@@ -135,7 +135,7 @@ public:
 	void SendGameServerNetworkData(const FString& Data);
 
 	UFUNCTION(BlueprintCallable, Category = "Network")
-	void JoinToGameServer(FString& clientSecret, int32& clientID, int32& characterID);
+	void JoinToGameServer(const int32& characterID);
 
 	void GetConnectedPlayers(FString& clientSecret, int32& clientID, int32& characterID);
 
@@ -169,6 +169,12 @@ public:
 	void AddLoadingScreen();
 
 	void RemoveLoadingScreen();
+
+	UFUNCTION(BlueprintCallable, Category = "Character")
+	void SetCurrentCharacterID(int32 CharacterID);
+
+	UFUNCTION(BlueprintCallable, Category = "Character")
+	int32 GetCurrentCharacterID();
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 	FName GameLevelName;

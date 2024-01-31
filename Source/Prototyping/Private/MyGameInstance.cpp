@@ -245,7 +245,7 @@ void UMyGameInstance::JoinToLoginServer(const FString& Username, const FString& 
 
 	// Create a JSON object
 	TSharedPtr<FJsonObject> JsonObjectLoginData = MakeShareable(new FJsonObject);
-	JsonObjectLoginData->SetStringField("type", "authentification");
+	JsonObjectLoginData->SetStringField("eventType", "authentification");
 	JsonObjectLoginData->SetStringField("login", Username);
 	JsonObjectLoginData->SetStringField("password", Password);
 
@@ -286,21 +286,38 @@ void UMyGameInstance::ProcessLoginResponse(const FString& ResponseData)
 				// Set Client Login
 				CurrentClientLogin = (*BodyObject)->GetStringField("login");
 
-				//TODO select real character ID from UI widget according current authentificated client user
-				// Set Client Character ID
-				if (CurrentClientID == 3) {
-					CurrentCharacterID = 1;
-				}
-				else if (CurrentClientID == 4) {
-					CurrentCharacterID = 2;
-				}
-
 				// Now broadcast this message
 				OnLoginResponseReceived.Broadcast(CurrentClientID, Message);
-				
 
+				GetCharacterItemsData(CurrentClientSecret, CurrentClientID);
+
+				//TODO - Use real data from server
+
+				TArray<FCharacterItemData> Items;
+				// add test data to list
+
+
+				// Create a test character item
+				FCharacterItemData Item1;
+				Item1.CharacterID = 1;
+				Item1.CharacterName = "Test1";
+
+				FCharacterItemData Item2;
+				Item2.CharacterID = 2;
+				Item2.CharacterName = "Test2";
+
+				// Add the item to the list
+				Items.Add(Item1);
+				Items.Add(Item2);
+
+				SetCharacterItems(Items);
+
+				if (LoginScreenWidget) {
+					// Show Character Selection Screen
+					LoginScreenWidget->ShowCharacterSelection();
+				}
 				// Send data to the game server
-				JoinToGameServer(CurrentClientSecret, CurrentClientID, CurrentCharacterID);
+				//JoinToGameServer(CurrentClientSecret, CurrentClientID, CurrentCharacterID);
 			}
 		}
 	}
@@ -458,13 +475,13 @@ void UMyGameInstance::ProcessGameServerResponse(const FString& ResponseData)
 	}
 }
 
-void UMyGameInstance::JoinToGameServer(FString& clientSecret, int32& clientID, int32& characterID)
+void UMyGameInstance::JoinToGameServer(const int32& characterID)
 {
 	// Create the header JSON object
 	TSharedPtr<FJsonObject> HeaderObject = MakeShareable(new FJsonObject);
 	HeaderObject->SetStringField("eventType", "joinGame");
-	HeaderObject->SetNumberField("clientId", clientID);
-	HeaderObject->SetStringField("hash", clientSecret);
+	HeaderObject->SetNumberField("clientId", CurrentClientID);
+	HeaderObject->SetStringField("hash", CurrentClientSecret);
 
 	// Create the body JSON object
 	TSharedPtr<FJsonObject> BodyObject = MakeShareable(new FJsonObject);
@@ -731,28 +748,6 @@ void UMyGameInstance::AddLoginWidgetToViewport()
 		if (LoginScreenWidget)
 		{
 			LoginScreenWidget->AddToViewport();
-
-
-			//TODO - Use real data from server
-
-			TArray<FCharacterItemData> Items;
-			// add test data to list
-
-
-			// Create a test character item
-			FCharacterItemData Item1;
-			Item1.CharacterID = 1;
-			Item1.CharacterName = "Test1";
-
-			FCharacterItemData Item2;
-			Item2.CharacterID = 2;
-			Item2.CharacterName = "Test2";
-
-			// Add the item to the list
-			Items.Add(Item1);
-			Items.Add(Item2);
-
-			SetCharacterItems(Items);
 		}
 	}
 }
@@ -945,14 +940,9 @@ void UMyGameInstance::GetCharacterItemsData(FString& clientSecret, int32& client
 	HeaderObject->SetNumberField("clientId", clientID);
 	HeaderObject->SetStringField("hash", clientSecret);
 
-	// Create the body JSON object
-	TSharedPtr<FJsonObject> BodyObject = MakeShareable(new FJsonObject);
-	BodyObject->SetStringField("", "");
-
 	// Create the main JSON object and add header and body
 	TSharedPtr<FJsonObject> MainJsonObject = MakeShareable(new FJsonObject);
 	MainJsonObject->SetObjectField("header", HeaderObject);
-	MainJsonObject->SetObjectField("body", BodyObject);
 
 	// Serialize the JSON object to a string
 	FString OutputString;
@@ -990,4 +980,16 @@ void UMyGameInstance::SetCharacterItems(TArray<FCharacterItemData> Items)
 			}
 		}
 	}
+}
+
+// set character id
+void UMyGameInstance::SetCurrentCharacterID(int32 CharacterID)
+{
+	CurrentCharacterID = CharacterID;
+}
+
+// get character id
+int32 UMyGameInstance::GetCurrentCharacterID()
+{
+	return CurrentCharacterID;
 }

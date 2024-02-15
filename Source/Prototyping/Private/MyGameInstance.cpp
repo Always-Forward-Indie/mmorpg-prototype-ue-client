@@ -4,18 +4,70 @@
 #include "MyGameInstance.h"
 
 
+void UMyGameInstance::CalculatePingTime(FDateTime SendTime, FDateTime ReceiveTime, FString serverName)
+{
+	// Calculate ping time by subtracting start time from end time
+	float PingTime = (ReceiveTime - SendTime).GetTotalMilliseconds();
+	// set the ping time to the monitor widget
+	if (MonitorStatsWidget)
+	{
+		if (serverName == "Login Server")
+		{
+			MonitorStatsWidget->SetLoginServerPingValue(FString::Printf(TEXT("%.2f ms"), PingTime));
+		}
+		else if (serverName == "Game Server")
+		{
+			MonitorStatsWidget->SetGameServerPingValue(FString::Printf(TEXT("%.2f ms"), PingTime));
+		}
+	}
+
+
+	UE_LOG(LogTemp, Warning, TEXT("Ping time to %s: %f ms"), *serverName, PingTime);
+}
+
+//ping server
+void UMyGameInstance::PingServer()
+{
+	// Create the header JSON object
+	TSharedPtr<FJsonObject> HeaderObject = MakeShareable(new FJsonObject);
+	HeaderObject->SetStringField("eventType", "pingClient");
+
+	// Create the main JSON object and add header and body
+	TSharedPtr<FJsonObject> MainJsonObject = MakeShareable(new FJsonObject);
+	MainJsonObject->SetObjectField("header", HeaderObject);
+
+	// Serialize the JSON object to a string
+	FString OutputString;
+	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutputString);
+	FJsonSerializer::Serialize(MainJsonObject.ToSharedRef(), Writer);
+
+	UE_LOG(LogTemp, Warning, TEXT("Sending Ping data: %s"), *OutputString);
+
+	// Record the time when the message is sent
+	SendTimeGameServer = FDateTime::UtcNow();
+	// Record the time when the message is sent
+	SendTimeLoginServer = SendTimeGameServer;
+
+	// Send the data to the login server
+	SendLoginServerNetworkData(OutputString);
+
+	// Send the data to the game server
+	SendGameServerNetworkData(OutputString);
+}
+
+
 UMyGameInstance::UMyGameInstance(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 	UE_LOG(LogTemp, Warning, TEXT("GameInstance Constructor called"));
 
 	// Set up the login server IP and port
-	LoginServerIP = TEXT("192.168.205.128");
+	LoginServerIP = TEXT("127.0.0.1");
 	LoginServerPort = 27014;
 
 	// Set up the game server IP and port
-	GameServerIP = TEXT("192.168.205.128");
-	GameServerPort = 27015;
+	GameServerIP = TEXT("127.0.0.1");
+	GameServerPort = 27016;
 }
 
 void UMyGameInstance::Init()
@@ -25,7 +77,7 @@ void UMyGameInstance::Init()
     InitializeTCPConnection(); // Your custom method to initialize TCP
 
 	// Set up polling timer to poll for new data from the login server
-	const float PollIntervalLoginServerData = 0.1f; // How often to poll data, in seconds.
+	const float PollIntervalLoginServerData = 0.001f; // How often to poll data, in seconds.
 	if (GetWorld())
 	{
 		GetWorld()->GetTimerManager().SetTimer(NetworkLoginServerPollTimerHandle, this, &UMyGameInstance::PollLoginServerNetworkData, PollIntervalLoginServerData, true);
@@ -38,7 +90,7 @@ void UMyGameInstance::Init()
 
 
 	// Set up polling timer to poll for new data from the game server
-	const float PollIntervalGameServerData = 0.01f; // How often to poll data, in seconds.
+	const float PollIntervalGameServerData = 0.001f; // How often to poll data, in seconds.
 	if (GetWorld())
 	{
 		GetWorld()->GetTimerManager().SetTimer(NetworkGameServerPollTimerHandle, this, &UMyGameInstance::PollGameServerNetworkData, PollIntervalGameServerData, true);
@@ -47,6 +99,18 @@ void UMyGameInstance::Init()
 	else
 	{
 		UE_LOG(LogTemp, Warning, TEXT("GetWorld() returned nullptr, polling timer for game server data not set."));
+	}
+
+	// send ping to the servers every 5 seconds
+	const float PingInterval = 5.0f; // How often to send ping, in seconds.
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().SetTimer(NetworkServersPingTimerHandle, this, &UMyGameInstance::PingServer, PingInterval, true);
+		UE_LOG(LogTemp, Warning, TEXT("Ping timer for servers set up successfully."));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("GetWorld() returned nullptr, ping timer for servers not set."));
 	}
 
 	// Load the LoginLevel after some delay to prevent issue with the loading screen not showing up as viewport is not yet created
@@ -222,36 +286,103 @@ void UMyGameInstance::SendLoginServerNetworkData(const FString& Data)
 	}
 }
 
-void UMyGameInstance::JoinToLoginServer(const FString& Username, const FString& Password)
+// is login value valid function
+bool UMyGameInstance::IsLoginValueValid(const FString& Login)
 {
-	//TODO move to separate function check if login and password is valid
-	//if Username empty
-	if (Username.IsEmpty())
+	//if login is empty
+	if (Login.IsEmpty())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Login could not be empty!"));
-		ProcessLoginResponse("{\"body\":{\"message\":\"Login could not be empty!\"},\"status\":\"error\"}");
+		// message to the login screen
+		OnLoginResponseReceived.Broadcast(CurrentClientID, "Login could not be empty!");
 
-		return;
+		return false;
 	}
 
-	//if Password empty
+	//if login is too short
+	if (Login.Len() < 3)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Login is too short!"));
+		// message to the login screen
+		OnLoginResponseReceived.Broadcast(CurrentClientID, "Login is too short!");
+
+		return false;
+	}
+
+	//if login is too long
+	if (Login.Len() > 20)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Login is too long!"));
+		// message to the login screen
+		OnLoginResponseReceived.Broadcast(CurrentClientID, "Login is too long!");
+
+		return false;
+	}
+
+	return true;
+}
+
+// is password value valid function
+bool UMyGameInstance::IsPasswordValueValid(const FString& Password)
+{
+	//if password is empty
 	if (Password.IsEmpty())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Password could not be empty!"));
-		ProcessLoginResponse("{\"body\":{\"message\":\"Password could not be empty!\"},\"status\":\"error\"}");
+		// message to the login screen
+		OnLoginResponseReceived.Broadcast(CurrentClientID, "Password could not be empty!");
 
+		return false;
+	}
+
+	//if password is too short
+	if (Password.Len() < 3)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Password is too short!"));
+		// message to the login screen
+		OnLoginResponseReceived.Broadcast(CurrentClientID, "Password is too short!");
+
+		return false;
+	}
+
+	//if password is too long
+	if (Password.Len() > 20)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Password is too long!"));
+		// message to the login screen
+		OnLoginResponseReceived.Broadcast(CurrentClientID, "Password is too long!");
+
+		return false;
+	}
+
+	return true;
+}
+
+void UMyGameInstance::JoinToLoginServer(const FString& Username, const FString& Password)
+{
+	if (!IsLoginValueValid(Username) || !IsPasswordValueValid(Password)) {
 		return;
 	}
 
-	// Create a JSON object
-	TSharedPtr<FJsonObject> JsonObjectLoginData = MakeShareable(new FJsonObject);
-	JsonObjectLoginData->SetStringField("eventType", "authentification");
-	JsonObjectLoginData->SetStringField("login", Username);
-	JsonObjectLoginData->SetStringField("password", Password);
+	// Create the header JSON object
+	TSharedPtr<FJsonObject> HeaderObject = MakeShareable(new FJsonObject);
+	HeaderObject->SetStringField("eventType", "authentificationClient");
+	HeaderObject->SetNumberField("clientId", CurrentClientID);
+	HeaderObject->SetStringField("hash", CurrentClientSecret);
+
+	// Create the body JSON object
+	TSharedPtr<FJsonObject> BodyObject = MakeShareable(new FJsonObject);
+	BodyObject->SetStringField("login", Username);
+	BodyObject->SetStringField("password", Password);
+
+	// Create the main JSON object and add header and body
+	TSharedPtr<FJsonObject> MainJsonObject = MakeShareable(new FJsonObject);
+	MainJsonObject->SetObjectField("header", HeaderObject);
+	MainJsonObject->SetObjectField("body", BodyObject);
 
 	FString OutputString;
 	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutputString);
-	FJsonSerializer::Serialize(JsonObjectLoginData.ToSharedRef(), Writer);
+	FJsonSerializer::Serialize(MainJsonObject.ToSharedRef(), Writer);
 
 	UE_LOG(LogTemp, Warning, TEXT("Sending Login Server data: %s"), *OutputString);
 
@@ -266,60 +397,126 @@ void UMyGameInstance::ProcessLoginResponse(const FString& ResponseData)
 
 	if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
 	{
-		// Check if "status" is "success" or "error" if needed
-		FString Status = JsonObject->GetStringField("status");
+		FString Status;
+		FString EventType;
+		FString Hash;
+		int32 ClientID = 0;
+		int32 CharacterID = 0;
+		FString Message;
 
-		// Access the nested "body" object
-		const TSharedPtr<FJsonObject>* BodyObject;
-		if (JsonObject->TryGetObjectField("body", BodyObject))
+		// Access the nested "header" object
+		const TSharedPtr<FJsonObject>* HeaderObject;
+		if (JsonObject->TryGetObjectField("header", HeaderObject))
 		{
-			FString Message = (*BodyObject)->GetStringField("message");
+
+			// if clientId is present
+			if ((*HeaderObject)->HasField("clientId"))
+			{
+				// Set Client ID
+				ClientID = (*HeaderObject)->GetNumberField("clientId");
+			}
+
+			// if hash is present
+			if ((*HeaderObject)->HasField("hash"))
+			{
+				// Set Client Secret
+				Hash = (*HeaderObject)->GetStringField("hash");
+			}
+
+			// set status
+			Status = (*HeaderObject)->GetStringField("status");
+
+			// set event type
+			EventType = (*HeaderObject)->GetStringField("eventType");
+
+			// set message
+			Message = (*HeaderObject)->GetStringField("message");
+		}
+
 
 			if (Status == "success")
 			{
-				// Set Client ID
-				CurrentClientID = (*BodyObject)->GetNumberField("clientId");
-
-				// Set Client Secret
-				CurrentClientSecret = (*BodyObject)->GetStringField("hash");
-
-				// Set Client Login
-				CurrentClientLogin = (*BodyObject)->GetStringField("login");
-
-				// Now broadcast this message
-				OnLoginResponseReceived.Broadcast(CurrentClientID, Message);
-
-				GetCharacterItemsData(CurrentClientSecret, CurrentClientID);
-
-				//TODO - Use real data from server
-
-				TArray<FCharacterItemData> Items;
-				// add test data to list
-
-
-				// Create a test character item
-				FCharacterItemData Item1;
-				Item1.CharacterID = 1;
-				Item1.CharacterName = "Test1";
-
-				FCharacterItemData Item2;
-				Item2.CharacterID = 2;
-				Item2.CharacterName = "Test2";
-
-				// Add the item to the list
-				Items.Add(Item1);
-				Items.Add(Item2);
-
-				SetCharacterItems(Items);
-
-				if (LoginScreenWidget) {
-					// Show Character Selection Screen
-					LoginScreenWidget->ShowCharacterSelection();
+				// Access the nested "body" object
+				const TSharedPtr<FJsonObject>* BodyObject;
+				if (JsonObject->TryGetObjectField("body", BodyObject))
+				{
+					// if characterId is present
+					if ((*BodyObject)->HasField("characterId"))
+					{
+						// Set Client Character ID
+						CharacterID = (*BodyObject)->GetNumberField("characterId");
+					}
 				}
-				// Send data to the game server
-				//JoinToGameServer(CurrentClientSecret, CurrentClientID, CurrentCharacterID);
+
+				// ping response
+				if (EventType == "pingClient")
+				{
+					// Record the time when the response is received
+					ReceiveTimeLoginServer = FDateTime::UtcNow();
+
+					// Calculate ping time
+					CalculatePingTime(SendTimeLoginServer, ReceiveTimeLoginServer, TEXT("Login Server"));
+				}
+
+				if (EventType == "authentificationClient") {
+					// Set Client ID
+					CurrentClientID = ClientID;
+
+					// Set Client Secret
+					CurrentClientSecret = Hash;
+
+					//if login is present
+					if ((*HeaderObject)->HasField("login"))
+					{
+						// Set Client Login
+						CurrentClientLogin = (*HeaderObject)->GetStringField("login");
+					}
+
+					//Get the characters list from the server
+					GetCharacterItemsData(CurrentClientSecret, CurrentClientID);
+
+					if (LoginScreenWidget) {
+						// Show Character Selection Screen
+						LoginScreenWidget->ShowCharacterSelection();
+					}
+				}
+
+				if (EventType == "getCharactersList") {
+					// Get the characters list data
+					TArray<TSharedPtr<FJsonValue>> CharactersList = (*BodyObject)->GetArrayField("charactersList");
+
+					// Create a list of character items
+					TArray<FCharacterItemData> CharacterItems;
+
+					// Iterate over the received characters list items
+					for (int32 i = 0; i < CharactersList.Num(); i++)
+					{
+						// Get the character item data as a JSON object
+						TSharedPtr<FJsonObject> Character = CharactersList[i]->AsObject();
+
+						// Create a new character item
+						FCharacterItemData CharacterItem;
+						CharacterItem.CharacterID = Character->GetNumberField("characterId");
+						CharacterItem.CharacterName = Character->GetStringField("characterName");
+
+						// Add the character item to the list
+						CharacterItems.Add(CharacterItem);
+					}
+
+					// Set the character items
+					SetCharacterItems(CharacterItems);
+
+					if (LoginScreenWidget) {
+						// Show Character Selection Screen
+						LoginScreenWidget->ShowCharacterSelection();
+					}
+				}
+
+
 			}
-		}
+
+			// Broadcast message to the login screen
+			OnLoginResponseReceived.Broadcast(CurrentClientID, Message);
 	}
 	else
 	{
@@ -370,11 +567,19 @@ void UMyGameInstance::ProcessGameServerResponse(const FString& ResponseData)
 		const TSharedPtr<FJsonObject>* HeaderObject;
 		if (JsonObject->TryGetObjectField("header", HeaderObject))
 		{
-			// Set Client ID
-			ClientID = (*HeaderObject)->GetNumberField("clientId");
+			// if clientId is present
+			if ((*HeaderObject)->HasField("clientId"))
+			{
+				// Set Client ID
+				ClientID = (*HeaderObject)->GetNumberField("clientId");
+			}
 
-			// Set Client Secret
-			Hash = (*HeaderObject)->GetStringField("hash");
+			// if hash is present
+			if ((*HeaderObject)->HasField("hash"))
+			{
+				// Set Client Secret
+				Hash = (*HeaderObject)->GetStringField("hash");
+			}
 
 			// set status
 			Status = (*HeaderObject)->GetStringField("status");
@@ -387,8 +592,21 @@ void UMyGameInstance::ProcessGameServerResponse(const FString& ResponseData)
 		const TSharedPtr<FJsonObject>* BodyObject;
 		if (JsonObject->TryGetObjectField("body", BodyObject))
 		{
-			// Set Client Character ID
-			CharacterID = (*BodyObject)->GetNumberField("characterId");
+			//if characterId is present
+			if ((*BodyObject)->HasField("characterId"))
+			{
+				CharacterID = (*BodyObject)->GetNumberField("characterId");
+			}
+		}
+
+		// ping response
+		if (Status == "success" && EventType == "pingClient")
+		{
+			// Record the time when the response is received
+			ReceiveTimeGameServer = FDateTime::UtcNow();
+
+			// Calculate ping time
+			CalculatePingTime(SendTimeGameServer, ReceiveTimeGameServer, TEXT("Game Server"));
 		}
 
 		if (Status == "success" && EventType == "joinGame")
@@ -564,7 +782,40 @@ void UMyGameInstance::SendPlayerMovementToGameServer(FString& clientSecret, int3
 	SendGameServerNetworkData(OutputString);
 }
 
+//send player disconnection to game server
+void UMyGameInstance::SendPlayerDisconnectionServers(FString& clientSecret, int32& clientID, int32& characterID)
+{
+	// Create the header JSON object
+	TSharedPtr<FJsonObject> HeaderObject = MakeShareable(new FJsonObject);
+	HeaderObject->SetStringField("eventType", "disconnectClient");
+	HeaderObject->SetNumberField("clientId", clientID);
+	HeaderObject->SetStringField("hash", clientSecret);
+
+	// Create the body JSON object
+	TSharedPtr<FJsonObject> BodyObject = MakeShareable(new FJsonObject);
+	BodyObject->SetNumberField("characterId", characterID);
+
+	// Create the main JSON object and add header and body
+	TSharedPtr<FJsonObject> MainJsonObject = MakeShareable(new FJsonObject);
+	MainJsonObject->SetObjectField("header", HeaderObject);
+	MainJsonObject->SetObjectField("body", BodyObject);
+
+	// Serialize the JSON object to a string
+	FString OutputString;
+	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutputString);
+	FJsonSerializer::Serialize(MainJsonObject.ToSharedRef(), Writer);
+
+	UE_LOG(LogTemp, Warning, TEXT("Sending Game Server data: %s"), *OutputString);
+
+	// Send the data to the server
+	SendGameServerNetworkData(OutputString);
+	SendLoginServerNetworkData(OutputString);
+}
+
 void UMyGameInstance::CleanupTCPConnection() {
+	// Send player disconnection to the servers
+	SendPlayerDisconnectionServers(CurrentClientSecret, CurrentClientID, CurrentCharacterID);
+
 	UE_LOG(LogTemp, Warning, TEXT("Game Instanse Cleanup..."));
 
 	// Stop the polling timer
@@ -684,7 +935,12 @@ void UMyGameInstance::OnLevelLoaded()
 	// Check if the level being loaded is the LoginLevel
 	if (LevelBeingLoaded == LoginLevelName)
 	{
+		// Add login widget to viewport
 		AddLoginWidgetToViewport();
+
+		// Add monitor stats widget to viewport
+		AddMonitorStatsWidgetToViewport();
+
 		//show mouse cursor
 		GetWorld()->GetFirstPlayerController()->bShowMouseCursor = true;
 
@@ -739,6 +995,20 @@ void UMyGameInstance::OnLevelLoaded()
 		GetWorld()->GetTimerManager().SetTimer(RemoveLoadingScreenTimerHandle, this, &UMyGameInstance::RemoveLoadingScreen, Delay, false);
 	}
 }
+
+// add monitor to viewport
+void UMyGameInstance::AddMonitorStatsWidgetToViewport()
+{
+	if (MonitorStatsWidgetClass)
+	{
+		MonitorStatsWidget = CreateWidget<UMonitorStatsWidget>(this, MonitorStatsWidgetClass);
+		if (MonitorStatsWidget)
+		{
+			MonitorStatsWidget->AddToViewport();
+		}
+	}
+}
+
 
 void UMyGameInstance::AddLoginWidgetToViewport()
 {

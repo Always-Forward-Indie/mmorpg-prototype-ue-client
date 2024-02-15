@@ -17,6 +17,7 @@
 #include "Services/LoadingSceenActor.h"
 #include "Widgets/LoginWidget.h"
 #include "Widgets/CharacterListItem.h"
+#include "Widgets/MonitorStatsWidget.h"
 #include "Components/ListView.h"
 #include "MyGameInstance.generated.h"
 
@@ -44,6 +45,9 @@ private:
 
 	FTimerHandle RemoveLoadingScreenTimerHandle; // Timer handle for loading the game level
 
+	FTimerHandle NetworkServersPingTimerHandle; // Timer handle for ping game server
+
+
 	// Client ID
 	int32 CurrentClientID;
 
@@ -56,8 +60,16 @@ private:
 	// Client Character ID
 	int32 CurrentCharacterID;
 
+	// Function to calculate ping time
+	void CalculatePingTime(FDateTime ReceiveTime, FDateTime SendTime, FString serverName);
 
+	// Time variables to measure ping
+	FDateTime SendTimeGameServer;
+	FDateTime SendTimeLoginServer;
+	FDateTime ReceiveTimeGameServer;
+	FDateTime ReceiveTimeLoginServer;
 
+	// TODO - Review methods list and move it to separate class according responsibilities
 
 public:
 	UMyGameInstance(const FObjectInitializer& ObjectInitializer);
@@ -69,6 +81,8 @@ public:
 	void Shutdown();
 
 	void InitializeTCPConnection();
+
+	void SendPlayerDisconnectionServers(FString& clientSecret, int32& clientID, int32& characterID);
 
 	void CleanupTCPConnection();
 
@@ -89,6 +103,8 @@ public:
 	void GetCharacterItemsData(FString& clientSecret, int32& clientID);
 
 	void SetCharacterItems(TArray<FCharacterItemData> Items);
+
+	void PingServer();
 
 	// spawn players
 	void SpawnPlayerForClient(int32 ClientID);
@@ -119,6 +135,10 @@ public:
 
 	// Method to send data to the login server
 	void SendLoginServerNetworkData(const FString& Data);
+
+	bool IsLoginValueValid(const FString& Login);
+
+	bool IsPasswordValueValid(const FString& Password);
 
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	void JoinToLoginServer(const FString& Username, const FString& Password);
@@ -161,6 +181,9 @@ public:
 	void OnLevelLoaded();
 
 	UFUNCTION(BlueprintCallable, Category = "UI")
+	void AddMonitorStatsWidgetToViewport();
+
+	UFUNCTION(BlueprintCallable, Category = "UI")
 	void AddLoginWidgetToViewport();
 
 	UFUNCTION(BlueprintCallable, Category = "UI")
@@ -192,6 +215,11 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<UCharacterListItem> CharactersListItemWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+	TSubclassOf<UMonitorStatsWidget> MonitorStatsWidgetClass;
+	UMonitorStatsWidget* MonitorStatsWidget;
+
 
 	// A member variable to store the name of the level being loaded
 	FName LevelBeingLoaded;

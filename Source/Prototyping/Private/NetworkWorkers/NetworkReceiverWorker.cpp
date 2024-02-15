@@ -35,7 +35,7 @@ uint32 NetworkReceiverWorker::Run()
             // Process the received data - for example, convert it to a string
             FString ReceivedString = StringFromBinaryArray(ReceiveBuffer, BytesRead);
 
-            UE_LOG(LogTemp, Warning, TEXT("Received Data: %s"), *ReceivedString);
+           // UE_LOG(LogTemp, Warning, TEXT("Received Data: %s"), *ReceivedString);
 
             // Enqueue the received data for processing on the game thread
             DataQueue.Enqueue(ReceivedString);

@@ -1,24 +1,26 @@
 #pragma once
 
 #include "CoreMinimal.h"
+
+#include "Networking/NetworkManager.h"
+#include "Authentication/AuthenticationManager.h"
+#include "Gameplay/Players/PlayerManager.h"
+
 #include <Kismet/GameplayStatics.h>
 #include "Blueprint/UserWidget.h"
 #include "Components/AudioComponent.h"
 #include "Sound/SoundCue.h"
 #include "TimerManager.h"
 #include "Engine/GameInstance.h"
-#include "Sockets.h"
-#include "SocketSubsystem.h"
-#include "Networking.h"
-#include "NetworkWorkers/NetworkReceiverWorker.h"
-#include "NetworkWorkers/NetworkSenderWorker.h"
-#include "Player/MyCameraActor.h"
-#include "Player/BasicPlayer.h"
+
+#include "Gameplay/Players/MyCameraActor.h"
+#include "Gameplay/Players/BasicPlayer.h"
 #include "Services/LoadingSceenActor.h"
-#include "Widgets/LoginWidget.h"
-#include "Widgets/CharacterListItem.h"
-#include "Widgets/MonitorStatsWidget.h"
+#include "Gameplay/UI/LoginWidget.h"
+#include "Gameplay/UI/CharacterListItem.h"
+#include "Gameplay/UI/MonitorStatsWidget.h"
 #include "Components/ListView.h"
+#include "Utils/JSONParser.h"
 #include "MyGameInstance.generated.h"
 
 
@@ -37,16 +39,14 @@ class PROTOTYPING_API UMyGameInstance : public UGameInstance
 	GENERATED_BODY()
 
 private:
-	FTimerHandle NetworkLoginServerPollTimerHandle; // Timer handle for polling network data
-
-	FTimerHandle NetworkGameServerPollTimerHandle; // Timer handle for polling network data
-
 	FTimerHandle LoadLoginLevelTimerHandle; // Timer handle for loading the login level
 
 	FTimerHandle RemoveLoadingScreenTimerHandle; // Timer handle for loading the game level
 
 	FTimerHandle NetworkServersPingTimerHandle; // Timer handle for ping game server
 
+	// ClientData
+	FClientDataStruct ClientData;
 
 	// Client ID
 	int32 CurrentClientID;
@@ -60,117 +60,85 @@ private:
 	// Client Character ID
 	int32 CurrentCharacterID;
 
-	// Function to calculate ping time
-	void CalculatePingTime(FDateTime ReceiveTime, FDateTime SendTime, FString serverName);
-
 	// Time variables to measure ping
 	FDateTime SendTimeGameServer;
 	FDateTime SendTimeLoginServer;
 	FDateTime ReceiveTimeGameServer;
 	FDateTime ReceiveTimeLoginServer;
 
-	// TODO - Review methods list and move it to separate class according responsibilities
-
 public:
 	UMyGameInstance(const FObjectInitializer& ObjectInitializer);
 
 	void Init();
 
-	FString BoolToString(bool bValue);
+	void InitNetworkingSetup();
 
 	void Shutdown();
 
-	void InitializeTCPConnection();
+	UPROPERTY()
+	// Network manager
+	UNetworkManager* NetworkManager;
 
-	void SendPlayerDisconnectionServers(FString& clientSecret, int32& clientID, int32& characterID);
+	UPROPERTY()
+	// Ping manager
+	UPingManager* PingManager;
 
-	void CleanupTCPConnection();
+	UPROPERTY()
+	// Authentication manager
+	UAuthenticationManager* AuthenticationManager;
 
-	TMap<int32, FPlayerData> ConnectedPlayers;
+	UPROPERTY()
+	// Player manager
+	UPlayerManager* PlayerManager;
+
+	TMap<int32, FClientDataStruct> ConnectedPlayers;
 
 	TMap<int32, ABasicPlayer*> SpawnedPlayers;
-
-	void AddPlayerData(int32 PlayerID, const FPlayerData& PlayerData);
-
-	void RemovePlayerData(int32 PlayerID, const FPlayerData& PlayerData);
-
-	void MovePlayerForClient(int32 ClientID, double x, double y, double z);
-
-	void HandlePlayerDisconnection(int32 ClientID);
-
-	void UpdatePlayerCoordinates(int32 PlayerID, double x, double y, double z);
-
-	void GetCharacterItemsData(FString& clientSecret, int32& clientID);
-
-	void SetCharacterItems(TArray<FCharacterItemData> Items);
-
-	void PingServer();
-
-	// spawn players
-	void SpawnPlayerForClient(int32 ClientID);
-
-	// Login server details
-	FString LoginServerIP;
-	int32 LoginServerPort;
-	FSocket* LoginServerSocket;
-	bool bIsLoginSocketConnected;
-
-	NetworkReceiverWorker* ReceiverLoginServerWorker;
-	FRunnableThread* ReceiverLoginServerThread;
-
-	NetworkSenderWorker* SenderLoginServerWorker;
-	FRunnableThread* SenderLoginServerThread;
-
-	// Game server details
-	FString GameServerIP;
-	int32 GameServerPort;
-	FSocket* GameServerSocket;
-	bool bIsGameSocketConnected;
-
-	NetworkReceiverWorker* ReceiverGameServerWorker;
-	FRunnableThread* ReceiverGameServerThread;
-
-	NetworkSenderWorker* SenderGameServerWorker;
-	FRunnableThread* SenderGameServerThread;
-
-	// Method to send data to the login server
-	void SendLoginServerNetworkData(const FString& Data);
-
-	bool IsLoginValueValid(const FString& Login);
-
-	bool IsPasswordValueValid(const FString& Password);
-
-	UFUNCTION(BlueprintCallable, Category = "Network")
-	void JoinToLoginServer(const FString& Username, const FString& Password);
 
 	UPROPERTY(BlueprintAssignable, Category = "Network")
 	FOnLoginResponseReceived OnLoginResponseReceived;
 
-	// Method to poll for new data form login server
-	void PollLoginServerNetworkData();
-
-	void ProcessLoginResponse(const FString& ResponseMessage); // Function to process loign server response
-
-	// Method to send data to the game server
-	void SendGameServerNetworkData(const FString& Data);
-
-	UFUNCTION(BlueprintCallable, Category = "Network")
-	void JoinToGameServer(const int32& characterID);
-
-	void GetConnectedPlayers(FString& clientSecret, int32& clientID, int32& characterID);
-
-	// Player Movement To Game Server
-	UFUNCTION(BlueprintCallable, Category = "Network")
-	void SendPlayerMovementToGameServer(FString& clientSecret, int32& clientID, int32& characterID, double& x, double& y, double& z);
-
 	UPROPERTY(BlueprintAssignable, Category = "Network")
-	FOnLoginResponseReceived OnGameServerResponseReceived;
+	FOnGameServerResponseReceived OnGameServerResponseReceived;
 
-	// Method to poll for new data form game server
-	void PollGameServerNetworkData();
+	// get network manager
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	UNetworkManager* GetNetworkManager();
 
-	void ProcessGameServerResponse(const FString& ResponseMessage); // Function to process game server response
+	// get Authentication manager
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	UAuthenticationManager* GetAuthenticationManager();
 
+	// get Player manager
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	UPlayerManager* GetPlayerManager();
+
+	// get current client data
+	UFUNCTION(BlueprintCallable, Category = "Client Data")
+	FClientDataStruct GetCurrentClientData();
+
+	void SetCurrentClientID(int32 ClientID);
+
+	int32 GetCurrentClientID();
+
+	void SetCurrentClientHash(FString ClientSecret);
+
+	FString GetCurrentClientHash();
+
+	void AddPlayerData(int32 ClientID, const FClientDataStruct clientData);
+
+	void RemovePlayerData(int32 ClientID);
+
+	void MovePlayerForClient(const int32 ClientID, const FClientDataStruct& clientData, const FMessageDataStruct& MessageData);
+
+	void HandlePlayerDisconnection(int32 ClientID);
+
+	void UpdatePlayerCoordinates(int32 PlayerID, double x, double y, double z, double rotZ);
+
+	void SetCharacterItems(TArray<FCharacterDataStruct> Items);
+
+	// spawn players
+	void SpawnPlayerForClient(int32 ClientID);
 
 	UFUNCTION(BlueprintCallable, Category = "Level")
 	void LoadLevel(const FName& LevelName);
@@ -179,6 +147,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Level")
 	void OnLevelLoaded();
+
+	UFUNCTION(BlueprintCallable, Category = "Level")
+	void OnLevelUnloaded();
 
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void AddMonitorStatsWidgetToViewport();

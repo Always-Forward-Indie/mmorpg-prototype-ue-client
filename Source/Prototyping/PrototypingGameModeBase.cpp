@@ -2,7 +2,7 @@
 
 
 #include "PrototypingGameModeBase.h"
-#include "Player/BasicPlayer.h"
+#include "Gameplay/Players/BasicPlayer.h"
 
 APrototypingGameModeBase::APrototypingGameModeBase()
 {

@@ -31,38 +31,34 @@ private:
 
 	UMyGameInstance* MyGameInstance;
 
-	float TimeSinceLastUpdate;
+	// set editable variables
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Configuration", meta = (AllowPrivateAccess = "true"))
+	float interpolationSpeedFactor = 2.8f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Configuration", meta = (AllowPrivateAccess = "true"))
+	float maxInterpolationSpeed = 1200.0f;
+
+	float TimeSinceLastUpdate = 0.0f;
+	float LastUpdateTime = 0.0f;
 
 	FVector LastSentPosition;
 	FRotator LastSentRotation;
 
 	// rotation threshold
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Configuration", meta = (AllowPrivateAccess = "true"))
 	float RotationThreshold = 5.0f;
 	// distance threshold
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Configuration", meta = (AllowPrivateAccess = "true"))
 	float PositionThreshold = 5.0f;
-
-
-	float AccumulatedDistance;
-
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Character Data", meta = (AllowPrivateAccess = "true"))
-	float MovementThreshold = 100.0f;
-	const float UpdateInterval = 0.5f;
+	// movement packet send update interval
+	const float UpdateInterval = 0.1f;
 
 	// Constant movement speed
-	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Character Data", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Configuration", meta = (AllowPrivateAccess = "true"))
 	float MoveSpeed = 200.0f; // Adjust as needed
 
 	// Constant rotation speed
-	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Character Data", meta = (AllowPrivateAccess = "true"))
-	float RotationSpeed = 250.0f; // Adjust as needed
-
-
-	//SIMULATION OF MOVEMENT VARIABLES
-	// Variables for circular movement
-	FVector CenterPosition;
-	float Radius;
-	float CurrentAngle;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Configuration", meta = (AllowPrivateAccess = "true"))
+	float RotationSpeed = 1000.0f; // Adjust as needed
 
 	// Variables for square movement
 	FVector SquareCenter;
@@ -80,18 +76,34 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-	//SIMULATION OF MOVEMENT FUNCTIONS
-	void StartMovementSimulation();
-	void StopMovementSimulation();
-	void UpdateMovement(float DeltaTime);
-
-
-
 	// Sets default values for this character's properties
 	ABasicPlayer();
 
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+	// Enhanced Input movement functions for the current player
+	void Move(const FInputActionValue& Value);
+	void Look(const FInputActionValue& Value);
+
+	// Convert string to timestamp
+	FDateTime StringToTimestamp(const FString& DateTimeString);
+
+	//SIMULATION OF MOVEMENT FUNCTIONS
+	void StartMovementSimulation();
+	void StopMovementSimulation();
+	void UpdateMovementSimulation(float DeltaTime);
+
+	// Update LOCAL player movement
+	void UpdateCurrentPlayerMovement(float DeltaTime);
+
+	// Update REMOTE player movement
+	void UpdateRemotePlayerMovementOld(float DeltaTime);
+	// Update REMOTE player movement
+	void UpdateRemotePlayerMovement();
+	// Interpolate movement for REMOTE player
+	float CalculateInterpolationSpeed(float MovementSpeed);
+	void InterpolateMovement(float DeltaTime, float InterpolationSpeed);
 
 	// Set Is Other Client
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
@@ -153,13 +165,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
 	bool GetIsOtherClient();
 
-	// Enhanced Input movement functions
-	void Move(const FInputActionValue& Value);
-	FDateTime StringToTimestamp(const FString& DateTimeString);
-	FVector InterpolatePlayerPosition(const FClientDataStruct& ClientData, const FMessageDataStruct& MessageData);
-	float CalculateInterpolationAlpha(float ServerTimestamp);
-	FVector PredictPlayerPosition(const FClientDataStruct& MovementData, float DeltaTime);
-	void Look(const FInputActionValue& Value);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input")
 	UInputMappingContext* InputMappingContext;
@@ -174,7 +179,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input")
 	// stop movement simulation action
 	UInputAction* StopMovementSimulationAction;
-
 
 	// Reference to the login camera actor
 	ACameraActor* LoginCameraActor;

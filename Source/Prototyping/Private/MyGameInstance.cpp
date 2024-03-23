@@ -26,6 +26,12 @@ void UMyGameInstance::Init()
 	// set the player manager
 	PlayerManager = NewObject<UPlayerManager>(this);
 
+	// set the MOB manager
+	MOBManager = NewObject<UMOBManager>(this);
+
+	// set the spawn zone manager
+	SpawnZoneManager = NewObject<USpawnZoneManager>(this);
+
 
 	UE_LOG(LogTemp, Warning, TEXT("GameInstance Init called"));
 
@@ -60,7 +66,7 @@ void UMyGameInstance::InitNetworkingSetup()
 		NetworkManager->InitializeTCPConnection();
 	}
 
-	if (AuthenticationManager) {
+	if (AuthenticationManager != nullptr) {
 		// set WorldContext
 		AuthenticationManager->SetWorldContext(GetWorld());
 		// Initialize the authentication manager
@@ -88,6 +94,25 @@ void UMyGameInstance::InitNetworkingSetup()
 		PingManager->SetWorldContext(GetWorld());
 		// Initialize the ping manager
 		PingManager->Initialize(NetworkManager, MonitorStatsWidget);
+	}
+
+	if (SpawnZoneManager != nullptr)
+	{
+		// set WorldContext
+		SpawnZoneManager->SetWorldContext(GetWorld());
+		// Initialize the spawn zone manager
+		SpawnZoneManager->Initialize(NetworkManager);
+		// subscribe to the network manager
+		SpawnZoneManager->SubscribeToNetworkManager();
+	}
+
+	if (MOBManager != nullptr) {
+		// set WorldContext
+		MOBManager->SetWorldContext(GetWorld());
+		// Initialize the MOB manager
+		MOBManager->Initialize(NetworkManager);
+		// subscribe to the network manager
+		MOBManager->SubscribeToNetworkManager();
 	}
 
 
@@ -149,6 +174,26 @@ FClientDataStruct UMyGameInstance::GetCurrentClientData()
 UPlayerManager* UMyGameInstance::GetPlayerManager()
 {
 	return PlayerManager;
+}
+
+UMOBManager* UMyGameInstance::GetMOBManager()
+{
+	return MOBManager;
+}
+
+TSubclassOf<class ABasicMOB> UMyGameInstance::GetBasicMOBClass()
+{
+	return BasicMOBClass;
+}
+
+USpawnZoneManager* UMyGameInstance::GetSpawnZoneManager()
+{
+	return SpawnZoneManager;
+}
+
+TSubclassOf<class AMobSpawnZone> UMyGameInstance::GetBasicSpawnZoneClass()
+{
+	return BasicSpawnZoneClass;
 }
 
 

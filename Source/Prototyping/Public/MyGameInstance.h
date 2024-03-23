@@ -5,6 +5,8 @@
 #include "Networking/NetworkManager.h"
 #include "Authentication/AuthenticationManager.h"
 #include "Gameplay/Players/PlayerManager.h"
+#include "Gameplay/Mobs/MOBManager.h"
+#include "Gameplay/Mobs/SpawnZoneManager.h"
 
 #include <Kismet/GameplayStatics.h>
 #include "Blueprint/UserWidget.h"
@@ -91,6 +93,14 @@ public:
 	// Player manager
 	UPlayerManager* PlayerManager;
 
+	UPROPERTY()
+	// MOB manager
+	UMOBManager* MOBManager;
+
+	// zone manager
+	UPROPERTY()
+	USpawnZoneManager* SpawnZoneManager;
+
 	TMap<int32, FClientDataStruct> ConnectedPlayers;
 
 	TMap<int32, ABasicPlayer*> SpawnedPlayers;
@@ -112,6 +122,22 @@ public:
 	// get Player manager
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	UPlayerManager* GetPlayerManager();
+
+	// get MOB manager
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	UMOBManager* GetMOBManager();
+
+	// get baic mob class
+	UFUNCTION(BlueprintCallable, Category = "MOB")
+	TSubclassOf<class ABasicMOB> GetBasicMOBClass();
+
+	// get spawn zone manager
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	USpawnZoneManager* GetSpawnZoneManager();
+
+	// get basic SpawnZone class
+	UFUNCTION(BlueprintCallable, Category = "MOB")
+	TSubclassOf<class AMobSpawnZone> GetBasicSpawnZoneClass();
 
 	// get current client data
 	UFUNCTION(BlueprintCallable, Category = "Client Data")
@@ -204,6 +230,14 @@ public:
 	// add a reference to the player actor blueprint
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Player")
 	TSubclassOf<class ABasicPlayer> MainPlayerClass;
+
+	// add a reference to the MOB actor blueprint
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MOB")
+	TSubclassOf<class ABasicMOB> BasicMOBClass;
+
+	// add a reference to the spawn zone actor blueprint
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MOB")
+	TSubclassOf<class AMobSpawnZone> BasicSpawnZoneClass;
 
 	// add a reference to the camera actor blueprint
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Player")

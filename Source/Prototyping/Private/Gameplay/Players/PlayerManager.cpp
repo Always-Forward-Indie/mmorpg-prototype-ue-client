@@ -288,10 +288,10 @@ void UPlayerManager::SendMovePlayerRequest(FClientDataStruct& ClientData)
 	TSharedPtr<FJsonValueNumber> PositionZValue = MakeShareable(new FJsonValueNumber(ClientData.characterData.characterPosition.positionZ));
 	TSharedPtr<FJsonValueNumber> RotationZValue = MakeShareable(new FJsonValueNumber(ClientData.characterData.characterPosition.rotationZ));
 
-	BodyData.Add("characterPosX", PositionXValue);
-	BodyData.Add("characterPosY", PositionYValue);
-	BodyData.Add("characterPosZ", PositionZValue);
-	BodyData.Add("characterRotZ", RotationZValue);
+	BodyData.Add("posX", PositionXValue);
+	BodyData.Add("posY", PositionYValue);
+	BodyData.Add("posZ", PositionZValue);
+	BodyData.Add("rotZ", RotationZValue);
 
 	FString JsonString = JSONParser::SerializeJson("moveCharacter", HeaderData, BodyData);
 

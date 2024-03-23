@@ -18,6 +18,29 @@ struct FPositionDataStruct
 };
 
 USTRUCT(BlueprintType)
+struct FAttributeDataStruct {
+	GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Attributes Struct")
+    int attributeId = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Attributes Struct")
+	FString attributeSlug = "";
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Attributes Struct")
+    FString attributeName = "";
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Attributes Struct")
+	int attributeValue = 0;
+};
+
+
+USTRUCT(BlueprintType)
+struct FAttributesDataStruct {
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Attributes Struct")
+    TMap<FString, FAttributeDataStruct> attributesData;
+};
+
+USTRUCT(BlueprintType)
 struct FCharacterDataStruct
 {
     GENERATED_BODY()
@@ -40,6 +63,8 @@ struct FCharacterDataStruct
     FString characterRace = "";
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
     FPositionDataStruct characterPosition;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
+    FAttributesDataStruct characterAttributes;
 };
 
 USTRUCT(BlueprintType)
@@ -72,4 +97,59 @@ struct FMessageDataStruct
     FString message;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Packet Service Data Struct")
 	FString timestamp = "";
+};
+
+USTRUCT(BlueprintType)
+struct FSpawnZoneStruct
+{
+    GENERATED_BODY();
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Zone Struct")
+    int zoneID = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Zone Struct")
+    FString zoneName = "";
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Zone Struct")
+    int MobIDToSpawn = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Zone Struct")
+    int currentMobsCount = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Zone Struct")
+    int MaxMobs = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Zone Struct")
+    int respawnTime = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Zone Struct")
+    bool bSpawningEnabled = true;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Zone Struct")
+    FVector spawnSizeStart;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Zone Struct")
+    FVector spawnSizeEnd;
+};
+
+USTRUCT(BlueprintType)
+struct FMOBStruct {
+    GENERATED_BODY();
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+    int mobID = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+    FString mobUniqueID = "";
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+    int mobZoneID = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+    FString mobName = "";
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+    FString mobRace = "";
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+    int mobLevel = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+    int mobCurrentHealth = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+    int mobCurrentMana = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+    FPositionDataStruct mobPosition;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+    bool bIsDead = false;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+    bool bIsAggressive = false;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+    FAttributesDataStruct mobAttributes;
 };

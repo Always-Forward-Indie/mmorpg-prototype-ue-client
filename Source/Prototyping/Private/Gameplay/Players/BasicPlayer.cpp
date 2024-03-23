@@ -74,63 +74,110 @@ void ABasicPlayer::Tick(float DeltaTime)
 
     if (MyGameInstance && !playerData.isOtherClient)
     {
-        FVector currentLocation = GetActorLocation();
-        FRotator currentRotation = GetActorRotation();
+        // Update player movement for local player
+		UpdateCurrentPlayerMovement(DeltaTime);
+    }
 
-        FVector newLocation = FVector(playerData.characterData.characterPosition.positionX,
-            			playerData.characterData.characterPosition.positionY,
-            			playerData.characterData.characterPosition.positionZ);
+    // Update player movement for remote player
+    if (playerData.isOtherClient)
+    {
+        // UpdateRemotePlayerMovementOld(DeltaTime);
+        UpdateRemotePlayerMovement();
+    }
 
-        FVector MovementDirection = (currentLocation - newLocation).GetSafeNormal();
-        if (!MovementDirection.IsNearlyZero())
+    // Simulate movement for local player
+    if (bSimulateMovement && !playerData.isOtherClient)
+    {
+        UpdateMovementSimulation(DeltaTime);
+	}
+}
+
+void ABasicPlayer::Move(const FInputActionValue& Value)
+{
+    if (Controller != nullptr)
+    {
+        const FVector2D MoveValue = Value.Get<FVector2D>().GetSafeNormal(); // Normalize input vector
+        const FRotator MovementRotation(0, Controller->GetControlRotation().Yaw, 0);
+
+        // Calculate movement direction based on control rotation
+        const FVector ForwardDirection = MovementRotation.RotateVector(FVector::ForwardVector);
+        const FVector RightDirection = MovementRotation.RotateVector(FVector::RightVector);
+
+        // Calculate movement input based on normalized MoveValue
+        const FVector MovementInput = (ForwardDirection * MoveValue.Y + RightDirection * MoveValue.X).GetSafeNormal();
+
+        // Apply movement input with constant speed
+        AddMovementInput(MovementInput, MoveSpeed * GetWorld()->GetDeltaSeconds());
+    }
+}
+
+void ABasicPlayer::Look(const FInputActionValue& Value)
+{
+    if (Controller != nullptr)
+    {
+        const FVector2D LookValue = Value.Get<FVector2D>();
+
+        if (LookValue.X != 0.f)
         {
-            // Calculate the desired rotation based on the movement direction
-            FRotator DesiredRotation = MovementDirection.Rotation();
-            DesiredRotation.Pitch = 0.0f; // Keep the pitch level, adjust if your game needs vertical aiming
-            DesiredRotation.Roll = 0.0f;  // Typically, you don't need to roll the character
-
-            if (!bSimulateMovement) {
-                playerData.characterData.characterPosition.rotationZ = DesiredRotation.Yaw;
-            }
+            AddControllerYawInput(LookValue.X);
         }
 
-        // Compare current position and rotation to the last sent values
-        bool hasPositionChanged = !currentLocation.Equals(LastSentPosition, PositionThreshold);
-        //bool hasRotationChanged = !FMath::IsNearlyEqual(currentRotation.Yaw, LastSentRotation.Yaw, RotationThreshold);
-
-        TimeSinceLastUpdate += DeltaTime;
-
-        if (hasPositionChanged && TimeSinceLastUpdate >= UpdateInterval)
+        if (LookValue.Y != 0.f)
         {
-            // Update player data with current state
-            playerData.characterData.characterPosition.positionX = currentLocation.X;
-            playerData.characterData.characterPosition.positionY = currentLocation.Y;
-            playerData.characterData.characterPosition.positionZ = currentLocation.Z;
-            //if (!bSimulateMovement) {
-                //playerData.characterData.characterPosition.rotationZ = currentRotation.Yaw;
-            //}
+            AddControllerPitchInput(LookValue.Y * -1);
+        }
+    }
+}
 
-            // Send player movement to the game server
-            MyGameInstance->PlayerManager->SendMovePlayerRequest(playerData);
+void ABasicPlayer::UpdateCurrentPlayerMovement(float DeltaTime)
+{
+    FVector currentLocation = GetActorLocation();
+    FRotator currentRotation = GetActorRotation();
 
-            // Update the last sent position and rotation
-            LastSentPosition = currentLocation;
-            LastSentRotation = currentRotation;
+    FVector newLocation = FVector(playerData.characterData.characterPosition.positionX,
+        playerData.characterData.characterPosition.positionY,
+        playerData.characterData.characterPosition.positionZ);
 
-            // Reset the timer
-            TimeSinceLastUpdate = 0.0f;
+    FVector MovementDirection = (currentLocation - newLocation).GetSafeNormal();
+    if (!MovementDirection.IsNearlyZero())
+    {
+        // Calculate the desired rotation based on the movement direction
+        FRotator DesiredRotation = MovementDirection.Rotation();
+        DesiredRotation.Pitch = 0.0f; // Keep the pitch level, adjust if your game needs vertical aiming
+        DesiredRotation.Roll = 0.0f;  // Typically, you don't need to roll the character
+
+        if (!bSimulateMovement) {
+            playerData.characterData.characterPosition.rotationZ = DesiredRotation.Yaw;
         }
     }
 
+    // Compare current position and rotation to the last sent values
+    bool hasPositionChanged = !currentLocation.Equals(LastSentPosition, PositionThreshold);
+    //bool hasRotationChanged = !FMath::IsNearlyEqual(currentRotation.Yaw, LastSentRotation.Yaw, RotationThreshold);
 
-    if (bSimulateMovement && !playerData.isOtherClient)
-    {
-		UpdateMovement(DeltaTime);
-	}
+    TimeSinceLastUpdate += DeltaTime;
 
-    // Move the player if it is an OTHER CLIENT
-    if (MyGameInstance && playerData.isOtherClient)
+    if (hasPositionChanged && TimeSinceLastUpdate >= UpdateInterval)
     {
+        // Update player data with current state
+        playerData.characterData.characterPosition.positionX = currentLocation.X;
+        playerData.characterData.characterPosition.positionY = currentLocation.Y;
+        playerData.characterData.characterPosition.positionZ = currentLocation.Z;
+
+        // Send player movement to the game server
+        MyGameInstance->PlayerManager->SendMovePlayerRequest(playerData);
+
+        // Update the last sent position and rotation
+        LastSentPosition = currentLocation;
+        LastSentRotation = currentRotation;
+
+        // Reset the timer
+        TimeSinceLastUpdate = 0.0f;
+    }
+}
+
+void ABasicPlayer::UpdateRemotePlayerMovementOld(float DeltaTime)
+{
         FVector TargetPointPosition = FVector(playerData.characterData.characterPosition.positionX,
             playerData.characterData.characterPosition.positionY,
             playerData.characterData.characterPosition.positionZ);
@@ -142,9 +189,11 @@ void ABasicPlayer::Tick(float DeltaTime)
         FVector Direction = (TargetPointPosition - CurrentPosition).GetSafeNormal();
         float DistanceToTarget = (TargetPointPosition - CurrentPosition).Size();
 
-        if (DistanceToTarget > 0.2f) // Small threshold to prevent jittering
+        if (DistanceToTarget > 5.0f) // Small threshold to prevent jittering
         {
-            float MovementStep = MoveSpeed * DeltaTime;
+            float MovementStep = MoveSpeed * 2 * DeltaTime;
+    //        //float MovementStep = MoveSpeed * GetWorld()->GetDeltaSeconds();
+
             if (DistanceToTarget < MovementStep) // Close enough to snap to the target
             {
                 SetActorLocation(TargetPointPosition);
@@ -152,7 +201,7 @@ void ABasicPlayer::Tick(float DeltaTime)
             else
             {
                 FVector NewPosition = CurrentPosition + Direction * MovementStep;
-                SetActorLocation(NewPosition);
+               SetActorLocation(NewPosition);
             }
         }
 
@@ -165,7 +214,68 @@ void ABasicPlayer::Tick(float DeltaTime)
         FRotator NewRotation = FMath::RInterpTo(CurrentRotation, TargetRotation, DeltaTime, RotationStep);
 
         SetActorRotation(NewRotation);
-    }
+}
+
+// Update function for remote player
+void ABasicPlayer::UpdateRemotePlayerMovement()
+{
+    // Convert server timestamp to Unix timestamp
+    float ServerUnixTimestamp = StringToTimestamp(messageData.timestamp).ToUnixTimestamp();
+
+    // Get current world time (Unix timestamp)
+    float CurrentWorldUnixTimestamp = GetWorld()->GetTimeSeconds();
+
+    // Calculate elapsed time since last update
+    float DeltaTime = CurrentWorldUnixTimestamp - LastUpdateTime;
+    LastUpdateTime = CurrentWorldUnixTimestamp;
+
+    // Calculate interpolation speed based on movement speed
+    float InterpolationSpeed = CalculateInterpolationSpeed(MoveSpeed);
+
+    // Interpolate movement based on timestamps and elapsed time
+    InterpolateMovement(DeltaTime, InterpolationSpeed);
+}
+
+// Define a function to calculate interpolation speed based on movement speed
+float ABasicPlayer::CalculateInterpolationSpeed(float MovementSpeed)
+{
+    // Calculate interpolation speed based on movement speed
+    float InterpolationSpeed = MovementSpeed * interpolationSpeedFactor;
+
+    // Ensure interpolation speed is within reasonable bounds
+    InterpolationSpeed = FMath::Clamp(InterpolationSpeed, 1.0f, maxInterpolationSpeed); // MAX_INTERPOLATION_SPEED is a constant defining the maximum interpolation speed
+
+    return InterpolationSpeed;
+}
+
+// Function to interpolate movement based on timestamps and elapsed time
+void ABasicPlayer::InterpolateMovement(float DeltaTime, float InterpolationSpeed)
+{
+    // Get target position from playerData
+    FVector targetPosition = FVector(playerData.characterData.characterPosition.positionX,
+        playerData.characterData.characterPosition.positionY,
+        playerData.characterData.characterPosition.positionZ);
+
+    // Interpolate position
+    FVector CurrentPosition = GetActorLocation();
+    FVector InterpolatedPosition = FMath::VInterpConstantTo(CurrentPosition, targetPosition, DeltaTime, InterpolationSpeed);
+    SetActorLocation(InterpolatedPosition);
+
+    // Interpolate rotation
+    FRotator CurrentRotation = GetActorRotation();
+    FRotator TargetRotation(0, playerData.characterData.characterPosition.rotationZ, 0);
+
+    // Interpolate rotation
+    float RotationStep = RotationSpeed * DeltaTime; // Define RotationSpeed as needed
+    FRotator NewRotation = FMath::RInterpTo(CurrentRotation, TargetRotation, DeltaTime, RotationStep);
+    SetActorRotation(NewRotation);
+}
+
+// Function to convert string to timestamp
+FDateTime ABasicPlayer::StringToTimestamp(const FString& DateTimeString) {
+    FDateTime DateTime;
+    FDateTime::Parse(DateTimeString, DateTime);
+    return DateTime;
 }
 
 // get player data is other client
@@ -261,98 +371,7 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
     playerData.characterData.characterPosition.rotationZ = rotZ;
 }
 
-void ABasicPlayer::Move(const FInputActionValue& Value)
-{
-    if (Controller != nullptr)
-    {
-        const FVector2D MoveValue = Value.Get<FVector2D>().GetSafeNormal(); // Normalize input vector
-        const FRotator MovementRotation(0, Controller->GetControlRotation().Yaw, 0);
 
-        // Calculate movement direction based on control rotation
-        const FVector ForwardDirection = MovementRotation.RotateVector(FVector::ForwardVector);
-        const FVector RightDirection = MovementRotation.RotateVector(FVector::RightVector);
-
-        // Calculate movement input based on normalized MoveValue
-        const FVector MovementInput = (ForwardDirection * MoveValue.Y + RightDirection * MoveValue.X).GetSafeNormal();
-
-        // Apply movement input with constant speed
-        AddMovementInput(MovementInput, MoveSpeed * GetWorld()->GetDeltaSeconds());
-    }
-}
-
-// Function to convert string to timestamp
-FDateTime ABasicPlayer::StringToTimestamp(const FString& DateTimeString) {
-    FDateTime DateTime;
-    FDateTime::Parse(DateTimeString, DateTime);
-    return DateTime;
-}
-
-// Function to interpolate player position
-FVector ABasicPlayer::InterpolatePlayerPosition(const FClientDataStruct& ClientData, const FMessageDataStruct& MessageData)
-{
-    // convert message data timestamp from string to FDateTime
-    FDateTime PacketDateTime = StringToTimestamp(MessageData.timestamp);
-    // get seconds from the timestamp
-    float ServerTimestamp = PacketDateTime.GetSecond();
-
-    FVector LastKnownPosition = GetActorLocation();
-    FVector NewPosition = FVector(ClientData.characterData.characterPosition.positionX, 
-        ClientData.characterData.characterPosition.positionY, 
-        ClientData.characterData.characterPosition.positionZ);
-    // Implement interpolation logic here (e.g., linear interpolation)
-    // For simplicity, linear interpolation is used in this example
-    float Alpha = CalculateInterpolationAlpha(ServerTimestamp);
-    return FMath::Lerp(LastKnownPosition, NewPosition, Alpha);
-}
-
-// Function to calculate interpolation alpha based on server timestamp
-float ABasicPlayer::CalculateInterpolationAlpha(float ServerTimestamp)
-{
-    float InterpolationDuration = 5.1f; // Adjust as needed
-    //float CurrentTime = GetWorld()->GetTimeSeconds();
-    float CurrentTime = FDateTime::UtcNow().GetSecond();
-    float Alpha = FMath::Clamp((CurrentTime - ServerTimestamp) / InterpolationDuration, 0.0f, 1.0f);
-
-    //log server timestamp
-    UE_LOG(LogTemp, Warning, TEXT("ServerTimestamp: %f"), ServerTimestamp);
-    //log current time
-    UE_LOG(LogTemp, Warning, TEXT("CurrentTimestamp: %f"), CurrentTime);
-    // log alpha value
-    UE_LOG(LogTemp, Warning, TEXT("Alpha: %f"), Alpha);
-
-    return Alpha;
-}
-
-// Function to predict player position
-FVector ABasicPlayer::PredictPlayerPosition(const FClientDataStruct& ClientData, float DeltaTime)
-{
-    FVector LastKnownPosition = GetActorLocation();
-    FVector NewPosition = FVector(ClientData.characterData.characterPosition.positionX,
-        ClientData.characterData.characterPosition.positionY,
-        ClientData.characterData.characterPosition.positionZ);
-    // Implement prediction logic here (e.g., dead reckoning)
-    // For simplicity, linear prediction is used in this example
-    FVector PredictedPosition = NewPosition + (NewPosition - LastKnownPosition) / DeltaTime;
-    return PredictedPosition;
-}
-
-void ABasicPlayer::Look(const FInputActionValue& Value)
-{
-    if (Controller != nullptr)
-    {
-        const FVector2D LookValue = Value.Get<FVector2D>();
-
-        if (LookValue.X != 0.f)
-        {
-            AddControllerYawInput(LookValue.X);
-        }
-
-        if (LookValue.Y != 0.f)
-        {
-            AddControllerPitchInput(LookValue.Y*-1);
-        }
-    }
-}
 
 // Play sound
 void ABasicPlayer::PlaySound(USoundBase* Sound)
@@ -377,7 +396,7 @@ void ABasicPlayer::StopMovementSimulation()
     bSimulateMovement = false;
 }
 
-void ABasicPlayer::UpdateMovement(float DeltaTime)
+void ABasicPlayer::UpdateMovementSimulation(float DeltaTime)
 {
     FVector CurrentLocation = GetActorLocation();
     float DistanceToTarget = FVector::Dist(CurrentLocation, TargetPosition);
@@ -387,8 +406,6 @@ void ABasicPlayer::UpdateMovement(float DeltaTime)
         float NewX = FMath::FRandRange(SquareCenter.X - SideLength / 2, SquareCenter.X + SideLength / 2);
         float NewY = FMath::FRandRange(SquareCenter.Y - SideLength / 2, SquareCenter.Y + SideLength / 2);
         TargetPosition = FVector(NewX, NewY, 90.0f); // Assuming Z is constant for this example
-
-        //float RandomYaw = FMath::FRandRange(0.0f, 360.0f);
 
         FVector MovementDirection = (TargetPosition - CurrentLocation).GetSafeNormal();
         if (!MovementDirection.IsNearlyZero())
@@ -410,7 +427,8 @@ void ABasicPlayer::UpdateMovement(float DeltaTime)
     if (DistanceToTarget > 1.0f) // Use a small threshold to avoid jittering at the target location
     {
         FVector Direction = (TargetPosition - CurrentLocation).GetSafeNormal();
-        float MovementStep = MoveSpeed * DeltaTime;
+        float MovementStep = MoveSpeed * 2 * DeltaTime; // Adjust as needed
+        //float MovementStep = MoveSpeed* GetWorld()->GetDeltaSeconds();
         FVector NewPosition = CurrentLocation + Direction * MovementStep;
         SetActorLocation(NewPosition);
     }

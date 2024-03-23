@@ -20,7 +20,7 @@ bool NetworkReceiverWorker::GetData(FString& OutData)
 uint32 NetworkReceiverWorker::Run()
 {
     // Assuming you've defined these somewhere
-    const int32 ReceiveBufferSize = 1024;
+    const int32 ReceiveBufferSize = 4096;
     uint8 ReceiveBuffer[ReceiveBufferSize];
 
     UE_LOG(LogTemp, Warning, TEXT("NetworkReceiverWorker Thread Started"));

@@ -127,7 +127,12 @@ void UMyGameInstance::InitNetworkingSetup()
 // load LoginLevel
 void UMyGameInstance::LoadLoginLevel()
 {
-	LoadLevel(LoginLevelName);
+	if (bDebug) {
+		LoadLevel(DebugLevelName);
+	}
+	else {
+		LoadLevel(LoginLevelName);
+	}
 }
 
 void UMyGameInstance::Shutdown()
@@ -226,7 +231,7 @@ void UMyGameInstance::LoadLevel(const FName& LevelName)
 void UMyGameInstance::OnLevelLoaded()
 {
 	// level loaded
-	UE_LOG(LogTemp, Warning, TEXT("Level loaded %s"), LevelBeingLoaded);
+	UE_LOG(LogTemp, Warning, TEXT("Level loaded %hs"), LevelBeingLoaded);
 	
 
 	// Check if the level being loaded is the LoginLevel
@@ -276,6 +281,29 @@ void UMyGameInstance::OnLevelLoaded()
 			LoginLevelCamera->StopSound();
 			LoginLevelCamera->Destroy();
 		}
+	}
+
+	if (LevelBeingLoaded == DebugLevelName)
+	{
+		RemoveLoginWidgetFromViewport();
+		GetWorld()->GetFirstPlayerController()->bShowMouseCursor = false;
+
+
+		FClientDataStruct clientData;
+		clientData.clientId = 1;
+		clientData.characterData.characterId = 1;
+		clientData.characterData.characterPosition.positionX = 0.0f;
+		clientData.characterData.characterPosition.positionY = 0.0f;
+		clientData.characterData.characterPosition.positionZ = 90.0f;
+		CurrentCharacterID = 1;
+		CurrentClientID = 1;
+
+		ClientData = clientData;
+
+
+
+		AddPlayerData(clientData.clientId, clientData);
+		SpawnPlayerForClient(clientData.clientId);
 	}
 
 	UWorld* TargetWorld = GetWorld();

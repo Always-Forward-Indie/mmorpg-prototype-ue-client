@@ -196,11 +196,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Character")
 	int32 GetCurrentCharacterID();
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Level")
 	FName GameLevelName;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Level")
 	FName LoginLevelName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Level")
+	FName DebugLevelName;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<UUserWidget> LoadingScreenWidgetClass;
@@ -266,6 +269,10 @@ public:
 	// sound cue for the loading screen
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Audio")
 	USoundBase* LoadingMusicSoundSource;
+
+	// debug flag
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Debug")
+	bool bDebug;
 
 	// Loading screen actor
 	ALoadingSceenActor* LoadingScreenActor;

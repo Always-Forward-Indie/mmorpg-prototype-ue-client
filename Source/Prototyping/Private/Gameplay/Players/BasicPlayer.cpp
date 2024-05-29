@@ -284,12 +284,23 @@ bool ABasicPlayer::GetIsOtherClient()
 	return playerData.isOtherClient;
 }
 
+// get current zone name
+FString ABasicPlayer::GetCurrentZoneName()
+{
+	return CurrentZoneName;
+}
+
 // Set message data
 void ABasicPlayer::SetMessageData(const FMessageDataStruct NewMessageData)
 {
 	messageData = NewMessageData;
 }
- 
+
+void ABasicPlayer::SetCurrentZoneName(const FString& NewZoneName)
+{
+    CurrentZoneName = NewZoneName;
+}
+
 // Set is other client
 void ABasicPlayer::SetIsOtherClient(bool bIsOtherClient)
 {

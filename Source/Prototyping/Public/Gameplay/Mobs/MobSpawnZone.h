@@ -17,7 +17,7 @@ class PROTOTYPING_API AMobSpawnZone : public ATriggerBox
 	GENERATED_BODY()
 
 	private:
-		UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SpawnZone Data", meta = (AllowPrivateAccess = "true"))
+		UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SpawnZone Data", meta = (AllowPrivateAccess = "true"))
 		FSpawnZoneStruct SpawnZoneData;
 
 		UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SpawnZone Data", meta = (AllowPrivateAccess = "true"))

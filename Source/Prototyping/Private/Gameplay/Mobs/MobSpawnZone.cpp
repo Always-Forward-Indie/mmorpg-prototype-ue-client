@@ -2,7 +2,7 @@
 
 
 #include "Gameplay/Mobs/MobSpawnZone.h"
-#include <Gameplay/Players/MyPlayerBasic.h>
+#include <Gameplay/Players/BasicPlayer.h>
 
 // Sets default values
 AMobSpawnZone::AMobSpawnZone()
@@ -17,6 +17,14 @@ AMobSpawnZone::AMobSpawnZone()
 void AMobSpawnZone::BeginPlay()
 {
 	Super::BeginPlay();
+	UBoxComponent* BoxComponent = Cast<UBoxComponent>(GetCollisionComponent());
+
+	// Bind the overlap events
+	if (BoxComponent)
+	{
+		BoxComponent->OnComponentBeginOverlap.AddDynamic(this, &AMobSpawnZone::OnOverlapBegin);
+		BoxComponent->OnComponentEndOverlap.AddDynamic(this, &AMobSpawnZone::OnOverlapEnd);
+	}
 }
 
 // Called every frame
@@ -51,13 +59,6 @@ void AMobSpawnZone::ChangeSpawnZoneSize()
 		BoxComponent->SetWorldLocation(Center);
 		BoxComponent->SetBoxExtent(Extent, true);
 		BoxComponent->UpdateBounds();
-
-		// Bind the overlap events
-		if (BoxComponent)
-		{
-			BoxComponent->OnComponentBeginOverlap.AddDynamic(this, &AMobSpawnZone::OnOverlapBegin);
-			BoxComponent->OnComponentEndOverlap.AddDynamic(this, &AMobSpawnZone::OnOverlapEnd);
-		}
 	}
 	else
 	{
@@ -88,6 +89,19 @@ void AMobSpawnZone::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* 
 	{
 		// Handle overlap start logic here
 		UE_LOG(LogTemp, Warning, TEXT("Overlap Begin with %s"), *OtherActor->GetName());
+
+		// check if the actor is a player
+		ABasicPlayer* Player = Cast<ABasicPlayer>(OtherActor);
+
+		if (Player)
+		{
+			// check if the spawn zone is enabled
+			if (SpawnZoneData.bSpawningEnabled)
+			{
+				Player->SetCurrentZoneName(SpawnZoneData.zoneName);
+				Player->ZoneUpdated.Broadcast();
+			}
+		}
 	}
 }
 
@@ -97,6 +111,15 @@ void AMobSpawnZone::OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActor* Ot
 	{
 		// Handle overlap end logic here
 		UE_LOG(LogTemp, Warning, TEXT("Overlap End with %s"), *OtherActor->GetName());
+
+		// check if the actor is a player
+		ABasicPlayer* Player = Cast<ABasicPlayer>(OtherActor);
+
+		if (Player)
+		{
+			Player->SetCurrentZoneName("");
+			Player->ZoneUpdated.Broadcast();
+		}
 	}
 }
 

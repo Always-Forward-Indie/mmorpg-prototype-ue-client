@@ -30,6 +30,10 @@ private:
 	FMessageDataStruct messageData;
 
 	UMyGameInstance* MyGameInstance;
+	
+	// Zone Name
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Character Data", meta = (AllowPrivateAccess = "true"))
+	FString CurrentZoneName;
 
 	// set editable variables
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Configuration", meta = (AllowPrivateAccess = "true"))
@@ -78,6 +82,13 @@ public:
 
 	// Sets default values for this character's properties
 	ABasicPlayer();
+
+	// Event declaration
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnZoneUpdated);
+
+	// Event variable
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FOnZoneUpdated ZoneUpdated;
 
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
@@ -161,9 +172,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
 	void SetMessageData(const FMessageDataStruct NewMessageData);
 
+	// Set zone name
+	UFUNCTION(BlueprintCallable, Category = "Player Data")
+	void SetCurrentZoneName(const FString& NewZoneName);
+
 	// Get is other client
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
 	bool GetIsOtherClient();
+
+	UFUNCTION(BlueprintCallable, Category = "Player Data")
+	FString GetCurrentZoneName();
 
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input")

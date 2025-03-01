@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Gameplay/Mobs/BasicMOB.h"
@@ -270,42 +270,71 @@ float ABasicMOB::CalculateInterpolationSpeed(float MovementSpeed)
 // Function to interpolate movement based on timestamps and elapsed time
 void ABasicMOB::InterpolateMovement(float DeltaTime, float InterpolationSpeed)
 {
-	// Get current position
+	// Получаем текущую позицию моба
 	FVector CurrentLocation = GetActorLocation();
 
-	// Get target position from playerData
-	FVector targetPosition = FVector(MOBData.mobPosition.positionX,
+	// Получаем целевую позицию от сервера
+	FVector TargetPosition = FVector(
+		MOBData.mobPosition.positionX,
 		MOBData.mobPosition.positionY,
-		MOBData.mobPosition.positionZ);
+		MOBData.mobPosition.positionZ
+	);
 
-	// Interpolate position
-	FVector CurrentPosition = GetActorLocation();
-	FVector InterpolatedPosition = FMath::VInterpConstantTo(CurrentPosition, targetPosition, DeltaTime, InterpolationSpeed);
-	SetActorLocation(InterpolatedPosition);
+	// Вычисляем дистанцию до цели
+	float MoveDistance = FVector::Dist(CurrentLocation, TargetPosition);
+	float MoveThreshold = 5.0f; // Порог для микро-движений
 
+	// Интерполяция движения, если расстояние достаточно велико
+	if (MoveDistance > MoveThreshold)
+	{
+		// Уменьшаем скорость интерполяции, чтобы движение было более мягким
+		float AdjustedInterpolationSpeed = InterpolationSpeed * 0.7f;
 
-	// Calculate the movement direction
-	FVector MovementDirection = (targetPosition - CurrentLocation).GetSafeNormal();
+		FVector InterpolatedPosition = FMath::VInterpConstantTo(CurrentLocation, TargetPosition, DeltaTime, AdjustedInterpolationSpeed);
+		SetActorLocation(InterpolatedPosition);
+	}
+
+	// Вычисляем направление движения
+	FVector MovementDirection = (TargetPosition - CurrentLocation).GetSafeNormal();
+
+	// ✅ Обновляем ротацию только если моб действительно двигается
 	if (!MovementDirection.IsNearlyZero())
 	{
-		// Calculate the desired rotation based on the movement direction
+		// Вычисляем желаемый угол
 		FRotator DesiredRotation = MovementDirection.Rotation();
-		DesiredRotation.Pitch = 0.0f; // Keep the pitch level, adjust if your game needs vertical aiming
-		DesiredRotation.Roll = 0.0f;  // Typically, you don't need to roll the character
+		DesiredRotation.Pitch = 0.0f; // Держим горизонтальный уровень
+		DesiredRotation.Roll = 0.0f;
 
-		// Set the rotation value according direction
+		// Записываем новый угол в данные MOB
 		MOBData.mobPosition.rotationZ = DesiredRotation.Yaw;
 	}
 
-	// Interpolate rotation
+	// Интерполяция поворота
 	FRotator CurrentRotation = GetActorRotation();
 	FRotator TargetRotation(0, MOBData.mobPosition.rotationZ, 0);
 
-	// Interpolate rotation
-	float RotationStep = RotationSpeed * DeltaTime; // Define RotationSpeed as needed
-	FRotator NewRotation = FMath::RInterpTo(CurrentRotation, TargetRotation, DeltaTime, RotationStep);
-	SetActorRotation(NewRotation);
+	// Разница между текущим и целевым углом
+	float AngleDiff = FMath::Abs(FRotator::NormalizeAxis(TargetRotation.Yaw - CurrentRotation.Yaw));
+
+	// Улучшаем плавность поворота
+	float RotationSpeedLimit = 1.5f; // Увеличиваем лимит, чтобы моб мог быстрее поворачиваться
+	float DynamicRotationSpeed = FMath::Clamp(1.0f + (AngleDiff / 250.0f), 1.0f, RotationSpeedLimit) * RotationSpeed;
+
+	// Плавная интерполяция поворота через `Slerp`
+	if (MoveDistance > MoveThreshold)
+	{
+		FQuat QuatCurrent = FQuat(CurrentRotation);
+		FQuat QuatTarget = FQuat(TargetRotation);
+
+		// Делаем Alpha еще меньше для мягкого завершения поворота
+		float Alpha = FMath::Clamp(DeltaTime * (DynamicRotationSpeed / 18.0f), 0.0f, 0.08f);
+		FQuat QuatInterpolated = FQuat::Slerp(QuatCurrent, QuatTarget, Alpha);
+
+		SetActorRotation(QuatInterpolated.Rotator());
+	}
 }
+
+
 
 // Function to convert string to timestamp
 FDateTime ABasicMOB::StringToTimestamp(const FString& DateTimeString) {

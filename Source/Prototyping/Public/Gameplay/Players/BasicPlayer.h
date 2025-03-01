@@ -112,6 +112,7 @@ public:
 	void UpdateRemotePlayerMovementOld(float DeltaTime);
 	// Update REMOTE player movement
 	void UpdateRemotePlayerMovement();
+	float CalculateRotationInterpSpeed();
 	// Interpolate movement for REMOTE player
 	float CalculateInterpolationSpeed(float MovementSpeed);
 	void InterpolateMovement(float DeltaTime, float InterpolationSpeed);
@@ -212,4 +213,14 @@ public:
 	// Stop sound
 	UFUNCTION(BlueprintCallable, Category = "Audio")
 	void StopSound();
+
+
+	// Remote player interpolation
+	FVector LastReceivedPosition;
+	FVector TargetReceivedPosition;
+	FRotator LastReceivedRotation;
+	FRotator TargetReceivedRotation;
+	float TimeSinceLastPositionUpdate;
+	float ServerPositionUpdateInterval = 0.1f; // Примерный интервал обновлений (100 мс)
+
 };

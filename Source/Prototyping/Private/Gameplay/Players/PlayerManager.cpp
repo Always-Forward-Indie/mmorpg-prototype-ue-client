@@ -378,7 +378,7 @@ void UPlayerManager::StartPing()
 	{
 		worldContext->GetTimerManager().ClearTimer(NetworkServersPingTimerHandle);
 		worldContext->GetTimerManager().SetTimer(NetworkServersPingTimerHandle, this, &UPlayerManager::SendPingRequest, PingTimeout, true);
-		UE_LOG(LogTemp, Warning, TEXT("Ping timer for Fame server set up successfully."));
+		UE_LOG(LogTemp, Warning, TEXT("Ping timer for Game server set up successfully."));
 	}
 	else
 	{

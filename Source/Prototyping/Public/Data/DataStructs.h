@@ -119,9 +119,9 @@ struct FSpawnZoneStruct
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Zone Struct")
     bool bSpawningEnabled = true;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Zone Struct")
-    FVector spawnSizeStart;
+    FVector spawnStartPos;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Zone Struct")
-    FVector spawnSizeEnd;
+    FVector spawnSize;
 };
 
 USTRUCT(BlueprintType)

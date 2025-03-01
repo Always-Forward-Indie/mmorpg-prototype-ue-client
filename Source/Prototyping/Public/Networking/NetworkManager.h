@@ -9,7 +9,9 @@
 #include "Networking.h"
 #include "Networking/NetworkReceiverWorker.h"
 #include "Networking/NetworkSenderWorker.h"
+#include <Gameplay/UI/MessageBoxPopup.h>
 #include "NetworkManager.generated.h"
+
 
 
 // Define a delegate or event signature
@@ -54,18 +56,46 @@ private:
 	FTimerHandle NetworkLoginServerPollTimerHandle;
 	FTimerHandle NetworkGameServerPollTimerHandle;
 
+	FTimerHandle LoginServerConnectionTimerHandle;
+	FTimerHandle GameServerConnectionTimerHandle;
+
+	int32 LoginConnectionRetryCount = 0;
+	int32 GameConnectionRetryCount = 0;
+	const int32 MaxLoginRetries = 3; 
+	const int32 MaxGameRetries = 3; 
+
+	// Класс виджета для месседж-бокса
+	UPROPERTY()
+	TSubclassOf<UMessageBoxPopup> MessageBoxPopupClass;
+
+	UPROPERTY()
+	UMessageBoxPopup* MsgBoxLoginServer;
+	UPROPERTY()
+	UMessageBoxPopup* MsgBoxGameServer;
+
 
 public:
 	UNetworkManager(const FObjectInitializer& ObjectInitializer);
-	void InitializeTCPConnection();
+	void ConnectGameServer();
+	void ShowLoginServerConnectionIssuePopup();
+	void ShowGameServerConnectionIssuePopup();
 	void SetWorldContext(UWorld* World);
+	void SetMessageBoxPopupClass(TSubclassOf<UMessageBoxPopup> InMessageBoxPopupClass);
 	void StartPollingLoginServer();
 	void StartPollingGameServer();
+	void ConnectLoginServer();
 	void SendDataToLoginServer(const FString& Data);
 	void SendDataToGameServer(const FString& Data);
 	void PollLoginServerNetworkData();
 	void PollGameServerNetworkData();
 	void Shutdown();
+
+	UFUNCTION()
+	void OnLoginServerConnectionRetry();
+	UFUNCTION()
+	void OnGameServerConnectionRetry();
+	UFUNCTION()
+	void OnConnectCancel();
 
 	// Delegate instance
 	FOnLoginServerDataReceived OnLoginServerDataReceived;

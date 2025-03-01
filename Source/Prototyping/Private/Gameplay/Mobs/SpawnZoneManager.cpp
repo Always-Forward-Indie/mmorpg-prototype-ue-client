@@ -139,7 +139,7 @@ void USpawnZoneManager::CreateSpawnZone(const FSpawnZoneStruct& SpawnZoneData)
 		// Create the SpawnZone in the world
 		AMobSpawnZone* BasicSpawnZone = worldContext->SpawnActor<AMobSpawnZone>(
 			BasicSpawnZoneClass,
-			FVector(SpawnZoneData.spawnSizeStart),
+			FVector(SpawnZoneData.spawnStartPos),
 			FRotator(0, 0, 0)
 		);
 

@@ -220,6 +220,10 @@ public:
 	TSubclassOf<UMonitorStatsWidget> MonitorStatsWidgetClass;
 	UMonitorStatsWidget* MonitorStatsWidget;
 
+	// Класс виджета, который создаётся в Blueprint
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
+	TSubclassOf<class UMessageBoxPopup> MessageBoxPopupClass;
+
 
 	// A member variable to store the name of the level being loaded
 	FName LevelBeingLoaded;

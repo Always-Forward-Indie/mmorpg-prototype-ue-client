@@ -62,8 +62,12 @@ void UMyGameInstance::InitNetworkingSetup()
 	if (NetworkManager != nullptr) {
 		// set WorldContext
 		NetworkManager->SetWorldContext(GetWorld());
+		//Set the message box popup class
+		NetworkManager->SetMessageBoxPopupClass(MessageBoxPopupClass);
 		// Initialize the network manager connection
-		NetworkManager->InitializeTCPConnection();
+		//NetworkManager->InitializeTCPConnection();
+		NetworkManager->ConnectLoginServer();
+		NetworkManager->ConnectGameServer();
 	}
 
 	if (AuthenticationManager != nullptr) {
@@ -231,7 +235,7 @@ void UMyGameInstance::LoadLevel(const FName& LevelName)
 void UMyGameInstance::OnLevelLoaded()
 {
 	// level loaded
-	UE_LOG(LogTemp, Warning, TEXT("Level loaded %hs"), LevelBeingLoaded);
+	UE_LOG(LogTemp, Warning, TEXT("Level loaded %s"), *LevelBeingLoaded.ToString());
 	
 
 	// Check if the level being loaded is the LoginLevel
@@ -331,7 +335,7 @@ void UMyGameInstance::OnLevelLoaded()
 
 void UMyGameInstance::OnLevelUnloaded()
 {
-	UE_LOG(LogTemp, Warning, TEXT("Level unloaded %s"), LevelBeingLoaded);
+	UE_LOG(LogTemp, Warning, TEXT("Level unloaded %s"), *LevelBeingLoaded.ToString());
 
 }
 

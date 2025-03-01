@@ -468,12 +468,12 @@ TArray<FSpawnZoneStruct> JSONParser::DeserializeSpawnZonesData(const FString& Js
 					// spawn zone size with x, y, z
 					if (SpawnZoneObject->HasField(TEXT("minX")))
 					{
-						SpawnZoneData.spawnSizeStart = FVector(SpawnZoneObject->GetNumberField(TEXT("minX")), SpawnZoneObject->GetNumberField(TEXT("minY")), SpawnZoneObject->GetNumberField(TEXT("minZ")));
+						SpawnZoneData.spawnStartPos = FVector(SpawnZoneObject->GetNumberField(TEXT("minX")), SpawnZoneObject->GetNumberField(TEXT("minY")), SpawnZoneObject->GetNumberField(TEXT("minZ")));
 					}
 
 					if (SpawnZoneObject->HasField(TEXT("maxX")))
 					{
-						SpawnZoneData.spawnSizeEnd = FVector(SpawnZoneObject->GetNumberField(TEXT("maxX")), SpawnZoneObject->GetNumberField(TEXT("maxY")), SpawnZoneObject->GetNumberField(TEXT("maxZ")));
+						SpawnZoneData.spawnSize = FVector(SpawnZoneObject->GetNumberField(TEXT("maxX")), SpawnZoneObject->GetNumberField(TEXT("maxY")), SpawnZoneObject->GetNumberField(TEXT("maxZ")));
 					}
 
 					SpawnZonesList.Add(SpawnZoneData);
@@ -545,12 +545,12 @@ FSpawnZoneStruct JSONParser::DeserializeSpawnZoneData(const FString& JsonString)
 				// spawn zone size with x, y, z
 				if ((*spawnZoneDataObject)->HasField(TEXT("minX")))
 				{
-					SpawnZoneData.spawnSizeStart = FVector((*spawnZoneDataObject)->GetNumberField(TEXT("minX")), (*spawnZoneDataObject)->GetNumberField(TEXT("minY")), (*spawnZoneDataObject)->GetNumberField(TEXT("minZ")));
+					SpawnZoneData.spawnStartPos = FVector((*spawnZoneDataObject)->GetNumberField(TEXT("minX")), (*spawnZoneDataObject)->GetNumberField(TEXT("minY")), (*spawnZoneDataObject)->GetNumberField(TEXT("minZ")));
 				}
 
 				if ((*spawnZoneDataObject)->HasField(TEXT("maxX")))
 				{
-					SpawnZoneData.spawnSizeEnd = FVector((*spawnZoneDataObject)->GetNumberField(TEXT("maxX")), (*spawnZoneDataObject)->GetNumberField(TEXT("maxY")), (*spawnZoneDataObject)->GetNumberField(TEXT("maxZ")));
+					SpawnZoneData.spawnSize = FVector((*spawnZoneDataObject)->GetNumberField(TEXT("maxX")), (*spawnZoneDataObject)->GetNumberField(TEXT("maxY")), (*spawnZoneDataObject)->GetNumberField(TEXT("maxZ")));
 				}
 			}
 

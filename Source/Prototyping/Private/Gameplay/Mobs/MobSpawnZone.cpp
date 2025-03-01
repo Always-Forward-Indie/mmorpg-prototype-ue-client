@@ -35,35 +35,27 @@ void AMobSpawnZone::Tick(float DeltaTime)
 }
 
 // change spawn zone CollisionComponent box component size based on the start and end positions
-
 void AMobSpawnZone::ChangeSpawnZoneSize()
 {
-	// get the box component
-	//UBoxComponent* BoxComponent = Cast<UBoxComponent>(GetComponentByClass(UBoxComponent::StaticClass()));
-
 	UBoxComponent* BoxComponent = Cast<UBoxComponent>(GetCollisionComponent());
-
-	if (BoxComponent)
-	{
-		FVector Max = SpawnZoneData.spawnSizeEnd; // Assuming this corresponds to your "maxX", "maxY", "maxZ"
-		FVector Min = SpawnZoneData.spawnSizeStart; // Assuming this corresponds to your "minX", "minY", "minZ"
-
-		// Calculate the center of the box
-		FVector Center = (Max + Min) / 2.0f;
-
-		// Calculate the extents of the box
-		FVector Extent = (Max - Min) / 2.0f;
-		Extent = Extent.GetAbs(); // Make sure all Vector coordinates of Extent are positive
-
-		// Update the BoxComponent's transform (position and size)
-		BoxComponent->SetWorldLocation(Center);
-		BoxComponent->SetBoxExtent(Extent, true);
-		BoxComponent->UpdateBounds();
-	}
-	else
+	if (!BoxComponent)
 	{
 		UE_LOG(LogTemp, Error, TEXT("BoxComponent not found"));
+		return;
 	}
+
+	// Берём Pos и Size из SpawnZoneData
+	FVector Pos = SpawnZoneData.spawnStartPos;
+	FVector Size = SpawnZoneData.spawnSize;
+
+	//set z position to half of the size + the start position
+	Pos.Z += (Size.Z / 2);
+
+	BoxComponent->SetBoxExtent(Size / 2);
+	BoxComponent->SetWorldLocation(Pos);
+
+	// Обновляем Bounds
+	BoxComponent->UpdateBounds();
 }
 
 
@@ -173,25 +165,25 @@ FString AMobSpawnZone::GetSpawnZoneName()
 // set the spawn zone position start
 void AMobSpawnZone::SetSpawnZonePositionStart(FVector spawnZonePosition)
 {
-	SpawnZoneData.spawnSizeStart = spawnZonePosition;
+	SpawnZoneData.spawnStartPos = spawnZonePosition;
 }
 
 // get the spawn zone position start
 FVector AMobSpawnZone::GetSpawnZonePositionStart()
 {
-	return SpawnZoneData.spawnSizeStart;
+	return SpawnZoneData.spawnStartPos;
 }
 
 // set the spawn zone position end
 void AMobSpawnZone::SetSpawnZonePositionEnd(FVector spawnZonePosition)
 {
-	SpawnZoneData.spawnSizeEnd = spawnZonePosition;
+	SpawnZoneData.spawnSize = spawnZonePosition;
 }
 
 // get the spawn zone position end
 FVector AMobSpawnZone::GetSpawnZonePositionEnd()
 {
-	return SpawnZoneData.spawnSizeEnd;
+	return SpawnZoneData.spawnSize;
 }
 
 // set the spawn zone mob ID

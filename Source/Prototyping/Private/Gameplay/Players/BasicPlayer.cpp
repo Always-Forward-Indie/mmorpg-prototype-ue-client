@@ -176,102 +176,47 @@ void ABasicPlayer::UpdateCurrentPlayerMovement(float DeltaTime)
     }
 }
 
-void ABasicPlayer::UpdateRemotePlayerMovementOld(float DeltaTime)
-{
-        FVector TargetPointPosition = FVector(playerData.characterData.characterPosition.positionX,
-            playerData.characterData.characterPosition.positionY,
-            playerData.characterData.characterPosition.positionZ);
 
-        // Target rotation from playerData
-        float TargetRotationZ = playerData.characterData.characterPosition.rotationZ;
-
-        FVector CurrentPosition = GetActorLocation();
-        FVector Direction = (TargetPointPosition - CurrentPosition).GetSafeNormal();
-        float DistanceToTarget = (TargetPointPosition - CurrentPosition).Size();
-
-        if (DistanceToTarget > 5.0f) // Small threshold to prevent jittering
-        {
-            float MovementStep = MoveSpeed * 2 * DeltaTime;
-    //        //float MovementStep = MoveSpeed * GetWorld()->GetDeltaSeconds();
-
-            if (DistanceToTarget < MovementStep) // Close enough to snap to the target
-            {
-                SetActorLocation(TargetPointPosition);
-            }
-            else
-            {
-                FVector NewPosition = CurrentPosition + Direction * MovementStep;
-               SetActorLocation(NewPosition);
-            }
-        }
-
-        // Interpolate rotation
-        FRotator CurrentRotation = GetActorRotation();
-        FRotator TargetRotation = FRotator(CurrentRotation.Pitch, TargetRotationZ, CurrentRotation.Roll);
-
-        // You can adjust the rotation speed if needed
-        float RotationStep = RotationSpeed * DeltaTime; // Define RotationSpeed as needed
-        FRotator NewRotation = FMath::RInterpTo(CurrentRotation, TargetRotation, DeltaTime, RotationStep);
-
-        SetActorRotation(NewRotation);
-}
-
-// Update function for remote player
 void ABasicPlayer::UpdateRemotePlayerMovement()
 {
-    // Convert server timestamp to Unix timestamp
-    float ServerUnixTimestamp = StringToTimestamp(messageData.timestamp).ToUnixTimestamp();
+    TimeSinceLastPositionUpdate += GetWorld()->GetDeltaSeconds();
 
-    // Get current world time (Unix timestamp)
-    float CurrentWorldUnixTimestamp = GetWorld()->GetTimeSeconds();
+    float LerpFactor = FMath::Clamp(TimeSinceLastPositionUpdate / ServerPositionUpdateInterval, 0.f, 1.f);
 
-    // Calculate elapsed time since last update
-    float DeltaTime = CurrentWorldUnixTimestamp - LastUpdateTime;
-    LastUpdateTime = CurrentWorldUnixTimestamp;
+    FVector NewPosition = FMath::Lerp(LastReceivedPosition, TargetReceivedPosition, LerpFactor);
+    // Плавно интерполируем вращение независимо от позиции, с умеренной скоростью
+    float RotationInterpSpeed = 15.0f; // Персонаж повернется на 15 градусов за секунду
 
-    // Calculate interpolation speed based on movement speed
-    float InterpolationSpeed = CalculateInterpolationSpeed(MoveSpeed);
+    FRotator NewRotation = FMath::RInterpTo(GetActorRotation(), TargetReceivedRotation, GetWorld()->GetDeltaSeconds(), RotationInterpSpeed);
 
-    // Interpolate movement based on timestamps and elapsed time
-    InterpolateMovement(DeltaTime, InterpolationSpeed);
-}
 
-// Define a function to calculate interpolation speed based on movement speed
-float ABasicPlayer::CalculateInterpolationSpeed(float MovementSpeed)
-{
-    // Calculate interpolation speed based on movement speed
-    float InterpolationSpeed = MovementSpeed * interpolationSpeedFactor;
 
-    // Ensure interpolation speed is within reasonable bounds
-    InterpolationSpeed = FMath::Clamp(InterpolationSpeed, 1.0f, maxInterpolationSpeed); // MAX_INTERPOLATION_SPEED is a constant defining the maximum interpolation speed
+    float distanceToTarget = FVector::Dist(GetActorLocation(), TargetReceivedPosition);
 
-    return InterpolationSpeed;
-}
+    if (distanceToTarget > 300.f) {
+        SetActorLocation(TargetReceivedPosition);
+    }
+    else {
+        SetActorLocation(NewPosition);
+    }
 
-// Function to interpolate movement based on timestamps and elapsed time
-void ABasicPlayer::InterpolateMovement(float DeltaTime, float InterpolationSpeed)
-{
-    // Get target position from playerData
-    FVector targetPosition = FVector(playerData.characterData.characterPosition.positionX,
-        playerData.characterData.characterPosition.positionY,
-        playerData.characterData.characterPosition.positionZ);
-
-    // Interpolate position
-    FVector CurrentPosition = GetActorLocation();
-    FVector InterpolatedPosition = FMath::VInterpConstantTo(CurrentPosition, targetPosition, DeltaTime, InterpolationSpeed);
-    SetActorLocation(InterpolatedPosition);
-
-    // Interpolate rotation
-    FRotator CurrentRotation = GetActorRotation();
-    FRotator TargetRotation(0, playerData.characterData.characterPosition.rotationZ, 0);
-
-    // Interpolate rotation
-    float RotationStep = RotationSpeed * DeltaTime; // Define RotationSpeed as needed
-    FRotator NewRotation = FMath::RInterpTo(CurrentRotation, TargetRotation, DeltaTime, RotationStep);
     SetActorRotation(NewRotation);
 }
 
-// Function to convert string to timestamp
+float ABasicPlayer::CalculateRotationInterpSpeed()
+{
+    float AngleDifference = FMath::Abs(LastReceivedRotation.Yaw - TargetReceivedRotation.Yaw);
+    AngleDifference = FMath::Min(AngleDifference, 360.f - AngleDifference); // Учитываем переходы через 360°
+    return AngleDifference / ServerPositionUpdateInterval;
+}
+
+
+float ABasicPlayer::CalculateInterpolationSpeed(float MovementSpeed)
+{
+    float InterpolationSpeed = MovementSpeed * interpolationSpeedFactor;
+    return FMath::Clamp(InterpolationSpeed, 1.0f, maxInterpolationSpeed);
+}
+
 FDateTime ABasicPlayer::StringToTimestamp(const FString& DateTimeString) {
     FDateTime DateTime;
     FDateTime::Parse(DateTimeString, DateTime);
@@ -380,6 +325,15 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
     playerData.characterData.characterPosition.positionY = y;
     playerData.characterData.characterPosition.positionZ = z;
     playerData.characterData.characterPosition.rotationZ = rotZ;
+
+
+    LastReceivedPosition = GetActorLocation();
+    TargetReceivedPosition = FVector(x, y, z);
+
+    LastReceivedRotation = GetActorRotation();
+    TargetReceivedRotation = FRotator(0, rotZ, 0);
+
+    TimeSinceLastPositionUpdate = 0.0f;
 }
 
 

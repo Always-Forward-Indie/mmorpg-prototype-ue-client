@@ -31,8 +31,8 @@ private:
 	TMap<FString, TArray<FDateTime>> ReceiveTimes; // Array to store ReceiveTime values for ping calculation
 	TMap<FString, TArray<FDateTime>> SendTimes; // Array to store SendTime values for ping calculation
 	// count of packets for ping calculation
-	int32 PingPacketsCount = 12;
-	float PingTimeout = 2.0f; // Ping timeout in seconds
+	int32 PingPacketsCount = 4;
+	float PingTimeout = 1.0f; // Ping timeout in seconds
 
 public:
 	UPlayerManager(const FObjectInitializer& ObjectInitializer);

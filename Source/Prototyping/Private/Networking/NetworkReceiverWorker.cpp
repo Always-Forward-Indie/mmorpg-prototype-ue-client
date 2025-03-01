@@ -3,7 +3,9 @@
 
 #include "Networking/NetworkReceiverWorker.h"
 
-NetworkReceiverWorker::NetworkReceiverWorker(FSocket* InSocket) : Socket(InSocket), bRunThread(true)
+NetworkReceiverWorker::NetworkReceiverWorker(FSocket* InSocket)
+    : Socket(InSocket)
+    , bRunThread(true)
 {
 }
 
@@ -14,70 +16,78 @@ bool NetworkReceiverWorker::Init()
 
 bool NetworkReceiverWorker::GetData(FString& OutData)
 {
-	return DataQueue.Dequeue(OutData);
+    return DataQueue.Dequeue(OutData);
 }
 
 uint32 NetworkReceiverWorker::Run()
 {
-    // Assuming you've defined these somewhere
+    // Ждем, пока соединение не установится
+    while (bRunThread && Socket && Socket->GetConnectionState() != ESocketConnectionState::SCS_Connected)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Waiting for Receiver socket connection..."));
+        FPlatformProcess::Sleep(0.1f); // Ждем 100 мс
+    }
+
+
     const int32 ReceiveBufferSize = 4096;
-    uint8 ReceiveBuffer[ReceiveBufferSize];
+    TArray<uint8> ReceiveBuffer;
+    ReceiveBuffer.SetNumUninitialized(ReceiveBufferSize);
+
+    TArray<uint8> AccumulatedBuffer; // Буфер для накопления данных
 
     UE_LOG(LogTemp, Warning, TEXT("NetworkReceiverWorker Thread Started"));
 
     while (bRunThread)
     {
         int32 BytesRead = 0;
-        bool bHasData = Socket->Recv(ReceiveBuffer, ReceiveBufferSize, BytesRead);
+        bool bHasData = Socket->Recv(ReceiveBuffer.GetData(), ReceiveBufferSize, BytesRead);
 
         if (bHasData && BytesRead > 0)
         {
-            // Process the received data - for example, convert it to a string
-            FString ReceivedString = StringFromBinaryArray(ReceiveBuffer, BytesRead);
+            // Копируем полученные данные в накопительный буфер
+            AccumulatedBuffer.Append(ReceiveBuffer.GetData(), BytesRead);
 
-           // UE_LOG(LogTemp, Warning, TEXT("Received Data: %s"), *ReceivedString);
+            int32 DelimiterIndex;
+            // Проверяем, есть ли в накопленных данных символ-разделитель '\n'
+            while ((DelimiterIndex = AccumulatedBuffer.Find((uint8)'\n')) != INDEX_NONE)
+            {
+                // Извлекаем один полный пакет
+                TArray<uint8> SinglePacket;
+                SinglePacket.Append(AccumulatedBuffer.GetData(), DelimiterIndex);
 
-            // Enqueue the received data for processing on the game thread
-            DataQueue.Enqueue(ReceivedString);
-        }
-        else if (BytesRead == 0)
-        {
-            // No data received - this is OK, just means there's no data waiting to be processed
-        }
-        else
-        {
-            // An error occurred - you may want to handle this and potentially set bRunThread to false
+                // Убираем пакет и разделитель из буфера
+                AccumulatedBuffer.RemoveAt(0, DelimiterIndex + 1);
+
+                // Преобразуем пакет в FString
+                FUTF8ToTCHAR Converter(reinterpret_cast<const ANSICHAR*>(SinglePacket.GetData()), SinglePacket.Num());
+                FString ReceivedString(Converter.Length(), Converter.Get());
+
+                UE_LOG(LogTemp, Warning, TEXT("Received packet: %s"), *ReceivedString);
+
+                // Добавляем строку в очередь
+                DataQueue.Enqueue(ReceivedString);
+            }
         }
 
-        // Sleep for a short duration if no data to prevent a tight loop that hogs the CPU
-        FPlatformProcess::Sleep(0.01);
+        FPlatformProcess::Sleep(0.0001f);
     }
 
     UE_LOG(LogTemp, Warning, TEXT("NetworkReceiverWorker Thread Exiting"));
-
     return 0;
 }
 
-// Helper function to convert a byte array to a string
+
+// Обновлённая функция для преобразования, хотя теперь она может не понадобиться,
+// поскольку мы используем FUTF8ToTCHAR непосредственно в Run()
 FString NetworkReceiverWorker::StringFromBinaryArray(const uint8* BinaryArray, const int32& ArraySize)
 {
-    // Make sure the array is null-terminated
-    uint8* NullTerminatedArray = new uint8[ArraySize + 1];
-    FMemory::Memcpy(NullTerminatedArray, BinaryArray, ArraySize);
-    NullTerminatedArray[ArraySize] = 0; // Null-terminate the array
-
-    // Assuming the binary array is ASCII-encoded
-    FString StringData = FString(UTF8_TO_TCHAR(NullTerminatedArray));
-
-    // Clean up
-    delete[] NullTerminatedArray;
-
-    return StringData;
+    FUTF8ToTCHAR Converter(reinterpret_cast<const ANSICHAR*>(BinaryArray), ArraySize);
+    return FString(Converter.Length(), Converter.Get());
 }
 
 void NetworkReceiverWorker::Stop()
 {
-	bRunThread = false;
+    bRunThread = false;
 }
 
 void NetworkReceiverWorker::Exit()

@@ -38,14 +38,15 @@ void UMOBManager::SubscribeToNetworkManager()
 {
 	if (networkManager != nullptr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Network Manager found and subscribed to GameServerResponse delegate"));
+		UE_LOG(LogTemp, Warning, TEXT("Network Manager found and subscribed to ChunkServerResponse delegate"));
 
 		if (IsValid(networkManager))
 		{
 			UE_LOG(LogTemp, Warning, TEXT("Network Manager is valid"));
 
-			networkManager->OnGameServerDataReceived.RemoveDynamic(this, &UMOBManager::ProcessGameServerData);
-			networkManager->OnGameServerDataReceived.AddDynamic(this, &UMOBManager::ProcessGameServerData);
+			// Subscribe to the network manager's events for chunk server data
+			networkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UMOBManager::ProcessGameServerData);
+			networkManager->OnChunkServerDataReceived.AddDynamic(this, &UMOBManager::ProcessGameServerData);
 		}
 		else
 		{
@@ -67,75 +68,89 @@ void UMOBManager::SetWorldContext(UWorld* World)
 // Process game server data
 void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 {
-	//UE_LOG(LogTemp, Warning, TEXT("MOBManager received data: %s"), *ReceivedData);
-
-	// Deserialize the received JSON string to get MessageData struct
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
-
-	// log the event type
 	UE_LOG(LogTemp, Warning, TEXT("MOBManager: Received event type: %s"), *MessageData.eventType);
 
-	//TODO : Move this to SpawnZoneManager
+	TSharedPtr<FJsonObject> Root;
+	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
+	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
+
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+
 	if (MessageData.eventType == "spawnMobsInZone" && MessageData.status == "success")
 	{
 		UE_LOG(LogTemp, Warning, TEXT("MOBManager: Received spawnMobsInZone event"));
-
-		// Deserialize the JSON string into zone data
-		//FSpawnZoneStruct SpawnZoneData = JSONParser::DeserializeSpawnZoneData(ReceivedData);
-
-		// Deserialize the JSON string into an array of MOB structs
-		TArray<FMOBStruct> MobsData = JSONParser::DeserializeMobsDataList(ReceivedData);
-
-		// Spawn the mobs in the zone
+		TArray<FMOBStruct> MobsData = JSONParser::DeserializeMobsList(Body);
 		for (FMOBStruct MobData : MobsData)
 		{
 			SpawnMOB(MobData);
 		}
-	}	
+	}
 	else if (MessageData.eventType == "getMOBData" && MessageData.status == "success")
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Received getMOBData event"));
-
-		// Deserialize the JSON string into an array of MOB structs
-		FMOBStruct MobData = JSONParser::DeserializeMobData(ReceivedData);
+		// Deserialize the JSON string into a single MOB data
+		FMOBStruct MobData = JSONParser::DeserializeMobData(Body->GetObjectField("mob"));
 	}
 	else if (MessageData.eventType == "zoneMoveMobs" && MessageData.status == "success")
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Received moveMOB event"));
 
-		// Deserialize the JSON string into an array of MOB structs
-		TArray<FMOBStruct> MobsData = JSONParser::DeserializeMobsDataList(ReceivedData);
-
-		// Deserialize the received JSON string to get PositionData struct
-		//FPositionDataStruct PositionData = JSONParser::DeserializePositionData(ReceivedData);
-
-		// Move the MOBs in the zone
+		// Deserialize the JSON string into a list of MOBs
+		TArray<FMOBStruct> MobsData = JSONParser::DeserializeMobsList(Body);
 		for (FMOBStruct MobData : MobsData)
 		{
-			// If MOB exists in the world, move it
 			if (MOBExists(worldContext, FName(MobData.mobUniqueID)))
 			{
-				// get the MOB
 				TArray<AActor*> FoundActors;
 				UGameplayStatics::GetAllActorsWithTag(worldContext, FName(MobData.mobUniqueID), FoundActors);
 
-				// If the array is not empty, then actors with the tag exist
 				if (FoundActors.Num() > 0)
 				{
 					ABasicMOB* MOB = Cast<ABasicMOB>(FoundActors[0]);
 
-					// set new timestamp
-					MOB->SetLastTimestamp(MessageData.timestamp);
-
-					// set the MOB position
-					MOB->SetMOBPosition(MobData.mobPosition);
-
-					// set the MOB position
-					//MOB->SetActorLocation(FVector(MobData.mobPosition.positionX, MobData.mobPosition.positionY, MobData.mobPosition.positionZ));
+					MOB->OnReceiveServerPacket(MobData.mobPosition);
 				}
 			}
 		}
+	}
+	else if (MessageData.eventType == "mobDeath" && MessageData.status == "success")
+	{
+		// Extract the mobUID from the response body
+		FString MobUID;
+		if (Body->TryGetStringField("mobUID", MobUID))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Received death event for mob: %s"), *MobUID);
 
+			// Find and destroy the mob
+			if (MOBExists(worldContext, FName(MobUID)))
+			{
+				TArray<AActor*> FoundActors;
+				UGameplayStatics::GetAllActorsWithTag(worldContext, FName(MobUID), FoundActors);
+
+				if (FoundActors.Num() > 0)
+				{
+					ABasicMOB* MOB = Cast<ABasicMOB>(FoundActors[0]);
+					if (MOB)
+					{
+						UE_LOG(LogTemp, Warning, TEXT("Destroying mob: %s (%s)"),
+							*MOB->GetMobName(), *MobUID);
+
+						// Destroy the actor
+						MOB->Destroy();
+					}
+				}
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("Received death event for mob %s but it doesn't exist in the world"),
+					*MobUID);
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("Failed to extract mobUID from death event"));
+		}
 	}
 }
 
@@ -206,6 +221,9 @@ void UMOBManager::SpawnMOB(const FMOBStruct& MOBData)
 			UE_LOG(LogTemp, Error, TEXT("MOB not spawned"));
 			return;
 		}
+
+		MOB->SetupMobVisual(FName(MOBData.mobSlug));
+		MOB->SetupMobAudio(FName(MOBData.mobSlug));
 
 		// set the MOB data
 		MOB->SetMOBData(MOBData);

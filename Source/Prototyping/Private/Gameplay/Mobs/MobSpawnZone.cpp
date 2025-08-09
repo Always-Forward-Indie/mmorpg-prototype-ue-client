@@ -85,13 +85,13 @@ void AMobSpawnZone::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* 
 		// check if the actor is a player
 		ABasicPlayer* Player = Cast<ABasicPlayer>(OtherActor);
 
-		if (Player)
+		if (Player && !Player->GetIsOtherClient() && Player->GetPlayerID() != 0)
 		{
 			// check if the spawn zone is enabled
 			if (SpawnZoneData.bSpawningEnabled)
 			{
 				Player->SetCurrentZoneName(SpawnZoneData.zoneName);
-				Player->ZoneUpdated.Broadcast();
+				Player->ZoneUpdated.Broadcast(Player->GetPlayerID());
 			}
 		}
 	}
@@ -107,10 +107,10 @@ void AMobSpawnZone::OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActor* Ot
 		// check if the actor is a player
 		ABasicPlayer* Player = Cast<ABasicPlayer>(OtherActor);
 
-		if (Player)
+		if (Player && !Player->GetIsOtherClient() && Player->GetPlayerID() != 0)
 		{
 			Player->SetCurrentZoneName("");
-			Player->ZoneUpdated.Broadcast();
+			Player->ZoneUpdated.Broadcast(Player->GetPlayerID());
 		}
 	}
 }

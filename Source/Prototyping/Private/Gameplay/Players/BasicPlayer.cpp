@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "EngineUtils.h"
 #include "MyGameInstance.h"
 
 
@@ -30,6 +31,10 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
         EnhancedInputComponent->BindAction(StartMovementSimulationAction, ETriggerEvent::Triggered, this, &ABasicPlayer::StartMovementSimulation);
         // bind stop movement simulation
         EnhancedInputComponent->BindAction(StopMovementSimulationAction, ETriggerEvent::Triggered, this, &ABasicPlayer::StopMovementSimulation);
+    
+    
+        // Bind attack action (you'll need to add AttackAction to your header file)
+        EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Triggered, this, &ABasicPlayer::OnAttackInput);
     }
 }
 
@@ -67,10 +72,83 @@ void ABasicPlayer::BeginPlay()
 	UE_LOG(LogTemp, Warning, TEXT("Player Was Created"));
 }
 
+//Create HUD
+void ABasicPlayer::CreateHUD()
+{
+	if (HUDWidgetClass)
+	{
+		if (!GetIsOtherClient()) {
+			//debug 
+			UE_LOG(LogTemp, Warning, TEXT("Creating Player HUD Widget"));
+			this->PlayerHUD = CreateWidget<UPlayerHUD>(GetWorld(), HUDWidgetClass);
+			if (PlayerHUD)
+			{
+				PlayerHUD->AddToViewport();
+
+                APlayerController* PC = Cast<APlayerController>(GetController());
+
+                if (PlayerHUD->GetDamageCanvas() && PC) {
+                    MyGameInstance->GetUIManager()->Init(PC, PlayerHUD->GetDamageCanvas(), DamageTextWidgetClass);
+                }
+			}
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("HUDWidgetClass is not set in ABasicPlayer!"));
+	}
+}
+
+
+// update HUD
+
+void ABasicPlayer::UpdateHUD()
+{
+    if (PlayerHUD)
+    {
+        if (!GetIsOtherClient())
+        {
+            //debug 
+			//UE_LOG(LogTemp, Warning, TEXT("Updating Player HUD for player with id"));
+
+            //get player max HP, Mana and XP from attributes
+            float MaxHealth = 1.0f;
+            float MaxMana = 1.0f;
+
+            // Проверяем, есть ли в attributesData нужные ключи
+            if (const FAttributeDataStruct* HealthAttr = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_health")))
+            {
+                MaxHealth = HealthAttr->attributeValue;
+
+                //UE_LOG(LogTemp, Warning, TEXT("Max Player Health: %f"), MaxHealth);
+                //UE_LOG(LogTemp, Warning, TEXT("Current Player Health: %d"), playerData.characterData.characterCurrentHealth);
+            }
+
+            if (const FAttributeDataStruct* ManaAttr = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_mana")))
+            {
+                MaxMana = ManaAttr->attributeValue;
+
+                //UE_LOG(LogTemp, Warning, TEXT("Max Player Mana: %f"), MaxMana);
+                //UE_LOG(LogTemp, Warning, TEXT("Current Player Health: %d"), playerData.characterData.characterCurrentMana);
+            }
+
+            // Update HUD
+            PlayerHUD->SetHP(playerData.characterData.characterCurrentHealth / MaxHealth);
+            PlayerHUD->SetMana(playerData.characterData.characterCurrentMana / MaxMana);
+            PlayerHUD->SetXP(playerData.characterData.characterExperiencePoints / playerData.characterData.characterExpForNextLevel);
+            PlayerHUD->SetLevel(playerData.characterData.characterLevel);
+        }
+    }
+}
+
 // Called every frame
 void ABasicPlayer::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
+
+    FVector CurrentLocation = GetActorLocation();
+    playerData.characterData.bIsMoving = !CurrentLocation.Equals(LastFrameLocation, 1.0f);
+    LastFrameLocation = CurrentLocation;
 
     if (MyGameInstance && !playerData.isOtherClient)
     {
@@ -90,6 +168,14 @@ void ABasicPlayer::Tick(float DeltaTime)
     {
         UpdateMovementSimulation(DeltaTime);
 	}
+
+	//if character data is not empty
+	if (playerData.characterData.characterId != 0) {
+		// Update the HUD
+		UpdateHUD();
+	}
+
+    CheckForMOB();
 }
 
 void ABasicPlayer::Move(const FInputActionValue& Value)
@@ -229,10 +315,34 @@ bool ABasicPlayer::GetIsOtherClient()
 	return playerData.isOtherClient;
 }
 
+//get is dead state
+bool ABasicPlayer::GetIsDead() const
+{
+	return playerData.characterData.bIsDead;
+}
+
+// get is moving state
+bool ABasicPlayer::GetIsMoving() const
+{
+    return playerData.characterData.bIsMoving;
+}
+
 // get current zone name
 FString ABasicPlayer::GetCurrentZoneName()
 {
 	return CurrentZoneName;
+}
+
+// get player current HP points
+int32 ABasicPlayer::GetPlayerCurrentHPPoints() const
+{
+    return playerData.characterData.characterCurrentHealth;
+}
+
+// get player current MP points
+int32 ABasicPlayer::GetPlayerCurrentMPPoints() const
+{
+    return playerData.characterData.characterCurrentMana;
 }
 
 // Set message data
@@ -306,6 +416,12 @@ void ABasicPlayer::SetPlayerExpPoints(int32 ExpPoints)
     playerData.characterData.characterExperiencePoints = ExpPoints;
 }
 
+// set player next level exp
+void ABasicPlayer::SetPlayerNextLevelExp(int32 NextLevelExp)
+{
+	playerData.characterData.characterExpForNextLevel = NextLevelExp;
+}
+
 // set player current HP points
 void ABasicPlayer::SetPlayerCurrentHPPoints(int32 CurrentHPPoints)
 {
@@ -316,6 +432,21 @@ void ABasicPlayer::SetPlayerCurrentHPPoints(int32 CurrentHPPoints)
 void ABasicPlayer::SetPlayerCurrentMPPoints(int32 CurrentMPPoints)
 {
     playerData.characterData.characterCurrentMana = CurrentMPPoints;
+}
+
+// set player attributes
+void ABasicPlayer::SetPlayerAttributes(TMap<FString, FAttributeDataStruct> Attributes)
+{
+	playerData.characterData.characterAttributes.attributesData = Attributes;
+
+	//debug player attributes
+	for (auto& Elem : Attributes)
+	{
+		FString Key = Elem.Key;
+		FAttributeDataStruct Value = Elem.Value;
+		UE_LOG(LogTemp, Warning, TEXT("Player Attribute Key: %s, Value: %d"), *Key, Value.attributeValue);
+	}
+
 }
 
 // set player coordinates
@@ -396,5 +527,176 @@ void ABasicPlayer::UpdateMovementSimulation(float DeltaTime)
         //float MovementStep = MoveSpeed* GetWorld()->GetDeltaSeconds();
         FVector NewPosition = CurrentLocation + Direction * MovementStep;
         SetActorLocation(NewPosition);
+    }
+}
+
+void ABasicPlayer::CheckForMOB()
+{
+    // Use the player's forward direction instead of the camera
+    FVector Start = GetActorLocation();
+    FVector ForwardVector = GetActorForwardVector();
+    FVector End = Start + ForwardVector * 1000.0f;
+
+    FCollisionQueryParams Params;
+    Params.AddIgnoredActor(this);
+
+    float CapsuleRadius = 50.0f;
+    float CapsuleHalfHeight = 100.0f;
+
+    TArray<FHitResult> HitResults;
+
+    bool bHit = GetWorld()->SweepMultiByChannel(
+        HitResults, Start, End, FQuat::Identity,
+        ECC_Visibility, FCollisionShape::MakeCapsule(CapsuleRadius, CapsuleHalfHeight),
+        Params
+    );
+
+    //DrawDebugLine(
+    //    GetWorld(),
+    //    Start,
+    //    End,
+    //    FColor::Green,
+    //    false,
+    //    2.0f,
+    //    0,
+    //    1.0f
+    //);
+
+    ABasicMOB* ClosestMob = nullptr;
+    float ClosestDistance = FLT_MAX;
+
+    if (bHit)
+    {
+        for (const FHitResult& Hit : HitResults)
+        {
+            ABasicMOB* Mob = Cast<ABasicMOB>(Hit.GetActor());
+            if (Mob)
+            {
+                float Distance = (Hit.ImpactPoint - Start).Size();
+                if (Distance < ClosestDistance)
+                {
+                    ClosestDistance = Distance;
+                    ClosestMob = Mob;
+                }
+            }
+        }
+    }
+
+    for (TActorIterator<ABasicMOB> It(GetWorld()); It; ++It)
+    {
+        if (*It == ClosestMob)
+        {
+            It->MobHeadInfo->ShowWidget(true);
+        }
+        else
+        {
+            It->MobHeadInfo->ShowWidget(false);
+        }
+    }
+}
+
+
+void ABasicPlayer::AttackTarget(int32 TargetID, int32 ActionID, bool bUseAI, const FString& TargetType)
+{
+    if (!MyGameInstance || !MyGameInstance->GetPlayerManager())
+    {
+        UE_LOG(LogTemp, Error, TEXT("Cannot attack: MyGameInstance or PlayerManager not found"));
+        return;
+    }
+
+    if (TargetID <= 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Cannot attack: Invalid target ID"));
+        return;
+    }
+
+    MyGameInstance->GetPlayerManager()->SendPlayerAttackRequest(playerData, TargetID, ActionID, bUseAI, TargetType);
+    UE_LOG(LogTemp, Warning, TEXT("Player attacking target ID: %d with action ID: %d, target type: %s"), TargetID, ActionID, *TargetType);
+}
+
+
+void ABasicPlayer::AttackActor(AActor* TargetActor, int32 ActionID, bool bUseAI)
+{
+    if (!TargetActor || TargetActor == this)
+        return;
+
+    if (ABasicMOB* Mob = Cast<ABasicMOB>(TargetActor))
+    {
+        int32 MobID = FCString::Atoi(*Mob->GetMOBUId());
+        AttackTarget(MobID, ActionID, bUseAI, TEXT("MOB"));
+    }
+    else if (ABasicPlayer* TargetPlayer = Cast<ABasicPlayer>(TargetActor))
+    {
+        if (!TargetPlayer->GetIsOtherClient())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Cannot attack local player or self."));
+            return;
+        }
+
+        int32 TargetPlayerID = TargetPlayer->GetPlayerCharacterID();
+        AttackTarget(TargetPlayerID, ActionID, bUseAI, TEXT("Player"));
+    }
+}
+
+void ABasicPlayer::OnAttackInput()
+{
+    FVector Start = GetActorLocation();
+    FVector ForwardVector = GetActorForwardVector();
+    FVector End = Start + ForwardVector * 1000.0f;
+
+    FCollisionQueryParams Params;
+    Params.AddIgnoredActor(this);
+
+    float CapsuleRadius = 50.0f;
+    float CapsuleHalfHeight = 100.0f;
+
+    TArray<FHitResult> HitResults;
+
+    bool bHit = GetWorld()->SweepMultiByChannel(
+        HitResults, Start, End, FQuat::Identity,
+        ECC_Visibility, FCollisionShape::MakeCapsule(CapsuleRadius, CapsuleHalfHeight),
+        Params
+    );
+
+    DrawDebugLine(GetWorld(), Start, End, FColor::Red, false, 1.0f, 0, 1.0f);
+
+    if (!bHit || HitResults.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("No valid target found for attack"));
+        return;
+    }
+
+    FHitResult* ClosestHit = nullptr;
+    float MinDistSq = FLT_MAX;
+
+    for (FHitResult& Hit : HitResults)
+    {
+        AActor* HitActor = Hit.GetActor();
+        if (!HitActor || HitActor == this)
+            continue;
+
+        bool bValid =
+            Cast<ABasicMOB>(HitActor) ||
+            (Cast<ABasicPlayer>(HitActor) && Cast<ABasicPlayer>(HitActor)->GetIsOtherClient());
+
+        if (!bValid)
+            continue;
+
+        float DistSq = FVector::DistSquared(GetActorLocation(), Hit.ImpactPoint);
+        if (DistSq < MinDistSq)
+        {
+            MinDistSq = DistSq;
+            ClosestHit = &Hit;
+        }
+    }
+
+    if (ClosestHit)
+    {
+        DrawDebugSphere(GetWorld(), ClosestHit->ImpactPoint, 25, 12, FColor::Red, false, 1.0f);
+        AttackActor(ClosestHit->GetActor(), 1, false);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("No valid MOB or player to attack"));
     }
 }

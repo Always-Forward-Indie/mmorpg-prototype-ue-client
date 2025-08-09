@@ -36,14 +36,14 @@ void USpawnZoneManager::SubscribeToNetworkManager()
 {
 	if (networkManager != nullptr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Network Manager found and subscribed to GameServerResponse delegate"));
+		UE_LOG(LogTemp, Warning, TEXT("Network Manager found and subscribed to ChunkServerResponse delegate"));
 
 		if (IsValid(networkManager))
 		{
 			UE_LOG(LogTemp, Warning, TEXT("Network Manager is valid"));
 
-			networkManager->OnGameServerDataReceived.RemoveDynamic(this, &USpawnZoneManager::ProcessGameServerData);
-			networkManager->OnGameServerDataReceived.AddDynamic(this, &USpawnZoneManager::ProcessGameServerData);
+			networkManager->OnChunkServerDataReceived.RemoveDynamic(this, &USpawnZoneManager::ProcessGameServerData);
+			networkManager->OnChunkServerDataReceived.AddDynamic(this, &USpawnZoneManager::ProcessGameServerData);
 		}
 		else
 		{
@@ -73,11 +73,24 @@ void USpawnZoneManager::ProcessGameServerData(const FString& ReceivedData)
 
 	if (MessageData.eventType == "spawnMobsInZone" && MessageData.status == "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("SpawnZoneManager: Received spawnMobsInZone event"));
-		// Deserialize the JSON string into zone data
-		FSpawnZoneStruct SpawnZoneData = JSONParser::DeserializeSpawnZoneData(ReceivedData);
+		// Parse JSON string
+		TSharedPtr<FJsonObject> JsonObject;
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
+		if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
+		{
+			const TSharedPtr<FJsonObject>* BodyObject = nullptr;
+			if (JsonObject->TryGetObjectField(TEXT("body"), BodyObject) && BodyObject)
+			{
+				const TSharedPtr<FJsonObject>* SpawnZoneObject = nullptr;
+				if ((*BodyObject)->TryGetObjectField(TEXT("spawnZone"), SpawnZoneObject) && SpawnZoneObject)
+				{
+					FSpawnZoneStruct SpawnZoneData = JSONParser::DeserializeSpawnZoneData(*SpawnZoneObject);
 
-		CreateSpawnZone(SpawnZoneData);
+					// Create the spawn zone
+					CreateSpawnZone(SpawnZoneData);
+				}
+			}
+		}
 	}
 }
 

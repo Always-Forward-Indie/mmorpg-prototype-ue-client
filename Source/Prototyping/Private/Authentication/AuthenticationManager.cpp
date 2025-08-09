@@ -344,8 +344,13 @@ void UAuthenticationManager::SendPingRequest()
 
 	// Serialize the JSON object to a string
 	FString OutputString;
-	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutputString);
+	TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer =
+		TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&OutputString);
 	FJsonSerializer::Serialize(MainJsonObject.ToSharedRef(), Writer);
+
+	// Удалим все символы перевода строки
+	OutputString.ReplaceInline(TEXT("\n"), TEXT(""));
+	OutputString.ReplaceInline(TEXT("\r"), TEXT(""));
 
 
 	if (networkManager != nullptr)

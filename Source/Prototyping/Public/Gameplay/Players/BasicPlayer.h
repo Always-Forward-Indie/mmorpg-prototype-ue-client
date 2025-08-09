@@ -11,6 +11,7 @@
 #include "InputMappingContext.h"
 #include "Components/AudioComponent.h"
 #include <Kismet/GameplayStatics.h>
+#include "Gameplay/UI/PlayerHUD.h"
 #include "BasicPlayer.generated.h"
 
 
@@ -72,9 +73,29 @@ private:
 	// Control simulation
 	bool bSimulateMovement;
 
+
+	/** Класс HUD, который будет создаваться */
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> HUDWidgetClass;
+
+	/** Ссылка на созданный HUD */
+	UPROPERTY()
+	UPlayerHUD* PlayerHUD;
+
+	void AttackActor(AActor* TargetActor, int32 ActionID, bool bUseAI);
+
+	UFUNCTION()
+	void OnAttackInput();
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
+
+
+
+	// Add this input action (you'll need to set it up in Blueprint)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* AttackAction;
 
 public:	
 	// Called every frame
@@ -83,12 +104,18 @@ public:
 	// Sets default values for this character's properties
 	ABasicPlayer();
 
+	void UpdateHUD();
+
 	// Event declaration
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnZoneUpdated);
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnZoneUpdated, int32, PlayerID);
 
 	// Event variable
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FOnZoneUpdated ZoneUpdated;
+
+	// Battle system functions
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void AttackTarget(int32 TargetID, int32 ActionID = 1, bool bUseAI = false, const FString& TargetType = TEXT("MOB"));
 
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
@@ -109,13 +136,10 @@ public:
 	void UpdateCurrentPlayerMovement(float DeltaTime);
 
 	// Update REMOTE player movement
-	void UpdateRemotePlayerMovementOld(float DeltaTime);
-	// Update REMOTE player movement
 	void UpdateRemotePlayerMovement();
 	float CalculateRotationInterpSpeed();
 	// Interpolate movement for REMOTE player
 	float CalculateInterpolationSpeed(float MovementSpeed);
-	void InterpolateMovement(float DeltaTime, float InterpolationSpeed);
 
 	// Set Is Other Client
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
@@ -161,6 +185,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
 	void SetPlayerExpPoints(int32 ExpPoints);
 
+	//set player next level exp
+	UFUNCTION(BlueprintCallable, Category = "Player Data")
+	void SetPlayerNextLevelExp(int32 NextLevelExp);
+
 	// set player current HP points
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
 	void SetPlayerCurrentHPPoints(int32 CurrentHPPoints);
@@ -168,6 +196,10 @@ public:
 	// set player current MP points
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
 	void SetPlayerCurrentMPPoints(int32 CurrentMPPoints);
+
+	//set player attributes
+	UFUNCTION(BlueprintCallable, Category = "Player Data")
+	void SetPlayerAttributes(TMap<FString, FAttributeDataStruct> Attributes);
 
 	// Set message data
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
@@ -180,11 +212,30 @@ public:
 	// Get is other client
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
 	bool GetIsOtherClient();
+	UFUNCTION(BlueprintCallable, Category = "Player Data")
+	bool GetIsDead() const;
+	UFUNCTION(BlueprintCallable, Category = "Player Data")
+	bool GetIsMoving() const;
 
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
 	FString GetCurrentZoneName();
 
+	// get player current HP points
+	UFUNCTION(BlueprintCallable, Category = "Player Data")
+	int32 GetPlayerCurrentHPPoints() const;
 
+	// get player current MP points
+	UFUNCTION(BlueprintCallable, Category = "Player Data")
+	int32 GetPlayerCurrentMPPoints() const;
+
+	// get player id
+	UFUNCTION(BlueprintCallable, Category = "Player Data")
+	int32 GetPlayerID() const { return playerData.clientId; }
+
+	FVector LastFrameLocation;
+	
+
+	// input mapping context and actions
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input")
 	UInputMappingContext* InputMappingContext;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input")
@@ -215,6 +266,10 @@ public:
 	void StopSound();
 
 
+	void CheckForMOB();
+
+	void CreateHUD();
+
 	// Remote player interpolation
 	FVector LastReceivedPosition;
 	FVector TargetReceivedPosition;
@@ -222,5 +277,14 @@ public:
 	FRotator TargetReceivedRotation;
 	float TimeSinceLastPositionUpdate;
 	float ServerPositionUpdateInterval = 0.1f; // Примерный интервал обновлений (100 мс)
+
+
+	public:
+		// Get player character ID
+		UFUNCTION(BlueprintCallable, Category = "Player")
+		int32 GetPlayerCharacterID() const { return playerData.characterData.characterId; }
+
+		UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+		TSubclassOf<class UDamageTextWidget> DamageTextWidgetClass;
 
 };

@@ -6,8 +6,21 @@
 #include "GameFramework/Character.h"
 #include "Components/TextRenderComponent.h"
 #include "Data/DataStructs.h"
+#include <Gameplay/UI/MOBHeadInfo.h>
+#include "Components/CapsuleComponent.h"
+#include "Engine/StreamableManager.h"
+#include "Engine/AssetManager.h"
+#include "Components/AudioComponent.h"
+#include <Gameplay/UI/W_MOBHeadInfoWidget.h>
+#include "Gameplay/Mobs/MOBMovementComponent.h"
 #include "BasicMOB.generated.h"
 
+// Event declaration
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMOBDataUpdated);
+
+/**
+ *
+ */
 UCLASS()
 class PROTOTYPING_API ABasicMOB : public ACharacter
 {
@@ -23,17 +36,74 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MOB Data", meta = (AllowPrivateAccess = "true"))
 	FString lastTimestamp = "";
 
+	
+	FVector LastReceivedPosition = FVector::ZeroVector;
+	FVector TargetReceivedPosition = FVector::ZeroVector;
+
+	float TimeSinceLastPositionUpdate = 0.0f;
+	float LastServerTimestamp = 0.f;
+	float TargetServerTimestamp = 0.f;
+	float TimeOffset = 0.f; // offset = ServerTimestamp - GetWorld()->GetTimeSeconds()
+
+	bool bInitialSyncDone = false;
+
+	FVector PrevServerPos;
+	FVector TargetServerPos;
+	FVector ServerVelocity;
+	FRotator PrevServerRot;
+	FRotator TargetServerRot;
+	float   LastMovePacketTime;
+	bool    bHasVelocity;
+	float ExpectedNextPacketTime = 0.0f;
+
+	float CurrentInterpSpeed = 0.f;
+
+
 public:
 	// Sets default values for this character's properties
 	ABasicMOB();
 
-	// Event declaration
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMOBDataUpdated);
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement")
+	class UMOBMovementComponent* MOBMovementComponent;
+
+	UPROPERTY(EditAnywhere, Category = "Debug")
+	bool bShowDebugSpheres = false;
+
+	void OnReceiveServerPacket(const FPositionDataStruct& MOBPosition);
+
+	UPROPERTY(EditAnywhere, Category = "Movement")
+	float MaxAcceleration = 800.f; // Максимальное ускорение (юнитов/с^2)
+
+	// Минимальная скорость (юнитов/с), чтобы не замедляться слишком сильно на малых отрезках
+	UPROPERTY(EditAnywhere, Category = "Movement")
+	float MinMoveSpeed = 580.f;
+
+	// Растояние (юнитов), при котором мы «за snapping» к точке без интерполяции
+	UPROPERTY(EditAnywhere, Category = "Movement")
+	float SnapDistance = 10.f;
+
+	// Helper function to adjust mob position to ground
+	// Helper function to adjust mob position to ground with priority control
+	FVector AdjustToGround(const FVector& Location, float DeltaTime, float Priority = 1.0f);
+
+	// Enables debug visualization for ground adjustment
+	UPROPERTY(EditDefaultsOnly, Category = "Movement|Debug")
+	bool bDebugGroundAdjustment = false;
 
 	// Event variable
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FOnMOBDataUpdated MOBDataUpdated;
 
+
+	// Add this with your other timer handles
+	FTimerHandle DamageFlagResetTimer;
+
+	// Add this with your other configurable properties
+	UPROPERTY(EditAnywhere, Category = "Damage")
+	float DamageFlagResetTime = 0.5f; // Time in seconds before damage flag
+
+
+	UW_MOBHeadInfoWidget* HeadWidget;
 
 	// Constant movement speed
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Configuration", meta = (AllowPrivateAccess = "true"))
@@ -79,7 +149,7 @@ public:
 	void SetMOBCurrentMana(const int& MOBCurrentMana);
 
 	UFUNCTION(BlueprintCallable, Category = "MOB")
-	void SetMOBPosition(const FPositionDataStruct& MOBPosition);
+	void SetMOBPosition(const FPositionDataStruct& MOBPosition, const FString& PacketTimestamp);
 
 	UFUNCTION(BlueprintCallable, Category = "MOB")
 	void SetMOBAttributes(const FAttributesDataStruct& MOBAttributes);
@@ -94,6 +164,12 @@ public:
 	// set mob is aggressive
 	UFUNCTION(BlueprintCallable, Category = "MOB")
 	void SetMOBIsAggressive(const bool& MOBIsAggressive);
+
+	//set mob is moving
+	UFUNCTION(BlueprintCallable, Category = "MOB")
+	void SetMOBIsMoving(const bool& MOBIsMoving);
+	UFUNCTION(BlueprintCallable, Category = "MOB")
+	void SetMobIsDamaged(const bool& bIsDamaged);
 
 	// set last timestamp
 	UFUNCTION(BlueprintCallable, Category = "MOB")
@@ -143,6 +219,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "MOB")
 	bool GetMOBIsAggressive() const;
 
+	//get mob is moving
+	UFUNCTION(BlueprintCallable, Category = "MOB")
+	bool GetMOBIsMoving() const;
+
+	// get mob is damaged
+	UFUNCTION(BlueprintCallable, Category = "MOB")
+	bool GetMOBIsDamaged() const;
+
 
 	UFUNCTION(BlueprintCallable, Category = "MOB")
 	void SetMobNameText(UTextRenderComponent* MobNameTextComponent, const FString& Name);
@@ -156,23 +240,95 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "MOB")
 	void MOBTextFaceToCamera(UTextRenderComponent* MobTextComponent);
 
-	// MOB Movement
+	// Force update UI
 	UFUNCTION(BlueprintCallable, Category = "MOB")
-	void UpdatePosition();
-	float CalculateInterpolationSpeed(float MovementSpeed);
-	void InterpolateMovement(float DeltaTime, float InterpolationSpeed);
-	FDateTime StringToTimestamp(const FString& DateTimeString);
+	void ForceUpdateUI();
+
+	// Initialize UI with delay
+	UFUNCTION()
+	void InitializeUIDelayed();
+
+	void Die();
+
+	public:
+		UPROPERTY(EditAnywhere, Category = "UI")
+		UMOBHeadInfo* MobHeadInfo;
+
+		// In your BasicMOB.h file add these with more appropriate values
+		UPROPERTY(EditAnywhere, Category = "UI")
+		float MinSize = 80.0f; // Smaller size when far away
+
+		UPROPERTY(EditAnywhere, Category = "UI")
+		float MaxSize = 250.0f; // Original size when close
+
+		UPROPERTY(EditAnywhere, Category = "UI")
+		float MinDistance = 700.0f; // Distance at which UI is full size
+
+		UPROPERTY(EditAnywhere, Category = "UI")
+		float MaxDistance = 2500.0f; // Distance at which UI is minimum size
+
+		UPROPERTY(EditAnywhere, Category = "UI")
+		float widgetScaleFactor = 1.0f; // Scale factor for the widget
+
+		UPROPERTY(EditAnywhere, Category = "UI")
+		float CurrentWidgetScale = 1.0f;
+
+		UPROPERTY(EditAnywhere, Category = "UI")
+		float InterpSpeedFactor = 5.0f;
 
 
-protected:
-	// Called when the game starts or when spawned
-	virtual void BeginPlay() override;
+		int LastHealth = 0;
+		int LastMana = 0;
+		bool bUIInitialized = false;
 
-public:	
-	// Called every frame
-	virtual void Tick(float DeltaTime) override;
 
-	// Called to bind functionality to input
-	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	protected:
+		// Called when the game starts or when spawned
+		virtual void BeginPlay() override;
 
+	public:	
+		// Called every frame
+		virtual void Tick(float DeltaTime) override;
+
+		void UpdateWidgetScale(float DeltaTime);
+
+		void UpdateWidgetPosition();
+
+		// Called to bind functionality to input
+		virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+		void SetupMobVisual(FName MobSlug);
+		void SetupMobAudio(FName MobSlug);
+
+		void PlayRandomIdleSound();
+
+		void PlaySoundByName(FName SoundName);
+
+		void PlayWalkRandomSound();
+
+		void PlayRunRandomSound();
+
+		UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MOBs Config")
+		UDataTable* MobDefinitionTable;
+
+		UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Audio")
+		UAudioComponent* AudioComponentMain;
+
+		UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Audio")
+		UAudioComponent* AudioComponentSecond;
+
+		// Звуки
+		UPROPERTY()
+		TMap<FName, USoundBase*> SoundMap;
+
+		UPROPERTY()
+		TArray<USoundBase*> IdleSounds;
+
+		UPROPERTY()
+		TArray<USoundBase*> WalkSounds;
+
+		UPROPERTY()
+		TArray<USoundBase*> RunSounds;
+
+		FTimerHandle IdleSoundTimer;
 };

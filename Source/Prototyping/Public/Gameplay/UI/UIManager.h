@@ -1,15 +1,36 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
+// UIManager.h
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UObject/NoExportTypes.h"
+#include "Gameplay/UI/FloatingCombatTextManager.h"
+#include "UIManager.generated.h"
 
-/**
- * 
- */
-class PROTOTYPING_API UIManager
+
+class UFloatingCombatTextManager;
+class UCanvasPanel;
+class UDamageTextWidget;
+
+UCLASS()
+class PROTOTYPING_API UUIManager : public UObject
 {
+	GENERATED_BODY()
+
 public:
-	UIManager();
-	~UIManager();
+	void Init(APlayerController* InPC, UCanvasPanel* InRootCanvas, 
+		TSubclassOf<UDamageTextWidget> InDamageTextClass);
+
+	UFUNCTION()
+	UFloatingCombatTextManager* GetFCTManager() const { return FCTManager; }
+
+
+private:
+	UPROPERTY()
+	UFloatingCombatTextManager* FCTManager;
+
+	UPROPERTY()
+	APlayerController* PlayerController;
+
+	UPROPERTY()
+	UCanvasPanel* RootCanvas;
 };

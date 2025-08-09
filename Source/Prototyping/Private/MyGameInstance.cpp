@@ -48,6 +48,12 @@ void UMyGameInstance::Init()
 		UE_LOG(LogTemp, Warning, TEXT("GetWorld() returned nullptr, level load delayed."));
 		// Consider an alternative approach to delay the level loading
 	}
+
+	// Start Ping for servers
+	NetworkManager->OnGameServerSocketConnected.AddDynamic(this, &UMyGameInstance::StartPingGameServer);
+	NetworkManager->OnLoginServerSocketConnected.AddDynamic(this, &UMyGameInstance::StartPingLoginServer);
+
+	UIManager = NewObject<UUIManager>(this);
 }
 
 // init networking setup
@@ -68,6 +74,7 @@ void UMyGameInstance::InitNetworkingSetup()
 		//NetworkManager->InitializeTCPConnection();
 		NetworkManager->ConnectLoginServer();
 		NetworkManager->ConnectGameServer();
+		NetworkManager->ConnectChunkServer();
 	}
 
 	if (AuthenticationManager != nullptr) {
@@ -77,8 +84,6 @@ void UMyGameInstance::InitNetworkingSetup()
 		AuthenticationManager->Initialize(NetworkManager, PingManager);
 		// subscribe to the network manager
 		AuthenticationManager->SubscribeToNetworkManager();
-		// start pinging the server
-		AuthenticationManager->StartPing();
 	}
 
 	if (PlayerManager != nullptr) {
@@ -88,8 +93,6 @@ void UMyGameInstance::InitNetworkingSetup()
 		PlayerManager->Initialize(NetworkManager, PingManager);
 		// subscribe to the network manager
 		PlayerManager->SubscribeToNetworkManager();
-		// start pinging the server
-		PlayerManager->StartPing();
 	}
 
 
@@ -125,6 +128,26 @@ void UMyGameInstance::InitNetworkingSetup()
 		NetworkManager->StartPollingLoginServer();
 		// Start polling the data from game server
 		NetworkManager->StartPollingGameServer();
+		// Start polling the data from chunk server
+		NetworkManager->StartPollingChunkServer();
+	}
+}
+
+void UMyGameInstance::StartPingGameServer()
+{
+	if (PlayerManager != nullptr) 
+	{
+		// Start pinging the game server
+		PlayerManager->StartPing();
+	}
+}
+
+void UMyGameInstance::StartPingLoginServer()
+{
+	if (AuthenticationManager != nullptr)
+	{
+		// Start pinging the login server
+		AuthenticationManager->StartPing();
 	}
 }
 
@@ -156,6 +179,7 @@ void UMyGameInstance::Shutdown()
 		// send leave game request
 		PlayerManager->SendLeaveGameRequest(ClientData);
 	}
+
 
 	// Shutdown the network manager
 	NetworkManager->Shutdown();
@@ -335,7 +359,7 @@ void UMyGameInstance::OnLevelLoaded()
 
 void UMyGameInstance::OnLevelUnloaded()
 {
-	UE_LOG(LogTemp, Warning, TEXT("Level unloaded %s"), *LevelBeingLoaded.ToString());
+	UE_LOG(LogTemp, Warning, TEXT("Level unloaded trigerred and loaded new level: %s"), *LevelBeingLoaded.ToString());
 
 }
 
@@ -378,8 +402,11 @@ void UMyGameInstance::AddLoadingScreen()
 {
 	if (LoadingScreenWidgetClass)
 	{
-		// Create the widget and add it to the viewport on top of the game UI
-		LoadingScreenWidget = CreateWidget<UUserWidget>(this, LoadingScreenWidgetClass);
+		if (!LoadingScreenWidget)
+		{
+			// Create the widget and add it to the viewport on top of the game UI
+			LoadingScreenWidget = CreateWidget<UUserWidget>(this, LoadingScreenWidgetClass);
+		}
 		if (LoadingScreenWidget)
 		{
 			LoadingScreenWidget->AddToViewport(999);
@@ -446,9 +473,16 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 				NewPlayer->SetPlayerClass(PlayerData.characterData.characterClass);
 				NewPlayer->SetPlayerRace(PlayerData.characterData.characterRace);
 				NewPlayer->SetPlayerLevel(PlayerData.characterData.characterLevel);
+				//set next level exp
+				NewPlayer->SetPlayerNextLevelExp(PlayerData.characterData.characterExpForNextLevel);
+
+				//set exp points
 				NewPlayer->SetPlayerExpPoints(PlayerData.characterData.characterExperiencePoints);
 				NewPlayer->SetPlayerCurrentHPPoints(PlayerData.characterData.characterCurrentHealth);
 				NewPlayer->SetPlayerCurrentMPPoints(PlayerData.characterData.characterCurrentMana);
+				//set attributes
+				NewPlayer->SetPlayerAttributes(PlayerData.characterData.characterAttributes.attributesData);
+
 
 				// Get the first player controller
 				APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
@@ -464,6 +498,7 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 					NewPlayer->SetClientSecret(PlayerData.hash);
 					// Possess the spawned player character with the player controller
 					PlayerController->Possess(NewPlayer);
+					NewPlayer->CreateHUD();
 				}
 
 				// Add the player to the SpawnedPlayers map
@@ -583,6 +618,11 @@ int32 UMyGameInstance::GetCurrentCharacterID()
 	return ClientData.characterData.characterId;
 }
 
+UUIManager* UMyGameInstance::GetUIManager()
+{
+	return UIManager;
+}
+
 // set current client id
 void UMyGameInstance::SetCurrentClientID(int32 ClientID)
 {
@@ -605,4 +645,153 @@ void UMyGameInstance::SetCurrentClientHash(FString ClientSecret)
 FString UMyGameInstance::GetCurrentClientHash()
 {
 	return ClientData.hash;
+}
+
+void UMyGameInstance::PlayCombatAnimation(const FCombatAnimationData& AnimationData)
+{
+	// Найти игрока по ID и воспроизвести анимацию
+	ABasicPlayer* PlayerActor = GetPlayerByCharacterId(AnimationData.CharacterId);
+	if (PlayerActor)
+	{
+		// Здесь можно добавить воспроизведение анимации
+		UE_LOG(LogTemp, Warning, TEXT("Playing animation %s for player %d"),
+			*AnimationData.AnimationName, AnimationData.CharacterId);
+
+		// Пример: PlayerActor->PlayAttackAnimation(AnimationData.AnimationName, AnimationData.Duration);
+	}
+}
+
+
+void UMyGameInstance::ProcessCombatAction(const FCombatActionData& ActionData)
+{
+	// Обработка боевого действия - можно добавить визуальные эффекты
+	UE_LOG(LogTemp, Warning, TEXT("Processing combat action: %s"), *ActionData.ActionName);
+
+	// Здесь можно добавить спецэффекты, звуки, и т.д.
+}
+
+void UMyGameInstance::UpdateTargetHealth(int32 TargetId, int32 TargetType, const FString& TargetTypeString, int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt)
+{
+	// Определяем тип цели: 1 = MOB, 2 = PLAYER
+	if (TargetType == 1 || TargetTypeString == "MOB")
+	{
+		UpdateMobHealth(TargetId, NewHealth, NewMana, bIsDead, bIsDamaged, DamageDealt);
+	}
+	else if (TargetType == 2 || TargetTypeString == "PLAYER")
+	{
+		UpdatePlayerHealth(TargetId, NewHealth, NewMana, bIsDead, bIsDamaged, DamageDealt);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Unknown target type: %d (%s) for target %d"), 
+			TargetType, *TargetTypeString, TargetId);
+	}
+}
+
+void UMyGameInstance::UpdatePlayerHealth(int32 TargetId, int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt)
+{
+	// Найти игрока по TargetId и обновить его здоровье
+	ABasicPlayer* PlayerActor = GetPlayerByCharacterId(TargetId);
+	if (PlayerActor)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UpdatePlayerHealth: Found player %d, updating health from %d to %d"),
+			TargetId, PlayerActor->GetPlayerCurrentHPPoints(), NewHealth);
+
+		// Обновляем здоровье и ману игрока
+		PlayerActor->SetPlayerCurrentHPPoints(NewHealth);
+		PlayerActor->SetPlayerCurrentMPPoints(NewMana);
+
+		// Принудительно обновляем UI
+		PlayerActor->UpdateHUD();
+
+		// Если игрок был поврежден, можно добавить логику для отображения урона
+		if (bIsDamaged)
+		{
+			FVector HitLoc = PlayerActor->GetActorLocation() + FVector(0, 0, 120);
+
+			if (UIManager && UIManager->GetFCTManager() && IsValid(UIManager->GetFCTManager()))
+			{
+				// Отображаем урон на экране
+				UIManager->GetFCTManager()->ShowDamage(HitLoc, DamageDealt, false, EDamageType::Physical);
+			}
+		}
+
+
+		// Если игрок умер, можно добавить дополнительную логику
+		if (bIsDead)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Player %d has died!"), TargetId);
+			// Можно добавить анимацию смерти, респавн, и т.д.
+			// PlayerActor->PlayDeathAnimation();
+			// PlayerActor->HandleDeath();
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Player with TargetId %d not found!"), TargetId);
+	}
+}
+
+void UMyGameInstance::UpdateMobHealth(int32 TargetId, int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt)
+{
+	// Найти моба по TargetId и обновить его здоровье
+	for (TActorIterator<ABasicMOB> ActorItr(GetWorld()); ActorItr; ++ActorItr)
+	{
+		ABasicMOB* Mob = *ActorItr;
+		if (Mob && FCString::Atoi(*Mob->GetMOBUId()) == TargetId)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("UpdateMobHealth: Found mob %d (%s), updating health from %d to %d"),
+				TargetId, *Mob->GetMobName(), Mob->GetMOBCurrentHealth(), NewHealth);
+
+			// Обновляем здоровье и ману
+			Mob->SetMOBCurrentHealth(NewHealth);
+			Mob->SetMOBCurrentMana(NewMana);
+			Mob->SetMOBIsDead(bIsDead);
+
+			// Если моб был поврежден, можно добавить логику для отображения урона
+			if (bIsDamaged)
+			{
+				Mob->SetMobIsDamaged(true);
+
+				FVector HitLoc = Mob->GetActorLocation() + FVector(0, 0, 120);
+
+				if (UIManager && UIManager->GetFCTManager() && IsValid(UIManager->GetFCTManager()))
+				{
+					// Отображаем урон на экране
+					UIManager->GetFCTManager()->ShowDamage(HitLoc, DamageDealt, false, EDamageType::Physical);
+				}
+			}
+
+			// Принудительно обновляем UI
+			Mob->ForceUpdateUI();
+
+			// Если моб умер, можно добавить дополнительную логику
+			if (bIsDead)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("Mob %d has died!"), TargetId);
+
+				Mob->Die();
+				// Можно добавить анимацию смерти, скрыть моба, и т.д.
+				// Mob->PlayDeathAnimation();
+				// Mob->SetActorHiddenInGame(true);
+			}
+
+			return; // Моб найден и обновлен
+		}
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("Mob with TargetId %d not found!"), TargetId);
+}
+
+ABasicPlayer* UMyGameInstance::GetPlayerByCharacterId(int32 CharacterId)
+{
+	for (TActorIterator<ABasicPlayer> ActorItr(GetWorld()); ActorItr; ++ActorItr)
+	{
+		ABasicPlayer* PlayerActor = *ActorItr;
+		if (PlayerActor && PlayerActor->GetPlayerCharacterID() == CharacterId)
+		{
+			return PlayerActor;
+		}
+	}
+	return nullptr;
 }

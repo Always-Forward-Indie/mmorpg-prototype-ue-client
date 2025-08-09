@@ -17,6 +17,17 @@
 // Define a delegate or event signature
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnLoginServerDataReceived, const FString&, Data);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGameServerDataReceived, const FString&, Data);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnChunkServerDataReceived, const FString&, Data);
+
+
+// Delegate to handle that Game Server socket connected
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameServerSocketConnected);
+
+// Delegate to handle that Login Server socket connected
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnLoginServerSocketConnected);
+
+// Delegate to handle that Chunk Server socket connected
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnChunkServerSocketConnected);
 
 /**
  * 
@@ -39,6 +50,25 @@ private:
 
 	NetworkSenderWorker* SenderLoginServerWorker;
 	FRunnableThread* SenderLoginServerThread;
+
+	// Chunk server details
+	FString ChunkServerIP;
+	int32 ChunkServerPort;
+	FSocket* ChunkServerSocket;
+	bool bIsChunkSocketConnected;
+
+	NetworkReceiverWorker* ReceiverChunkServerWorker;
+	FRunnableThread* ReceiverChunkServerThread;
+
+	NetworkSenderWorker* SenderChunkServerWorker;
+	FRunnableThread* SenderChunkServerThread;
+
+	// timers chunk server
+	FTimerHandle NetworkChunkServerPollTimerHandle;
+	FTimerHandle ChunkServerConnectionTimerHandle;
+
+	int32 ChunkConnectionRetryCount = 0;
+	const int32 MaxChunkRetries = 3;
 
 	// Game server details
 	FString GameServerIP;
@@ -72,6 +102,8 @@ private:
 	UMessageBoxPopup* MsgBoxLoginServer;
 	UPROPERTY()
 	UMessageBoxPopup* MsgBoxGameServer;
+	UPROPERTY()
+	UMessageBoxPopup* MsgBoxChunkServer;
 
 
 public:
@@ -79,15 +111,20 @@ public:
 	void ConnectGameServer();
 	void ShowLoginServerConnectionIssuePopup();
 	void ShowGameServerConnectionIssuePopup();
+	void ShowChunkServerConnectionIssuePopup();
 	void SetWorldContext(UWorld* World);
 	void SetMessageBoxPopupClass(TSubclassOf<UMessageBoxPopup> InMessageBoxPopupClass);
 	void StartPollingLoginServer();
 	void StartPollingGameServer();
+	void StartPollingChunkServer();
 	void ConnectLoginServer();
+	void ConnectChunkServer();
 	void SendDataToLoginServer(const FString& Data);
 	void SendDataToGameServer(const FString& Data);
+	void SendDataToChunkServer(const FString& Data);
 	void PollLoginServerNetworkData();
 	void PollGameServerNetworkData();
+	void PollChunkServerNetworkData();
 	void Shutdown();
 
 	UFUNCTION()
@@ -96,8 +133,15 @@ public:
 	void OnGameServerConnectionRetry();
 	UFUNCTION()
 	void OnConnectCancel();
+	UFUNCTION()
+	void OnChunkServerConnectionRetry();
 
 	// Delegate instance
 	FOnLoginServerDataReceived OnLoginServerDataReceived;
 	FOnGameServerDataReceived OnGameServerDataReceived;
+	FOnChunkServerDataReceived OnChunkServerDataReceived;
+
+	FOnGameServerSocketConnected OnGameServerSocketConnected;
+	FOnLoginServerSocketConnected OnLoginServerSocketConnected;
+	FOnChunkServerSocketConnected OnChunkServerSocketConnected;
 };

@@ -14,7 +14,7 @@ bool NetworkSenderWorker::Init()
 
 void NetworkSenderWorker::EnqueueDataForSending(const FString& Data)
 {
-	FString DelimitedData = Data + TEXT("\r\n\r\n"); // Using "\r\n\r\n" as data packet delimiter
+	FString DelimitedData = Data + TEXT("\n"); // Using "\n" as data packet delimiter
     DataQueue.Enqueue(DelimitedData);
 }
 

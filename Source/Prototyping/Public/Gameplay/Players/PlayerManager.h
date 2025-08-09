@@ -42,14 +42,23 @@ public:
 
 	UFUNCTION()
 	void ProcessGameServerData(const FString& ReceivedData);
+	UFUNCTION()
+	void ProcessChunkServerData(const FString& ReceivedData);
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	void SendJoinGameRequest(const FClientDataStruct& ClientData);
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	void SendJoinClientChunkRequest(const FClientDataStruct& ClientData);
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	void SendJoinCharacterChunkRequest(const FClientDataStruct& ClientData);
+
 	void SendGetConnectedPlayersRequest(FClientDataStruct& ClientData);
 	void SendMovePlayerRequest(FClientDataStruct& ClientData);
 	void SendLeaveGameRequest(FClientDataStruct& ClientData);
 
 	void SendPingRequest();
 	void StartPing();
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void SendPlayerAttackRequest(const FClientDataStruct& ClientData, int32 TargetID, int32 ActionID, bool bUseAI, const FString& TargetType);
 	void AddReceivePingTime(const FString& EventType, const FDateTime& ReceiveTime);
 	void AddSendPingTime(const FString& EventType, const FDateTime& SendTime);
 };

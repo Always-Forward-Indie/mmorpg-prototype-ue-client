@@ -14,6 +14,8 @@
 #include "Sound/SoundCue.h"
 #include "TimerManager.h"
 #include "Engine/GameInstance.h"
+#include "EngineUtils.h" 
+#include "Gameplay/UI/UIManager.h"
 
 #include "Gameplay/Players/MyCameraActor.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -35,6 +37,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnGameServerResponseReceived, int3
 /**
  *
  */
+
+class UFloatingCombatTextManager;
+
 UCLASS()
 class PROTOTYPING_API UMyGameInstance : public UGameInstance
 {
@@ -142,6 +147,12 @@ public:
 	// get current client data
 	UFUNCTION(BlueprintCallable, Category = "Client Data")
 	FClientDataStruct GetCurrentClientData();
+
+	// UI manager
+	UPROPERTY()
+	UUIManager* UIManager;
+
+	UUIManager* GetUIManager();
 
 	void SetCurrentClientID(int32 ClientID);
 
@@ -280,4 +291,34 @@ public:
 
 	// Loading screen actor
 	ALoadingSceenActor* LoadingScreenActor;
+
+	// Ping servers
+	UFUNCTION()
+	void StartPingGameServer();
+	UFUNCTION()
+	void StartPingLoginServer();
+
+	public:
+		// Combat system functions
+		UFUNCTION(BlueprintCallable, Category = "Combat")
+		void PlayCombatAnimation(const FCombatAnimationData& AnimationData);
+
+		UFUNCTION(BlueprintCallable, Category = "Combat")
+		void ProcessCombatAction(const FCombatActionData& ActionData);
+
+		UFUNCTION(BlueprintCallable, Category = "Combat")
+		void UpdateMobHealth(int32 TargetId, int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt);
+
+		UFUNCTION(BlueprintCallable, Category = "Combat")
+		void UpdatePlayerHealth(int32 TargetId, int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt);
+
+		UFUNCTION(BlueprintCallable, Category = "Combat")
+		void UpdateTargetHealth(int32 TargetId, int32 TargetType, const FString& TargetTypeString, int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt);
+
+
+
+private:
+	// Helper function
+	ABasicPlayer* GetPlayerByCharacterId(int32 CharacterId);
+
 };

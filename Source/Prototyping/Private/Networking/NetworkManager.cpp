@@ -7,20 +7,6 @@
 #include "JsonUtilities.h"
 #include <Kismet/KismetSystemLibrary.h>
 
-//UNetworkManager::UNetworkManager(const FObjectInitializer& ObjectInitializer)
-//	: Super(ObjectInitializer)
-//{
-//	UE_LOG(LogTemp, Warning, TEXT("Network Manager Constructor called"));
-//
-//	// Set up the login server IP and port
-//	LoginServerIP = TEXT("127.0.0.1");
-//	LoginServerPort = 27014;
-//
-//	// Set up the game server IP and port
-//	GameServerIP = TEXT("127.0.0.1");
-//	GameServerPort = 27016;
-//}
-
 
 UNetworkManager::UNetworkManager(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -41,6 +27,8 @@ UNetworkManager::UNetworkManager(const FObjectInitializer& ObjectInitializer)
 		ConfigFilePath = FPaths::LaunchDir() + TEXT("server_config.json");
 	}
 
+	UE_LOG(LogTemp, Warning, TEXT("Config file path: %s"), *ConfigFilePath);
+
 	FString JsonString;
 	if (FFileHelper::LoadFileToString(JsonString, *ConfigFilePath))
 	{
@@ -57,8 +45,12 @@ UNetworkManager::UNetworkManager(const FObjectInitializer& ObjectInitializer)
 			GameServerIP = JsonObject->GetObjectField("GameServer")->GetStringField("IP");
 			GameServerPort = JsonObject->GetObjectField("GameServer")->GetIntegerField("Port");
 
+			ChunkServerIP = JsonObject->GetObjectField("ChunkServer")->GetStringField("IP");
+			ChunkServerPort = JsonObject->GetObjectField("ChunkServer")->GetIntegerField("Port");
+
 			UE_LOG(LogTemp, Warning, TEXT("Login Server: %s:%d"), *LoginServerIP, LoginServerPort);
 			UE_LOG(LogTemp, Warning, TEXT("Game Server: %s:%d"), *GameServerIP, GameServerPort);
+			UE_LOG(LogTemp, Warning, TEXT("Chunk Server: %s:%d"), *ChunkServerIP, ChunkServerPort);
 		}
 		else
 		{
@@ -103,6 +95,19 @@ void UNetworkManager::StartPollingGameServer()
 	}
 }
 
+// start polling data from chunk server
+void UNetworkManager::StartPollingChunkServer()
+{
+	const float PollIntervalChunkServerData = 0.001f; // Adjust as necessary
+	if (WorldContext)
+	{
+		WorldContext->GetTimerManager().ClearTimer(NetworkChunkServerPollTimerHandle);
+		WorldContext->GetTimerManager().SetTimer(NetworkChunkServerPollTimerHandle, this, &UNetworkManager::PollChunkServerNetworkData, PollIntervalChunkServerData, true);
+		UE_LOG(LogTemp, Warning, TEXT("Polling timer for chunk server data set up successfully."));
+	}
+}
+
+//start connection to login server
 void UNetworkManager::ConnectLoginServer()
 {
 	// Настраиваем сокет, если он еще не создан
@@ -112,6 +117,7 @@ void UNetworkManager::ConnectLoginServer()
 		LoginServerSocket->SetNonBlocking(true);
 		LoginServerSocket->SetReuseAddr(true);
 		LoginServerSocket->SetRecvErr(true);
+		LoginServerSocket->SetNoDelay(true);
 	}
 
 	// Устанавливаем IP и порт
@@ -130,6 +136,7 @@ void UNetworkManager::ConnectLoginServer()
 			if (LoginServerSocket && LoginServerSocket->GetConnectionState() == ESocketConnectionState::SCS_Connected)
 			{
 				UE_LOG(LogTemp, Warning, TEXT("Login Server socket connected."));
+
 				WorldContext->GetTimerManager().ClearTimer(LoginServerConnectionTimerHandle);
 
 				// Создаем потоки для работы с логин-сервером
@@ -137,6 +144,8 @@ void UNetworkManager::ConnectLoginServer()
 				ReceiverLoginServerThread = FRunnableThread::Create(ReceiverLoginServerWorker, TEXT("NetworkingLoginServerReceiverThread"));
 				SenderLoginServerWorker = new NetworkSenderWorker(LoginServerSocket);
 				SenderLoginServerThread = FRunnableThread::Create(SenderLoginServerWorker, TEXT("NetworkingLoginServerSenderThread"));
+			
+				OnLoginServerSocketConnected.Broadcast();
 			}
 			else
 			{
@@ -179,6 +188,7 @@ void UNetworkManager::ConnectGameServer()
 			if (GameServerSocket && GameServerSocket->GetConnectionState() == ESocketConnectionState::SCS_Connected)
 			{
 				UE_LOG(LogTemp, Warning, TEXT("Game Server socket connected."));
+
 				WorldContext->GetTimerManager().ClearTimer(GameServerConnectionTimerHandle);
 
 				// Создаем потоки для работы с игровым сервером
@@ -186,6 +196,8 @@ void UNetworkManager::ConnectGameServer()
 				ReceiverGameServerThread = FRunnableThread::Create(ReceiverGameServerWorker, TEXT("NetworkingGameServerReceiverThread"));
 				SenderGameServerWorker = new NetworkSenderWorker(GameServerSocket);
 				SenderGameServerThread = FRunnableThread::Create(SenderGameServerWorker, TEXT("NetworkingGameServerSenderThread"));
+
+				OnGameServerSocketConnected.Broadcast();
 			}
 			else
 			{
@@ -203,6 +215,85 @@ void UNetworkManager::ConnectGameServer()
 	WorldContext->GetTimerManager().SetTimer(GameServerConnectionTimerHandle, GameTimerDelegate, 1.0f, true);
 }
 
+// connect to chunk server
+void UNetworkManager::ConnectChunkServer()
+{
+	// Аналогичная логика для игрового сервера
+	if (!ChunkServerSocket)
+	{
+		ChunkServerSocket = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateSocket(NAME_Stream, TEXT("ChunkServerSocket"), false);
+		ChunkServerSocket->SetNonBlocking(true);
+		ChunkServerSocket->SetReuseAddr(true);
+		ChunkServerSocket->SetRecvErr(true);
+		ChunkServerSocket->SetNoDelay(true);
+	}
+	FIPv4Address ChunkServerIPAddr;
+	FIPv4Address::Parse(ChunkServerIP, ChunkServerIPAddr);
+	FIPv4Endpoint ChunkServerEndpoint(ChunkServerIPAddr, ChunkServerPort);
+	bIsChunkSocketConnected = ChunkServerSocket->Connect(*ChunkServerEndpoint.ToInternetAddr());
+	ChunkConnectionRetryCount = 0;
+	FTimerDelegate ChunkTimerDelegate;
+	ChunkTimerDelegate.BindLambda([this, ChunkServerEndpoint]()
+		{
+			if (ChunkServerSocket && ChunkServerSocket->GetConnectionState() == ESocketConnectionState::SCS_Connected)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("Chunk Server socket connected."));
+
+				WorldContext->GetTimerManager().ClearTimer(ChunkServerConnectionTimerHandle);
+				// Создаем потоки для работы с игровым сервером
+				ReceiverChunkServerWorker = new NetworkReceiverWorker(ChunkServerSocket);
+				ReceiverChunkServerThread = FRunnableThread::Create(ReceiverChunkServerWorker, TEXT("NetworkingChunkServerReceiverThread"));
+				SenderChunkServerWorker = new NetworkSenderWorker(ChunkServerSocket);
+				SenderChunkServerThread = FRunnableThread::Create(SenderChunkServerWorker, TEXT("NetworkingChunkServerSenderThread"));
+
+
+				OnChunkServerSocketConnected.Broadcast();
+			}
+			else
+			{
+				ChunkConnectionRetryCount++;
+				UE_LOG(LogTemp, Warning, TEXT("Waiting for Chunk Server socket connection... Retry %d"), ChunkConnectionRetryCount);
+				if (ChunkConnectionRetryCount > MaxChunkRetries)
+				{
+					UE_LOG(LogTemp, Error, TEXT("Failed to connect to Chunk Server after %d retries."), ChunkConnectionRetryCount);
+					WorldContext->GetTimerManager().ClearTimer(ChunkServerConnectionTimerHandle);
+					// Можно добавить аналогичный попап для игрового сервера,
+					// если нужно
+					ShowChunkServerConnectionIssuePopup();
+				}
+			}
+		});
+	WorldContext->GetTimerManager().SetTimer(ChunkServerConnectionTimerHandle, ChunkTimerDelegate, 1.0f, true);
+}
+
+
+// show popup for chunk server connection issue
+void UNetworkManager::ShowChunkServerConnectionIssuePopup()
+{
+	if (MessageBoxPopupClass)
+	{
+		// Если окно уже создано, не создаём новое
+		if (!MsgBoxChunkServer)
+		{
+			MsgBoxChunkServer = CreateWidget<UMessageBoxPopup>(WorldContext, MessageBoxPopupClass);
+		}
+		if (MsgBoxChunkServer)
+		{
+			FText TitleMessage = FText::FromString(TEXT("Error"));
+			FText ErrorMessage = FText::FromString(TEXT("Can not connect to Chunk Server. Retry?"));
+			FText YesText = FText::FromString(TEXT("Yes"));
+			FText NoText = FText::FromString(TEXT("No"));
+			MsgBoxChunkServer->SetupMessageBox(TitleMessage, ErrorMessage, YesText, NoText);
+			// Устанавливаем окно на экран
+			MsgBoxChunkServer->AddToViewport();
+			// Подписываемся на события кнопок
+			MsgBoxChunkServer->OnLeftButtonClicked.AddDynamic(this, &UNetworkManager::OnChunkServerConnectionRetry);
+			MsgBoxChunkServer->OnRightButtonClicked.AddDynamic(this, &UNetworkManager::OnConnectCancel);
+		}
+	}
+}
+
+// show popup for login server connection issue
 void UNetworkManager::ShowLoginServerConnectionIssuePopup()
 {
 	if (MessageBoxPopupClass)
@@ -290,6 +381,23 @@ void UNetworkManager::OnGameServerConnectionRetry()
 	ConnectGameServer();
 }
 
+// retry connection to chunk server
+void UNetworkManager::OnChunkServerConnectionRetry()
+{
+	if (MsgBoxChunkServer)
+	{
+		MsgBoxChunkServer->OnLeftButtonClicked.Clear();
+		MsgBoxChunkServer->OnRightButtonClicked.Clear();
+		MsgBoxChunkServer->RemoveFromParent();
+		MsgBoxChunkServer = nullptr;
+	}
+	UE_LOG(LogTemp, Warning, TEXT("User chose to retry Chunk Server connection."));
+	// Попытка переподключения: вызываем метод подключения заново
+	ConnectChunkServer();
+}
+
+
+// if cancel connection
 void UNetworkManager::OnConnectCancel()
 {
 	UE_LOG(LogTemp, Warning, TEXT("User cancelled Server connection."));
@@ -320,6 +428,19 @@ void UNetworkManager::SendDataToGameServer(const FString& Data) {
 	}
 }
 
+// send data to chunk server
+void UNetworkManager::SendDataToChunkServer(const FString& Data)
+{
+	if (SenderChunkServerWorker != nullptr)
+	{
+		SenderChunkServerWorker->EnqueueDataForSending(Data);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("Sender Chunk Server Worker is null"));
+	}
+}
+
 void UNetworkManager::PollLoginServerNetworkData()
 {
 	//UE_LOG(LogTemp, Warning, TEXT("Polling for Login Server data..."));
@@ -346,6 +467,19 @@ void UNetworkManager::PollGameServerNetworkData()
 	}
 }
 
+// poll data from chunk server
+void UNetworkManager::PollChunkServerNetworkData()
+{
+	//UE_LOG(LogTemp, Warning, TEXT("Polling for Chunk Server data..."));
+	FString ReceivedData;
+	while (ReceiverChunkServerWorker && ReceiverChunkServerWorker->GetData(ReceivedData))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Received Chunk Server data: %s"), *ReceivedData);
+		// Trigger the event or delegate call
+		OnChunkServerDataReceived.Broadcast(ReceivedData);
+	}
+}
+
 void UNetworkManager::Shutdown() {
 
 	UE_LOG(LogTemp, Warning, TEXT("Shutting down Network Manager..."));
@@ -355,6 +489,7 @@ void UNetworkManager::Shutdown() {
 	{
 		WorldContext->GetTimerManager().ClearTimer(NetworkLoginServerPollTimerHandle);
 		WorldContext->GetTimerManager().ClearTimer(NetworkGameServerPollTimerHandle);
+		WorldContext->GetTimerManager().ClearTimer(NetworkChunkServerPollTimerHandle);
 	}
 
 
@@ -411,6 +546,26 @@ void UNetworkManager::Shutdown() {
 		}
 	}
 
+	if (ReceiverChunkServerWorker != nullptr)
+	{
+		ReceiverChunkServerWorker->Stop();
+		if (ReceiverChunkServerThread != nullptr)
+		{
+			ReceiverChunkServerThread->WaitForCompletion();
+		}
+	}
+
+	if (SenderChunkServerWorker != nullptr)
+	{
+		SenderChunkServerWorker->Stop();
+		if (SenderChunkServerThread != nullptr)
+		{
+			SenderChunkServerThread->WaitForCompletion();
+		}
+	}
+
+	// Shutdown the sockets
+
 	if (LoginServerSocket != nullptr)
 	{
 		LoginServerSocket->Close();
@@ -421,5 +576,11 @@ void UNetworkManager::Shutdown() {
 	{
 		GameServerSocket->Close();
 		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(GameServerSocket);
+	}
+
+	if (ChunkServerSocket != nullptr)
+	{
+		ChunkServerSocket->Close();
+		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ChunkServerSocket);
 	}
 }

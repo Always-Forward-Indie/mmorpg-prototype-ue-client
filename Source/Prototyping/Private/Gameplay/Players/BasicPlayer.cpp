@@ -35,6 +35,12 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
     
         // Bind attack action (you'll need to add AttackAction to your header file)
         EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Triggered, this, &ABasicPlayer::OnAttackInput);
+
+        // Pickup item action
+        if (PickupAction)
+        {
+            EnhancedInputComponent->BindAction(PickupAction, ETriggerEvent::Triggered, this, &ABasicPlayer::OnPickupInput);
+        }
     }
 }
 
@@ -366,6 +372,11 @@ void ABasicPlayer::SetIsOtherClient(bool bIsOtherClient)
 void ABasicPlayer::SetClientID(int32 ID)
 {
     playerData.clientId = ID;
+}
+
+void ABasicPlayer::SetPlayerTag(const FString& Tag)
+{
+    Tags.Add(FName(*Tag));
 }
 
 // Set client token
@@ -700,3 +711,14 @@ void ABasicPlayer::OnAttackInput()
         UE_LOG(LogTemp, Warning, TEXT("No valid MOB or player to attack"));
     }
 }
+
+
+void ABasicPlayer::OnPickupInput()
+{
+    UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetGameInstance());
+    if (GameInstance && GameInstance->GetInventoryManager())
+    {
+        GameInstance->GetInventoryManager()->PickupNearbyItem();
+    }
+}
+

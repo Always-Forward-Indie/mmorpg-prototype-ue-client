@@ -5,6 +5,9 @@
 #include "GameFramework/Character.h"
 #include "Components/CapsuleComponent.h"
 #include "DrawDebugHelpers.h"
+#include <Kismet/GameplayStatics.h>
+#include "Gameplay/Players/BasicPlayer.h"
+#include "Gameplay/Mobs/BasicMOB.h"
 
 // Sets default values for this component's properties
 UMOBMovementComponent::UMOBMovementComponent()
@@ -55,10 +58,16 @@ void UMOBMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
         // Adjust every second when not moving
         if (TimeSinceLastGroundCheck >= 0.2f)
         {
-            FVector AdjustedLocation = AdjustToGround(GetOwner()->GetActorLocation(), DeltaTime, 0.5f);
+            FVector AdjustedLocation = AdjustToGround(GetOwner()->GetActorLocation(), DeltaTime, 20.f);
             GetOwner()->SetActorLocation(AdjustedLocation);
             TimeSinceLastGroundCheck = 0.0f;
         }
+    }
+
+    // Add target tracking when not moving or moving slowly
+    if (bEnableTargetTracking && CurrentTargetId != 0)
+    {
+        UpdateTargetTracking(DeltaTime);
     }
 }
 
@@ -163,6 +172,10 @@ FVector UMOBMovementComponent::AdjustToGround(const FVector& Location, float Del
     // Create trace params that ignore this actor
     FCollisionQueryParams Params;
     Params.AddIgnoredActor(Character);
+
+    FCollisionObjectQueryParams ObjectParams;
+    ObjectParams.AddObjectTypesToQuery(ECC_WorldStatic); // Only hit static world geometry
+
     Params.bTraceComplex = false;
     Params.bReturnPhysicalMaterial = false;
 
@@ -175,7 +188,7 @@ FVector UMOBMovementComponent::AdjustToGround(const FVector& Location, float Del
     FVector CenterEnd = Location - FVector(0, 0, TraceDepth);
     FHitResult CenterHit;
 
-    if (World->LineTraceSingleByChannel(CenterHit, CenterStart, CenterEnd, ECC_WorldStatic, Params))
+    if (World->LineTraceSingleByObjectType(CenterHit, CenterStart, CenterEnd, ObjectParams, Params))
     {
         GroundHeights.Add(CenterHit.Location.Z);
         bFoundGround = true;
@@ -212,7 +225,7 @@ FVector UMOBMovementComponent::AdjustToGround(const FVector& Location, float Del
             FVector TraceEnd = Location + Offset - FVector(0, 0, TraceDepth);
             FHitResult Hit;
 
-            if (World->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_WorldStatic, Params))
+            if (World->LineTraceSingleByObjectType(Hit, TraceStart, TraceEnd, ObjectParams, Params))
             {
                 GroundHeights.Add(Hit.Location.Z);
                 bFoundGround = true;
@@ -410,4 +423,125 @@ void UMOBMovementComponent::SnapToGround()
         UE_LOG(LogTemp, Warning, TEXT("MOB snapped to ground: Z adjustment = %f"),
             AdjustedLocation.Z - CurrentLocation.Z);
     }
+}
+
+void UMOBMovementComponent::SetTargetType(const FString& NewTargetType)
+{
+    if (CurrentTargetType != NewTargetType)
+    {
+        CurrentTargetType = NewTargetType;
+        // Reset target update timer
+        TimeSinceLastTargetUpdate = 0.0f;
+    }
+}
+
+void UMOBMovementComponent::SetTargetId(int32 NewTargetId)
+{
+    if (CurrentTargetId != NewTargetId)
+    {
+        CurrentTargetId = NewTargetId;
+		// Reset target update timer
+        TimeSinceLastTargetUpdate = 0.0f;
+
+        if (bDebugGroundAdjustment) // Reuse debug flag for now
+        {
+            UE_LOG(LogTemp, Log, TEXT("MOBMovementComponent: Target set to ID %d"), NewTargetId);
+        }
+    }
+}
+
+void UMOBMovementComponent::ClearTarget()
+{
+    CurrentTargetId = 0;
+}
+
+void UMOBMovementComponent::UpdateTargetTracking(float DeltaTime)
+{
+    // Don't update target rotation too frequently
+    TimeSinceLastTargetUpdate += DeltaTime;
+    if (TimeSinceLastTargetUpdate < 0.001f) // Update 10 times per second
+        return;
+
+    TimeSinceLastTargetUpdate = 0.0f;
+
+	AActor* TargetActor = FindTargetActor(CurrentTargetId, CurrentTargetType);
+    if (TargetActor)
+    {
+        RotateTowardsTarget(TargetActor, DeltaTime);
+    }
+    else
+    {
+        // Target not found, clear it
+        ClearTarget();
+    }
+}
+
+AActor* UMOBMovementComponent::FindTargetActor(int32 TargetId, FString TargetType)
+{
+    if (TargetId <= 0) return nullptr;
+
+    UWorld* World = GetWorld();
+    if (!World) return nullptr;
+
+    TArray<AActor*> FoundActors;
+
+    // Выбираем класс поиска
+    if (TargetType.Equals("Player", ESearchCase::IgnoreCase))
+    {
+        UGameplayStatics::GetAllActorsOfClass(World, ABasicPlayer::StaticClass(), FoundActors);
+    }
+    else if (TargetType.Equals("Mob", ESearchCase::IgnoreCase))
+    {
+        UGameplayStatics::GetAllActorsOfClass(World, ABasicMOB::StaticClass(), FoundActors);
+    }
+    else
+    {
+        if (bDebugGroundAdjustment)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("MOBMovementComponent: Unknown TargetType '%s'"), *TargetType);
+        }
+        return nullptr;
+    }
+
+    // Ищем по тегу = TargetId
+    const FName TargetIdTag = FName(*FString::FromInt(TargetId));
+    for (AActor* Actor : FoundActors)
+    {
+        if (Actor && Actor->ActorHasTag(TargetIdTag))
+        {
+            return Actor;
+        }
+    }
+
+    if (bDebugGroundAdjustment)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("MOBMovementComponent: No %s found with ID %d"), *TargetType, TargetId);
+    }
+
+    return nullptr;
+}
+
+void UMOBMovementComponent::RotateTowardsTarget(AActor* TargetActor, float DeltaTime)
+{
+    if (!GetOwner() || !TargetActor) return;
+
+    // Don't rotate while moving fast - let movement rotation handle it
+    //if (bIsMoving && CurrentInterpSpeed > MinMoveSpeed * 0.8f)
+    //    return;
+
+    FVector DirectionToTarget = (TargetActor->GetActorLocation() - GetOwner()->GetActorLocation()).GetSafeNormal();
+    FRotator TargetRotation = DirectionToTarget.Rotation();
+    TargetRotation.Pitch = 0.0f; // Keep mob upright
+    TargetRotation.Roll = 0.0f;
+
+    FRotator CurrentRotation = GetOwner()->GetActorRotation();
+
+    // Check if we're already facing the target
+    float AngleDifference = FMath::Abs(FMath::FindDeltaAngleDegrees(CurrentRotation.Yaw, TargetRotation.Yaw));
+    if (AngleDifference <= MinAngleThreshold)
+        return;
+
+    // Smooth rotation towards target
+    FRotator NewRotation = FMath::RInterpTo(CurrentRotation, TargetRotation, DeltaTime, TargetTrackingSpeed / 180.0f);
+    GetOwner()->SetActorRotation(NewRotation);
 }

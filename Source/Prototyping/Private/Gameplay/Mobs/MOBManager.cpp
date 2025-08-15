@@ -152,6 +152,151 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 			UE_LOG(LogTemp, Error, TEXT("Failed to extract mobUID from death event"));
 		}
 	}
+	else if (MessageData.eventType == "mobTargetLost" && MessageData.status == "success")
+	{
+		UE_LOG(LogTemp, Warning, TEXT("MOBManager: Received mob target lost event"));
+
+		FMobTargetLostStruct TargetLostData = JSONParser::DeserializeMobTargetLost(Body);
+
+		UE_LOG(LogTemp, Warning, TEXT("Mob %d (UID: %d) lost target player %d at position (%.2f, %.2f, %.2f)"),
+			TargetLostData.mobId, TargetLostData.mobUID, TargetLostData.lostTargetPlayerId,
+			TargetLostData.position.positionX, TargetLostData.position.positionY, TargetLostData.position.positionZ);
+
+		FString MobUidStr = FString::FromInt(TargetLostData.mobUID);
+
+		if (MOBExists(worldContext, FName(MobUidStr)))
+		{
+			TArray<AActor*> FoundActors;
+			UGameplayStatics::GetAllActorsWithTag(worldContext, FName(MobUidStr), FoundActors);
+
+			if (FoundActors.Num() > 0)
+			{
+				ABasicMOB* MOB = Cast<ABasicMOB>(FoundActors[0]);
+				if (MOB)
+				{
+					// —брасываем цель моба
+					MOB->SetMobTargetId(0);
+					MOB->SetMobTargetType("");
+					MOB->SetMOBIsAggressive(false);
+
+					// ќбновл€ем позицию моба
+					MOB->OnReceiveServerPacket(TargetLostData.position);
+
+					UE_LOG(LogTemp, Warning, TEXT("MOB %s (UID: %d) target cleared and position updated"),
+						*MOB->GetMobName(), TargetLostData.mobUID);
+				}
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Mob with UID %d not found for target lost event"), TargetLostData.mobUID);
+		}
+	}
+	// Handle combat animation events
+	else if (MessageData.eventType == "combatAnimation" && MessageData.status == "success")
+	{
+		if (Body->HasField("animation"))
+		{
+			FCombatAnimationData AnimationData = JSONParser::DeserializeCombatAnimation(Body->GetObjectField("animation"));
+
+			UE_LOG(LogTemp, Warning, TEXT("MOBManager: Received combat animation: %s for character/mob %d"),
+				*AnimationData.AnimationName, AnimationData.CharacterId);
+
+			// Play the combat animation
+			if (gameInstance)
+			{
+				gameInstance->PlayCombatAnimation(AnimationData);
+			}
+		}
+	}
+	// Handle combat action events
+	else if (MessageData.eventType == "initiateCombatAction" && MessageData.status == "success")
+	{
+		if (Body->HasField("action"))
+		{
+			FCombatActionData ActionData = JSONParser::DeserializeCombatAction(Body->GetObjectField("action"));
+
+			UE_LOG(LogTemp, Warning, TEXT("MOBManager: Received combat action: %s from caster %d to target %d"),
+				*ActionData.ActionName, ActionData.CasterId, ActionData.TargetId);
+
+			// Check if the caster is a player or a mob
+			if (gameInstance)
+			{
+				// Check if the target is a mob
+				if (ActionData.TargetTypeString.Equals("player", ESearchCase::IgnoreCase))
+				{
+					// find mob with caster ID
+					FString MobUidStr = FString::FromInt(ActionData.CasterId);
+
+					if (MOBExists(worldContext, FName(MobUidStr)))
+					{
+						TArray<AActor*> FoundActors;
+						UGameplayStatics::GetAllActorsWithTag(worldContext, FName(MobUidStr), FoundActors);
+						if (FoundActors.Num() > 0)
+						{
+							ABasicMOB* MOB = Cast<ABasicMOB>(FoundActors[0]);
+							if (MOB)
+							{
+								MOB->SetMOBIsAggressive(true);
+								// Set the MOB's target
+								MOB->SetMobTargetId(ActionData.TargetId);
+								MOB->SetMobTargetType(ActionData.TargetTypeString);
+							}
+						}
+					}
+				}
+				else if (ActionData.TargetTypeString.Equals("mob", ESearchCase::IgnoreCase))
+				{
+
+
+				}
+			}
+			
+
+			// Process the combat action
+			if (gameInstance)
+			{
+				gameInstance->ProcessCombatAction(ActionData);
+			}
+		}
+	}
+	// Handle combat result events
+	else if (MessageData.eventType == "combatResult" && MessageData.status == "success")
+	{
+		if (Body->HasField("result"))
+		{
+			FCombatResultData ResultData = JSONParser::DeserializeCombatResult(Body->GetObjectField("result"));
+
+			UE_LOG(LogTemp, Warning, TEXT("MOBManager: Received combat result for target %d (type: %s): damage=%d, remaining health=%d"),
+				ResultData.TargetId, *ResultData.TargetTypeString, ResultData.DamageDealt, ResultData.RemainingHealth);
+
+			// Process the combat result based on target type
+			if (gameInstance)
+			{
+				// Check if the target is a mob
+				if (ResultData.TargetTypeString.Equals("mob", ESearchCase::IgnoreCase))
+				{
+					// Update mob health
+					UpdateMobHealth(ResultData);
+				}
+				else if (ResultData.TargetTypeString.Equals("player", ESearchCase::IgnoreCase))
+				{
+					// Update player health
+					if (gameInstance)
+					{
+						gameInstance->UpdatePlayerHealth(
+							ResultData.TargetId,
+							ResultData.RemainingHealth,
+							ResultData.RemainingMana,
+							ResultData.bTargetDied,
+							ResultData.bIsDamaged,
+							ResultData.DamageDealt
+						);
+					}
+				}
+			}
+		}
+	}
 }
 
 // Send join game request
@@ -181,6 +326,64 @@ void UMOBManager::SendGetMobData(const FClientDataStruct& ClientData)
 	}
 	else {
 		UE_LOG(LogTemp, Error, TEXT("Network manager not found"));
+	}
+}
+
+// Update mob health based on combat result
+void UMOBManager::UpdateMobHealth(const FCombatResultData& ResultData)
+{
+	// Find the mob in the world by ID
+	FString MobUidStr = FString::FromInt(ResultData.TargetId);
+	
+	if (MOBExists(worldContext, FName(MobUidStr)))
+	{
+		TArray<AActor*> FoundActors;
+		UGameplayStatics::GetAllActorsWithTag(worldContext, FName(MobUidStr), FoundActors);
+
+		if (FoundActors.Num() > 0)
+		{
+			ABasicMOB* MOB = Cast<ABasicMOB>(FoundActors[0]);
+			if (MOB)
+			{
+				// Update the mob's health
+				MOB->SetMOBCurrentHealth(ResultData.RemainingHealth);
+				
+				// Set the damaged flag
+				MOB->SetMobIsDamaged(ResultData.bIsDamaged);
+				
+				// If the mob died, handle death
+				if (ResultData.bTargetDied)
+				{
+					MOB->SetMOBIsDead(true);
+					
+					// Trigger visual death animation/effect
+					MOB->Die();
+				}
+				
+				// Force update UI to show new health
+				MOB->ForceUpdateUI();
+				
+				// Notify game instance about mob health update
+				if (gameInstance)
+				{
+					gameInstance->UpdateMobHealth(
+						ResultData.TargetId,
+						ResultData.RemainingHealth,
+						ResultData.RemainingMana,
+						ResultData.bTargetDied,
+						ResultData.bIsDamaged,
+						ResultData.DamageDealt
+					);
+				}
+				
+				UE_LOG(LogTemp, Warning, TEXT("MOB %s health updated: %d, IsDead: %s"),
+					*MOB->GetMobName(), MOB->GetMOBCurrentHealth(), ResultData.bTargetDied ? TEXT("True") : TEXT("False"));
+			}
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Mob with ID %d not found for health update"), ResultData.TargetId);
 	}
 }
 
@@ -229,6 +432,7 @@ void UMOBManager::SpawnMOB(const FMOBStruct& MOBData)
 		MOB->SetMOBData(MOBData);
 		// set the MOB tag
 		MOB->SetMOBTag(MOBData.mobUniqueID);
+		MOB->SetMOBTag("Mob");
 	}
 }
 

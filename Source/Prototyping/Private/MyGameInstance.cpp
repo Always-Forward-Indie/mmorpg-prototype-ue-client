@@ -31,7 +31,12 @@ void UMyGameInstance::Init()
 
 	// set the spawn zone manager
 	SpawnZoneManager = NewObject<USpawnZoneManager>(this);
+    
+	// set the item manager
+	ItemManager = NewObject<UItemManager>(this);
 
+	// set the inventory manager
+	InventoryManager = NewObject<UInventoryManager>(this);
 
 	UE_LOG(LogTemp, Warning, TEXT("GameInstance Init called"));
 
@@ -54,6 +59,8 @@ void UMyGameInstance::Init()
 	NetworkManager->OnLoginServerSocketConnected.AddDynamic(this, &UMyGameInstance::StartPingLoginServer);
 
 	UIManager = NewObject<UUIManager>(this);
+
+	InitGameSystems();
 }
 
 // init networking setup
@@ -121,7 +128,28 @@ void UMyGameInstance::InitNetworkingSetup()
 		// subscribe to the network manager
 		MOBManager->SubscribeToNetworkManager();
 	}
+    
+	if (ItemManager != nullptr) {
+		// set WorldContext
+		ItemManager->SetWorldContext(GetWorld());
+		// set game instance
+		ItemManager->SetGameInstance(this);
+		// Initialize the item manager
+		ItemManager->Initialize(NetworkManager);
+		// subscribe to the network manager
+		ItemManager->SubscribeToNetworkManager();
+	}
 
+	if (InventoryManager != nullptr) {
+		// set WorldContext
+		InventoryManager->SetWorldContext(GetWorld());
+		// set game instance
+		InventoryManager->SetGameInstance(this);
+		// Initialize the inventory manager
+		InventoryManager->Initialize(NetworkManager);
+		// subscribe to the network manager
+		InventoryManager->SubscribeToNetworkManager();
+	}
 
 	if (NetworkManager != nullptr) {
 		// Start polling the data from login server
@@ -229,6 +257,20 @@ TSubclassOf<class AMobSpawnZone> UMyGameInstance::GetBasicSpawnZoneClass()
 	return BasicSpawnZoneClass;
 }
 
+UItemManager* UMyGameInstance::GetItemManager()
+{
+	return ItemManager;
+}
+
+UInventoryManager* UMyGameInstance::GetInventoryManager()
+{
+	return InventoryManager;
+}
+
+TSubclassOf<class ADroppedItemActor> UMyGameInstance::GetDroppedItemActorClass()
+{
+	return DroppedItemActorClass;
+}
 
 void UMyGameInstance::LoadLevel(const FName& LevelName)
 {
@@ -482,69 +524,116 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 				NewPlayer->SetPlayerCurrentMPPoints(PlayerData.characterData.characterCurrentMana);
 				//set attributes
 				NewPlayer->SetPlayerAttributes(PlayerData.characterData.characterAttributes.attributesData);
+				//set tag
+				NewPlayer->SetPlayerTag(*FString::FromInt(PlayerData.characterData.characterId));
+				NewPlayer->SetPlayerTag("Player");
 
 
 				// Get the first player controller
 				APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
 
-				// If this is current client player
-				if (PlayerController && GetCurrentClientID() == ClientID)
-				{
-					UE_LOG(LogTemp, Warning, TEXT("SpawnPlayerForCurrentClient - Recieved ID: %d, Found ID: %d"), ClientID, PlayerData.clientId);
-
-					NewPlayer->SetIsOtherClient(false);
-					// set additional important secret data
-					NewPlayer->SetClientLogin(PlayerData.clientLogin);
-					NewPlayer->SetClientSecret(PlayerData.hash);
-					// Possess the spawned player character with the player controller
-					PlayerController->Possess(NewPlayer);
-					NewPlayer->CreateHUD();
-				}
-
-				// Add the player to the SpawnedPlayers map
+				// Add to spawned players map
 				SpawnedPlayers.Add(ClientID, NewPlayer);
+
+				// If this is the current client, possession happens in the player's begin play
+				if (ClientID == CurrentClientID)
+				{
+					// Set the character as the current player's character
+					Player = NewPlayer;
+					Player->SetIsOtherClient(false);
+                    
+                    // Set additional important secret data
+                    NewPlayer->SetClientLogin(PlayerData.clientLogin);
+                    NewPlayer->SetClientSecret(PlayerData.hash);
+                    
+                    // Possess the player and create the HUD
+                    PlayerController->Possess(Player);
+                    NewPlayer->CreateHUD();
+
+					// Request inventory data for the current player
+					if (InventoryManager)
+					{
+						InventoryManager->RequestInventoryData(PlayerData.characterData.characterId);
+						UE_LOG(LogTemp, Warning, TEXT("Requested inventory data for character ID: %d"), PlayerData.characterData.characterId);
+					}
+				}
 			}
 		}
 	}
 }
 
-//TODO - work on movement logic for client player
-//move client player
-void UMyGameInstance::MovePlayerForClient(const int32 ClientID, const FClientDataStruct& clientData, const FMessageDataStruct& MessageData)
+UUIManager* UMyGameInstance::GetUIManager()
 {
-	// Check if the player has already been spawned
-	if (SpawnedPlayers.Contains(ClientID))
-	{
-		// Get the player actor
-		if (ABasicPlayer* PlayerActor = SpawnedPlayers[ClientID])
-		{
-				// If the distance is greater than the movement threshold
-				if (PlayerActor->GetIsOtherClient())
-				{
-					// Set Message Data
-					PlayerActor->SetMessageData(MessageData);
-
-					// Move the player to the new location
-					PlayerActor->SetCoordinates(clientData.characterData.characterPosition.positionX,
-						clientData.characterData.characterPosition.positionY,
-						clientData.characterData.characterPosition.positionZ,
-						clientData.characterData.characterPosition.rotationZ);
-				}
-		}
-	}
+	return UIManager;
 }
 
-void UMyGameInstance::HandlePlayerDisconnection(int32 ClientID)
+void UMyGameInstance::SetCurrentClientID(int32 ClientID)
 {
-	if (ABasicPlayer** PlayerActor = SpawnedPlayers.Find(ClientID))
-	{
-		// Destroy the player actor
-		(*PlayerActor)->Destroy();
+	CurrentClientID = ClientID;
 
-		// Remove the player actor from the map
-		SpawnedPlayers.Remove(ClientID);
-		RemovePlayerData(ClientID);
-	}
+	// set client ID to client data
+	ClientData.clientId = ClientID;
+}
+
+int32 UMyGameInstance::GetCurrentClientID()
+{
+	return CurrentClientID;
+}
+
+void UMyGameInstance::SetCurrentClientHash(FString ClientSecret)
+{
+	CurrentClientSecret = ClientSecret;
+
+	// set client token to client data
+	ClientData.hash = ClientSecret;
+}
+
+FString UMyGameInstance::GetCurrentClientHash()
+{
+	return CurrentClientSecret;
+}
+
+void UMyGameInstance::SetCurrentCharacterID(int32 CharacterID)
+{
+	CurrentCharacterID = CharacterID;
+    
+    // Update the character ID in the client data
+    ClientData.characterData.characterId = CharacterID;
+    
+    UE_LOG(LogTemp, Warning, TEXT("SetCurrentCharacterID %d"), CharacterID);
+}
+
+int32 UMyGameInstance::GetCurrentCharacterID()
+{
+	return CurrentCharacterID;
+}
+
+void UMyGameInstance::JoinSelectedCharacterToGame()
+{
+    UE_LOG(LogTemp, Warning, TEXT("JoinSelectedCharacterToGame called with CharacterID: %d"), CurrentCharacterID);
+    
+    if (CurrentCharacterID <= 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Cannot join game: No character selected."));
+        return;
+    }
+    
+    if (CurrentClientID <= 0 || CurrentClientSecret.IsEmpty())
+    {
+        UE_LOG(LogTemp, Error, TEXT("Cannot join game: Client not authenticated."));
+        return;
+    }
+    
+    // Send the join game request
+    if (PlayerManager)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Sending join game request for character %d"), CurrentCharacterID);
+        PlayerManager->SendJoinCharacterChunkRequest(ClientData);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Cannot join game: PlayerManager is null."));
+    }
 }
 
 void UMyGameInstance::AddPlayerData(int32 ClientID, const FClientDataStruct clientData)
@@ -563,18 +652,70 @@ void UMyGameInstance::RemovePlayerData(int32 ClientID)
 	if (ConnectedPlayers.Contains(ClientID))
 	{
 		ConnectedPlayers.Remove(ClientID);
+
+		// If the player was spawned, remove it from the map and destroy it
+		if (SpawnedPlayers.Contains(ClientID))
+		{
+			ABasicPlayer* PlayerToRemove = SpawnedPlayers[ClientID];
+			if (PlayerToRemove)
+			{
+				PlayerToRemove->Destroy();
+			}
+			SpawnedPlayers.Remove(ClientID);
+		}
 	}
 }
 
-//update payer data coordinates
+void UMyGameInstance::MovePlayerForClient(const int32 ClientID, const FClientDataStruct& clientData, const FMessageDataStruct& MessageData)
+{
+	// If the player has been spawned and it's not the current client
+	if (SpawnedPlayers.Contains(ClientID) && ClientID != CurrentClientID)
+	{
+		ABasicPlayer* PlayerToMove = SpawnedPlayers[ClientID];
+		if (PlayerToMove)
+		{
+			FString CurrentTimestamp = MessageData.timestamp;
+
+			//set character coordinates
+			PlayerToMove->SetCoordinates(clientData.characterData.characterPosition.positionX,
+				clientData.characterData.characterPosition.positionY,
+				clientData.characterData.characterPosition.positionZ,
+				clientData.characterData.characterPosition.rotationZ);
+		}
+	}
+}
+
+void UMyGameInstance::HandlePlayerDisconnection(int32 ClientID)
+{
+	// Remove the player from our map and destroy the actor if it exists
+	RemovePlayerData(ClientID);
+}
+
 void UMyGameInstance::UpdatePlayerCoordinates(int32 PlayerID, double x, double y, double z, double rotZ)
 {
-	if (FClientDataStruct* PlayerData = ConnectedPlayers.Find(PlayerID))
+	// Find the player in the map
+	if (ConnectedPlayers.Contains(PlayerID))
 	{
-		PlayerData->characterData.characterPosition.positionX = x;
-		PlayerData->characterData.characterPosition.positionY = y;
-		PlayerData->characterData.characterPosition.positionZ = z;
-		PlayerData->characterData.characterPosition.rotationZ = rotZ;
+		FClientDataStruct& PlayerData = ConnectedPlayers[PlayerID];
+
+		// Update the player's position in our map
+		PlayerData.characterData.characterPosition.positionX = x;
+		PlayerData.characterData.characterPosition.positionY = y;
+		PlayerData.characterData.characterPosition.positionZ = z;
+		PlayerData.characterData.characterPosition.rotationZ = rotZ;
+
+		// If the player has been spawned, update its position in the world
+		if (SpawnedPlayers.Contains(PlayerID))
+		{
+			ABasicPlayer* PlayerToMove = SpawnedPlayers[PlayerID];
+			if (PlayerToMove)
+			{
+				FVector NewLocation(x, y, z);
+				FRotator NewRotation(0.0f, rotZ, 0.0f);
+
+				PlayerToMove->SetActorLocationAndRotation(NewLocation, NewRotation);
+			}
+		}
 	}
 }
 
@@ -585,7 +726,10 @@ void UMyGameInstance::SetCharacterItems(TArray<FCharacterDataStruct> Items)
 
 	if (LoginScreenWidget && CharacterListView)
 	{
-		// Assuming you have a custom entry widget class for characters named UCharacterListItemWidget
+		// Clear existing items first
+		CharacterListView->ClearListItems();
+		
+		// Populate the list with character items
 		for (const FCharacterDataStruct& Character : Items)
 		{
 			UCharacterListItem* CharacterListItemWidget = CreateWidget<UCharacterListItem>(this, CharactersListItemWidgetClass);
@@ -593,205 +737,230 @@ void UMyGameInstance::SetCharacterItems(TArray<FCharacterDataStruct> Items)
 			// Check if the widget creation was successful
 			if (CharacterListItemWidget)
 			{
-				UCharacterListItem* CharacterItem = Cast<UCharacterListItem>(CharacterListItemWidget);
-				if (CharacterItem)
-				{
-					// Assuming your UCharacterListItem widget has a function to set character data
-					CharacterItem->SetCharacterItemData(Character.characterName, Character.characterId); // Set character data in your list item widget.
-					CharacterListView->AddItem(CharacterItem); // Add the item to the List View.
-				}
+				// Set character data in the list item widget
+				CharacterListItemWidget->SetCharacterItemData(Character.characterName, Character.characterId);
+				
+				// Add the item to the List View
+				CharacterListView->AddItem(CharacterListItemWidget);
+				
+				UE_LOG(LogTemp, Warning, TEXT("Added character to list: %s (ID: %d)"), 
+					*Character.characterName, Character.characterId);
 			}
-		}
-	}
-}
-
-// set character id
-void UMyGameInstance::SetCurrentCharacterID(int32 CharacterID)
-{
-	ClientData.characterData.characterId = CharacterID;
-	UE_LOG(LogTemp, Warning, TEXT("SetCurrentCharacterID %d"), CharacterID);
-}
-
-// get character id
-int32 UMyGameInstance::GetCurrentCharacterID()
-{
-	return ClientData.characterData.characterId;
-}
-
-UUIManager* UMyGameInstance::GetUIManager()
-{
-	return UIManager;
-}
-
-// set current client id
-void UMyGameInstance::SetCurrentClientID(int32 ClientID)
-{
-	ClientData.clientId = ClientID;
-}
-
-// get current client id
-int32 UMyGameInstance::GetCurrentClientID()
-{
-	return ClientData.clientId;
-}
-
-// set current client secret
-void UMyGameInstance::SetCurrentClientHash(FString ClientSecret)
-{
-	ClientData.hash = ClientSecret;
-}
-
-// get current client secret
-FString UMyGameInstance::GetCurrentClientHash()
-{
-	return ClientData.hash;
-}
-
-void UMyGameInstance::PlayCombatAnimation(const FCombatAnimationData& AnimationData)
-{
-	// Найти игрока по ID и воспроизвести анимацию
-	ABasicPlayer* PlayerActor = GetPlayerByCharacterId(AnimationData.CharacterId);
-	if (PlayerActor)
-	{
-		// Здесь можно добавить воспроизведение анимации
-		UE_LOG(LogTemp, Warning, TEXT("Playing animation %s for player %d"),
-			*AnimationData.AnimationName, AnimationData.CharacterId);
-
-		// Пример: PlayerActor->PlayAttackAnimation(AnimationData.AnimationName, AnimationData.Duration);
-	}
-}
-
-
-void UMyGameInstance::ProcessCombatAction(const FCombatActionData& ActionData)
-{
-	// Обработка боевого действия - можно добавить визуальные эффекты
-	UE_LOG(LogTemp, Warning, TEXT("Processing combat action: %s"), *ActionData.ActionName);
-
-	// Здесь можно добавить спецэффекты, звуки, и т.д.
-}
-
-void UMyGameInstance::UpdateTargetHealth(int32 TargetId, int32 TargetType, const FString& TargetTypeString, int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt)
-{
-	// Определяем тип цели: 1 = MOB, 2 = PLAYER
-	if (TargetType == 1 || TargetTypeString == "MOB")
-	{
-		UpdateMobHealth(TargetId, NewHealth, NewMana, bIsDead, bIsDamaged, DamageDealt);
-	}
-	else if (TargetType == 2 || TargetTypeString == "PLAYER")
-	{
-		UpdatePlayerHealth(TargetId, NewHealth, NewMana, bIsDead, bIsDamaged, DamageDealt);
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Unknown target type: %d (%s) for target %d"), 
-			TargetType, *TargetTypeString, TargetId);
-	}
-}
-
-void UMyGameInstance::UpdatePlayerHealth(int32 TargetId, int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt)
-{
-	// Найти игрока по TargetId и обновить его здоровье
-	ABasicPlayer* PlayerActor = GetPlayerByCharacterId(TargetId);
-	if (PlayerActor)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("UpdatePlayerHealth: Found player %d, updating health from %d to %d"),
-			TargetId, PlayerActor->GetPlayerCurrentHPPoints(), NewHealth);
-
-		// Обновляем здоровье и ману игрока
-		PlayerActor->SetPlayerCurrentHPPoints(NewHealth);
-		PlayerActor->SetPlayerCurrentMPPoints(NewMana);
-
-		// Принудительно обновляем UI
-		PlayerActor->UpdateHUD();
-
-		// Если игрок был поврежден, можно добавить логику для отображения урона
-		if (bIsDamaged)
-		{
-			FVector HitLoc = PlayerActor->GetActorLocation() + FVector(0, 0, 120);
-
-			if (UIManager && UIManager->GetFCTManager() && IsValid(UIManager->GetFCTManager()))
-			{
-				// Отображаем урон на экране
-				UIManager->GetFCTManager()->ShowDamage(HitLoc, DamageDealt, false, EDamageType::Physical);
-			}
-		}
-
-
-		// Если игрок умер, можно добавить дополнительную логику
-		if (bIsDead)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("Player %d has died!"), TargetId);
-			// Можно добавить анимацию смерти, респавн, и т.д.
-			// PlayerActor->PlayDeathAnimation();
-			// PlayerActor->HandleDeath();
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Player with TargetId %d not found!"), TargetId);
+		UE_LOG(LogTemp, Error, TEXT("Failed to set character items - LoginScreenWidget or CharacterListView is null"));
 	}
 }
 
-void UMyGameInstance::UpdateMobHealth(int32 TargetId, int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt)
-{
-	// Найти моба по TargetId и обновить его здоровье
-	for (TActorIterator<ABasicMOB> ActorItr(GetWorld()); ActorItr; ++ActorItr)
-	{
-		ABasicMOB* Mob = *ActorItr;
-		if (Mob && FCString::Atoi(*Mob->GetMOBUId()) == TargetId)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("UpdateMobHealth: Found mob %d (%s), updating health from %d to %d"),
-				TargetId, *Mob->GetMobName(), Mob->GetMOBCurrentHealth(), NewHealth);
-
-			// Обновляем здоровье и ману
-			Mob->SetMOBCurrentHealth(NewHealth);
-			Mob->SetMOBCurrentMana(NewMana);
-			Mob->SetMOBIsDead(bIsDead);
-
-			// Если моб был поврежден, можно добавить логику для отображения урона
-			if (bIsDamaged)
-			{
-				Mob->SetMobIsDamaged(true);
-
-				FVector HitLoc = Mob->GetActorLocation() + FVector(0, 0, 120);
-
-				if (UIManager && UIManager->GetFCTManager() && IsValid(UIManager->GetFCTManager()))
-				{
-					// Отображаем урон на экране
-					UIManager->GetFCTManager()->ShowDamage(HitLoc, DamageDealt, false, EDamageType::Physical);
-				}
-			}
-
-			// Принудительно обновляем UI
-			Mob->ForceUpdateUI();
-
-			// Если моб умер, можно добавить дополнительную логику
-			if (bIsDead)
-			{
-				UE_LOG(LogTemp, Warning, TEXT("Mob %d has died!"), TargetId);
-
-				Mob->Die();
-				// Можно добавить анимацию смерти, скрыть моба, и т.д.
-				// Mob->PlayDeathAnimation();
-				// Mob->SetActorHiddenInGame(true);
-			}
-
-			return; // Моб найден и обновлен
-		}
-	}
-
-	UE_LOG(LogTemp, Warning, TEXT("Mob with TargetId %d not found!"), TargetId);
-}
-
+// Combat system functions
 ABasicPlayer* UMyGameInstance::GetPlayerByCharacterId(int32 CharacterId)
 {
-	for (TActorIterator<ABasicPlayer> ActorItr(GetWorld()); ActorItr; ++ActorItr)
+	for (const auto& PlayerPair : SpawnedPlayers)
 	{
-		ABasicPlayer* PlayerActor = *ActorItr;
+		ABasicPlayer* PlayerActor = PlayerPair.Value;
 		if (PlayerActor && PlayerActor->GetPlayerCharacterID() == CharacterId)
 		{
 			return PlayerActor;
 		}
 	}
 	return nullptr;
+}
+
+void UMyGameInstance::PlayCombatAnimation(const FCombatAnimationData& AnimationData)
+{
+	UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Playing combat animation %s for character ID %d"),
+		*AnimationData.AnimationName, AnimationData.CharacterId);
+
+	// Check if the character is the player
+	ABasicPlayer* SourcePlayer = GetPlayerByCharacterId(AnimationData.CharacterId);
+	
+	if (SourcePlayer)
+	{
+		// Play animation on the player character
+		UE_LOG(LogTemp, Warning, TEXT("Playing animation on player character: %s"), *AnimationData.AnimationName);
+		// TODO: Implement animation playing in BasicPlayer class
+		// SourcePlayer->PlayAnimation(AnimationData.AnimationName);
+	}
+	else
+	{
+		// Check if it's a MOB
+		// Convert the character ID to a string to match how MOB UIDs are stored
+		FString MobUid = FString::FromInt(AnimationData.CharacterId);
+		
+		TArray<AActor*> FoundActors;
+		UGameplayStatics::GetAllActorsWithTag(GetWorld(), FName(*MobUid), FoundActors);
+		
+		if (FoundActors.Num() > 0)
+		{
+			ABasicMOB* MOB = Cast<ABasicMOB>(FoundActors[0]);
+			if (MOB)
+			{
+				// Play animation on the MOB
+				UE_LOG(LogTemp, Warning, TEXT("Playing animation on MOB %s: %s"), 
+					*MOB->GetMobName(), *AnimationData.AnimationName);
+				// TODO: Implement animation playing in BasicMOB class
+				// MOB->PlayAnimation(AnimationData.AnimationName);
+			}
+		}
+	}
+}
+
+void UMyGameInstance::ProcessCombatAction(const FCombatActionData& ActionData)
+{
+	UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Processing combat action %s from caster %d to target %d"),
+		*ActionData.ActionName, ActionData.CasterId, ActionData.TargetId);
+
+	// Find the source and target based on their IDs
+	ABasicPlayer* SourcePlayer = GetPlayerByCharacterId(ActionData.CasterId);
+	
+	if (SourcePlayer)
+	{
+		// Handle action on player character (e.g., play attack animation)
+		UE_LOG(LogTemp, Warning, TEXT("Player %d performing action %s"), 
+			ActionData.CasterId, *ActionData.ActionName);
+		// TODO: Implement action performing in BasicPlayer class
+		// SourcePlayer->PerformAction(ActionData.ActionName);
+	}
+	
+	// Note: The target's response to the action (e.g., taking damage) will be handled 
+	// through the combatResult event and the respective update health methods
+}
+
+void UMyGameInstance::UpdateMobHealth(int32 TargetId, int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt)
+{
+	UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Updating mob health for ID %d: Health=%d, IsDead=%s, Damage=%d"),
+		TargetId, NewHealth, bIsDead ? TEXT("True") : TEXT("False"), DamageDealt);
+
+	// Find the mob in the world
+	FString MobUid = FString::FromInt(TargetId);
+	TArray<AActor*> FoundActors;
+	UGameplayStatics::GetAllActorsWithTag(GetWorld(), FName(*MobUid), FoundActors);
+	
+	if (FoundActors.Num() > 0)
+	{
+		ABasicMOB* MOB = Cast<ABasicMOB>(FoundActors[0]);
+		if (MOB)
+		{
+			// Update the mob's health
+			MOB->SetMOBCurrentHealth(NewHealth);
+			MOB->SetMOBCurrentMana(NewMana);
+			MOB->SetMobIsDamaged(bIsDamaged);
+			
+			if (bIsDead)
+			{
+				MOB->SetMOBIsDead(true);
+				// Handle mob death
+				MOB->Die();
+			}
+			
+			// Update UI
+			MOB->ForceUpdateUI();
+			
+			// Show damage numbers if damaged
+			if (bIsDamaged && DamageDealt > 0)
+			{
+				FVector HitLoc = MOB->GetActorLocation() + FVector(0, 0, 120);
+				
+				if (UIManager && UIManager->GetFCTManager() && IsValid(UIManager->GetFCTManager()))
+				{
+					UE_LOG(LogTemp, Warning, TEXT("Showing mob damage: %d at location %s"), 
+						DamageDealt, *HitLoc.ToString());
+					UIManager->GetFCTManager()->ShowDamage(HitLoc, DamageDealt, false, EDamageType::Physical);
+				}
+				else
+				{
+					UE_LOG(LogTemp, Error, TEXT("Cannot show damage: FCT Manager is invalid"));
+				}
+			}
+		}
+	}
+}
+
+void UMyGameInstance::UpdatePlayerHealth(int32 TargetId, int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt)
+{
+	UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Updating player health for ID %d: Health=%d, IsDead=%s, Damage=%d"),
+		TargetId, NewHealth, bIsDead ? TEXT("True") : TEXT("False"), DamageDealt);
+
+	// Find the player and update their health
+	ABasicPlayer* TargetPlayer = GetPlayerByCharacterId(TargetId);
+	
+	if (TargetPlayer)
+	{
+		// Update the player's health, mana, and other status
+		TargetPlayer->SetPlayerCurrentHPPoints(NewHealth);
+		TargetPlayer->SetPlayerCurrentMPPoints(NewMana);
+		
+		// Update the player's HUD
+		TargetPlayer->UpdateHUD();
+		
+		// Show damage numbers if damaged
+		if (bIsDamaged && DamageDealt > 0)
+		{
+			FVector HitLoc = TargetPlayer->GetActorLocation() + FVector(0, 0, 120);
+			
+			if (UIManager && UIManager->GetFCTManager() && IsValid(UIManager->GetFCTManager()))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("Showing player damage: %d at location %s"), 
+					DamageDealt, *HitLoc.ToString());
+				UIManager->GetFCTManager()->ShowDamage(HitLoc, DamageDealt, false, EDamageType::Physical);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("Cannot show damage: FCT Manager is invalid"));
+			}
+		}
+		
+		// Handle player death if needed
+		if (bIsDead)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Player %d has died!"), TargetId);
+			// TODO: Implement death handling in BasicPlayer class
+			// TargetPlayer->HandleDeath();
+		}
+	}
+}
+
+void UMyGameInstance::UpdateTargetHealth(int32 TargetId, int32 TargetType, const FString& TargetTypeString, 
+	int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt)
+{
+	UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Updating target health for %s ID %d: Health=%d, IsDead=%s, Damage=%d"),
+		*TargetTypeString, TargetId, NewHealth, bIsDead ? TEXT("True") : TEXT("False"), DamageDealt);
+
+	// Route the update based on target type
+	if (TargetTypeString.Equals("mob", ESearchCase::IgnoreCase) || 
+        TargetTypeString.Equals("MOB", ESearchCase::IgnoreCase) || 
+        TargetType == 1 || 
+        TargetType == 3)  // Support both numerical and string type identifiers
+	{
+		UpdateMobHealth(TargetId, NewHealth, NewMana, bIsDead, bIsDamaged, DamageDealt);
+	}
+	else if (TargetTypeString.Equals("player", ESearchCase::IgnoreCase) || 
+             TargetTypeString.Equals("PLAYER", ESearchCase::IgnoreCase) || 
+             TargetType == 2)
+	{
+		UpdatePlayerHealth(TargetId, NewHealth, NewMana, bIsDead, bIsDamaged, DamageDealt);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Unknown target type: %s (Type %d) for target %d"), 
+			*TargetTypeString, TargetType, TargetId);
+	}
+}
+
+void UMyGameInstance::InitGameSystems()
+{
+	// Other initialization code...
+
+	// Initialize the item manager with the visuals data table if available
+	if (ItemManager && ItemVisualsDataTable)
+	{
+		ItemManager->LoadItemVisualsDataTable(ItemVisualsDataTable);
+		UE_LOG(LogTemp, Log, TEXT("Initialized ItemManager with configured ItemVisualsDataTable"));
+	}
+	else if (ItemManager)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ItemVisualsDataTable not configured in editor - item visuals will use defaults"));
+	}
 }

@@ -430,77 +430,430 @@ FMOBStruct JSONParser::DeserializeMobData(const TSharedPtr<FJsonObject>& MobObje
 	return Mob;
 }
 
+// Parse item attribute from JSON object
+FItemAttributeStruct JSONParser::DeserializeItemAttribute(const TSharedPtr<FJsonObject>& AttributeObj)
+{
+	FItemAttributeStruct ItemAttribute;
+	if (!AttributeObj.IsValid()) return ItemAttribute;
 
-//combat 
+	if (AttributeObj->HasField("id"))
+		ItemAttribute.id = AttributeObj->GetIntegerField("id");
+	
+	if (AttributeObj->HasField("name"))
+		ItemAttribute.name = AttributeObj->GetStringField("name");
+	
+	if (AttributeObj->HasField("slug"))
+		ItemAttribute.slug = AttributeObj->GetStringField("slug");
+	
+	if (AttributeObj->HasField("value"))
+		ItemAttribute.value = AttributeObj->GetNumberField("value");
 
+	return ItemAttribute;
+}
+
+// Parse item attributes array
+TArray<FItemAttributeStruct> JSONParser::DeserializeItemAttributes(const TArray<TSharedPtr<FJsonValue>>& JsonArray)
+{
+	TArray<FItemAttributeStruct> Attributes;
+	for (const TSharedPtr<FJsonValue>& Value : JsonArray)
+	{
+		const TSharedPtr<FJsonObject> AttrObj = Value->AsObject();
+		if (AttrObj.IsValid())
+		{
+			Attributes.Add(JSONParser::DeserializeItemAttribute(AttrObj));
+		}
+	}
+	return Attributes;
+}
+
+// Parse item data from JSON object
+FItemBaseStruct JSONParser::DeserializeItemData(const TSharedPtr<FJsonObject>& ItemObj)
+{
+	FItemBaseStruct Item;
+	if (!ItemObj.IsValid()) return Item;
+
+	if (ItemObj->HasField("id"))
+		Item.id = ItemObj->GetIntegerField("id");
+	
+	if (ItemObj->HasField("name"))
+		Item.name = ItemObj->GetStringField("name");
+	
+	if (ItemObj->HasField("slug"))
+		Item.slug = ItemObj->GetStringField("slug");
+	
+	if (ItemObj->HasField("description"))
+		Item.description = ItemObj->GetStringField("description");
+	
+	if (ItemObj->HasField("isQuestItem"))
+		Item.isQuestItem = ItemObj->GetBoolField("isQuestItem");
+	
+	if (ItemObj->HasField("itemType"))
+	{
+		Item.itemType = static_cast<EItemType>(ItemObj->GetIntegerField("itemType"));
+	}
+	
+	if (ItemObj->HasField("itemTypeName"))
+		Item.itemTypeName = ItemObj->GetStringField("itemTypeName");
+	
+	if (ItemObj->HasField("itemTypeSlug"))
+		Item.itemTypeSlug = ItemObj->GetStringField("itemTypeSlug");
+	
+	if (ItemObj->HasField("attributes"))
+	{
+		const TArray<TSharedPtr<FJsonValue>>* AttributesArray;
+		if (ItemObj->TryGetArrayField("attributes", AttributesArray))
+		{
+			Item.attributes = JSONParser::DeserializeItemAttributes(*AttributesArray);
+		}
+	}
+
+	return Item;
+}
+
+// Parse dropped item from JSON object
+FDroppedItemStruct JSONParser::DeserializeDroppedItem(const TSharedPtr<FJsonObject>& DroppedItemObj)
+{
+	FDroppedItemStruct DroppedItem;
+	if (!DroppedItemObj.IsValid()) return DroppedItem;
+
+	if (DroppedItemObj->HasField("uid"))
+		DroppedItem.uid = DroppedItemObj->GetIntegerField("uid");
+	
+	if (DroppedItemObj->HasField("itemId"))
+		DroppedItem.itemId = DroppedItemObj->GetIntegerField("itemId");
+	
+	if (DroppedItemObj->HasField("droppedByMobUID"))
+		DroppedItem.droppedByMobUID = DroppedItemObj->GetStringField("droppedByMobUID");
+	
+	if (DroppedItemObj->HasField("quantity"))
+		DroppedItem.quantity = DroppedItemObj->GetIntegerField("quantity");
+	
+	if (DroppedItemObj->HasField("canBePickedUp"))
+		DroppedItem.canBePickedUp = DroppedItemObj->GetBoolField("canBePickedUp");
+	
+	if (DroppedItemObj->HasField("position") && DroppedItemObj->GetObjectField("position").IsValid())
+		DroppedItem.position = JSONParser::DeserializePositionData(DroppedItemObj->GetObjectField("position"));
+	
+	if (DroppedItemObj->HasField("item") && DroppedItemObj->GetObjectField("item").IsValid())
+		DroppedItem.item = JSONParser::DeserializeItemData(DroppedItemObj->GetObjectField("item"));
+
+	return DroppedItem;
+}
+
+// Parse item drop response from JSON object
+FItemDropResponseStruct JSONParser::DeserializeItemDropResponse(const TSharedPtr<FJsonObject>& Body)
+{
+	FItemDropResponseStruct ItemDropResponse;
+	if (!Body.IsValid()) return ItemDropResponse;
+
+	const TArray<TSharedPtr<FJsonValue>>* DroppedItemsArray;
+	if (Body->TryGetArrayField("droppedItems", DroppedItemsArray))
+	{
+		for (const TSharedPtr<FJsonValue>& ItemValue : *DroppedItemsArray)
+		{
+			TSharedPtr<FJsonObject> ItemObject = ItemValue->AsObject();
+			if (ItemObject.IsValid())
+			{
+				ItemDropResponse.droppedItems.Add(JSONParser::DeserializeDroppedItem(ItemObject));
+			}
+		}
+	}
+
+	return ItemDropResponse;
+}
+
+// Parse item drop response from JSON string
+FItemDropResponseStruct JSONParser::DeserializeItemDropResponse(const FString& JsonString)
+{
+	TSharedPtr<FJsonObject> Root;
+	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) 
+		return FItemDropResponseStruct();
+	
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	if (!Body.IsValid())
+		return FItemDropResponseStruct();
+	
+	return JSONParser::DeserializeItemDropResponse(Body);
+}
+
+// Combat data deserializers
 FCombatAnimationData JSONParser::DeserializeCombatAnimation(const TSharedPtr<FJsonObject>& AnimationObj)
 {
-	FCombatAnimationData Data;
-	if (!AnimationObj.IsValid()) return Data;
+	FCombatAnimationData AnimationData;
+	if (!AnimationObj.IsValid()) return AnimationData;
 
-	Data.AnimationName = AnimationObj->GetStringField("animationName");
-	Data.CharacterId = AnimationObj->GetIntegerField("characterId");
-	Data.Duration = AnimationObj->GetNumberField("duration");
-	Data.bIsLooping = AnimationObj->GetBoolField("isLooping");
-	Data.Position = JSONParser::DeserializePositionData(AnimationObj->GetObjectField("position"));
-	Data.TargetPosition = JSONParser::DeserializePositionData(AnimationObj->GetObjectField("targetPosition"));
-	return Data;
+	if (AnimationObj->HasField("animationName"))
+		AnimationData.AnimationName = AnimationObj->GetStringField("animationName");
+	
+	if (AnimationObj->HasField("characterId"))
+		AnimationData.CharacterId = AnimationObj->GetIntegerField("characterId");
+	
+	if (AnimationObj->HasField("duration"))
+		AnimationData.Duration = AnimationObj->GetNumberField("duration");
+	
+	if (AnimationObj->HasField("isLooping"))
+		AnimationData.bIsLooping = AnimationObj->GetBoolField("isLooping");
+
+	return AnimationData;
 }
 
 FCombatActionData JSONParser::DeserializeCombatAction(const TSharedPtr<FJsonObject>& ActionObj)
 {
-	FCombatActionData Data;
-	if (!ActionObj.IsValid()) return Data;
+	FCombatActionData ActionData;
+	if (!ActionObj.IsValid()) return ActionData;
 
-	Data.ActionId = ActionObj->GetIntegerField("actionId");
-	Data.ActionName = ActionObj->GetStringField("actionName");
-	Data.ActionType = ActionObj->GetIntegerField("actionType");
-	Data.AnimationName = ActionObj->GetStringField("animationName");
-	Data.CastTime = ActionObj->GetNumberField("castTime");
-	Data.CasterId = ActionObj->GetIntegerField("casterId");
-	Data.Damage = ActionObj->GetIntegerField("damage");
-	Data.Range = ActionObj->GetNumberField("range");
-	Data.State = ActionObj->GetIntegerField("state");
-	Data.TargetId = ActionObj->GetIntegerField("targetId");
-	Data.TargetPosition = JSONParser::DeserializePositionData(ActionObj->GetObjectField("targetPosition"));
-	Data.TargetType = ActionObj->GetIntegerField("targetType");
-
-	// Parse targetTypeString if available
+	if (ActionObj->HasField("actionId"))
+		ActionData.ActionId = ActionObj->GetIntegerField("actionId");
+	
+	if (ActionObj->HasField("actionName"))
+		ActionData.ActionName = ActionObj->GetStringField("actionName");
+	
+	if (ActionObj->HasField("actionType"))
+		ActionData.ActionType = ActionObj->GetIntegerField("actionType");
+	
+	if (ActionObj->HasField("casterId"))
+		ActionData.CasterId = ActionObj->GetIntegerField("casterId");
+	
+	if (ActionObj->HasField("targetId"))
+		ActionData.TargetId = ActionObj->GetIntegerField("targetId");
+	
+	if (ActionObj->HasField("targetType"))
+		ActionData.TargetType = ActionObj->GetIntegerField("targetType");
+	
 	if (ActionObj->HasField("targetTypeString"))
-	{
-		Data.TargetTypeString = ActionObj->GetStringField("targetTypeString");
-	}
+		ActionData.TargetTypeString = ActionObj->GetStringField("targetTypeString");
 
-
-	return Data;
+	return ActionData;
 }
 
 FCombatResultData JSONParser::DeserializeCombatResult(const TSharedPtr<FJsonObject>& ResultObj)
 {
-	FCombatResultData Data;
-	if (!ResultObj.IsValid()) return Data;
+	FCombatResultData ResultData;
+	if (!ResultObj.IsValid()) return ResultData;
 
-	Data.ActionId = ResultObj->GetIntegerField("actionId");
-	Data.CasterId = ResultObj->GetIntegerField("casterId");
-	Data.DamageDealt = ResultObj->GetIntegerField("damageDealt");
-	Data.HealingDone = ResultObj->GetIntegerField("healingDone");
-	Data.bIsBlocked = ResultObj->GetBoolField("isBlocked");
-	Data.bIsCritical = ResultObj->GetBoolField("isCritical");
-	Data.bIsDodged = ResultObj->GetBoolField("isDodged");
-	Data.bIsResisted = ResultObj->GetBoolField("isResisted");
-	Data.RemainingHealth = ResultObj->GetIntegerField("remainingHealth");
-	Data.RemainingMana = ResultObj->GetIntegerField("remainingMana");
-	Data.bTargetDied = ResultObj->GetBoolField("targetDied");
-	Data.bIsDamaged = ResultObj->GetBoolField("isDamaged");
-	Data.TargetId = ResultObj->GetIntegerField("targetId");
-	Data.TargetType = ResultObj->GetIntegerField("targetType");
-
-	// Parse targetTypeString if available
+	if (ResultObj->HasField("actionId"))
+		ResultData.ActionId = ResultObj->GetIntegerField("actionId");
+	
+	if (ResultObj->HasField("casterId"))
+		ResultData.CasterId = ResultObj->GetIntegerField("casterId");
+	
+	if (ResultObj->HasField("damageDealt"))
+		ResultData.DamageDealt = ResultObj->GetIntegerField("damageDealt");
+	
+	if (ResultObj->HasField("healingDone"))
+		ResultData.HealingDone = ResultObj->GetIntegerField("healingDone");
+	
+	if (ResultObj->HasField("isBlocked"))
+		ResultData.bIsBlocked = ResultObj->GetBoolField("isBlocked");
+	
+	if (ResultObj->HasField("isCritical"))
+		ResultData.bIsCritical = ResultObj->GetBoolField("isCritical");
+	
+	if (ResultObj->HasField("isDodged"))
+		ResultData.bIsDodged = ResultObj->GetBoolField("isDodged");
+	
+	if (ResultObj->HasField("isResisted"))
+		ResultData.bIsResisted = ResultObj->GetBoolField("isResisted");
+	
+	if (ResultObj->HasField("remainingHealth"))
+		ResultData.RemainingHealth = ResultObj->GetIntegerField("remainingHealth");
+	
+	if (ResultObj->HasField("remainingMana"))
+		ResultData.RemainingMana = ResultObj->GetIntegerField("remainingMana");
+	
+	if (ResultObj->HasField("targetDied"))
+		ResultData.bTargetDied = ResultObj->GetBoolField("targetDied");
+	
+	if (ResultObj->HasField("isDamaged"))
+		ResultData.bIsDamaged = ResultObj->GetBoolField("isDamaged");
+	
+	if (ResultObj->HasField("targetId"))
+		ResultData.TargetId = ResultObj->GetIntegerField("targetId");
+	
+	if (ResultObj->HasField("targetType"))
+		ResultData.TargetType = ResultObj->GetIntegerField("targetType");
+	
 	if (ResultObj->HasField("targetTypeString"))
-	{
-		Data.TargetTypeString = ResultObj->GetStringField("targetTypeString");
-	}
+		ResultData.TargetTypeString = ResultObj->GetStringField("targetTypeString");
 
-	return Data;
+	return ResultData;
 }
 
+FMobTargetLostStruct JSONParser::DeserializeMobTargetLost(const TSharedPtr<FJsonObject>& Body)
+{
+	FMobTargetLostStruct MobTargetLostData;
+	if (!Body.IsValid()) return MobTargetLostData;
+
+	if (Body->HasField("lostTargetPlayerId"))
+		MobTargetLostData.lostTargetPlayerId = Body->GetIntegerField("lostTargetPlayerId");
+
+	if (Body->HasField("mobId"))
+		MobTargetLostData.mobId = Body->GetIntegerField("mobId");
+
+	if (Body->HasField("mobUID"))
+		MobTargetLostData.mobUID = Body->GetIntegerField("mobUID");
+
+	// Parse position data from individual fields
+	if (Body->HasField("positionX") && Body->HasField("positionY") &&
+		Body->HasField("positionZ") && Body->HasField("rotationZ"))
+	{
+		MobTargetLostData.position.positionX = Body->GetNumberField("positionX");
+		MobTargetLostData.position.positionY = Body->GetNumberField("positionY");
+		MobTargetLostData.position.positionZ = Body->GetNumberField("positionZ");
+		MobTargetLostData.position.rotationZ = Body->GetNumberField("rotationZ");
+	}
+
+	return MobTargetLostData;
+}
+
+// Parse mob target lost data from JSON string
+FMobTargetLostStruct JSONParser::DeserializeMobTargetLost(const FString& JsonString)
+{
+	TSharedPtr<FJsonObject> Root;
+	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+		return FMobTargetLostStruct();
+
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	if (!Body.IsValid())
+		return FMobTargetLostStruct();
+
+	return JSONParser::DeserializeMobTargetLost(Body);
+}
+
+// Inventory parsing functions
+FInventoryItemStruct JSONParser::DeserializeInventoryItem(const TSharedPtr<FJsonObject>& ItemObj)
+{
+	FInventoryItemStruct Item;
+	if (!ItemObj.IsValid()) return Item;
+
+	if (ItemObj->HasField("itemId"))
+		Item.itemId = ItemObj->GetIntegerField("itemId");
+	
+	if (ItemObj->HasField("quantity"))
+		Item.quantity = ItemObj->GetIntegerField("quantity");
+	
+	if (ItemObj->HasField("name"))
+		Item.name = ItemObj->GetStringField("name");
+	
+	if (ItemObj->HasField("description"))
+		Item.description = ItemObj->GetStringField("description");
+	
+	if (ItemObj->HasField("type"))
+		Item.type = ItemObj->GetStringField("type");
+	
+	if (ItemObj->HasField("rarity"))
+		Item.rarity = ItemObj->GetStringField("rarity");
+	
+	if (ItemObj->HasField("level"))
+		Item.level = ItemObj->GetIntegerField("level");
+
+	// Parse attributes object
+	if (ItemObj->HasField("attributes"))
+	{
+		TSharedPtr<FJsonObject> AttributesObj = ItemObj->GetObjectField("attributes");
+		if (AttributesObj.IsValid())
+		{
+			for (const auto& AttributePair : AttributesObj->Values)
+			{
+				FString AttributeValue;
+				if (AttributePair.Value->TryGetString(AttributeValue))
+				{
+					Item.attributes.Add(AttributePair.Key, AttributeValue);
+				}
+				else
+				{
+					// Handle numeric attributes
+					double NumericValue;
+					if (AttributePair.Value->TryGetNumber(NumericValue))
+					{
+						Item.attributes.Add(AttributePair.Key, FString::SanitizeFloat(NumericValue));
+					}
+				}
+			}
+		}
+	}
+
+	return Item;
+}
+
+TArray<FInventoryItemStruct> JSONParser::DeserializeInventoryItems(const TArray<TSharedPtr<FJsonValue>>& JsonArray)
+{
+	TArray<FInventoryItemStruct> Items;
+	for (const TSharedPtr<FJsonValue>& Value : JsonArray)
+	{
+		const TSharedPtr<FJsonObject> ItemObj = Value->AsObject();
+		if (ItemObj.IsValid())
+		{
+			Items.Add(JSONParser::DeserializeInventoryItem(ItemObj));
+		}
+	}
+	return Items;
+}
+
+FCharacterInventoryStruct JSONParser::DeserializeCharacterInventory(const TSharedPtr<FJsonObject>& InventoryObj)
+{
+	FCharacterInventoryStruct Inventory;
+	if (!InventoryObj.IsValid()) return Inventory;
+
+	if (InventoryObj->HasField("characterId"))
+		Inventory.characterId = InventoryObj->GetIntegerField("characterId");
+
+	// Parse items array
+	const TArray<TSharedPtr<FJsonValue>>* ItemsArray = nullptr;
+	if (InventoryObj->TryGetArrayField("items", ItemsArray))
+	{
+		Inventory.items = JSONParser::DeserializeInventoryItems(*ItemsArray);
+	}
+
+	return Inventory;
+}
+
+FCharacterInventoryStruct JSONParser::DeserializeCharacterInventory(const FString& JsonString)
+{
+	TSharedPtr<FJsonObject> Root;
+	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+		return FCharacterInventoryStruct();
+
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	if (!Body.IsValid())
+		return FCharacterInventoryStruct();
+
+	return JSONParser::DeserializeCharacterInventory(Body);
+}
+
+FInventoryUpdateStruct JSONParser::DeserializeInventoryUpdate(const TSharedPtr<FJsonObject>& UpdateObj)
+{
+	FInventoryUpdateStruct Update;
+	if (!UpdateObj.IsValid()) return Update;
+
+	if (UpdateObj->HasField("eventType"))
+		Update.eventType = UpdateObj->GetStringField("eventType");
+	
+	if (UpdateObj->HasField("characterId"))
+		Update.characterId = UpdateObj->GetIntegerField("characterId");
+
+	// Parse data object
+	if (UpdateObj->HasField("data"))
+	{
+		TSharedPtr<FJsonObject> DataObj = UpdateObj->GetObjectField("data");
+		if (DataObj.IsValid())
+		{
+			Update.data = JSONParser::DeserializeCharacterInventory(DataObj);
+		}
+	}
+
+	return Update;
+}
+
+FInventoryUpdateStruct JSONParser::DeserializeInventoryUpdate(const FString& JsonString)
+{
+	TSharedPtr<FJsonObject> Root;
+	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+		return FInventoryUpdateStruct();
+
+	return JSONParser::DeserializeInventoryUpdate(Root);
+}

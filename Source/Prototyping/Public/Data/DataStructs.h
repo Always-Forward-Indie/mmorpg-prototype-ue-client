@@ -166,6 +166,11 @@ struct FMOBStruct {
 	bool bIsMoving = false;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
     bool bIsGotDamage = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+	int32 mobTargetId = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+	FString mobTargetType = "";
 };
 
 USTRUCT(BlueprintType)
@@ -181,10 +186,6 @@ struct FCombatAnimationData
     float Duration = 0.f;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Animation Data Struct")
     bool bIsLooping = false;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Animation Data Struct")
-    FPositionDataStruct Position;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Animation Data Struct")
-    FPositionDataStruct TargetPosition;
 };
 
 USTRUCT(BlueprintType)
@@ -199,21 +200,9 @@ struct FCombatActionData
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Action Data Struct")
     int32 ActionType = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Action Data Struct")
-    FString AnimationName;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Action Data Struct")
-    float CastTime = 0.f;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Action Data Struct")
     int32 CasterId = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Action Data Struct")
-    int32 Damage = 0;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Action Data Struct")
-    float Range = 0.f;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Action Data Struct")
-    int32 State = 0;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Action Data Struct")
     int32 TargetId = 0;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Action Data Struct")
-    FPositionDataStruct TargetPosition;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Action Data Struct")
     int32 TargetType = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Action Data Struct")
@@ -321,6 +310,93 @@ struct FMobDefinition : public FTableRowBase
     // Will be other data
 };
 
+// Add after the existing structs, before the existing enums
+
+// Inventory item structure that matches server format
+USTRUCT(BlueprintType)
+struct FInventoryItemStruct
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 itemId = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 quantity = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	FString name = "";
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	FString description = "";
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	FString type = "";
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	FString rarity = "";
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 level = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	TMap<FString, FString> attributes;
+
+	FInventoryItemStruct()
+	{
+		itemId = 0;
+		quantity = 0;
+		name = "";
+		description = "";
+		type = "";
+		rarity = "";
+		level = 1;
+		attributes.Empty();
+	}
+};
+
+// Character inventory structure
+USTRUCT(BlueprintType)
+struct FCharacterInventoryStruct
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Inventory")
+	int32 characterId = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Inventory")
+	TArray<FInventoryItemStruct> items;
+
+	FCharacterInventoryStruct()
+	{
+		characterId = 0;
+		items.Empty();
+	}
+};
+
+// Inventory update structure for when items are added/removed
+USTRUCT(BlueprintType)
+struct FInventoryUpdateStruct
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Update")
+	FString eventType = "";
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Update")
+	int32 characterId = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Update")
+	FCharacterInventoryStruct data;
+
+	FInventoryUpdateStruct()
+	{
+		eventType = "";
+		characterId = 0;
+		data = FCharacterInventoryStruct();
+	}
+};
+
 
 UENUM(BlueprintType)
 enum class EDamageType : uint8
@@ -329,4 +405,30 @@ enum class EDamageType : uint8
     Fire,
     Ice,
     Poison
+};
+
+USTRUCT(BlueprintType)
+struct FMobTargetLostStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Target Lost")
+    int32 lostTargetPlayerId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Target Lost")
+    int32 mobId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Target Lost")
+    int32 mobUID = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Target Lost")
+    FPositionDataStruct position;
+
+    FMobTargetLostStruct()
+    {
+        lostTargetPlayerId = 0;
+        mobId = 0;
+        mobUID = 0;
+        position = FPositionDataStruct();
+    }
 };

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Data/DataStructs.h"
+#include "Data/ItemStruct.h"
 
 /**
  * 
@@ -36,4 +37,25 @@ public:
     static FCombatResultData DeserializeCombatResult(const TSharedPtr<FJsonObject>& ResultObj);
 
     static TArray<FMOBStruct> DeserializeMobsList(const TSharedPtr<FJsonObject>& Body);
+
+    // Item data parsers
+    static FItemAttributeStruct DeserializeItemAttribute(const TSharedPtr<FJsonObject>& AttributeObj);
+    static TArray<FItemAttributeStruct> DeserializeItemAttributes(const TArray<TSharedPtr<FJsonValue>>& JsonArray);
+    static FItemBaseStruct DeserializeItemData(const TSharedPtr<FJsonObject>& ItemObj);
+    static FDroppedItemStruct DeserializeDroppedItem(const TSharedPtr<FJsonObject>& DroppedItemObj);
+    static FItemDropResponseStruct DeserializeItemDropResponse(const TSharedPtr<FJsonObject>& Body);
+    static FItemDropResponseStruct DeserializeItemDropResponse(const FString& JsonString);
+
+    // Inventory data parsers
+    static FInventoryItemStruct DeserializeInventoryItem(const TSharedPtr<FJsonObject>& ItemObj);
+    static TArray<FInventoryItemStruct> DeserializeInventoryItems(const TArray<TSharedPtr<FJsonValue>>& JsonArray);
+    static FCharacterInventoryStruct DeserializeCharacterInventory(const TSharedPtr<FJsonObject>& InventoryObj);
+    static FCharacterInventoryStruct DeserializeCharacterInventory(const FString& JsonString);
+    static FInventoryUpdateStruct DeserializeInventoryUpdate(const TSharedPtr<FJsonObject>& UpdateObj);
+    static FInventoryUpdateStruct DeserializeInventoryUpdate(const FString& JsonString);
+
+    // Parse mob target lost data from JSON object
+    static FMobTargetLostStruct DeserializeMobTargetLost(const TSharedPtr<FJsonObject>& Body);
+    // Parse mob target lost data from JSON string
+    static FMobTargetLostStruct DeserializeMobTargetLost(const FString& JsonString);
 };

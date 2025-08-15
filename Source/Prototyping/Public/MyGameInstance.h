@@ -7,6 +7,8 @@
 #include "Gameplay/Players/PlayerManager.h"
 #include "Gameplay/Mobs/MOBManager.h"
 #include "Gameplay/Mobs/SpawnZoneManager.h"
+#include "Gameplay/Items/ItemManager.h"
+#include "Gameplay/Items/InventoryManager.h"
 
 #include <Kismet/GameplayStatics.h>
 #include "Blueprint/UserWidget.h"
@@ -39,6 +41,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnGameServerResponseReceived, int3
  */
 
 class UFloatingCombatTextManager;
+class ADroppedItemActor;
 
 UCLASS()
 class PROTOTYPING_API UMyGameInstance : public UGameInstance
@@ -80,6 +83,8 @@ public:
 
 	void InitNetworkingSetup();
 
+	void InitGameSystems();
+
 	void Shutdown();
 
 	UPROPERTY()
@@ -102,9 +107,17 @@ public:
 	// MOB manager
 	UMOBManager* MOBManager;
 
-	// zone manager
+	// Zone manager
 	UPROPERTY()
 	USpawnZoneManager* SpawnZoneManager;
+
+	// Item manager
+	UPROPERTY()
+	UItemManager* ItemManager;
+
+	// Inventory manager
+	UPROPERTY()
+	UInventoryManager* InventoryManager;
 
 	TMap<int32, FClientDataStruct> ConnectedPlayers;
 
@@ -143,6 +156,18 @@ public:
 	// get basic SpawnZone class
 	UFUNCTION(BlueprintCallable, Category = "MOB")
 	TSubclassOf<class AMobSpawnZone> GetBasicSpawnZoneClass();
+
+	// get item manager
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	UItemManager* GetItemManager();
+
+	// get inventory manager
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	UInventoryManager* GetInventoryManager();
+
+	// get dropped item actor class
+	UFUNCTION(BlueprintCallable, Category = "Items")
+	TSubclassOf<class ADroppedItemActor> GetDroppedItemActorClass();
 
 	// get current client data
 	UFUNCTION(BlueprintCallable, Category = "Client Data")
@@ -207,6 +232,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Character")
 	int32 GetCurrentCharacterID();
 
+	// Join the selected character to the game
+	UFUNCTION(BlueprintCallable, Category = "Game")
+	void JoinSelectedCharacterToGame();
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Level")
 	FName GameLevelName;
 
@@ -256,6 +285,13 @@ public:
 	// add a reference to the spawn zone actor blueprint
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MOB")
 	TSubclassOf<class AMobSpawnZone> BasicSpawnZoneClass;
+
+	// add a reference to the dropped item actor blueprint
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Items")
+	TSubclassOf<class ADroppedItemActor> DroppedItemActorClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Items")
+	UDataTable* ItemVisualsDataTable;
 
 	// add a reference to the camera actor blueprint
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Player")
@@ -314,8 +350,6 @@ public:
 
 		UFUNCTION(BlueprintCallable, Category = "Combat")
 		void UpdateTargetHealth(int32 TargetId, int32 TargetType, const FString& TargetTypeString, int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt);
-
-
 
 private:
 	// Helper function

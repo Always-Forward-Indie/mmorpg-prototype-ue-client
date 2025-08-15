@@ -252,9 +252,9 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 	if (MessageData.eventType == "initiateCombatAction" && MessageData.status == "success") {
 		FCombatActionData ActionData = JSONParser::DeserializeCombatAction(Body->GetObjectField("action"));
 
-		UE_LOG(LogTemp, Warning, TEXT("Combat Action: %s from Caster %d to Target %d (%s), Damage: %d"),
+		UE_LOG(LogTemp, Warning, TEXT("Combat Action: %s from Caster %d to Target %d (%s)"),
 			*ActionData.ActionName, ActionData.CasterId, ActionData.TargetId,
-			*ActionData.TargetTypeString, ActionData.Damage);
+			*ActionData.TargetTypeString);
 
 		// Можно добавить визуальные эффекты атаки
 		if (gameInstance) {

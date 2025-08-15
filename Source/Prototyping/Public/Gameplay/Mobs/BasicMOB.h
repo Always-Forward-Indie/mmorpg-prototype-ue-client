@@ -129,6 +129,13 @@ public:
 	void SetMOBId(const int& MOBId);
 
 	UFUNCTION(BlueprintCallable, Category = "MOB")
+	void SetMobTargetId(const int32& TargetId);
+
+	UFUNCTION(BlueprintCallable, Category = "MOB")
+	void SetMobTargetType(const FString& TargetType);
+
+
+	UFUNCTION(BlueprintCallable, Category = "MOB")
 	void SetMOBUId(const FString& MOBUId);
 	UFUNCTION(BlueprintCallable, Category = "MOB")
 	void SetMOBZoneId(const int& MOBZoneId);

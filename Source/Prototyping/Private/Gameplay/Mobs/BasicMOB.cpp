@@ -497,6 +497,26 @@ void ABasicMOB::SetMOBUId(const FString& MOBUId)
 	MOBData.mobUniqueID = MOBUId;
 }
 
+void ABasicMOB::SetMobTargetId(const int32& TargetId)
+{
+	MOBData.mobTargetId = TargetId;
+
+	if (MOBMovementComponent)
+	{
+		MOBMovementComponent->SetTargetId(TargetId);
+	}
+}
+
+void ABasicMOB::SetMobTargetType(const FString& TargetType)
+{
+	MOBData.mobTargetType = TargetType;
+
+	if (MOBMovementComponent)
+	{
+		MOBMovementComponent->SetTargetType(TargetType);
+	}
+}
+
 void ABasicMOB::SetMOBZoneId(const int& MOBZoneId)
 {
 	MOBData.mobZoneID = MOBZoneId;

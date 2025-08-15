@@ -36,6 +36,9 @@ class PROTOTYPING_API UMOBManager : public UObject
 		void SendGetMobData(const FClientDataStruct& ClientData);
 		void SetGameInstance(UMyGameInstance* GameInstance);
 
+		// Combat related methods
+		void UpdateMobHealth(const FCombatResultData& ResultData);
+
 		UFUNCTION(BlueprintCallable, Category = "MOBManager")
 		void SpawnMOB(const FMOBStruct& MOBData);
 		UFUNCTION(BlueprintCallable, Category = "MOBManager")

@@ -7,6 +7,7 @@
 #include "Data/DataStructs.h"
 #include "MOBMovementComponent.generated.h"
 
+
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class PROTOTYPING_API UMOBMovementComponent : public UActorComponent
 {
@@ -68,6 +69,28 @@ public:
 	// Is the mob currently moving
 	bool IsMoving() const { return bIsMoving; }
 
+	// Target tracking functionality
+	UPROPERTY(EditAnywhere, Category = "Target Tracking")
+	bool bEnableTargetTracking = true;
+
+	UPROPERTY(EditAnywhere, Category = "Target Tracking")
+	float TargetTrackingSpeed = 360.0f; // Degrees per second
+
+	UPROPERTY(EditAnywhere, Category = "Target Tracking")
+	float MinAngleThreshold = 5.0f; // Don't rotate if already facing target within this angle
+
+	// Set target for tracking
+	void SetTargetId(int32 NewTargetId);
+
+	// Set target type (e.g., "Player", "Mob")
+	void SetTargetType(const FString& NewTargetType);
+
+	// Clear current target
+	void ClearTarget();
+
+	// Get current target ID
+	int32 GetTargetId() const { return CurrentTargetId; }
+
 private:
 	// Internal movement state
 	FVector PrevServerPos;
@@ -84,4 +107,18 @@ private:
 
 	// Function to notify owner that movement state changed
 	void UpdateMovingState(bool bNewIsMoving);
+
+	// Target tracking state
+	int32 CurrentTargetId = 0;
+	// Current Target Type (e.g., "Player", "Mob")
+	FString CurrentTargetType;
+	// Time since last target update
+	float TimeSinceLastTargetUpdate = 0.0f;
+
+
+
+	// Target tracking methods
+	void UpdateTargetTracking(float DeltaTime);
+	AActor* FindTargetActor(int32 TargetId, FString TargetType = "");
+	void RotateTowardsTarget(AActor* TargetActor, float DeltaTime);
 };

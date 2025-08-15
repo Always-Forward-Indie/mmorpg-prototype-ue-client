@@ -149,6 +149,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
 	void SetClientID(int32 ID);
 
+	void SetPlayerTag(const FString& Tag);
+
 	// Set client token
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
 	void SetClientSecret(FString Secret);
@@ -287,4 +289,19 @@ public:
 		UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 		TSubclassOf<class UDamageTextWidget> DamageTextWidgetClass;
 
+		public:
+			UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+			class UInputAction* PickupAction;
+
+
+			UFUNCTION(BlueprintCallable, Category = "Player Data")
+			FClientDataStruct GetPlayerData() const { return playerData; }
+
+			// Get just the position data from playerData
+			UFUNCTION(BlueprintCallable, Category = "Player Data")
+			FPositionDataStruct GetPlayerDataPosition() const { return playerData.characterData.characterPosition; }
+
+		protected:
+			UFUNCTION()
+			void OnPickupInput();
 };

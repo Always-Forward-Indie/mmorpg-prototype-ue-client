@@ -32,7 +32,6 @@ struct FAttributeDataStruct {
 	int attributeValue = 0;
 };
 
-
 USTRUCT(BlueprintType)
 struct FAttributesDataStruct {
 	GENERATED_BODY()
@@ -72,7 +71,6 @@ struct FCharacterDataStruct
 	bool bIsDead = false;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
 	bool bIsMoving = false;
-
 };
 
 USTRUCT(BlueprintType)
@@ -171,8 +169,230 @@ struct FMOBStruct {
 	int32 mobTargetId = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
 	FString mobTargetType = "";
+
+	// Harvest state
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+	bool bHasBeenHarvested = false;
 };
 
+// New Combat System Data Structures for the new server format
+
+UENUM(BlueprintType)
+enum class ESkillEffectType : uint8
+{
+    None        UMETA(DisplayName = "None"),
+    Damage      UMETA(DisplayName = "Damage"),
+    Healing     UMETA(DisplayName = "Healing"), 
+    Buff        UMETA(DisplayName = "Buff"),
+    Debuff      UMETA(DisplayName = "Debuff"),
+    Resource    UMETA(DisplayName = "Resource") // for mana/energy effects
+};
+
+UENUM(BlueprintType)
+enum class ESkillSchool : uint8
+{
+    None        UMETA(DisplayName = "None"),
+    Physical    UMETA(DisplayName = "Physical"),
+    Fire        UMETA(DisplayName = "Fire"),
+    Ice         UMETA(DisplayName = "Ice"),
+    Nature      UMETA(DisplayName = "Nature"),
+    Arcane      UMETA(DisplayName = "Arcane"),
+    Shadow      UMETA(DisplayName = "Shadow"),
+    Holy        UMETA(DisplayName = "Holy")
+};
+
+UENUM(BlueprintType)
+enum class ECasterType : uint8
+{
+    None = 0 UMETA(DisplayName = "None"),
+    Self = 1 UMETA(DisplayName = "Self"),
+    Player = 2 UMETA(DisplayName = "Player"),
+    Mob = 3 UMETA(DisplayName = "Mob"),
+    NPC = 4 UMETA(DisplayName = "NPC")
+};
+
+// Applied Effect Data - for buffs/debuffs
+USTRUCT(BlueprintType)
+struct FAppliedEffectData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Applied Effect")
+    FString effectName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Applied Effect")
+    float duration = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Applied Effect")
+    int32 value = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Applied Effect")
+    FString effectType = ""; // "buff" or "debuff"
+
+    FAppliedEffectData()
+    {
+        effectName = "";
+        duration = 0.0f;
+        value = 0;
+        effectType = "";
+    }
+};
+
+// Skill Initiation Data - corresponds to "combatInitiation" event
+USTRUCT(BlueprintType)
+struct FSkillInitiationData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    FString skillName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    FString animationName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    float animationDuration = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    float castTime = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    int32 casterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    int32 casterType = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    FString casterTypeString = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    int32 targetId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    int32 targetType = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    FString targetTypeString = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    ESkillEffectType skillEffectType = ESkillEffectType::None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    ESkillSchool skillSchool = ESkillSchool::None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    bool success = false;
+
+    FSkillInitiationData()
+    {
+        skillName = "";
+        animationName = "";
+        animationDuration = 0.0f;
+        castTime = 0.0f;
+        casterId = 0;
+        casterType = 0;
+        casterTypeString = "";
+        targetId = 0;
+        targetType = 0;
+        targetTypeString = "";
+        skillEffectType = ESkillEffectType::None;
+        skillSchool = ESkillSchool::None;
+        success = false;
+    }
+};
+
+// Skill Result Data - corresponds to "combatResult" event  
+USTRUCT(BlueprintType)
+struct FSkillResultData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    FString skillName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    int32 casterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    int32 casterType = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    FString casterTypeString = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    int32 targetId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    int32 targetType = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    FString targetTypeString = "";
+
+    // Damage/Healing values
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    int32 damage = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    int32 healing = 0;
+
+    // Final target stats
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    int32 finalTargetHealth = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    int32 finalTargetMana = 0;
+
+    // Combat result flags
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    bool isCritical = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    bool isBlocked = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    bool isMissed = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    bool targetDied = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    bool success = false;
+
+    // Skill type and school
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    ESkillEffectType skillEffectType = ESkillEffectType::None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    ESkillSchool skillSchool = ESkillSchool::None;
+
+    // Applied effects (buffs/debuffs)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    TArray<FAppliedEffectData> appliedEffects;
+
+    FSkillResultData()
+    {
+        skillName = "";
+        casterId = 0;
+        casterType = 0;
+        casterTypeString = "";
+        targetId = 0;
+        targetType = 0;
+        targetTypeString = "";
+        damage = 0;
+        healing = 0;
+        finalTargetHealth = 0;
+        finalTargetMana = 0;
+        isCritical = false;
+        isBlocked = false;
+        isMissed = false;
+        targetDied = false;
+        success = false;
+        skillEffectType = ESkillEffectType::None;
+        skillSchool = ESkillSchool::None;
+    }
+};
+
+// Legacy structs (keeping for backward compatibility)
 USTRUCT(BlueprintType)
 struct FCombatAnimationData
 {
@@ -246,7 +466,6 @@ struct FCombatResultData
     FString TargetTypeString = "";
 };
 
-
 USTRUCT(BlueprintType)
 struct FMobVisualData
 {
@@ -292,7 +511,6 @@ struct FMobAudioData
     TArray<TSoftObjectPtr<USoundBase>> RunSounds;
 };
 
-
 USTRUCT(BlueprintType)
 struct FMobDefinition : public FTableRowBase
 {
@@ -310,8 +528,6 @@ struct FMobDefinition : public FTableRowBase
     // Will be other data
 };
 
-// Add after the existing structs, before the existing enums
-
 // Inventory item structure that matches server format
 USTRUCT(BlueprintType)
 struct FInventoryItemStruct
@@ -323,6 +539,42 @@ struct FInventoryItemStruct
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	int32 quantity = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	float weight = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 stackSize = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 durability_max = 100;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 durability_current = 100;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	bool is_durable = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	bool is_tradable = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	bool is_equippable = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 vendor_price_buy = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    int32 vendor_price_sell = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    bool is_container = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    bool is_quest_item = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    FString slug = "";
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	FString name = "";
@@ -337,7 +589,7 @@ struct FInventoryItemStruct
 	FString rarity = "";
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-	int32 level = 1;
+	int32 level_requirement = 0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	TMap<FString, FString> attributes;
@@ -347,10 +599,24 @@ struct FInventoryItemStruct
 		itemId = 0;
 		quantity = 0;
 		name = "";
+        slug = "";
 		description = "";
 		type = "";
 		rarity = "";
-		level = 1;
+        level_requirement = 0;
+		weight = 0.0f;
+		stackSize = 0;
+		durability_max = 100;
+		durability_current = 100;
+		vendor_price_buy = 0;
+		vendor_price_sell = 0;
+
+        is_durable = false;
+        is_tradable = true;
+        is_equippable = false;
+		is_container = false;
+		is_quest_item = false;
+
 		attributes.Empty();
 	}
 };
@@ -397,7 +663,6 @@ struct FInventoryUpdateStruct
 	}
 };
 
-
 UENUM(BlueprintType)
 enum class EDamageType : uint8
 {
@@ -430,5 +695,285 @@ struct FMobTargetLostStruct
         mobId = 0;
         mobUID = 0;
         position = FPositionDataStruct();
+    }
+};
+
+// Harvest system structures
+USTRUCT(BlueprintType)
+struct FHarvestItemStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Item")
+    int32 itemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Item")
+    FString itemSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Item")
+    int32 quantity = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Item")
+    FString name = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Item")
+    FString description = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Item")
+    int32 rarityId = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Item")
+    FString rarityName = "Common";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Item")
+    FString itemType = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Item")
+    float weight = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Item")
+    bool addedToInventory = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Item")
+    bool isHarvestItem = true;
+
+    FHarvestItemStruct()
+    {
+        itemId = 0;
+        itemSlug = "";
+        quantity = 0;
+        name = "";
+        description = "";
+        rarityId = 1;
+        rarityName = "Common";
+        itemType = "";
+        weight = 0.0f;
+        addedToInventory = false;
+        isHarvestItem = true;
+    }
+};
+
+USTRUCT(BlueprintType)
+struct FHarvestStartedStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Started")
+    FString type = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Started")
+    int32 clientId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Started")
+    int32 playerId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Started")
+    int32 corpseId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Started")
+    int32 duration = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Started")
+    int64 startTime = 0;
+
+    FHarvestStartedStruct()
+    {
+        type = "";
+        clientId = 0;
+        playerId = 0;
+        corpseId = 0;
+        duration = 0;
+        startTime = 0;
+    }
+};
+
+USTRUCT(BlueprintType)
+struct FHarvestCompleteStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Complete")
+    FString type = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Complete")
+    int32 clientId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Complete")
+    int32 playerId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Complete")
+    int32 corpseId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Complete")
+    bool success = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Complete")
+    int32 totalItems = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Complete")
+    TArray<FHarvestItemStruct> availableLoot;
+
+    FHarvestCompleteStruct()
+    {
+        type = "";
+        clientId = 0;
+        playerId = 0;
+        corpseId = 0;
+        success = false;
+        totalItems = 0;
+        availableLoot.Empty();
+    }
+};
+
+USTRUCT(BlueprintType)
+struct FHarvestErrorStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Error")
+    FString type = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Error")
+    int32 clientId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Error")
+    int32 playerId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Error")
+    int32 corpseId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Error")
+    FString errorCode = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Error")
+    FString message = "";
+
+    FHarvestErrorStruct()
+    {
+        type = "";
+        clientId = 0;
+        playerId = 0;
+        corpseId = 0;
+        errorCode = "";
+        message = "";
+    }
+};
+
+USTRUCT(BlueprintType)
+struct FCorpseLootPickupRequestItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Corpse Loot Pickup")
+    int32 itemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Corpse Loot Pickup")
+    int32 quantity = 0;
+
+    FCorpseLootPickupRequestItem()
+    {
+        itemId = 0;
+        quantity = 0;
+    }
+};
+
+USTRUCT(BlueprintType)
+struct FCorpseLootPickupResponseStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Corpse Loot Pickup Response")
+    bool success = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Corpse Loot Pickup Response")
+    int32 corpseUID = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Corpse Loot Pickup Response")
+    TArray<FHarvestItemStruct> pickedUpItems;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Corpse Loot Pickup Response")
+    TArray<FHarvestItemStruct> remainingLoot;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Corpse Loot Pickup Response")
+    int32 itemsPickedUp = 0;
+
+    FCorpseLootPickupResponseStruct()
+    {
+        success = false;
+        corpseUID = 0;
+        pickedUpItems.Empty();
+        remainingLoot.Empty();
+        itemsPickedUp = 0;
+    }
+};
+
+USTRUCT(BlueprintType)
+struct FCorpseLootPickupErrorStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Corpse Loot Pickup Error")
+    bool success = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Corpse Loot Pickup Error")
+    FString errorCode = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Corpse Loot Pickup Error")
+    int32 corpseUID = 0;
+
+    FCorpseLootPickupErrorStruct()
+    {
+        success = false;
+        errorCode = "";
+        corpseUID = 0;
+    }
+};
+
+// Corpse loot inspection structures
+USTRUCT(BlueprintType)
+struct FCorpseLootInspectResponseStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Corpse Loot Inspect Response")
+    bool success = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Corpse Loot Inspect Response")
+    int32 corpseUID = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Corpse Loot Inspect Response")
+    FString type = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Corpse Loot Inspect Response")
+    int32 totalItems = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Corpse Loot Inspect Response")
+    TArray<FHarvestItemStruct> availableLoot;
+
+    FCorpseLootInspectResponseStruct()
+    {
+        success = false;
+        corpseUID = 0;
+        type = "";
+        totalItems = 0;
+        availableLoot.Empty();
+    }
+};
+
+USTRUCT(BlueprintType)
+struct FCorpseLootInspectErrorStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Corpse Loot Inspect Error")
+    bool success = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Corpse Loot Inspect Error")
+    FString errorCode = "";
+
+    FCorpseLootInspectErrorStruct()
+    {
+        success = false;
+        errorCode = "";
     }
 };

@@ -9,6 +9,7 @@
 #include "Gameplay/Mobs/SpawnZoneManager.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "Gameplay/Items/InventoryManager.h"
+#include "UI/UIManager.h"
 
 #include <Kismet/GameplayStatics.h>
 #include "Blueprint/UserWidget.h"
@@ -17,7 +18,6 @@
 #include "TimerManager.h"
 #include "Engine/GameInstance.h"
 #include "EngineUtils.h" 
-#include "Gameplay/UI/UIManager.h"
 
 #include "Gameplay/Players/MyCameraActor.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -119,6 +119,20 @@ public:
 	UPROPERTY()
 	UInventoryManager* InventoryManager;
 
+	// Harvest manager
+	UPROPERTY()
+	class UHarvestManager* HarvestManager;
+
+	// Combat system managers
+	UPROPERTY()
+	class UCombatSystemManager* CombatSystemManager;
+
+	UPROPERTY()
+	class USkillSystemManager* SkillSystemManager;
+
+	UPROPERTY()
+	class UCombatNetworkHandler* CombatNetworkHandler;
+
 	TMap<int32, FClientDataStruct> ConnectedPlayers;
 
 	TMap<int32, ABasicPlayer*> SpawnedPlayers;
@@ -157,6 +171,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "MOB")
 	TSubclassOf<class AMobSpawnZone> GetBasicSpawnZoneClass();
 
+	// get dropped item actor class
+	UFUNCTION(BlueprintCallable, Category = "Items")
+	TSubclassOf<class ADroppedItemActor> GetDroppedItemActorClass();
+
 	// get item manager
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	UItemManager* GetItemManager();
@@ -165,9 +183,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	UInventoryManager* GetInventoryManager();
 
-	// get dropped item actor class
-	UFUNCTION(BlueprintCallable, Category = "Items")
-	TSubclassOf<class ADroppedItemActor> GetDroppedItemActorClass();
+	// get harvest manager
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	class UHarvestManager* GetHarvestManager();
+
+	// get combat system manager
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	class UCombatSystemManager* GetCombatSystemManager();
+
+	// get skill system manager
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	class USkillSystemManager* GetSkillSystemManager();
+
+	// get combat network handler
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	class UCombatNetworkHandler* GetCombatNetworkHandler();
 
 	// get current client data
 	UFUNCTION(BlueprintCallable, Category = "Client Data")
@@ -335,13 +365,14 @@ public:
 	void StartPingLoginServer();
 
 	public:
-		// Combat system functions
+		// Combat system functions (updated for new system)
 		UFUNCTION(BlueprintCallable, Category = "Combat")
 		void PlayCombatAnimation(const FCombatAnimationData& AnimationData);
 
 		UFUNCTION(BlueprintCallable, Category = "Combat")
 		void ProcessCombatAction(const FCombatActionData& ActionData);
 
+		// Health update methods (supporting both new and legacy systems)
 		UFUNCTION(BlueprintCallable, Category = "Combat")
 		void UpdateMobHealth(int32 TargetId, int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt);
 
@@ -351,8 +382,11 @@ public:
 		UFUNCTION(BlueprintCallable, Category = "Combat")
 		void UpdateTargetHealth(int32 TargetId, int32 TargetType, const FString& TargetTypeString, int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt);
 
-private:
+		// Set inventory manager reference
+		UFUNCTION(BlueprintCallable, Category = "Network")
+		void SetInventoryManager(UInventoryManager* NewInventoryManager);
+
+	private:
 	// Helper function
 	ABasicPlayer* GetPlayerByCharacterId(int32 CharacterId);
-
 };

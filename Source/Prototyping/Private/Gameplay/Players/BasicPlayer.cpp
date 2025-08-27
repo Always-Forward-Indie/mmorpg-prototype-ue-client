@@ -4,7 +4,103 @@
 #include "Gameplay/Players/BasicPlayer.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
+#include "UI/UIManager.h"
+#include "Gameplay/Items/InventoryManager.h"
+#include "Gameplay/Items/HarvestManager.h"
+#include "Gameplay/Combat/CombatSystemManager.h"
+#include "Gameplay/Combat/SkillSystemManager.h"
+#include "Gameplay/UI/FloatingCombatTextManager.h"
+#include "Gameplay/Mobs/BasicMOB.h"
 
+// Implementation of missing input methods
+void ABasicPlayer::OnAttackInput()
+{
+    UE_LOG(LogTemp, Warning, TEXT("Attack input pressed"));
+    
+    // Look for nearby MOBs to attack
+    TArray<AActor*> FoundActors;
+    UGameplayStatics::GetAllActorsOfClass(GetWorld(), ABasicMOB::StaticClass(), FoundActors);
+    
+    ABasicMOB* ClosestMob = nullptr;
+    float ClosestDistance = 500.0f; // Attack range
+    
+    for (AActor* Actor : FoundActors)
+    {
+        ABasicMOB* Mob = Cast<ABasicMOB>(Actor);
+        if (Mob && !Mob->GetMOBIsDead())
+        {
+            float Distance = FVector::Dist(GetActorLocation(), Mob->GetActorLocation());
+            if (Distance < ClosestDistance)
+            {
+                ClosestDistance = Distance;
+                ClosestMob = Mob;
+            }
+        }
+    }
+    
+    if (ClosestMob)
+    {
+        //convert mob uid to int
+		int32 MobId = FCString::Atoi(*ClosestMob->GetMOBUId());
+
+
+        // Attack the closest mob with a basic attack skill
+        AttackTarget(MobId, CurrentSkillName, 3);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("No MOBs in range to attack"));
+    }
+}
+
+void ABasicPlayer::OnPickupInput()
+{
+    UE_LOG(LogTemp, Warning, TEXT("Pickup input pressed"));
+    
+    if (InventoryManager)
+    {
+        InventoryManager->PickupNearbyItem();
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Inventory manager not found"));
+    }
+}
+
+void ABasicPlayer::OnInventoryToggle()
+{
+    UE_LOG(LogTemp, Warning, TEXT("Inventory toggle pressed"));
+    
+    if (InventoryManager)
+    {
+        InventoryManager->ToggleInventoryUI();
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Inventory manager not found"));
+    }
+}
+
+void ABasicPlayer::OnHarvestInput()
+{
+    UE_LOG(LogTemp, Warning, TEXT("Harvest input pressed"));
+    
+    if (!MyGameInstance)
+    {
+        UE_LOG(LogTemp, Error, TEXT("MyGameInstance not found"));
+        return;
+    }
+    
+    UHarvestManager* HarvestManager = MyGameInstance->GetHarvestManager();
+    if (HarvestManager)
+    {
+        HarvestManager->TryHarvestNearbyCorpse();
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Harvest manager not found"));
+    }
+}
 
 void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
@@ -33,13 +129,28 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
         EnhancedInputComponent->BindAction(StopMovementSimulationAction, ETriggerEvent::Triggered, this, &ABasicPlayer::StopMovementSimulation);
     
     
-        // Bind attack action (you'll need to add AttackAction to your header file)
-        EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Triggered, this, &ABasicPlayer::OnAttackInput);
+        if (AttackAction)
+        {
+            // Bind attack action (you'll need to add AttackAction to your header file)
+            EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Triggered, this, &ABasicPlayer::OnAttackInput);
+        }
 
         // Pickup item action
         if (PickupAction)
         {
             EnhancedInputComponent->BindAction(PickupAction, ETriggerEvent::Triggered, this, &ABasicPlayer::OnPickupInput);
+        }
+
+        // Inventory action
+        if (InventoryAction)
+        {
+            EnhancedInputComponent->BindAction(InventoryAction, ETriggerEvent::Triggered, this, &ABasicPlayer::OnInventoryToggle);
+        }
+
+        // Harvest action
+        if (HarvestAction)
+        {
+            EnhancedInputComponent->BindAction(HarvestAction, ETriggerEvent::Triggered, this, &ABasicPlayer::OnHarvestInput);
         }
     }
 }
@@ -53,6 +164,12 @@ ABasicPlayer::ABasicPlayer()
     //Create audio component
     AudioComponent = CreateDefaultSubobject<UAudioComponent>(TEXT("AudioComponent"));
     AudioComponent->SetupAttachment(RootComponent);
+
+    // Create UI Manager component
+	UIManager = CreateDefaultSubobject<UUIManager>(TEXT("UIManager"));
+
+	// Create Inventory Manager component  
+	InventoryManager = CreateDefaultSubobject<UInventoryManager>(TEXT("InventoryManager"));
 
     // Init simulation variables
     SquareCenter = FVector(0.f, 0.f, 90.f); // Assuming Z is up and you want to move around this center
@@ -69,6 +186,21 @@ void ABasicPlayer::BeginPlay()
     if (MyGameInstance)
     {
         UE_LOG(LogTemp, Warning, TEXT("GameInstance found"));
+
+        // Register with combat system if this is the local player
+        if (!playerData.isOtherClient)
+        {
+            UCombatSystemManager* CombatManager = MyGameInstance->GetCombatSystemManager();
+            if (CombatManager && GetActorId_Implementation() > 0)
+            {
+                TScriptInterface<ICombatable> CombatableInterface;
+                CombatableInterface.SetObject(this);
+                CombatableInterface.SetInterface(this);
+                
+                CombatManager->RegisterCombatable(CombatableInterface);
+                UE_LOG(LogTemp, Warning, TEXT("Player %d registered with combat system"), GetActorId_Implementation());
+            }
+        }
     }
     else
     {
@@ -76,6 +208,62 @@ void ABasicPlayer::BeginPlay()
 	}
 
 	UE_LOG(LogTemp, Warning, TEXT("Player Was Created"));
+
+	// Initialize inventory manager for local player only
+	if (!playerData.isOtherClient && MyGameInstance)
+	{
+		// Set up inventory manager
+		if (InventoryManager)
+		{
+			InventoryManager->SetWorldContext(GetWorld());
+			InventoryManager->SetGameInstance(MyGameInstance);
+			
+			// Get network manager from game instance and initialize inventory
+			if (UNetworkManager* NetworkManager = MyGameInstance->GetNetworkManager())
+			{
+				InventoryManager->Initialize(NetworkManager);
+				InventoryManager->SubscribeToNetworkManager();
+			}
+			
+			// Set reference in game instance for easy access
+			MyGameInstance->SetInventoryManager(InventoryManager);
+		}
+
+		// Initialize harvest manager
+		if (UHarvestManager* HarvestManager = MyGameInstance->GetHarvestManager())
+		{
+			HarvestManager->SetWorldContext(GetWorld());
+			HarvestManager->SetGameInstance(MyGameInstance);
+
+			// Get network manager from game instance and initialize harvest
+			if (UNetworkManager* NetworkManager = MyGameInstance->GetNetworkManager())
+			{
+				HarvestManager->Initialize(NetworkManager);
+				HarvestManager->SubscribeToNetworkManager();
+			}
+
+			UE_LOG(LogTemp, Warning, TEXT("HarvestManager initialized for local player"));
+		}
+
+		// Initialize UI manager with slight delay to ensure everything is ready
+		if (UIManager)
+		{
+			FTimerHandle TimerHandle;
+			GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
+			{
+				if (InventoryManager)
+				{
+					// Get HarvestManager from GameInstance
+					UHarvestManager* HarvestManager = MyGameInstance ? MyGameInstance->GetHarvestManager() : nullptr;
+					
+					// Initialize UIManager with both managers
+					UIManager->Initialize(InventoryManager, HarvestManager);
+					
+					UE_LOG(LogTemp, Warning, TEXT("UIManager initialized with InventoryManager and HarvestManager"));
+				}
+			}, 0.5f, false);
+		}
+	}
 }
 
 //Create HUD
@@ -93,8 +281,34 @@ void ABasicPlayer::CreateHUD()
 
                 APlayerController* PC = Cast<APlayerController>(GetController());
 
-                if (PlayerHUD->GetDamageCanvas() && PC) {
-                    MyGameInstance->GetUIManager()->Init(PC, PlayerHUD->GetDamageCanvas(), DamageTextWidgetClass);
+                if (PlayerHUD->GetDamageCanvas() && PC && MyGameInstance) {
+                    // Initialize FCTManager with immediate setup
+                    UUIManager* GameUIManager = MyGameInstance->GetUIManager();
+                    if (GameUIManager)
+                    {
+                        GameUIManager->Init(PC, PlayerHUD->GetDamageCanvas(), DamageTextWidgetClass);
+                        
+                        // Verify FCTManager was created successfully
+                        if (UFloatingCombatTextManager* FCTManager = GameUIManager->GetFCTManager())
+                        {
+                            UE_LOG(LogTemp, Warning, TEXT("CreateHUD: FCTManager successfully initialized and ready"));
+                        }
+                        else
+                        {
+                            UE_LOG(LogTemp, Error, TEXT("CreateHUD: FCTManager failed to initialize!"));
+                        }
+                    }
+                    else
+                    {
+                        UE_LOG(LogTemp, Error, TEXT("CreateHUD: UIManager not found in GameInstance"));
+                    }
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Error, TEXT("CreateHUD: Missing required components - Canvas: %s, PC: %s, GameInstance: %s"), 
+                        PlayerHUD->GetDamageCanvas() ? TEXT("Valid") : TEXT("NULL"),
+                        PC ? TEXT("Valid") : TEXT("NULL"),
+                        MyGameInstance ? TEXT("Valid") : TEXT("NULL"));
                 }
 			}
 		}
@@ -104,7 +318,6 @@ void ABasicPlayer::CreateHUD()
 		UE_LOG(LogTemp, Error, TEXT("HUDWidgetClass is not set in ABasicPlayer!"));
 	}
 }
-
 
 // update HUD
 
@@ -138,10 +351,10 @@ void ABasicPlayer::UpdateHUD()
                 //UE_LOG(LogTemp, Warning, TEXT("Current Player Health: %d"), playerData.characterData.characterCurrentMana);
             }
 
-            // Update HUD
-            PlayerHUD->SetHP(playerData.characterData.characterCurrentHealth / MaxHealth);
-            PlayerHUD->SetMana(playerData.characterData.characterCurrentMana / MaxMana);
-            PlayerHUD->SetXP(playerData.characterData.characterExperiencePoints / playerData.characterData.characterExpForNextLevel);
+            // Update HUD with current and max values
+            PlayerHUD->SetHP(playerData.characterData.characterCurrentHealth, MaxHealth);
+            PlayerHUD->SetMana(playerData.characterData.characterCurrentMana, MaxMana);
+            PlayerHUD->SetXP(playerData.characterData.characterExperiencePoints, playerData.characterData.characterExpForNextLevel);
             PlayerHUD->SetLevel(playerData.characterData.characterLevel);
         }
     }
@@ -280,6 +493,7 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     float RotationInterpSpeed = 15.0f; // Персонаж повернется на 15 градусов за секунду
 
     FRotator NewRotation = FMath::RInterpTo(GetActorRotation(), TargetReceivedRotation, GetWorld()->GetDeltaSeconds(), RotationInterpSpeed);
+ 
 
 
 
@@ -607,11 +821,27 @@ void ABasicPlayer::CheckForMOB()
 }
 
 
-void ABasicPlayer::AttackTarget(int32 TargetID, int32 ActionID, bool bUseAI, const FString& TargetType)
+void ABasicPlayer::AttackTarget(int32 TargetID, const FString& SkillSlug, int32 TargetTypeId)
 {
-    if (!MyGameInstance || !MyGameInstance->GetPlayerManager())
+    if (!MyGameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("Cannot attack: MyGameInstance or PlayerManager not found"));
+        UE_LOG(LogTemp, Error, TEXT("Cannot attack: MyGameInstance not found"));
+        return;
+    }
+
+    // Get combat system manager from game instance
+    UCombatSystemManager* CombatManager = MyGameInstance->GetCombatSystemManager();
+    if (!CombatManager)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Cannot attack: CombatSystemManager not found"));
+        return;
+    }
+
+    // Get skill system manager
+    USkillSystemManager* SkillManager = MyGameInstance->GetSkillSystemManager();
+    if (!SkillManager)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Cannot attack: SkillSystemManager not found"));
         return;
     }
 
@@ -621,104 +851,151 @@ void ABasicPlayer::AttackTarget(int32 TargetID, int32 ActionID, bool bUseAI, con
         return;
     }
 
-    MyGameInstance->GetPlayerManager()->SendPlayerAttackRequest(playerData, TargetID, ActionID, bUseAI, TargetType);
-    UE_LOG(LogTemp, Warning, TEXT("Player attacking target ID: %d with action ID: %d, target type: %s"), TargetID, ActionID, *TargetType);
-}
-
-
-void ABasicPlayer::AttackActor(AActor* TargetActor, int32 ActionID, bool bUseAI)
-{
-    if (!TargetActor || TargetActor == this)
-        return;
-
-    if (ABasicMOB* Mob = Cast<ABasicMOB>(TargetActor))
+    // Check if we can cast the skill
+    if (!SkillManager->CanCastSkill(GetActorId_Implementation(), SkillSlug))
     {
-        int32 MobID = FCString::Atoi(*Mob->GetMOBUId());
-        AttackTarget(MobID, ActionID, bUseAI, TEXT("MOB"));
-    }
-    else if (ABasicPlayer* TargetPlayer = Cast<ABasicPlayer>(TargetActor))
-    {
-        if (!TargetPlayer->GetIsOtherClient())
-        {
-            UE_LOG(LogTemp, Warning, TEXT("Cannot attack local player or self."));
-            return;
-        }
-
-        int32 TargetPlayerID = TargetPlayer->GetPlayerCharacterID();
-        AttackTarget(TargetPlayerID, ActionID, bUseAI, TEXT("Player"));
-    }
-}
-
-void ABasicPlayer::OnAttackInput()
-{
-    FVector Start = GetActorLocation();
-    FVector ForwardVector = GetActorForwardVector();
-    FVector End = Start + ForwardVector * 1000.0f;
-
-    FCollisionQueryParams Params;
-    Params.AddIgnoredActor(this);
-
-    float CapsuleRadius = 50.0f;
-    float CapsuleHalfHeight = 100.0f;
-
-    TArray<FHitResult> HitResults;
-
-    bool bHit = GetWorld()->SweepMultiByChannel(
-        HitResults, Start, End, FQuat::Identity,
-        ECC_Visibility, FCollisionShape::MakeCapsule(CapsuleRadius, CapsuleHalfHeight),
-        Params
-    );
-
-    DrawDebugLine(GetWorld(), Start, End, FColor::Red, false, 1.0f, 0, 1.0f);
-
-    if (!bHit || HitResults.Num() == 0)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("No valid target found for attack"));
+        UE_LOG(LogTemp, Warning, TEXT("Cannot cast skill %s"), *SkillSlug);
         return;
     }
 
-    FHitResult* ClosestHit = nullptr;
-    float MinDistSq = FLT_MAX;
-
-    for (FHitResult& Hit : HitResults)
+    // Convert TargetTypeId to ECasterType
+    ECasterType TargetType = ECasterType::Mob; // Default
+    switch (TargetTypeId)
     {
-        AActor* HitActor = Hit.GetActor();
-        if (!HitActor || HitActor == this)
-            continue;
-
-        bool bValid =
-            Cast<ABasicMOB>(HitActor) ||
-            (Cast<ABasicPlayer>(HitActor) && Cast<ABasicPlayer>(HitActor)->GetIsOtherClient());
-
-        if (!bValid)
-            continue;
-
-        float DistSq = FVector::DistSquared(GetActorLocation(), Hit.ImpactPoint);
-        if (DistSq < MinDistSq)
-        {
-            MinDistSq = DistSq;
-            ClosestHit = &Hit;
-        }
+        case 2:
+            TargetType = ECasterType::Player;
+            break;
+        case 3:
+            TargetType = ECasterType::Mob;
+            break;
+        default:
+            TargetType = ECasterType::Mob;
+            break;
     }
 
-    if (ClosestHit)
+    // Use skill system to cast the skill
+    if (SkillManager->CastSkill(GetActorId_Implementation(), TargetID, SkillSlug, TargetType))
     {
-        DrawDebugSphere(GetWorld(), ClosestHit->ImpactPoint, 25, 12, FColor::Red, false, 1.0f);
-        AttackActor(ClosestHit->GetActor(), 1, false);
+        UE_LOG(LogTemp, Warning, TEXT("Player %d attacking target ID: %d with skill: %s, target type id: %d"), 
+            GetActorId_Implementation(), TargetID, *SkillSlug, TargetTypeId);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("No valid MOB or player to attack"));
+        UE_LOG(LogTemp, Warning, TEXT("Failed to cast skill %s on target %d"), *SkillSlug, TargetID);
     }
 }
 
-
-void ABasicPlayer::OnPickupInput()
+// Called when the actor is being destroyed
+void ABasicPlayer::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-    UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetGameInstance());
-    if (GameInstance && GameInstance->GetInventoryManager())
+    // Unregister from combat system
+    if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetGameInstance()))
     {
-        GameInstance->GetInventoryManager()->PickupNearbyItem();
+        if (UCombatSystemManager* CombatManager = GameInstance->GetCombatSystemManager())
+        {
+            // Безопасно отписываемся только если объект ещё валиден
+            if (IsValid(this) && GetActorId_Implementation() > 0)
+            {
+                TScriptInterface<ICombatable> CombatableInterface;
+                CombatableInterface.SetObject(this);
+                CombatableInterface.SetInterface(this);
+                
+                CombatManager->UnregisterCombatable(CombatableInterface);
+                UE_LOG(LogTemp, Log, TEXT("Player %d unregistered from combat system"), GetActorId_Implementation());
+            }
+        }
     }
+
+    Super::EndPlay(EndPlayReason);
+}
+
+// ICombatable interface implementations
+int32 ABasicPlayer::GetMaxHealth_Implementation() const
+{
+    if (const FAttributeDataStruct* HealthAttr = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_health")))
+    {
+        return HealthAttr->attributeValue;
+    }
+    return 100; // Default value
+}
+
+int32 ABasicPlayer::GetMaxMana_Implementation() const
+{
+    if (const FAttributeDataStruct* ManaAttr = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_mana")))
+    {
+        return ManaAttr->attributeValue;
+    }
+    return 100; // Default value
+}
+
+void ABasicPlayer::SetDead_Implementation(bool bNewDead)
+{
+    playerData.characterData.bIsDead = bNewDead;
+    
+    if (bNewDead)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Player %d has died"), GetActorId_Implementation());
+        OnDeath_Implementation();
+    }
+}
+
+void ABasicPlayer::OnDeath_Implementation()
+{
+    UE_LOG(LogTemp, Warning, TEXT("Player %s died"), *playerData.characterData.characterName);
+    
+    // Clear target when dying
+    ClearTarget_Implementation();
+    
+    // Handle player death logic here
+    // For example: disable movement, play death animation, etc.
+}
+
+void ABasicPlayer::SetTarget_Implementation(int32 TargetId, ECasterType TargetType)
+{
+    CurrentTargetId = TargetId;
+    CurrentTargetType = TargetType;
+    
+    UE_LOG(LogTemp, Log, TEXT("Player %d set target: %d (%s)"), 
+        GetActorId_Implementation(), TargetId, *UEnum::GetValueAsString(TargetType));
+}
+
+void ABasicPlayer::ClearTarget_Implementation()
+{
+    CurrentTargetId = 0;
+    CurrentTargetType = ECasterType::None;
+    
+    UE_LOG(LogTemp, Log, TEXT("Player %d cleared target"), GetActorId_Implementation());
+}
+
+void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationName, float Duration)
+{
+    UE_LOG(LogTemp, Log, TEXT("Player %d playing skill animation: %s (Duration: %.1f)"), 
+        GetActorId_Implementation(), *AnimationName, Duration);
+    
+    // Play animation logic here
+    // You might want to trigger animation montages or other visual effects
+}
+
+void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, ESkillSchool School)
+{
+    UE_LOG(LogTemp, Log, TEXT("Player %d taking %d %s damage (Critical: %s, School: %s)"), 
+        GetActorId_Implementation(), Damage, bIsCritical ? TEXT("CRITICAL") : TEXT("normal"),
+        bIsCritical ? TEXT("true") : TEXT("false"), *UEnum::GetValueAsString(School));
+    
+}
+
+void ABasicPlayer::ShowHealingEffect_Implementation(int32 Healing)
+{
+    UE_LOG(LogTemp, Log, TEXT("Player %d healed for %d"), GetActorId_Implementation(), Healing);
+    
+}
+
+void ABasicPlayer::ShowBuffEffect_Implementation(const FAppliedEffectData& Effect)
+{
+    UE_LOG(LogTemp, Log, TEXT("Player %d received %s effect: %s (Value: %d, Duration: %.1f)"), 
+        GetActorId_Implementation(), *Effect.effectType, *Effect.effectName, Effect.value, Effect.duration);
+    
+    // Handle buff/debuff visual effects here
+    // You might want to show icons, particle effects, etc.
 }
 

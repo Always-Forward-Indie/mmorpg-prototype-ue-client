@@ -119,7 +119,39 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Inventory Events")
 	FOnNoItemsInRange OnNoItemsInRange;
 
+public:
+	// Add these new methods after the existing public methods
+
+	// UI Integration methods
+	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
+	void SetInventoryUIWidget(class UInventoryWidget* InventoryUIWidget);
+
+	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
+	void ShowInventoryUI();
+
+	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
+	void HideInventoryUI();
+
+	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
+	void ToggleInventoryUI();
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory UI")
+	bool IsInventoryUIVisible() const;
+
+	// Handle UI events
+	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
+	void HandleSlotClicked(int32 SlotIndex, const FInventoryItemStruct& Item);
+
+	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
+	void HandleSlotRightClicked(int32 SlotIndex, const FInventoryItemStruct& Item);
+
 protected:
+	// Add after existing protected methods
+
+	// UI Widget reference
+	UPROPERTY()
+	class UInventoryWidget* InventoryUIWidget;
+
 	virtual void BeginPlay() override;
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
@@ -136,6 +168,11 @@ private:
 	void UpdateLocalInventory(const FCharacterInventoryStruct& NewInventory);
 	void AddItemToInventory(const FInventoryItemStruct& Item);
 	void RemoveItemFromInventory(int32 ItemId, int32 Quantity);
+
+public:
+	// Add item to local inventory (public utility function)
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	void AddItemToLocalInventory(const FInventoryItemStruct& Item);
 
 	// Send requests to server
 	void SendUseItemRequest(int32 ItemId, int32 Quantity);

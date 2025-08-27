@@ -119,6 +119,9 @@ struct FItemVisualData : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual")
 	FString ItemSlug;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual")
+	TSoftObjectPtr<UTexture2D> Icon;
+
 	// Reference to the mesh to use for this item
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual")
 	TSoftObjectPtr<UStaticMesh> ItemMesh;

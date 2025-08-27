@@ -65,11 +65,31 @@ void UMOBManager::SetWorldContext(UWorld* World)
 	worldContext = World;
 }
 
+// Check if event is combat-related and should be handled by CombatNetworkHandler
+bool UMOBManager::IsCombatEvent(const FString& EventType) const
+{
+	// Define combat-related events that should be handled by CombatNetworkHandler
+	return EventType == TEXT("combatInitiation") || 
+		   EventType == TEXT("combatResult") ||
+		   EventType == TEXT("combatAnimation") ||
+		   EventType == TEXT("initiateCombatAction") ||
+		   EventType == TEXT("mobTargetLost"); // Add mobTargetLost as combat event
+}
+
 // Process game server data
 void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 {
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
 	UE_LOG(LogTemp, Warning, TEXT("MOBManager: Received event type: %s"), *MessageData.eventType);
+
+	// Check if this is a combat event - if so, let CombatNetworkHandler handle it
+	//if (IsCombatEvent(MessageData.eventType))
+	//{
+	//	UE_LOG(LogTemp, Log, TEXT("MOBManager: Delegating combat event '%s' to CombatNetworkHandler"), *MessageData.eventType);
+	//	// Combat events are handled by CombatNetworkHandler which is already subscribed to the same event
+	//	// No need to process them here
+	//	return;
+	//}
 
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
@@ -190,111 +210,6 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 		else
 		{
 			UE_LOG(LogTemp, Warning, TEXT("Mob with UID %d not found for target lost event"), TargetLostData.mobUID);
-		}
-	}
-	// Handle combat animation events
-	else if (MessageData.eventType == "combatAnimation" && MessageData.status == "success")
-	{
-		if (Body->HasField("animation"))
-		{
-			FCombatAnimationData AnimationData = JSONParser::DeserializeCombatAnimation(Body->GetObjectField("animation"));
-
-			UE_LOG(LogTemp, Warning, TEXT("MOBManager: Received combat animation: %s for character/mob %d"),
-				*AnimationData.AnimationName, AnimationData.CharacterId);
-
-			// Play the combat animation
-			if (gameInstance)
-			{
-				gameInstance->PlayCombatAnimation(AnimationData);
-			}
-		}
-	}
-	// Handle combat action events
-	else if (MessageData.eventType == "initiateCombatAction" && MessageData.status == "success")
-	{
-		if (Body->HasField("action"))
-		{
-			FCombatActionData ActionData = JSONParser::DeserializeCombatAction(Body->GetObjectField("action"));
-
-			UE_LOG(LogTemp, Warning, TEXT("MOBManager: Received combat action: %s from caster %d to target %d"),
-				*ActionData.ActionName, ActionData.CasterId, ActionData.TargetId);
-
-			// Check if the caster is a player or a mob
-			if (gameInstance)
-			{
-				// Check if the target is a mob
-				if (ActionData.TargetTypeString.Equals("player", ESearchCase::IgnoreCase))
-				{
-					// find mob with caster ID
-					FString MobUidStr = FString::FromInt(ActionData.CasterId);
-
-					if (MOBExists(worldContext, FName(MobUidStr)))
-					{
-						TArray<AActor*> FoundActors;
-						UGameplayStatics::GetAllActorsWithTag(worldContext, FName(MobUidStr), FoundActors);
-						if (FoundActors.Num() > 0)
-						{
-							ABasicMOB* MOB = Cast<ABasicMOB>(FoundActors[0]);
-							if (MOB)
-							{
-								MOB->SetMOBIsAggressive(true);
-								// Set the MOB's target
-								MOB->SetMobTargetId(ActionData.TargetId);
-								MOB->SetMobTargetType(ActionData.TargetTypeString);
-							}
-						}
-					}
-				}
-				else if (ActionData.TargetTypeString.Equals("mob", ESearchCase::IgnoreCase))
-				{
-
-
-				}
-			}
-			
-
-			// Process the combat action
-			if (gameInstance)
-			{
-				gameInstance->ProcessCombatAction(ActionData);
-			}
-		}
-	}
-	// Handle combat result events
-	else if (MessageData.eventType == "combatResult" && MessageData.status == "success")
-	{
-		if (Body->HasField("result"))
-		{
-			FCombatResultData ResultData = JSONParser::DeserializeCombatResult(Body->GetObjectField("result"));
-
-			UE_LOG(LogTemp, Warning, TEXT("MOBManager: Received combat result for target %d (type: %s): damage=%d, remaining health=%d"),
-				ResultData.TargetId, *ResultData.TargetTypeString, ResultData.DamageDealt, ResultData.RemainingHealth);
-
-			// Process the combat result based on target type
-			if (gameInstance)
-			{
-				// Check if the target is a mob
-				if (ResultData.TargetTypeString.Equals("mob", ESearchCase::IgnoreCase))
-				{
-					// Update mob health
-					UpdateMobHealth(ResultData);
-				}
-				else if (ResultData.TargetTypeString.Equals("player", ESearchCase::IgnoreCase))
-				{
-					// Update player health
-					if (gameInstance)
-					{
-						gameInstance->UpdatePlayerHealth(
-							ResultData.TargetId,
-							ResultData.RemainingHealth,
-							ResultData.RemainingMana,
-							ResultData.bTargetDied,
-							ResultData.bIsDamaged,
-							ResultData.DamageDealt
-						);
-					}
-				}
-			}
 		}
 	}
 }

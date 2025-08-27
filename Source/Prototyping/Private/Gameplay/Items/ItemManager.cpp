@@ -105,7 +105,7 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 		
 		// Handle removing item from the world
 		int32 ItemUID = -1;
-		if (Body->TryGetNumberField(TEXT("itemUID"), ItemUID) && ItemUID > 0)
+		if (Body->TryGetNumberField(TEXT("droppedItemUID"), ItemUID) && ItemUID > 0)
 		{
 			// Find and remove the item actor from the world
 			if (DroppedItemsMap.Contains(ItemUID))

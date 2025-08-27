@@ -12,13 +12,16 @@
 #include "Components/AudioComponent.h"
 #include <Kismet/GameplayStatics.h>
 #include "Gameplay/UI/PlayerHUD.h"
+#include "Gameplay/Combat/ICombatable.h"
 #include "BasicPlayer.generated.h"
-
 
 class UMyGameInstance;
 
+// Event declaration
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnZoneUpdated, int32, PlayerID);
+
 UCLASS()
-class PROTOTYPING_API ABasicPlayer : public ACharacter
+class PROTOTYPING_API ABasicPlayer : public ACharacter, public ICombatable
 {
 	GENERATED_BODY()
 
@@ -35,6 +38,15 @@ private:
 	// Zone Name
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Character Data", meta = (AllowPrivateAccess = "true"))
 	FString CurrentZoneName;
+
+	// Combat system target tracking
+	int32 CurrentTargetId = 0;
+	ECasterType CurrentTargetType = ECasterType::None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Configuration", meta = (AllowPrivateAccess = "true"))
+	//skill name
+	FString CurrentSkillName = "basic_attack";
+
 
 	// set editable variables
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Configuration", meta = (AllowPrivateAccess = "true"))
@@ -82,7 +94,7 @@ private:
 	UPROPERTY()
 	UPlayerHUD* PlayerHUD;
 
-	void AttackActor(AActor* TargetActor, int32 ActionID, bool bUseAI);
+	void AttackActor(AActor* TargetActor, const FString& SkillSlug);
 
 	UFUNCTION()
 	void OnAttackInput();
@@ -91,7 +103,8 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
-
+	// Called when the actor is being destroyed
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	// Add this input action (you'll need to set it up in Blueprint)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
@@ -106,8 +119,36 @@ public:
 
 	void UpdateHUD();
 
-	// Event declaration
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnZoneUpdated, int32, PlayerID);
+	// ICombatable interface implementation
+	virtual int32 GetActorId_Implementation() const override 
+	{ 
+		int32 CharacterId = playerData.characterData.characterId;
+		return CharacterId > 0 ? CharacterId : 0;
+	}
+	virtual ECasterType GetActorType_Implementation() const override { return ECasterType::Player; }
+	virtual FString GetActorTypeString_Implementation() const override { return TEXT("Player"); }
+	
+	virtual int32 GetCurrentHealth_Implementation() const override { return playerData.characterData.characterCurrentHealth; }
+	virtual int32 GetMaxHealth_Implementation() const override;
+	virtual int32 GetCurrentMana_Implementation() const override { return playerData.characterData.characterCurrentMana; }
+	virtual int32 GetMaxMana_Implementation() const override;
+	
+	virtual void SetCurrentHealth_Implementation(int32 NewHealth) override { SetPlayerCurrentHPPoints(NewHealth); }
+	virtual void SetCurrentMana_Implementation(int32 NewMana) override { SetPlayerCurrentMPPoints(NewMana); }
+	
+	virtual bool IsDead_Implementation() const override { return GetIsDead(); }
+	virtual void SetDead_Implementation(bool bNewDead) override;
+	virtual void OnDeath_Implementation() override;
+	
+	virtual FVector GetCombatPosition_Implementation() const override { return GetActorLocation() + FVector(0, 0, 120); }
+	
+	virtual void SetTarget_Implementation(int32 TargetId, ECasterType TargetType) override;
+	virtual void ClearTarget_Implementation() override;
+	
+	virtual void PlaySkillAnimation_Implementation(const FString& AnimationName, float Duration = 0.0f) override;
+	virtual void ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, ESkillSchool School) override;
+	virtual void ShowHealingEffect_Implementation(int32 Healing) override;
+	virtual void ShowBuffEffect_Implementation(const FAppliedEffectData& Effect) override;
 
 	// Event variable
 	UPROPERTY(BlueprintAssignable, Category = "Events")
@@ -115,7 +156,7 @@ public:
 
 	// Battle system functions
 	UFUNCTION(BlueprintCallable, Category = "Combat")
-	void AttackTarget(int32 TargetID, int32 ActionID = 1, bool bUseAI = false, const FString& TargetType = TEXT("MOB"));
+	void AttackTarget(int32 TargetID, const FString& SkillSlug, int32 TargetTypeId = 3);
 
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
@@ -252,6 +293,14 @@ public:
 	// stop movement simulation action
 	UInputAction* StopMovementSimulationAction;
 
+	// Inventory input action
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* InventoryAction;
+
+	// Harvest input action
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* HarvestAction;
+
 	// Reference to the login camera actor
 	ACameraActor* LoginCameraActor;
 
@@ -304,4 +353,20 @@ public:
 		protected:
 			UFUNCTION()
 			void OnPickupInput();
+
+			// Handle inventory input
+	UFUNCTION()
+	void OnInventoryToggle();
+
+	// UI Manager component
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI", meta = (AllowPrivateAccess = "true"))
+	class UUIManager* UIManager;
+
+	// Inventory Manager component
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory", meta = (AllowPrivateAccess = "true"))
+	class UInventoryManager* InventoryManager;
+
+	// Handle harvest input
+	UFUNCTION()
+	void OnHarvestInput();
 };

@@ -13,6 +13,7 @@
 #include "Components/AudioComponent.h"
 #include <Gameplay/UI/W_MOBHeadInfoWidget.h>
 #include "Gameplay/Mobs/MOBMovementComponent.h"
+#include "Gameplay/Combat/ICombatable.h"
 #include "BasicMOB.generated.h"
 
 // Event declaration
@@ -22,7 +23,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMOBDataUpdated);
  *
  */
 UCLASS()
-class PROTOTYPING_API ABasicMOB : public ACharacter
+class PROTOTYPING_API ABasicMOB : public ACharacter, public ICombatable
 {
 	GENERATED_BODY()
 
@@ -36,6 +37,9 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MOB Data", meta = (AllowPrivateAccess = "true"))
 	FString lastTimestamp = "";
 
+	// Combat system target tracking  
+	int32 CurrentTargetId = 0;
+	ECasterType CurrentTargetType = ECasterType::None;
 	
 	FVector LastReceivedPosition = FVector::ZeroVector;
 	FVector TargetReceivedPosition = FVector::ZeroVector;
@@ -58,10 +62,44 @@ private:
 
 	float CurrentInterpSpeed = 0.f;
 
-
 public:
 	// Sets default values for this character's properties
 	ABasicMOB();
+
+	// ICombatable interface implementation
+	virtual int32 GetActorId_Implementation() const override 
+	{ 
+		if (MOBData.mobUniqueID.IsEmpty())
+		{
+			return 0;
+		}
+		int32 ConvertedId = FCString::Atoi(*MOBData.mobUniqueID);
+		return ConvertedId > 0 ? ConvertedId : 0;
+	}
+	virtual ECasterType GetActorType_Implementation() const override { return ECasterType::Mob; }
+	virtual FString GetActorTypeString_Implementation() const override { return TEXT("Mob"); }
+	
+	virtual int32 GetCurrentHealth_Implementation() const override { return MOBData.mobCurrentHealth; }
+	virtual int32 GetMaxHealth_Implementation() const override;
+	virtual int32 GetCurrentMana_Implementation() const override { return MOBData.mobCurrentMana; }
+	virtual int32 GetMaxMana_Implementation() const override;
+	
+	virtual void SetCurrentHealth_Implementation(int32 NewHealth) override { SetMOBCurrentHealth(NewHealth); }
+	virtual void SetCurrentMana_Implementation(int32 NewMana) override { SetMOBCurrentMana(NewMana); }
+	
+	virtual bool IsDead_Implementation() const override { return GetMOBIsDead(); }
+	virtual void SetDead_Implementation(bool bNewDead) override;
+	virtual void OnDeath_Implementation() override;
+	
+	virtual FVector GetCombatPosition_Implementation() const override { return GetActorLocation() + FVector(0, 0, 120); }
+	
+	virtual void SetTarget_Implementation(int32 TargetId, ECasterType TargetType) override;
+	virtual void ClearTarget_Implementation() override;
+	
+	virtual void PlaySkillAnimation_Implementation(const FString& AnimationName, float Duration = 0.0f) override;
+	virtual void ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, ESkillSchool School) override;
+	virtual void ShowHealingEffect_Implementation(int32 Healing) override;
+	virtual void ShowBuffEffect_Implementation(const FAppliedEffectData& Effect) override;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement")
 	class UMOBMovementComponent* MOBMovementComponent;
@@ -72,13 +110,13 @@ public:
 	void OnReceiveServerPacket(const FPositionDataStruct& MOBPosition);
 
 	UPROPERTY(EditAnywhere, Category = "Movement")
-	float MaxAcceleration = 800.f; // Максимальное ускорение (юнитов/с^2)
+	float MaxAcceleration = 800.f; // ???????????? ????????? (??????/?^2)
 
-	// Минимальная скорость (юнитов/с), чтобы не замедляться слишком сильно на малых отрезках
+	// ??????????? ???????? (??????/?), ????? ?? ??????????? ??????? ?????? ?? ????? ????????
 	UPROPERTY(EditAnywhere, Category = "Movement")
 	float MinMoveSpeed = 580.f;
 
-	// Растояние (юнитов), при котором мы «за snapping» к точке без интерполяции
+	// ????????? (??????), ??? ??????? ?? ??? snapping? ? ????? ??? ????????????
 	UPROPERTY(EditAnywhere, Category = "Movement")
 	float SnapDistance = 10.f;
 
@@ -293,6 +331,9 @@ public:
 		// Called when the game starts or when spawned
 		virtual void BeginPlay() override;
 
+		// Called when the actor is being destroyed
+		virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
 	public:	
 		// Called every frame
 		virtual void Tick(float DeltaTime) override;
@@ -324,7 +365,7 @@ public:
 		UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Audio")
 		UAudioComponent* AudioComponentSecond;
 
-		// Звуки
+		// ?????
 		UPROPERTY()
 		TMap<FName, USoundBase*> SoundMap;
 
@@ -338,4 +379,16 @@ public:
 		TArray<USoundBase*> RunSounds;
 
 		FTimerHandle IdleSoundTimer;
+
+		// Check if MOB can be harvested
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Harvest")
+	bool CanBeHarvested() const;
+
+	// Check if MOB has been harvested
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Harvest")
+	bool HasBeenHarvested() const;
+
+	// Set MOB as harvested
+	UFUNCTION(BlueprintCallable, Category = "Harvest")
+	void SetHarvested(bool bHarvested);
 };

@@ -1,7 +1,13 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Gameplay/Combat/CombatSystemManager.h"
+#include "MyGameInstance.h"
+#include "Gameplay/UI/FloatingCombatTextManager.h"
+#include "UObject/ConstructorHelpers.h"
+#include "Engine/Engine.h"
+#include "Components/CapsuleComponent.h"
+#include "Kismet/GameplayStatics.h"
 
 // Sets default values
 ABasicMOB::ABasicMOB()
@@ -11,13 +17,11 @@ ABasicMOB::ABasicMOB()
 
 	MOBMovementComponent = CreateDefaultSubobject<UMOBMovementComponent>(TEXT("MOBMovementComponent"));
 
-
 	PrevServerPos = TargetServerPos = GetActorLocation();
 	PrevServerRot = TargetServerRot = GetActorRotation();
 	ServerVelocity = FVector::ZeroVector;
 	LastMovePacketTime = 0.f;
 	bHasVelocity = false;
-
 
 	// Добавляем компонент для отображения шкалы здоровья
 	MobHeadInfo = CreateDefaultSubobject<UMOBHeadInfo>(TEXT("MobHeadInfo"));
@@ -27,16 +31,13 @@ ABasicMOB::ABasicMOB()
 	MobHeadInfo->SetDrawSize(FVector2D(160.0f, 60.0f));
 	MobHeadInfo->SetVisibility(false);
 
-
 	AudioComponentMain = CreateDefaultSubobject<UAudioComponent>(TEXT("MobMainAudio"));
 	AudioComponentMain->SetupAttachment(RootComponent);
 	AudioComponentMain->bAutoActivate = false;
 
-
 	AudioComponentSecond = CreateDefaultSubobject<UAudioComponent>(TEXT("MobSecondAudio"));
 	AudioComponentSecond->SetupAttachment(RootComponent);
 	AudioComponentSecond->bAutoActivate = false;
-
 }
 
 // Called when the game starts or when spawned
@@ -54,11 +55,34 @@ void ABasicMOB::BeginPlay()
 	HeadWidget = Cast<UW_MOBHeadInfoWidget>(MobHeadInfo->GetUserWidgetObject());
 }
 
+// Override EndPlay to unregister from combat system
+void ABasicMOB::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    // Unregister from combat system
+    if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (UCombatSystemManager* CombatManager = GameInstance->GetCombatSystemManager())
+        {
+            // Безопасно отписываемся только если объект ещё валиден
+            if (IsValid(this) && MOBData.mobID > 0)
+            {
+                TScriptInterface<ICombatable> CombatableInterface;
+                CombatableInterface.SetObject(this);
+                CombatableInterface.SetInterface(this);
+                
+                CombatManager->UnregisterCombatable(CombatableInterface);
+                UE_LOG(LogTemp, Log, TEXT("MOB %d unregistered from combat system"), GetActorId_Implementation());
+            }
+        }
+    }
+
+    Super::EndPlay(EndPlayReason);
+}
+
 void ABasicMOB::OnReceiveServerPacket(const FPositionDataStruct& MOBPosition)
 {
 	// Store position in MOB data
 	MOBData.mobPosition = MOBPosition;
-
 
 	if (MOBMovementComponent)
 	{
@@ -168,18 +192,11 @@ void ABasicMOB::UpdateWidgetScale(float DeltaTime)
 		FMath::Abs(LastDisplayedDistance - Distance) > 100.0f ||
 		GetWorld()->GetTimeSeconds() - LastUpdateTime > 2.0f)
 	{
-		//UE_LOG(LogTemp, Warning, TEXT("MOB %s: Distance: %.1f, Scale: %.2f (Target: %.2f)"),
-		//	*MOBData.mobName, Distance, CurrentWidgetScale, TargetScale);
-
-		//GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow,
-		//	FString::Printf(TEXT("MOB %s: Distance: %.1f, Scale: %.2f"), *MOBData.mobName, Distance, CurrentWidgetScale));
-
 		LastDisplayedScale = CurrentWidgetScale;
 		LastDisplayedDistance = Distance;
 		LastUpdateTime = GetWorld()->GetTimeSeconds();
 	}
 }
-
 
 void ABasicMOB::UpdateWidgetPosition()
 {
@@ -209,13 +226,117 @@ void ABasicMOB::UpdateWidgetPosition()
 	MobHeadInfo->SetRelativeLocation(FVector(0.f, 0.f, FinalZ));
 }
 
-
-
 // Called to bind functionality to input
 void ABasicMOB::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
+}
 
+// ICombatable interface implementations
+int32 ABasicMOB::GetMaxHealth_Implementation() const
+{
+    if (const FAttributeDataStruct* HealthAttr = MOBData.mobAttributes.attributesData.Find(TEXT("max_health")))
+    {
+        return HealthAttr->attributeValue;
+    }
+    return 100; // Default value
+}
+
+int32 ABasicMOB::GetMaxMana_Implementation() const
+{
+    if (const FAttributeDataStruct* ManaAttr = MOBData.mobAttributes.attributesData.Find(TEXT("max_mana")))
+    {
+        return ManaAttr->attributeValue;
+    }
+    return 100; // Default value
+}
+
+void ABasicMOB::SetDead_Implementation(bool bNewDead)
+{
+    SetMOBIsDead(bNewDead);
+    
+    if (bNewDead)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("MOB %d has died"), GetActorId_Implementation());
+        OnDeath_Implementation();
+    }
+}
+
+void ABasicMOB::OnDeath_Implementation()
+{
+    UE_LOG(LogTemp, Warning, TEXT("MOB %s died"), *MOBData.mobName);
+    
+    // Clear target when dying
+    ClearTarget_Implementation();
+    
+    // Call the existing Die() method
+    Die();
+}
+
+void ABasicMOB::SetTarget_Implementation(int32 TargetId, ECasterType TargetType)
+{
+    CurrentTargetId = TargetId;
+    CurrentTargetType = TargetType;
+    
+    // Also update the MOB data for network sync
+    SetMobTargetId(TargetId);
+    SetMobTargetType(TargetType == ECasterType::Player ? TEXT("Player") : TEXT("Mob"));
+    
+    UE_LOG(LogTemp, Log, TEXT("MOB %d set target: %d (%s)"), 
+        GetActorId_Implementation(), TargetId, *UEnum::GetValueAsString(TargetType));
+}
+
+void ABasicMOB::ClearTarget_Implementation()
+{
+    CurrentTargetId = 0;
+    CurrentTargetType = ECasterType::None;
+    
+    // Also clear MOB data
+    SetMobTargetId(0);
+    SetMobTargetType(TEXT(""));
+    
+    UE_LOG(LogTemp, Log, TEXT("MOB %d cleared target"), GetActorId_Implementation());
+}
+
+void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, float Duration)
+{
+    UE_LOG(LogTemp, Log, TEXT("MOB %d playing skill animation: %s (Duration: %.1f)"), 
+        GetActorId_Implementation(), *AnimationName, Duration);
+    
+    // Play sound based on animation type
+    if (AnimationName.Contains(TEXT("attack"), ESearchCase::IgnoreCase))
+    {
+        PlaySoundByName("Attack");
+    }
+    else if (AnimationName.Contains(TEXT("hit"), ESearchCase::IgnoreCase))
+    {
+        PlaySoundByName("Hit");
+    }
+}
+
+void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, ESkillSchool School)
+{
+    UE_LOG(LogTemp, Log, TEXT("MOB %d taking %d %s damage (Critical: %s, School: %s)"), 
+        GetActorId_Implementation(), Damage, bIsCritical ? TEXT("CRITICAL") : TEXT("normal"),
+        bIsCritical ? TEXT("true") : TEXT("false"), *UEnum::GetValueAsString(School));
+    
+    // Set damage flag for visual feedback
+    SetMobIsDamaged(true);
+    
+    // Play hit sound
+    PlaySoundByName("Hit");
+}
+
+void ABasicMOB::ShowHealingEffect_Implementation(int32 Healing)
+{
+    UE_LOG(LogTemp, Log, TEXT("MOB %d healed for %d"), GetActorId_Implementation(), Healing);
+    
+}
+
+void ABasicMOB::ShowBuffEffect_Implementation(const FAppliedEffectData& Effect)
+{
+    UE_LOG(LogTemp, Log, TEXT("MOB %d received %s effect: %s (Value: %d, Duration: %.1f)"), 
+        GetActorId_Implementation(), *Effect.effectType, *Effect.effectName, Effect.value, Effect.duration);
 }
 
 void ABasicMOB::SetupMobVisual(FName MobSlug)
@@ -345,7 +466,6 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 	GetWorld()->GetTimerManager().SetTimer(IdleSoundTimer, this, &ABasicMOB::PlayRandomIdleSound, FMath::RandRange(5.f, 15.f), false);
 }
 
-
 void ABasicMOB::PlayRandomIdleSound()
 {
 	if (IdleSounds.Num() > 0 && !MOBData.bIsDead)
@@ -357,7 +477,6 @@ void ABasicMOB::PlayRandomIdleSound()
 
 	GetWorld()->GetTimerManager().SetTimer(IdleSoundTimer, this, &ABasicMOB::PlayRandomIdleSound, FMath::RandRange(5.f, 15.f), false);
 }
-
 
 void ABasicMOB::PlaySoundByName(FName SoundName)
 {
@@ -414,15 +533,9 @@ void ABasicMOB::PlayRunRandomSound()
 	}
 }
 
-
-
-
 // set mob name text
 void ABasicMOB::SetMobNameText(UTextRenderComponent* MobNameTextComponent, const FString& Name)
 {
-	//get text render component and set text
-	//UTextRenderComponent* MobNameText = FindComponentByClass<UTextRenderComponent>();
-
 	if (MobNameTextComponent)
 	{
 		MobNameTextComponent->SetText(FText::FromString(Name));
@@ -436,8 +549,6 @@ void ABasicMOB::SetMobNameText(UTextRenderComponent* MobNameTextComponent, const
 // set mob level text
 void ABasicMOB::SetMobLevelText(UTextRenderComponent* MobLevelTextComponent, const FString& Level)
 {
-	//get text render component and set text
-	//UTextRenderComponent* MobLevelText = FindComponentByClass<UTextRenderComponent>();
 	FText LevelText = FText::FromString("LVL: " + Level);
 
 	if (MobLevelTextComponent)
@@ -462,23 +573,64 @@ FMOBStruct ABasicMOB::GetMOBData() const
 
 void ABasicMOB::SetMOBData(const FMOBStruct& Data)
 {
-	if (MOBData.mobID == 0)
+	if (MOBData.mobID == 0 && Data.mobID > 0 && !Data.mobUniqueID.IsEmpty())
 	{
 		MOBData = Data;
-		 // НЕ инициализируем LastHealth и LastMana сразу, чтобы UI обновился
-		// LastHealth = MOBData.mobCurrentHealth;
-		// LastMana = MOBData.mobCurrentMana;
 		MOBDataUpdated.Broadcast();
 		
-		UE_LOG(LogTemp, Warning, TEXT("MOB Data set for %s (ID:%d): HP=%d, MP=%d"), 
-			*MOBData.mobName, MOBData.mobID, MOBData.mobCurrentHealth, MOBData.mobCurrentMana);
+		UE_LOG(LogTemp, Warning, TEXT("MOB Data set for %s (ID:%d, UID:%s): HP=%d, MP=%d"), 
+			*MOBData.mobName, MOBData.mobID, *MOBData.mobUniqueID, MOBData.mobCurrentHealth, MOBData.mobCurrentMana);
+
+		// Register with combat system now that we have valid data
+		// Only register if we have a valid actor ID (converted from UID)
+		int32 ActorId = GetActorId_Implementation();
+		if (ActorId > 0)
+		{
+			if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetGameInstance()))
+			{
+				if (UCombatSystemManager* CombatManager = GameInstance->GetCombatSystemManager())
+				{
+					// Убедимся что объект валиден перед регистрацией
+					if (IsValid(this) && !IsActorBeingDestroyed())
+					{
+						// Create TScriptInterface for registration
+						TScriptInterface<ICombatable> CombatableInterface;
+						CombatableInterface.SetObject(this);
+						CombatableInterface.SetInterface(this);
+						
+						CombatManager->RegisterCombatable(CombatableInterface);
+						UE_LOG(LogTemp, Warning, TEXT("MOB %d (UID:%s) registered with combat system"), ActorId, *MOBData.mobUniqueID);
+					}
+					else
+					{
+						UE_LOG(LogTemp, Error, TEXT("MOB %d (UID:%s) is invalid or being destroyed, not registering"), ActorId, *MOBData.mobUniqueID);
+					}
+				}
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("MOB has invalid ActorId (%d) from UID '%s', not registering with combat system"), 
+				ActorId, *MOBData.mobUniqueID);
+		}
 
 		// Принудительно обновляем UI при первой установке данных
 		ForceUpdateUI();
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("MOB Data already set"));
+		if (MOBData.mobID != 0)
+		{
+			UE_LOG(LogTemp, Error, TEXT("MOB Data already set for %s (ID:%d)"), *MOBData.mobName, MOBData.mobID);
+		}
+		else if (Data.mobID <= 0)
+		{
+			UE_LOG(LogTemp, Error, TEXT("Invalid MOB ID (%d) provided"), Data.mobID);
+		}
+		else if (Data.mobUniqueID.IsEmpty())
+		{
+			UE_LOG(LogTemp, Error, TEXT("Empty MOB UID provided for MOB ID %d"), Data.mobID);
+		}
 	}
 
 	if (MOBData.bIsDead)
@@ -700,6 +852,29 @@ bool ABasicMOB::GetMOBIsDamaged() const
 	return false;
 }
 
+// Check if MOB can be harvested
+bool ABasicMOB::CanBeHarvested() const
+{
+	// MOB must be dead and not yet harvested
+	return MOBData.bIsDead && !MOBData.bHasBeenHarvested;
+}
+
+// Check if MOB has been harvested
+bool ABasicMOB::HasBeenHarvested() const
+{
+	return MOBData.bHasBeenHarvested;
+}
+
+// Set MOB as harvested
+void ABasicMOB::SetHarvested(bool bHarvested)
+{
+	MOBData.bHasBeenHarvested = bHarvested;
+	
+	if (bHarvested)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("MOB %s (ID:%d) has been harvested"), *MOBData.mobName, MOBData.mobID);
+	}
+}
 
 // Force update UI immediately
 void ABasicMOB::MOBTextFaceToCamera(UTextRenderComponent* MobTextComponent)
@@ -801,6 +976,12 @@ void ABasicMOB::InitializeUIDelayed()
 void ABasicMOB::Die()
 {
 	PlaySoundByName("Death");
+
+	// set target id to 0
+	SetMobTargetId(0);
+
+	// set aggressive to false
+	SetMOBIsAggressive(false);
 
 	// dubug mob is dead
 	UE_LOG(LogTemp, Warning, TEXT("MOB %s (ID:%d) has died."), *MOBData.mobName, MOBData.mobID);

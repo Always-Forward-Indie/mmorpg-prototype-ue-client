@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UObject/NoExportTypes.h"
 #include "Utils/JSONParser.h"
 #include "Networking/PingManager.h"
 #include "Networking/NetworkManager.h"
@@ -10,7 +11,10 @@
 
 #include "PlayerManager.generated.h"
 
+// Forward declarations
 class UMyGameInstance;
+class UCombatSystemManager;
+class UCombatNetworkHandler;
 
 /**
  * 
@@ -25,6 +29,10 @@ private:
 	UPingManager* pingManager;
 	UNetworkManager* networkManager;
 	UMyGameInstance* gameInstance;
+
+	// Combat network handler for delegating combat events
+	UPROPERTY()
+	UCombatNetworkHandler* CombatNetworkHandler;
 
 	// Timer to ping servers
 	FTimerHandle NetworkServersPingTimerHandle;
@@ -58,7 +66,14 @@ public:
 	void SendPingRequest();
 	void StartPing();
 	UFUNCTION(BlueprintCallable, Category = "Combat")
-	void SendPlayerAttackRequest(const FClientDataStruct& ClientData, int32 TargetID, int32 ActionID, bool bUseAI, const FString& TargetType);
+	void SendPlayerAttackRequest(const FClientDataStruct& ClientData, int32 TargetID, const FString& SkillSlug, int32 TargetTypeId);
 	void AddReceivePingTime(const FString& EventType, const FDateTime& ReceiveTime);
 	void AddSendPingTime(const FString& EventType, const FDateTime& SendTime);
+
+private:
+	// Initialize combat network handler
+	void InitializeCombatNetworkHandler();
+	
+	// Check if event is combat-related
+	bool IsCombatEvent(const FString& EventType) const;
 };

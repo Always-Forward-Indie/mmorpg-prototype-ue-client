@@ -2,28 +2,55 @@
 
 
 #include "Gameplay/Players/PlayerManager.h"
+#include "Gameplay/Combat/CombatSystemManager.h"
+#include "Gameplay/Combat/CombatNetworkHandler.h"
 #include "MyGameInstance.h"
 
 UPlayerManager::UPlayerManager(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	// CombatNetworkHandler is now handled centrally by GameInstance
 }
 
 void UPlayerManager::Initialize(UNetworkManager* NetworkManager, UPingManager* PingManager)
 {
+	if (!NetworkManager || !PingManager)
+	{
+		UE_LOG(LogTemp, Error, TEXT("PlayerManager: Cannot initialize with null NetworkManager or PingManager"));
+		return;
+	}
+
 	networkManager = NetworkManager;
 	pingManager = PingManager;
-	// Get the game instance
-	gameInstance = Cast<UMyGameInstance>(worldContext->GetGameInstance());
-
-	if (gameInstance)
+	
+	// Get the game instance safely
+	if (worldContext && IsValid(worldContext))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("GameInstance found"));
+		gameInstance = Cast<UMyGameInstance>(worldContext->GetGameInstance());
+
+		if (gameInstance && IsValid(gameInstance))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("GameInstance found"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("GameInstance not found or invalid"));
+		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("GameInstance not found"));
+		UE_LOG(LogTemp, Error, TEXT("PlayerManager: WorldContext is null or invalid"));
 	}
+}
+
+bool UPlayerManager::IsCombatEvent(const FString& EventType) const
+{
+	// Define combat-related events that should be handled by CombatNetworkHandler
+	return EventType == TEXT("combatInitiation") || 
+		   EventType == TEXT("combatResult") ||
+		   EventType == TEXT("combatAnimation") ||
+		   EventType == TEXT("initiateCombatAction") ||
+		   EventType == TEXT("mobTargetLost"); // Add mobTargetLost as combat event
 }
 
 // subscribe to the network manager's event
@@ -131,7 +158,6 @@ void UPlayerManager::ProcessGameServerData(const FString& ReceivedData)
 		}
 	}
 
-
 	// If the ping manager is valid, calculate the ping time
 	if (pingManager != nullptr && MessageData.eventType == "pingClient") {
 		// Process the received data here
@@ -144,21 +170,66 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 {
 	UE_LOG(LogTemp, Warning, TEXT("Init by delegate Chunk Server: %s"), *ReceivedData);
 
+	// Проверяем валидность данных перед парсингом
+	if (ReceivedData.IsEmpty())
+	{
+		UE_LOG(LogTemp, Error, TEXT("PlayerManager: Received empty data"));
+		return;
+	}
 
-	// Разбор строки JSON один раз
+	// Парсим JSON данные с проверкой валидности
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("PlayerManager: Failed to parse JSON data"));
 		return;
+	}
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
+	// Безопасно получаем body
+	TSharedPtr<FJsonObject> Body;
+	if (Root->HasField(TEXT("body")))
+	{
+		Body = Root->GetObjectField(TEXT("body"));
+		if (!Body.IsValid())
+		{
+			UE_LOG(LogTemp, Error, TEXT("PlayerManager: Invalid body object"));
+			return;
+		}
+	}
 
 	// Deserialize the received JSON string to get MessageData struct
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
+	
+	// Проверяем валидность MessageData
+	if (MessageData.eventType.IsEmpty())
+	{
+		UE_LOG(LogTemp, Error, TEXT("PlayerManager: Empty event type"));
+		return;
+	}
+
+	//// Check if this is a combat event - if so, let CombatNetworkHandler handle it
+	//if (IsCombatEvent(MessageData.eventType))
+	//{
+	//	UE_LOG(LogTemp, Log, TEXT("PlayerManager: Delegating combat event '%s' to CombatNetworkHandler"), *MessageData.eventType);
+	//	// Combat events are handled by CombatNetworkHandler which is already subscribed to the same event
+	//	// No need to process them here
+	//	return;
+	//}
+
 	// Deserialize the received JSON string to get ClientData struct
 	FClientDataStruct ClientData = JSONParser::DeserializeClientData(ReceivedData);
-	// Deserialize the received JSON string to get CharacterData struct
-	FCharacterDataStruct CharacterData = JSONParser::DeserializeCharacterData(Body->GetObjectField(TEXT("character")));
+	
+	// Deserialize character data only if body and character field exist
+	FCharacterDataStruct CharacterData;
+	if (Body.IsValid() && Body->HasField(TEXT("character")))
+	{
+		TSharedPtr<FJsonObject> CharacterObject = Body->GetObjectField(TEXT("character"));
+		if (CharacterObject.IsValid())
+		{
+			CharacterData = JSONParser::DeserializeCharacterData(CharacterObject);
+		}
+	}
 
 	//if character data is valid
 	if (CharacterData.characterId != 0) {
@@ -166,10 +237,9 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 		ClientData.characterData = CharacterData;
 	}
 
-
 	// If the data is a response to a join game request
 	if (MessageData.eventType == "joinGameCharacter" && MessageData.status == "success" && ClientData.clientId != 0) {
-		if (gameInstance) {
+		if (gameInstance && IsValid(gameInstance)) {
 			//ue log with client and character id
 			UE_LOG(LogTemp, Warning, TEXT("Joined Client to Chunk Server with ID: %d, Character ID: %d"), ClientData.clientId, ClientData.characterData.characterId);
 
@@ -191,39 +261,41 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 				// Add the connected client data to the game instance
 				gameInstance->AddPlayerData(ClientData.clientId, ClientData);
 				gameInstance->SpawnPlayerForClient(ClientData.clientId);
-
-				// Get connected players
-				//SendGetConnectedPlayersRequest(ClientData);
 			}
-
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("PlayerManager: GameInstance is null or invalid in joinGameCharacter"));
 		}
 	}
 
 	// If the data is a response to a get connected players request
 	if (MessageData.eventType == "getConnectedCharacters" && MessageData.status == "success" && ClientData.clientId != 0) {
-		if (gameInstance) {
+		if (gameInstance && IsValid(gameInstance)) {
 			// get connected players deserialize
-			TArray<FClientDataStruct> ConnectedPlayers = JSONParser::DeserializeCharactersList(Root->GetObjectField(TEXT("body")));
+			TArray<FClientDataStruct> ConnectedPlayers = JSONParser::DeserializeCharactersList(Body);
 
 			// go through connected players
-			for (FClientDataStruct ConnectedPlayer : ConnectedPlayers) {
+			for (const FClientDataStruct& ConnectedPlayer : ConnectedPlayers) {
 				// If the client ID is not the same as the current client ID
 				if (gameInstance->GetCurrentClientID() != ConnectedPlayer.clientId) {
 					//debug current client id and connected player client id 
 					UE_LOG(LogTemp, Warning, TEXT("Connected Player Client ID: %d, Current Client ID: %d"), ConnectedPlayer.clientId, gameInstance->GetCurrentClientID());
-
 
 					gameInstance->AddPlayerData(ConnectedPlayer.clientId, ConnectedPlayer);
 					gameInstance->SpawnPlayerForClient(ConnectedPlayer.clientId);
 				}
 			}
 		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("PlayerManager: GameInstance is null or invalid in getConnectedCharacters"));
+		}
 	}
-
 
 	// If the data is a response to a move player request
 	if (MessageData.eventType == "moveCharacter" && MessageData.status == "success" && CharacterData.characterId != 0) {
-		if (gameInstance) {
+		if (gameInstance && IsValid(gameInstance)) {
 			// If the client ID is not the same as the current client ID
 			if (gameInstance->GetCurrentClientID() != ClientData.clientId) {
 				// ue log position
@@ -233,72 +305,25 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 				gameInstance->MovePlayerForClient(ClientData.clientId, ClientData, MessageData);
 			}
 		}
-	}
-
-	// Обработка анимации боя
-	if (MessageData.eventType == "combatAnimation" && MessageData.status == "success") {
-		FCombatAnimationData AnimationData = JSONParser::DeserializeCombatAnimation(Body->GetObjectField("animation"));
-
-		UE_LOG(LogTemp, Warning, TEXT("Combat Animation: %s for Character %d"),
-			*AnimationData.AnimationName, AnimationData.CharacterId);
-
-		// Здесь можно добавить воспроизведение анимации
-		if (gameInstance) {
-			gameInstance->PlayCombatAnimation(AnimationData);
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("PlayerManager: GameInstance is null or invalid in moveCharacter"));
 		}
 	}
-
-	// Обработка инициации боевого действия
-	if (MessageData.eventType == "initiateCombatAction" && MessageData.status == "success") {
-		FCombatActionData ActionData = JSONParser::DeserializeCombatAction(Body->GetObjectField("action"));
-
-		UE_LOG(LogTemp, Warning, TEXT("Combat Action: %s from Caster %d to Target %d (%s)"),
-			*ActionData.ActionName, ActionData.CasterId, ActionData.TargetId,
-			*ActionData.TargetTypeString);
-
-		// Можно добавить визуальные эффекты атаки
-		if (gameInstance) {
-			gameInstance->ProcessCombatAction(ActionData);
-		}
-	}
-
-	// Обработка результата боя - УНИВЕРСАЛЬНОЕ ОБНОВЛЕНИЕ ЗДОРОВЬЯ
-	if (MessageData.eventType == "combatResult" && MessageData.status == "success") {
-		FCombatResultData ResultData = JSONParser::DeserializeCombatResult(Body->GetObjectField("result"));
-
-		UE_LOG(LogTemp, Warning, TEXT("Combat Result: Target %d (%s) took %d damage, Health: %d, Mana: %d, Dead: %s"),
-			ResultData.TargetId, *ResultData.TargetTypeString, ResultData.DamageDealt,
-			ResultData.RemainingHealth, ResultData.RemainingMana,
-			ResultData.bTargetDied ? TEXT("Yes") : TEXT("No"));
-
-			// ИСПОЛЬЗУЕМ УНИВЕРСАЛЬНУЮ ФУНКЦИЮ UpdateTargetHealth
-		if (gameInstance) {
-			gameInstance->UpdateTargetHealth(
-				ResultData.TargetId, 
-				ResultData.TargetType, 
-				ResultData.TargetTypeString,
-				ResultData.RemainingHealth,
-				ResultData.RemainingMana, 
-				ResultData.bTargetDied,
-				ResultData.bIsDamaged,
-				ResultData.DamageDealt
-			);
-		}
-	}
-
-
-
 
 	// If the data is a response to a leave game request
 	if (MessageData.eventType == "disconnectClient" && ClientData.clientId != 0) {
-		if (gameInstance) {
+		if (gameInstance && IsValid(gameInstance)) {
 			// If the client ID is not the same as the current client ID
 			if (gameInstance->GetCurrentClientID() != ClientData.clientId) {
 				gameInstance->HandlePlayerDisconnection(ClientData.clientId);
 			}
 		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("PlayerManager: GameInstance is null or invalid in disconnectClient"));
+		}
 	}
-
 
 	// If the ping manager is valid, calculate the ping time
 	if (pingManager != nullptr && MessageData.eventType == "pingClient") {
@@ -402,6 +427,12 @@ void UPlayerManager::SendJoinClientChunkRequest(const FClientDataStruct& ClientD
 
 void UPlayerManager::SendGetConnectedPlayersRequest(FClientDataStruct& ClientData)
 {
+	if (!networkManager || !IsValid(networkManager))
+	{
+		UE_LOG(LogTemp, Error, TEXT("PlayerManager: NetworkManager is null or invalid"));
+		return;
+	}
+
 	// Create a JSON object for the header and body data
 	TMap<FString, TSharedPtr<FJsonValue>> HeaderData;
 	TMap<FString, TSharedPtr<FJsonValue>> BodyData;
@@ -424,16 +455,16 @@ void UPlayerManager::SendGetConnectedPlayersRequest(FClientDataStruct& ClientDat
 	// Get spawn zones and spawn mobs
 	FString getSpawnZones = JSONParser::SerializeJson("getSpawnZones", HeaderData, BodyData);
 
-	// Send the JSON string to the chunk server
-	if (networkManager != nullptr)
+	// Validate JSON strings before sending
+	if (getConnectedCharacters.IsEmpty() || getSpawnZones.IsEmpty())
 	{
-		// Send the JSON string to the chunk server
-		networkManager->SendDataToChunkServer(getConnectedCharacters);
-		networkManager->SendDataToChunkServer(getSpawnZones);
+		UE_LOG(LogTemp, Error, TEXT("PlayerManager: Failed to serialize JSON data"));
+		return;
 	}
-	else {
-		UE_LOG(LogTemp, Error, TEXT("Network manager not found"));
-	}
+
+	// Send the JSON string to the chunk server
+	networkManager->SendDataToChunkServer(getConnectedCharacters);
+	networkManager->SendDataToChunkServer(getSpawnZones);
 }
 
 void UPlayerManager::SendMovePlayerRequest(FClientDataStruct& ClientData)
@@ -475,7 +506,6 @@ void UPlayerManager::SendMovePlayerRequest(FClientDataStruct& ClientData)
 	else {
 		UE_LOG(LogTemp, Error, TEXT("Network manager not found"));
 	}
-
 }
 
 void UPlayerManager::SendLeaveGameRequest(FClientDataStruct& ClientData)
@@ -531,7 +561,6 @@ void UPlayerManager::SendPingRequest()
 	OutputString.ReplaceInline(TEXT("\n"), TEXT(""));
 	OutputString.ReplaceInline(TEXT("\r"), TEXT(""));
 
-
 	if (networkManager != nullptr)
 	{
 		// add send time
@@ -560,7 +589,7 @@ void UPlayerManager::StartPing()
 	}
 }
 
-void UPlayerManager::SendPlayerAttackRequest(const FClientDataStruct& ClientData, int32 TargetID, int32 ActionID, bool bUseAI, const FString& TargetType)
+void UPlayerManager::SendPlayerAttackRequest(const FClientDataStruct& ClientData, int32 TargetID, const FString& SkillSlug, int32 TargetTypeId)
 {
 	// Create JSON data for the attack request
 	TMap<FString, TSharedPtr<FJsonValue>> HeaderData;
@@ -574,18 +603,16 @@ void UPlayerManager::SendPlayerAttackRequest(const FClientDataStruct& ClientData
 	HeaderData.Add("hash", HashValue);
 
 	// Add attack data to body
-	TSharedPtr<FJsonValueNumber> ActionIDValue = MakeShareable(new FJsonValueNumber(ActionID));
+	TSharedPtr<FJsonValueString> SkillSlugValue = MakeShareable(new FJsonValueString(SkillSlug));
 	TSharedPtr<FJsonValueNumber> TargetIDValue = MakeShareable(new FJsonValueNumber(TargetID));
-	TSharedPtr<FJsonValueBoolean> UseAIValue = MakeShareable(new FJsonValueBoolean(bUseAI));
-	TSharedPtr<FJsonValueString> TargetTypeValue = MakeShareable(new FJsonValueString(TargetType));
+	TSharedPtr<FJsonValueNumber> TargetTypeIdValue = MakeShareable(new FJsonValueNumber(TargetTypeId));
 
-	BodyData.Add("actionId", ActionIDValue);
+	BodyData.Add("skillSlug", SkillSlugValue);
 	BodyData.Add("targetId", TargetIDValue);
-	BodyData.Add("useAI", UseAIValue);
-	BodyData.Add("targetType", TargetTypeValue);
+	BodyData.Add("targetType", TargetTypeIdValue);
 
 	// Serialize to JSON string with the correct event type
-	FString JsonString = JSONParser::SerializeJson("PLAYER_ATTACK", HeaderData, BodyData);
+	FString JsonString = JSONParser::SerializeJson("playerAttack", HeaderData, BodyData);
 
 	if (networkManager != nullptr)
 	{

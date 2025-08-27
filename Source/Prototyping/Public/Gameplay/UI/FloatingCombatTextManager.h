@@ -21,7 +21,15 @@ public:
 
 	void ShowDamage(const FVector& WorldLocation, float Damage, bool bIsCrit, EDamageType DamageType);
 
+	void ShowMissText(const FVector& WorldLocation);
+	void ShowBlockedText(const FVector& WorldLocation);
+
 	TSubclassOf<UDamageTextWidget> DamageTextClass;
+
+	// Validation getter methods
+	UCanvasPanel* GetRootCanvas() const;
+	APlayerController* GetPlayerController() const;
+	TSubclassOf<UDamageTextWidget> GetDamageTextClass() const;
 
 private:
 	TArray<TWeakObjectPtr<UDamageTextWidget>> WidgetPool;
@@ -32,11 +40,11 @@ private:
 	UDamageTextWidget* GetOrCreateWidget();
 	void ReturnToPool(UDamageTextWidget* Widget);
 
+	void ShowSpecialText(const FVector& WorldLocation, const FString& Text, FLinearColor Color);
+
 	friend class UDamageTextWidget;
 
-	// хендл, чтобы отписаться при уничтожении менеджера
 	FDelegateHandle ReactivateHandle;
 
-	//begin destroy
 	virtual void BeginDestroy() override;
 };

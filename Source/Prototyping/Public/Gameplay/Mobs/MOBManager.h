@@ -26,6 +26,9 @@ class PROTOTYPING_API UMOBManager : public UObject
 		UNetworkManager* networkManager;
 		UMyGameInstance* gameInstance;
 
+		// Check if event is combat-related
+		bool IsCombatEvent(const FString& EventType) const;
+
 	public:
 		UMOBManager(const FObjectInitializer& ObjectInitializer);
 		void Initialize(UNetworkManager* NetworkManager);

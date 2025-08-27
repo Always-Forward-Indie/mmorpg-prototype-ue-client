@@ -3,6 +3,7 @@
 #include "MyGameInstance.h"
 #include "Utils/JSONParser.h"
 #include "Engine/World.h"
+#include "UI/InventoryWidget.h"
 
 UInventoryManager::UInventoryManager()
 {
@@ -157,30 +158,57 @@ void UInventoryManager::ProcessInventoryData(const FString& JsonData)
 				ItemObject->TryGetNumberField(TEXT("itemId"), Item.itemId);
 				ItemObject->TryGetNumberField(TEXT("quantity"), Item.quantity);
 				ItemObject->TryGetStringField(TEXT("name"), Item.name);
+				ItemObject->TryGetStringField(TEXT("slug"), Item.slug);
 				ItemObject->TryGetStringField(TEXT("description"), Item.description);
-				ItemObject->TryGetStringField(TEXT("type"), Item.type);
-				ItemObject->TryGetStringField(TEXT("rarity"), Item.rarity);
-				ItemObject->TryGetNumberField(TEXT("level"), Item.level);
+				ItemObject->TryGetStringField(TEXT("itemTypeName"), Item.type);
+				ItemObject->TryGetStringField(TEXT("rarityName"), Item.rarity);
+				ItemObject->TryGetNumberField(TEXT("weight"), Item.weight);
+				ItemObject->TryGetNumberField(TEXT("levelRequirement"), Item.level_requirement);
+				ItemObject->TryGetNumberField(TEXT("stackSize"), Item.stackSize);
+				ItemObject->TryGetNumberField(TEXT("durabilityMax"), Item.durability_max);
+				ItemObject->TryGetNumberField(TEXT("durabilityCurrent"), Item.durability_current);
+				ItemObject->TryGetNumberField(TEXT("vendorPriceBuy"), Item.vendor_price_buy);
+				ItemObject->TryGetNumberField(TEXT("vendorPriceSell"), Item.vendor_price_sell);
+				// Parse boolean fields
+				ItemObject->TryGetBoolField(TEXT("isDurable"), Item.is_durable);
+				ItemObject->TryGetBoolField(TEXT("isTradable"), Item.is_tradable);
+				ItemObject->TryGetBoolField(TEXT("isEquippable"), Item.is_equippable);
+				ItemObject->TryGetBoolField(TEXT("isContainer"), Item.is_container);
+				ItemObject->TryGetBoolField(TEXT("isQuestItem"), Item.is_quest_item);
+
+
 
 				// Parse attributes object
-				TSharedPtr<FJsonObject> AttributesObject = ItemObject->GetObjectField(TEXT("attributes"));
-				if (AttributesObject.IsValid())
+				const TArray<TSharedPtr<FJsonValue>>* AttributesArray = nullptr;
+				if (ItemObject->TryGetArrayField(TEXT("attributes"), AttributesArray) && AttributesArray)
 				{
-					for (const auto& AttributePair : AttributesObject->Values)
+					for (const TSharedPtr<FJsonValue>& AttrVal : *AttributesArray)
 					{
-						FString AttributeValue;
-						if (AttributePair.Value->TryGetString(AttributeValue))
+						TSharedPtr<FJsonObject> AttrObj = AttrVal->AsObject();
+						if (!AttrObj.IsValid()) continue;
+
+						FString AttrName;
+						// value может быть числом или строкой
+						// —охран€ем в строку (как и раньше в Item.attributes: TMap<FString, FString>)
+						FString ValueAsString;
+
+						AttrObj->TryGetStringField(TEXT("name"), AttrName);
+
+						// ѕробуем число
+						double NumVal = 0.0;
+						if (AttrObj->TryGetNumberField(TEXT("value"), NumVal))
 						{
-							Item.attributes.Add(AttributePair.Key, AttributeValue);
+							ValueAsString = FString::SanitizeFloat(NumVal);
 						}
 						else
 						{
-							// Handle numeric attributes
-							double NumericValue;
-							if (AttributePair.Value->TryGetNumber(NumericValue))
-							{
-								Item.attributes.Add(AttributePair.Key, FString::SanitizeFloat(NumericValue));
-							}
+							// иначе строка
+							AttrObj->TryGetStringField(TEXT("value"), ValueAsString);
+						}
+
+						if (!AttrName.IsEmpty())
+						{
+							Item.attributes.Add(AttrName, ValueAsString);
 						}
 					}
 				}
@@ -689,4 +717,110 @@ TArray<ADroppedItemActor*> UInventoryManager::GetAllDroppedItemsInRange(float Ma
 		});
 
 	return ItemsInRange;
+}
+
+void UInventoryManager::SetInventoryUIWidget(UInventoryWidget* InInventoryUIWidget)
+{
+	if (InInventoryUIWidget)
+	{
+		this->InventoryUIWidget = InInventoryUIWidget;
+		InInventoryUIWidget->InitializeInventory(this);
+		
+		// Bind UI events
+		InInventoryUIWidget->OnInventorySlotClicked.AddDynamic(this, &UInventoryManager::HandleSlotClicked);
+		InInventoryUIWidget->OnInventorySlotRightClicked.AddDynamic(this, &UInventoryManager::HandleSlotRightClicked);
+		
+		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: UI Widget set and initialized"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("InventoryManager: Cannot set null UI Widget"));
+	}
+}
+
+void UInventoryManager::ShowInventoryUI()
+{
+	if (InventoryUIWidget)
+	{
+		InventoryUIWidget->SetInventoryVisible(true);
+	}
+}
+
+void UInventoryManager::HideInventoryUI()
+{
+	if (InventoryUIWidget)
+	{
+		InventoryUIWidget->SetInventoryVisible(false);
+	}
+}
+
+void UInventoryManager::ToggleInventoryUI()
+{
+	if (InventoryUIWidget)
+	{
+		InventoryUIWidget->ToggleInventory();
+	}
+}
+
+bool UInventoryManager::IsInventoryUIVisible() const
+{
+	if (InventoryUIWidget)
+	{
+		return InventoryUIWidget->IsInventoryVisible();
+	}
+	return false;
+}
+
+void UInventoryManager::HandleSlotClicked(int32 SlotIndex, const FInventoryItemStruct& Item)
+{
+	UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Slot %d clicked - Item: %s (ID: %d)"), SlotIndex, *Item.name, Item.itemId);
+	
+	// Default behavior: Use the item (you can customize this)
+	if (Item.itemId > 0)
+	{
+		UseItem(Item.itemId, 1);
+	}
+}
+
+void UInventoryManager::HandleSlotRightClicked(int32 SlotIndex, const FInventoryItemStruct& Item)
+{
+	UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Slot %d right-clicked - Item: %s (ID: %d)"), SlotIndex, *Item.name, Item.itemId);
+	
+	// Default behavior: Drop the item (you can customize this)
+	if (Item.itemId > 0)
+	{
+		DropItem(Item.itemId, 1);
+	}
+}
+
+void UInventoryManager::AddItemToLocalInventory(const FInventoryItemStruct& Item)
+{
+	// Find existing item with same ID
+	FInventoryItemStruct* ExistingItem = CurrentInventory.items.FindByPredicate(
+		[Item](const FInventoryItemStruct& InventoryItem) { return InventoryItem.itemId == Item.itemId; });
+
+	if (ExistingItem)
+	{
+		// Item already exists, add to quantity
+		int32 OldQuantity = ExistingItem->quantity;
+		ExistingItem->quantity += Item.quantity;
+		
+		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Updated item %s quantity from %d to %d"), 
+			*Item.name, OldQuantity, ExistingItem->quantity);
+		
+		OnItemAdded.Broadcast(*ExistingItem, Item.quantity);
+	}
+	else
+	{
+		// New item, add to inventory
+		CurrentInventory.items.Add(Item);
+		
+		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Added new item %s (ID: %d, Quantity: %d)"), 
+			*Item.name, Item.itemId, Item.quantity);
+		
+		OnItemAdded.Broadcast(Item, Item.quantity);
+	}
+
+	// Broadcast inventory update
+	OnInventoryUpdated.Broadcast(CurrentInventory);
 }

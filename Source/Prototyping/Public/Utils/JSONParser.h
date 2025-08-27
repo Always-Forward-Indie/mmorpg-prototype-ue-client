@@ -31,10 +31,22 @@ public:
     static FSpawnZoneStruct DeserializeSpawnZoneData(const TSharedPtr<FJsonObject>& Body);
 
     static FMOBStruct DeserializeMobData(const TSharedPtr<FJsonObject>& MobObject);
-    // Combat data parsers
+    
+    // Legacy combat data parsers (for backward compatibility)
     static FCombatAnimationData DeserializeCombatAnimation(const TSharedPtr<FJsonObject>& AnimationObj);
     static FCombatActionData DeserializeCombatAction(const TSharedPtr<FJsonObject>& ActionObj);
     static FCombatResultData DeserializeCombatResult(const TSharedPtr<FJsonObject>& ResultObj);
+
+    // New combat system parsers
+    static ESkillEffectType ParseSkillEffectType(const FString& EffectTypeString);
+    static ESkillSchool ParseSkillSchool(const FString& SchoolString);
+    static ECasterType ParseCasterType(const FString& CasterTypeString);
+    static FAppliedEffectData DeserializeAppliedEffect(const TSharedPtr<FJsonObject>& EffectObj);
+    static TArray<FAppliedEffectData> DeserializeAppliedEffects(const TArray<TSharedPtr<FJsonValue>>& JsonArray);
+    static FSkillInitiationData DeserializeSkillInitiation(const TSharedPtr<FJsonObject>& InitiationObj);
+    static FSkillInitiationData DeserializeSkillInitiation(const FString& JsonString);
+    static FSkillResultData DeserializeSkillResult(const TSharedPtr<FJsonObject>& ResultObj);
+    static FSkillResultData DeserializeSkillResult(const FString& JsonString);
 
     static TArray<FMOBStruct> DeserializeMobsList(const TSharedPtr<FJsonObject>& Body);
 
@@ -58,4 +70,21 @@ public:
     static FMobTargetLostStruct DeserializeMobTargetLost(const TSharedPtr<FJsonObject>& Body);
     // Parse mob target lost data from JSON string
     static FMobTargetLostStruct DeserializeMobTargetLost(const FString& JsonString);
+
+    // Harvest system parsers
+    static FHarvestItemStruct DeserializeHarvestItem(const TSharedPtr<FJsonObject>& ItemObj);
+    static FHarvestStartedStruct DeserializeHarvestStarted(const TSharedPtr<FJsonObject>& Body);
+    static FHarvestStartedStruct DeserializeHarvestStarted(const FString& JsonString);
+    static FHarvestCompleteStruct DeserializeHarvestComplete(const TSharedPtr<FJsonObject>& Body);
+    static FHarvestCompleteStruct DeserializeHarvestComplete(const FString& JsonString);
+    static FHarvestErrorStruct DeserializeHarvestError(const TSharedPtr<FJsonObject>& Body);
+    static FHarvestErrorStruct DeserializeHarvestError(const FString& JsonString);
+    static FCorpseLootPickupResponseStruct DeserializeCorpseLootPickupResponse(const TSharedPtr<FJsonObject>& Body);
+    static FCorpseLootPickupResponseStruct DeserializeCorpseLootPickupResponse(const FString& JsonString);
+    static FCorpseLootPickupErrorStruct DeserializeCorpseLootPickupError(const TSharedPtr<FJsonObject>& Body);
+    static FCorpseLootPickupErrorStruct DeserializeCorpseLootPickupError(const FString& JsonString);
+    static FCorpseLootInspectResponseStruct DeserializeCorpseLootInspectResponse(const TSharedPtr<FJsonObject>& Body);
+    static FCorpseLootInspectResponseStruct DeserializeCorpseLootInspectResponse(const FString& JsonString);
+    static FCorpseLootInspectErrorStruct DeserializeCorpseLootInspectError(const TSharedPtr<FJsonObject>& Body);
+    static FCorpseLootInspectErrorStruct DeserializeCorpseLootInspectError(const FString& JsonString);
 };

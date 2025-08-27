@@ -17,15 +17,15 @@ class PROTOTYPING_API UPlayerHUD : public UUserWidget
 public:
     /** Устанавливает HP */
     UFUNCTION(BlueprintCallable, Category = "HUD")
-    void SetHP(float NewHP);
+    void SetHP(float NewHP, float MaxHP);
 
     /** Устанавливает Mana */
     UFUNCTION(BlueprintCallable, Category = "HUD")
-    void SetMana(float NewMana);
+    void SetMana(float NewMana, float MaxMana);
 
     /** Устанавливает XP */
     UFUNCTION(BlueprintCallable, Category = "HUD")
-    void SetXP(float NewXP);
+    void SetXP(float NewXP, float MaxXP);
 
     /** Устанавливает уровень */
     UFUNCTION(BlueprintCallable, Category = "HUD")
@@ -46,10 +46,19 @@ protected:
     class UProgressBar* HealthBar;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "HUD")
+	class UTextBlock* HealthBarTextValue;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "HUD")
     class UProgressBar* ManaBar;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "HUD")
+    class UTextBlock* ManaBarTextValue;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "HUD")
     class UProgressBar* XPBar;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "HUD")
+    class UTextBlock* ExpBarTextValue;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "HUD")
     class UTextBlock* LevelText;

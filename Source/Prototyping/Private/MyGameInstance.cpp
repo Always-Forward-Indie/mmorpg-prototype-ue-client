@@ -2,6 +2,15 @@
 
 
 #include "MyGameInstance.h"
+#include "Gameplay/UI/FloatingCombatTextManager.h"
+#include "Gameplay/Items/HarvestManager.h"
+#include "Gameplay/Combat/CombatSystemManager.h"
+#include "Gameplay/Combat/SkillSystemManager.h"
+#include "Gameplay/Combat/CombatNetworkHandler.h"
+#include "Gameplay/Combat/DamageEffectHandler.h"
+#include "Gameplay/Combat/HealingEffectHandler.h"
+#include "Gameplay/Combat/BuffEffectHandler.h"
+#include "Gameplay/Combat/ICombatable.h"
 
 
 UMyGameInstance::UMyGameInstance(const FObjectInitializer& ObjectInitializer)
@@ -12,7 +21,7 @@ UMyGameInstance::UMyGameInstance(const FObjectInitializer& ObjectInitializer)
 
 void UMyGameInstance::Init()
 {
-    Super::Init();
+	Super::Init();
 
 	// set the network manager
 	NetworkManager = NewObject<UNetworkManager>(this);
@@ -37,6 +46,14 @@ void UMyGameInstance::Init()
 
 	// set the inventory manager
 	InventoryManager = NewObject<UInventoryManager>(this);
+
+	// set the harvest manager
+	HarvestManager = NewObject<UHarvestManager>(this);
+
+	// Initialize new combat system
+	CombatSystemManager = NewObject<UCombatSystemManager>(this);
+	SkillSystemManager = NewObject<USkillSystemManager>(this);
+	CombatNetworkHandler = NewObject<UCombatNetworkHandler>(this);
 
 	UE_LOG(LogTemp, Warning, TEXT("GameInstance Init called"));
 
@@ -149,6 +166,61 @@ void UMyGameInstance::InitNetworkingSetup()
 		InventoryManager->Initialize(NetworkManager);
 		// subscribe to the network manager
 		InventoryManager->SubscribeToNetworkManager();
+	}
+
+	if (HarvestManager != nullptr) {
+		// set WorldContext
+		HarvestManager->SetWorldContext(GetWorld());
+		// set game instance
+		HarvestManager->SetGameInstance(this);
+		// Initialize the harvest manager
+		HarvestManager->Initialize(NetworkManager);
+		// subscribe to the network manager
+		HarvestManager->SubscribeToNetworkManager();
+	}
+
+	// Initialize new combat system
+	if (CombatSystemManager != nullptr) {
+		// set WorldContext
+		CombatSystemManager->SetWorldContext(GetWorld());
+		// Initialize the combat system manager
+		CombatSystemManager->Initialize(this, NetworkManager);
+		
+		// Register default effect handlers using proper UINTERFACE method
+		UDamageEffectHandler* DamageHandler = NewObject<UDamageEffectHandler>(this);
+		TScriptInterface<ISkillEffectHandler> DamageInterface;
+		DamageInterface.SetObject(DamageHandler);
+		DamageInterface.SetInterface(Cast<ISkillEffectHandler>(DamageHandler));
+		CombatSystemManager->RegisterEffectHandler(DamageInterface);
+
+		UHealingEffectHandler* HealingHandler = NewObject<UHealingEffectHandler>(this);
+		TScriptInterface<ISkillEffectHandler> HealingInterface;
+		HealingInterface.SetObject(HealingHandler);
+		HealingInterface.SetInterface(Cast<ISkillEffectHandler>(HealingHandler));
+		CombatSystemManager->RegisterEffectHandler(HealingInterface);
+
+		UBuffEffectHandler* BuffHandler = NewObject<UBuffEffectHandler>(this);
+		TScriptInterface<ISkillEffectHandler> BuffInterface;
+		BuffInterface.SetObject(BuffHandler);
+		BuffInterface.SetInterface(Cast<ISkillEffectHandler>(BuffHandler));
+		CombatSystemManager->RegisterEffectHandler(BuffInterface);
+		
+		UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager initialized with UINTERFACE effect handlers"));
+	}
+
+	if (SkillSystemManager != nullptr) {
+		// Initialize the skill system manager
+		SkillSystemManager->Initialize(CombatSystemManager, NetworkManager);
+		UE_LOG(LogTemp, Warning, TEXT("SkillSystemManager initialized"));
+	}
+
+	// Initialize CombatNetworkHandler centrally AFTER CombatSystemManager
+	if (CombatNetworkHandler != nullptr && CombatSystemManager != nullptr) {
+		// Initialize the combat network handler
+		CombatNetworkHandler->Initialize(CombatSystemManager, NetworkManager);
+		// Subscribe to network events
+		CombatNetworkHandler->SubscribeToNetworkManager();
+		UE_LOG(LogTemp, Warning, TEXT("CombatNetworkHandler initialized centrally"));
 	}
 
 	if (NetworkManager != nullptr) {
@@ -265,6 +337,26 @@ UItemManager* UMyGameInstance::GetItemManager()
 UInventoryManager* UMyGameInstance::GetInventoryManager()
 {
 	return InventoryManager;
+}
+
+UHarvestManager* UMyGameInstance::GetHarvestManager()
+{
+	return HarvestManager;
+}
+
+UCombatSystemManager* UMyGameInstance::GetCombatSystemManager()
+{
+	return CombatSystemManager;
+}
+
+USkillSystemManager* UMyGameInstance::GetSkillSystemManager()
+{
+	return SkillSystemManager;
+}
+
+UCombatNetworkHandler* UMyGameInstance::GetCombatNetworkHandler()
+{
+	return CombatNetworkHandler;
 }
 
 TSubclassOf<class ADroppedItemActor> UMyGameInstance::GetDroppedItemActorClass()
@@ -528,6 +620,29 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 				NewPlayer->SetPlayerTag(*FString::FromInt(PlayerData.characterData.characterId));
 				NewPlayer->SetPlayerTag("Player");
 
+
+				// Register with combat system now that player has valid data
+				if (CombatSystemManager && PlayerData.characterData.characterId > 0)
+				{
+					// Убедимся что объект валиден перед регистрацией
+					if (IsValid(NewPlayer) && !NewPlayer->IsActorBeingDestroyed())
+					{
+						TScriptInterface<ICombatable> CombatableInterface;
+						CombatableInterface.SetObject(NewPlayer);
+						CombatableInterface.SetInterface(Cast<ICombatable>(NewPlayer));
+						
+						CombatSystemManager->RegisterCombatable(CombatableInterface);
+						UE_LOG(LogTemp, Warning, TEXT("Player %d registered with combat system"), PlayerData.characterData.characterId);
+					}
+					else
+					{
+						UE_LOG(LogTemp, Error, TEXT("Player %d is invalid or being destroyed, not registering"), PlayerData.characterData.characterId);
+					}
+				}
+				else
+				{
+					UE_LOG(LogTemp, Warning, TEXT("Cannot register player with combat system - invalid data or CombatSystemManager null"));
+				}
 
 				// Get the first player controller
 				APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
@@ -833,49 +948,77 @@ void UMyGameInstance::UpdateMobHealth(int32 TargetId, int32 NewHealth, int32 New
 	UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Updating mob health for ID %d: Health=%d, IsDead=%s, Damage=%d"),
 		TargetId, NewHealth, bIsDead ? TEXT("True") : TEXT("False"), DamageDealt);
 
-	// Find the mob in the world
-	FString MobUid = FString::FromInt(TargetId);
-	TArray<AActor*> FoundActors;
-	UGameplayStatics::GetAllActorsWithTag(GetWorld(), FName(*MobUid), FoundActors);
-	
-	if (FoundActors.Num() > 0)
+	// Use new combat system to find and update MOB
+	if (UCombatSystemManager* CombatManager = GetCombatSystemManager())
 	{
-		ABasicMOB* MOB = Cast<ABasicMOB>(FoundActors[0]);
-		if (MOB)
+		TScriptInterface<ICombatable> MobCombatable = CombatManager->FindCombatableById(TargetId, ECasterType::Mob);
+		if (MobCombatable.GetInterface() && MobCombatable.GetObject() && IsValid(MobCombatable.GetObject()))
 		{
-			// Update the mob's health
-			MOB->SetMOBCurrentHealth(NewHealth);
-			MOB->SetMOBCurrentMana(NewMana);
-			MOB->SetMobIsDamaged(bIsDamaged);
+			ICombatable* MobInterface = MobCombatable.GetInterface();
+			
+			// Update through combat system
+			MobInterface->SetCurrentHealth_Implementation(NewHealth);
+			MobInterface->SetCurrentMana_Implementation(NewMana);
 			
 			if (bIsDead)
 			{
-				MOB->SetMOBIsDead(true);
-				// Handle mob death
-				MOB->Die();
+				MobInterface->SetDead_Implementation(true);
 			}
 			
-			// Update UI
-			MOB->ForceUpdateUI();
+			// Show damage effect if damaged
+			//if (bIsDamaged && DamageDealt > 0)
+			//{
+			//	MobInterface->ShowDamageEffect_Implementation(DamageDealt, false, ESkillSchool::Physical);
+			//}
 			
-			// Show damage numbers if damaged
-			if (bIsDamaged && DamageDealt > 0)
-			{
-				FVector HitLoc = MOB->GetActorLocation() + FVector(0, 0, 120);
-				
-				if (UIManager && UIManager->GetFCTManager() && IsValid(UIManager->GetFCTManager()))
-				{
-					UE_LOG(LogTemp, Warning, TEXT("Showing mob damage: %d at location %s"), 
-						DamageDealt, *HitLoc.ToString());
-					UIManager->GetFCTManager()->ShowDamage(HitLoc, DamageDealt, false, EDamageType::Physical);
-				}
-				else
-				{
-					UE_LOG(LogTemp, Error, TEXT("Cannot show damage: FCT Manager is invalid"));
-				}
-			}
+			UE_LOG(LogTemp, Warning, TEXT("Updated MOB through combat system"));
+			return;
 		}
 	}
+	
+	//// Fallback to legacy method if combat system not available
+	//FString MobUid = FString::FromInt(TargetId);
+	//TArray<AActor*> FoundActors;
+	//UGameplayStatics::GetAllActorsWithTag(GetWorld(), FName(*MobUid), FoundActors);
+	//
+	//if (FoundActors.Num() > 0)
+	//{
+	//	ABasicMOB* MOB = Cast<ABasicMOB>(FoundActors[0]);
+	//	if (MOB)
+	//	{
+	//		// Update the mob's health
+	//		MOB->SetMOBCurrentHealth(NewHealth);
+	//		MOB->SetMOBCurrentMana(NewMana);
+	//		MOB->SetMobIsDamaged(bIsDamaged);
+	//		
+	//		if (bIsDead)
+	//		{
+	//			MOB->SetMOBIsDead(true);
+	//			// Handle mob death
+	//			MOB->Die();
+	//		}
+	//		
+	//		// Update UI
+	//		MOB->ForceUpdateUI();
+	//		
+	//		// Show damage numbers if damaged
+	//		//if (bIsDamaged && DamageDealt > 0)
+	//		//{
+	//		//	FVector HitLoc = MOB->GetActorLocation() + FVector(0, 0, 120);
+	//		//	
+	//		//	if (UIManager && UIManager->GetFCTManager())
+	//		//	{
+	//		//		UE_LOG(LogTemp, Warning, TEXT("Showing mob damage: %d at location %s"), 
+	//		//			DamageDealt, *HitLoc.ToString());
+	//		//		UIManager->GetFCTManager()->ShowDamage(HitLoc, DamageDealt, false, EDamageType::Physical);
+	//		//	}
+	//		//	else
+	//		//	{
+	//		//		UE_LOG(LogTemp, Error, TEXT("Cannot show damage: FCT Manager is invalid"));
+	//		//	}
+	//		//}
+	//	}
+	//}
 }
 
 void UMyGameInstance::UpdatePlayerHealth(int32 TargetId, int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt)
@@ -883,43 +1026,68 @@ void UMyGameInstance::UpdatePlayerHealth(int32 TargetId, int32 NewHealth, int32 
 	UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Updating player health for ID %d: Health=%d, IsDead=%s, Damage=%d"),
 		TargetId, NewHealth, bIsDead ? TEXT("True") : TEXT("False"), DamageDealt);
 
-	// Find the player and update their health
-	ABasicPlayer* TargetPlayer = GetPlayerByCharacterId(TargetId);
-	
-	if (TargetPlayer)
+	// Use new combat system to find and update Player
+	if (UCombatSystemManager* CombatManager = GetCombatSystemManager())
 	{
-		// Update the player's health, mana, and other status
-		TargetPlayer->SetPlayerCurrentHPPoints(NewHealth);
-		TargetPlayer->SetPlayerCurrentMPPoints(NewMana);
-		
-		// Update the player's HUD
-		TargetPlayer->UpdateHUD();
-		
-		// Show damage numbers if damaged
-		if (bIsDamaged && DamageDealt > 0)
+		TScriptInterface<ICombatable> PlayerCombatable = CombatManager->FindCombatableById(TargetId, ECasterType::Player);
+		if (PlayerCombatable.GetInterface() && PlayerCombatable.GetObject() && IsValid(PlayerCombatable.GetObject()))
 		{
-			FVector HitLoc = TargetPlayer->GetActorLocation() + FVector(0, 0, 120);
+			ICombatable* PlayerInterface = PlayerCombatable.GetInterface();
 			
-			if (UIManager && UIManager->GetFCTManager() && IsValid(UIManager->GetFCTManager()))
+			// Update through combat system
+			PlayerInterface->SetCurrentHealth_Implementation(NewHealth);
+			PlayerInterface->SetCurrentMana_Implementation(NewMana);
+			
+			// Show damage effect if damaged
+			//if (bIsDamaged && DamageDealt > 0)
+			//{
+			//	PlayerInterface->ShowDamageEffect_Implementation(DamageDealt, false, ESkillSchool::Physical);
+			//}
+			
+			// Handle player death if needed
+			if (bIsDead)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Showing player damage: %d at location %s"), 
-					DamageDealt, *HitLoc.ToString());
-				UIManager->GetFCTManager()->ShowDamage(HitLoc, DamageDealt, false, EDamageType::Physical);
+				PlayerInterface->SetDead_Implementation(true);
 			}
-			else
-			{
-				UE_LOG(LogTemp, Error, TEXT("Cannot show damage: FCT Manager is invalid"));
-			}
-		}
-		
-		// Handle player death if needed
-		if (bIsDead)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("Player %d has died!"), TargetId);
-			// TODO: Implement death handling in BasicPlayer class
-			// TargetPlayer->HandleDeath();
+			
+			UE_LOG(LogTemp, Warning, TEXT("Updated Player through combat system"));
+			return;
 		}
 	}
+	
+	//// Fallback to legacy method if combat system not available
+	//ABasicPlayer* TargetPlayer = GetPlayerByCharacterId(TargetId);
+	//
+	//if (TargetPlayer)
+	//{
+	//	// Update the player's health, mana, and other status
+	//	TargetPlayer->SetPlayerCurrentHPPoints(NewHealth);
+	//	TargetPlayer->SetPlayerCurrentMPPoints(NewMana);
+	//	
+	//	// Update the player's HUD
+	//	TargetPlayer->UpdateHUD();
+	//	
+	//	// Show damage numbers if damaged
+	//	//if (bIsDamaged && DamageDealt > 0)
+	//	//{
+	//	//	FVector HitLoc = TargetPlayer->GetActorLocation() + FVector(0, 0, 120);
+	//	//	
+	//	//	if (UIManager && UIManager->GetFCTManager())
+	//	//	{
+	//	//		UE_LOG(LogTemp, Warning, TEXT("Showing player damage: %d at location %s"), 
+	//	//			DamageDealt, *HitLoc.ToString());
+	//	//		UIManager->GetFCTManager()->ShowDamage(HitLoc, DamageDealt, false, EDamageType::Physical);
+	//	//	}
+	//	//}
+	//	
+	//	// Handle player death if needed
+	//	if (bIsDead)
+	//	{
+	//		UE_LOG(LogTemp, Warning, TEXT("Player %d has died!"), TargetId);
+	//		// TODO: Implement death handling in BasicPlayer class
+	//		// TargetPlayer->HandleDeath();
+	//	}
+	//}
 }
 
 void UMyGameInstance::UpdateTargetHealth(int32 TargetId, int32 TargetType, const FString& TargetTypeString, 
@@ -962,5 +1130,18 @@ void UMyGameInstance::InitGameSystems()
 	else if (ItemManager)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("ItemVisualsDataTable not configured in editor - item visuals will use defaults"));
+	}
+}
+
+void UMyGameInstance::SetInventoryManager(UInventoryManager* NewInventoryManager)
+{
+	if (NewInventoryManager)
+	{
+		InventoryManager = NewInventoryManager;
+		UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Inventory Manager reference set"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Cannot set null Inventory Manager"));
 	}
 }

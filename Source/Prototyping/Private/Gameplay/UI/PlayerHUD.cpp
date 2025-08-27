@@ -4,27 +4,54 @@
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 
-void UPlayerHUD::SetHP(float NewHP)
+void UPlayerHUD::SetHP(float NewHP, float MaxHP)
 {
     if (HealthBar)
     {
-        HealthBar->SetPercent(NewHP);
+        // Calculate percentage for progress bar
+        float Percentage = (MaxHP > 0.0f) ? (NewHP / MaxHP) : 0.0f;
+        HealthBar->SetPercent(Percentage);
+    }
+
+    if (HealthBarTextValue)
+    {
+        // Format text as "current/max"
+        FString HPText = FString::Printf(TEXT("%.0f/%.0f"), NewHP, MaxHP);
+        HealthBarTextValue->SetText(FText::FromString(HPText));
     }
 }
 
-void UPlayerHUD::SetMana(float NewMana)
+void UPlayerHUD::SetMana(float NewMana, float MaxMana)
 {
     if (ManaBar)
     {
-        ManaBar->SetPercent(NewMana);
+        // Calculate percentage for progress bar
+        float Percentage = (MaxMana > 0.0f) ? (NewMana / MaxMana) : 0.0f;
+        ManaBar->SetPercent(Percentage);
+    }
+
+    if (ManaBarTextValue)
+    {
+        // Format text as "current/max"
+        FString ManaText = FString::Printf(TEXT("%.0f/%.0f"), NewMana, MaxMana);
+        ManaBarTextValue->SetText(FText::FromString(ManaText));
     }
 }
 
-void UPlayerHUD::SetXP(float NewXP)
+void UPlayerHUD::SetXP(float NewXP, float MaxXP)
 {
     if (XPBar)
     {
-        XPBar->SetPercent(NewXP);
+        // Calculate percentage for progress bar
+        float Percentage = (MaxXP > 0.0f) ? (NewXP / MaxXP) : 0.0f;
+        XPBar->SetPercent(Percentage);
+    }
+
+    if (ExpBarTextValue)
+    {
+        // Format text as "current/max"
+        FString XPText = FString::Printf(TEXT("%.0f/%.0f"), NewXP, MaxXP);
+        ExpBarTextValue->SetText(FText::FromString(XPText));
     }
 }
 

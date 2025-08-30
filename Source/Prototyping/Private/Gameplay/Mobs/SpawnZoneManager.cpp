@@ -65,6 +65,12 @@ void USpawnZoneManager::ProcessGameServerData(const FString& ReceivedData)
 {
 	//UE_LOG(LogTemp, Warning, TEXT("SpawnZoneManager received data: %s"), *ReceivedData);
 
+	// Process time sync data first
+	//if (gameInstance && gameInstance->GetTimeSyncService())
+	//{
+	//	JSONParser::ProcessTimeSyncFromHeader(ReceivedData, gameInstance->GetTimeSyncService());
+	//}
+
 	// Deserialize the received JSON string to get MessageData struct
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
 
@@ -111,7 +117,8 @@ void USpawnZoneManager::SendGetSpawnZonesData(const FClientDataStruct& ClientDat
 	TSharedPtr<FJsonValueNumber> zoneID = MakeShareable(new FJsonValueNumber(1));
 	BodyData.Add("spawnZoneId", zoneID);
 
-	FString JsonString = JSONParser::SerializeJson("getSpawnZoneData", HeaderData, BodyData);
+	// Create JSON string with correct server type  
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync("getSpawnZoneData", HeaderData, BodyData, nullptr, EServerType::ChunkServer);
 
 	if (networkManager != nullptr)
 	{

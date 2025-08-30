@@ -6,6 +6,9 @@
 #include "Misc/Paths.h"
 #include "JsonUtilities.h"
 #include <Kismet/KismetSystemLibrary.h>
+#include "Services/TimeSyncService.h"
+#include "MyGameInstance.h"
+#include "Utils/JSONParser.h"
 
 
 UNetworkManager::UNetworkManager(const FObjectInitializer& ObjectInitializer)
@@ -141,8 +144,19 @@ void UNetworkManager::ConnectLoginServer()
 
 				// Создаем потоки для работы с логин-сервером
 				ReceiverLoginServerWorker = new NetworkReceiverWorker(LoginServerSocket);
+				// Set TimeSyncService reference for precise timestamps
+				if (UTimeSyncService* TimeSyncSvc = GetTimeSyncService())
+				{
+					ReceiverLoginServerWorker->SetTimeSyncService(TimeSyncSvc);
+				}
 				ReceiverLoginServerThread = FRunnableThread::Create(ReceiverLoginServerWorker, TEXT("NetworkingLoginServerReceiverThread"));
+				
 				SenderLoginServerWorker = new NetworkSenderWorker(LoginServerSocket);
+				// Set TimeSyncService reference for precise timestamps
+				if (UTimeSyncService* TimeSyncSvc = GetTimeSyncService())
+				{
+					SenderLoginServerWorker->SetTimeSyncService(TimeSyncSvc);
+				}
 				SenderLoginServerThread = FRunnableThread::Create(SenderLoginServerWorker, TEXT("NetworkingLoginServerSenderThread"));
 			
 				OnLoginServerSocketConnected.Broadcast();
@@ -193,8 +207,19 @@ void UNetworkManager::ConnectGameServer()
 
 				// Создаем потоки для работы с игровым сервером
 				ReceiverGameServerWorker = new NetworkReceiverWorker(GameServerSocket);
+				// Set TimeSyncService reference for precise timestamps
+				if (UTimeSyncService* TimeSyncSvc = GetTimeSyncService())
+				{
+					ReceiverGameServerWorker->SetTimeSyncService(TimeSyncSvc);
+				}
 				ReceiverGameServerThread = FRunnableThread::Create(ReceiverGameServerWorker, TEXT("NetworkingGameServerReceiverThread"));
+				
 				SenderGameServerWorker = new NetworkSenderWorker(GameServerSocket);
+				// Set TimeSyncService reference for precise timestamps
+				if (UTimeSyncService* TimeSyncSvc = GetTimeSyncService())
+				{
+					SenderGameServerWorker->SetTimeSyncService(TimeSyncSvc);
+				}
 				SenderGameServerThread = FRunnableThread::Create(SenderGameServerWorker, TEXT("NetworkingGameServerSenderThread"));
 
 				OnGameServerSocketConnected.Broadcast();
@@ -240,12 +265,23 @@ void UNetworkManager::ConnectChunkServer()
 				UE_LOG(LogTemp, Warning, TEXT("Chunk Server socket connected."));
 
 				WorldContext->GetTimerManager().ClearTimer(ChunkServerConnectionTimerHandle);
-				// Создаем потоки для работы с игровым сервером
+				
+				// Создаем потоки для работы с chunk сервером
 				ReceiverChunkServerWorker = new NetworkReceiverWorker(ChunkServerSocket);
+				// Set TimeSyncService reference for precise timestamps
+				if (UTimeSyncService* TimeSyncSvc = GetTimeSyncService())
+				{
+					ReceiverChunkServerWorker->SetTimeSyncService(TimeSyncSvc);
+				}
 				ReceiverChunkServerThread = FRunnableThread::Create(ReceiverChunkServerWorker, TEXT("NetworkingChunkServerReceiverThread"));
+				
 				SenderChunkServerWorker = new NetworkSenderWorker(ChunkServerSocket);
+				// Set TimeSyncService reference for precise timestamps
+				if (UTimeSyncService* TimeSyncSvc = GetTimeSyncService())
+				{
+					SenderChunkServerWorker->SetTimeSyncService(TimeSyncSvc);
+				}
 				SenderChunkServerThread = FRunnableThread::Create(SenderChunkServerWorker, TEXT("NetworkingChunkServerSenderThread"));
-
 
 				OnChunkServerSocketConnected.Broadcast();
 			}
@@ -266,6 +302,19 @@ void UNetworkManager::ConnectChunkServer()
 	WorldContext->GetTimerManager().SetTimer(ChunkServerConnectionTimerHandle, ChunkTimerDelegate, 1.0f, true);
 }
 
+
+UTimeSyncService* UNetworkManager::GetTimeSyncService()
+{
+    if (WorldContext)
+    {
+        UMyGameInstance* GameInstance = Cast<UMyGameInstance>(WorldContext->GetGameInstance());
+        if (GameInstance)
+        {
+            return GameInstance->GetTimeSyncService();
+        }
+    }
+    return nullptr;
+}
 
 // show popup for chunk server connection issue
 void UNetworkManager::ShowChunkServerConnectionIssuePopup()
@@ -449,6 +498,9 @@ void UNetworkManager::PollLoginServerNetworkData()
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Received Login Server data: %s"), *ReceivedData);
 
+		// Process time sync data before broadcasting
+		ProcessIncomingData(ReceivedData);
+
 		// Trigger the event or delegate call
 		OnLoginServerDataReceived.Broadcast(ReceivedData);
 	}
@@ -461,6 +513,9 @@ void UNetworkManager::PollGameServerNetworkData()
 	while (ReceiverGameServerWorker && ReceiverGameServerWorker->GetData(ReceivedData))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Received Game Server data: %s"), *ReceivedData);
+
+		// Process time sync data before broadcasting
+		ProcessIncomingData(ReceivedData);
 
 		// Trigger the event or delegate call
 		OnGameServerDataReceived.Broadcast(ReceivedData);
@@ -475,6 +530,10 @@ void UNetworkManager::PollChunkServerNetworkData()
 	while (ReceiverChunkServerWorker && ReceiverChunkServerWorker->GetData(ReceivedData))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Received Chunk Server data: %s"), *ReceivedData);
+		
+		// Process time sync data before broadcasting
+		ProcessIncomingData(ReceivedData);
+		
 		// Trigger the event or delegate call
 		OnChunkServerDataReceived.Broadcast(ReceivedData);
 	}
@@ -583,4 +642,23 @@ void UNetworkManager::Shutdown() {
 		ChunkServerSocket->Close();
 		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ChunkServerSocket);
 	}
+}
+
+void UNetworkManager::ProcessIncomingData(const FString& ReceivedData)
+{
+    // Process time sync data automatically for all server responses
+    FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
+
+	//debug log message Data
+	UE_LOG(LogTemp, Warning, TEXT("NetworkManager: Processing message of type %s with timestamps - clientSendMs: %lld, serverRecvMs: %lld, serverSendMs: %lld"),
+		*MessageData.eventType, MessageData.clientSendMs, MessageData.serverRecvMs, MessageData.serverSendMs);
+
+	//debug log type of event
+	UE_LOG(LogTemp, Warning, TEXT("NetworkManager: Event type with timestamps: %s"), *MessageData.eventType);
+    
+    // Use the improved time sync processing method
+    if (UTimeSyncService* TimeSyncService = GetTimeSyncService())
+    {
+        JSONParser::ProcessTimeSyncFromHeader(ReceivedData, TimeSyncService);
+    }
 }

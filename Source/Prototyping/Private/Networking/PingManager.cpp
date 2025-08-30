@@ -1,13 +1,17 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "Networking/PingManager.h"
+#include "Dom/JsonObject.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
 
 UPingManager::UPingManager(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	
-
+	networkManager = nullptr;
+	worldContext = nullptr;
+	MonitorStatsWidget = nullptr;
+	TimeSyncService = nullptr;
 }
 
 void UPingManager::Initialize(UNetworkManager* NetworkManager, UMonitorStatsWidget* MonitorStats)
@@ -17,101 +21,230 @@ void UPingManager::Initialize(UNetworkManager* NetworkManager, UMonitorStatsWidg
 
 	// Initialize the monitor stats widget
 	MonitorStatsWidget = MonitorStats;
+	
+	// Get TimeSyncService from NetworkManager if available
+	if (networkManager)
+	{
+		TimeSyncService = networkManager->GetTimeSyncService();
+	}
+	
+	UE_LOG(LogTemp, Warning, TEXT("PingManager: Initialized with TimeSyncService integration"));
 }
 
-// set the world context
 void UPingManager::SetWorldContext(UWorld* World)
 {
-	worldContext = World; // Set the world context
+	worldContext = World;
 }
 
+void UPingManager::SetTimeSyncService(UTimeSyncService* InTimeSyncService)
+{
+	TimeSyncService = InTimeSyncService;
+	UE_LOG(LogTemp, Warning, TEXT("PingManager: TimeSyncService reference set"));
+}
+
+void UPingManager::StartPingUpdates()
+{
+	if (!worldContext)
+	{
+		UE_LOG(LogTemp, Error, TEXT("PingManager: Cannot start ping updates - no world context"));
+		return;
+	}
+	
+	if (!TimeSyncService)
+	{
+		UE_LOG(LogTemp, Error, TEXT("PingManager: Cannot start ping updates - no TimeSyncService"));
+		return;
+	}
+	
+	// Update ping display every 3 seconds
+	const float UpdateInterval = 3.0f;
+	worldContext->GetTimerManager().SetTimer(PingUpdateTimerHandle, this, &UPingManager::OnPingUpdateTimer, UpdateInterval, true);
+	
+	// Start sending ping requests every 1 seconds
+	const float PingRequestInterval = 1.0f;
+	worldContext->GetTimerManager().SetTimer(PingRequestTimerHandle, this, &UPingManager::OnPingRequestTimer, PingRequestInterval, true);
+	
+	// Update immediately
+	UpdatePingDisplay();
+	
+	UE_LOG(LogTemp, Warning, TEXT("PingManager: Started ping updates with %.1f second interval and ping requests with %.1f second interval"), 
+		UpdateInterval, PingRequestInterval);
+}
+
+void UPingManager::StopPingUpdates()
+{
+	if (worldContext)
+	{
+		worldContext->GetTimerManager().ClearTimer(PingUpdateTimerHandle);
+		worldContext->GetTimerManager().ClearTimer(PingRequestTimerHandle);
+		UE_LOG(LogTemp, Warning, TEXT("PingManager: Stopped ping updates and ping requests"));
+	}
+}
+
+float UPingManager::GetServerPing(EServerType ServerType) const
+{
+	if (!TimeSyncService)
+	{
+		return 0.0f;
+	}
+	
+	return TimeSyncService->GetNetworkLatencyMs(ServerType);
+}
+
+void UPingManager::SendPingRequestToAllServers()
+{
+	if (!networkManager || !TimeSyncService)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PingManager: Cannot send ping requests - missing NetworkManager or TimeSyncService"));
+		return;
+	}
+
+	// Send ping request to Login Server
+	SendPingRequestToServer(EServerType::LoginServer);
+	
+	// Send ping request to Game Server
+	SendPingRequestToServer(EServerType::GameServer);
+	
+	// Send ping request to Chunk Server
+	SendPingRequestToServer(EServerType::ChunkServer);
+}
+
+void UPingManager::SendPingRequestToServer(EServerType ServerType)
+{
+	if (!networkManager || !TimeSyncService)
+	{
+		return;
+	}
+
+	// Generate unique request ID for this ping
+	FString RequestId = TimeSyncService->GenerateAndRegisterSyncRequest(ServerType);
+	
+	// Create the ping request JSON
+	TSharedPtr<FJsonObject> HeaderObject = MakeShareable(new FJsonObject);
+	HeaderObject->SetStringField("eventType", "pingClient");
+	HeaderObject->SetStringField("requestId", RequestId);
+	
+	// Add precise client send timestamp
+	int64 ClientSendMs = TimeSyncService->GetCurrentClientTimeMs();
+	HeaderObject->SetNumberField("clientSendMs", ClientSendMs);
+
+	// Create the main JSON object
+	TSharedPtr<FJsonObject> MainJsonObject = MakeShareable(new FJsonObject);
+	MainJsonObject->SetObjectField("header", HeaderObject);
+	
+	// Add empty body
+	TSharedPtr<FJsonObject> BodyObject = MakeShareable(new FJsonObject);
+	MainJsonObject->SetObjectField("body", BodyObject);
+
+	// Serialize to string
+	FString OutputString;
+	TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer =
+		TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&OutputString);
+	FJsonSerializer::Serialize(MainJsonObject.ToSharedRef(), Writer);
+
+	// Remove newline characters
+	OutputString.ReplaceInline(TEXT("\n"), TEXT(""));
+	OutputString.ReplaceInline(TEXT("\r"), TEXT(""));
+
+	// Send to appropriate server
+	switch (ServerType)
+	{
+		case EServerType::LoginServer:
+			networkManager->SendDataToLoginServer(OutputString);
+			UE_LOG(LogTemp, VeryVerbose, TEXT("PingManager: Sent ping request to Login Server with ID: %s"), *RequestId);
+			break;
+			
+		case EServerType::GameServer:
+			networkManager->SendDataToGameServer(OutputString);
+			UE_LOG(LogTemp, VeryVerbose, TEXT("PingManager: Sent ping request to Game Server with ID: %s"), *RequestId);
+			break;
+			
+		case EServerType::ChunkServer:
+			networkManager->SendDataToChunkServer(OutputString);
+			UE_LOG(LogTemp, VeryVerbose, TEXT("PingManager: Sent ping request to Chunk Server with ID: %s"), *RequestId);
+			break;
+			
+		default:
+			UE_LOG(LogTemp, Warning, TEXT("PingManager: Unknown server type for ping request"));
+			break;
+	}
+}
+
+void UPingManager::UpdatePingDisplay()
+{
+	if (!MonitorStatsWidget || !TimeSyncService)
+	{
+		return;
+	}
+	
+	// Get ping values from TimeSyncService for each server
+	float LoginServerPing = TimeSyncService->GetNetworkLatencyMs(EServerType::LoginServer);
+	float GameServerPing = TimeSyncService->GetNetworkLatencyMs(EServerType::GameServer);
+	float ChunkServerPing = TimeSyncService->GetNetworkLatencyMs(EServerType::ChunkServer);
+	
+	// Check if we have valid sync data for each server
+	bool bLoginValid = TimeSyncService->IsTimeSyncValid(EServerType::LoginServer);
+	bool bGameValid = TimeSyncService->IsTimeSyncValid(EServerType::GameServer);
+	bool bChunkValid = TimeSyncService->IsTimeSyncValid(EServerType::ChunkServer);
+	
+	// Format and display Login Server ping
+	if (bLoginValid && LoginServerPing > 0.0f)
+	{
+		FString LoginPingText = FString::Printf(TEXT("%.1f ms"), LoginServerPing);
+		MonitorStatsWidget->SetLoginServerPingValue(LoginPingText);
+		UE_LOG(LogTemp, VeryVerbose, TEXT("PingManager: Updated Login Server ping: %s"), *LoginPingText);
+	}
+	else
+	{
+		MonitorStatsWidget->SetLoginServerPingValue(TEXT("-- ms"));
+		UE_LOG(LogTemp, VeryVerbose, TEXT("PingManager: Login Server ping not available (valid: %s, ping: %.1f)"), 
+			bLoginValid ? TEXT("true") : TEXT("false"), LoginServerPing);
+	}
+	
+	// Format and display Game Server ping
+	if (bGameValid && GameServerPing > 0.0f)
+	{
+		FString GamePingText = FString::Printf(TEXT("%.1f ms"), GameServerPing);
+		MonitorStatsWidget->SetGameServerPingValue(GamePingText);
+		UE_LOG(LogTemp, VeryVerbose, TEXT("PingManager: Updated Game Server ping: %s"), *GamePingText);
+	}
+	else
+	{
+		MonitorStatsWidget->SetGameServerPingValue(TEXT("-- ms"));
+		UE_LOG(LogTemp, VeryVerbose, TEXT("PingManager: Game Server ping not available (valid: %s, ping: %.1f)"), 
+			bGameValid ? TEXT("true") : TEXT("false"), GameServerPing);
+	}
+	
+	// Format and display Chunk Server ping
+	if (bChunkValid && ChunkServerPing > 0.0f)
+	{
+		FString ChunkPingText = FString::Printf(TEXT("%.1f ms"), ChunkServerPing);
+		MonitorStatsWidget->SetChunkServerPingValue(ChunkPingText);
+		UE_LOG(LogTemp, VeryVerbose, TEXT("PingManager: Updated Chunk Server ping: %s"), *ChunkPingText);
+	}
+	else
+	{
+		MonitorStatsWidget->SetChunkServerPingValue(TEXT("-- ms"));
+		UE_LOG(LogTemp, VeryVerbose, TEXT("PingManager: Chunk Server ping not available (valid: %s, ping: %.1f)"), 
+			bChunkValid ? TEXT("true") : TEXT("false"), ChunkServerPing);
+	}
+}
+
+void UPingManager::OnPingUpdateTimer()
+{
+	UpdatePingDisplay();
+}
+
+void UPingManager::OnPingRequestTimer()
+{
+	SendPingRequestToAllServers();
+}
+
+// Legacy method - now deprecated but kept for compatibility
 void UPingManager::CalculatePingTime(const TArray<FDateTime>& SendTimes, const TArray<FDateTime>& ReceiveTimes, const FString& serverName)
 {
-    // Ensure both arrays have at least one element
-    if (SendTimes.Num() == 0 || ReceiveTimes.Num() == 0)
-    {
-        UE_LOG(LogTemp, Error, TEXT("SendTimes or ReceiveTimes array is empty!"));
-        return;
-    }
-
-    // Determine the minimum length between SendTimes and ReceiveTimes arrays
-    int32 MinLength = FMath::Min(SendTimes.Num(), ReceiveTimes.Num());
-
-    // Calculate ping time for each pair of SendTime and ReceiveTime
-    TArray<float> PingTimes;
-    for (int32 i = 0; i < MinLength; ++i)
-    {
-        float PingTime = (ReceiveTimes[i] - SendTimes[i]).GetTotalMilliseconds();
-        if (PingTime >= 0) // Skip negative ping times
-        {
-            PingTimes.Add(PingTime);
-        }
-    }
-
-    // Calculate the average ping time
-    float TotalPingTime = 0.0f;
-    int32 NumValidPings = 0; // Counter for valid ping times
-    for (float PingTime : PingTimes)
-    {
-        TotalPingTime += PingTime;
-        NumValidPings++; // Increment the counter for each valid ping time
-    }
-
-    // Ensure at least one valid ping time before calculating the average
-    if (NumValidPings > 0)
-    {
-        // Calculate mean and standard deviation
-        float MeanPingTime = TotalPingTime / NumValidPings;
-        float Variance = 0.0f;
-        for (float PingTime : PingTimes)
-        {
-            Variance += FMath::Square(PingTime - MeanPingTime);
-        }
-        Variance /= NumValidPings;
-        float StdDev = FMath::Sqrt(Variance);
-
-        // Filter out outliers based on z-score threshold
-        const float ZScoreThreshold = 3.0f; // Adjust as needed
-        TArray<float> FilteredPingTimes;
-        for (float PingTime : PingTimes)
-        {
-            float ZScore = (PingTime - MeanPingTime) / StdDev;
-            if (FMath::Abs(ZScore) <= ZScoreThreshold)
-            {
-                FilteredPingTimes.Add(PingTime);
-            }
-        }
-
-        // Recalculate total ping time and number of valid pings
-        TotalPingTime = 0.0f;
-        NumValidPings = 0;
-        for (float PingTime : FilteredPingTimes)
-        {
-            TotalPingTime += PingTime;
-            NumValidPings++;
-        }
-
-        // Calculate the average ping time
-        float AveragePingTime = TotalPingTime / NumValidPings;
-
-        // Log the average ping time
-        UE_LOG(LogTemp, Warning, TEXT("Average ping time for %s: %.2f ms"), *serverName, AveragePingTime);
-
-        // Set the average ping time to the monitor widget (assuming MonitorStatsWidget is valid)
-        if (MonitorStatsWidget != nullptr)
-        {
-            if (serverName == "Login Server")
-            {
-                MonitorStatsWidget->SetLoginServerPingValue(FString::Printf(TEXT("%.2f ms"), AveragePingTime));
-            }
-            else if (serverName == "Game Server")
-            {
-                MonitorStatsWidget->SetGameServerPingValue(FString::Printf(TEXT("%.2f ms"), AveragePingTime));
-            }
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("No valid ping times found for %s."), *serverName);
-    }
+	UE_LOG(LogTemp, Warning, TEXT("PingManager: CalculatePingTime is deprecated. Use TimeSyncService instead for server: %s"), *serverName);
+	
+	// For backwards compatibility, we still update the display using TimeSyncService
+	UpdatePingDisplay();
 }

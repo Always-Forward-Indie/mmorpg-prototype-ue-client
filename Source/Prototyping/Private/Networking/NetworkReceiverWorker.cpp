@@ -2,10 +2,15 @@
 
 
 #include "Networking/NetworkReceiverWorker.h"
+#include "Dom/JsonObject.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
+#include "Services/TimeSyncService.h"
 
 NetworkReceiverWorker::NetworkReceiverWorker(FSocket* InSocket)
     : Socket(InSocket)
     , bRunThread(true)
+    , TimeSyncService(nullptr)
 {
 }
 
@@ -17,6 +22,120 @@ bool NetworkReceiverWorker::Init()
 bool NetworkReceiverWorker::GetData(FString& OutData)
 {
     return DataQueue.Dequeue(OutData);
+}
+
+void NetworkReceiverWorker::SetTimeSyncService(UTimeSyncService* InTimeSyncService)
+{
+    TimeSyncService = InTimeSyncService;
+}
+
+//FString NetworkReceiverWorker::AddClientReceiveTimestamp(const FString& JsonData, int64 ClientRecvMs)
+//{
+//    if (!TimeSyncService)
+//    {
+//        return JsonData;
+//    }
+//
+//    // Parse the JSON to check if it has time sync fields
+//    TSharedPtr<FJsonObject> JsonObject;
+//    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonData);
+//    
+//    if (!FJsonSerializer::Deserialize(Reader, JsonObject) || !JsonObject.IsValid())
+//    {
+//        return JsonData; // Return original if parsing fails
+//    }
+//
+//    // Check if header exists and has server timing fields (indicating this is a server response)
+//    const TSharedPtr<FJsonObject>* HeaderPtr = nullptr;
+//    if (!JsonObject->TryGetObjectField(TEXT("header"), HeaderPtr) || !HeaderPtr || !(*HeaderPtr).IsValid())
+//    {
+//        return JsonData; // No header, return original
+//    }
+//
+//    TSharedPtr<FJsonObject> Header = *HeaderPtr;
+//    
+//    // Only add clientRecvMs if this is a server response with timing data
+//    if (!Header->HasField(TEXT("serverRecvMs")) || !Header->HasField(TEXT("serverSendMs")))
+//    {
+//        return JsonData; // Not a server response with timing, return original
+//    }
+//
+//    // Add clientRecvMs timestamp (t3)
+//    Header->SetNumberField(TEXT("clientRecvMs"), ClientRecvMs);
+//
+//    // Rebuild the JSON string
+//    FString UpdatedJsonString;
+//    TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer =
+//        TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&UpdatedJsonString);
+//    
+//    if (FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer))
+//    {
+//        // Remove any newline characters
+//        UpdatedJsonString.ReplaceInline(TEXT("\n"), TEXT(""));
+//        UpdatedJsonString.ReplaceInline(TEXT("\r"), TEXT(""));
+//        
+//        UE_LOG(LogTemp, VeryVerbose, TEXT("NetworkReceiverWorker: Added clientRecvMs %lld to packet: %s"), 
+//            ClientRecvMs, *UpdatedJsonString);
+//        
+//        return UpdatedJsonString;
+//    }
+//
+//    // Fallback to original if serialization fails
+//    return JsonData;
+//}
+
+FString NetworkReceiverWorker::AddClientReceiveTimestamp(const FString& JsonData, int64 ClientRecvMs)
+{
+    if (!TimeSyncService)
+    {
+        return JsonData;
+    }
+
+    // Parse the JSON to check if it has time sync fields
+    TSharedPtr<FJsonObject> JsonObject;
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonData);
+
+    if (!FJsonSerializer::Deserialize(Reader, JsonObject) || !JsonObject.IsValid())
+    {
+        return JsonData;
+    }
+
+    // Check if header exists and has server timing fields
+    const TSharedPtr<FJsonObject>* HeaderPtr = nullptr;
+    if (!JsonObject->TryGetObjectField(TEXT("header"), HeaderPtr) || !HeaderPtr || !(*HeaderPtr).IsValid())
+    {
+        return JsonData;
+    }
+
+    TSharedPtr<FJsonObject> Header = *HeaderPtr;
+
+    // Only add clientRecvMs if this is a server response with timing data
+    if (!Header->HasField(TEXT("serverRecvMs")) || !Header->HasField(TEXT("serverSendMs")))
+    {
+        return JsonData;
+    }
+
+
+    int64 PreciseClientRecvMs = TimeSyncService->GetCurrentClientTimeMs();
+    Header->SetNumberField(TEXT("clientRecvMs"), PreciseClientRecvMs);
+
+    // Rebuild the JSON string
+    FString UpdatedJsonString;
+    TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer =
+        TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&UpdatedJsonString);
+
+    if (FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer))
+    {
+        UpdatedJsonString.ReplaceInline(TEXT("\n"), TEXT(""));
+        UpdatedJsonString.ReplaceInline(TEXT("\r"), TEXT(""));
+
+        UE_LOG(LogTemp, VeryVerbose, TEXT("NetworkReceiverWorker: Added clientRecvMs %lld to packet: %s"),
+            PreciseClientRecvMs, *UpdatedJsonString);
+
+        return UpdatedJsonString;
+    }
+
+    return JsonData;
 }
 
 uint32 NetworkReceiverWorker::Run()
@@ -44,6 +163,9 @@ uint32 NetworkReceiverWorker::Run()
 
         if (bHasData && BytesRead > 0)
         {
+            // Get precise receive timestamp immediately after successful Socket->Recv() (t3)
+            //int64 PreciseClientRecvMs = TimeSyncService ? TimeSyncService->GetCurrentClientTimeMs() : 0;
+            
             // Копируем полученные данные в накопительный буфер
             AccumulatedBuffer.Append(ReceiveBuffer.GetData(), BytesRead);
 
@@ -62,10 +184,15 @@ uint32 NetworkReceiverWorker::Run()
                 FUTF8ToTCHAR Converter(reinterpret_cast<const ANSICHAR*>(SinglePacket.GetData()), SinglePacket.Num());
                 FString ReceivedString(Converter.Length(), Converter.Get());
 
-                UE_LOG(LogTemp, Warning, TEXT("Received packet: %s"), *ReceivedString);
+                // t3 ДОЛЖЕН сниматься здесь, на каждый пакет:
+                const int64 PerPacketT3 = TimeSyncService ? TimeSyncService->GetCurrentClientTimeMs() : 0;
+                // Add clientRecvMs timestamp if this is a server response
+                FString TimestampedString = AddClientReceiveTimestamp(ReceivedString, PerPacketT3);
+
+                UE_LOG(LogTemp, Warning, TEXT("Received packet: %s"), *TimestampedString);
 
                 // Добавляем строку в очередь
-                DataQueue.Enqueue(ReceivedString);
+                DataQueue.Enqueue(TimestampedString);
             }
         }
 

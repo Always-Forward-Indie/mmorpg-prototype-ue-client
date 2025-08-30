@@ -77,6 +77,12 @@ void UItemManager::SubscribeToNetworkManager()
 
 void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 {
+	// Process time sync data first
+	//if (gameInstance && gameInstance->GetTimeSyncService())
+	//{
+	//	JSONParser::ProcessTimeSyncFromHeader(ReceivedData, gameInstance->GetTimeSyncService());
+	//}
+
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
 	UE_LOG(LogTemp, Warning, TEXT("ItemManager: Received event type: %s"), *MessageData.eventType);
 
@@ -283,8 +289,8 @@ void UItemManager::SendPickUpItemRequest(int32 ItemUID)
 	}
 
 	
-	// Create the JSON string
-	FString JsonString = JSONParser::SerializeJson(TEXT("itemPickup"), HeaderData, BodyData);
+	// Use TimeSyncService for automatic clientSendMs with correct server type
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync(TEXT("itemPickup"), HeaderData, BodyData, gameInstance->GetTimeSyncService(), EServerType::ChunkServer);
 	
 	// Send the request to the server
 	networkManager->SendDataToChunkServer(JsonString);

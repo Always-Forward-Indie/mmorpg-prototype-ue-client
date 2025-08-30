@@ -55,6 +55,19 @@ void UMyGameInstance::Init()
 	SkillSystemManager = NewObject<USkillSystemManager>(this);
 	CombatNetworkHandler = NewObject<UCombatNetworkHandler>(this);
 
+	// Initialize time sync service
+	TimeSyncService = NewObject<UTimeSyncService>(this);
+	if (TimeSyncService)
+	{
+		TimeSyncService->SetWorldContext(GetWorld());
+		TimeSyncService->Initialize();
+		UE_LOG(LogTemp, Warning, TEXT("TimeSyncService initialized with world context"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("Failed to create TimeSyncService"));
+	}
+
 	UE_LOG(LogTemp, Warning, TEXT("GameInstance Init called"));
 
 	// Load the LoginLevel after some delay to prevent issue with the loading screen not showing up as viewport is not yet created
@@ -1004,19 +1017,19 @@ void UMyGameInstance::UpdateMobHealth(int32 TargetId, int32 NewHealth, int32 New
 	//		// Show damage numbers if damaged
 	//		//if (bIsDamaged && DamageDealt > 0)
 	//		//{
-	//		//	FVector HitLoc = MOB->GetActorLocation() + FVector(0, 0, 120);
-	//		//	
-	//		//	if (UIManager && UIManager->GetFCTManager())
-	//		//	{
-	//		//		UE_LOG(LogTemp, Warning, TEXT("Showing mob damage: %d at location %s"), 
-	//		//			DamageDealt, *HitLoc.ToString());
-	//		//		UIManager->GetFCTManager()->ShowDamage(HitLoc, DamageDealt, false, EDamageType::Physical);
-	//		//	}
-	//		//	else
-	//		//	{
-	//		//		UE_LOG(LogTemp, Error, TEXT("Cannot show damage: FCT Manager is invalid"));
-	//		//	}
-	//		//}
+	//	//FVector HitLoc = MOB->GetActorLocation() + FVector(0, 0, 120);
+	//	//	
+	//	//	if (UIManager && UIManager->GetFCTManager())
+	//	//	{
+	//	//		UE_LOG(LogTemp, Warning, TEXT("Showing mob damage: %d at location %s"), 
+	//	//			DamageDealt, *HitLoc.ToString());
+	//	//		UIManager->GetFCTManager()->ShowDamage(HitLoc, DamageDealt, false, EDamageType::Physical);
+	//	//	}
+	//	//	else
+	//	//	{
+	//	//		UE_LOG(LogTemp, Error, TEXT("Cannot show damage: FCT Manager is invalid"));
+	//	//	}
+	//	//}
 	//	}
 	//}
 }
@@ -1143,5 +1156,24 @@ void UMyGameInstance::SetInventoryManager(UInventoryManager* NewInventoryManager
 	else
 	{
 		UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Cannot set null Inventory Manager"));
+	}
+}
+
+UTimeSyncService* UMyGameInstance::GetTimeSyncService()
+{
+	return TimeSyncService;
+}
+
+void UMyGameInstance::ProcessTimeSyncData(const FMessageDataStruct& MessageData)
+{
+	// Process time sync data from server response
+	if (TimeSyncService && !MessageData.timestamp.IsEmpty() && MessageData.serverRecvMs > 0 && MessageData.serverSendMs > 0)
+	{
+		// Use timestamp as request ID since we don't have a proper request ID in the current structure
+		FString RequestId = MessageData.timestamp;
+		TimeSyncService->UpdateTimeSyncData(RequestId, MessageData.serverRecvMs, MessageData.serverSendMs);
+		
+		UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Updated time sync data - RequestId: %s, ServerRecv: %lld, ServerSend: %lld"),
+			*RequestId, MessageData.serverRecvMs, MessageData.serverSendMs);
 	}
 }

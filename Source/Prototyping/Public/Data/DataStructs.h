@@ -103,6 +103,74 @@ struct FMessageDataStruct
     FString message;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Packet Service Data Struct")
 	FString timestamp = "";
+    
+    // Time sync fields for lag compensation
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Packet Service Data Struct")
+    int64 clientSendMs = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Packet Service Data Struct")
+    int64 serverRecvMs = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Packet Service Data Struct")
+    int64 serverSendMs = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Packet Service Data Struct")
+    int64 clientSendMsEcho = 0;
+};
+
+// New unified network header structure for all client-server communication
+USTRUCT(BlueprintType)
+struct FNetworkHeaderStruct
+{
+    GENERATED_BODY()
+
+    // Event type identifier
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Network Header")
+    FString eventType = "";
+
+    // Response status (for server responses)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Network Header")
+    FString status = "";
+
+    // Client authentication
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Network Header")
+    int32 clientId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Network Header")
+    FString hash = "";
+
+    // Request ID for matching request-response pairs
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Network Header")
+    FString requestId = "";
+
+    // Time sync for lag compensation
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Network Header")
+    int64 clientSendMs = 0;
+
+    // Server response time fields (only in server responses)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Network Header")
+    int64 serverRecvMs = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Network Header")
+    int64 serverSendMs = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Network Header")
+    int64 clientSendMsEcho = 0;
+
+    // Optional message for errors or additional info
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Network Header")
+    FString message = "";
+
+    FNetworkHeaderStruct()
+    {
+        eventType = "";
+        status = "";
+        clientId = 0;
+        hash = "";
+        requestId = "";
+        clientSendMs = 0;
+        serverRecvMs = 0;
+        serverSendMs = 0;
+        clientSendMsEcho = 0;
+        message = "";
+    }
 };
 
 USTRUCT(BlueprintType)

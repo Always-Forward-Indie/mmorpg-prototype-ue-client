@@ -8,6 +8,7 @@
 // Forward declarations
 class UCombatSystemManager;
 class UNetworkManager;
+class UTimeSyncService;
 
 // Skill data structure
 USTRUCT(BlueprintType)
@@ -59,6 +60,7 @@ struct FSkillData
 /**
  * Manages skill execution, cooldowns, and casting
  * Separate from combat system to handle skill-specific logic
+ * Uses TimeSyncService for accurate cooldown calculations
  */
 UCLASS(BlueprintType)
 class PROTOTYPING_API USkillSystemManager : public UObject
@@ -123,4 +125,10 @@ private:
 
     // Helper to get current world time
     float GetWorldTime() const;
+
+    // Helper to get server-synchronized time for accurate cooldown calculations
+    float GetSynchronizedWorldTime() const;
+
+    // Helper to get TimeSyncService instance
+    UTimeSyncService* GetTimeSyncService() const;
 };

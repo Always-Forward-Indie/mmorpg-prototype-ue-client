@@ -470,6 +470,12 @@ void UHarvestManager::HideLootWindow()
 
 void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 {
+	// Process time sync data first
+	//if (gameInstance && gameInstance->GetTimeSyncService())
+	//{
+	//	JSONParser::ProcessTimeSyncFromHeader(ReceivedData, gameInstance->GetTimeSyncService());
+	//}
+
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
 	UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Received event type: %s"), *MessageData.eventType);
 
@@ -642,8 +648,8 @@ void UHarvestManager::SendHarvestStartRequest(int32 CorpseUID)
 	TSharedPtr<FJsonValueNumber> CorpseUIDValue = MakeShareable(new FJsonValueNumber(CorpseUID));
 	BodyData.Add(TEXT("corpseUID"), CorpseUIDValue);
 	
-	// Create the JSON string
-	FString JsonString = JSONParser::SerializeJson(TEXT("harvestStart"), HeaderData, BodyData);
+	// Create the JSON string with automatic clientSendMs and correct server type
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync(TEXT("harvestStart"), HeaderData, BodyData, gameInstance->GetTimeSyncService(), EServerType::ChunkServer);
 	
 	// Send the request to the server
 	networkManager->SendDataToChunkServer(JsonString);
@@ -693,8 +699,8 @@ void UHarvestManager::SendLootPickupRequest(int32 CorpseUID, const TArray<FCorps
 	TSharedPtr<FJsonValueArray> RequestedItemsArray = MakeShareable(new FJsonValueArray(ItemsArray));
 	BodyData.Add(TEXT("requestedItems"), RequestedItemsArray);
 	
-	// Create the JSON string
-	FString JsonString = JSONParser::SerializeJson(TEXT("corpseLootPickup"), HeaderData, BodyData);
+	// Create the JSON string with automatic clientSendMs and correct server type
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync(TEXT("corpseLootPickup"), HeaderData, BodyData, gameInstance->GetTimeSyncService(), EServerType::ChunkServer);
 	
 	// Send the request to the server
 	networkManager->SendDataToChunkServer(JsonString);
@@ -732,8 +738,8 @@ void UHarvestManager::SendLootInspectRequest(int32 CorpseUID)
 	TSharedPtr<FJsonValueNumber> CorpseUIDValue = MakeShareable(new FJsonValueNumber(CorpseUID));
 	BodyData.Add(TEXT("corpseUID"), CorpseUIDValue);
 	
-	// Create the JSON string
-	FString JsonString = JSONParser::SerializeJson(TEXT("corpseLootInspect"), HeaderData, BodyData);
+	// Create the JSON string with automatic clientSendMs and correct server type
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync(TEXT("corpseLootInspect"), HeaderData, BodyData, gameInstance->GetTimeSyncService(), EServerType::ChunkServer);
 	
 	// Send the request to the server
 	networkManager->SendDataToChunkServer(JsonString);

@@ -63,6 +63,8 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UFloatingCombatTextManager* GetFCTManager() const { return FCTManager; }
 
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void CreateGameVersionWidget();
 
 protected:
 	virtual void BeginPlay() override;
@@ -89,8 +91,6 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager")
 	TSubclassOf<UUserWidget> GameVersionWidgetClass;
 
-	UFUNCTION(BlueprintCallable, Category = "UI Manager")
-	void CreateGameVersionWidget();
 
 	// UI widgets
 	UPROPERTY(BlueprintReadOnly, Category = "UI Manager")

@@ -10,6 +10,7 @@
 #include "Gameplay/Items/ItemManager.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "UI/UIManager.h"
+#include "Services/TimeSyncService.h"
 
 #include <Kismet/GameplayStatics.h>
 #include "Blueprint/UserWidget.h"
@@ -132,6 +133,10 @@ public:
 
 	UPROPERTY()
 	class UCombatNetworkHandler* CombatNetworkHandler;
+
+	// Time synchronization service
+	UPROPERTY()
+	UTimeSyncService* TimeSyncService;
 
 	TMap<int32, FClientDataStruct> ConnectedPlayers;
 
@@ -385,6 +390,14 @@ public:
 		// Set inventory manager reference
 		UFUNCTION(BlueprintCallable, Category = "Network")
 		void SetInventoryManager(UInventoryManager* NewInventoryManager);
+
+		// get time sync service
+		UFUNCTION(BlueprintCallable, Category = "Network")
+		UTimeSyncService* GetTimeSyncService();
+
+		// Process time sync data from server responses
+		UFUNCTION(BlueprintCallable, Category = "Network")
+		void ProcessTimeSyncData(const FMessageDataStruct& MessageData);
 
 	private:
 	// Helper function

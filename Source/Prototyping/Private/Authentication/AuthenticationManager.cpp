@@ -1,6 +1,5 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "Authentication/AuthenticationManager.h"
 #include "MyGameInstance.h"
 
@@ -24,6 +23,13 @@ void UAuthenticationManager::Initialize(UNetworkManager* NetworkManager, UPingMa
 	if (gameInstance)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("GameInstance found"));
+		
+		// Set up PingManager with TimeSyncService integration
+		if (pingManager)
+		{
+			pingManager->SetTimeSyncService(gameInstance->GetTimeSyncService());
+			UE_LOG(LogTemp, Warning, TEXT("AuthenticationManager: PingManager configured with TimeSyncService"));
+		}
 	}
 	else
 	{
@@ -161,41 +167,6 @@ bool UAuthenticationManager::IsPasswordValueValid(const FString& Password)
 	return true;
 }
 
-// Add receive ping time
-void UAuthenticationManager::AddReceivePingTime(const FString& EventType, const FDateTime& ReceiveTime)
-{
-	// Add the received timestamp to the array, indexed by event type
-	if (!ReceiveTimes.Contains(EventType))
-	{
-		ReceiveTimes.Add(EventType, TArray<FDateTime>());
-	}
-	ReceiveTimes[EventType].Add(ReceiveTime);
-
-	// Check if there are sufficient send and receive timestamps for this event type
-	if (SendTimes.Contains(EventType) && ReceiveTimes.Contains(EventType) &&
-		SendTimes[EventType].Num() >= PingPacketsCount && ReceiveTimes[EventType].Num() >= PingPacketsCount &&
-		pingManager)
-	{
-		// Calculate average ping time using the send and receive timestamps for this event type
-		pingManager->CalculatePingTime(SendTimes[EventType], ReceiveTimes[EventType], "Login Server");
-
-		// Clear the arrays to start collecting new values (assuming one-to-one correspondence)
-		SendTimes[EventType].Empty();
-		ReceiveTimes[EventType].Empty();
-	}
-}
-
-// Add send ping time
-void UAuthenticationManager::AddSendPingTime(const FString& EventType, const FDateTime& SendTime)
-{
-	// Add the send timestamp to the array, indexed by event type
-	if (!SendTimes.Contains(EventType))
-	{
-		SendTimes.Add(EventType, TArray<FDateTime>());
-	}
-	SendTimes[EventType].Add(SendTime);
-}
-
 // send login request to the server
 void UAuthenticationManager::SendLoginRequest(const FString& Username, const FString& Password)
 {
@@ -209,7 +180,8 @@ void UAuthenticationManager::SendLoginRequest(const FString& Username, const FSt
 	BodyData.Add("login", UsernameValue);
 	BodyData.Add("password", PasswordValue);
 
-	FString JsonString = JSONParser::SerializeJson("authentificationClient", HeaderData, BodyData);
+	// Use TimeSyncService for automatic clientSendMs with correct server type
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync("authentificationClient", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::LoginServer);
 
 	if(networkManager)
 	{
@@ -218,9 +190,6 @@ void UAuthenticationManager::SendLoginRequest(const FString& Username, const FSt
 		{
 			if (networkManager != nullptr)
 			{
-				// add send time
-				//AddSendPingTime("authentificationClient", FDateTime::UtcNow());
-
 				// Send the JSON string to the login server
 				networkManager->SendDataToLoginServer(JsonString);
 			}
@@ -242,13 +211,11 @@ void UAuthenticationManager::SendCharacterListRequest(FClientDataStruct& ClientD
 
 	TMap<FString, TSharedPtr<FJsonValue>> BodyData;
 
-	FString JsonString = JSONParser::SerializeJson("getCharactersList", HeaderData, BodyData);
+	// Use TimeSyncService for automatic clientSendMs with correct server type
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync("getCharactersList", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::LoginServer);
 
 	if (networkManager != nullptr)
 	{
-		// add send time
-		//AddSendPingTime("getCharactersList", FDateTime::UtcNow());
-
 		// Send the JSON string to the login server
 		networkManager->SendDataToLoginServer(JsonString);
 	}
@@ -271,13 +238,11 @@ void UAuthenticationManager::SendLeaveGameRequest(FClientDataStruct& ClientData)
 
 	BodyData.Add("characterId", CharacterIDValue);
 
-	FString JsonString = JSONParser::SerializeJson("disconnectClient", HeaderData, BodyData);
+	// Use TimeSyncService for automatic clientSendMs with correct server type
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync("disconnectClient", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::LoginServer);
 
 	if (networkManager != nullptr)
 	{
-		// add send time
-		//AddSendPingTime("disconnectClient", FDateTime::UtcNow());
-
 		// Send the JSON string to the login server
 		networkManager->SendDataToLoginServer(JsonString);
 	}
@@ -289,27 +254,34 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 
 	// Deserialize the received JSON string to get MessageData struct
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
+
 	// Deserialize the received JSON string to get ClientData struct
 	FClientDataStruct ClientData = JSONParser::DeserializeClientData(ReceivedData);
 
+	// If authentication is successful
 	if (MessageData.eventType == "authentificationClient" && MessageData.status == "success" && ClientData.clientId != 0 && ClientData.hash != "") {
 		if (gameInstance) {
-			gameInstance->OnLoginResponseReceived.Broadcast(ClientData.clientId, MessageData.message);
+			UE_LOG(LogTemp, Warning, TEXT("Login Success: Client ID: %d, Hash: %s"), ClientData.clientId, *ClientData.hash);
+
+			// Set the client data
 			gameInstance->SetCurrentClientID(ClientData.clientId);
 			gameInstance->SetCurrentClientHash(ClientData.hash);
-			// Send the character list request
+
+			// Request characters list
 			SendCharacterListRequest(ClientData);
 		}
 	}
-	else if(MessageData.eventType == "authentificationClient" && MessageData.status == "error"){
-		gameInstance->OnLoginResponseReceived.Broadcast(ClientData.clientId, MessageData.message);
-		UE_LOG(LogTemp, Error, TEXT("Login failed"));
+
+	// Handle authentication errors
+	if (MessageData.eventType == "authentificationClient" && MessageData.status == "error") {
+		UE_LOG(LogTemp, Error, TEXT("Login Error: %s"), *MessageData.message);
+		// Handle error (show message to user, etc.)
 	}
 
 	// if event type is get character list
 	if (MessageData.eventType == "getCharactersList" && MessageData.status == "success") {
 		// Deserialize the received JSON string to get characters list
-		TArray<FCharacterDataStruct> CharactersList = JSONParser::DeserializeLoginCharactersList(ReceivedData);
+			TArray<FCharacterDataStruct> CharactersList = JSONParser::DeserializeLoginCharactersList(ReceivedData);
 		// Set the characters list to the login screen UI
 		if (gameInstance) {
 			gameInstance->OnLoginResponseReceived.Broadcast(gameInstance->GetCurrentClientID(), MessageData.message);
@@ -325,57 +297,24 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 		UE_LOG(LogTemp, Error, TEXT("Character list request failed"));
 	}
 
-	// If the ping manager is valid, calculate the ping time
-	if (pingManager != nullptr && MessageData.eventType == "pingClient") {
-		// Process the received data here
-		AddReceivePingTime(MessageData.eventType, FDateTime::UtcNow());
-	}
-}
-
-void UAuthenticationManager::SendPingRequest()
-{
-	// Create the header JSON object
-	TSharedPtr<FJsonObject> HeaderObject = MakeShareable(new FJsonObject);
-	HeaderObject->SetStringField("eventType", "pingClient");
-
-	// Create the main JSON object and add header and body
-	TSharedPtr<FJsonObject> MainJsonObject = MakeShareable(new FJsonObject);
-	MainJsonObject->SetObjectField("header", HeaderObject);
-
-	// Serialize the JSON object to a string
-	FString OutputString;
-	TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer =
-		TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&OutputString);
-	FJsonSerializer::Serialize(MainJsonObject.ToSharedRef(), Writer);
-
-	// Удалим все символы перевода строки
-	OutputString.ReplaceInline(TEXT("\n"), TEXT(""));
-	OutputString.ReplaceInline(TEXT("\r"), TEXT(""));
-
-
-	if (networkManager != nullptr)
-	{
-		// add send time
-		AddSendPingTime("pingClient", FDateTime::UtcNow());
-
-		networkManager->SendDataToLoginServer(OutputString);
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("Network Manager not found"));
-	}
+	// Legacy ping handling is no longer needed - TimeSyncService handles ping automatically
+	// The old ping calculation code has been removed in favor of TimeSyncService integration
 }
 
 void UAuthenticationManager::StartPing()
 {
-	if (worldContext)
+	if (worldContext && pingManager)
 	{
-		worldContext->GetTimerManager().ClearTimer(NetworkServersPingTimerHandle);
-		worldContext->GetTimerManager().SetTimer(NetworkServersPingTimerHandle, this, &UAuthenticationManager::SendPingRequest, PingTimeout, true);
-		UE_LOG(LogTemp, Warning, TEXT("Ping timer for Login server set up successfully."));
+		// Set world context for PingManager
+		pingManager->SetWorldContext(worldContext);
+		
+		// Start the new TimeSyncService-based ping updates
+		pingManager->StartPingUpdates();
+		
+		UE_LOG(LogTemp, Warning, TEXT("AuthenticationManager: Started TimeSyncService-based ping updates"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("GetWorld() returned nullptr, ping timer for servers not set."));
+		UE_LOG(LogTemp, Warning, TEXT("AuthenticationManager: Cannot start ping - missing worldContext or pingManager"));
 	}
 }

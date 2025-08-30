@@ -6,6 +6,9 @@
 #include "Sockets.h"
 #include "SocketSubsystem.h"
 
+// Forward declaration
+class UTimeSyncService;
+
 /**
  * 
  */
@@ -15,6 +18,7 @@ class PROTOTYPING_API NetworkSenderWorker : public FRunnable
 		FSocket* Socket;
 		bool bRunThread;
 		TQueue<FString, EQueueMode::Mpsc> DataQueue; // Thread-safe queue for messages
+		UTimeSyncService* TimeSyncService; // Reference to TimeSyncService for timestamp updates
 
 	public:
 		NetworkSenderWorker(FSocket* InSocket);
@@ -27,4 +31,11 @@ class PROTOTYPING_API NetworkSenderWorker : public FRunnable
 		virtual void Exit() override;
 
 		void EnqueueDataForSending(const FString& Data);
+
+		// Set TimeSyncService reference for precise timestamp updates
+		void SetTimeSyncService(UTimeSyncService* InTimeSyncService);
+
+	private:
+		// Update clientSendMs timestamp right before sending for maximum accuracy
+		FString UpdateClientSendTimestamp(const FString& JsonData);
 };

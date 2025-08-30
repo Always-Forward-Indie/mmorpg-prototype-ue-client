@@ -6,6 +6,9 @@
 #include "Sockets.h"
 #include "SocketSubsystem.h"
 
+// Forward declaration
+class UTimeSyncService;
+
 /**
  * 
  */
@@ -15,6 +18,7 @@ private:
 	FSocket* Socket; // Socket to receive data on
     bool bRunThread; // Flag to control thread execution
     TQueue<FString, EQueueMode::Mpsc> DataQueue; // Thread-safe queue for messages
+    UTimeSyncService* TimeSyncService; // Reference to TimeSyncService for timestamp updates
 
 public:
     // Constructor
@@ -25,6 +29,9 @@ public:
     // Method to safely retrieve data from the queue
     bool GetData(FString& OutData);
 
+    // Set TimeSyncService reference for precise timestamp updates
+    void SetTimeSyncService(UTimeSyncService* InTimeSyncService);
+
     // FRunnable interface implementation
     virtual bool Init() override;
     virtual uint32 Run() override;
@@ -33,4 +40,8 @@ public:
 
     // Destructor
 	~NetworkReceiverWorker();
+
+private:
+    // Add clientRecvMs timestamp right after receiving for maximum accuracy
+    FString AddClientReceiveTimestamp(const FString& JsonData, int64 ClientRecvMs);
 };

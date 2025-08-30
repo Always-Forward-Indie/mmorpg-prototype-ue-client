@@ -12,7 +12,8 @@
 #include <Gameplay/UI/MessageBoxPopup.h>
 #include "NetworkManager.generated.h"
 
-
+// Forward declarations
+class UTimeSyncService;
 
 // Define a delegate or event signature
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnLoginServerDataReceived, const FString&, Data);
@@ -126,6 +127,12 @@ public:
 	void PollGameServerNetworkData();
 	void PollChunkServerNetworkData();
 	void Shutdown();
+
+    // Process incoming data and extract time sync information
+    void ProcessIncomingData(const FString& ReceivedData);
+
+    // Get TimeSyncService instance
+    UTimeSyncService* GetTimeSyncService();
 
 	UFUNCTION()
 	void OnLoginServerConnectionRetry();

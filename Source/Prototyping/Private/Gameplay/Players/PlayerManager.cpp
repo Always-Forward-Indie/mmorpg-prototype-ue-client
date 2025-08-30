@@ -31,6 +31,13 @@ void UPlayerManager::Initialize(UNetworkManager* NetworkManager, UPingManager* P
 		if (gameInstance && IsValid(gameInstance))
 		{
 			UE_LOG(LogTemp, Warning, TEXT("GameInstance found"));
+			
+			// Set up PingManager with TimeSyncService integration
+			if (pingManager)
+			{
+				pingManager->SetTimeSyncService(gameInstance->GetTimeSyncService());
+				UE_LOG(LogTemp, Warning, TEXT("PlayerManager: PingManager configured with TimeSyncService"));
+			}
 		}
 		else
 		{
@@ -89,41 +96,6 @@ void UPlayerManager::SetWorldContext(UWorld* World)
 	worldContext = World;
 }
 
-// Add receive ping time
-void UPlayerManager::AddReceivePingTime(const FString& EventType, const FDateTime& ReceiveTime)
-{
-	// Add the received timestamp to the array, indexed by event type
-	if (!ReceiveTimes.Contains(EventType))
-	{
-		ReceiveTimes.Add(EventType, TArray<FDateTime>());
-	}
-	ReceiveTimes[EventType].Add(ReceiveTime);
-
-	// Check if there are sufficient send and receive timestamps for this event type
-	if (SendTimes.Contains(EventType) && ReceiveTimes.Contains(EventType) &&
-		SendTimes[EventType].Num() >= PingPacketsCount && ReceiveTimes[EventType].Num() >= PingPacketsCount &&
-		pingManager)
-	{
-		// Calculate average ping time using the send and receive timestamps for this event type
-		pingManager->CalculatePingTime(SendTimes[EventType], ReceiveTimes[EventType], "Game Server");
-
-		// Clear the arrays to start collecting new values (assuming one-to-one correspondence)
-		SendTimes[EventType].Empty();
-		ReceiveTimes[EventType].Empty();
-	}
-}
-
-// Add send ping time
-void UPlayerManager::AddSendPingTime(const FString& EventType, const FDateTime& SendTime)
-{
-	// Add the send timestamp to the array, indexed by event type
-	if (!SendTimes.Contains(EventType))
-	{
-		SendTimes.Add(EventType, TArray<FDateTime>());
-	}
-	SendTimes[EventType].Add(SendTime);
-}
-
 // Process game server data
 void UPlayerManager::ProcessGameServerData(const FString& ReceivedData)
 {
@@ -156,12 +128,6 @@ void UPlayerManager::ProcessGameServerData(const FString& ReceivedData)
 				gameInstance->HandlePlayerDisconnection(ClientData.clientId);
 			}
 		}
-	}
-
-	// If the ping manager is valid, calculate the ping time
-	if (pingManager != nullptr && MessageData.eventType == "pingClient") {
-		// Process the received data here
-		AddReceivePingTime(MessageData.eventType, FDateTime::UtcNow());
 	}
 }
 
@@ -207,15 +173,6 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 		UE_LOG(LogTemp, Error, TEXT("PlayerManager: Empty event type"));
 		return;
 	}
-
-	//// Check if this is a combat event - if so, let CombatNetworkHandler handle it
-	//if (IsCombatEvent(MessageData.eventType))
-	//{
-	//	UE_LOG(LogTemp, Log, TEXT("PlayerManager: Delegating combat event '%s' to CombatNetworkHandler"), *MessageData.eventType);
-	//	// Combat events are handled by CombatNetworkHandler which is already subscribed to the same event
-	//	// No need to process them here
-	//	return;
-	//}
 
 	// Deserialize the received JSON string to get ClientData struct
 	FClientDataStruct ClientData = JSONParser::DeserializeClientData(ReceivedData);
@@ -324,11 +281,23 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 			UE_LOG(LogTemp, Error, TEXT("PlayerManager: GameInstance is null or invalid in disconnectClient"));
 		}
 	}
+}
 
-	// If the ping manager is valid, calculate the ping time
-	if (pingManager != nullptr && MessageData.eventType == "pingClient") {
-		// Process the received data here
-		AddReceivePingTime(MessageData.eventType, FDateTime::UtcNow());
+void UPlayerManager::StartPing()
+{
+	if (worldContext && pingManager)
+	{
+		// Set world context for PingManager
+		pingManager->SetWorldContext(worldContext);
+		
+		// Start the new TimeSyncService-based ping updates
+		pingManager->StartPingUpdates();
+		
+		UE_LOG(LogTemp, Warning, TEXT("PlayerManager: Started TimeSyncService-based ping updates"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PlayerManager: Cannot start ping - missing worldContext or pingManager"));
 	}
 }
 
@@ -349,7 +318,8 @@ void UPlayerManager::SendJoinGameRequest(const FClientDataStruct& ClientData)
 	TSharedPtr<FJsonValueNumber> CharacterIDValue = MakeShareable(new FJsonValueNumber(ClientData.characterData.characterId));
 	BodyData.Add("characterId", CharacterIDValue);
 
-	FString JsonString = JSONParser::SerializeJson("joinGame", HeaderData, BodyData);
+	// Use TimeSyncService for automatic clientSendMs with correct server type
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync("joinGame", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::GameServer);
 
 	if (networkManager != nullptr)
 	{
@@ -381,7 +351,8 @@ void UPlayerManager::SendJoinCharacterChunkRequest(const FClientDataStruct& Clie
 	// Add the character ID to the body data
 	BodyData.Add("id", CharacterIDValue);
 
-	FString JsonString = JSONParser::SerializeJson("joinGameCharacter", HeaderData, BodyData);
+	// Use TimeSyncService for automatic clientSendMs with correct server type
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync("joinGameCharacter", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::ChunkServer);
 
 	if (networkManager != nullptr)
 	{
@@ -413,7 +384,8 @@ void UPlayerManager::SendJoinClientChunkRequest(const FClientDataStruct& ClientD
 	// Add the character ID to the body data
 	BodyData.Add("id", CharacterIDValue);
 
-	FString JsonString = JSONParser::SerializeJson("joinGameClient", HeaderData, BodyData);
+	// Use TimeSyncService for automatic clientSendMs
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync("joinGameClient", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr);
 
 	if (networkManager != nullptr)
 	{
@@ -449,11 +421,11 @@ void UPlayerManager::SendGetConnectedPlayersRequest(FClientDataStruct& ClientDat
 
 	BodyData.Add("characterId", CharacterIDValue);
 
-	// Get Connected Characters
-	FString getConnectedCharacters = JSONParser::SerializeJson("getConnectedCharacters", HeaderData, BodyData);
+	// Get Connected Characters - это ChunkServer
+	FString getConnectedCharacters = JSONParser::SerializeJsonWithTimeSync("getConnectedCharacters", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::ChunkServer);
 
-	// Get spawn zones and spawn mobs
-	FString getSpawnZones = JSONParser::SerializeJson("getSpawnZones", HeaderData, BodyData);
+	// Get spawn zones and spawn mobs - это тоже ChunkServer
+	FString getSpawnZones = JSONParser::SerializeJsonWithTimeSync("getSpawnZones", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::ChunkServer);
 
 	// Validate JSON strings before sending
 	if (getConnectedCharacters.IsEmpty() || getSpawnZones.IsEmpty())
@@ -496,7 +468,20 @@ void UPlayerManager::SendMovePlayerRequest(FClientDataStruct& ClientData)
 	BodyData.Add("posZ", PositionZValue);
 	BodyData.Add("rotZ", RotationZValue);
 
-	FString JsonString = JSONParser::SerializeJson("moveCharacter", HeaderData, BodyData);
+	// Debug logging to check TimeSyncService availability
+	UTimeSyncService* TimeSyncService = gameInstance ? gameInstance->GetTimeSyncService() : nullptr;
+	if (!TimeSyncService)
+	{
+		UE_LOG(LogTemp, Error, TEXT("PlayerManager::SendMovePlayerRequest - TimeSyncService is null! gameInstance: %s"),
+			gameInstance ? TEXT("Valid") : TEXT("Null"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PlayerManager::SendMovePlayerRequest - TimeSyncService is available"));
+	}
+
+	// Use TimeSyncService for automatic clientSendMs with correct server type
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync("moveCharacter", HeaderData, BodyData, TimeSyncService, EServerType::ChunkServer);
 
 	if (networkManager != nullptr)
 	{
@@ -526,7 +511,8 @@ void UPlayerManager::SendLeaveGameRequest(FClientDataStruct& ClientData)
 
 	BodyData.Add("id", CharacterIDValue);
 
-	FString JsonString = JSONParser::SerializeJson("disconnectClient", HeaderData, BodyData);
+	// Use TimeSyncService for automatic clientSendMs with correct server type
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync("disconnectClient", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::LoginServer);
 
 	if (networkManager != nullptr)
 	{
@@ -537,55 +523,6 @@ void UPlayerManager::SendLeaveGameRequest(FClientDataStruct& ClientData)
 	}
 	else {
 		UE_LOG(LogTemp, Error, TEXT("Network manager not found"));
-	}
-}
-
-//send ping request
-void UPlayerManager::SendPingRequest()
-{
-	// Create the header JSON object
-	TSharedPtr<FJsonObject> HeaderObject = MakeShareable(new FJsonObject);
-	HeaderObject->SetStringField("eventType", "pingClient");
-
-	// Create the main JSON object and add header and body
-	TSharedPtr<FJsonObject> MainJsonObject = MakeShareable(new FJsonObject);
-	MainJsonObject->SetObjectField("header", HeaderObject);
-
-	// Serialize the JSON object to a string
-	FString OutputString;
-	TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer =
-		TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&OutputString);
-	FJsonSerializer::Serialize(MainJsonObject.ToSharedRef(), Writer);
-
-	// Удалим все символы перевода строки
-	OutputString.ReplaceInline(TEXT("\n"), TEXT(""));
-	OutputString.ReplaceInline(TEXT("\r"), TEXT(""));
-
-	if (networkManager != nullptr)
-	{
-		// add send time
-		AddSendPingTime("pingClient", FDateTime::UtcNow());
-
-		networkManager->SendDataToGameServer(OutputString);
-		networkManager->SendDataToChunkServer(OutputString);
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("Network Manager not found"));
-	}
-}
-
-void UPlayerManager::StartPing()
-{
-	if (worldContext)
-	{
-		worldContext->GetTimerManager().ClearTimer(NetworkServersPingTimerHandle);
-		worldContext->GetTimerManager().SetTimer(NetworkServersPingTimerHandle, this, &UPlayerManager::SendPingRequest, PingTimeout, true);
-		UE_LOG(LogTemp, Warning, TEXT("Ping timer for Game server set up successfully."));
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("GetWorld() returned nullptr, ping timer for servers not set."));
 	}
 }
 
@@ -611,8 +548,8 @@ void UPlayerManager::SendPlayerAttackRequest(const FClientDataStruct& ClientData
 	BodyData.Add("targetId", TargetIDValue);
 	BodyData.Add("targetType", TargetTypeIdValue);
 
-	// Serialize to JSON string with the correct event type
-	FString JsonString = JSONParser::SerializeJson("playerAttack", HeaderData, BodyData);
+	// Use TimeSyncService for automatic clientSendMs with correct server type
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync("playerAttack", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::ChunkServer);
 
 	if (networkManager != nullptr)
 	{

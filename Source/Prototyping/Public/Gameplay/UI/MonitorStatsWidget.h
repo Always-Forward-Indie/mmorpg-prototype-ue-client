@@ -20,15 +20,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "PING")
 	// set the login server ping value
 	void SetLoginServerPingValue(const FString& Value);
+	
 	UFUNCTION(BlueprintCallable, Category = "PING")
 	// set the game server ping value
 	void SetGameServerPingValue(const FString& Value);
+	
+	UFUNCTION(BlueprintCallable, Category = "PING")
+	// set the chunk server ping value
+	void SetChunkServerPingValue(const FString& Value);
 
 	UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
 	UTextBlock* LoginServerPingValue;
 
 	UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
 	UTextBlock* GameServerPingValue;
-
-
+	
+	UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
+	UTextBlock* ChunkServerPingValue;
 };

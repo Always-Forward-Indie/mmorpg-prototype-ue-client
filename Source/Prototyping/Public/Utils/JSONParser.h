@@ -6,6 +6,10 @@
 #include "Data/DataStructs.h"
 #include "Data/ItemStruct.h"
 
+// Forward declaration
+class UTimeSyncService;
+enum class EServerType : uint8;
+
 /**
  * 
  */
@@ -13,10 +17,25 @@ class PROTOTYPING_API JSONParser
 {
 public:
     static FString SerializeJson(const FString& EventType, const TMap<FString, TSharedPtr<FJsonValue>>& HeaderData, const TMap<FString, TSharedPtr<FJsonValue>>& BodyData);
+    
+    // New method with explicit TimeSyncService parameter
+    static FString SerializeJsonWithTimeSync(const FString& EventType, const TMap<FString, TSharedPtr<FJsonValue>>& HeaderData, const TMap<FString, TSharedPtr<FJsonValue>>& BodyData, UTimeSyncService* TimeSyncService);
+
+    // New method with explicit TimeSyncService parameter and server type
+    static FString SerializeJsonWithTimeSync(const FString& EventType, const TMap<FString, TSharedPtr<FJsonValue>>& HeaderData, const TMap<FString, TSharedPtr<FJsonValue>>& BodyData, UTimeSyncService* TimeSyncService, EServerType ServerType);
+
+    // Helper method to get TimeSyncService instance
+    static UTimeSyncService* GetTimeSyncService();
 
     static FClientDataStruct DeserializeClientData(const FString& JsonString);
     static FMessageDataStruct DeserializeMessageData(const FString& JsonString);
     static FString DeserializeEventTypeData(const FString& JsonString);
+
+    // New method to deserialize network header with time sync data
+    static FNetworkHeaderStruct DeserializeNetworkHeader(const FString& JsonString);
+
+    // Helper method to process time sync from network headers
+    static void ProcessTimeSyncFromHeader(const FString& JsonString, UTimeSyncService* TimeSyncService);
 
     static FPositionDataStruct DeserializePositionData(const TSharedPtr<FJsonObject>& PosObj);
     static TMap<FString, FAttributeDataStruct> DeserializeAttributesArray(const TArray<TSharedPtr<FJsonValue>>& JsonArray);

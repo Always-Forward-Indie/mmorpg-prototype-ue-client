@@ -26,14 +26,6 @@ private:
 	UNetworkManager* networkManager;
 	UMyGameInstance* gameInstance;
 
-	// Timer to ping servers
-	FTimerHandle NetworkServersPingTimerHandle;
-	TMap<FString, TArray<FDateTime>> ReceiveTimes; // Array to store ReceiveTime values for ping calculation
-	TMap<FString, TArray<FDateTime>> SendTimes; // Array to store SendTime values for ping calculation
-	// count of packets for ping calculation
-	int32 PingPacketsCount = 4;
-	float PingTimeout = 1.0f; // Ping timeout in seconds
-
 public:
 	UAuthenticationManager(const FObjectInitializer& ObjectInitializer);
 	void Initialize(UNetworkManager* NetworkManager, UPingManager* PingManager);
@@ -49,8 +41,6 @@ public:
 	bool IsLoginValueValid(const FString& Login);
 	bool IsPasswordValueValid(const FString& Password);
 
-	void SendPingRequest();
+	// Start TimeSyncService-based ping updates
 	void StartPing();
-	void AddReceivePingTime(const FString& EventType, const FDateTime& ReceiveTime);
-	void AddSendPingTime(const FString& EventType, const FDateTime& SendTime);
 };

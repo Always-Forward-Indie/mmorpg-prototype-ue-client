@@ -86,6 +86,12 @@ void UInventoryManager::SubscribeToNetworkManager()
 
 void UInventoryManager::ProcessGameServerData(const FString& ReceivedData)
 {
+	// Process time sync data first
+	//if (gameInstance && gameInstance->GetTimeSyncService())
+	//{
+	//	JSONParser::ProcessTimeSyncFromHeader(ReceivedData, gameInstance->GetTimeSyncService());
+	//}
+
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
 	UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Received event type: %s"), *MessageData.eventType);
 
@@ -390,8 +396,8 @@ void UInventoryManager::RequestInventoryData(int32 CharacterId)
 	TSharedPtr<FJsonValueNumber> CharacterIDValue = MakeShareable(new FJsonValueNumber(CharacterId));
 	BodyData.Add(TEXT("id"), CharacterIDValue);
 	
-	// Create the JSON string
-	FString JsonString = JSONParser::SerializeJson(TEXT("getPlayerInventory"), HeaderData, BodyData);
+	// Use TimeSyncService for automatic clientSendMs with correct server type
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync(TEXT("getPlayerInventory"), HeaderData, BodyData, gameInstance->GetTimeSyncService(), EServerType::ChunkServer);
 	
 	// Send the request to the server
 	networkManager->SendDataToChunkServer(JsonString);
@@ -521,8 +527,8 @@ void UInventoryManager::SendUseItemRequest(int32 ItemId, int32 Quantity)
 	TSharedPtr<FJsonValueNumber> QuantityValue = MakeShareable(new FJsonValueNumber(Quantity));
 	BodyData.Add(TEXT("quantity"), QuantityValue);
 	
-	// Create the JSON string
-	FString JsonString = JSONParser::SerializeJson(TEXT("useItem"), HeaderData, BodyData);
+	// Use TimeSyncService for automatic clientSendMs with correct server type
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync(TEXT("useItem"), HeaderData, BodyData, gameInstance->GetTimeSyncService(), EServerType::ChunkServer);
 	
 	// Send the request to the server
 	networkManager->SendDataToChunkServer(JsonString);
@@ -556,8 +562,8 @@ void UInventoryManager::SendDropItemRequest(int32 ItemId, int32 Quantity)
 	TSharedPtr<FJsonValueNumber> QuantityValue = MakeShareable(new FJsonValueNumber(Quantity));
 	BodyData.Add(TEXT("quantity"), QuantityValue);
 	
-	// Create the JSON string
-	FString JsonString = JSONParser::SerializeJson(TEXT("dropItem"), HeaderData, BodyData);
+	// Use TimeSyncService for automatic clientSendMs with correct server type
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync(TEXT("dropItem"), HeaderData, BodyData, gameInstance->GetTimeSyncService(), EServerType::ChunkServer);
 	
 	// Send the request to the server
 	networkManager->SendDataToChunkServer(JsonString);

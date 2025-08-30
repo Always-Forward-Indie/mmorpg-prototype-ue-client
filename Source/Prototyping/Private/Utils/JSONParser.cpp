@@ -2,13 +2,38 @@
 
 
 #include "Utils/JSONParser.h"
+#include "Services/TimeSyncService.h"
+#include "MyGameInstance.h"
+#include "Engine/World.h"
 
+// Helper method to get TimeSyncService instance
+UTimeSyncService* JSONParser::GetTimeSyncService()
+{
+    // Try to get TimeSyncService from the current world's game instance
+    if (GWorld)
+    {
+        UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GWorld->GetGameInstance());
+        if (GameInstance)
+        {
+            return GameInstance->GetTimeSyncService();
+        }
+    }
+    return nullptr;
+}
 
 // serialize a json object to a string
  FString JSONParser::SerializeJson(const FString& EventType, const TMap<FString, TSharedPtr<FJsonValue>>& HeaderData, const TMap<FString, TSharedPtr<FJsonValue>>& BodyData)
 {
     TSharedPtr<FJsonObject> HeaderObject = MakeShareable(new FJsonObject);
     HeaderObject->SetStringField("eventType", EventType);
+
+    // Automatically add clientSendMs timestamp if TimeSyncService is available
+    UTimeSyncService* TimeSyncService = GetTimeSyncService();
+    if (TimeSyncService)
+    {
+        int64 ClientSendMs = TimeSyncService->GetCurrentClientTimeMs();
+        HeaderObject->SetNumberField("clientSendMs", ClientSendMs);
+    }
 
     for (const auto& Elem : HeaderData)
     {
@@ -39,11 +64,109 @@
 		TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&OutputString);
     FJsonSerializer::Serialize(MainJsonObject.ToSharedRef(), Writer);
 
-	// Удалим все символы перевода строки
+	// Remove any newline characters
 	OutputString.ReplaceInline(TEXT("\n"), TEXT(""));
 	OutputString.ReplaceInline(TEXT("\r"), TEXT(""));
 
     return OutputString;
+}
+
+// New method with explicit TimeSyncService parameter and server type
+FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TMap<FString, TSharedPtr<FJsonValue>>& HeaderData, const TMap<FString, TSharedPtr<FJsonValue>>& BodyData, UTimeSyncService* TimeSyncService, EServerType ServerType)
+{
+    TSharedPtr<FJsonObject> HeaderObject = MakeShareable(new FJsonObject);
+    HeaderObject->SetStringField("eventType", EventType);
+
+    // Generate request ID and register with TimeSyncService for ALL requests
+    FString RequestId;
+    if (TimeSyncService)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("JSONParser::SerializeJsonWithTimeSync - TimeSyncService available, calling GenerateAndRegisterSyncRequest for ServerType: %d, EventType: %s"), 
+            static_cast<int32>(ServerType), *EventType);
+            
+        // Generate request ID for every request without restrictions
+        RequestId = TimeSyncService->GenerateAndRegisterSyncRequest(ServerType);
+        
+        UE_LOG(LogTemp, Verbose, TEXT("JSONParser::SerializeJsonWithTimeSync - Generated RequestId: '%s' (IsEmpty: %s)"), 
+            *RequestId, RequestId.IsEmpty() ? TEXT("true") : TEXT("false"));
+        
+        if (!RequestId.IsEmpty())
+        {
+            // Add requestId to header but DO NOT set clientSendMs here
+            // NetworkSenderWorker will set the precise clientSendMs right before sending
+            HeaderObject->SetStringField("requestId", RequestId);
+            
+            UE_LOG(LogTemp, Verbose, TEXT("JSONParser::SerializeJsonWithTimeSync - Added requestId: %s (clientSendMs will be set by NetworkSenderWorker)"), 
+                *RequestId);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("JSONParser::SerializeJsonWithTimeSync - RequestId is empty, not adding time sync fields"));
+        }
+    }
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("TimeSyncService is null. Cannot add requestId to header."));
+	}
+
+    for (const auto& Elem : HeaderData)
+    {
+        HeaderObject->SetField(Elem.Key, Elem.Value);
+    }
+
+    TSharedPtr<FJsonObject> BodyObject = MakeShareable(new FJsonObject);
+
+    for (const auto& Elem : BodyData)
+    {
+        BodyObject->SetField(Elem.Key, Elem.Value);
+	}
+
+    TSharedPtr<FJsonObject> MainJsonObject = MakeShareable(new FJsonObject);
+
+    if (HeaderObject->Values.Num() > 0)
+    {
+        MainJsonObject->SetObjectField("header", HeaderObject);
+    }
+
+    if (BodyObject->Values.Num() > 0)
+    {
+        MainJsonObject->SetObjectField("body", BodyObject);
+    }
+
+    FString OutputString;
+	TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer =
+		TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&OutputString);
+    FJsonSerializer::Serialize(MainJsonObject.ToSharedRef(), Writer);
+
+	// Remove any newline characters
+	OutputString.ReplaceInline(TEXT("\n"), TEXT(""));
+	OutputString.ReplaceInline(TEXT("\r"), TEXT(""));
+
+    UE_LOG(LogTemp, Verbose, TEXT("JSONParser::SerializeJsonWithTimeSync - Final JSON (without clientSendMs): %s"), *OutputString);
+
+    return OutputString;
+}
+
+// Legacy method with automatic server type detection
+FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TMap<FString, TSharedPtr<FJsonValue>>& HeaderData, const TMap<FString, TSharedPtr<FJsonValue>>& BodyData, UTimeSyncService* TimeSyncService)
+{
+    // Determine server type based on event type
+    EServerType ServerType = EServerType::ChunkServer; // Default
+    
+    if (EventType == TEXT("authentificationClient") || 
+        EventType == TEXT("getCharactersList") ||
+        EventType == TEXT("disconnectClient"))
+    {
+        ServerType = EServerType::LoginServer;
+    }
+    else if (EventType == TEXT("joinGame") ||
+             EventType == TEXT("joinGameClient"))
+    {
+        ServerType = EServerType::GameServer;
+    }
+    // Everything else goes to ChunkServer by default
+    
+    return SerializeJsonWithTimeSync(EventType, HeaderData, BodyData, TimeSyncService, ServerType);
 }
 
 
@@ -217,6 +340,34 @@ FClientDataStruct JSONParser::DeserializeClientData(const FString& JsonString)
 			 {
 				 MessageData.timestamp = (*HeaderObject)->GetStringField(TEXT("timestamp"));
 			 }
+
+             // Parse time sync fields
+             if ((*HeaderObject)->HasField(TEXT("clientSendMs")))
+             {
+                 MessageData.clientSendMs = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("clientSendMs")));
+             }
+
+			 if ((*HeaderObject)->HasField(TEXT("clientSendMsEcho")))
+			 {
+				 MessageData.clientSendMs = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("clientSendMsEcho")));
+			 }
+
+			 if ((*HeaderObject)->HasField(TEXT("clientSendMsEcho")))
+			 {
+				 MessageData.clientSendMsEcho = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("clientSendMsEcho")));
+			 }
+
+             if ((*HeaderObject)->HasField(TEXT("serverRecvMs")))
+             {
+                 MessageData.serverRecvMs = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("serverRecvMs")));
+             }
+
+             if ((*HeaderObject)->HasField(TEXT("serverSendMs")))
+             {
+                 MessageData.serverSendMs = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("serverSendMs")));
+             }
+
+
 		 }
 	 }
 
@@ -560,21 +711,6 @@ FItemDropResponseStruct JSONParser::DeserializeItemDropResponse(const TSharedPtr
 	}
 
 	return ItemDropResponse;
-}
-
-// Parse item drop response from JSON string
-FItemDropResponseStruct JSONParser::DeserializeItemDropResponse(const FString& JsonString)
-{
-	TSharedPtr<FJsonObject> Root;
-	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
-	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) 
-		return FItemDropResponseStruct();
-	
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
-	if (!Body.IsValid())
-		return FItemDropResponseStruct();
-	
-	return JSONParser::DeserializeItemDropResponse(Body);
 }
 
 // Combat data deserializers
@@ -1500,4 +1636,150 @@ FSkillResultData JSONParser::DeserializeSkillResult(const FString& JsonString)
 		return FSkillResultData();
 
 	return JSONParser::DeserializeSkillResult(SkillResult);
+}
+
+// Deserialize network header with time sync data
+FNetworkHeaderStruct JSONParser::DeserializeNetworkHeader(const FString& JsonString)
+{
+    TSharedPtr<FJsonObject> JsonObject;
+    FNetworkHeaderStruct NetworkHeader;
+
+    // Convert the string to a JSON object
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+    if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
+    {
+        const TSharedPtr<FJsonObject>* HeaderObject = nullptr;
+        if (JsonObject->TryGetObjectField(TEXT("header"), HeaderObject) && HeaderObject != nullptr)
+        {
+            if ((*HeaderObject)->HasField(TEXT("eventType")))
+            {
+                NetworkHeader.eventType = (*HeaderObject)->GetStringField(TEXT("eventType"));
+            }
+
+            if ((*HeaderObject)->HasField(TEXT("status")))
+            {
+                NetworkHeader.status = (*HeaderObject)->GetStringField(TEXT("status"));
+            }
+
+            if ((*HeaderObject)->HasField(TEXT("clientId")))
+            {
+                NetworkHeader.clientId = (*HeaderObject)->GetIntegerField(TEXT("clientId"));
+            }
+
+            if ((*HeaderObject)->HasField(TEXT("hash")))
+            {
+                NetworkHeader.hash = (*HeaderObject)->GetStringField(TEXT("hash"));
+            }
+
+            if ((*HeaderObject)->HasField(TEXT("message")))
+            {
+                NetworkHeader.message = (*HeaderObject)->GetStringField(TEXT("message"));
+            }
+
+            // Check for requestIdEcho first (server response), then requestId (client request)
+            if ((*HeaderObject)->HasField(TEXT("requestIdEcho")))
+            {
+                NetworkHeader.requestId = (*HeaderObject)->GetStringField(TEXT("requestIdEcho"));
+            }
+            else if ((*HeaderObject)->HasField(TEXT("requestId")))
+            {
+                NetworkHeader.requestId = (*HeaderObject)->GetStringField(TEXT("requestId"));
+            }
+
+            // Time sync fields
+            if ((*HeaderObject)->HasField(TEXT("clientSendMs")))
+            {
+                NetworkHeader.clientSendMs = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("clientSendMs")));
+            }
+
+            if ((*HeaderObject)->HasField(TEXT("serverRecvMs")))
+            {
+                NetworkHeader.serverRecvMs = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("serverRecvMs")));
+            }
+
+            if ((*HeaderObject)->HasField(TEXT("serverSendMs")))
+            {
+                NetworkHeader.serverSendMs = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("serverSendMs")));
+            }
+
+            if ((*HeaderObject)->HasField(TEXT("clientSendMsEcho")))
+            {
+                NetworkHeader.clientSendMsEcho = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("clientSendMsEcho")));
+            }
+        }
+    }
+
+    return NetworkHeader;
+}
+
+// Helper method to process time sync from network headers
+//void JSONParser::ProcessTimeSyncFromHeader(const FString& JsonString, UTimeSyncService* TimeSyncService)
+//{
+//    if (!TimeSyncService)
+//    {
+//        return;
+//    }
+//
+//    FNetworkHeaderStruct NetworkHeader = DeserializeNetworkHeader(JsonString);
+//    
+//    // Check for Echo fields (response from server with requestIdEcho and clientSendMsEcho)
+//    if (!NetworkHeader.requestId.IsEmpty() && 
+//        NetworkHeader.serverRecvMs > 0 && 
+//        NetworkHeader.serverSendMs > 0)
+//    {
+//        // Server returns requestIdEcho as requestId field and includes timing data
+//        bool bUpdated = TimeSyncService->UpdateTimeSyncData(
+//            NetworkHeader.requestId, // This is actually requestIdEcho from server
+//            NetworkHeader.serverRecvMs,
+//            NetworkHeader.serverSendMs
+//        );
+//        
+//        if (bUpdated)
+//        {
+//            UE_LOG(LogTemp, Verbose, TEXT("JSONParser: Updated time sync for requestIdEcho: %s"), *NetworkHeader.requestId);
+//        }
+//    }
+//    // Also log clientSendMsEcho if present for validation
+//    if (NetworkHeader.clientSendMsEcho > 0)
+//    {
+//        UE_LOG(LogTemp, Verbose, TEXT("JSONParser: Received clientSendMsEcho: %lld"), NetworkHeader.clientSendMsEcho);
+//    }
+//}
+
+void JSONParser::ProcessTimeSyncFromHeader(const FString& JsonString, UTimeSyncService* TimeSyncService)
+{
+	if (!TimeSyncService)
+	{
+		return;
+	}
+
+	FNetworkHeaderStruct NetworkHeader = DeserializeNetworkHeader(JsonString);
+
+	// Приоритет requestIdEcho для ответов сервера
+	FString RequestIdToUse;
+	if (!NetworkHeader.requestId.IsEmpty())
+	{
+		RequestIdToUse = NetworkHeader.requestId; // Может быть requestIdEcho от сервера
+	}
+
+	// Обрабатываем только если есть серверные таймстампы
+	if (!RequestIdToUse.IsEmpty() &&
+		NetworkHeader.serverRecvMs > 0 &&
+		NetworkHeader.serverSendMs > 0)
+	{
+		bool bUpdated = TimeSyncService->UpdateTimeSyncData(
+			RequestIdToUse,
+			NetworkHeader.serverRecvMs,
+			NetworkHeader.serverSendMs
+		);
+
+		if (bUpdated)
+		{
+			UE_LOG(LogTemp, VeryVerbose, TEXT("JSONParser: Updated time sync for request: %s"), *RequestIdToUse);
+		}
+		else
+		{
+			UE_LOG(LogTemp, VeryVerbose, TEXT("JSONParser: Time sync update failed or filtered for: %s"), *RequestIdToUse);
+		}
+	}
 }

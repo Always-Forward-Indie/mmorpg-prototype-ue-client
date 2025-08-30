@@ -343,7 +343,8 @@ void UCombatSystemManager::SendAttackRequest(int32 AttackerId, int32 TargetId, c
     BodyData.Add(TEXT("skillSlug"), MakeShareable(new FJsonValueString(SkillSlug)));
     BodyData.Add(TEXT("targetType"), MakeShareable(new FJsonValueNumber(static_cast<int32>(TargetType))));
 
-    FString JsonString = JSONParser::SerializeJson(TEXT("playerAttack"), HeaderData, BodyData);
+    // Use TimeSyncService for automatic clientSendMs
+    FString JsonString = JSONParser::SerializeJsonWithTimeSync(TEXT("playerAttack"), HeaderData, BodyData, GameInstance->GetTimeSyncService());
     NetworkManager->SendDataToChunkServer(JsonString);
 
     UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Sent attack request - Attacker: %d, Target: %d, Skill: %s"), 

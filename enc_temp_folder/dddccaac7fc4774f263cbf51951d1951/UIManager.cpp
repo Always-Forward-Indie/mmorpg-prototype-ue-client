@@ -32,6 +32,8 @@ void UUIManager::BeginPlay()
 	
 	// UI creation is handled manually through Initialize() or CreateUIWidgets()
 	// This allows for better control over when UI is created
+
+	CreateGameVersionWidget();
 }
 
 void UUIManager::Initialize(UInventoryManager* InInventoryManager, UHarvestManager* InHarvestManager)

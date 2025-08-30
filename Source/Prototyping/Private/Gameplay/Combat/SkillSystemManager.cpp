@@ -3,6 +3,8 @@
 #include "Gameplay/Combat/ICombatable.h"
 #include "Networking/NetworkManager.h"
 #include "Engine/World.h"
+#include "Services/TimeSyncService.h"
+#include "MyGameInstance.h"
 
 USkillSystemManager::USkillSystemManager()
 {
@@ -113,7 +115,9 @@ bool USkillSystemManager::IsSkillOnCooldown(int32 CasterId, const FString& Skill
     {
         if (const float* EndTime = CasterCooldowns->Find(SkillSlug))
         {
-            return GetWorldTime() < *EndTime;
+            // Use server-synchronized time for more accurate cooldown checking
+            float CurrentTime = GetSynchronizedWorldTime();
+            return CurrentTime < *EndTime;
         }
     }
     return false;
@@ -125,7 +129,9 @@ float USkillSystemManager::GetSkillCooldownRemaining(int32 CasterId, const FStri
     {
         if (const float* EndTime = CasterCooldowns->Find(SkillSlug))
         {
-            float Remaining = *EndTime - GetWorldTime();
+            // Use server-synchronized time for accurate remaining time calculation
+            float CurrentTime = GetSynchronizedWorldTime();
+            float Remaining = *EndTime - CurrentTime;
             return FMath::Max(0.0f, Remaining);
         }
     }
@@ -137,7 +143,9 @@ void USkillSystemManager::StartSkillCooldown(int32 CasterId, const FString& Skil
     const FSkillData SkillData = GetSkillData(SkillSlug);
     if (SkillData.cooldown > 0.0f)
     {
-        float EndTime = GetWorldTime() + SkillData.cooldown;
+        // Use server-synchronized time for cooldown start
+        float CurrentTime = GetSynchronizedWorldTime();
+        float EndTime = CurrentTime + SkillData.cooldown;
         
         if (!SkillCooldowns.Contains(CasterId))
         {
@@ -146,8 +154,8 @@ void USkillSystemManager::StartSkillCooldown(int32 CasterId, const FString& Skil
         
         SkillCooldowns[CasterId].Add(SkillSlug, EndTime);
         
-        UE_LOG(LogTemp, Log, TEXT("SkillSystemManager: Started cooldown for %s (%.1fs)"), 
-            *SkillSlug, SkillData.cooldown);
+        UE_LOG(LogTemp, Log, TEXT("SkillSystemManager: Started cooldown for %s (%.1fs) at synchronized time %.3f"), 
+            *SkillSlug, SkillData.cooldown, CurrentTime);
     }
 }
 
@@ -190,4 +198,32 @@ float USkillSystemManager::GetWorldTime() const
         return CombatSystemManager->GetWorld()->GetTimeSeconds();
     }
     return 0.0f;
+}
+
+float USkillSystemManager::GetSynchronizedWorldTime() const
+{
+    // Try to get synchronized server time for more accurate calculations
+    UTimeSyncService* TimeSyncService = GetTimeSyncService();
+    if (TimeSyncService && TimeSyncService->IsTimeSyncValid())
+    {
+        // Convert server time to local time equivalent for consistency with existing cooldown system
+        int64 ServerTimeMs = TimeSyncService->GetEstimatedServerTimeMs();
+        return static_cast<float>(ServerTimeMs) / 1000.0f;
+    }
+    
+    // Fallback to local world time if sync service is not available
+    return GetWorldTime();
+}
+
+UTimeSyncService* USkillSystemManager::GetTimeSyncService() const
+{
+    if (CombatSystemManager && CombatSystemManager->GetWorld())
+    {
+        UMyGameInstance* GameInstance = Cast<UMyGameInstance>(CombatSystemManager->GetWorld()->GetGameInstance());
+        if (GameInstance)
+        {
+            return GameInstance->GetTimeSyncService();
+        }
+    }
+    return nullptr;
 }

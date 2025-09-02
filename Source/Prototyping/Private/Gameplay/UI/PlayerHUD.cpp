@@ -37,28 +37,3 @@ void UPlayerHUD::SetMana(float NewMana, float MaxMana)
         ManaBarTextValue->SetText(FText::FromString(ManaText));
     }
 }
-
-void UPlayerHUD::SetXP(float NewXP, float MaxXP)
-{
-    if (XPBar)
-    {
-        // Calculate percentage for progress bar
-        float Percentage = (MaxXP > 0.0f) ? (NewXP / MaxXP) : 0.0f;
-        XPBar->SetPercent(Percentage);
-    }
-
-    if (ExpBarTextValue)
-    {
-        // Format text as "current/max"
-        FString XPText = FString::Printf(TEXT("%.0f/%.0f"), NewXP, MaxXP);
-        ExpBarTextValue->SetText(FText::FromString(XPText));
-    }
-}
-
-void UPlayerHUD::SetLevel(int NewLevel)
-{
-    if (LevelText)
-    {
-        LevelText->SetText(FText::AsNumber(NewLevel));
-    }
-}

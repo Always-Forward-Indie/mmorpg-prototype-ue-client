@@ -2,8 +2,10 @@
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
 #include "UI/HarvestLootWidget.h"
+#include "Gameplay/UI/PlayerExperienceWidget.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Items/HarvestManager.h"
+#include "Gameplay/Player/ExperienceManager.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
 #include "Gameplay/UI/DamageTextWidget.h"
 #include "Blueprint/UserWidget.h"
@@ -17,8 +19,10 @@ UUIManager::UUIManager()
 	InventoryWidget = nullptr;
 	HarvestProgressWidget = nullptr;
 	HarvestLootWidget = nullptr;
+	ExperienceWidget = nullptr;
 	InventoryManager = nullptr;
 	HarvestManager = nullptr;
+	ExperienceManager = nullptr;
 	FCTManager = nullptr;
 	PlayerController = nullptr;
 	RootCanvas = nullptr;
@@ -34,7 +38,7 @@ void UUIManager::BeginPlay()
 	// This allows for better control over when UI is created
 }
 
-void UUIManager::Initialize(UInventoryManager* InInventoryManager, UHarvestManager* InHarvestManager)
+void UUIManager::Initialize(UInventoryManager* InInventoryManager, UHarvestManager* InHarvestManager, UExperienceManager* InExperienceManager)
 {
 	if (!InInventoryManager)
 	{
@@ -46,10 +50,12 @@ void UUIManager::Initialize(UInventoryManager* InInventoryManager, UHarvestManag
 
 	InventoryManager = InInventoryManager;
 	HarvestManager = InHarvestManager;
+	ExperienceManager = InExperienceManager;
 	
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Managers set - InventoryManager: %s, HarvestManager: %s"), 
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Managers set - InventoryManager: %s, HarvestManager: %s, ExperienceManager: %s"), 
 		InventoryManager ? TEXT("Valid") : TEXT("NULL"), 
-		HarvestManager ? TEXT("Valid") : TEXT("NULL"));
+		HarvestManager ? TEXT("Valid") : TEXT("NULL"),
+		ExperienceManager ? TEXT("Valid") : TEXT("NULL"));
 	
 	// Create UI widgets
 	CreateUIWidgets();
@@ -115,6 +121,9 @@ void UUIManager::CreateUIWidgets()
 	
 	// Create harvest widgets
 	CreateHarvestWidgets();
+
+	// Create experience widget
+	CreateExperienceWidget();
 
 	// Create game version widget
 	CreateGameVersionWidget();
@@ -282,4 +291,60 @@ void UUIManager::HandleInventoryToggle(const FInputActionValue& Value)
 	{
 		ToggleInventory();
 	}
+}
+
+void UUIManager::CreateExperienceWidget()
+{
+	if (!ExperienceWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: ExperienceWidgetClass is not set"));
+		return;
+	}
+
+	if (ExperienceWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: Experience widget already exists, removing old one"));
+		ExperienceWidget->RemoveFromParent();
+		ExperienceWidget = nullptr;
+	}
+
+	// Create the widget
+	ExperienceWidget = CreateWidget<UPlayerExperienceWidget>(GetWorld(), ExperienceWidgetClass);
+	if (!ExperienceWidget)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create experience widget"));
+		return;
+	}
+
+	// Add to viewport
+	ExperienceWidget->AddToViewport();
+
+	// Widget will be initialized later when character ID is available
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Experience widget created (will be initialized when character ID is available)"));
+}
+
+void UUIManager::InitializeExperienceWidget(int32 CharacterId)
+{
+	if (!ExperienceWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: Experience widget not created yet"));
+		return;
+	}
+
+	if (!ExperienceManager)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: ExperienceManager not available for experience widget initialization"));
+		return;
+	}
+
+	if (CharacterId <= 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: Invalid character ID for experience widget initialization: %d"), CharacterId);
+		return;
+	}
+
+	// Initialize the widget with the character ID
+	ExperienceWidget->InitializeWidget(ExperienceManager, CharacterId);
+	
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Experience widget initialized for character %d"), CharacterId);
 }

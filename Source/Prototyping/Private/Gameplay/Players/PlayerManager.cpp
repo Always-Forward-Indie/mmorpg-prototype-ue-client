@@ -281,6 +281,41 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 			UE_LOG(LogTemp, Error, TEXT("PlayerManager: GameInstance is null or invalid in disconnectClient"));
 		}
 	}
+
+	// Handle player stats update
+	if (MessageData.eventType == "stats_update" && MessageData.status == "success")
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PlayerManager: Received stats_update"));
+		FPlayerStatsUpdateStruct StatsUpdate = JSONParser::DeserializePlayerStatsUpdate(ReceivedData);
+		
+		if (gameInstance && IsValid(gameInstance))
+		{
+			// Get the player for this character ID
+			int32 CharacterId = StatsUpdate.characterId;
+			if (CharacterId > 0)
+			{
+				// Find and update the player
+				ABasicPlayer* Player = gameInstance->GetPlayerByCharacterId(CharacterId);
+				if (Player && IsValid(Player))
+				{
+					Player->ProcessStatsUpdate(StatsUpdate);
+					UE_LOG(LogTemp, Log, TEXT("PlayerManager: Updated stats for character %d"), CharacterId);
+				}
+				else
+				{
+					UE_LOG(LogTemp, Warning, TEXT("PlayerManager: Player not found for character ID %d"), CharacterId);
+				}
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("PlayerManager: Invalid character ID in stats update: %d"), CharacterId);
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("PlayerManager: GameInstance is null or invalid in stats_update"));
+		}
+	}
 }
 
 void UPlayerManager::StartPing()

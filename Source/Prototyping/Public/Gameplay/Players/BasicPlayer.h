@@ -232,6 +232,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
 	void SetPlayerNextLevelExp(int32 NextLevelExp);
 
+	// Update experience data in ExperienceManager
+	UFUNCTION(BlueprintCallable, Category = "Player Data")
+	void UpdateExperienceData();
+
 	// set player current HP points
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
 	void SetPlayerCurrentHPPoints(int32 CurrentHPPoints);
@@ -338,7 +342,7 @@ public:
 		UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 		TSubclassOf<class UDamageTextWidget> DamageTextWidgetClass;
 
-		public:
+
 			UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 			class UInputAction* PickupAction;
 
@@ -349,6 +353,18 @@ public:
 			// Get just the position data from playerData
 			UFUNCTION(BlueprintCallable, Category = "Player Data")
 			FPositionDataStruct GetPlayerDataPosition() const { return playerData.characterData.characterPosition; }
+
+			// Update player stats from server data (for stats_update event)
+			UFUNCTION(BlueprintCallable, Category = "Player Data")
+			void UpdatePlayerStats(const FPlayerStatsUpdateStruct& StatsUpdate);
+
+			// Handle stats update and refresh UI
+			UFUNCTION(BlueprintCallable, Category = "Player Data")
+			void ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdate);
+
+			// Force refresh HUD with current player stats
+			UFUNCTION(BlueprintCallable, Category = "UI")
+			void RefreshHUD();
 
 		protected:
 			UFUNCTION()

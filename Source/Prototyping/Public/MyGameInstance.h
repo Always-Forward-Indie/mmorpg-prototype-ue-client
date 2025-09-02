@@ -124,6 +124,14 @@ public:
 	UPROPERTY()
 	class UHarvestManager* HarvestManager;
 
+	// Experience manager
+	UPROPERTY()
+	class UExperienceManager* ExperienceManager;
+
+	// Experience network handler
+	UPROPERTY()
+	class UExperienceNetworkHandler* ExperienceNetworkHandler;
+
 	// Combat system managers
 	UPROPERTY()
 	class UCombatSystemManager* CombatSystemManager;
@@ -191,6 +199,14 @@ public:
 	// get harvest manager
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	class UHarvestManager* GetHarvestManager();
+
+	// get experience manager
+	UFUNCTION(BlueprintCallable, Category = "Player Progression")
+	class UExperienceManager* GetExperienceManager();
+
+	// get experience network handler
+	UFUNCTION(BlueprintCallable, Category = "Player Progression")
+	class UExperienceNetworkHandler* GetExperienceNetworkHandler();
 
 	// get combat system manager
 	UFUNCTION(BlueprintCallable, Category = "Combat")
@@ -399,7 +415,7 @@ public:
 		UFUNCTION(BlueprintCallable, Category = "Network")
 		void ProcessTimeSyncData(const FMessageDataStruct& MessageData);
 
-	private:
-	// Helper function
-	ABasicPlayer* GetPlayerByCharacterId(int32 CharacterId);
+		// Get player by character ID
+		UFUNCTION(BlueprintCallable, Category = "Player")
+		ABasicPlayer* GetPlayerByCharacterId(int32 CharacterId);
 };

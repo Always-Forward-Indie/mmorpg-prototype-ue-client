@@ -5,6 +5,7 @@
 #include "Services/TimeSyncService.h"
 #include "MyGameInstance.h"
 #include "Engine/World.h"
+#include "Utils/PlayerAttributeParser.h"
 
 // Helper method to get TimeSyncService instance
 UTimeSyncService* JSONParser::GetTimeSyncService()
@@ -862,6 +863,7 @@ FMobTargetLostStruct JSONParser::DeserializeMobTargetLost(const FString& JsonStr
 FInventoryItemStruct JSONParser::DeserializeInventoryItem(const TSharedPtr<FJsonObject>& ItemObj)
 {
 	FInventoryItemStruct Item;
+	
 	if (!ItemObj.IsValid()) return Item;
 
 	// Простые числовые/строковые
@@ -1007,7 +1009,7 @@ FInventoryUpdateStruct JSONParser::DeserializeInventoryUpdate(const TSharedPtr<F
 {
 	FInventoryUpdateStruct Update;
 	if (!UpdateObj.IsValid()) return Update;
-
+	
 	if (UpdateObj->HasField("eventType"))
 		Update.eventType = UpdateObj->GetStringField("eventType");
 	
@@ -1729,7 +1731,7 @@ FNetworkHeaderStruct JSONParser::DeserializeNetworkHeader(const FString& JsonStr
 //    {
 //        // Server returns requestIdEcho as requestId field and includes timing data
 //        bool bUpdated = TimeSyncService->UpdateTimeSyncData(
-//            NetworkHeader.requestId, // This is actually requestIdEcho from server
+//            NetworkHeader.requestId, // Это на самом деле requestIdEcho от сервера
 //            NetworkHeader.serverRecvMs,
 //            NetworkHeader.serverSendMs
 //        );
@@ -1782,4 +1784,193 @@ void JSONParser::ProcessTimeSyncFromHeader(const FString& JsonString, UTimeSyncS
 			UE_LOG(LogTemp, VeryVerbose, TEXT("JSONParser: Time sync update failed or filtered for: %s"), *RequestIdToUse);
 		}
 	}
+}
+
+// Experience system parsing functions
+FExperienceUpdateStruct JSONParser::DeserializeExperienceUpdate(const TSharedPtr<FJsonObject>& Body)
+{
+	FExperienceUpdateStruct ExperienceUpdate;
+	if (!Body.IsValid()) return ExperienceUpdate;
+
+	if (Body->HasField("characterId"))
+		ExperienceUpdate.characterId = Body->GetIntegerField("characterId");
+
+	if (Body->HasField("oldLevel"))
+		ExperienceUpdate.oldLevel = Body->GetIntegerField("oldLevel");
+
+	if (Body->HasField("newLevel"))
+		ExperienceUpdate.newLevel = Body->GetIntegerField("newLevel");
+
+	if (Body->HasField("oldExperience"))
+		ExperienceUpdate.oldExperience = Body->GetIntegerField("oldExperience");
+
+	if (Body->HasField("newExperience"))
+		ExperienceUpdate.newExperience = Body->GetIntegerField("newExperience");
+
+	if (Body->HasField("experienceChange"))
+		ExperienceUpdate.experienceChange = Body->GetIntegerField("experienceChange");
+
+	if (Body->HasField("expForCurrentLevel"))
+		ExperienceUpdate.expForCurrentLevel = Body->GetIntegerField("expForCurrentLevel");
+
+	if (Body->HasField("expForNextLevel"))
+		ExperienceUpdate.expForNextLevel = Body->GetIntegerField("expForNextLevel");
+
+	if (Body->HasField("levelUp"))
+		ExperienceUpdate.levelUp = Body->GetBoolField("levelUp");
+
+	if (Body->HasField("reason"))
+		ExperienceUpdate.reason = Body->GetStringField("reason");
+
+	if (Body->HasField("sourceId"))
+		ExperienceUpdate.sourceId = Body->GetIntegerField("sourceId");
+
+	return ExperienceUpdate;
+}
+
+FExperienceUpdateStruct JSONParser::DeserializeExperienceUpdate(const FString& JsonString)
+{
+	TSharedPtr<FJsonObject> Root;
+	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+		return FExperienceUpdateStruct();
+
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	if (!Body.IsValid())
+		return FExperienceUpdateStruct();
+
+	return JSONParser::DeserializeExperienceUpdate(Body);
+}
+
+FPlayerProgressionStruct JSONParser::DeserializePlayerProgression(const TSharedPtr<FJsonObject>& ProgressionObj)
+{
+	FPlayerProgressionStruct Progression;
+	if (!ProgressionObj.IsValid()) return Progression;
+
+	if (ProgressionObj->HasField("characterId"))
+		Progression.characterId = ProgressionObj->GetIntegerField("characterId");
+
+	if (ProgressionObj->HasField("currentLevel"))
+		Progression.currentLevel = ProgressionObj->GetIntegerField("currentLevel");
+
+	if (ProgressionObj->HasField("currentExperience"))
+		Progression.currentExperience = ProgressionObj->GetIntegerField("currentExperience");
+
+	if (ProgressionObj->HasField("totalExperience"))
+		Progression.totalExperience = ProgressionObj->GetIntegerField("totalExperience");
+
+	if (ProgressionObj->HasField("expForNextLevel"))
+		Progression.expForNextLevel = ProgressionObj->GetIntegerField("expForNextLevel");
+
+	if (ProgressionObj->HasField("expForCurrentLevel"))
+		Progression.expForCurrentLevel = ProgressionObj->GetIntegerField("expForCurrentLevel");
+
+	if (ProgressionObj->HasField("hasPendingLevelUp"))
+		Progression.bHasPendingLevelUp = ProgressionObj->GetBoolField("hasPendingLevelUp");
+
+	if (ProgressionObj->HasField("pendingLevelGained"))
+		Progression.pendingLevelGained = ProgressionObj->GetIntegerField("pendingLevelGained");
+
+	return Progression;
+}
+
+FPlayerProgressionStruct JSONParser::DeserializePlayerProgression(const FString& JsonString)
+{
+	TSharedPtr<FJsonObject> Root;
+	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+		return FPlayerProgressionStruct();
+
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	if (!Body.IsValid())
+		return FPlayerProgressionStruct();
+
+	TSharedPtr<FJsonObject> Progression = Body->GetObjectField("progression");
+	if (!Progression.IsValid())
+		return FPlayerProgressionStruct();
+
+	return JSONParser::DeserializePlayerProgression(Progression);
+}
+
+FExperienceGainEventStruct JSONParser::DeserializeExperienceGainEvent(const TSharedPtr<FJsonObject>& EventObj)
+{
+	FExperienceGainEventStruct Event;
+	if (!EventObj.IsValid()) return Event;
+
+	if (EventObj->HasField("experienceGained"))
+		Event.experienceGained = EventObj->GetIntegerField("experienceGained");
+
+	if (EventObj->HasField("reason"))
+		Event.reasonText = EventObj->GetStringField("reason");
+
+	if (EventObj->HasField("sourceId"))
+		Event.sourceId = EventObj->GetIntegerField("sourceId");
+
+	if (EventObj->HasField("sourceName"))
+		Event.sourceName = EventObj->GetStringField("sourceName");
+
+	// Parse reason enum from string
+	if (!Event.reasonText.IsEmpty())
+	{
+		if (Event.reasonText.Equals(TEXT("mob_kill"), ESearchCase::IgnoreCase))
+			Event.reason = EExperienceReason::MobKill;
+		else if (Event.reasonText.Equals(TEXT("quest_complete"), ESearchCase::IgnoreCase))
+			Event.reason = EExperienceReason::QuestComplete;
+		else if (Event.reasonText.Equals(TEXT("quest_turn_in"), ESearchCase::IgnoreCase))
+			Event.reason = EExperienceReason::QuestTurnIn;
+		else if (Event.reasonText.Equals(TEXT("discovery"), ESearchCase::IgnoreCase))
+			Event.reason = EExperienceReason::Discovery;
+		else if (Event.reasonText.Equals(TEXT("crafting"), ESearchCase::IgnoreCase))
+			Event.reason = EExperienceReason::Crafting;
+		else if (Event.reasonText.Equals(TEXT("gathering"), ESearchCase::IgnoreCase))
+			Event.reason = EExperienceReason::Gathering;
+		else if (Event.reasonText.Equals(TEXT("pvp_kill"), ESearchCase::IgnoreCase))
+			Event.reason = EExperienceReason::PvPKill;
+		else if (Event.reasonText.Equals(TEXT("boss_kill"), ESearchCase::IgnoreCase))
+			Event.reason = EExperienceReason::BossKill;
+		else if (Event.reasonText.Equals(TEXT("group_bonus"), ESearchCase::IgnoreCase))
+			Event.reason = EExperienceReason::GroupBonus;
+		else if (Event.reasonText.Equals(TEXT("event"), ESearchCase::IgnoreCase))
+			Event.reason = EExperienceReason::Event;
+		else if (Event.reasonText.Equals(TEXT("admin"), ESearchCase::IgnoreCase))
+			Event.reason = EExperienceReason::Admin;
+		else
+			Event.reason = EExperienceReason::None;
+	}
+
+	// Set timestamp to now (server timestamp parsing could be added here if needed)
+	Event.timestamp = FDateTime::Now();
+
+	return Event;
+}
+
+FExperienceGainEventStruct JSONParser::DeserializeExperienceGainEvent(const FString& JsonString)
+{
+	TSharedPtr<FJsonObject> Root;
+	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+		return FExperienceGainEventStruct();
+
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	if (!Body.IsValid())
+		return FExperienceGainEventStruct();
+
+	TSharedPtr<FJsonObject> Event = Body->GetObjectField("experienceEvent");
+	if (!Event.IsValid())
+	{
+		// Try to parse directly from body if no experienceEvent object
+		return JSONParser::DeserializeExperienceGainEvent(Body);
+	}
+
+	return JSONParser::DeserializeExperienceGainEvent(Event);
+}
+
+FPlayerStatsUpdateStruct JSONParser::DeserializePlayerStatsUpdate(const FString& JsonString)
+{
+    return PlayerAttributeParser::DeserializePlayerStatsUpdate(JsonString);
+}
+
+FPlayerStatsUpdateStruct JSONParser::DeserializePlayerStatsUpdate(const TSharedPtr<FJsonObject>& Body)
+{
+    return PlayerAttributeParser::DeserializePlayerStatsUpdate(Body);
 }

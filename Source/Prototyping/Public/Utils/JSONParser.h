@@ -106,4 +106,16 @@ public:
     static FCorpseLootInspectResponseStruct DeserializeCorpseLootInspectResponse(const FString& JsonString);
     static FCorpseLootInspectErrorStruct DeserializeCorpseLootInspectError(const TSharedPtr<FJsonObject>& Body);
     static FCorpseLootInspectErrorStruct DeserializeCorpseLootInspectError(const FString& JsonString);
+
+    // Experience system parsers
+    static FExperienceUpdateStruct DeserializeExperienceUpdate(const TSharedPtr<FJsonObject>& Body);
+    static FExperienceUpdateStruct DeserializeExperienceUpdate(const FString& JsonString);
+    static FPlayerProgressionStruct DeserializePlayerProgression(const TSharedPtr<FJsonObject>& ProgressionObj);
+    static FPlayerProgressionStruct DeserializePlayerProgression(const FString& JsonString);
+    static FExperienceGainEventStruct DeserializeExperienceGainEvent(const TSharedPtr<FJsonObject>& EventObj);
+    static FExperienceGainEventStruct DeserializeExperienceGainEvent(const FString& JsonString);
+
+    // Player stats system parsers
+    static FPlayerStatsUpdateStruct DeserializePlayerStatsUpdate(const TSharedPtr<FJsonObject>& Body);
+    static FPlayerStatsUpdateStruct DeserializePlayerStatsUpdate(const FString& JsonString);
 };

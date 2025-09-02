@@ -11,6 +11,8 @@
 #include "Gameplay/Combat/HealingEffectHandler.h"
 #include "Gameplay/Combat/BuffEffectHandler.h"
 #include "Gameplay/Combat/ICombatable.h"
+#include "Gameplay/Player/ExperienceManager.h"
+#include "Gameplay/Player/ExperienceNetworkHandler.h"
 
 
 UMyGameInstance::UMyGameInstance(const FObjectInitializer& ObjectInitializer)
@@ -49,6 +51,12 @@ void UMyGameInstance::Init()
 
 	// set the harvest manager
 	HarvestManager = NewObject<UHarvestManager>(this);
+
+	// set the experience manager
+	ExperienceManager = NewObject<UExperienceManager>(this);
+
+	// set the experience network handler
+	ExperienceNetworkHandler = NewObject<UExperienceNetworkHandler>(this);
 
 	// Initialize new combat system
 	CombatSystemManager = NewObject<UCombatSystemManager>(this);
@@ -190,6 +198,21 @@ void UMyGameInstance::InitNetworkingSetup()
 		HarvestManager->Initialize(NetworkManager);
 		// subscribe to the network manager
 		HarvestManager->SubscribeToNetworkManager();
+	}
+
+	// Initialize experience system
+	if (ExperienceManager != nullptr) {
+		// Initialize the experience manager
+		ExperienceManager->Initialize(this, NetworkManager);
+		UE_LOG(LogTemp, Warning, TEXT("ExperienceManager initialized"));
+	}
+
+	if (ExperienceNetworkHandler != nullptr && ExperienceManager != nullptr) {
+		// Initialize the experience network handler
+		ExperienceNetworkHandler->Initialize(ExperienceManager, this, NetworkManager);
+		// Subscribe to network events
+		ExperienceNetworkHandler->SubscribeToNetworkEvents();
+		UE_LOG(LogTemp, Warning, TEXT("ExperienceNetworkHandler initialized and subscribed"));
 	}
 
 	// Initialize new combat system
@@ -355,6 +378,16 @@ UInventoryManager* UMyGameInstance::GetInventoryManager()
 UHarvestManager* UMyGameInstance::GetHarvestManager()
 {
 	return HarvestManager;
+}
+
+UExperienceManager* UMyGameInstance::GetExperienceManager()
+{
+	return ExperienceManager;
+}
+
+UExperienceNetworkHandler* UMyGameInstance::GetExperienceNetworkHandler()
+{
+	return ExperienceNetworkHandler;
 }
 
 UCombatSystemManager* UMyGameInstance::GetCombatSystemManager()
@@ -885,14 +918,24 @@ void UMyGameInstance::SetCharacterItems(TArray<FCharacterDataStruct> Items)
 // Combat system functions
 ABasicPlayer* UMyGameInstance::GetPlayerByCharacterId(int32 CharacterId)
 {
-	for (const auto& PlayerPair : SpawnedPlayers)
+	// Check if we have a local player with this character ID
+	if (Player && Player->GetPlayerCharacterID() == CharacterId)
+	{
+		return Player;
+	}
+
+	// Check spawned players for the character ID
+	for (auto& PlayerPair : SpawnedPlayers)
 	{
 		ABasicPlayer* PlayerActor = PlayerPair.Value;
-		if (PlayerActor && PlayerActor->GetPlayerCharacterID() == CharacterId)
+		if (PlayerActor && IsValid(PlayerActor) && PlayerActor->GetPlayerCharacterID() == CharacterId)
 		{
 			return PlayerActor;
 		}
 	}
+
+	// If not found, return nullptr
+	UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Player with character ID %d not found"), CharacterId);
 	return nullptr;
 }
 

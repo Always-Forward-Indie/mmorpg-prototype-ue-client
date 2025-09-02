@@ -7,10 +7,12 @@
 #include "UI/UIManager.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Items/HarvestManager.h"
+#include "Gameplay/Player/ExperienceManager.h"
 #include "Gameplay/Combat/CombatSystemManager.h"
 #include "Gameplay/Combat/SkillSystemManager.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Utils/PlayerAttributeParser.h"
 
 // Implementation of missing input methods
 void ABasicPlayer::OnAttackInput()
@@ -255,12 +257,43 @@ void ABasicPlayer::BeginPlay()
 				{
 					// Get HarvestManager from GameInstance
 					UHarvestManager* HarvestManager = MyGameInstance ? MyGameInstance->GetHarvestManager() : nullptr;
+
+					//get ExperienceManager from GameInstance
+					UExperienceManager* ExperienceManager = MyGameInstance ? MyGameInstance->GetExperienceManager() : nullptr;
 					
 					// Initialize UIManager with both managers
-					UIManager->Initialize(InventoryManager, HarvestManager);
+					UIManager->Initialize(InventoryManager, HarvestManager, ExperienceManager);
 					
 					UE_LOG(LogTemp, Warning, TEXT("UIManager initialized with InventoryManager and HarvestManager"));
+
+					// Initialize experience widget for this character and set initial progression data
+					if (ExperienceManager && playerData.characterData.characterId > 0)
+					{
+						// Create initial progression data from current player data
+						FPlayerProgressionStruct InitialProgression;
+						InitialProgression.characterId = playerData.characterData.characterId;
+						InitialProgression.currentLevel = playerData.characterData.characterLevel;
+						InitialProgression.currentExperience = playerData.characterData.characterExperiencePoints;
+						InitialProgression.totalExperience = playerData.characterData.characterExperiencePoints;
+						InitialProgression.expForNextLevel = playerData.characterData.characterExpForNextLevel;
+						InitialProgression.expForCurrentLevel = 0; // Will be calculated by server
+						InitialProgression.bHasPendingLevelUp = false;
+						InitialProgression.pendingLevelGained = 0;
+
+						// Update ExperienceManager with initial progression data FIRST
+						ExperienceManager->UpdateCharacterProgression(playerData.characterData.characterId, InitialProgression);
+
+						// THEN initialize experience widget
+						UIManager->InitializeExperienceWidget(playerData.characterData.characterId);
+
+						UE_LOG(LogTemp, Warning, TEXT("ExperienceWidget initialized for character %d with initial data: Level %d, XP %d/%d"), 
+							playerData.characterData.characterId, 
+							InitialProgression.currentLevel,
+							InitialProgression.currentExperience,
+							InitialProgression.expForNextLevel);
+					}
 				}
+                
 			}, 0.5f, false);
 		}
 	}
@@ -297,6 +330,33 @@ void ABasicPlayer::CreateHUD()
                         {
                             UE_LOG(LogTemp, Error, TEXT("CreateHUD: FCTManager failed to initialize!"));
                         }
+
+						// Initialize experience data if ExperienceManager is available
+						if (UExperienceManager* ExperienceManager = MyGameInstance->GetExperienceManager())
+						{
+							if (playerData.characterData.characterId > 0)
+							{
+								// Create initial progression data from current player data
+								FPlayerProgressionStruct InitialProgression;
+								InitialProgression.characterId = playerData.characterData.characterId;
+								InitialProgression.currentLevel = playerData.characterData.characterLevel;
+								InitialProgression.currentExperience = playerData.characterData.characterExperiencePoints;
+								InitialProgression.totalExperience = playerData.characterData.characterExperiencePoints;
+								InitialProgression.expForNextLevel = playerData.characterData.characterExpForNextLevel;
+								InitialProgression.expForCurrentLevel = 0; // Will be calculated by server
+								InitialProgression.bHasPendingLevelUp = false;
+								InitialProgression.pendingLevelGained = 0;
+
+								// Update ExperienceManager with initial progression data
+								ExperienceManager->UpdateCharacterProgression(playerData.characterData.characterId, InitialProgression);
+
+								UE_LOG(LogTemp, Warning, TEXT("CreateHUD: Initial experience data set for character %d: Level %d, XP %d/%d"), 
+									playerData.characterData.characterId, 
+									InitialProgression.currentLevel,
+									InitialProgression.currentExperience,
+									InitialProgression.expForNextLevel);
+							}
+						}
                     }
                     else
                     {
@@ -354,8 +414,6 @@ void ABasicPlayer::UpdateHUD()
             // Update HUD with current and max values
             PlayerHUD->SetHP(playerData.characterData.characterCurrentHealth, MaxHealth);
             PlayerHUD->SetMana(playerData.characterData.characterCurrentMana, MaxMana);
-            PlayerHUD->SetXP(playerData.characterData.characterExperiencePoints, playerData.characterData.characterExpForNextLevel);
-            PlayerHUD->SetLevel(playerData.characterData.characterLevel);
         }
     }
 }
@@ -633,18 +691,54 @@ void ABasicPlayer::SetPlayerName(FString Name)
 void ABasicPlayer::SetPlayerLevel(int32 Level)
 {
     playerData.characterData.characterLevel = Level;
+	UpdateExperienceData(); // Update ExperienceManager when level changes
 }
 
 // set player experience points
 void ABasicPlayer::SetPlayerExpPoints(int32 ExpPoints)
 {
     playerData.characterData.characterExperiencePoints = ExpPoints;
+	UpdateExperienceData(); // Update ExperienceManager when experience changes
 }
 
 // set player next level exp
 void ABasicPlayer::SetPlayerNextLevelExp(int32 NextLevelExp)
 {
 	playerData.characterData.characterExpForNextLevel = NextLevelExp;
+	UpdateExperienceData(); // Update ExperienceManager when next level exp changes
+}
+
+// Update experience data in ExperienceManager
+void ABasicPlayer::UpdateExperienceData()
+{
+	if (!MyGameInstance || playerData.isOtherClient)
+	{
+		return; // Only update for local player
+	}
+
+	UExperienceManager* ExperienceManager = MyGameInstance->GetExperienceManager();
+	if (ExperienceManager && playerData.characterData.characterId > 0)
+	{
+		// Create updated progression data from current player data
+		FPlayerProgressionStruct UpdatedProgression;
+		UpdatedProgression.characterId = playerData.characterData.characterId;
+		UpdatedProgression.currentLevel = playerData.characterData.characterLevel;
+		UpdatedProgression.currentExperience = playerData.characterData.characterExperiencePoints;
+		UpdatedProgression.totalExperience = playerData.characterData.characterExperiencePoints;
+		UpdatedProgression.expForNextLevel = playerData.characterData.characterExpForNextLevel;
+		UpdatedProgression.expForCurrentLevel = 0; // Will be calculated by server
+		UpdatedProgression.bHasPendingLevelUp = false;
+		UpdatedProgression.pendingLevelGained = 0;
+
+		// Update ExperienceManager with current progression data
+		ExperienceManager->UpdateCharacterProgression(playerData.characterData.characterId, UpdatedProgression);
+
+		UE_LOG(LogTemp, Log, TEXT("Updated experience data for character %d: Level %d, XP %d/%d"), 
+			playerData.characterData.characterId, 
+			UpdatedProgression.currentLevel,
+			UpdatedProgression.currentExperience,
+			UpdatedProgression.expForNextLevel);
+	}
 }
 
 // set player current HP points
@@ -997,5 +1091,82 @@ void ABasicPlayer::ShowBuffEffect_Implementation(const FAppliedEffectData& Effec
     
     // Handle buff/debuff visual effects here
     // You might want to show icons, particle effects, etc.
+}
+
+// Add these method implementations at the end of the file, before the closing brace
+
+void ABasicPlayer::UpdatePlayerStats(const FPlayerStatsUpdateStruct& StatsUpdate)
+{
+	// Validate the stats update
+	if (!PlayerAttributeParser::ValidateStatsData(StatsUpdate))
+	{
+		UE_LOG(LogTemp, Error, TEXT("BasicPlayer: Invalid stats update data received"));
+		return;
+	}
+
+	// Check if this update is for this player
+	if (StatsUpdate.characterId != playerData.characterData.characterId)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Stats update for different character (Expected: %d, Received: %d)"), 
+			playerData.characterData.characterId, StatsUpdate.characterId);
+		return;
+	}
+
+	// Update character data
+	PlayerAttributeParser::UpdateCharacterDataFromStatsUpdate(playerData.characterData, StatsUpdate);
+
+	UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Updated stats for character %d - Level: %d, HP: %d/%d, MP: %d/%d"),
+		StatsUpdate.characterId, StatsUpdate.level,
+		StatsUpdate.healthCurrent, StatsUpdate.healthMax,
+		StatsUpdate.manaCurrent, StatsUpdate.manaMax);
+}
+
+void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdate)
+{
+	// Update the player data
+	UpdatePlayerStats(StatsUpdate);
+	
+	// Refresh the UI to reflect new stats
+	RefreshHUD();
+	
+	// Update experience data if level changed
+	if (StatsUpdate.level != playerData.characterData.characterLevel)
+	{
+		UpdateExperienceData();
+	}
+	
+	UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Processed stats update and refreshed UI"));
+}
+
+void ABasicPlayer::RefreshHUD()
+{
+	if (!PlayerHUD)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Cannot refresh HUD - PlayerHUD is null"));
+		return;
+	}
+
+	// Get max health and mana from attributes
+	float MaxHealth = 100.0f; // Default value
+	float MaxMana = 100.0f;   // Default value
+
+	// Try to get max values from character attributes
+	if (const FAttributeDataStruct* HealthAttr = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_health")))
+	{
+		MaxHealth = static_cast<float>(HealthAttr->attributeValue);
+	}
+
+	if (const FAttributeDataStruct* ManaAttr = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_mana")))
+	{
+		MaxMana = static_cast<float>(ManaAttr->attributeValue);
+	}
+
+	// Update HUD with current values
+	PlayerHUD->SetHP(static_cast<float>(playerData.characterData.characterCurrentHealth), MaxHealth);
+	PlayerHUD->SetMana(static_cast<float>(playerData.characterData.characterCurrentMana), MaxMana);
+
+	UE_LOG(LogTemp, VeryVerbose, TEXT("BasicPlayer: HUD refreshed - HP: %.0f/%.0f, MP: %.0f/%.0f"),
+		static_cast<float>(playerData.characterData.characterCurrentHealth), MaxHealth,
+		static_cast<float>(playerData.characterData.characterCurrentMana), MaxMana);
 }
 

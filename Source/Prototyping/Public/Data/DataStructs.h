@@ -1045,3 +1045,192 @@ struct FCorpseLootInspectErrorStruct
         errorCode = "";
     }
 };
+
+// Experience System Structures
+USTRUCT(BlueprintType)
+struct FExperienceUpdateStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Update")
+    int32 characterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Update")
+    int32 oldLevel = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Update")
+    int32 newLevel = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Update")
+    int32 oldExperience = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Update")
+    int32 newExperience = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Update")
+    int32 experienceChange = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Update")
+    int32 expForCurrentLevel = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Update")
+    int32 expForNextLevel = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Update")
+    bool levelUp = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Update")
+    FString reason = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Update")
+    int32 sourceId = 0;
+
+    FExperienceUpdateStruct()
+    {
+        characterId = 0;
+        oldLevel = 1;
+        newLevel = 1;
+        oldExperience = 0;
+        newExperience = 0;
+        experienceChange = 0;
+        expForCurrentLevel = 0;
+        expForNextLevel = 0;
+        levelUp = false;
+        reason = "";
+        sourceId = 0;
+    }
+};
+
+// Player progression data structure for managing character advancement
+USTRUCT(BlueprintType)
+struct FPlayerProgressionStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Progression")
+    int32 characterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Progression")
+    int32 currentLevel = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Progression")
+    int32 currentExperience = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Progression")
+    int32 totalExperience = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Progression")
+    int32 expForNextLevel = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Progression")
+    int32 expForCurrentLevel = 0;
+
+    // Track level-ups that need to be shown to player
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Progression")
+    bool bHasPendingLevelUp = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Progression")
+    int32 pendingLevelGained = 0;
+
+    FPlayerProgressionStruct()
+    {
+        characterId = 0;
+        currentLevel = 1;
+        currentExperience = 0;
+        totalExperience = 0;
+        expForNextLevel = 0;
+        expForCurrentLevel = 0;
+        bHasPendingLevelUp = false;
+        pendingLevelGained = 0;
+    }
+};
+
+// Experience gain reason enumeration for categorizing experience sources
+UENUM(BlueprintType)
+enum class EExperienceReason : uint8
+{
+    None = 0        UMETA(DisplayName = "None"),
+    MobKill = 1     UMETA(DisplayName = "Mob Kill"),
+    QuestComplete = 2  UMETA(DisplayName = "Quest Complete"),
+    QuestTurnIn = 3    UMETA(DisplayName = "Quest Turn In"),
+    Discovery = 4      UMETA(DisplayName = "Discovery"),
+    Crafting = 5       UMETA(DisplayName = "Crafting"),
+    Gathering = 6      UMETA(DisplayName = "Gathering"),
+    PvPKill = 7        UMETA(DisplayName = "PvP Kill"),
+    BossKill = 8       UMETA(DisplayName = "Boss Kill"),
+    GroupBonus = 9     UMETA(DisplayName = "Group Bonus"),
+    Event = 10         UMETA(DisplayName = "Event"),
+    Admin = 99         UMETA(DisplayName = "Admin")
+};
+
+// Experience gain event structure for detailed logging and display
+USTRUCT(BlueprintType)
+struct FExperienceGainEventStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Gain Event")
+    int32 experienceGained = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Gain Event")
+    EExperienceReason reason = EExperienceReason::None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Gain Event")
+    FString reasonText = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Gain Event")
+    int32 sourceId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Gain Event")
+    FString sourceName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Gain Event")
+    FDateTime timestamp;
+
+    FExperienceGainEventStruct()
+    {
+        experienceGained = 0;
+        reason = EExperienceReason::None;
+        reasonText = "";
+        sourceId = 0;
+        sourceName = "";
+        timestamp = FDateTime::Now();
+    }
+};
+
+// Player Stats Update Structure - matches server format for stats_update event
+USTRUCT(BlueprintType)
+struct FPlayerStatsUpdateStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
+    int32 characterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
+    int32 level = 1;
+
+    // Health stats
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
+    int32 healthCurrent = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
+    int32 healthMax = 0;
+
+    // Mana stats
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
+    int32 manaCurrent = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
+    int32 manaMax = 0;
+
+    FPlayerStatsUpdateStruct()
+    {
+        characterId = 0;
+        level = 1;
+        healthCurrent = 0;
+        healthMax = 0;
+        manaCurrent = 0;
+        manaMax = 0;
+    }
+};

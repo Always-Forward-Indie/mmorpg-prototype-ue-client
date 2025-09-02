@@ -23,14 +23,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "HUD")
     void SetMana(float NewMana, float MaxMana);
 
-    /** Устанавливает XP */
-    UFUNCTION(BlueprintCallable, Category = "HUD")
-    void SetXP(float NewXP, float MaxXP);
-
-    /** Устанавливает уровень */
-    UFUNCTION(BlueprintCallable, Category = "HUD")
-    void SetLevel(int NewLevel);
-
 	//get damage canvas
     UFUNCTION(BlueprintCallable, Category = "HUD")
     UCanvasPanel* GetDamageCanvas() const { return DamageCanvas; }
@@ -53,15 +45,6 @@ protected:
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "HUD")
     class UTextBlock* ManaBarTextValue;
-
-    UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "HUD")
-    class UProgressBar* XPBar;
-
-    UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "HUD")
-    class UTextBlock* ExpBarTextValue;
-
-    UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "HUD")
-    class UTextBlock* LevelText;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "HUD")
     UCanvasPanel* DamageCanvas;

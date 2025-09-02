@@ -10,12 +10,14 @@
 // Forward declarations
 class UInventoryManager;
 class UHarvestManager;
+class UExperienceManager;
 class UInputAction;
 class UFloatingCombatTextManager;
 class UCanvasPanel;
 class UDamageTextWidget;
 class UHarvestProgressWidget;
 class UHarvestLootWidget;
+class UPlayerExperienceWidget;
 
 /**
  * UI Manager component that handles all UI elements for the player
@@ -30,7 +32,7 @@ public:
 
 	// Initialize the UI manager
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
-	void Initialize(UInventoryManager* InInventoryManager, UHarvestManager* InHarvestManager = nullptr);
+	void Initialize(UInventoryManager* InInventoryManager, UHarvestManager* InHarvestManager = nullptr, UExperienceManager* InExperienceManager = nullptr);
 
 	// Initialize FCT Manager
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
@@ -40,6 +42,10 @@ public:
 	// Create and setup all UI widgets
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void CreateUIWidgets();
+
+	// Initialize experience widget for specific character
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void InitializeExperienceWidget(int32 CharacterId);
 
 	// Toggle inventory UI
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
@@ -59,6 +65,9 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UHarvestLootWidget* GetHarvestLootWidget() const { return HarvestLootWidget; }
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UPlayerExperienceWidget* GetExperienceWidget() const { return ExperienceWidget; }
+
 	// Get FCT Manager
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UFloatingCombatTextManager* GetFCTManager() const { return FCTManager; }
@@ -74,6 +83,9 @@ protected:
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void CreateHarvestWidgets();
 
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void CreateExperienceWidget();
+
 protected:
 	// Widget classes (set these in Blueprint or C++)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager")
@@ -84,6 +96,9 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager")
 	TSubclassOf<UHarvestLootWidget> HarvestLootWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager")
+	TSubclassOf<UPlayerExperienceWidget> ExperienceWidgetClass;
 
 	//Version of game widget
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager")
@@ -103,6 +118,9 @@ protected:
 	UHarvestLootWidget* HarvestLootWidget;
 
 	UPROPERTY(BlueprintReadOnly, Category = "UI Manager")
+	UPlayerExperienceWidget* ExperienceWidget;
+
+	UPROPERTY(BlueprintReadOnly, Category = "UI Manager")
 	UUserWidget* GameVersionWidget;
 
 	// FCT Manager
@@ -115,6 +133,9 @@ protected:
 
 	UPROPERTY()
 	UHarvestManager* HarvestManager;
+
+	UPROPERTY()
+	UExperienceManager* ExperienceManager;
 
 	UPROPERTY()
 	APlayerController* PlayerController;

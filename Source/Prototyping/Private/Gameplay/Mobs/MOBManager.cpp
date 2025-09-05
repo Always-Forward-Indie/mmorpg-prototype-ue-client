@@ -95,7 +95,7 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 
 	if (MessageData.eventType == "spawnMobsInZone" && MessageData.status == "success")
 	{
@@ -110,7 +110,7 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Received getMOBData event"));
 		// Deserialize the JSON string into a single MOB data
-		FMOBStruct MobData = JSONParser::DeserializeMobData(Body->GetObjectField("mob"));
+		FMOBStruct MobData = JSONParser::DeserializeMobData(Body->GetObjectField(TEXT("mob")));
 	}
 	else if (MessageData.eventType == "zoneMoveMobs" && MessageData.status == "success")
 	{
@@ -138,7 +138,7 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 	{
 		// Extract the mobUID from the response body
 		FString MobUID;
-		if (Body->TryGetStringField("mobUID", MobUID))
+		if (Body->TryGetStringField(TEXT("mobUID"), MobUID))
 		{
 			UE_LOG(LogTemp, Warning, TEXT("Received death event for mob: %s"), *MobUID);
 

@@ -47,8 +47,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	void SendJoinGameRequest(const FClientDataStruct& ClientData);
 	UFUNCTION(BlueprintCallable, Category = "Network")
-	void SendJoinClientChunkRequest(const FClientDataStruct& ClientData);
-	UFUNCTION(BlueprintCallable, Category = "Network")
 	void SendJoinCharacterChunkRequest(const FClientDataStruct& ClientData);
 
 	void SendGetConnectedPlayersRequest(FClientDataStruct& ClientData);

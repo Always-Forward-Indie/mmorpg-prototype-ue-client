@@ -181,9 +181,12 @@ float UExperienceManager::GetExperienceProgressToNextLevel(int32 CharacterId) co
         return 1.0f; // Max level reached
     }
 
-    // Используем данные от сервера для расчета прогресса
-    float Progress = static_cast<float>(Progression->currentExperience) / 
-                    static_cast<float>(Progression->expForNextLevel);
+    // Правильный расчет: прогресс внутри текущего уровня
+    float CurrentLevelStart = static_cast<float>(Progression->expForCurrentLevel);
+    float CurrentLevelEnd = static_cast<float>(Progression->expForNextLevel);
+    float CurrentExp = static_cast<float>(Progression->currentExperience);
+
+    float Progress = (CurrentExp - CurrentLevelStart) / (CurrentLevelEnd - CurrentLevelStart);
     
     return FMath::Clamp(Progress, 0.0f, 1.0f);
 }

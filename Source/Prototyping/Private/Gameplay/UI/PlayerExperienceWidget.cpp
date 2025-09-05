@@ -172,9 +172,11 @@ void UPlayerExperienceWidget::OnProgressionUpdated_Implementation(const FPlayerP
     float ProgressPercent = 0.0f;
     if (NewProgression.expForNextLevel > 0)
     {
-        ProgressPercent = static_cast<float>(NewProgression.currentExperience) / 
-                         static_cast<float>(NewProgression.expForNextLevel);
-        ProgressPercent = FMath::Clamp(ProgressPercent, 0.0f, 1.0f);
+        float CurrentLevelStart = static_cast<float>(CurrentProgression.expForCurrentLevel);
+        float CurrentLevelEnd = static_cast<float>(CurrentProgression.expForNextLevel);
+        float CurrentExp = static_cast<float>(CurrentProgression.currentExperience);
+
+        ProgressPercent = (CurrentExp - CurrentLevelStart) / (CurrentLevelEnd - CurrentLevelStart);
     }
     
     UpdateProgressBar(ProgressPercent);
@@ -197,8 +199,14 @@ float UPlayerExperienceWidget::GetExperienceToNextLevelPercent_Implementation() 
     if (CurrentProgression.expForNextLevel <= 0)
         return 1.0f; // Max level
 
-    return static_cast<float>(CurrentProgression.currentExperience) / 
-           static_cast<float>(CurrentProgression.expForNextLevel);
+
+    float CurrentLevelStart = static_cast<float>(CurrentProgression.expForCurrentLevel);
+    float CurrentLevelEnd = static_cast<float>(CurrentProgression.expForNextLevel);
+    float CurrentExp = static_cast<float>(CurrentProgression.currentExperience);
+
+    float Progress = (CurrentExp - CurrentLevelStart) / (CurrentLevelEnd - CurrentLevelStart);
+
+    return Progress;
 }
 
 void UPlayerExperienceWidget::UpdateExperienceDisplay(int32 CurrentExp, int32 ExpForNextLevel, int32 Level)
@@ -210,8 +218,11 @@ void UPlayerExperienceWidget::UpdateExperienceDisplay(int32 CurrentExp, int32 Ex
     float ProgressPercent = 0.0f;
     if (ExpForNextLevel > 0)
     {
-        ProgressPercent = static_cast<float>(CurrentExp) / static_cast<float>(ExpForNextLevel);
-        ProgressPercent = FMath::Clamp(ProgressPercent, 0.0f, 1.0f);
+        float CurrentLevelStart = static_cast<float>(CurrentProgression.expForCurrentLevel);
+        float CurrentLevelEnd = static_cast<float>(CurrentProgression.expForNextLevel);
+        float CurrentExpPoints = static_cast<float>(CurrentProgression.currentExperience);
+
+        ProgressPercent = (CurrentExpPoints - CurrentLevelStart) / (CurrentLevelEnd - CurrentLevelStart);
     }
     
     UpdateProgressBar(ProgressPercent);

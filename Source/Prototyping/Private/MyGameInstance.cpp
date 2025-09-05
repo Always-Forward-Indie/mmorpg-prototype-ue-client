@@ -654,7 +654,7 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 				NewPlayer->SetPlayerRace(PlayerData.characterData.characterRace);
 				NewPlayer->SetPlayerLevel(PlayerData.characterData.characterLevel);
 				//set next level exp
-				NewPlayer->SetPlayerNextLevelExp(PlayerData.characterData.characterExpForNextLevel);
+				NewPlayer->SetPlayerNextLevelExp(PlayerData.characterData.characterExpForLevelEnd);
 
 				//set exp points
 				NewPlayer->SetPlayerExpPoints(PlayerData.characterData.characterExperiencePoints);

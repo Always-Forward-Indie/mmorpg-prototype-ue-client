@@ -275,7 +275,7 @@ void ABasicPlayer::BeginPlay()
 						InitialProgression.currentLevel = playerData.characterData.characterLevel;
 						InitialProgression.currentExperience = playerData.characterData.characterExperiencePoints;
 						InitialProgression.totalExperience = playerData.characterData.characterExperiencePoints;
-						InitialProgression.expForNextLevel = playerData.characterData.characterExpForNextLevel;
+						InitialProgression.expForNextLevel = playerData.characterData.characterExpForLevelEnd;
 						InitialProgression.expForCurrentLevel = 0; // Will be calculated by server
 						InitialProgression.bHasPendingLevelUp = false;
 						InitialProgression.pendingLevelGained = 0;
@@ -342,7 +342,7 @@ void ABasicPlayer::CreateHUD()
 								InitialProgression.currentLevel = playerData.characterData.characterLevel;
 								InitialProgression.currentExperience = playerData.characterData.characterExperiencePoints;
 								InitialProgression.totalExperience = playerData.characterData.characterExperiencePoints;
-								InitialProgression.expForNextLevel = playerData.characterData.characterExpForNextLevel;
+								InitialProgression.expForNextLevel = playerData.characterData.characterExpForLevelEnd;
 								InitialProgression.expForCurrentLevel = 0; // Will be calculated by server
 								InitialProgression.bHasPendingLevelUp = false;
 								InitialProgression.pendingLevelGained = 0;
@@ -704,7 +704,7 @@ void ABasicPlayer::SetPlayerExpPoints(int32 ExpPoints)
 // set player next level exp
 void ABasicPlayer::SetPlayerNextLevelExp(int32 NextLevelExp)
 {
-	playerData.characterData.characterExpForNextLevel = NextLevelExp;
+	playerData.characterData.characterExpForLevelEnd = NextLevelExp;
 	UpdateExperienceData(); // Update ExperienceManager when next level exp changes
 }
 
@@ -725,7 +725,7 @@ void ABasicPlayer::UpdateExperienceData()
 		UpdatedProgression.currentLevel = playerData.characterData.characterLevel;
 		UpdatedProgression.currentExperience = playerData.characterData.characterExperiencePoints;
 		UpdatedProgression.totalExperience = playerData.characterData.characterExperiencePoints;
-		UpdatedProgression.expForNextLevel = playerData.characterData.characterExpForNextLevel;
+		UpdatedProgression.expForNextLevel = playerData.characterData.characterExpForLevelEnd;
 		UpdatedProgression.expForCurrentLevel = 0; // Will be calculated by server
 		UpdatedProgression.bHasPendingLevelUp = false;
 		UpdatedProgression.pendingLevelGained = 0;

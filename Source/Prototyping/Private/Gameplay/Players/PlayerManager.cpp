@@ -113,9 +113,6 @@ void UPlayerManager::ProcessGameServerData(const FString& ReceivedData)
 			//ue log with client and character id
 			UE_LOG(LogTemp, Warning, TEXT("Joined Client to Game Server with ID: %d, Character ID: %d"), ClientData.clientId, ClientData.characterData.characterId);
 
-			//TODO - add connection delegate call for connect to chunk sever
-
-			SendJoinClientChunkRequest(ClientData);
 			SendJoinCharacterChunkRequest(ClientData);
 		}
 	}
@@ -388,39 +385,6 @@ void UPlayerManager::SendJoinCharacterChunkRequest(const FClientDataStruct& Clie
 
 	// Use TimeSyncService for automatic clientSendMs with correct server type
 	FString JsonString = JSONParser::SerializeJsonWithTimeSync("joinGameCharacter", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::ChunkServer);
-
-	if (networkManager != nullptr)
-	{
-		// Send the JSON string to the Chunk server
-		networkManager->SendDataToChunkServer(JsonString);
-	}
-	else {
-		UE_LOG(LogTemp, Error, TEXT("Network manager not found"));
-	}
-}
-
-void UPlayerManager::SendJoinClientChunkRequest(const FClientDataStruct& ClientData)
-{
-	// Create a JSON object for the header and body data
-	TMap<FString, TSharedPtr<FJsonValue>> HeaderData;
-	TMap<FString, TSharedPtr<FJsonValue>> BodyData;
-
-	// Add the client ID and hash to the header data
-	TSharedPtr<FJsonValueNumber> ClientIDValue = MakeShareable(new FJsonValueNumber(ClientData.clientId));
-	TSharedPtr<FJsonValueString> HashValue = MakeShareable(new FJsonValueString(ClientData.hash));
-
-	HeaderData.Add("clientId", ClientIDValue);
-	HeaderData.Add("hash", HashValue);
-
-	// Add the Character ID to the body data
-	TSharedPtr<FJsonValueNumber> CharacterIDValue = MakeShareable(new FJsonValueNumber(ClientData.characterData.characterId));
-
-	CharacterIDValue = gameInstance->GetCurrentCharacterID() != 0 ? MakeShareable(new FJsonValueNumber(gameInstance->GetCurrentCharacterID())) : CharacterIDValue;
-	// Add the character ID to the body data
-	BodyData.Add("id", CharacterIDValue);
-
-	// Use TimeSyncService for automatic clientSendMs
-	FString JsonString = JSONParser::SerializeJsonWithTimeSync("joinGameClient", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr);
 
 	if (networkManager != nullptr)
 	{

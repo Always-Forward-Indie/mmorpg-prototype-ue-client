@@ -33,7 +33,7 @@ UTimeSyncService* JSONParser::GetTimeSyncService()
     if (TimeSyncService)
     {
         int64 ClientSendMs = TimeSyncService->GetCurrentClientTimeMs();
-        HeaderObject->SetNumberField("clientSendMs", ClientSendMs);
+        HeaderObject->SetNumberField(TEXT("clientSendMs"), ClientSendMs);
     }
 
     for (const auto& Elem : HeaderData)
@@ -52,12 +52,12 @@ UTimeSyncService* JSONParser::GetTimeSyncService()
 
     if (HeaderObject->Values.Num() > 0)
     {
-        MainJsonObject->SetObjectField("header", HeaderObject);
+        MainJsonObject->SetObjectField(TEXT("header"), HeaderObject);
     }
 
     if (BodyObject->Values.Num() > 0)
     {
-        MainJsonObject->SetObjectField("body", BodyObject);
+        MainJsonObject->SetObjectField(TEXT("body"), BodyObject);
     }
 
     FString OutputString;
@@ -76,7 +76,7 @@ UTimeSyncService* JSONParser::GetTimeSyncService()
 FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TMap<FString, TSharedPtr<FJsonValue>>& HeaderData, const TMap<FString, TSharedPtr<FJsonValue>>& BodyData, UTimeSyncService* TimeSyncService, EServerType ServerType)
 {
     TSharedPtr<FJsonObject> HeaderObject = MakeShareable(new FJsonObject);
-    HeaderObject->SetStringField("eventType", EventType);
+    HeaderObject->SetStringField(TEXT("eventType"), EventType);
 
     // Generate request ID and register with TimeSyncService for ALL requests
     FString RequestId;
@@ -95,7 +95,7 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
         {
             // Add requestId to header but DO NOT set clientSendMs here
             // NetworkSenderWorker will set the precise clientSendMs right before sending
-            HeaderObject->SetStringField("requestId", RequestId);
+            HeaderObject->SetStringField(TEXT("requestId"), RequestId);
             
             UE_LOG(LogTemp, Verbose, TEXT("JSONParser::SerializeJsonWithTimeSync - Added requestId: %s (clientSendMs will be set by NetworkSenderWorker)"), 
                 *RequestId);
@@ -126,12 +126,12 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 
     if (HeaderObject->Values.Num() > 0)
     {
-        MainJsonObject->SetObjectField("header", HeaderObject);
+        MainJsonObject->SetObjectField(TEXT("header"), HeaderObject);
     }
 
     if (BodyObject->Values.Num() > 0)
     {
-        MainJsonObject->SetObjectField("body", BodyObject);
+        MainJsonObject->SetObjectField(TEXT("body"), BodyObject);
     }
 
     FString OutputString;
@@ -176,10 +176,10 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
  {
 	 FPositionDataStruct Pos;
 	 if (!PosObj.IsValid()) return Pos;
-	 Pos.positionX = PosObj->GetNumberField("x");
-	 Pos.positionY = PosObj->GetNumberField("y");
-	 Pos.positionZ = PosObj->GetNumberField("z");
-	 Pos.rotationZ = PosObj->GetNumberField("rotationZ");
+	 Pos.positionX = PosObj->GetNumberField(TEXT("x"));
+	 Pos.positionY = PosObj->GetNumberField(TEXT("y"));
+	 Pos.positionZ = PosObj->GetNumberField(TEXT("z"));
+	 Pos.rotationZ = PosObj->GetNumberField(TEXT("rotationZ"));
 	 return Pos;
  }
 
@@ -192,10 +192,10 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 		 const TSharedPtr<FJsonObject> AttrObj = Value->AsObject();
 		 if (!AttrObj.IsValid()) continue;
 		 FAttributeDataStruct Attr;
-		 Attr.attributeId = AttrObj->GetIntegerField("id");
-		 Attr.attributeName = AttrObj->GetStringField("name");
-		 Attr.attributeSlug = AttrObj->GetStringField("slug");
-		 Attr.attributeValue = AttrObj->GetIntegerField("value");
+		 Attr.attributeId = AttrObj->GetIntegerField(TEXT("id"));
+		 Attr.attributeName = AttrObj->GetStringField(TEXT("name"));
+		 Attr.attributeSlug = AttrObj->GetStringField(TEXT("slug"));
+		 Attr.attributeValue = AttrObj->GetIntegerField(TEXT("value"));
 		 if (!Attr.attributeSlug.IsEmpty())
 		 {
 			 Result.Add(Attr.attributeSlug, Attr);
@@ -209,38 +209,39 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
  {
 	 FCharacterDataStruct Character;
 	 if (!CD.IsValid()) return Character;
-	 Character.characterId = CD->GetIntegerField("id");
-	 Character.characterName = CD->GetStringField("name");
-	 Character.characterClass = CD->GetStringField("class");
-	 Character.characterRace = CD->GetStringField("race");
-	 Character.characterLevel = CD->GetIntegerField("level");
+	 Character.characterId = CD->GetIntegerField(TEXT("id"));
+	 Character.characterName = CD->GetStringField(TEXT("name"));
+	 Character.characterClass = CD->GetStringField(TEXT("class"));
+	 Character.characterRace = CD->GetStringField(TEXT("race"));
+	 Character.characterLevel = CD->GetIntegerField(TEXT("level"));
 
 	 //is dead
-	 if (CD->HasField("isDead")) {
-		 Character.bIsDead = CD->GetBoolField("isDead");
+	 if (CD->HasField(TEXT("isDead"))) {
+		 Character.bIsDead = CD->GetBoolField(TEXT("isDead"));
 	 } else {
 		 Character.bIsDead = false; // Default value if not present
 	 }
 
-	 if (CD->HasField("exp")) {
-		 TSharedPtr<FJsonObject> Exp = CD->GetObjectField("exp");
-		 Character.characterExperiencePoints = Exp->GetIntegerField("current");
-		 Character.characterExpForNextLevel = Exp->GetIntegerField("nextLevel");
+	 if (CD->HasField(TEXT("exp"))) {
+		 TSharedPtr<FJsonObject> Exp = CD->GetObjectField(TEXT("exp"));
+		 Character.characterExperiencePoints = Exp->GetIntegerField(TEXT("current"));
+		 Character.characterExpForLevelStart = Exp->GetIntegerField(TEXT("levelStart"));
+		 Character.characterExpForLevelEnd = Exp->GetIntegerField(TEXT("levelEnd"));
 	 }
 
-	 if (CD->HasField("stats")) {
-		 TSharedPtr<FJsonObject> Stats = CD->GetObjectField("stats");
-		 TSharedPtr<FJsonObject> Health = Stats->GetObjectField("health");
-		 TSharedPtr<FJsonObject> Mana = Stats->GetObjectField("mana");
-		 Character.characterCurrentHealth = Health->GetIntegerField("current");
-		 Character.characterCurrentMana = Mana->GetIntegerField("current");
+	 if (CD->HasField(TEXT("stats"))) {
+		 TSharedPtr<FJsonObject> Stats = CD->GetObjectField(TEXT("stats"));
+		 TSharedPtr<FJsonObject> Health = Stats->GetObjectField(TEXT("health"));
+		 TSharedPtr<FJsonObject> Mana = Stats->GetObjectField(TEXT("mana"));
+		 Character.characterCurrentHealth = Health->GetIntegerField(TEXT("current"));
+		 Character.characterCurrentMana = Mana->GetIntegerField(TEXT("current"));
 	 }
 
-	 if (CD->HasField("position"))
-		 Character.characterPosition = JSONParser::DeserializePositionData(CD->GetObjectField("position"));
+	 if (CD->HasField(TEXT("position")))
+		 Character.characterPosition = JSONParser::DeserializePositionData(CD->GetObjectField(TEXT("position")));
 
-	 if (CD->HasField("attributes"))
-		 Character.characterAttributes.attributesData = JSONParser::DeserializeAttributesArray(CD->GetArrayField("attributes"));
+	 if (CD->HasField(TEXT("attributes")))
+		 Character.characterAttributes.attributesData = JSONParser::DeserializeAttributesArray(CD->GetArrayField(TEXT("attributes")));
 
 	 return Character;
  }
@@ -251,8 +252,8 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 	 TSharedPtr<FJsonObject> Root;
 	 TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	 if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return FCharacterDataStruct();
-	 TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
-	 return JSONParser::DeserializeCharacterData(Body->GetObjectField("character"));
+	 TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
+	 return JSONParser::DeserializeCharacterData(Body->GetObjectField(TEXT("character")));
  }
 
 
@@ -504,27 +505,27 @@ FSpawnZoneStruct JSONParser::DeserializeSpawnZoneData(const TSharedPtr<FJsonObje
 
 	if (!SpawnZoneObject.IsValid()) return SpawnZoneData;
 
-	SpawnZoneData.zoneID = SpawnZoneObject->GetIntegerField("id");
-	SpawnZoneData.zoneName = SpawnZoneObject->GetStringField("name");
-	SpawnZoneData.MobIDToSpawn = SpawnZoneObject->GetIntegerField("spawnMobId");
-	SpawnZoneData.MaxMobs = SpawnZoneObject->GetIntegerField("maxSpawnCount");
-	SpawnZoneData.currentMobsCount = SpawnZoneObject->GetIntegerField("spawnedMobsCount");
-	SpawnZoneData.respawnTime = SpawnZoneObject->GetIntegerField("respawnTime");
-	SpawnZoneData.bSpawningEnabled = SpawnZoneObject->GetBoolField("spawnEnabled");
+	SpawnZoneData.zoneID = SpawnZoneObject->GetIntegerField(TEXT("id"));
+	SpawnZoneData.zoneName = SpawnZoneObject->GetStringField(TEXT("name"));
+	SpawnZoneData.MobIDToSpawn = SpawnZoneObject->GetIntegerField(TEXT("spawnMobId"));
+	SpawnZoneData.MaxMobs = SpawnZoneObject->GetIntegerField(TEXT("maxSpawnCount"));
+	SpawnZoneData.currentMobsCount = SpawnZoneObject->GetIntegerField(TEXT("spawnedMobsCount"));
+	SpawnZoneData.respawnTime = SpawnZoneObject->GetIntegerField(TEXT("respawnTime"));
+	SpawnZoneData.bSpawningEnabled = SpawnZoneObject->GetBoolField(TEXT("spawnEnabled"));
 
-	if (SpawnZoneObject->HasField("bounds"))
+	if (SpawnZoneObject->HasField(TEXT("bounds")))
 	{
-		const TSharedPtr<FJsonObject> Bounds = SpawnZoneObject->GetObjectField("bounds");
+		const TSharedPtr<FJsonObject> Bounds = SpawnZoneObject->GetObjectField(TEXT("bounds"));
 
 		SpawnZoneData.spawnStartPos = FVector(
-			Bounds->GetNumberField("minX"),
-			Bounds->GetNumberField("minY"),
-			Bounds->GetNumberField("minZ"));
+			Bounds->GetNumberField(TEXT("minX")),
+			Bounds->GetNumberField(TEXT("minY")),
+			Bounds->GetNumberField(TEXT("minZ")));
 
 		SpawnZoneData.spawnSize = FVector(
-			Bounds->GetNumberField("maxX"),
-			Bounds->GetNumberField("maxY"),
-			Bounds->GetNumberField("maxZ"));
+			Bounds->GetNumberField(TEXT("maxX")),
+			Bounds->GetNumberField(TEXT("maxY")),
+			Bounds->GetNumberField(TEXT("maxZ")));
 	}
 
 	return SpawnZoneData;
@@ -536,7 +537,7 @@ TArray<FMOBStruct> JSONParser::DeserializeMobsList(const TSharedPtr<FJsonObject>
 	TArray<FMOBStruct> MobsList;
 	const TArray<TSharedPtr<FJsonValue>>* MobsArray;
 
-	if (Body->TryGetArrayField("mobs", MobsArray))
+	if (Body->TryGetArrayField(TEXT("mobs"), MobsArray))
 	{
 		for (const TSharedPtr<FJsonValue>& MobValue : *MobsArray)
 		{
@@ -553,30 +554,30 @@ TArray<FMOBStruct> JSONParser::DeserializeMobsList(const TSharedPtr<FJsonObject>
 FMOBStruct JSONParser::DeserializeMobData(const TSharedPtr<FJsonObject>& MobObject)
 {
 	FMOBStruct Mob;
-	Mob.mobID = MobObject->GetIntegerField("id");
-	Mob.mobUniqueID = FString::FromInt(MobObject->GetIntegerField("uid"));
-	Mob.mobZoneID = MobObject->GetIntegerField("zoneId");
-	Mob.mobName = MobObject->GetStringField("name");
-	Mob.mobSlug = MobObject->GetStringField("slug");
-	Mob.mobRace = MobObject->GetStringField("race");
-	Mob.mobLevel = MobObject->GetIntegerField("level");
-	Mob.bIsAggressive = MobObject->GetBoolField("isAggressive");
-	Mob.bIsDead = MobObject->GetBoolField("isDead");
+	Mob.mobID = MobObject->GetIntegerField(TEXT("id"));
+	Mob.mobUniqueID = FString::FromInt(MobObject->GetIntegerField(TEXT("uid")));
+	Mob.mobZoneID = MobObject->GetIntegerField(TEXT("zoneId"));
+	Mob.mobName = MobObject->GetStringField(TEXT("name"));
+	Mob.mobSlug = MobObject->GetStringField(TEXT("slug"));
+	Mob.mobRace = MobObject->GetStringField(TEXT("race"));
+	Mob.mobLevel = MobObject->GetIntegerField(TEXT("level"));
+	Mob.bIsAggressive = MobObject->GetBoolField(TEXT("isAggressive"));
+	Mob.bIsDead = MobObject->GetBoolField(TEXT("isDead"));
 
 
-	Mob.mobPosition = JSONParser::DeserializePositionData(MobObject->GetObjectField("position"));
+	Mob.mobPosition = JSONParser::DeserializePositionData(MobObject->GetObjectField(TEXT("position")));
 
-	if (MobObject->HasField("stats")) {
-		TSharedPtr<FJsonObject> Stats = MobObject->GetObjectField("stats");
-		TSharedPtr<FJsonObject> Health = Stats->GetObjectField("health");
-		TSharedPtr<FJsonObject> Mana = Stats->GetObjectField("mana");
-		Mob.mobCurrentHealth = Health->GetIntegerField("current");
-		Mob.mobCurrentMana = Mana->GetIntegerField("current");
+	if (MobObject->HasField(TEXT("stats"))) {
+		TSharedPtr<FJsonObject> Stats = MobObject->GetObjectField(TEXT("stats"));
+		TSharedPtr<FJsonObject> Health = Stats->GetObjectField(TEXT("health"));
+		TSharedPtr<FJsonObject> Mana = Stats->GetObjectField(TEXT("mana"));
+		Mob.mobCurrentHealth = Health->GetIntegerField(TEXT("current"));
+		Mob.mobCurrentMana = Mana->GetIntegerField(TEXT("current"));
 	}
 
-	if (MobObject->HasField("attributes"))
+	if (MobObject->HasField(TEXT("attributes")))
 	{
-		Mob.mobAttributes.attributesData = JSONParser::DeserializeAttributesArray(MobObject->GetArrayField("attributes"));
+		Mob.mobAttributes.attributesData = JSONParser::DeserializeAttributesArray(MobObject->GetArrayField(TEXT("attributes")));
 	}
 
 	return Mob;
@@ -588,17 +589,17 @@ FItemAttributeStruct JSONParser::DeserializeItemAttribute(const TSharedPtr<FJson
 	FItemAttributeStruct ItemAttribute;
 	if (!AttributeObj.IsValid()) return ItemAttribute;
 
-	if (AttributeObj->HasField("id"))
-		ItemAttribute.id = AttributeObj->GetIntegerField("id");
+	if (AttributeObj->HasField(TEXT("id")))
+		ItemAttribute.id = AttributeObj->GetIntegerField(TEXT("id"));
 	
-	if (AttributeObj->HasField("name"))
-		ItemAttribute.name = AttributeObj->GetStringField("name");
+	if (AttributeObj->HasField(TEXT("name")))
+		ItemAttribute.name = AttributeObj->GetStringField(TEXT("name"));
 	
-	if (AttributeObj->HasField("slug"))
-		ItemAttribute.slug = AttributeObj->GetStringField("slug");
+	if (AttributeObj->HasField(TEXT("slug")))
+		ItemAttribute.slug = AttributeObj->GetStringField(TEXT("slug"));
 	
-	if (AttributeObj->HasField("value"))
-		ItemAttribute.value = AttributeObj->GetNumberField("value");
+	if (AttributeObj->HasField(TEXT("value")))
+		ItemAttribute.value = AttributeObj->GetNumberField(TEXT("value"));
 
 	return ItemAttribute;
 }
@@ -624,36 +625,36 @@ FItemBaseStruct JSONParser::DeserializeItemData(const TSharedPtr<FJsonObject>& I
 	FItemBaseStruct Item;
 	if (!ItemObj.IsValid()) return Item;
 
-	if (ItemObj->HasField("id"))
-		Item.id = ItemObj->GetIntegerField("id");
+	if (ItemObj->HasField(TEXT("id")))
+		Item.id = ItemObj->GetIntegerField(TEXT("id"));
 	
-	if (ItemObj->HasField("name"))
-		Item.name = ItemObj->GetStringField("name");
+	if (ItemObj->HasField(TEXT("name")))
+		Item.name = ItemObj->GetStringField(TEXT("name"));
 	
-	if (ItemObj->HasField("slug"))
-		Item.slug = ItemObj->GetStringField("slug");
+	if (ItemObj->HasField(TEXT("slug")))
+		Item.slug = ItemObj->GetStringField(TEXT("slug"));
 	
-	if (ItemObj->HasField("description"))
-		Item.description = ItemObj->GetStringField("description");
+	if (ItemObj->HasField(TEXT("description")))
+		Item.description = ItemObj->GetStringField(TEXT("description"));
 	
-	if (ItemObj->HasField("isQuestItem"))
-		Item.isQuestItem = ItemObj->GetBoolField("isQuestItem");
+	if (ItemObj->HasField(TEXT("isQuestItem")))
+		Item.isQuestItem = ItemObj->GetBoolField(TEXT("isQuestItem"));
 	
-	if (ItemObj->HasField("itemType"))
+	if (ItemObj->HasField(TEXT("itemType")))
 	{
-		Item.itemType = static_cast<EItemType>(ItemObj->GetIntegerField("itemType"));
+		Item.itemType = static_cast<EItemType>(ItemObj->GetIntegerField(TEXT("itemType")));
 	}
 	
-	if (ItemObj->HasField("itemTypeName"))
-		Item.itemTypeName = ItemObj->GetStringField("itemTypeName");
+	if (ItemObj->HasField(TEXT("itemTypeName")))
+		Item.itemTypeName = ItemObj->GetStringField(TEXT("itemTypeName"));
 	
-	if (ItemObj->HasField("itemTypeSlug"))
-		Item.itemTypeSlug = ItemObj->GetStringField("itemTypeSlug");
+	if (ItemObj->HasField(TEXT("itemTypeSlug")))
+		Item.itemTypeSlug = ItemObj->GetStringField(TEXT("itemTypeSlug"));
 	
-	if (ItemObj->HasField("attributes"))
+	if (ItemObj->HasField(TEXT("attributes")))
 	{
 		const TArray<TSharedPtr<FJsonValue>>* AttributesArray;
-		if (ItemObj->TryGetArrayField("attributes", AttributesArray))
+		if (ItemObj->TryGetArrayField(TEXT("attributes"), AttributesArray))
 		{
 			Item.attributes = JSONParser::DeserializeItemAttributes(*AttributesArray);
 		}
@@ -668,26 +669,26 @@ FDroppedItemStruct JSONParser::DeserializeDroppedItem(const TSharedPtr<FJsonObje
 	FDroppedItemStruct DroppedItem;
 	if (!DroppedItemObj.IsValid()) return DroppedItem;
 
-	if (DroppedItemObj->HasField("uid"))
-		DroppedItem.uid = DroppedItemObj->GetIntegerField("uid");
+	if (DroppedItemObj->HasField(TEXT("uid")))
+		DroppedItem.uid = DroppedItemObj->GetIntegerField(TEXT("uid"));
 	
-	if (DroppedItemObj->HasField("itemId"))
-		DroppedItem.itemId = DroppedItemObj->GetIntegerField("itemId");
+	if (DroppedItemObj->HasField(TEXT("itemId")))
+		DroppedItem.itemId = DroppedItemObj->GetIntegerField(TEXT("itemId"));
 	
-	if (DroppedItemObj->HasField("droppedByMobUID"))
-		DroppedItem.droppedByMobUID = DroppedItemObj->GetStringField("droppedByMobUID");
+	if (DroppedItemObj->HasField(TEXT("droppedByMobUID")))
+		DroppedItem.droppedByMobUID = DroppedItemObj->GetStringField(TEXT("droppedByMobUID"));
 	
-	if (DroppedItemObj->HasField("quantity"))
-		DroppedItem.quantity = DroppedItemObj->GetIntegerField("quantity");
+	if (DroppedItemObj->HasField(TEXT("quantity")))
+		DroppedItem.quantity = DroppedItemObj->GetIntegerField(TEXT("quantity"));
 	
-	if (DroppedItemObj->HasField("canBePickedUp"))
-		DroppedItem.canBePickedUp = DroppedItemObj->GetBoolField("canBePickedUp");
+	if (DroppedItemObj->HasField(TEXT("canBePickedUp")))
+		DroppedItem.canBePickedUp = DroppedItemObj->GetBoolField(TEXT("canBePickedUp"));
 	
-	if (DroppedItemObj->HasField("position") && DroppedItemObj->GetObjectField("position").IsValid())
-		DroppedItem.position = JSONParser::DeserializePositionData(DroppedItemObj->GetObjectField("position"));
+	if (DroppedItemObj->HasField(TEXT("position")) && DroppedItemObj->GetObjectField(TEXT("position")).IsValid())
+		DroppedItem.position = JSONParser::DeserializePositionData(DroppedItemObj->GetObjectField(TEXT("position")));
 	
-	if (DroppedItemObj->HasField("item") && DroppedItemObj->GetObjectField("item").IsValid())
-		DroppedItem.item = JSONParser::DeserializeItemData(DroppedItemObj->GetObjectField("item"));
+	if (DroppedItemObj->HasField(TEXT("item")) && DroppedItemObj->GetObjectField(TEXT("item")).IsValid())
+		DroppedItem.item = JSONParser::DeserializeItemData(DroppedItemObj->GetObjectField(TEXT("item")));
 
 	return DroppedItem;
 }
@@ -699,7 +700,7 @@ FItemDropResponseStruct JSONParser::DeserializeItemDropResponse(const TSharedPtr
 	if (!Body.IsValid()) return ItemDropResponse;
 
 	const TArray<TSharedPtr<FJsonValue>>* DroppedItemsArray;
-	if (Body->TryGetArrayField("droppedItems", DroppedItemsArray))
+	if (Body->TryGetArrayField(TEXT("droppedItems"), DroppedItemsArray))
 	{
 		for (const TSharedPtr<FJsonValue>& ItemValue : *DroppedItemsArray)
 		{
@@ -720,17 +721,17 @@ FCombatAnimationData JSONParser::DeserializeCombatAnimation(const TSharedPtr<FJs
 	FCombatAnimationData AnimationData;
 	if (!AnimationObj.IsValid()) return AnimationData;
 
-	if (AnimationObj->HasField("animationName"))
-		AnimationData.AnimationName = AnimationObj->GetStringField("animationName");
+	if (AnimationObj->HasField(TEXT("animationName")))
+		AnimationData.AnimationName = AnimationObj->GetStringField(TEXT("animationName"));
 	
-	if (AnimationObj->HasField("characterId"))
-		AnimationData.CharacterId = AnimationObj->GetIntegerField("characterId");
+	if (AnimationObj->HasField(TEXT("characterId")))
+		AnimationData.CharacterId = AnimationObj->GetIntegerField(TEXT("characterId"));
 	
-	if (AnimationObj->HasField("duration"))
-		AnimationData.Duration = AnimationObj->GetNumberField("duration");
+	if (AnimationObj->HasField(TEXT("duration")))
+		AnimationData.Duration = AnimationObj->GetNumberField(TEXT("duration"));
 	
-	if (AnimationObj->HasField("isLooping"))
-		AnimationData.bIsLooping = AnimationObj->GetBoolField("isLooping");
+	if (AnimationObj->HasField(TEXT("isLooping")))
+		AnimationData.bIsLooping = AnimationObj->GetBoolField(TEXT("isLooping"));
 
 	return AnimationData;
 }
@@ -740,26 +741,26 @@ FCombatActionData JSONParser::DeserializeCombatAction(const TSharedPtr<FJsonObje
 	FCombatActionData ActionData;
 	if (!ActionObj.IsValid()) return ActionData;
 
-	if (ActionObj->HasField("actionId"))
-		ActionData.ActionId = ActionObj->GetIntegerField("actionId");
+	if (ActionObj->HasField(TEXT("actionId")))
+		ActionData.ActionId = ActionObj->GetIntegerField(TEXT("actionId"));
 	
-	if (ActionObj->HasField("actionName"))
-		ActionData.ActionName = ActionObj->GetStringField("actionName");
+	if (ActionObj->HasField(TEXT("actionName")))
+		ActionData.ActionName = ActionObj->GetStringField(TEXT("actionName"));
 	
-	if (ActionObj->HasField("actionType"))
-		ActionData.ActionType = ActionObj->GetIntegerField("actionType");
+	if (ActionObj->HasField(TEXT("actionType")))
+		ActionData.ActionType = ActionObj->GetIntegerField(TEXT("actionType"));
 	
-	if (ActionObj->HasField("casterId"))
-		ActionData.CasterId = ActionObj->GetIntegerField("casterId");
+	if (ActionObj->HasField(TEXT("casterId")))
+		ActionData.CasterId = ActionObj->GetIntegerField(TEXT("casterId"));
 	
-	if (ActionObj->HasField("targetId"))
-		ActionData.TargetId = ActionObj->GetIntegerField("targetId");
+	if (ActionObj->HasField(TEXT("targetId")))
+		ActionData.TargetId = ActionObj->GetIntegerField(TEXT("targetId"));
 	
-	if (ActionObj->HasField("targetType"))
-		ActionData.TargetType = ActionObj->GetIntegerField("targetType");
+	if (ActionObj->HasField(TEXT("targetType")))
+		ActionData.TargetType = ActionObj->GetIntegerField(TEXT("targetType"));
 	
-	if (ActionObj->HasField("targetTypeString"))
-		ActionData.TargetTypeString = ActionObj->GetStringField("targetTypeString");
+	if (ActionObj->HasField(TEXT("targetTypeString")))
+		ActionData.TargetTypeString = ActionObj->GetStringField(TEXT("targetTypeString"));
 
 	return ActionData;
 }
@@ -769,50 +770,50 @@ FCombatResultData JSONParser::DeserializeCombatResult(const TSharedPtr<FJsonObje
 	FCombatResultData ResultData;
 	if (!ResultObj.IsValid()) return ResultData;
 
-	if (ResultObj->HasField("actionId"))
-		ResultData.ActionId = ResultObj->GetIntegerField("actionId");
+	if (ResultObj->HasField(TEXT("actionId")))
+		ResultData.ActionId = ResultObj->GetIntegerField(TEXT("actionId"));
 	
-	if (ResultObj->HasField("casterId"))
-		ResultData.CasterId = ResultObj->GetIntegerField("casterId");
+	if (ResultObj->HasField(TEXT("casterId")))
+		ResultData.CasterId = ResultObj->GetIntegerField(TEXT("casterId"));
 	
-	if (ResultObj->HasField("damageDealt"))
-		ResultData.DamageDealt = ResultObj->GetIntegerField("damageDealt");
+	if (ResultObj->HasField(TEXT("damageDealt")))
+		ResultData.DamageDealt = ResultObj->GetIntegerField(TEXT("damageDealt"));
 	
-	if (ResultObj->HasField("healingDone"))
-		ResultData.HealingDone = ResultObj->GetIntegerField("healingDone");
+	if (ResultObj->HasField(TEXT("healingDone")))
+		ResultData.HealingDone = ResultObj->GetIntegerField(TEXT("healingDone"));
 	
-	if (ResultObj->HasField("isBlocked"))
-		ResultData.bIsBlocked = ResultObj->GetBoolField("isBlocked");
+	if (ResultObj->HasField(TEXT("isBlocked")))
+		ResultData.bIsBlocked = ResultObj->GetBoolField(TEXT("isBlocked"));
 	
-	if (ResultObj->HasField("isCritical"))
-		ResultData.bIsCritical = ResultObj->GetBoolField("isCritical");
+	if (ResultObj->HasField(TEXT("isCritical")))
+		ResultData.bIsCritical = ResultObj->GetBoolField(TEXT("isCritical"));
 	
-	if (ResultObj->HasField("isDodged"))
-		ResultData.bIsDodged = ResultObj->GetBoolField("isDodged");
+	if (ResultObj->HasField(TEXT("isDodged")))
+		ResultData.bIsDodged = ResultObj->GetBoolField(TEXT("isDodged"));
 	
-	if (ResultObj->HasField("isResisted"))
-		ResultData.bIsResisted = ResultObj->GetBoolField("isResisted");
+	if (ResultObj->HasField(TEXT("isResisted")))
+		ResultData.bIsResisted = ResultObj->GetBoolField(TEXT("isResisted"));
 	
-	if (ResultObj->HasField("remainingHealth"))
-		ResultData.RemainingHealth = ResultObj->GetIntegerField("remainingHealth");
+	if (ResultObj->HasField(TEXT("remainingHealth")))
+		ResultData.RemainingHealth = ResultObj->GetIntegerField(TEXT("remainingHealth"));
 	
-	if (ResultObj->HasField("remainingMana"))
-		ResultData.RemainingMana = ResultObj->GetIntegerField("remainingMana");
+	if (ResultObj->HasField(TEXT("remainingMana")))
+		ResultData.RemainingMana = ResultObj->GetIntegerField(TEXT("remainingMana"));
 	
-	if (ResultObj->HasField("targetDied"))
-		ResultData.bTargetDied = ResultObj->GetBoolField("targetDied");
+	if (ResultObj->HasField(TEXT("targetDied")))
+		ResultData.bTargetDied = ResultObj->GetBoolField(TEXT("targetDied"));
 	
-	if (ResultObj->HasField("isDamaged"))
-		ResultData.bIsDamaged = ResultObj->GetBoolField("isDamaged");
+	if (ResultObj->HasField(TEXT("isDamaged")))
+		ResultData.bIsDamaged = ResultObj->GetBoolField(TEXT("isDamaged"));
 	
-	if (ResultObj->HasField("targetId"))
-		ResultData.TargetId = ResultObj->GetIntegerField("targetId");
+	if (ResultObj->HasField(TEXT("targetId")))
+		ResultData.TargetId = ResultObj->GetIntegerField(TEXT("targetId"));
 	
-	if (ResultObj->HasField("targetType"))
-		ResultData.TargetType = ResultObj->GetIntegerField("targetType");
+	if (ResultObj->HasField(TEXT("targetType")))
+		ResultData.TargetType = ResultObj->GetIntegerField(TEXT("targetType"));
 	
-	if (ResultObj->HasField("targetTypeString"))
-		ResultData.TargetTypeString = ResultObj->GetStringField("targetTypeString");
+	if (ResultObj->HasField(TEXT("targetTypeString")))
+		ResultData.TargetTypeString = ResultObj->GetStringField(TEXT("targetTypeString"));
 
 	return ResultData;
 }
@@ -822,23 +823,23 @@ FMobTargetLostStruct JSONParser::DeserializeMobTargetLost(const TSharedPtr<FJson
 	FMobTargetLostStruct MobTargetLostData;
 	if (!Body.IsValid()) return MobTargetLostData;
 
-	if (Body->HasField("lostTargetPlayerId"))
-		MobTargetLostData.lostTargetPlayerId = Body->GetIntegerField("lostTargetPlayerId");
+	if (Body->HasField(TEXT("lostTargetPlayerId")))
+		MobTargetLostData.lostTargetPlayerId = Body->GetIntegerField(TEXT("lostTargetPlayerId"));
 
-	if (Body->HasField("mobId"))
-		MobTargetLostData.mobId = Body->GetIntegerField("mobId");
+	if (Body->HasField(TEXT("mobId")))
+		MobTargetLostData.mobId = Body->GetIntegerField(TEXT("mobId"));
 
-	if (Body->HasField("mobUID"))
-		MobTargetLostData.mobUID = Body->GetIntegerField("mobUID");
+	if (Body->HasField(TEXT("mobUID")))
+		MobTargetLostData.mobUID = Body->GetIntegerField(TEXT("mobUID"));
 
 	// Parse position data from individual fields
-	if (Body->HasField("positionX") && Body->HasField("positionY") &&
-		Body->HasField("positionZ") && Body->HasField("rotationZ"))
+	if (Body->HasField(TEXT("positionX")) && Body->HasField(TEXT("positionY")) &&
+		Body->HasField(TEXT("positionZ")) && Body->HasField(TEXT("rotationZ")))
 	{
-		MobTargetLostData.position.positionX = Body->GetNumberField("positionX");
-		MobTargetLostData.position.positionY = Body->GetNumberField("positionY");
-		MobTargetLostData.position.positionZ = Body->GetNumberField("positionZ");
-		MobTargetLostData.position.rotationZ = Body->GetNumberField("rotationZ");
+		MobTargetLostData.position.positionX = Body->GetNumberField(TEXT("positionX"));
+		MobTargetLostData.position.positionY = Body->GetNumberField(TEXT("positionY"));
+		MobTargetLostData.position.positionZ = Body->GetNumberField(TEXT("positionZ"));
+		MobTargetLostData.position.rotationZ = Body->GetNumberField(TEXT("rotationZ"));
 	}
 
 	return MobTargetLostData;
@@ -852,7 +853,7 @@ FMobTargetLostStruct JSONParser::DeserializeMobTargetLost(const FString& JsonStr
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 		return FMobTargetLostStruct();
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 	if (!Body.IsValid())
 		return FMobTargetLostStruct();
 
@@ -867,89 +868,89 @@ FInventoryItemStruct JSONParser::DeserializeInventoryItem(const TSharedPtr<FJson
 	if (!ItemObj.IsValid()) return Item;
 
 	// ѕростые числовые/строковые
-	if (ItemObj->HasField("itemId"))
-		Item.itemId = ItemObj->GetIntegerField("itemId");
+	if (ItemObj->HasField(TEXT("itemId")))
+		Item.itemId = ItemObj->GetIntegerField(TEXT("itemId"));
 
-	if (ItemObj->HasField("quantity"))
-		Item.quantity = ItemObj->GetIntegerField("quantity");
+	if (ItemObj->HasField(TEXT("quantity")))
+		Item.quantity = ItemObj->GetIntegerField(TEXT("quantity"));
 
-	if (ItemObj->HasField("name"))
-		Item.name = ItemObj->GetStringField("name");
+	if (ItemObj->HasField(TEXT("name")))
+		Item.name = ItemObj->GetStringField(TEXT("name"));
 
-	if (ItemObj->HasField("slug"))
-		Item.slug = ItemObj->GetStringField("slug");
+	if (ItemObj->HasField(TEXT("slug")))
+		Item.slug = ItemObj->GetStringField(TEXT("slug"));
 
-	if (ItemObj->HasField("description"))
-		Item.description = ItemObj->GetStringField("description");
+	if (ItemObj->HasField(TEXT("description")))
+		Item.description = ItemObj->GetStringField(TEXT("description"));
 
-	if (ItemObj->HasField("itemTypeName"))
-		Item.type = ItemObj->GetStringField("itemTypeName");
+	if (ItemObj->HasField(TEXT("itemTypeName")))
+		Item.type = ItemObj->GetStringField(TEXT("itemTypeName"));
 
-	if (ItemObj->HasField("rarityName"))
-		Item.rarity = ItemObj->GetStringField("rarityName");
+	if (ItemObj->HasField(TEXT("rarityName")))
+		Item.rarity = ItemObj->GetStringField(TEXT("rarityName"));
 
-	if (ItemObj->HasField("levelRequirement"))
-		Item.level_requirement = ItemObj->GetIntegerField("levelRequirement");
+	if (ItemObj->HasField(TEXT("levelRequirement")))
+		Item.level_requirement = ItemObj->GetIntegerField(TEXT("levelRequirement"));
 
-	if (ItemObj->HasField("weight"))
-		Item.weight = ItemObj->GetNumberField("weight");
+	if (ItemObj->HasField(TEXT("weight")))
+		Item.weight = ItemObj->GetNumberField(TEXT("weight"));
 
-	if (ItemObj->HasField("stackMax"))
-		Item.stackSize = ItemObj->GetIntegerField("stackMax");
+	if (ItemObj->HasField(TEXT("stackMax")))
+		Item.stackSize = ItemObj->GetIntegerField(TEXT("stackMax"));
 
-	if (ItemObj->HasField("durabilityMax"))
-		Item.durability_max = ItemObj->GetIntegerField("durabilityMax");
+	if (ItemObj->HasField(TEXT("durabilityMax")))
+		Item.durability_max = ItemObj->GetIntegerField(TEXT("durabilityMax"));
 
 	// durabilityCurrent в пакете пока нет, оставл€ем дефолт = max
 	Item.durability_current = Item.durability_max;
 
 	// ‘лаги
-	if (ItemObj->HasField("isDurable"))
-		Item.is_durable = ItemObj->GetBoolField("isDurable");
+	if (ItemObj->HasField(TEXT("isDurable")))
+		Item.is_durable = ItemObj->GetBoolField(TEXT("isDurable"));
 
-	if (ItemObj->HasField("isTradable"))
-		Item.is_tradable = ItemObj->GetBoolField("isTradable");
+	if (ItemObj->HasField(TEXT("isTradable")))
+		Item.is_tradable = ItemObj->GetBoolField(TEXT("isTradable"));
 
-	if (ItemObj->HasField("isContainer"))
-		Item.is_container = ItemObj->GetBoolField("isContainer");
+	if (ItemObj->HasField(TEXT("isContainer")))
+		Item.is_container = ItemObj->GetBoolField(TEXT("isContainer"));
 
-	if (ItemObj->HasField("isQuestItem"))
-		Item.is_quest_item = ItemObj->GetBoolField("isQuestItem");
+	if (ItemObj->HasField(TEXT("isQuestItem")))
+		Item.is_quest_item = ItemObj->GetBoolField(TEXT("isQuestItem"));
 
 	// Ёквип Ч делаем флажок true если есть слот > 0
-	if (ItemObj->HasField("equipSlot"))
+	if (ItemObj->HasField(TEXT("equipSlot")))
 	{
-		int32 SlotId = ItemObj->GetIntegerField("equipSlot");
+		int32 SlotId = ItemObj->GetIntegerField(TEXT("equipSlot"));
 		Item.is_equippable = (SlotId > 0);
 	}
 
 	// ÷ены
-	if (ItemObj->HasField("vendorPriceBuy"))
-		Item.vendor_price_buy = ItemObj->GetIntegerField("vendorPriceBuy");
+	if (ItemObj->HasField(TEXT("vendorPriceBuy")))
+		Item.vendor_price_buy = ItemObj->GetIntegerField(TEXT("vendorPriceBuy"));
 
-	if (ItemObj->HasField("vendorPriceSell"))
-		Item.vendor_price_sell = ItemObj->GetIntegerField("vendorPriceSell");
+	if (ItemObj->HasField(TEXT("vendorPriceSell")))
+		Item.vendor_price_sell = ItemObj->GetIntegerField(TEXT("vendorPriceSell"));
 
 	// Attributes (массив объектов {name,value})
-	if (ItemObj->HasTypedField<EJson::Array>("attributes"))
+	if (ItemObj->HasTypedField<EJson::Array>(TEXT("attributes")))
 	{
-		const TArray<TSharedPtr<FJsonValue>> AttrArray = ItemObj->GetArrayField("attributes");
+		const TArray<TSharedPtr<FJsonValue>> AttrArray = ItemObj->GetArrayField(TEXT("attributes"));
 		for (const TSharedPtr<FJsonValue>& AttrVal : AttrArray)
 		{
 			TSharedPtr<FJsonObject> AttrObj = AttrVal->AsObject();
 			if (!AttrObj.IsValid()) continue;
 
 			FString AttrName;
-			if (AttrObj->TryGetStringField("name", AttrName))
+			if (AttrObj->TryGetStringField(TEXT("name"), AttrName))
 			{
 				// value может быть числом или строкой
 				FString StrVal;
 				double NumVal;
-				if (AttrObj->TryGetStringField("value", StrVal))
+				if (AttrObj->TryGetStringField(TEXT("value"), StrVal))
 				{
 					Item.attributes.Add(AttrName, StrVal);
 				}
-				else if (AttrObj->TryGetNumberField("value", NumVal))
+				else if (AttrObj->TryGetNumberField(TEXT("value"), NumVal))
 				{
 					Item.attributes.Add(AttrName, FString::SanitizeFloat(NumVal));
 				}
@@ -968,7 +969,7 @@ FCharacterInventoryStruct JSONParser::DeserializeCharacterInventory(const FStrin
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 		return FCharacterInventoryStruct();
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 	if (!Body.IsValid())
 		return FCharacterInventoryStruct();
 
@@ -982,14 +983,14 @@ FCharacterInventoryStruct JSONParser::DeserializeCharacterInventory(const TShare
 		return Inventory;
 
 	int32 CharacterId = 0;
-	if (Body->TryGetNumberField("characterId", CharacterId))
+	if (Body->TryGetNumberField(TEXT("characterId"), CharacterId))
 	{
 		Inventory.characterId = CharacterId;
 	}
 
 	// Items
 	const TArray<TSharedPtr<FJsonValue>>* ItemsArray = nullptr;
-	if (Body->TryGetArrayField("items", ItemsArray))
+	if (Body->TryGetArrayField(TEXT("items"), ItemsArray))
 	{
 		for (const TSharedPtr<FJsonValue>& ItemValue : *ItemsArray)
 		{
@@ -1010,16 +1011,16 @@ FInventoryUpdateStruct JSONParser::DeserializeInventoryUpdate(const TSharedPtr<F
 	FInventoryUpdateStruct Update;
 	if (!UpdateObj.IsValid()) return Update;
 	
-	if (UpdateObj->HasField("eventType"))
-		Update.eventType = UpdateObj->GetStringField("eventType");
+	if (UpdateObj->HasField(TEXT("eventType")))
+		Update.eventType = UpdateObj->GetStringField(TEXT("eventType"));
 	
-	if (UpdateObj->HasField("characterId"))
-		Update.characterId = UpdateObj->GetIntegerField("characterId");
+	if (UpdateObj->HasField(TEXT("characterId")))
+		Update.characterId = UpdateObj->GetIntegerField(TEXT("characterId"));
 
 	// Parse data object
-	if (UpdateObj->HasField("data"))
+	if (UpdateObj->HasField(TEXT("data")))
 	{
-		TSharedPtr<FJsonObject> DataObj = UpdateObj->GetObjectField("data");
+		TSharedPtr<FJsonObject> DataObj = UpdateObj->GetObjectField(TEXT("data"));
 		if (DataObj.IsValid())
 		{
 			Update.data = JSONParser::DeserializeCharacterInventory(DataObj);
@@ -1045,38 +1046,38 @@ FHarvestItemStruct JSONParser::DeserializeHarvestItem(const TSharedPtr<FJsonObje
 	FHarvestItemStruct Item;
 	if (!ItemObj.IsValid()) return Item;
 
-	if (ItemObj->HasField("itemId"))
-		Item.itemId = ItemObj->GetIntegerField("itemId");
+	if (ItemObj->HasField(TEXT("itemId")))
+		Item.itemId = ItemObj->GetIntegerField(TEXT("itemId"));
 
-	if (ItemObj->HasField("itemSlug"))
-		Item.itemSlug = ItemObj->GetStringField("itemSlug");
+	if (ItemObj->HasField(TEXT("itemSlug")))
+		Item.itemSlug = ItemObj->GetStringField(TEXT("itemSlug"));
 
-	if (ItemObj->HasField("quantity"))
-		Item.quantity = ItemObj->GetIntegerField("quantity");
+	if (ItemObj->HasField(TEXT("quantity")))
+		Item.quantity = ItemObj->GetIntegerField(TEXT("quantity"));
 
-	if (ItemObj->HasField("name"))
-		Item.name = ItemObj->GetStringField("name");
+	if (ItemObj->HasField(TEXT("name")))
+		Item.name = ItemObj->GetStringField(TEXT("name"));
 
-	if (ItemObj->HasField("description"))
-		Item.description = ItemObj->GetStringField("description");
+	if (ItemObj->HasField(TEXT("description")))
+		Item.description = ItemObj->GetStringField(TEXT("description"));
 
-	if (ItemObj->HasField("rarityId"))
-		Item.rarityId = ItemObj->GetIntegerField("rarityId");
+	if (ItemObj->HasField(TEXT("rarityId")))
+		Item.rarityId = ItemObj->GetIntegerField(TEXT("rarityId"));
 
-	if (ItemObj->HasField("rarityName"))
-		Item.rarityName = ItemObj->GetStringField("rarityName");
+	if (ItemObj->HasField(TEXT("rarityName")))
+		Item.rarityName = ItemObj->GetStringField(TEXT("rarityName"));
 
-	if (ItemObj->HasField("itemType"))
-		Item.itemType = ItemObj->GetStringField("itemType");
+	if (ItemObj->HasField(TEXT("itemType")))
+		Item.itemType = ItemObj->GetStringField(TEXT("itemType"));
 
-	if (ItemObj->HasField("weight"))
-		Item.weight = ItemObj->GetNumberField("weight");
+	if (ItemObj->HasField(TEXT("weight")))
+		Item.weight = ItemObj->GetNumberField(TEXT("weight"));
 
-	if (ItemObj->HasField("addedToInventory"))
-		Item.addedToInventory = ItemObj->GetBoolField("addedToInventory");
+	if (ItemObj->HasField(TEXT("addedToInventory")))
+		Item.addedToInventory = ItemObj->GetBoolField(TEXT("addedToInventory"));
 
-	if (ItemObj->HasField("isHarvestItem"))
-		Item.isHarvestItem = ItemObj->GetBoolField("isHarvestItem");
+	if (ItemObj->HasField(TEXT("isHarvestItem")))
+		Item.isHarvestItem = ItemObj->GetBoolField(TEXT("isHarvestItem"));
 
 	return Item;
 }
@@ -1086,23 +1087,23 @@ FHarvestStartedStruct JSONParser::DeserializeHarvestStarted(const TSharedPtr<FJs
 	FHarvestStartedStruct HarvestStarted;
 	if (!Body.IsValid()) return HarvestStarted;
 
-	if (Body->HasField("type"))
-		HarvestStarted.type = Body->GetStringField("type");
+	if (Body->HasField(TEXT("type")))
+		HarvestStarted.type = Body->GetStringField(TEXT("type"));
 
-	if (Body->HasField("clientId"))
-		HarvestStarted.clientId = Body->GetIntegerField("clientId");
+	if (Body->HasField(TEXT("clientId")))
+		HarvestStarted.clientId = Body->GetIntegerField(TEXT("clientId"));
 
-	if (Body->HasField("playerId"))
-		HarvestStarted.playerId = Body->GetIntegerField("playerId");
+	if (Body->HasField(TEXT("playerId")))
+		HarvestStarted.playerId = Body->GetIntegerField(TEXT("playerId"));
 
-	if (Body->HasField("corpseId"))
-		HarvestStarted.corpseId = Body->GetIntegerField("corpseId");
+	if (Body->HasField(TEXT("corpseId")))
+		HarvestStarted.corpseId = Body->GetIntegerField(TEXT("corpseId"));
 
-	if (Body->HasField("duration"))
-		HarvestStarted.duration = Body->GetIntegerField("duration");
+	if (Body->HasField(TEXT("duration")))
+		HarvestStarted.duration = Body->GetIntegerField(TEXT("duration"));
 
-	if (Body->HasField("startTime"))
-		HarvestStarted.startTime = static_cast<int64>(Body->GetNumberField("startTime"));
+	if (Body->HasField(TEXT("startTime")))
+		HarvestStarted.startTime = static_cast<int64>(Body->GetNumberField(TEXT("startTime")));
 
 	return HarvestStarted;
 }
@@ -1114,7 +1115,7 @@ FHarvestStartedStruct JSONParser::DeserializeHarvestStarted(const FString& JsonS
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 		return FHarvestStartedStruct();
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 	if (!Body.IsValid())
 		return FHarvestStartedStruct();
 
@@ -1126,27 +1127,27 @@ FHarvestCompleteStruct JSONParser::DeserializeHarvestComplete(const TSharedPtr<F
 	FHarvestCompleteStruct HarvestComplete;
 	if (!Body.IsValid()) return HarvestComplete;
 
-	if (Body->HasField("type"))
-		HarvestComplete.type = Body->GetStringField("type");
+	if (Body->HasField(TEXT("type")))
+		HarvestComplete.type = Body->GetStringField(TEXT("type"));
 
-	if (Body->HasField("clientId"))
-		HarvestComplete.clientId = Body->GetIntegerField("clientId");
+	if (Body->HasField(TEXT("clientId")))
+		HarvestComplete.clientId = Body->GetIntegerField(TEXT("clientId"));
 
-	if (Body->HasField("playerId"))
-		HarvestComplete.playerId = Body->GetIntegerField("playerId");
+	if (Body->HasField(TEXT("playerId")))
+		HarvestComplete.playerId = Body->GetIntegerField(TEXT("playerId"));
 
-	if (Body->HasField("corpseId"))
-		HarvestComplete.corpseId = Body->GetIntegerField("corpseId");
+	if (Body->HasField(TEXT("corpseId")))
+		HarvestComplete.corpseId = Body->GetIntegerField(TEXT("corpseId"));
 
-	if (Body->HasField("success"))
-		HarvestComplete.success = Body->GetBoolField("success");
+	if (Body->HasField(TEXT("success")))
+		HarvestComplete.success = Body->GetBoolField(TEXT("success"));
 
-	if (Body->HasField("totalItems"))
-		HarvestComplete.totalItems = Body->GetIntegerField("totalItems");
+	if (Body->HasField(TEXT("totalItems")))
+		HarvestComplete.totalItems = Body->GetIntegerField(TEXT("totalItems"));
 
 	// Parse available loot
 	const TArray<TSharedPtr<FJsonValue>>* LootArray = nullptr;
-	if (Body->TryGetArrayField("availableLoot", LootArray))
+	if (Body->TryGetArrayField(TEXT("availableLoot"), LootArray))
 	{
 		for (const TSharedPtr<FJsonValue>& LootValue : *LootArray)
 		{
@@ -1169,7 +1170,7 @@ FHarvestCompleteStruct JSONParser::DeserializeHarvestComplete(const FString& Jso
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 		return FHarvestCompleteStruct();
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 	if (!Body.IsValid())
 		return FHarvestCompleteStruct();
 	
@@ -1181,23 +1182,23 @@ FHarvestErrorStruct JSONParser::DeserializeHarvestError(const TSharedPtr<FJsonOb
 	FHarvestErrorStruct HarvestError;
 	if (!Body.IsValid()) return HarvestError;
 
-	if (Body->HasField("type"))
-		HarvestError.type = Body->GetStringField("type");
+	if (Body->HasField(TEXT("type")))
+		HarvestError.type = Body->GetStringField(TEXT("type"));
 
-	if (Body->HasField("clientId"))
-		HarvestError.clientId = Body->GetIntegerField("clientId");
+	if (Body->HasField(TEXT("clientId")))
+		HarvestError.clientId = Body->GetIntegerField(TEXT("clientId"));
 
-	if (Body->HasField("playerId"))
-		HarvestError.playerId = Body->GetIntegerField("playerId");
+	if (Body->HasField(TEXT("playerId")))
+		HarvestError.playerId = Body->GetIntegerField(TEXT("playerId"));
 
-	if (Body->HasField("corpseId"))
-		HarvestError.corpseId = Body->GetIntegerField("corpseId");
+	if (Body->HasField(TEXT("corpseId")))
+		HarvestError.corpseId = Body->GetIntegerField(TEXT("corpseId"));
 
-	if (Body->HasField("errorCode"))
-		HarvestError.errorCode = Body->GetStringField("errorCode");
+	if (Body->HasField(TEXT("errorCode")))
+		HarvestError.errorCode = Body->GetStringField(TEXT("errorCode"));
 
-	if (Body->HasField("message"))
-		HarvestError.message = Body->GetStringField("message");
+	if (Body->HasField(TEXT("message")))
+		HarvestError.message = Body->GetStringField(TEXT("message"));
 
 	return HarvestError;
 }
@@ -1209,7 +1210,7 @@ FHarvestErrorStruct JSONParser::DeserializeHarvestError(const FString& JsonStrin
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 		return FHarvestErrorStruct();
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 	if (!Body.IsValid())
 		return FHarvestErrorStruct();
 
@@ -1221,18 +1222,18 @@ FCorpseLootPickupResponseStruct JSONParser::DeserializeCorpseLootPickupResponse(
 	FCorpseLootPickupResponseStruct Response;
 	if (!Body.IsValid()) return Response;
 
-	if (Body->HasField("success"))
-		Response.success = Body->GetBoolField("success");
+	if (Body->HasField(TEXT("success")))
+		Response.success = Body->GetBoolField(TEXT("success"));
 
-	if (Body->HasField("corpseUID"))
-		Response.corpseUID = Body->GetIntegerField("corpseUID");
+	if (Body->HasField(TEXT("corpseUID")))
+		Response.corpseUID = Body->GetIntegerField(TEXT("corpseUID"));
 
-	if (Body->HasField("itemsPickedUp"))
-		Response.itemsPickedUp = Body->GetIntegerField("itemsPickedUp");
+	if (Body->HasField(TEXT("itemsPickedUp")))
+		Response.itemsPickedUp = Body->GetIntegerField(TEXT("itemsPickedUp"));
 
 	// Parse picked up items
 	const TArray<TSharedPtr<FJsonValue>>* PickedUpArray = nullptr;
-	if (Body->TryGetArrayField("pickedUpItems", PickedUpArray))
+	if (Body->TryGetArrayField(TEXT("pickedUpItems"), PickedUpArray))
 	{
 		for (const TSharedPtr<FJsonValue>& ItemValue : *PickedUpArray)
 		{
@@ -1247,7 +1248,7 @@ FCorpseLootPickupResponseStruct JSONParser::DeserializeCorpseLootPickupResponse(
 
 	// Parse remaining loot
 	const TArray<TSharedPtr<FJsonValue>>* RemainingArray = nullptr;
-	if (Body->TryGetArrayField("remainingLoot", RemainingArray))
+	if (Body->TryGetArrayField(TEXT("remainingLoot"), RemainingArray))
 	{
 		for (const TSharedPtr<FJsonValue>& ItemValue : *RemainingArray)
 		{
@@ -1270,7 +1271,7 @@ FCorpseLootPickupResponseStruct JSONParser::DeserializeCorpseLootPickupResponse(
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 		return FCorpseLootPickupResponseStruct();
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 	if (!Body.IsValid())
 		return FCorpseLootPickupResponseStruct();
 
@@ -1282,14 +1283,14 @@ FCorpseLootPickupErrorStruct JSONParser::DeserializeCorpseLootPickupError(const 
 	FCorpseLootPickupErrorStruct Error;
 	if (!Body.IsValid()) return Error;
 
-	if (Body->HasField("success"))
-		Error.success = Body->GetBoolField("success");
+	if (Body->HasField(TEXT("success")))
+		Error.success = Body->GetBoolField(TEXT("success"));
 
-	if (Body->HasField("errorCode"))
-		Error.errorCode = Body->GetStringField("errorCode");
+	if (Body->HasField(TEXT("errorCode")))
+		Error.errorCode = Body->GetStringField(TEXT("errorCode"));
 
-	if (Body->HasField("corpseUID"))
-		Error.corpseUID = Body->GetIntegerField("corpseUID");
+	if (Body->HasField(TEXT("corpseUID")))
+		Error.corpseUID = Body->GetIntegerField(TEXT("corpseUID"));
 
 	return Error;
 }
@@ -1301,7 +1302,7 @@ FCorpseLootPickupErrorStruct JSONParser::DeserializeCorpseLootPickupError(const 
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 		return FCorpseLootPickupErrorStruct();
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 	if (!Body.IsValid())
 		return FCorpseLootPickupErrorStruct();
 
@@ -1313,21 +1314,21 @@ FCorpseLootInspectResponseStruct JSONParser::DeserializeCorpseLootInspectRespons
 	FCorpseLootInspectResponseStruct Response;
 	if (!Body.IsValid()) return Response;
 
-	if (Body->HasField("success"))
-		Response.success = Body->GetBoolField("success");
+	if (Body->HasField(TEXT("success")))
+		Response.success = Body->GetBoolField(TEXT("success"));
 
-	if (Body->HasField("corpseUID"))
-		Response.corpseUID = Body->GetIntegerField("corpseUID");
+	if (Body->HasField(TEXT("corpseUID")))
+		Response.corpseUID = Body->GetIntegerField(TEXT("corpseUID"));
 
-	if (Body->HasField("type"))
-		Response.type = Body->GetStringField("type");
+	if (Body->HasField(TEXT("type")))
+		Response.type = Body->GetStringField(TEXT("type"));
 
-	if (Body->HasField("totalItems"))
-		Response.totalItems = Body->GetIntegerField("totalItems");
+	if (Body->HasField(TEXT("totalItems")))
+		Response.totalItems = Body->GetIntegerField(TEXT("totalItems"));
 
 	// Parse available loot
 	const TArray<TSharedPtr<FJsonValue>>* LootArray = nullptr;
-	if (Body->TryGetArrayField("availableLoot", LootArray))
+	if (Body->TryGetArrayField(TEXT("availableLoot"), LootArray))
 	{
 		for (const TSharedPtr<FJsonValue>& LootValue : *LootArray)
 		{
@@ -1350,7 +1351,7 @@ FCorpseLootInspectResponseStruct JSONParser::DeserializeCorpseLootInspectRespons
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 		return FCorpseLootInspectResponseStruct();
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 	if (!Body.IsValid())
 		return FCorpseLootInspectResponseStruct();
 
@@ -1362,11 +1363,11 @@ FCorpseLootInspectErrorStruct JSONParser::DeserializeCorpseLootInspectError(cons
 	FCorpseLootInspectErrorStruct Error;
 	if (!Body.IsValid()) return Error;
 
-	if (Body->HasField("success"))
-		Error.success = Body->GetBoolField("success");
+	if (Body->HasField(TEXT("success")))
+		Error.success = Body->GetBoolField(TEXT("success"));
 
-	if (Body->HasField("errorCode"))
-		Error.errorCode = Body->GetStringField("errorCode");
+	if (Body->HasField(TEXT("errorCode")))
+		Error.errorCode = Body->GetStringField(TEXT("errorCode"));
 
 	return Error;
 }
@@ -1378,7 +1379,7 @@ FCorpseLootInspectErrorStruct JSONParser::DeserializeCorpseLootInspectError(cons
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 		return FCorpseLootInspectErrorStruct();
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 	if (!Body.IsValid())
 		return FCorpseLootInspectErrorStruct();
 
@@ -1442,17 +1443,17 @@ FAppliedEffectData JSONParser::DeserializeAppliedEffect(const TSharedPtr<FJsonOb
 	FAppliedEffectData Effect;
 	if (!EffectObj.IsValid()) return Effect;
 
-	if (EffectObj->HasField("effectName"))
-		Effect.effectName = EffectObj->GetStringField("effectName");
+	if (EffectObj->HasField(TEXT("effectName")))
+		Effect.effectName = EffectObj->GetStringField(TEXT("effectName"));
 	
-	if (EffectObj->HasField("duration"))
-		Effect.duration = EffectObj->GetNumberField("duration");
+	if (EffectObj->HasField(TEXT("duration")))
+		Effect.duration = EffectObj->GetNumberField(TEXT("duration"));
 	
-	if (EffectObj->HasField("value"))
-		Effect.value = EffectObj->GetIntegerField("value");
+	if (EffectObj->HasField(TEXT("value")))
+		Effect.value = EffectObj->GetIntegerField(TEXT("value"));
 	
-	if (EffectObj->HasField("effectType"))
-		Effect.effectType = EffectObj->GetStringField("effectType");
+	if (EffectObj->HasField(TEXT("effectType")))
+		Effect.effectType = EffectObj->GetStringField(TEXT("effectType"));
 
 	return Effect;
 }
@@ -1476,49 +1477,49 @@ FSkillInitiationData JSONParser::DeserializeSkillInitiation(const TSharedPtr<FJs
 	FSkillInitiationData SkillData;
 	if (!InitiationObj.IsValid()) return SkillData;
 
-	if (InitiationObj->HasField("skillName"))
-		SkillData.skillName = InitiationObj->GetStringField("skillName");
+	if (InitiationObj->HasField(TEXT("skillName")))
+		SkillData.skillName = InitiationObj->GetStringField(TEXT("skillName"));
 	
-	if (InitiationObj->HasField("animationName"))
-		SkillData.animationName = InitiationObj->GetStringField("animationName");
+	if (InitiationObj->HasField(TEXT("animationName")))
+		SkillData.animationName = InitiationObj->GetStringField(TEXT("animationName"));
 	
-	if (InitiationObj->HasField("animationDuration"))
-		SkillData.animationDuration = InitiationObj->GetNumberField("animationDuration");
+	if (InitiationObj->HasField(TEXT("animationDuration")))
+		SkillData.animationDuration = InitiationObj->GetNumberField(TEXT("animationDuration"));
 	
-	if (InitiationObj->HasField("castTime"))
-		SkillData.castTime = InitiationObj->GetNumberField("castTime");
+	if (InitiationObj->HasField(TEXT("castTime")))
+		SkillData.castTime = InitiationObj->GetNumberField(TEXT("castTime"));
 	
-	if (InitiationObj->HasField("casterId"))
-		SkillData.casterId = InitiationObj->GetIntegerField("casterId");
+	if (InitiationObj->HasField(TEXT("casterId")))
+		SkillData.casterId = InitiationObj->GetIntegerField(TEXT("casterId"));
 	
-	if (InitiationObj->HasField("casterType"))
-		SkillData.casterType = InitiationObj->GetIntegerField("casterType");
+	if (InitiationObj->HasField(TEXT("casterType")))
+		SkillData.casterType = InitiationObj->GetIntegerField(TEXT("casterType"));
 	
-	if (InitiationObj->HasField("casterTypeString"))
-		SkillData.casterTypeString = InitiationObj->GetStringField("casterTypeString");
+	if (InitiationObj->HasField(TEXT("casterTypeString")))
+		SkillData.casterTypeString = InitiationObj->GetStringField(TEXT("casterTypeString"));
 	
-	if (InitiationObj->HasField("targetId"))
-		SkillData.targetId = InitiationObj->GetIntegerField("targetId");
+	if (InitiationObj->HasField(TEXT("targetId")))
+		SkillData.targetId = InitiationObj->GetIntegerField(TEXT("targetId"));
 	
-	if (InitiationObj->HasField("targetType"))
-		SkillData.targetType = InitiationObj->GetIntegerField("targetType");
+	if (InitiationObj->HasField(TEXT("targetType")))
+		SkillData.targetType = InitiationObj->GetIntegerField(TEXT("targetType"));
 	
-	if (InitiationObj->HasField("targetTypeString"))
-		SkillData.targetTypeString = InitiationObj->GetStringField("targetTypeString");
+	if (InitiationObj->HasField(TEXT("targetTypeString")))
+		SkillData.targetTypeString = InitiationObj->GetStringField(TEXT("targetTypeString"));
 	
-	if (InitiationObj->HasField("success"))
-		SkillData.success = InitiationObj->GetBoolField("success");
+	if (InitiationObj->HasField(TEXT("success")))
+		SkillData.success = InitiationObj->GetBoolField(TEXT("success"));
 
 	// Parse effect type and school
-	if (InitiationObj->HasField("skillEffectType"))
+	if (InitiationObj->HasField(TEXT("skillEffectType")))
 	{
-		FString EffectTypeStr = InitiationObj->GetStringField("skillEffectType");
+		FString EffectTypeStr = InitiationObj->GetStringField(TEXT("skillEffectType"));
 		SkillData.skillEffectType = JSONParser::ParseSkillEffectType(EffectTypeStr);
 	}
 	
-	if (InitiationObj->HasField("skillSchool"))
+	if (InitiationObj->HasField(TEXT("skillSchool")))
 	{
-		FString SchoolStr = InitiationObj->GetStringField("skillSchool");
+		FString SchoolStr = InitiationObj->GetStringField(TEXT("skillSchool"));
 		SkillData.skillSchool = JSONParser::ParseSkillSchool(SchoolStr);
 	}
 
@@ -1532,11 +1533,11 @@ FSkillInitiationData JSONParser::DeserializeSkillInitiation(const FString& JsonS
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 		return FSkillInitiationData();
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 	if (!Body.IsValid())
 		return FSkillInitiationData();
 
-	TSharedPtr<FJsonObject> SkillInitiation = Body->GetObjectField("skillInitiation");
+	TSharedPtr<FJsonObject> SkillInitiation = Body->GetObjectField(TEXT("skillInitiation"));
 	if (!SkillInitiation.IsValid())
 		return FSkillInitiationData();
 
@@ -1548,72 +1549,72 @@ FSkillResultData JSONParser::DeserializeSkillResult(const TSharedPtr<FJsonObject
 	FSkillResultData SkillResult;
 	if (!ResultObj.IsValid()) return SkillResult;
 
-	if (ResultObj->HasField("skillName"))
-		SkillResult.skillName = ResultObj->GetStringField("skillName");
+	if (ResultObj->HasField(TEXT("skillName")))
+		SkillResult.skillName = ResultObj->GetStringField(TEXT("skillName"));
 	
-	if (ResultObj->HasField("casterId"))
-		SkillResult.casterId = ResultObj->GetIntegerField("casterId");
+	if (ResultObj->HasField(TEXT("casterId")))
+		SkillResult.casterId = ResultObj->GetIntegerField(TEXT("casterId"));
 	
-	if (ResultObj->HasField("casterType"))
-		SkillResult.casterType = ResultObj->GetIntegerField("casterType");
+	if (ResultObj->HasField(TEXT("casterType")))
+		SkillResult.casterType = ResultObj->GetIntegerField(TEXT("casterType"));
 	
-	if (ResultObj->HasField("casterTypeString"))
-		SkillResult.casterTypeString = ResultObj->GetStringField("casterTypeString");
+	if (ResultObj->HasField(TEXT("casterTypeString")))
+		SkillResult.casterTypeString = ResultObj->GetStringField(TEXT("casterTypeString"));
 	
-	if (ResultObj->HasField("targetId"))
-		SkillResult.targetId = ResultObj->GetIntegerField("targetId");
+	if (ResultObj->HasField(TEXT("targetId")))
+		SkillResult.targetId = ResultObj->GetIntegerField(TEXT("targetId"));
 	
-	if (ResultObj->HasField("targetType"))
-		SkillResult.targetType = ResultObj->GetIntegerField("targetType");
+	if (ResultObj->HasField(TEXT("targetType")))
+		SkillResult.targetType = ResultObj->GetIntegerField(TEXT("targetType"));
 	
-	if (ResultObj->HasField("targetTypeString"))
-		SkillResult.targetTypeString = ResultObj->GetStringField("targetTypeString");
+	if (ResultObj->HasField(TEXT("targetTypeString")))
+		SkillResult.targetTypeString = ResultObj->GetStringField(TEXT("targetTypeString"));
 	
-	if (ResultObj->HasField("damage"))
-		SkillResult.damage = ResultObj->GetIntegerField("damage");
+	if (ResultObj->HasField(TEXT("damage")))
+		SkillResult.damage = ResultObj->GetIntegerField(TEXT("damage"));
 	
-	if (ResultObj->HasField("healing"))
-		SkillResult.healing = ResultObj->GetIntegerField("healing");
+	if (ResultObj->HasField(TEXT("healing")))
+		SkillResult.healing = ResultObj->GetIntegerField(TEXT("healing"));
 	
-	if (ResultObj->HasField("finalTargetHealth"))
-		SkillResult.finalTargetHealth = ResultObj->GetIntegerField("finalTargetHealth");
+	if (ResultObj->HasField(TEXT("finalTargetHealth")))
+		SkillResult.finalTargetHealth = ResultObj->GetIntegerField(TEXT("finalTargetHealth"));
 	
-	if (ResultObj->HasField("finalTargetMana"))
-		SkillResult.finalTargetMana = ResultObj->GetIntegerField("finalTargetMana");
+	if (ResultObj->HasField(TEXT("finalTargetMana")))
+		SkillResult.finalTargetMana = ResultObj->GetIntegerField(TEXT("finalTargetMana"));
 	
-	if (ResultObj->HasField("isCritical"))
-		SkillResult.isCritical = ResultObj->GetBoolField("isCritical");
+	if (ResultObj->HasField(TEXT("isCritical")))
+		SkillResult.isCritical = ResultObj->GetBoolField(TEXT("isCritical"));
 	
-	if (ResultObj->HasField("isBlocked"))
-		SkillResult.isBlocked = ResultObj->GetBoolField("isBlocked");
+	if (ResultObj->HasField(TEXT("isBlocked")))
+		SkillResult.isBlocked = ResultObj->GetBoolField(TEXT("isBlocked"));
 	
-	if (ResultObj->HasField("isMissed"))
-		SkillResult.isMissed = ResultObj->GetBoolField("isMissed");
+	if (ResultObj->HasField(TEXT("isMissed")))
+		SkillResult.isMissed = ResultObj->GetBoolField(TEXT("isMissed"));
 	
-	if (ResultObj->HasField("targetDied"))
-		SkillResult.targetDied = ResultObj->GetBoolField("targetDied");
+	if (ResultObj->HasField(TEXT("targetDied")))
+		SkillResult.targetDied = ResultObj->GetBoolField(TEXT("targetDied"));
 	
-	if (ResultObj->HasField("success"))
-		SkillResult.success = ResultObj->GetBoolField("success");
+	if (ResultObj->HasField(TEXT("success")))
+		SkillResult.success = ResultObj->GetBoolField(TEXT("success"));
 
 	// Parse effect type and school
-	if (ResultObj->HasField("skillEffectType"))
+	if (ResultObj->HasField(TEXT("skillEffectType")))
 	{
-		FString EffectTypeStr = ResultObj->GetStringField("skillEffectType");
+		FString EffectTypeStr = ResultObj->GetStringField(TEXT("skillEffectType"));
 		SkillResult.skillEffectType = JSONParser::ParseSkillEffectType(EffectTypeStr);
 	}
 	
-	if (ResultObj->HasField("skillSchool"))
+	if (ResultObj->HasField(TEXT("skillSchool")))
 	{
-		FString SchoolStr = ResultObj->GetStringField("skillSchool");
+		FString SchoolStr = ResultObj->GetStringField(TEXT("skillSchool"));
 		SkillResult.skillSchool = JSONParser::ParseSkillSchool(SchoolStr);
 	}
 
 	// Parse applied effects array
-	if (ResultObj->HasField("appliedEffects"))
+	if (ResultObj->HasField(TEXT("appliedEffects")))
 	{
 		const TArray<TSharedPtr<FJsonValue>>* EffectsArray;
-		if (ResultObj->TryGetArrayField("appliedEffects", EffectsArray))
+		if (ResultObj->TryGetArrayField(TEXT("appliedEffects"), EffectsArray))
 		{
 			SkillResult.appliedEffects = JSONParser::DeserializeAppliedEffects(*EffectsArray);
 		}
@@ -1629,11 +1630,11 @@ FSkillResultData JSONParser::DeserializeSkillResult(const FString& JsonString)
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 		return FSkillResultData();
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 	if (!Body.IsValid())
 		return FSkillResultData();
 
-	TSharedPtr<FJsonObject> SkillResult = Body->GetObjectField("skillResult");
+	TSharedPtr<FJsonObject> SkillResult = Body->GetObjectField(TEXT("skillResult"));
 	if (!SkillResult.IsValid())
 		return FSkillResultData();
 
@@ -1714,40 +1715,6 @@ FNetworkHeaderStruct JSONParser::DeserializeNetworkHeader(const FString& JsonStr
     return NetworkHeader;
 }
 
-// Helper method to process time sync from network headers
-//void JSONParser::ProcessTimeSyncFromHeader(const FString& JsonString, UTimeSyncService* TimeSyncService)
-//{
-//    if (!TimeSyncService)
-//    {
-//        return;
-//    }
-//
-//    FNetworkHeaderStruct NetworkHeader = DeserializeNetworkHeader(JsonString);
-//    
-//    // Check for Echo fields (response from server with requestIdEcho and clientSendMsEcho)
-//    if (!NetworkHeader.requestId.IsEmpty() && 
-//        NetworkHeader.serverRecvMs > 0 && 
-//        NetworkHeader.serverSendMs > 0)
-//    {
-//        // Server returns requestIdEcho as requestId field and includes timing data
-//        bool bUpdated = TimeSyncService->UpdateTimeSyncData(
-//            NetworkHeader.requestId, // Ёто на самом деле requestIdEcho от сервера
-//            NetworkHeader.serverRecvMs,
-//            NetworkHeader.serverSendMs
-//        );
-//        
-//        if (bUpdated)
-//        {
-//            UE_LOG(LogTemp, Verbose, TEXT("JSONParser: Updated time sync for requestIdEcho: %s"), *NetworkHeader.requestId);
-//        }
-//    }
-//    // Also log clientSendMsEcho if present for validation
-//    if (NetworkHeader.clientSendMsEcho > 0)
-//    {
-//        UE_LOG(LogTemp, Verbose, TEXT("JSONParser: Received clientSendMsEcho: %lld"), NetworkHeader.clientSendMsEcho);
-//    }
-//}
-
 void JSONParser::ProcessTimeSyncFromHeader(const FString& JsonString, UTimeSyncService* TimeSyncService)
 {
 	if (!TimeSyncService)
@@ -1792,38 +1759,38 @@ FExperienceUpdateStruct JSONParser::DeserializeExperienceUpdate(const TSharedPtr
 	FExperienceUpdateStruct ExperienceUpdate;
 	if (!Body.IsValid()) return ExperienceUpdate;
 
-	if (Body->HasField("characterId"))
-		ExperienceUpdate.characterId = Body->GetIntegerField("characterId");
+	if (Body->HasField(TEXT("characterId")))
+		ExperienceUpdate.characterId = Body->GetIntegerField(TEXT("characterId"));
 
-	if (Body->HasField("oldLevel"))
-		ExperienceUpdate.oldLevel = Body->GetIntegerField("oldLevel");
+	if (Body->HasField(TEXT("oldLevel")))
+		ExperienceUpdate.oldLevel = Body->GetIntegerField(TEXT("oldLevel"));
 
-	if (Body->HasField("newLevel"))
-		ExperienceUpdate.newLevel = Body->GetIntegerField("newLevel");
+	if (Body->HasField(TEXT("newLevel")))
+		ExperienceUpdate.newLevel = Body->GetIntegerField(TEXT("newLevel"));
 
-	if (Body->HasField("oldExperience"))
-		ExperienceUpdate.oldExperience = Body->GetIntegerField("oldExperience");
+	if (Body->HasField(TEXT("oldExperience")))
+		ExperienceUpdate.oldExperience = Body->GetIntegerField(TEXT("oldExperience"));
 
-	if (Body->HasField("newExperience"))
-		ExperienceUpdate.newExperience = Body->GetIntegerField("newExperience");
+	if (Body->HasField(TEXT("newExperience")))
+		ExperienceUpdate.newExperience = Body->GetIntegerField(TEXT("newExperience"));
 
-	if (Body->HasField("experienceChange"))
-		ExperienceUpdate.experienceChange = Body->GetIntegerField("experienceChange");
+	if (Body->HasField(TEXT("experienceChange")))
+		ExperienceUpdate.experienceChange = Body->GetIntegerField(TEXT("experienceChange"));
 
-	if (Body->HasField("expForCurrentLevel"))
-		ExperienceUpdate.expForCurrentLevel = Body->GetIntegerField("expForCurrentLevel");
+	if (Body->HasField(TEXT("expForCurrentLevel")))
+		ExperienceUpdate.expForCurrentLevel = Body->GetIntegerField(TEXT("expForCurrentLevel"));
 
-	if (Body->HasField("expForNextLevel"))
-		ExperienceUpdate.expForNextLevel = Body->GetIntegerField("expForNextLevel");
+	if (Body->HasField(TEXT("expForNextLevel")))
+		ExperienceUpdate.expForNextLevel = Body->GetIntegerField(TEXT("expForNextLevel"));
 
-	if (Body->HasField("levelUp"))
-		ExperienceUpdate.levelUp = Body->GetBoolField("levelUp");
+	if (Body->HasField(TEXT("levelUp")))
+		ExperienceUpdate.levelUp = Body->GetBoolField(TEXT("levelUp"));
 
-	if (Body->HasField("reason"))
-		ExperienceUpdate.reason = Body->GetStringField("reason");
+	if (Body->HasField(TEXT("reason")))
+		ExperienceUpdate.reason = Body->GetStringField(TEXT("reason"));
 
-	if (Body->HasField("sourceId"))
-		ExperienceUpdate.sourceId = Body->GetIntegerField("sourceId");
+	if (Body->HasField(TEXT("sourceId")))
+		ExperienceUpdate.sourceId = Body->GetIntegerField(TEXT("sourceId"));
 
 	return ExperienceUpdate;
 }
@@ -1835,7 +1802,7 @@ FExperienceUpdateStruct JSONParser::DeserializeExperienceUpdate(const FString& J
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 		return FExperienceUpdateStruct();
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 	if (!Body.IsValid())
 		return FExperienceUpdateStruct();
 
@@ -1847,29 +1814,29 @@ FPlayerProgressionStruct JSONParser::DeserializePlayerProgression(const TSharedP
 	FPlayerProgressionStruct Progression;
 	if (!ProgressionObj.IsValid()) return Progression;
 
-	if (ProgressionObj->HasField("characterId"))
-		Progression.characterId = ProgressionObj->GetIntegerField("characterId");
+	if (ProgressionObj->HasField(TEXT("characterId")))
+		Progression.characterId = ProgressionObj->GetIntegerField(TEXT("characterId"));
 
-	if (ProgressionObj->HasField("currentLevel"))
-		Progression.currentLevel = ProgressionObj->GetIntegerField("currentLevel");
+	if (ProgressionObj->HasField(TEXT("currentLevel")))
+		Progression.currentLevel = ProgressionObj->GetIntegerField(TEXT("currentLevel"));
 
-	if (ProgressionObj->HasField("currentExperience"))
-		Progression.currentExperience = ProgressionObj->GetIntegerField("currentExperience");
+	if (ProgressionObj->HasField(TEXT("currentExperience")))
+		Progression.currentExperience = ProgressionObj->GetIntegerField(TEXT("currentExperience"));
 
-	if (ProgressionObj->HasField("totalExperience"))
-		Progression.totalExperience = ProgressionObj->GetIntegerField("totalExperience");
+	if (ProgressionObj->HasField(TEXT("totalExperience")))
+		Progression.totalExperience = ProgressionObj->GetIntegerField(TEXT("totalExperience"));
 
-	if (ProgressionObj->HasField("expForNextLevel"))
-		Progression.expForNextLevel = ProgressionObj->GetIntegerField("expForNextLevel");
+	if (ProgressionObj->HasField(TEXT("expForNextLevel")))
+		Progression.expForNextLevel = ProgressionObj->GetIntegerField(TEXT("expForNextLevel"));
 
-	if (ProgressionObj->HasField("expForCurrentLevel"))
-		Progression.expForCurrentLevel = ProgressionObj->GetIntegerField("expForCurrentLevel");
+	if (ProgressionObj->HasField(TEXT("expForCurrentLevel")))
+		Progression.expForCurrentLevel = ProgressionObj->GetIntegerField(TEXT("expForCurrentLevel"));
 
-	if (ProgressionObj->HasField("hasPendingLevelUp"))
-		Progression.bHasPendingLevelUp = ProgressionObj->GetBoolField("hasPendingLevelUp");
+	if (ProgressionObj->HasField(TEXT("hasPendingLevelUp")))
+		Progression.bHasPendingLevelUp = ProgressionObj->GetBoolField(TEXT("hasPendingLevelUp"));
 
-	if (ProgressionObj->HasField("pendingLevelGained"))
-		Progression.pendingLevelGained = ProgressionObj->GetIntegerField("pendingLevelGained");
+	if (ProgressionObj->HasField(TEXT("pendingLevelGained")))
+		Progression.pendingLevelGained = ProgressionObj->GetIntegerField(TEXT("pendingLevelGained"));
 
 	return Progression;
 }
@@ -1881,11 +1848,11 @@ FPlayerProgressionStruct JSONParser::DeserializePlayerProgression(const FString&
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 		return FPlayerProgressionStruct();
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 	if (!Body.IsValid())
 		return FPlayerProgressionStruct();
 
-	TSharedPtr<FJsonObject> Progression = Body->GetObjectField("progression");
+	TSharedPtr<FJsonObject> Progression = Body->GetObjectField(TEXT("progression"));
 	if (!Progression.IsValid())
 		return FPlayerProgressionStruct();
 
@@ -1897,17 +1864,17 @@ FExperienceGainEventStruct JSONParser::DeserializeExperienceGainEvent(const TSha
 	FExperienceGainEventStruct Event;
 	if (!EventObj.IsValid()) return Event;
 
-	if (EventObj->HasField("experienceGained"))
-		Event.experienceGained = EventObj->GetIntegerField("experienceGained");
+	if (EventObj->HasField(TEXT("experienceGained")))
+		Event.experienceGained = EventObj->GetIntegerField(TEXT("experienceGained"));
 
-	if (EventObj->HasField("reason"))
-		Event.reasonText = EventObj->GetStringField("reason");
+	if (EventObj->HasField(TEXT("reason")))
+		Event.reasonText = EventObj->GetStringField(TEXT("reason"));
 
-	if (EventObj->HasField("sourceId"))
-		Event.sourceId = EventObj->GetIntegerField("sourceId");
+	if (EventObj->HasField(TEXT("sourceId")))
+		Event.sourceId = EventObj->GetIntegerField(TEXT("sourceId"));
 
-	if (EventObj->HasField("sourceName"))
-		Event.sourceName = EventObj->GetStringField("sourceName");
+	if (EventObj->HasField(TEXT("sourceName")))
+		Event.sourceName = EventObj->GetStringField(TEXT("sourceName"));
 
 	// Parse reason enum from string
 	if (!Event.reasonText.IsEmpty())
@@ -1951,11 +1918,11 @@ FExperienceGainEventStruct JSONParser::DeserializeExperienceGainEvent(const FStr
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 		return FExperienceGainEventStruct();
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField("body");
+	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 	if (!Body.IsValid())
 		return FExperienceGainEventStruct();
 
-	TSharedPtr<FJsonObject> Event = Body->GetObjectField("experienceEvent");
+	TSharedPtr<FJsonObject> Event = Body->GetObjectField(TEXT("experienceEvent"));
 	if (!Event.IsValid())
 	{
 		// Try to parse directly from body if no experienceEvent object

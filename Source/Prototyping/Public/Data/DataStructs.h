@@ -52,7 +52,9 @@ struct FCharacterDataStruct
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
     int characterExperiencePoints = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
-	int characterExpForNextLevel = 0;
+	int characterExpForLevelStart = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
+	int characterExpForLevelEnd = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
     int characterCurrentHealth = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")

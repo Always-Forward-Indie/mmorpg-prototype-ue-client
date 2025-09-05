@@ -42,14 +42,14 @@ UNetworkManager::UNetworkManager(const FObjectInitializer& ObjectInitializer)
 
 		if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
 		{
-			LoginServerIP = JsonObject->GetObjectField("LoginServer")->GetStringField("IP");
-			LoginServerPort = JsonObject->GetObjectField("LoginServer")->GetIntegerField("Port");
+			LoginServerIP = JsonObject->GetObjectField(TEXT("LoginServer"))->GetStringField(TEXT("IP"));
+			LoginServerPort = JsonObject->GetObjectField(TEXT("LoginServer"))->GetIntegerField(TEXT("Port"));
 
-			GameServerIP = JsonObject->GetObjectField("GameServer")->GetStringField("IP");
-			GameServerPort = JsonObject->GetObjectField("GameServer")->GetIntegerField("Port");
+			GameServerIP = JsonObject->GetObjectField(TEXT("GameServer"))->GetStringField(TEXT("IP"));
+			GameServerPort = JsonObject->GetObjectField(TEXT("GameServer"))->GetIntegerField(TEXT("Port"));
 
-			ChunkServerIP = JsonObject->GetObjectField("ChunkServer")->GetStringField("IP");
-			ChunkServerPort = JsonObject->GetObjectField("ChunkServer")->GetIntegerField("Port");
+			ChunkServerIP = JsonObject->GetObjectField(TEXT("ChunkServer"))->GetStringField(TEXT("IP"));
+			ChunkServerPort = JsonObject->GetObjectField(TEXT("ChunkServer"))->GetIntegerField(TEXT("Port"));
 
 			UE_LOG(LogTemp, Warning, TEXT("Login Server: %s:%d"), *LoginServerIP, LoginServerPort);
 			UE_LOG(LogTemp, Warning, TEXT("Game Server: %s:%d"), *GameServerIP, GameServerPort);

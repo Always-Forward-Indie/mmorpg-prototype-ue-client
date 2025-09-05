@@ -273,10 +273,13 @@ void UHarvestLootItemWidget::AsyncLoad(const FSoftObjectPath& Path, FStreamableD
 		return;
 	}
 
-	if (UAssetManager* AM = UAssetManager::GetIfValid())
+	if (UAssetManager::IsInitialized())
 	{
-		FStreamableManager& SM = AM->GetStreamableManager();
-		StreamableHandle = SM.RequestAsyncLoad(Path, MoveTemp(Callback));
+		if (UAssetManager* AM = UAssetManager::GetIfInitialized())
+		{
+			FStreamableManager& SM = AM->GetStreamableManager();
+			StreamableHandle = SM.RequestAsyncLoad(Path, MoveTemp(Callback));
+		}
 	}
 	else
 	{

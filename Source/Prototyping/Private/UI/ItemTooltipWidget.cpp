@@ -21,6 +21,7 @@ UItemTooltipWidget::UItemTooltipWidget(const FObjectInitializer& ObjectInitializ
 	FadeInDuration = 0.2f;
 	FadeOutDuration = 0.1f;
 	bIsVisible = false;
+	bIsFocusable = false;
 }
 
 void UItemTooltipWidget::NativeConstruct()
@@ -29,8 +30,6 @@ void UItemTooltipWidget::NativeConstruct()
 
 	// Initialize colors
 	InitializeColors();
-
-	bIsFocusable = false;
 	// Hide tooltip initially
 	SetVisibility(ESlateVisibility::Hidden);
 	SetRenderOpacity(0.0f);
@@ -189,10 +188,15 @@ void UItemTooltipWidget::AsyncLoad(const FSoftObjectPath& Path, FStreamableDeleg
 		return;
 	}
 
-	if (UAssetManager* AM = UAssetManager::GetIfValid())
+	if (UObject* Existing = Path.ResolveObject())
 	{
-		FStreamableManager& SM = AM->GetStreamableManager();
-		SM.RequestAsyncLoad(Path, MoveTemp(Callback));
+		if (Callback.IsBound()) { Callback.Execute(); }
+		return;
+	}
+
+	if (UAssetManager* AM = UAssetManager::GetIfInitialized())
+	{
+		AM->GetStreamableManager().RequestAsyncLoad(Path, MoveTemp(Callback));
 	}
 	else
 	{
@@ -557,7 +561,7 @@ UTextBlock* UItemTooltipWidget::AddAttributeTextWidget(const FString& AttributeN
 	AttributeTextWidget->SetColorAndOpacity(FLinearColor(0.9f, 0.9f, 0.9f, 1.0f));
 
 	//set font size
-	FSlateFontInfo FontInfo = AttributeTextWidget->Font;
+	FSlateFontInfo FontInfo = AttributeTextWidget->GetFont();
 	FontInfo.Size = 12; // любой размер в pt
 	AttributeTextWidget->SetFont(FontInfo);
 

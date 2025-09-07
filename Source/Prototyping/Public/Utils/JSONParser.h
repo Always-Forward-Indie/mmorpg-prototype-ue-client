@@ -118,4 +118,10 @@ public:
     // Player stats system parsers
     static FPlayerStatsUpdateStruct DeserializePlayerStatsUpdate(const TSharedPtr<FJsonObject>& Body);
     static FPlayerStatsUpdateStruct DeserializePlayerStatsUpdate(const FString& JsonString);
+
+    // Player skills system parsers
+    static FPlayerSkillNetworkData DeserializePlayerSkillNetworkData(const TSharedPtr<FJsonObject>& SkillObj);
+    static TArray<FPlayerSkillNetworkData> DeserializePlayerSkillsArray(const TArray<TSharedPtr<FJsonValue>>& JsonArray);
+    static FPlayerSkillsInitializationData DeserializePlayerSkillsInitialization(const TSharedPtr<FJsonObject>& Body);
+    static FPlayerSkillsInitializationData DeserializePlayerSkillsInitialization(const FString& JsonString);
 };

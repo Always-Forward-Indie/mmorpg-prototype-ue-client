@@ -1932,12 +1932,147 @@ FExperienceGainEventStruct JSONParser::DeserializeExperienceGainEvent(const FStr
 	return JSONParser::DeserializeExperienceGainEvent(Event);
 }
 
-FPlayerStatsUpdateStruct JSONParser::DeserializePlayerStatsUpdate(const FString& JsonString)
-{
-    return PlayerAttributeParser::DeserializePlayerStatsUpdate(JsonString);
-}
+//FPlayerStatsUpdateStruct JSONParser::DeserializePlayerStatsUpdate(const FString& JsonString)
+//{
+//    return PlayerAttributeParser::DeserializePlayerStatsUpdate(JsonString);
+//}
 
 FPlayerStatsUpdateStruct JSONParser::DeserializePlayerStatsUpdate(const TSharedPtr<FJsonObject>& Body)
 {
     return PlayerAttributeParser::DeserializePlayerStatsUpdate(Body);
+}
+
+FPlayerStatsUpdateStruct JSONParser::DeserializePlayerStatsUpdate(const FString& JsonString)
+{
+	TSharedPtr<FJsonObject> JsonObject;
+	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+
+	FPlayerStatsUpdateStruct PlayerStatsUpdate;
+
+	if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
+	{
+		if (JsonObject->HasField(TEXT("body")))
+		{
+			TSharedPtr<FJsonObject> Body = JsonObject->GetObjectField(TEXT("body"));
+			PlayerStatsUpdate = DeserializePlayerStatsUpdate(Body);
+		}
+	}
+
+	return PlayerStatsUpdate;
+}
+
+// Player skills system parsers
+FPlayerSkillNetworkData JSONParser::DeserializePlayerSkillNetworkData(const TSharedPtr<FJsonObject>& SkillObj)
+{
+	FPlayerSkillNetworkData SkillData;
+
+	if (SkillObj.IsValid())
+	{
+		if (SkillObj->HasField(TEXT("skillSlug")))
+		{
+			SkillData.skillSlug = SkillObj->GetStringField(TEXT("skillSlug"));
+		}
+
+		if (SkillObj->HasField(TEXT("skillLevel")))
+		{
+			SkillData.skillLevel = SkillObj->GetIntegerField(TEXT("skillLevel"));
+		}
+
+		if (SkillObj->HasField(TEXT("castMs")))
+		{
+			SkillData.castMs = SkillObj->GetIntegerField(TEXT("castMs"));
+		}
+
+		if (SkillObj->HasField(TEXT("coeff")))
+		{
+			SkillData.coeff = SkillObj->GetNumberField(TEXT("coeff"));
+		}
+
+		if (SkillObj->HasField(TEXT("cooldownMs")))
+		{
+			SkillData.cooldownMs = SkillObj->GetIntegerField(TEXT("cooldownMs"));
+		}
+
+		if (SkillObj->HasField(TEXT("costMp")))
+		{
+			SkillData.costMp = SkillObj->GetIntegerField(TEXT("costMp"));
+		}
+
+		if (SkillObj->HasField(TEXT("flatAdd")))
+		{
+			SkillData.flatAdd = SkillObj->GetNumberField(TEXT("flatAdd"));
+		}
+
+		if (SkillObj->HasField(TEXT("gcdMs")))
+		{
+			SkillData.gcdMs = SkillObj->GetIntegerField(TEXT("gcdMs"));
+		}
+
+		if (SkillObj->HasField(TEXT("maxRange")))
+		{
+			SkillData.maxRange = SkillObj->GetNumberField(TEXT("maxRange"));
+		}
+	}
+
+	return SkillData;
+}
+
+TArray<FPlayerSkillNetworkData> JSONParser::DeserializePlayerSkillsArray(const TArray<TSharedPtr<FJsonValue>>& JsonArray)
+{
+	TArray<FPlayerSkillNetworkData> Skills;
+
+	for (const TSharedPtr<FJsonValue>& JsonValue : JsonArray)
+	{
+		if (JsonValue.IsValid() && JsonValue->Type == EJson::Object)
+		{
+			TSharedPtr<FJsonObject> SkillObj = JsonValue->AsObject();
+			FPlayerSkillNetworkData SkillData = DeserializePlayerSkillNetworkData(SkillObj);
+			Skills.Add(SkillData);
+		}
+	}
+
+	return Skills;
+}
+
+FPlayerSkillsInitializationData JSONParser::DeserializePlayerSkillsInitialization(const TSharedPtr<FJsonObject>& Body)
+{
+	FPlayerSkillsInitializationData InitData;
+
+	if (Body.IsValid())
+	{
+		if (Body->HasField(TEXT("characterId")))
+		{
+			InitData.characterId = Body->GetIntegerField(TEXT("characterId"));
+		}
+
+		if (Body->HasField(TEXT("skills")))
+		{
+			const TArray<TSharedPtr<FJsonValue>>* SkillsArray;
+			if (Body->TryGetArrayField(TEXT("skills"), SkillsArray))
+			{
+				InitData.skills = DeserializePlayerSkillsArray(*SkillsArray);
+			}
+		}
+	}
+
+	return InitData;
+}
+
+FPlayerSkillsInitializationData JSONParser::DeserializePlayerSkillsInitialization(const FString& JsonString)
+{
+	TSharedPtr<FJsonObject> JsonObject;
+	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+
+	FPlayerSkillsInitializationData InitData;
+
+	if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
+	{
+		if (JsonObject->HasField(TEXT("body")))
+		{
+			TSharedPtr<FJsonObject> Body = JsonObject->GetObjectField(TEXT("body"));
+			InitData = DeserializePlayerSkillsInitialization(Body);
+		}
+	}
+
+	return InitData;
 }

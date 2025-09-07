@@ -2,15 +2,19 @@
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
 #include "UI/HarvestLootWidget.h"
+#include "UI/SkillBarWidget.h"
+#include "UI/AvailableSkillsWidget.h"
 #include "Gameplay/UI/PlayerExperienceWidget.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Items/HarvestManager.h"
 #include "Gameplay/Player/ExperienceManager.h"
+#include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
 #include "Gameplay/UI/DamageTextWidget.h"
 #include "Blueprint/UserWidget.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "MyGameInstance.h"
 
 UUIManager::UUIManager()
 {
@@ -20,14 +24,18 @@ UUIManager::UUIManager()
 	HarvestProgressWidget = nullptr;
 	HarvestLootWidget = nullptr;
 	ExperienceWidget = nullptr;
+	SkillBarWidget = nullptr;
+	AvailableSkillsWidget = nullptr;
 	InventoryManager = nullptr;
 	HarvestManager = nullptr;
 	ExperienceManager = nullptr;
+	SkillManager = nullptr;
 	FCTManager = nullptr;
 	PlayerController = nullptr;
 	RootCanvas = nullptr;
 	GameVersionWidget = nullptr;
 	bIsInitialized = false;
+	bSkillsPanelVisible = false;
 }
 
 void UUIManager::BeginPlay()
@@ -38,7 +46,7 @@ void UUIManager::BeginPlay()
 	// This allows for better control over when UI is created
 }
 
-void UUIManager::Initialize(UInventoryManager* InInventoryManager, UHarvestManager* InHarvestManager, UExperienceManager* InExperienceManager)
+void UUIManager::Initialize(UInventoryManager* InInventoryManager, UHarvestManager* InHarvestManager, UExperienceManager* InExperienceManager, UPlayerSkillManager* InSkillManager)
 {
 	if (!InInventoryManager)
 	{
@@ -51,11 +59,13 @@ void UUIManager::Initialize(UInventoryManager* InInventoryManager, UHarvestManag
 	InventoryManager = InInventoryManager;
 	HarvestManager = InHarvestManager;
 	ExperienceManager = InExperienceManager;
+	SkillManager = InSkillManager;
 	
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Managers set - InventoryManager: %s, HarvestManager: %s, ExperienceManager: %s"), 
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Managers set - InventoryManager: %s, HarvestManager: %s, ExperienceManager: %s, SkillManager: %s"), 
 		InventoryManager ? TEXT("Valid") : TEXT("NULL"), 
 		HarvestManager ? TEXT("Valid") : TEXT("NULL"),
-		ExperienceManager ? TEXT("Valid") : TEXT("NULL"));
+		ExperienceManager ? TEXT("Valid") : TEXT("NULL"),
+		SkillManager ? TEXT("Valid") : TEXT("NULL"));
 	
 	// Create UI widgets
 	CreateUIWidgets();
@@ -99,6 +109,9 @@ void UUIManager::Init(APlayerController* InPC, UCanvasPanel* InRootCanvas,
 		{
 			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create FCTManager object"));
 		}
+		
+		// Store PlayerController reference for later use
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: PlayerController reference stored for UI management"));
 	}
 	else
 	{
@@ -124,6 +137,9 @@ void UUIManager::CreateUIWidgets()
 
 	// Create experience widget
 	CreateExperienceWidget();
+
+	// Create skill widgets
+	CreateSkillWidgets();
 
 	// Create game version widget
 	CreateGameVersionWidget();
@@ -157,8 +173,8 @@ void UUIManager::CreateInventoryWidget()
 	// Set inventory size
 	InventoryWidget->SetInventorySize(InventoryRows, InventoryColumns);
 
-	// Add to viewport
-	InventoryWidget->AddToViewport();
+	// Add to viewport with highest Z-Order for overlays
+	InventoryWidget->AddToViewport(100);
 
 	// Initialize with inventory manager
 	if (InventoryManager)
@@ -265,8 +281,8 @@ void UUIManager::CreateGameVersionWidget()
 		UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create game version widget"));
 		return;
 	}
-	// Add to viewport
-	GameVersionWidget->AddToViewport();
+	// Add to viewport with very low Z-Order (background HUD element)
+	GameVersionWidget->AddToViewport(1);
 	UE_LOG(LogTemp, Warning, TEXT("UIManager: Game version widget created and added to viewport"));
 }
 
@@ -316,8 +332,8 @@ void UUIManager::CreateExperienceWidget()
 		return;
 	}
 
-	// Add to viewport
-	ExperienceWidget->AddToViewport();
+	// Add to viewport with low Z-Order (HUD element)
+	ExperienceWidget->AddToViewport(5);
 
 	// Widget will be initialized later when character ID is available
 	UE_LOG(LogTemp, Warning, TEXT("UIManager: Experience widget created (will be initialized when character ID is available)"));
@@ -347,4 +363,202 @@ void UUIManager::InitializeExperienceWidget(int32 CharacterId)
 	ExperienceWidget->InitializeWidget(ExperienceManager, CharacterId);
 	
 	UE_LOG(LogTemp, Warning, TEXT("UIManager: Experience widget initialized for character %d"), CharacterId);
+}
+
+void UUIManager::CreateSkillWidgets()
+{
+	if (!SkillManager)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: SkillManager not available, skipping skill widgets creation"));
+		return;
+	}
+
+	// Create skill bar widget
+	if (SkillBarWidgetClass)
+	{
+		if (SkillBarWidget)
+		{
+			SkillBarWidget->RemoveFromParent();
+			SkillBarWidget = nullptr;
+		}
+
+		SkillBarWidget = CreateWidget<USkillBarWidget>(GetWorld(), SkillBarWidgetClass);
+		if (SkillBarWidget)
+		{
+			SkillBarWidget->AddToViewport(10); // Lower Z-Order for skill bar
+			
+			// Get game instance for initialization
+			if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetWorld()->GetGameInstance()))
+			{
+				SkillBarWidget->Initialize(GameInstance);
+				SkillBarWidget->CreateSkillSlots(SkillBarSlots);
+				UE_LOG(LogTemp, Warning, TEXT("UIManager: Skill bar widget created and initialized"));
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to get GameInstance for skill bar widget"));
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create skill bar widget"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: SkillBarWidgetClass is not set"));
+	}
+
+	// Create available skills widget
+	if (AvailableSkillsWidgetClass)
+	{
+		if (AvailableSkillsWidget)
+		{
+			AvailableSkillsWidget->RemoveFromParent();
+			AvailableSkillsWidget = nullptr;
+		}
+
+		AvailableSkillsWidget = CreateWidget<UAvailableSkillsWidget>(GetWorld(), AvailableSkillsWidgetClass);
+		if (AvailableSkillsWidget)
+		{
+			// Add to viewport with higher Z-Order than skill bar but lower than inventory
+			AvailableSkillsWidget->AddToViewport(50);
+			
+			// Initially hide the available skills panel
+			AvailableSkillsWidget->SetVisibility(ESlateVisibility::Hidden);
+			
+			// Get game instance for initialization
+			if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetWorld()->GetGameInstance()))
+			{
+				AvailableSkillsWidget->Initialize(GameInstance);
+				UE_LOG(LogTemp, Warning, TEXT("UIManager: Available skills widget created and initialized"));
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to get GameInstance for available skills widget"));
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create available skills widget"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: AvailableSkillsWidgetClass is not set"));
+	}
+}
+
+void UUIManager::InitializeSkillWidgets()
+{
+	if (!SkillManager)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: SkillManager not available for skill widgets initialization"));
+		return;
+	}
+
+	// Both widgets should already be initialized in CreateSkillWidgets
+	if (SkillBarWidget)
+	{
+		// Refresh skill bar to show current skills
+		SkillBarWidget->RefreshAllSlots();
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: Skill bar widget refreshed"));
+	}
+
+	if (AvailableSkillsWidget)
+	{
+		// Refresh available skills list
+		AvailableSkillsWidget->RefreshSkillList();
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: Available skills widget refreshed"));
+	}
+}
+
+void UUIManager::ToggleSkillsPanel()
+{
+	if (!bIsInitialized)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: Cannot toggle skills panel - not initialized"));
+		return;
+	}
+
+	if (!AvailableSkillsWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: Available skills widget not created"));
+		return;
+	}
+
+	bSkillsPanelVisible = !bSkillsPanelVisible;
+	
+	if (bSkillsPanelVisible)
+	{
+		AvailableSkillsWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		AvailableSkillsWidget->RefreshSkillList();
+		
+		// Set focus and enable cursor when opening skills panel
+		if (PlayerController)
+		{
+			// Show cursor for UI interaction
+			PlayerController->bShowMouseCursor = true;
+			PlayerController->bEnableClickEvents = true;
+			PlayerController->bEnableMouseOverEvents = true;
+			
+			// Set input mode to allow UI input
+			FInputModeGameAndUI InputMode;
+			//InputMode.SetWidgetToFocus(AvailableSkillsWidget->TakeWidget());
+			InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+			InputMode.SetHideCursorDuringCapture(false);
+			PlayerController->SetInputMode(InputMode);
+			
+			UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel opened - cursor enabled and focus set"));
+			UE_LOG(LogTemp, Warning, TEXT("UIManager: PlayerController state - ShowCursor: %s, ClickEvents: %s, MouseOver: %s"), 
+				PlayerController->bShowMouseCursor ? TEXT("true") : TEXT("false"),
+				PlayerController->bEnableClickEvents ? TEXT("true") : TEXT("false"),
+				PlayerController->bEnableMouseOverEvents ? TEXT("true") : TEXT("false"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("UIManager: PlayerController not available for cursor setup"));
+		}
+	}
+	else
+	{
+		AvailableSkillsWidget->SetVisibility(ESlateVisibility::Hidden);
+		
+		// Restore game input mode when closing
+		if (PlayerController)
+		{
+			// Keep cursor for other UI elements, but set focus back to game
+			FInputModeGameAndUI InputMode;
+			InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+			InputMode.SetHideCursorDuringCapture(false);
+			PlayerController->SetInputMode(InputMode);
+			
+			UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel closed - focus restored to game"));
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("UIManager: Skills panel %s"), bSkillsPanelVisible ? TEXT("opened") : TEXT("closed"));
+}
+
+void UUIManager::HandleSkillsPanelToggle(const FInputActionValue& Value)
+{
+	if (Value.Get<bool>())
+	{
+		ToggleSkillsPanel();
+	}
+}
+
+void UUIManager::SetSkillTarget(int32 TargetId, ECasterType TargetType)
+{
+	if (SkillBarWidget)
+	{
+		SkillBarWidget->SetCurrentTarget(TargetId, TargetType);
+		//UE_LOG(LogTemp, Log, TEXT("UIManager: Set skill target to %d (%s)"), TargetId, *UEnum::GetValueAsString(TargetType));
+	}
+}
+
+void UUIManager::SetPlayerController(APlayerController* InPlayerController)
+{
+	PlayerController = InPlayerController;
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: PlayerController reference set successfully"));
 }

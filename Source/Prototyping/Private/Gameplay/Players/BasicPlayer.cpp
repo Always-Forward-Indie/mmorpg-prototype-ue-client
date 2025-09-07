@@ -5,11 +5,13 @@
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "UI/UIManager.h"
+#include "UI/SkillBarWidget.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Items/HarvestManager.h"
 #include "Gameplay/Player/ExperienceManager.h"
 #include "Gameplay/Combat/CombatSystemManager.h"
 #include "Gameplay/Combat/SkillSystemManager.h"
+#include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
 #include "Gameplay/Mobs/BasicMOB.h"
 #include "Utils/PlayerAttributeParser.h"
@@ -104,6 +106,70 @@ void ABasicPlayer::OnHarvestInput()
     }
 }
 
+void ABasicPlayer::OnSkillsPanelToggle()
+{
+    UE_LOG(LogTemp, Warning, TEXT("Skills panel toggle pressed"));
+    
+    if (UIManager)
+    {
+        UIManager->ToggleSkillsPanel();
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("UI manager not found"));
+    }
+}
+
+void ABasicPlayer::OnSkill1Input()
+{
+    UE_LOG(LogTemp, Warning, TEXT("Skill 1 input pressed"));
+    
+    if (UIManager && UIManager->GetSkillBarWidget())
+    {
+        UIManager->GetSkillBarWidget()->CastSkillFromSlot(0);
+    }
+}
+
+void ABasicPlayer::OnSkill2Input()
+{
+    UE_LOG(LogTemp, Warning, TEXT("Skill 2 input pressed"));
+    
+    if (UIManager && UIManager->GetSkillBarWidget())
+    {
+        UIManager->GetSkillBarWidget()->CastSkillFromSlot(1);
+    }
+}
+
+void ABasicPlayer::OnSkill3Input()
+{
+    UE_LOG(LogTemp, Warning, TEXT("Skill 3 input pressed"));
+    
+    if (UIManager && UIManager->GetSkillBarWidget())
+    {
+        UIManager->GetSkillBarWidget()->CastSkillFromSlot(2);
+    }
+}
+
+void ABasicPlayer::OnSkill4Input()
+{
+    UE_LOG(LogTemp, Warning, TEXT("Skill 4 input pressed"));
+    
+    if (UIManager && UIManager->GetSkillBarWidget())
+    {
+        UIManager->GetSkillBarWidget()->CastSkillFromSlot(3);
+    }
+}
+
+void ABasicPlayer::OnSkill5Input()
+{
+    UE_LOG(LogTemp, Warning, TEXT("Skill 5 input pressed"));
+    
+    if (UIManager && UIManager->GetSkillBarWidget())
+    {
+        UIManager->GetSkillBarWidget()->CastSkillFromSlot(4);
+    }
+}
+
 void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -153,6 +219,38 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
         if (HarvestAction)
         {
             EnhancedInputComponent->BindAction(HarvestAction, ETriggerEvent::Triggered, this, &ABasicPlayer::OnHarvestInput);
+        }
+
+        // Skills panel action
+        if (SkillsPanelAction)
+        {
+            EnhancedInputComponent->BindAction(SkillsPanelAction, ETriggerEvent::Triggered, this, &ABasicPlayer::OnSkillsPanelToggle);
+        }
+
+        // Individual skill actions
+        if (Skill1Action)
+        {
+            EnhancedInputComponent->BindAction(Skill1Action, ETriggerEvent::Triggered, this, &ABasicPlayer::OnSkill1Input);
+        }
+
+        if (Skill2Action)
+        {
+            EnhancedInputComponent->BindAction(Skill2Action, ETriggerEvent::Triggered, this, &ABasicPlayer::OnSkill2Input);
+        }
+
+        if (Skill3Action)
+        {
+            EnhancedInputComponent->BindAction(Skill3Action, ETriggerEvent::Triggered, this, &ABasicPlayer::OnSkill3Input);
+        }
+
+        if (Skill4Action)
+        {
+            EnhancedInputComponent->BindAction(Skill4Action, ETriggerEvent::Triggered, this, &ABasicPlayer::OnSkill4Input);
+        }
+
+        if (Skill5Action)
+        {
+            EnhancedInputComponent->BindAction(Skill5Action, ETriggerEvent::Triggered, this, &ABasicPlayer::OnSkill5Input);
         }
     }
 }
@@ -255,16 +353,33 @@ void ABasicPlayer::BeginPlay()
 			{
 				if (InventoryManager)
 				{
+					// Get PlayerController
+					APlayerController* PC = Cast<APlayerController>(GetController());
+					
 					// Get HarvestManager from GameInstance
 					UHarvestManager* HarvestManager = MyGameInstance ? MyGameInstance->GetHarvestManager() : nullptr;
 
 					//get ExperienceManager from GameInstance
 					UExperienceManager* ExperienceManager = MyGameInstance ? MyGameInstance->GetExperienceManager() : nullptr;
 					
-					// Initialize UIManager with both managers
-					UIManager->Initialize(InventoryManager, HarvestManager, ExperienceManager);
+					// Get SkillManager from GameInstance
+					UPlayerSkillManager* SkillManager = MyGameInstance ? MyGameInstance->GetPlayerSkillManager() : nullptr;
 					
-					UE_LOG(LogTemp, Warning, TEXT("UIManager initialized with InventoryManager and HarvestManager"));
+					// Initialize UIManager with all managers
+					UIManager->Initialize(InventoryManager, HarvestManager, ExperienceManager, SkillManager);
+					
+					// Set PlayerController reference immediately after Initialize
+					if (PC)
+					{
+						UIManager->SetPlayerController(PC);
+						UE_LOG(LogTemp, Warning, TEXT("UIManager: PlayerController set during initialization"));
+					}
+					else
+					{
+						UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to get PlayerController during initialization"));
+					}
+					
+					UE_LOG(LogTemp, Warning, TEXT("UIManager initialized with all managers including SkillManager"));
 
 					// Initialize experience widget for this character and set initial progression data
 					if (ExperienceManager && playerData.characterData.characterId > 0)
@@ -291,6 +406,13 @@ void ABasicPlayer::BeginPlay()
 							InitialProgression.currentLevel,
 							InitialProgression.currentExperience,
 							InitialProgression.expForNextLevel);
+					}
+
+					// Initialize skill widgets if SkillManager is available
+					if (SkillManager)
+					{
+						UIManager->InitializeSkillWidgets();
+						UE_LOG(LogTemp, Warning, TEXT("Skill widgets initialized"));
 					}
 				}
                 
@@ -552,7 +674,6 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
 
     FRotator NewRotation = FMath::RInterpTo(GetActorRotation(), TargetReceivedRotation, GetWorld()->GetDeltaSeconds(), RotationInterpSpeed);
  
-
 
 
     float distanceToTarget = FVector::Dist(GetActorLocation(), TargetReceivedPosition);
@@ -870,17 +991,6 @@ void ABasicPlayer::CheckForMOB()
         Params
     );
 
-    //DrawDebugLine(
-    //    GetWorld(),
-    //    Start,
-    //    End,
-    //    FColor::Green,
-    //    false,
-    //    2.0f,
-    //    0,
-    //    1.0f
-    //);
-
     ABasicMOB* ClosestMob = nullptr;
     float ClosestDistance = FLT_MAX;
 
@@ -901,6 +1011,20 @@ void ABasicPlayer::CheckForMOB()
         }
     }
 
+    // Store the current target for skill system
+    int32 CurrentTargetMobId = 0;
+    if (ClosestMob)
+    {
+        CurrentTargetMobId = FCString::Atoi(*ClosestMob->GetMOBUId());
+    }
+
+    // Update skill target when selecting new target
+    if (UIManager)
+    {
+        UIManager->SetSkillTarget(CurrentTargetMobId, CurrentTargetMobId > 0 ? ECasterType::Mob : ECasterType::None);
+    }
+
+    // Show/hide MOB head info
     for (TActorIterator<ABasicMOB> It(GetWorld()); It; ++It)
     {
         if (*It == ClosestMob)
@@ -1164,9 +1288,5 @@ void ABasicPlayer::RefreshHUD()
 	// Update HUD with current values
 	PlayerHUD->SetHP(static_cast<float>(playerData.characterData.characterCurrentHealth), MaxHealth);
 	PlayerHUD->SetMana(static_cast<float>(playerData.characterData.characterCurrentMana), MaxMana);
-
-	UE_LOG(LogTemp, VeryVerbose, TEXT("BasicPlayer: HUD refreshed - HP: %.0f/%.0f, MP: %.0f/%.0f"),
-		static_cast<float>(playerData.characterData.characterCurrentHealth), MaxHealth,
-		static_cast<float>(playerData.characterData.characterCurrentMana), MaxMana);
 }
 

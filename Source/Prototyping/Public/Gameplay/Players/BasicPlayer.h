@@ -305,6 +305,25 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* HarvestAction;
 
+	// Skills input actions
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* SkillsPanelAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* Skill1Action;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* Skill2Action;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* Skill3Action;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* Skill4Action;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* Skill5Action;
+
 	// Reference to the login camera actor
 	ACameraActor* LoginCameraActor;
 
@@ -385,4 +404,23 @@ public:
 	// Handle harvest input
 	UFUNCTION()
 	void OnHarvestInput();
+
+	// Handle skills input
+	UFUNCTION()
+	void OnSkillsPanelToggle();
+
+	UFUNCTION()
+	void OnSkill1Input();
+
+	UFUNCTION()
+	void OnSkill2Input();
+
+	UFUNCTION()
+	void OnSkill3Input();
+
+	UFUNCTION()
+	void OnSkill4Input();
+
+	UFUNCTION()
+	void OnSkill5Input();
 };

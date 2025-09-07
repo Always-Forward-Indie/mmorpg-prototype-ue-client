@@ -1236,3 +1236,203 @@ struct FPlayerStatsUpdateStruct
         manaMax = 0;
     }
 };
+
+// Player Skills System Structures
+
+// Server skill data from network
+USTRUCT(BlueprintType)
+struct FPlayerSkillNetworkData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Skill Network")
+    FString skillSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Skill Network")
+    int32 skillLevel = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Skill Network")
+    int32 castMs = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Skill Network")
+    float coeff = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Skill Network")
+    int32 cooldownMs = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Skill Network")
+    int32 costMp = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Skill Network")
+    float flatAdd = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Skill Network")
+    int32 gcdMs = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Skill Network")
+    float maxRange = 0.0f;
+
+    FPlayerSkillNetworkData()
+    {
+        skillSlug = "";
+        skillLevel = 1;
+        castMs = 0;
+        coeff = 1.0f;
+        cooldownMs = 0;
+        costMp = 0;
+        flatAdd = 0.0f;
+        gcdMs = 0;
+        maxRange = 0.0f;
+    }
+};
+
+// Player skills initialization from server
+USTRUCT(BlueprintType)
+struct FPlayerSkillsInitializationData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Skills Initialization")
+    int32 characterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Skills Initialization")
+    TArray<FPlayerSkillNetworkData> skills;
+
+    FPlayerSkillsInitializationData()
+    {
+        characterId = 0;
+        skills.Empty();
+    }
+};
+
+// Extended skill definition for client-side data (icons, descriptions, etc.)
+USTRUCT(BlueprintType)
+struct FSkillDefinitionData : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    FString skillSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    FText displayName = FText::GetEmpty();
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    FText description = FText::GetEmpty();
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    TSoftObjectPtr<UTexture2D> skillIcon;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    TSoftObjectPtr<USoundBase> castSound;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    TSoftObjectPtr<USoundBase> hitSound;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    FString animationName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    ESkillEffectType effectType = ESkillEffectType::None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    ESkillSchool school = ESkillSchool::None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    FLinearColor skillColor = FLinearColor::White;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    bool bIsChanneled = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    bool bIsTargeted = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    bool bRequiresLineOfSight = true;
+
+    // Visual effects
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    TSoftObjectPtr<UParticleSystem> castEffect;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    TSoftObjectPtr<UParticleSystem> hitEffect;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    TSoftObjectPtr<UParticleSystem> projectileEffect;
+
+    FSkillDefinitionData()
+    {
+        skillSlug = "";
+        displayName = FText::GetEmpty();
+        description = FText::GetEmpty();
+        animationName = "";
+        effectType = ESkillEffectType::None;
+        school = ESkillSchool::None;
+        skillColor = FLinearColor::White;
+        bIsChanneled = false;
+        bIsTargeted = true;
+        bRequiresLineOfSight = true;
+    }
+};
+
+// Complete player skill data (network + definition)
+USTRUCT(BlueprintType)
+struct FPlayerSkillData
+{
+    GENERATED_BODY()
+
+    // Network data from server
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Skill")
+    FPlayerSkillNetworkData networkData;
+
+    // Definition data from data table
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Skill")
+    FSkillDefinitionData definitionData;
+
+    // Runtime cooldown tracking
+    UPROPERTY(BlueprintReadOnly, Category = "Player Skill")
+    float cooldownEndTime = 0.0f;
+
+    // Runtime state
+    UPROPERTY(BlueprintReadOnly, Category = "Player Skill")
+    bool bIsOnCooldown = false;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Player Skill")
+    bool bIsReady = true;
+
+    FPlayerSkillData()
+    {
+        networkData = FPlayerSkillNetworkData();
+        definitionData = FSkillDefinitionData();
+        cooldownEndTime = 0.0f;
+        bIsOnCooldown = false;
+        bIsReady = true;
+    }
+};
+
+// Skill slot data for UI
+USTRUCT(BlueprintType)
+struct FSkillSlotData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot")
+    int32 slotIndex = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot")
+    FString skillSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot")
+    FKey boundKey;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot")
+    bool bIsAssigned = false;
+
+    FSkillSlotData()
+    {
+        slotIndex = 0;
+        skillSlug = "";
+        boundKey = FKey();
+        bIsAssigned = false;
+    }
+};

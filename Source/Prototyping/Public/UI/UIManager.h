@@ -11,6 +11,7 @@
 class UInventoryManager;
 class UHarvestManager;
 class UExperienceManager;
+class UPlayerSkillManager;
 class UInputAction;
 class UFloatingCombatTextManager;
 class UCanvasPanel;
@@ -18,6 +19,8 @@ class UDamageTextWidget;
 class UHarvestProgressWidget;
 class UHarvestLootWidget;
 class UPlayerExperienceWidget;
+class USkillBarWidget;
+class UAvailableSkillsWidget;
 
 /**
  * UI Manager component that handles all UI elements for the player
@@ -32,7 +35,7 @@ public:
 
 	// Initialize the UI manager
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
-	void Initialize(UInventoryManager* InInventoryManager, UHarvestManager* InHarvestManager = nullptr, UExperienceManager* InExperienceManager = nullptr);
+	void Initialize(UInventoryManager* InInventoryManager, UHarvestManager* InHarvestManager = nullptr, UExperienceManager* InExperienceManager = nullptr, UPlayerSkillManager* InSkillManager = nullptr);
 
 	// Initialize FCT Manager
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
@@ -47,13 +50,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void InitializeExperienceWidget(int32 CharacterId);
 
-	// Toggle inventory UI
+	// Initialize skill widgets
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void InitializeSkillWidgets();
+
+	// Toggle UI elements
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void ToggleInventory();
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ToggleSkillsPanel();
 
 	// Handle input actions
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void HandleInventoryToggle(const FInputActionValue& Value);
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void HandleSkillsPanelToggle(const FInputActionValue& Value);
 
 	// Get UI widgets
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
@@ -68,10 +81,23 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UPlayerExperienceWidget* GetExperienceWidget() const { return ExperienceWidget; }
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	USkillBarWidget* GetSkillBarWidget() const { return SkillBarWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UAvailableSkillsWidget* GetAvailableSkillsWidget() const { return AvailableSkillsWidget; }
+
 	// Get FCT Manager
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UFloatingCombatTextManager* GetFCTManager() const { return FCTManager; }
 
+	// Set current target for skill casting
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void SetSkillTarget(int32 TargetId, ECasterType TargetType);
+
+	// Set PlayerController reference
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void SetPlayerController(APlayerController* InPlayerController);
 
 protected:
 	virtual void BeginPlay() override;
@@ -85,6 +111,12 @@ protected:
 
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void CreateExperienceWidget();
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void CreateSkillWidgets();
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void CreateGameVersionWidget();
 
 protected:
 	// Widget classes (set these in Blueprint or C++)
@@ -100,12 +132,15 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager")
 	TSubclassOf<UPlayerExperienceWidget> ExperienceWidgetClass;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager")
+	TSubclassOf<USkillBarWidget> SkillBarWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager")
+	TSubclassOf<UAvailableSkillsWidget> AvailableSkillsWidgetClass;
+
 	//Version of game widget
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager")
 	TSubclassOf<UUserWidget> GameVersionWidgetClass;
-
-	UFUNCTION(BlueprintCallable, Category = "UI Manager")
-	void CreateGameVersionWidget();
 
 	// UI widgets
 	UPROPERTY(BlueprintReadOnly, Category = "UI Manager")
@@ -119,6 +154,12 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly, Category = "UI Manager")
 	UPlayerExperienceWidget* ExperienceWidget;
+
+	UPROPERTY(BlueprintReadOnly, Category = "UI Manager")
+	USkillBarWidget* SkillBarWidget;
+
+	UPROPERTY(BlueprintReadOnly, Category = "UI Manager")
+	UAvailableSkillsWidget* AvailableSkillsWidget;
 
 	UPROPERTY(BlueprintReadOnly, Category = "UI Manager")
 	UUserWidget* GameVersionWidget;
@@ -138,6 +179,9 @@ protected:
 	UExperienceManager* ExperienceManager;
 
 	UPROPERTY()
+	UPlayerSkillManager* SkillManager;
+
+	UPROPERTY()
 	APlayerController* PlayerController;
 
 	UPROPERTY()
@@ -149,6 +193,12 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager")
 	int32 InventoryColumns = 8;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager")
+	int32 SkillBarSlots = 10;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager")
+	bool bSkillsPanelVisible = false;
 
 private:
 	bool bIsInitialized = false;

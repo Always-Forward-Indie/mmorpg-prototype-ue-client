@@ -142,6 +142,19 @@ public:
 	UPROPERTY()
 	class UCombatNetworkHandler* CombatNetworkHandler;
 
+	// Player skill system components
+	UPROPERTY()
+	class UPlayerSkillManager* PlayerSkillManager;
+
+	UPROPERTY()
+	class USkillDefinitionRepository* SkillDefinitionRepository;
+
+	UPROPERTY()
+	class UPlayerSkillNetworkHandler* PlayerSkillNetworkHandler;
+
+	UPROPERTY()
+	class UPlayerSkillSystemFactory* PlayerSkillSystemFactory;
+
 	// Time synchronization service
 	UPROPERTY()
 	UTimeSyncService* TimeSyncService;
@@ -219,6 +232,22 @@ public:
 	// get combat network handler
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	class UCombatNetworkHandler* GetCombatNetworkHandler();
+
+	// get player skill manager
+	UFUNCTION(BlueprintCallable, Category = "Player Skills")
+	class UPlayerSkillManager* GetPlayerSkillManager();
+
+	// get skill definition repository
+	UFUNCTION(BlueprintCallable, Category = "Player Skills")
+	class USkillDefinitionRepository* GetSkillDefinitionRepository();
+
+	// get player skill network handler
+	UFUNCTION(BlueprintCallable, Category = "Player Skills")
+	class UPlayerSkillNetworkHandler* GetPlayerSkillNetworkHandler();
+
+	// get player skill system factory
+	UFUNCTION(BlueprintCallable, Category = "Player Skills")
+	class UPlayerSkillSystemFactory* GetPlayerSkillSystemFactory();
 
 	// get current client data
 	UFUNCTION(BlueprintCallable, Category = "Client Data")
@@ -343,6 +372,10 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Items")
 	UDataTable* ItemVisualsDataTable;
+
+	// Skill definitions data table
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Player Skills")
+	UDataTable* SkillDefinitionsDataTable;
 
 	// add a reference to the camera actor blueprint
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Player")

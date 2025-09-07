@@ -5,11 +5,13 @@
 #include "Engine/World.h"
 #include "Services/TimeSyncService.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Skills/PlayerSkillManager.h" // Add include for new system
 
 USkillSystemManager::USkillSystemManager()
 {
     CombatSystemManager = nullptr;
     NetworkManager = nullptr;
+    PlayerSkillManager = nullptr; // Initialize new field
 }
 
 void USkillSystemManager::Initialize(UCombatSystemManager* CombatManager, UNetworkManager* InNetworkManager)
@@ -31,6 +33,13 @@ void USkillSystemManager::Initialize(UCombatSystemManager* CombatManager, UNetwo
     RegisterSkill(BasicAttack.skillSlug, BasicAttack);
 
     UE_LOG(LogTemp, Warning, TEXT("SkillSystemManager: Initialized with default skills"));
+}
+
+// Add setter for PlayerSkillManager integration
+void USkillSystemManager::SetPlayerSkillManager(UPlayerSkillManager* InPlayerSkillManager)
+{
+    PlayerSkillManager = InPlayerSkillManager;
+    UE_LOG(LogTemp, Log, TEXT("SkillSystemManager: PlayerSkillManager integration enabled"));
 }
 
 void USkillSystemManager::RegisterSkill(const FString& SkillSlug, const FSkillData& SkillData)

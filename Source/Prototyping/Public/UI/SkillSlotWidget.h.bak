@@ -1,0 +1,175 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Blueprint/UserWidget.h"
+#include "Components/Button.h"
+#include "Components/Image.h"
+#include "Components/TextBlock.h"
+#include "Components/ProgressBar.h"
+#include "Data/DataStructs.h"
+#include "SkillSlotWidget.generated.h"
+
+// Forward declarations
+class UPlayerSkillManager;
+class USkillDragDropOperation;
+
+// Delegate declarations
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FSkillSlotClicked, int32, SlotIndex, const FString&, SkillSlug);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FSkillSlotRightClicked, int32, SlotIndex, const FString&, SkillSlug);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FSkillDroppedOnSlot, int32, SlotIndex, const FPlayerSkillData&, SkillData, const FKey&, Hotkey);
+
+/**
+ * UI Widget for displaying a single skill slot
+ * Shows skill icon, cooldown progress, and handles click events
+ * Supports drag-and-drop of skills from available skills list
+ */
+UCLASS(BlueprintType, Blueprintable)
+class PROTOTYPING_API USkillSlotWidget : public UUserWidget
+{
+    GENERATED_BODY()
+
+public:
+    USkillSlotWidget(const FObjectInitializer& ObjectInitializer);
+
+    // Initialization
+    UFUNCTION(BlueprintCallable, Category = "Skill Slot Widget")
+    void Initialize(int32 InSlotIndex, UPlayerSkillManager* InSkillManager);
+
+    // Skill slot management
+    UFUNCTION(BlueprintCallable, Category = "Skill Slot Widget")
+    void SetSkillData(const FPlayerSkillData& SkillData);
+
+    UFUNCTION(BlueprintCallable, Category = "Skill Slot Widget")
+    void SetSlotData(const FSkillSlotData& SlotData);
+
+    UFUNCTION(BlueprintCallable, Category = "Skill Slot Widget")
+    void ClearSlot();
+
+    // Visual updates
+    UFUNCTION(BlueprintCallable, Category = "Skill Slot Widget")
+    void UpdateCooldown(float RemainingTime, float TotalTime);
+
+    UFUNCTION(BlueprintCallable, Category = "Skill Slot Widget")
+    void SetEnabled(bool bEnabled);
+
+    UFUNCTION(BlueprintCallable, Category = "Skill Slot Widget")
+    void SetHighlighted(bool bHighlighted);
+
+    UFUNCTION(BlueprintCallable, Category = "Skill Slot Widget")
+    void SetDropHighlighted(bool bDropHighlighted);
+
+    // Events
+    UPROPERTY(BlueprintAssignable, Category = "Skill Slot Widget")
+    FSkillSlotClicked OnSkillSlotClicked;
+
+    UPROPERTY(BlueprintAssignable, Category = "Skill Slot Widget")
+    FSkillSlotRightClicked OnSkillSlotRightClicked;
+
+    UPROPERTY(BlueprintAssignable, Category = "Skill Slot Widget")
+    FSkillDroppedOnSlot OnSkillDroppedOnSlot;
+
+    // Properties
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Skill Slot Widget")
+    int32 GetSlotIndex() const { return SlotIndex; }
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Skill Slot Widget")
+    FString GetAssignedSkillSlug() const { return AssignedSkillSlug; }
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Skill Slot Widget")
+    bool IsSlotAssigned() const { return !AssignedSkillSlug.IsEmpty(); }
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Skill Slot Widget")
+    bool IsOnCooldown() const { return bIsOnCooldown; }
+
+protected:
+    // Widget components
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "Skill Slot Widget")
+    UButton* SkillButton;
+
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "Skill Slot Widget")
+    UImage* SkillIcon;
+
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "Skill Slot Widget")
+    UImage* CooldownOverlay;
+
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "Skill Slot Widget")
+    UProgressBar* CooldownProgress;
+
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "Skill Slot Widget")
+    UTextBlock* CooldownText;
+
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "Skill Slot Widget")
+    UTextBlock* HotkeyText;
+
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "Skill Slot Widget")
+    UImage* HighlightBorder;
+
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Skill Slot Widget")
+    UImage* DropHighlightBorder;
+
+    // Event handlers
+    UFUNCTION()
+    void OnSkillButtonClicked();
+
+    UFUNCTION()
+    void OnSkillButtonPressed();
+
+    UFUNCTION()
+    void OnSkillButtonReleased();
+
+    // Native overrides
+    virtual void NativeConstruct() override;
+    virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+    virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+
+    // Drag and Drop support
+    virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
+    virtual void NativeOnDragEnter(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
+    virtual void NativeOnDragLeave(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
+
+private:
+    // Dependencies
+    UPROPERTY()
+    UPlayerSkillManager* SkillManager;
+
+    // Slot data
+    int32 SlotIndex = -1;
+    FString AssignedSkillSlug = "";
+    FPlayerSkillData CurrentSkillData;
+    FSkillSlotData CurrentSlotData;
+
+    // State
+    bool bIsOnCooldown = false;
+    bool bIsEnabled = true;
+    bool bIsHighlighted = false;
+    bool bIsDropHighlighted = false;
+    float CooldownRemainingTime = 0.0f;
+    float CooldownTotalTime = 0.0f;
+
+    // Visual settings
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot Widget", meta = (AllowPrivateAccess = "true"))
+    UTexture2D* DefaultSkillIcon;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot Widget", meta = (AllowPrivateAccess = "true"))
+    FLinearColor EnabledColor = FLinearColor::White;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot Widget", meta = (AllowPrivateAccess = "true"))
+    FLinearColor DisabledColor = FLinearColor(0.5f, 0.5f, 0.5f, 1.0f);
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot Widget", meta = (AllowPrivateAccess = "true"))
+    FLinearColor CooldownColor = FLinearColor(1.0f, 1.0f, 1.0f, 0.5f);
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot Widget", meta = (AllowPrivateAccess = "true"))
+    FLinearColor HighlightColor = FLinearColor::Yellow;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot Widget", meta = (AllowPrivateAccess = "true"))
+    FLinearColor DropHighlightColor = FLinearColor::Green;
+
+    // Internal methods
+    void UpdateVisualState();
+    void UpdateCooldownDisplay();
+    void UpdateHotkeyDisplay();
+    FString FormatCooldownTime(float Time) const;
+    bool CanAcceptSkillDrop(USkillDragDropOperation* DragDropOp) const;
+    FKey GetSlotHotkey() const;
+};

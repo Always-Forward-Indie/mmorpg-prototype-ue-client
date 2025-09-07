@@ -13,7 +13,10 @@
 #include "Gameplay/Combat/ICombatable.h"
 #include "Gameplay/Player/ExperienceManager.h"
 #include "Gameplay/Player/ExperienceNetworkHandler.h"
-
+#include "Gameplay/Skills/PlayerSkillManager.h"
+#include "Gameplay/Skills/SkillDefinitionRepository.h"
+#include "Gameplay/Skills/PlayerSkillNetworkHandler.h"
+#include "Gameplay/Skills/PlayerSkillSystemFactory.h"
 
 UMyGameInstance::UMyGameInstance(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -250,6 +253,37 @@ void UMyGameInstance::InitNetworkingSetup()
 		UE_LOG(LogTemp, Warning, TEXT("SkillSystemManager initialized"));
 	}
 
+	// Initialize player skill system using factory pattern
+	PlayerSkillSystemFactory = NewObject<UPlayerSkillSystemFactory>(this);
+	if (PlayerSkillSystemFactory && SkillSystemManager && NetworkManager)
+	{
+		bool bSkillSystemCreated = PlayerSkillSystemFactory->CreateCompletePlayerSkillSystem(
+			SkillSystemManager,
+			NetworkManager,
+			SkillDefinitionsDataTable,
+			TimeSyncService,
+			this
+		);
+
+		if (bSkillSystemCreated)
+		{
+			// Get references to created components
+			PlayerSkillManager = PlayerSkillSystemFactory->GetPlayerSkillManager();
+			SkillDefinitionRepository = PlayerSkillSystemFactory->GetSkillDefinitionRepository();
+			PlayerSkillNetworkHandler = PlayerSkillSystemFactory->GetPlayerSkillNetworkHandler();
+
+			UE_LOG(LogTemp, Warning, TEXT("Player skill system created successfully"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("Failed to create player skill system"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Cannot create player skill system - missing dependencies or SkillDefinitionsDataTable not configured"));
+	}
+
 	// Initialize CombatNetworkHandler centrally AFTER CombatSystemManager
 	if (CombatNetworkHandler != nullptr && CombatSystemManager != nullptr) {
 		// Initialize the combat network handler
@@ -403,6 +437,26 @@ USkillSystemManager* UMyGameInstance::GetSkillSystemManager()
 UCombatNetworkHandler* UMyGameInstance::GetCombatNetworkHandler()
 {
 	return CombatNetworkHandler;
+}
+
+UPlayerSkillManager* UMyGameInstance::GetPlayerSkillManager()
+{
+	return PlayerSkillManager;
+}
+
+USkillDefinitionRepository* UMyGameInstance::GetSkillDefinitionRepository()
+{
+	return SkillDefinitionRepository;
+}
+
+UPlayerSkillNetworkHandler* UMyGameInstance::GetPlayerSkillNetworkHandler()
+{
+	return PlayerSkillNetworkHandler;
+}
+
+UPlayerSkillSystemFactory* UMyGameInstance::GetPlayerSkillSystemFactory()
+{
+	return PlayerSkillSystemFactory;
 }
 
 TSubclassOf<class ADroppedItemActor> UMyGameInstance::GetDroppedItemActorClass()

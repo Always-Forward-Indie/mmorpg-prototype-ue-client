@@ -9,6 +9,7 @@
 class UCombatSystemManager;
 class UNetworkManager;
 class UTimeSyncService;
+class UPlayerSkillManager; // Add forward declaration
 
 // Skill data structure
 USTRUCT(BlueprintType)
@@ -61,6 +62,7 @@ struct FSkillData
  * Manages skill execution, cooldowns, and casting
  * Separate from combat system to handle skill-specific logic
  * Uses TimeSyncService for accurate cooldown calculations
+ * Now integrates with the new PlayerSkillManager for enhanced functionality
  */
 UCLASS(BlueprintType)
 class PROTOTYPING_API USkillSystemManager : public UObject
@@ -73,6 +75,10 @@ public:
     // Initialization
     UFUNCTION(BlueprintCallable, Category = "Skill System")
     void Initialize(UCombatSystemManager* CombatManager, UNetworkManager* NetworkManager);
+
+    // New integration method
+    UFUNCTION(BlueprintCallable, Category = "Skill System")
+    void SetPlayerSkillManager(UPlayerSkillManager* InPlayerSkillManager);
 
     // Skill management
     UFUNCTION(BlueprintCallable, Category = "Skill System")
@@ -105,6 +111,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Skill System")
     bool HasSufficientMana(int32 CasterId, const FString& SkillSlug) const;
 
+    // Utility methods
+    UFUNCTION(BlueprintCallable, Category = "Skill System")
+    float GetWorldTime() const;
+
 protected:
     // Validate skill casting conditions
     bool ValidateSkillCast(int32 CasterId, int32 TargetId, const FString& SkillSlug, ECasterType TargetType);
@@ -116,15 +126,16 @@ private:
     UPROPERTY()
     UNetworkManager* NetworkManager;
 
+    // Integration with new player skill system
+    UPROPERTY()
+    UPlayerSkillManager* PlayerSkillManager;
+
     // Skill database
     UPROPERTY()
     TMap<FString, FSkillData> RegisteredSkills;
 
     // Cooldown tracking - maps CasterId -> SkillSlug -> EndTime
     TMap<int32, TMap<FString, float>> SkillCooldowns;
-
-    // Helper to get current world time
-    float GetWorldTime() const;
 
     // Helper to get server-synchronized time for accurate cooldown calculations
     float GetSynchronizedWorldTime() const;

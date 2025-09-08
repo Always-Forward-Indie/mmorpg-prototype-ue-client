@@ -35,7 +35,11 @@ UUIManager::UUIManager()
 	RootCanvas = nullptr;
 	GameVersionWidget = nullptr;
 	bIsInitialized = false;
+	
+	// Initialize widget visibility tracking
+	bInventoryVisible = false;
 	bSkillsPanelVisible = false;
+	bHarvestLootVisible = false;
 }
 
 void UUIManager::BeginPlay()
@@ -44,6 +48,27 @@ void UUIManager::BeginPlay()
 	
 	// UI creation is handled manually through Initialize() or CreateUIWidgets()
 	// This allows for better control over when UI is created
+}
+
+void UUIManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// Unsubscribe from widget events before cleanup
+	if (AvailableSkillsWidget)
+	{
+		AvailableSkillsWidget->OnWidgetVisibilityChanged.RemoveDynamic(this, &UUIManager::OnAvailableSkillsVisibilityChanged);
+	}
+	
+	if (InventoryWidget)
+	{
+		InventoryWidget->OnInventoryVisibilityChanged.RemoveDynamic(this, &UUIManager::OnInventoryVisibilityChanged);
+	}
+	
+	if (HarvestLootWidget)
+	{
+		HarvestLootWidget->OnHarvestLootVisibilityChanged.RemoveDynamic(this, &UUIManager::OnHarvestLootVisibilityChanged);
+	}
+	
+	Super::EndPlay(EndPlayReason);
 }
 
 void UUIManager::Initialize(UInventoryManager* InInventoryManager, UHarvestManager* InHarvestManager, UExperienceManager* InExperienceManager, UPlayerSkillManager* InSkillManager)
@@ -158,6 +183,7 @@ void UUIManager::CreateInventoryWidget()
 	if (InventoryWidget)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("UIManager: Inventory widget already exists, removing old one"));
+		InventoryWidget->OnInventoryVisibilityChanged.RemoveDynamic(this, &UUIManager::OnInventoryVisibilityChanged);
 		InventoryWidget->RemoveFromParent();
 		InventoryWidget = nullptr;
 	}
@@ -181,6 +207,9 @@ void UUIManager::CreateInventoryWidget()
 	{
 		InventoryManager->SetInventoryUIWidget(InventoryWidget);
 	}
+
+	// Bind to inventory visibility events
+	InventoryWidget->OnInventoryVisibilityChanged.AddDynamic(this, &UUIManager::OnInventoryVisibilityChanged);
 
 	// Hide initially
 	InventoryWidget->SetInventoryVisible(false);
@@ -230,6 +259,7 @@ void UUIManager::CreateHarvestWidgets()
 	{
 		if (HarvestLootWidget)
 		{
+			HarvestLootWidget->OnHarvestLootVisibilityChanged.RemoveDynamic(this, &UUIManager::OnHarvestLootVisibilityChanged);
 			HarvestLootWidget->RemoveFromParent();
 			HarvestLootWidget = nullptr;
 		}
@@ -247,6 +277,9 @@ void UUIManager::CreateHarvestWidgets()
 			{
 				HarvestManager->SetHarvestLootWidget(HarvestLootWidget);
 			}
+			
+			// Bind to harvest loot visibility events
+			HarvestLootWidget->OnHarvestLootVisibilityChanged.AddDynamic(this, &UUIManager::OnHarvestLootVisibilityChanged);
 			
 			UE_LOG(LogTemp, Warning, TEXT("UIManager: Harvest loot widget created and forcibly hidden"));
 		}
@@ -296,8 +329,18 @@ void UUIManager::ToggleInventory()
 
 	if (InventoryManager)
 	{
+		// Обновляем состояние видимости инвентаря
+		bool bWasVisible = bInventoryVisible;
 		InventoryManager->ToggleInventoryUI();
-		UE_LOG(LogTemp, Log, TEXT("UIManager: Toggled inventory UI"));
+		
+		// Определяем новое состояние (инвертируем предыдущее)
+		bInventoryVisible = !bWasVisible;
+		
+		// Обновляем курсор и режим ввода
+		UpdateCursorAndInputMode();
+		
+		UE_LOG(LogTemp, Log, TEXT("UIManager: Toggled inventory UI - now %s"), 
+			bInventoryVisible ? TEXT("visible") : TEXT("hidden"));
 	}
 }
 
@@ -427,6 +470,9 @@ void UUIManager::CreateSkillWidgets()
 			// Initially hide the available skills panel
 			AvailableSkillsWidget->SetVisibility(ESlateVisibility::Hidden);
 			
+			// Subscribe to visibility change events
+			AvailableSkillsWidget->OnWidgetVisibilityChanged.AddDynamic(this, &UUIManager::OnAvailableSkillsVisibilityChanged);
+			
 			// Get game instance for initialization
 			if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetWorld()->GetGameInstance()))
 			{
@@ -487,57 +533,26 @@ void UUIManager::ToggleSkillsPanel()
 		return;
 	}
 
-	bSkillsPanelVisible = !bSkillsPanelVisible;
+	// Используем текущее состояние видимости виджета вместо нашей переменной
+	bool bCurrentlyVisible = AvailableSkillsWidget->IsWidgetVisible();
 	
-	if (bSkillsPanelVisible)
+	if (!bCurrentlyVisible)
 	{
-		AvailableSkillsWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		AvailableSkillsWidget->RefreshSkillList();
+		// ИСПРАВЛЕНО: Используем ShowWidget() вместо SetVisibility(SelfHitTestInvisible)
+		AvailableSkillsWidget->ShowWidget();
 		
-		// Set focus and enable cursor when opening skills panel
-		if (PlayerController)
-		{
-			// Show cursor for UI interaction
-			PlayerController->bShowMouseCursor = true;
-			PlayerController->bEnableClickEvents = true;
-			PlayerController->bEnableMouseOverEvents = true;
-			
-			// Set input mode to allow UI input
-			FInputModeGameAndUI InputMode;
-			//InputMode.SetWidgetToFocus(AvailableSkillsWidget->TakeWidget());
-			InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-			InputMode.SetHideCursorDuringCapture(false);
-			PlayerController->SetInputMode(InputMode);
-			
-			UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel opened - cursor enabled and focus set"));
-			UE_LOG(LogTemp, Warning, TEXT("UIManager: PlayerController state - ShowCursor: %s, ClickEvents: %s, MouseOver: %s"), 
-				PlayerController->bShowMouseCursor ? TEXT("true") : TEXT("false"),
-				PlayerController->bEnableClickEvents ? TEXT("true") : TEXT("false"),
-				PlayerController->bEnableMouseOverEvents ? TEXT("true") : TEXT("false"));
-		}
-		else
-		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: PlayerController not available for cursor setup"));
-		}
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel opened using ShowWidget()"));
 	}
 	else
 	{
-		AvailableSkillsWidget->SetVisibility(ESlateVisibility::Hidden);
+		// Используем HideWidget() для последовательности
+		AvailableSkillsWidget->HideWidget();
 		
-		// Restore game input mode when closing
-		if (PlayerController)
-		{
-			// Keep cursor for other UI elements, but set focus back to game
-			FInputModeGameAndUI InputMode;
-			InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-			InputMode.SetHideCursorDuringCapture(false);
-			PlayerController->SetInputMode(InputMode);
-			
-			UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel closed - focus restored to game"));
-		}
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel closed using HideWidget()"));
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("UIManager: Skills panel %s"), bSkillsPanelVisible ? TEXT("opened") : TEXT("closed"));
+	// bSkillsPanelVisible будет автоматически обновлена через OnAvailableSkillsVisibilityChanged
+	UE_LOG(LogTemp, Log, TEXT("UIManager: Skills panel %s"), !bCurrentlyVisible ? TEXT("opened") : TEXT("closed"));
 }
 
 void UUIManager::HandleSkillsPanelToggle(const FInputActionValue& Value)
@@ -561,4 +576,79 @@ void UUIManager::SetPlayerController(APlayerController* InPlayerController)
 {
 	PlayerController = InPlayerController;
 	UE_LOG(LogTemp, Warning, TEXT("UIManager: PlayerController reference set successfully"));
+}
+
+void UUIManager::OnAvailableSkillsVisibilityChanged(bool bIsVisible)
+{
+	// Синхронизоруем состояние видимости с внутренним состоянием виджета
+	bSkillsPanelVisible = bIsVisible;
+	
+	// Обновляем курсор и режим ввода
+	UpdateCursorAndInputMode();
+	
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel visibility synced: %s"), 
+		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
+}
+
+void UUIManager::OnInventoryVisibilityChanged(bool bIsVisible)
+{
+	bInventoryVisible = bIsVisible;
+	UpdateCursorAndInputMode();
+	
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Inventory visibility synced: %s"), 
+		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
+}
+
+void UUIManager::OnHarvestLootVisibilityChanged(bool bIsVisible)
+{
+	bHarvestLootVisible = bIsVisible;
+	UpdateCursorAndInputMode();
+	
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Harvest loot visibility synced: %s"), 
+		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
+}
+
+void UUIManager::UpdateCursorAndInputMode()
+{
+	if (!PlayerController)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: Cannot update cursor - PlayerController not set"));
+		return;
+	}
+
+	bool bShouldShow = ShouldShowCursor();
+	PlayerController->bShowMouseCursor = bShouldShow;
+
+	if (bShouldShow)
+	{
+		// Есть активные UI виджеты - используем режим Game+UI
+		FInputModeGameAndUI InputMode;
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		InputMode.SetHideCursorDuringCapture(false);
+		PlayerController->SetInputMode(InputMode);
+		
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: Cursor shown - Game+UI mode"));
+	}
+	else
+	{
+		// Нет активных UI виджетов - переходим в игровой режим
+		FInputModeGameOnly InputMode;
+		PlayerController->SetInputMode(InputMode);
+		
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: Cursor hidden - Game only mode"));
+	}
+}
+
+bool UUIManager::ShouldShowCursor() const
+{
+	// Показываем курсор если хотя бы один из UI виджетов видим
+	bool bAnyWidgetVisible = bInventoryVisible || bSkillsPanelVisible || bHarvestLootVisible;
+	
+	UE_LOG(LogTemp, Verbose, TEXT("UIManager: Cursor check - Inventory: %s, Skills: %s, Harvest: %s -> Show: %s"),
+		bInventoryVisible ? TEXT("visible") : TEXT("hidden"),
+		bSkillsPanelVisible ? TEXT("visible") : TEXT("hidden"),
+		bHarvestLootVisible ? TEXT("visible") : TEXT("hidden"),
+		bAnyWidgetVisible ? TEXT("YES") : TEXT("NO"));
+	
+	return bAnyWidgetVisible;
 }

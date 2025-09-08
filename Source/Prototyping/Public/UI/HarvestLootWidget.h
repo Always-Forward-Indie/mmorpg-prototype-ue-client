@@ -15,6 +15,8 @@ class UHarvestLootItemWidget;
 class UItemTooltipWidget;
 class UHarvestManager;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnHarvestLootVisibilityChanged, bool, bIsVisible);
+
 /**
  * Widget to display harvestable loot items with drag support and tooltips
  */
@@ -57,6 +59,10 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Harvest Loot")
 	void HideTooltip();
+
+	// Events
+	UPROPERTY(BlueprintAssignable, Category = "Harvest Loot Events")
+	FOnHarvestLootVisibilityChanged OnHarvestLootVisibilityChanged;
 
 protected:
 	virtual void NativeConstruct() override;

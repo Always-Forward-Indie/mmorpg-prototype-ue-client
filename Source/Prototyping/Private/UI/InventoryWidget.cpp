@@ -194,31 +194,15 @@ void UInventoryWidget::SetInventoryVisible(bool bVisible)
 	bIsInventoryVisible = bVisible;
 	SetVisibility(bVisible ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
 
-
 	if (!bVisible)
 	{
 		bDragging = false; // <-- сбрасываем drag
 		HideTooltip();
 	}
 
-	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
-	if (PC)
-	{
-		PC->bShowMouseCursor = bVisible;
-
-		if (bVisible)
-		{
-			FInputModeGameAndUI InputMode;
-			InputMode.SetWidgetToFocus(TakeWidget());
-			InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::LockAlways);
-			PC->SetInputMode(InputMode);
-		}
-		else
-		{
-			FInputModeGameOnly InputMode;
-			PC->SetInputMode(InputMode);
-		}
-	}
+	// НЕ управляем курсором здесь - это делает UIManager
+	// Уведомляем UIManager об изменении видимости
+	OnInventoryVisibilityChanged.Broadcast(bVisible);
 
 	// Hide tooltip when inventory is hidden
 	if (!bVisible)

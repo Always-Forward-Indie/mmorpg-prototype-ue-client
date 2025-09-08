@@ -13,12 +13,12 @@
 #include "Math/Color.h"
 #include "InventoryWidget.generated.h"
 
-
 // Forward declarations
 class UInventoryManager;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInventorySlotClicked, int32, SlotIndex, const FInventoryItemStruct&, Item);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInventorySlotRightClicked, int32, SlotIndex, const FInventoryItemStruct&, Item);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnInventoryVisibilityChanged, bool, bIsVisible);
 
 /**
  * Main inventory UI widget that displays the player's inventory in a grid layout
@@ -61,6 +61,9 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Inventory UI Events")
 	FOnInventorySlotRightClicked OnInventorySlotRightClicked;
+
+	UPROPERTY(BlueprintAssignable, Category = "Inventory UI Events")
+	FOnInventoryVisibilityChanged OnInventoryVisibilityChanged;
 
 protected:
 	virtual void NativeConstruct() override;

@@ -306,16 +306,9 @@ void UHarvestLootWidget::ShowWidget()
 		bIsVisible = true;
 		SetVisibility(ESlateVisibility::Visible);
 		
-		// Show mouse cursor when loot window is open
-		if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
-		{
-			PC->bShowMouseCursor = true;
-			
-			FInputModeGameAndUI InputMode;
-			InputMode.SetWidgetToFocus(TakeWidget());
-			InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::LockAlways);
-			PC->SetInputMode(InputMode);
-		}
+		// НЕ управляем курсором здесь - это делает UIManager
+		// Уведомляем UIManager об изменении видимости
+		OnHarvestLootVisibilityChanged.Broadcast(true);
 		
 		UE_LOG(LogTemp, Warning, TEXT("HarvestLootWidget: Widget shown - Items: %d"), CurrentLootItems.Num());
 	}
@@ -330,14 +323,9 @@ void UHarvestLootWidget::HideWidget()
 	// Hide tooltip when widget is hidden
 	HideTooltip();
 	
-	// Restore game-only input mode
-	if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
-	{
-		PC->bShowMouseCursor = false;
-		
-		FInputModeGameOnly InputMode;
-		PC->SetInputMode(InputMode);
-	}
+	// НЕ управляем курсором здесь - это делает UIManager
+	// Уведомляем UIManager об изменении видимости
+	OnHarvestLootVisibilityChanged.Broadcast(false);
 	
 	UE_LOG(LogTemp, Warning, TEXT("HarvestLootWidget: Widget hidden"));
 }

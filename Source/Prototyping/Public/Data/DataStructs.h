@@ -318,6 +318,9 @@ struct FSkillInitiationData
     FString skillName = "";
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    FString skillSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
     FString animationName = "";
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
@@ -379,6 +382,9 @@ struct FSkillResultData
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
     FString skillName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    FString skillSlug = "";
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
     int32 casterId = 0;
@@ -1391,7 +1397,7 @@ struct FPlayerSkillData
 
     // Runtime cooldown tracking
     UPROPERTY(BlueprintReadOnly, Category = "Player Skill")
-    float cooldownEndTime = 0.0f;
+    double cooldownEndTime = 0.0f;
 
     // Runtime state
     UPROPERTY(BlueprintReadOnly, Category = "Player Skill")
@@ -1399,6 +1405,8 @@ struct FPlayerSkillData
 
     UPROPERTY(BlueprintReadOnly, Category = "Player Skill")
     bool bIsReady = true;
+
+    bool   bCooldownUsesServerClock = true;
 
     FPlayerSkillData()
     {

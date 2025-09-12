@@ -29,7 +29,7 @@ void UPlayerExperienceWidget::NativeConstruct()
 
     if (LevelText)
     {
-        LevelText->SetText(FText::FromString(TEXT("1lvl")));
+        LevelText->SetText(FText::FromString(TEXT("1")));
     }
 
     if (ExperienceText)
@@ -294,7 +294,7 @@ void UPlayerExperienceWidget::UpdateLevelDisplay(int32 Level)
     if (!LevelText)
         return;
 
-    FString LevelString = FString::Printf(TEXT("Level %d"), Level);
+    FString LevelString = FString::Printf(TEXT("%d"), Level);
     LevelText->SetText(FText::FromString(LevelString));
 }
 

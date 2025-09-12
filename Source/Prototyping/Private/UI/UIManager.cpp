@@ -2,15 +2,16 @@
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
 #include "UI/HarvestLootWidget.h"
-#include "UI/SkillBarWidget.h"
 #include "UI/AvailableSkillsWidget.h"
 #include "Gameplay/UI/PlayerExperienceWidget.h"
+#include "Gameplay/UI/PlayerInterfaceWidget.h"
+#include "Gameplay/UI/DamageCanvasWidget.h"
+#include "Gameplay/UI/DamageTextWidget.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Items/HarvestManager.h"
 #include "Gameplay/Player/ExperienceManager.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
-#include "Gameplay/UI/DamageTextWidget.h"
 #include "Blueprint/UserWidget.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -20,11 +21,10 @@ UUIManager::UUIManager()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 	
+	PlayerInterfaceWidget = nullptr;
 	InventoryWidget = nullptr;
 	HarvestProgressWidget = nullptr;
 	HarvestLootWidget = nullptr;
-	ExperienceWidget = nullptr;
-	SkillBarWidget = nullptr;
 	AvailableSkillsWidget = nullptr;
 	InventoryManager = nullptr;
 	HarvestManager = nullptr;
@@ -32,7 +32,6 @@ UUIManager::UUIManager()
 	SkillManager = nullptr;
 	FCTManager = nullptr;
 	PlayerController = nullptr;
-	RootCanvas = nullptr;
 	GameVersionWidget = nullptr;
 	bIsInitialized = false;
 	
@@ -99,48 +98,67 @@ void UUIManager::Initialize(UInventoryManager* InInventoryManager, UHarvestManag
 	UE_LOG(LogTemp, Warning, TEXT("UIManager: Successfully initialized"));
 }
 
-void UUIManager::Init(APlayerController* InPC, UCanvasPanel* InRootCanvas, 
-	TSubclassOf<UDamageTextWidget> InDamageTextClass)
+void UUIManager::InitFTCManager(APlayerController* InPC)
 {
-	UE_LOG(LogTemp, Warning, TEXT("UIManager::Init called with PC: %s, Canvas: %s, DamageTextClass: %s"), 
+	PlayerController = InPC;
+	UDamageCanvasWidget* InDamageCanvasWidget = GetDamageCanvasWidget();
+	TSubclassOf<UDamageTextWidget> InDamageTextClass = DamageTextWidgetClass;
+
+	UE_LOG(LogTemp, Warning, TEXT("UIManager::InitFTCManager called with PC: %s, DamageCanvasWidget: %s, DamageTextClass: %s"),
 		InPC ? TEXT("Valid") : TEXT("NULL"),
-		InRootCanvas ? TEXT("Valid") : TEXT("NULL"), 
+		InDamageCanvasWidget ? TEXT("Valid") : TEXT("NULL"),
 		InDamageTextClass ? TEXT("Valid") : TEXT("NULL"));
 
-	PlayerController = InPC;
-	RootCanvas = InRootCanvas;
-
-	if (PlayerController && RootCanvas && InDamageTextClass)
+	// Validate all required parameters before proceeding
+	if (!PlayerController)
 	{
-		// Create FCT Manager
+		UE_LOG(LogTemp, Error, TEXT("UIManager::InitFTCManager - PlayerController is null"));
+		return;
+	}
+
+	if (!InDamageCanvasWidget)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UIManager::InitFTCManager - DamageCanvasWidget is null"));
+		return;
+	}
+
+	if (!InDamageCanvasWidget->GetDamageCanvas())
+	{
+		UE_LOG(LogTemp, Error, TEXT("UIManager::InitFTCManager - DamageCanvas is null"));
+		return;
+	}
+
+	if (!InDamageTextClass)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UIManager::InitFTCManager - DamageTextClass is null"));
+		return;
+	}
+
+	// Create FCT Manager if it doesn't exist
+	if (!FCTManager)
+	{
 		FCTManager = NewObject<UFloatingCombatTextManager>(this);
-		if (FCTManager)
+		if (!FCTManager)
 		{
-			FCTManager->Init(RootCanvas, PlayerController, InDamageTextClass);
-			
-			UE_LOG(LogTemp, Warning, TEXT("UIManager: FCT Manager initialized successfully"));
-			
-			// Verify the FCTManager is properly set up
-			if (FCTManager->GetRootCanvas() && FCTManager->GetPlayerController() && FCTManager->GetDamageTextClass())
-			{
-				UE_LOG(LogTemp, Warning, TEXT("UIManager: FCT Manager validation successful - all components ready"));
-			}
-			else
-			{
-				UE_LOG(LogTemp, Error, TEXT("UIManager: FCT Manager validation failed after init"));
-			}
+			UE_LOG(LogTemp, Error, TEXT("UIManager::InitFTCManager - Failed to create FCTManager object"));
+			return;
 		}
-		else
-		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create FCTManager object"));
-		}
-		
-		// Store PlayerController reference for later use
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: PlayerController reference stored for UI management"));
+	}
+
+	// Initialize the FCT Manager
+	FCTManager->Init(InDamageCanvasWidget->GetDamageCanvas(), PlayerController, InDamageTextClass);
+
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: FCT Manager initialized successfully with DamageCanvasWidget"));
+
+	// Verify the FCTManager is properly set up
+	if (FCTManager->GetRootCanvas() && FCTManager->GetPlayerController() && FCTManager->GetDamageTextClass())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: FCT Manager validation successful - all components ready"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager: Cannot initialize FCT Manager - missing required parameters"));
+		UE_LOG(LogTemp, Error, TEXT("UIManager: FCT Manager validation failed after init"));
+		// Don't null out FCTManager here, as it might still be partially functional
 	}
 }
 
@@ -154,22 +172,91 @@ void UUIManager::CreateUIWidgets()
 
 	UE_LOG(LogTemp, Warning, TEXT("UIManager: Starting UI widgets creation"));
 
+	// Create player interface widget first (now includes experience widget)
+	CreatePlayerInterfaceWidget();
+	
 	// Create inventory widget
 	CreateInventoryWidget();
 	
 	// Create harvest widgets
 	CreateHarvestWidgets();
 
-	// Create experience widget
-	CreateExperienceWidget();
-
-	// Create skill widgets
+	// Create skill widgets (now handled by PlayerInterfaceWidget)
 	CreateSkillWidgets();
 
 	// Create game version widget
 	CreateGameVersionWidget();
 	
 	UE_LOG(LogTemp, Warning, TEXT("UIManager: All UI widgets created successfully"));
+}
+
+void UUIManager::CreatePlayerInterfaceWidget()
+{
+	if (!PlayerInterfaceWidgetClass)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UIManager: PlayerInterfaceWidgetClass is not set"));
+		return;
+	}
+
+	if (PlayerInterfaceWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: Player interface widget already exists, removing old one"));
+		PlayerInterfaceWidget->RemoveFromParent();
+		PlayerInterfaceWidget = nullptr;
+	}
+
+	// Create the widget
+	PlayerInterfaceWidget = CreateWidget<UPlayerInterfaceWidget>(GetWorld(), PlayerInterfaceWidgetClass);
+	if (!PlayerInterfaceWidget)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create player interface widget"));
+		return;
+	}
+
+	// Add to viewport with appropriate Z-Order
+	PlayerInterfaceWidget->AddToViewport(10);
+
+	// Initialize with GameInstance
+	if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetWorld()->GetGameInstance()))
+	{
+		PlayerInterfaceWidget->Initialize(GameInstance);
+		
+		// Setup skill bar
+		PlayerInterfaceWidget->SetupSkillBar(SkillBarSlots);
+		
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: Player interface widget created and initialized"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to get GameInstance for player interface widget"));
+	}
+}
+
+USkillBarWidget* UUIManager::GetSkillBarWidget() const
+{
+	if (PlayerInterfaceWidget)
+	{
+		return PlayerInterfaceWidget->GetSkillBarWidget();
+	}
+	return nullptr;
+}
+
+UDamageCanvasWidget* UUIManager::GetDamageCanvasWidget() const
+{
+	if (PlayerInterfaceWidget)
+	{
+		return PlayerInterfaceWidget->GetDamageCanvasWidget();
+	}
+	return nullptr;
+}
+
+UPlayerExperienceWidget* UUIManager::GetPlayerExperienceWidget() const
+{
+	if (PlayerInterfaceWidget)
+	{
+		return PlayerInterfaceWidget->GetPlayerExperienceWidget();
+	}
+	return nullptr;
 }
 
 void UUIManager::CreateInventoryWidget()
@@ -352,41 +439,11 @@ void UUIManager::HandleInventoryToggle(const FInputActionValue& Value)
 	}
 }
 
-void UUIManager::CreateExperienceWidget()
-{
-	if (!ExperienceWidgetClass)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: ExperienceWidgetClass is not set"));
-		return;
-	}
-
-	if (ExperienceWidget)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: Experience widget already exists, removing old one"));
-		ExperienceWidget->RemoveFromParent();
-		ExperienceWidget = nullptr;
-	}
-
-	// Create the widget
-	ExperienceWidget = CreateWidget<UPlayerExperienceWidget>(GetWorld(), ExperienceWidgetClass);
-	if (!ExperienceWidget)
-	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create experience widget"));
-		return;
-	}
-
-	// Add to viewport with low Z-Order (HUD element)
-	ExperienceWidget->AddToViewport(5);
-
-	// Widget will be initialized later when character ID is available
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Experience widget created (will be initialized when character ID is available)"));
-}
-
 void UUIManager::InitializeExperienceWidget(int32 CharacterId)
 {
-	if (!ExperienceWidget)
+	if (!PlayerInterfaceWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: Experience widget not created yet"));
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: PlayerInterfaceWidget not created yet"));
 		return;
 	}
 
@@ -402,56 +459,17 @@ void UUIManager::InitializeExperienceWidget(int32 CharacterId)
 		return;
 	}
 
-	// Initialize the widget with the character ID
-	ExperienceWidget->InitializeWidget(ExperienceManager, CharacterId);
+	// Delegate initialization to PlayerInterfaceWidget
+	PlayerInterfaceWidget->InitializeExperienceWidget(ExperienceManager, CharacterId);
 	
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Experience widget initialized for character %d"), CharacterId);
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Experience widget initialization delegated to PlayerInterfaceWidget for character %d"), CharacterId);
 }
 
 void UUIManager::CreateSkillWidgets()
 {
-	if (!SkillManager)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: SkillManager not available, skipping skill widgets creation"));
-		return;
-	}
-
-	// Create skill bar widget
-	if (SkillBarWidgetClass)
-	{
-		if (SkillBarWidget)
-		{
-			SkillBarWidget->RemoveFromParent();
-			SkillBarWidget = nullptr;
-		}
-
-		SkillBarWidget = CreateWidget<USkillBarWidget>(GetWorld(), SkillBarWidgetClass);
-		if (SkillBarWidget)
-		{
-			SkillBarWidget->AddToViewport(10); // Lower Z-Order for skill bar
-			
-			// Get game instance for initialization
-			if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetWorld()->GetGameInstance()))
-			{
-				SkillBarWidget->Initialize(GameInstance);
-				SkillBarWidget->CreateSkillSlots(SkillBarSlots);
-				UE_LOG(LogTemp, Warning, TEXT("UIManager: Skill bar widget created and initialized"));
-			}
-			else
-			{
-				UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to get GameInstance for skill bar widget"));
-			}
-		}
-		else
-		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create skill bar widget"));
-		}
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: SkillBarWidgetClass is not set"));
-	}
-
+	// Skills are now handled by PlayerInterfaceWidget
+	// This method remains for AvailableSkillsWidget only
+	
 	// Create available skills widget
 	if (AvailableSkillsWidgetClass)
 	{
@@ -503,7 +521,8 @@ void UUIManager::InitializeSkillWidgets()
 		return;
 	}
 
-	// Both widgets should already be initialized in CreateSkillWidgets
+	// Skill bar is now handled by PlayerInterfaceWidget
+	USkillBarWidget* SkillBarWidget = GetSkillBarWidget();
 	if (SkillBarWidget)
 	{
 		// Refresh skill bar to show current skills
@@ -565,6 +584,7 @@ void UUIManager::HandleSkillsPanelToggle(const FInputActionValue& Value)
 
 void UUIManager::SetSkillTarget(int32 TargetId, ECasterType TargetType)
 {
+	USkillBarWidget* SkillBarWidget = GetSkillBarWidget();
 	if (SkillBarWidget)
 	{
 		SkillBarWidget->SetCurrentTarget(TargetId, TargetType);

@@ -32,12 +32,28 @@ void USkillSlotWidget::NativeConstruct()
 {
     Super::NativeConstruct();
 
+    // Log widget initialization state
+    UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: NativeConstruct - Widget initialization check:"), SlotIndex);
+    UE_LOG(LogTemp, Warning, TEXT("  - SkillButton: %s"), SkillButton ? TEXT("✅") : TEXT("❌"));
+    UE_LOG(LogTemp, Warning, TEXT("  - SkillIcon: %s"), SkillIcon ? TEXT("✅") : TEXT("❌"));
+    UE_LOG(LogTemp, Warning, TEXT("  - CooldownProgress: %s"), CooldownProgress ? TEXT("✅") : TEXT("❌"));
+    UE_LOG(LogTemp, Warning, TEXT("  - CooldownText: %s"), CooldownText ? TEXT("✅") : TEXT("❌"));
+    UE_LOG(LogTemp, Warning, TEXT("  - CooldownOverlay: %s"), CooldownOverlay ? TEXT("✅") : TEXT("❌"));
+    UE_LOG(LogTemp, Warning, TEXT("  - HotkeyText: %s"), HotkeyText ? TEXT("✅") : TEXT("❌"));
+    UE_LOG(LogTemp, Warning, TEXT("  - HighlightBorder: %s"), HighlightBorder ? TEXT("✅") : TEXT("❌"));
+    UE_LOG(LogTemp, Warning, TEXT("  - DropHighlightBorder: %s"), DropHighlightBorder ? TEXT("✅") : TEXT("❌"));
+
     // Bind button events
     if (SkillButton)
     {
         SkillButton->OnClicked.AddDynamic(this, &USkillSlotWidget::OnSkillButtonClicked);
         SkillButton->OnPressed.AddDynamic(this, &USkillSlotWidget::OnSkillButtonPressed);
         SkillButton->OnReleased.AddDynamic(this, &USkillSlotWidget::OnSkillButtonReleased);
+        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Button events bound"), SlotIndex);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("SkillSlotWidget[%d]: SkillButton is NULL - events not bound!"), SlotIndex);
     }
 
     // Initialize visual state
@@ -57,12 +73,23 @@ void USkillSlotWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
         if (bIsOnCooldown)
         {
             CooldownRemainingTime = SkillManager->GetSkillCooldownRemaining(AssignedSkillSlug);
+            
+            // Add periodic logging for debugging (every 60 frames ~1 second)
+            static int32 TickCounter = 0;
+            TickCounter++;
+            if (TickCounter % 60 == 0)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: NativeTick - Skill: %s, OnCooldown: %s, Remaining: %.1f"), 
+                    SlotIndex, *AssignedSkillSlug, bIsOnCooldown ? TEXT("TRUE") : TEXT("FALSE"), CooldownRemainingTime);
+            }
+            
             UpdateCooldownDisplay();
         }
         else if (bWasOnCooldown)
         {
             // Cooldown just finished
             CooldownRemainingTime = 0.0f;
+            UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Natural cooldown finished for %s"), SlotIndex, *AssignedSkillSlug);
             UpdateCooldownDisplay();
             UpdateVisualState();
         }
@@ -245,11 +272,15 @@ void USkillSlotWidget::Initialize(int32 InSlotIndex, UPlayerSkillManager* InSkil
 
     if (SkillManager)
     {
+        // Subscribe to cooldown events for more efficient updates
+        SkillManager->OnSkillCooldownStarted.AddDynamic(this, &USkillSlotWidget::OnSkillCooldownStarted);
+        SkillManager->OnSkillReady.AddDynamic(this, &USkillSlotWidget::OnSkillReady);
+
         // Get current slot data
         FSkillSlotData SlotData = SkillManager->GetSkillSlot(SlotIndex);
         SetSlotData(SlotData);
 
-        UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget: Initialized slot %d"), SlotIndex);
+        UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget: Initialized slot %d with event subscriptions"), SlotIndex);
     }
     else
     {
@@ -482,6 +513,9 @@ void USkillSlotWidget::UpdateVisualState()
 
 void USkillSlotWidget::UpdateCooldownDisplay()
 {
+   // UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: UpdateCooldownDisplay called - OnCooldown: %s, Remaining: %.1f, Total: %.1f"), 
+    //    SlotIndex, bIsOnCooldown ? TEXT("TRUE") : TEXT("FALSE"), CooldownRemainingTime, CooldownTotalTime);
+
     // Update cooldown progress bar
     if (CooldownProgress)
     {
@@ -490,11 +524,19 @@ void USkillSlotWidget::UpdateCooldownDisplay()
             float Progress = 1.0f - (CooldownRemainingTime / CooldownTotalTime);
             CooldownProgress->SetPercent(Progress);
             CooldownProgress->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+            
+           // UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Progress bar updated - Progress: %.2f%%, Visibility: SelfHitTestInvisible"), 
+               // SlotIndex, Progress * 100.0f);
         }
         else
         {
             CooldownProgress->SetVisibility(ESlateVisibility::Hidden);
+            UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Progress bar hidden"), SlotIndex);
         }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("SkillSlotWidget[%d]: CooldownProgress is NULL!"), SlotIndex);
     }
 
     // Update cooldown text
@@ -505,11 +547,19 @@ void USkillSlotWidget::UpdateCooldownDisplay()
             FString CooldownString = FormatCooldownTime(CooldownRemainingTime);
             CooldownText->SetText(FText::FromString(CooldownString));
             CooldownText->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+            
+            //UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Cooldown text updated - Text: '%s', Visibility: SelfHitTestInvisible"), 
+               // SlotIndex, *CooldownString);
         }
         else
         {
             CooldownText->SetVisibility(ESlateVisibility::Hidden);
+            UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Cooldown text hidden"), SlotIndex);
         }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("SkillSlotWidget[%d]: CooldownText is NULL!"), SlotIndex);
     }
 }
 
@@ -644,4 +694,57 @@ void USkillSlotWidget::ForceResetDragState()
     }
 
     UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Force reset completed"), SlotIndex);
+}
+
+void USkillSlotWidget::BeginDestroy()
+{
+    // Unsubscribe from events before destruction
+    if (SkillManager)
+    {
+        SkillManager->OnSkillCooldownStarted.RemoveDynamic(this, &USkillSlotWidget::OnSkillCooldownStarted);
+        SkillManager->OnSkillReady.RemoveDynamic(this, &USkillSlotWidget::OnSkillReady);
+    }
+    
+    Super::BeginDestroy();
+}
+
+void USkillSlotWidget::OnSkillCooldownStarted(const FString& SkillSlug)
+{
+    // Only update if this slot contains the skill that went on cooldown
+    if (SkillSlug == AssignedSkillSlug && SkillManager)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Cooldown event received for %s"), SlotIndex, *SkillSlug);
+        
+        CooldownTotalTime = CurrentSkillData.networkData.cooldownMs / 1000.0f;
+        CooldownRemainingTime = SkillManager->GetSkillCooldownRemaining(SkillSlug);
+        bIsOnCooldown = (CooldownRemainingTime > 0.0f);
+
+        UpdateCooldownDisplay();
+        UpdateVisualState();
+        
+        UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Cooldown started for %s (%.1fs)"), 
+            SlotIndex, *SkillSlug, CooldownTotalTime);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("SkillSlotWidget[%d]: Ignoring cooldown event for %s (assigned: %s)"), 
+            SlotIndex, *SkillSlug, *AssignedSkillSlug);
+    }
+
+
+}
+
+void USkillSlotWidget::OnSkillReady(const FString& SkillSlug)
+{
+    // Only update if this slot contains the skill that became ready
+    if (SkillSlug == AssignedSkillSlug)
+    {
+        bIsOnCooldown = false;
+        CooldownRemainingTime = 0.0f;
+        
+        UpdateCooldownDisplay();
+        UpdateVisualState();
+        
+        UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Skill %s is ready"), SlotIndex, *SkillSlug);
+    }
 }

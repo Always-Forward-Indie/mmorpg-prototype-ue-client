@@ -58,6 +58,8 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Combat System")
     void ProcessSkillInitiation(const FSkillInitiationData& SkillData);
 
+    static ECasterType MapNetCasterType(int32 Net, const FString& Str);
+
     UFUNCTION(BlueprintCallable, Category = "Combat System")
     void ProcessSkillResult(const FSkillResultData& SkillResult);
 

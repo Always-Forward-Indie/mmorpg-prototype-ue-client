@@ -253,12 +253,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Client Data")
 	FClientDataStruct GetCurrentClientData();
 
-	// UI manager
-	UPROPERTY()
-	UUIManager* UIManager;
-
-	UUIManager* GetUIManager();
-
 	void SetCurrentClientID(int32 ClientID);
 
 	int32 GetCurrentClientID();

@@ -102,14 +102,11 @@ bool USkillSystemManager::CastSkill(int32 CasterId, int32 TargetId, const FStrin
         return false;
     }
 
-    // Start cooldown
-    StartSkillCooldown(CasterId, SkillSlug);
-
     // Send skill request to server via combat system
     if (CombatSystemManager)
     {
         CombatSystemManager->SendAttackRequest(CasterId, TargetId, SkillSlug, TargetType);
-        UE_LOG(LogTemp, Log, TEXT("SkillSystemManager: Cast skill %s from %d to %d"), 
+        UE_LOG(LogTemp, Log, TEXT("SkillSystemManager: Sent skill request %s from %d to %d - waiting for server confirmation"), 
             *SkillSlug, CasterId, TargetId);
         return true;
     }

@@ -115,6 +115,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Skill System")
     float GetWorldTime() const;
 
+    // Public access to synchronized time for PlayerSkillManager integration
+    UFUNCTION(BlueprintCallable, Category = "Skill System")
+    float GetSynchronizedWorldTime() const;
+
 protected:
     // Validate skill casting conditions
     bool ValidateSkillCast(int32 CasterId, int32 TargetId, const FString& SkillSlug, ECasterType TargetType);
@@ -136,9 +140,6 @@ private:
 
     // Cooldown tracking - maps CasterId -> SkillSlug -> EndTime
     TMap<int32, TMap<FString, float>> SkillCooldowns;
-
-    // Helper to get server-synchronized time for accurate cooldown calculations
-    float GetSynchronizedWorldTime() const;
 
     // Helper to get TimeSyncService instance
     UTimeSyncService* GetTimeSyncService() const;

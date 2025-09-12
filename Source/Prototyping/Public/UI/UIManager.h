@@ -21,9 +21,15 @@ class UHarvestLootWidget;
 class UPlayerExperienceWidget;
 class USkillBarWidget;
 class UAvailableSkillsWidget;
+class UPlayerInterfaceWidget;
+class UDamageCanvasWidget;
+
+// Delegate for UI Manager initialization completion
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnUIManagerInitialized);
 
 /**
  * UI Manager component that handles all UI elements for the player
+ * Now uses PlayerInterfaceWidget for better UI organization
  */
 UCLASS(BlueprintType, Blueprintable)
 class PROTOTYPING_API UUIManager : public UActorComponent
@@ -32,6 +38,10 @@ class PROTOTYPING_API UUIManager : public UActorComponent
 
 public:
 	UUIManager();
+
+	// Event broadcast when UIManager is fully initialized
+	UPROPERTY(BlueprintAssignable, Category = "UI Manager|Events")
+	FOnUIManagerInitialized OnUIManagerInitialized;
 
 protected:
 	virtual void BeginPlay() override;
@@ -43,10 +53,10 @@ public:
 	void Initialize(UInventoryManager* InInventoryManager, UHarvestManager* InHarvestManager, 
 		UExperienceManager* InExperienceManager, UPlayerSkillManager* InSkillManager);
 
-	// Initialize floating combat text system
+	// Initialize floating combat text system with the new damage canvas
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
-	void Init(APlayerController* InPC, UCanvasPanel* InRootCanvas, 
-		TSubclassOf<UDamageTextWidget> InDamageTextClass);
+	void InitFTCManager(APlayerController* InPC);
+
 
 	// Initialize experience widget with character ID (called after character login)
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
@@ -89,7 +99,7 @@ public:
 	UHarvestLootWidget* GetHarvestLootWidget() const { return HarvestLootWidget; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
-	USkillBarWidget* GetSkillBarWidget() const { return SkillBarWidget; }
+	USkillBarWidget* GetSkillBarWidget() const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UAvailableSkillsWidget* GetAvailableSkillsWidget() const { return AvailableSkillsWidget; }
@@ -97,9 +107,26 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UFloatingCombatTextManager* GetFCTManager() const { return FCTManager; }
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UPlayerInterfaceWidget* GetPlayerInterfaceWidget() const { return PlayerInterfaceWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UDamageCanvasWidget* GetDamageCanvasWidget() const;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UPlayerExperienceWidget* GetPlayerExperienceWidget() const;
+
+	// Check if UIManager is fully initialized
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	bool IsInitialized() const { return bIsInitialized; }
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI Manager")
+	TSubclassOf<class UDamageTextWidget> DamageTextWidgetClass;
+
 protected:
 	// Widget creation methods
 	void CreateUIWidgets();
+	void CreatePlayerInterfaceWidget();
 	void CreateInventoryWidget();
 	void CreateHarvestWidgets();
 	void CreateExperienceWidget();
@@ -123,6 +150,9 @@ protected:
 protected:
 	// Widget class references (set in Blueprint)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UPlayerInterfaceWidget> PlayerInterfaceWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UInventoryWidget> InventoryWidgetClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
@@ -130,12 +160,6 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UHarvestLootWidget> HarvestLootWidgetClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
-	TSubclassOf<UPlayerExperienceWidget> ExperienceWidgetClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
-	TSubclassOf<USkillBarWidget> SkillBarWidgetClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UAvailableSkillsWidget> AvailableSkillsWidgetClass;
@@ -155,6 +179,9 @@ protected:
 
 	// Widget instances
 	UPROPERTY()
+	UPlayerInterfaceWidget* PlayerInterfaceWidget;
+
+	UPROPERTY()
 	UInventoryWidget* InventoryWidget;
 
 	UPROPERTY()
@@ -162,12 +189,6 @@ protected:
 
 	UPROPERTY()
 	UHarvestLootWidget* HarvestLootWidget;
-
-	UPROPERTY()
-	UPlayerExperienceWidget* ExperienceWidget;
-
-	UPROPERTY()
-	USkillBarWidget* SkillBarWidget;
 
 	UPROPERTY()
 	UAvailableSkillsWidget* AvailableSkillsWidget;
@@ -194,10 +215,6 @@ protected:
 	// Player controller reference
 	UPROPERTY()
 	APlayerController* PlayerController;
-
-	// Root canvas for UI elements
-	UPROPERTY()
-	UCanvasPanel* RootCanvas;
 
 	// State tracking
 	bool bIsInitialized;

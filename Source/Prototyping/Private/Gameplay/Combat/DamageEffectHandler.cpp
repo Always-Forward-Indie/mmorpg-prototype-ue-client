@@ -146,17 +146,42 @@ void UDamageEffectHandler::ShowFloatingDamageText(const FSkillResultData& SkillR
 
 UFloatingCombatTextManager* UDamageEffectHandler::GetFCTManager(UObject* TargetObject)
 {
-    // Получить FCT Manager через GameInstance
-    if (AActor* Actor = Cast<AActor>(TargetObject))
+    if (!TargetObject || !TargetObject->IsA(AActor::StaticClass()))
     {
-        if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(Actor->GetGameInstance()))
-        {
-            if (UUIManager* GameUIManager = GameInstance->GetUIManager())
-            {
-                return GameUIManager->GetFCTManager();
-            }
-        }
+        UE_LOG(LogTemp, Error, TEXT("GetFCTManager: TargetObject is not an AActor"));
+        return nullptr;
     }
+
+    AActor* Actor = static_cast<AActor*>(TargetObject); // дёшево и без RTTI
+    UWorld* World = Actor->GetWorld();
+    if (!World)
+    {
+        UE_LOG(LogTemp, Error, TEXT("GetFCTManager: World is null"));
+        return nullptr;
+    }
+
+        APawn* LocalPawn = UGameplayStatics::GetPlayerPawn(World, 0);
+        if (!LocalPawn)
+        {
+            UE_LOG(LogTemp, Error, TEXT("GetFCTManager: No local player pawn"));
+            return nullptr;
+        }
+
+        if (UUIManager* UIM = LocalPawn->FindComponentByClass<UUIManager>())
+        {
+            if (UFloatingCombatTextManager* FCT = UIM->GetFCTManager())
+            {
+                return FCT;
+            }
+            UE_LOG(LogTemp, Error, TEXT("GetFCTManager: Local player's UIManager has no FCT"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("GetFCTManager: Local player has no UUIManager component"));
+        }
+
+
+    UE_LOG(LogTemp, Error, TEXT("GetFCTManager: Failed to resolve FCT (Target=%s)"), *GetNameSafe(Actor));
     return nullptr;
 }
 

@@ -4,6 +4,7 @@
 #include "Gameplay/UI/FloatingCombatTextManager.h"
 #include "UI/UIManager.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
 #include "Engine/World.h"
@@ -217,9 +218,31 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
             *SkillData.skillName, SkillData.casterId, *SkillData.casterTypeString,
             SkillData.targetId, *SkillData.targetTypeString));
 
+    // NEW: Handle skill initiation in PlayerSkillManager for cooldown management
+    if (GameInstance)
+    {
+        UPlayerSkillManager* PlayerSkillManager = GameInstance->GetPlayerSkillManager();
+        if (PlayerSkillManager)
+        {
+            FString SkillSlug = "";
+
+			SkillSlug = SkillData.skillSlug;
+            
+            PlayerSkillManager->HandleSkillInitiation(SkillSlug, SkillData.casterId);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: PlayerSkillManager not available"));
+        }
+    }
+
     // Find caster
-    ECasterType CasterType = static_cast<ECasterType>(SkillData.casterType);
+    ECasterType CasterType = MapNetCasterType(SkillData.casterType, SkillData.casterTypeString);
     TScriptInterface<ICombatable> Caster = FindCombatableById(SkillData.casterId, CasterType);
+
+    UE_LOG(LogTemp, Warning, TEXT("INIT: casterId=%d netType=%d(%s) mapped=%d key=%s"),
+        SkillData.casterId, SkillData.casterType, *SkillData.casterTypeString,
+        (int32)CasterType, *CreateCombatableKey(SkillData.casterId, CasterType));
     
     if (Caster.GetInterface() && Caster.GetObject() && IsValid(Caster.GetObject()))
     {
@@ -243,6 +266,18 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
 
     // Broadcast event
     OnSkillInitiated.Broadcast(SkillData);
+}
+
+ECasterType UCombatSystemManager::MapNetCasterType(int32 Net, const FString& Str)
+{
+    if (Str.Equals(TEXT("PLAYER"), ESearchCase::IgnoreCase)) return ECasterType::Player;
+    if (Str.Equals(TEXT("MOB"), ESearchCase::IgnoreCase)) return ECasterType::Mob;
+    if (Str.Equals(TEXT("NPC"), ESearchCase::IgnoreCase)) return ECasterType::NPC;
+    if (Str.Equals(TEXT("SELF"), ESearchCase::IgnoreCase)) return ECasterType::Self;
+
+    // на случай, если строки нет — хардкод по текущему серверному контракту
+    switch (Net) { case 1: return ECasterType::Player; case 3: return ECasterType::Mob; case 4: return ECasterType::NPC; }
+                         return ECasterType::None;
 }
 
 void UCombatSystemManager::ProcessSkillResult(const FSkillResultData& SkillResult)

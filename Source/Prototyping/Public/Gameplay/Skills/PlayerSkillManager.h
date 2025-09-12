@@ -78,7 +78,24 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Player Skill Manager")
     int32 GetCharacterId() const { return CharacterId; }
 
+    // Public access for time synchronization with UI
+    UFUNCTION(BlueprintCallable, Category = "Player Skill Manager")
+    float GetCurrentTime() const;
+
+    // Handle combat events from server
+    UFUNCTION(BlueprintCallable, Category = "Player Skill Manager") 
+    void HandleSkillInitiation(const FString& SkillSlug, int32 CasterId);
+
+    double GetServerSeconds() const;
+
+    double GetWorldSeconds() const;
+
+    double NowFor(const FPlayerSkillData* Skill) const;
+
 protected:
+    // Get world for time calculations
+    UWorld* GetWorld() const;
+
     // Dependencies
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Dependencies")
     TObjectPtr<USkillSystemManager> SkillSystemManager;
@@ -108,7 +125,6 @@ protected:
 private:
     // Internals
     FPlayerSkillData CreatePlayerSkillData(const FPlayerSkillNetworkData& NetworkData) const;
-    float GetCurrentTime() const;
     void UpdateSkillCooldownState(FPlayerSkillData& SkillData);
     bool ValidateSkillSlot(int32 SlotIndex) const;
 

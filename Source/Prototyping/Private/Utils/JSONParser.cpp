@@ -1479,6 +1479,9 @@ FSkillInitiationData JSONParser::DeserializeSkillInitiation(const TSharedPtr<FJs
 
 	if (InitiationObj->HasField(TEXT("skillName")))
 		SkillData.skillName = InitiationObj->GetStringField(TEXT("skillName"));
+
+	if (InitiationObj->HasField(TEXT("skillSlug")))
+		SkillData.skillSlug = InitiationObj->GetStringField(TEXT("skillSlug"));
 	
 	if (InitiationObj->HasField(TEXT("animationName")))
 		SkillData.animationName = InitiationObj->GetStringField(TEXT("animationName"));
@@ -1551,6 +1554,9 @@ FSkillResultData JSONParser::DeserializeSkillResult(const TSharedPtr<FJsonObject
 
 	if (ResultObj->HasField(TEXT("skillName")))
 		SkillResult.skillName = ResultObj->GetStringField(TEXT("skillName"));
+	
+	if (ResultObj->HasField(TEXT("skillSlug")))
+		SkillResult.skillSlug = ResultObj->GetStringField(TEXT("skillSlug"));
 	
 	if (ResultObj->HasField(TEXT("casterId")))
 		SkillResult.casterId = ResultObj->GetIntegerField(TEXT("casterId"));

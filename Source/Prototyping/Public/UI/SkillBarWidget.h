@@ -4,6 +4,7 @@
 #include "Blueprint/UserWidget.h"
 #include "Components/HorizontalBox.h"
 #include "Components/UniformGridPanel.h"
+#include "Components/Overlay.h"
 #include "Data/DataStructs.h"
 #include "UI/SkillSlotWidget.h"
 #include "SkillBarWidget.generated.h"
@@ -19,6 +20,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FSkillCast, int32, SlotIndex, const
  * Main skill bar widget that displays all skill slots
  * Manages skill slot widgets and handles skill casting
  * Supports drag-and-drop from available skills list
+ * Now includes overlay container for additional UI elements like PlayerHUD
  */
 UCLASS(BlueprintType, Blueprintable)
 class PROTOTYPING_API USkillBarWidget : public UUserWidget
@@ -60,6 +62,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Skill Bar Widget")
     void SetCurrentTarget(int32 TargetId, ECasterType TargetType);
 
+    // Overlay container access
+    UFUNCTION(BlueprintCallable, Category = "Skill Bar Widget")
+    UOverlay* GetSkillBarContainerOverlay() const { return SkillBarContainerOverlay; }
+
     // Events
     UPROPERTY(BlueprintAssignable, Category = "Skill Bar Widget")
     FSkillCast OnSkillCast;
@@ -72,6 +78,10 @@ public:
     USkillSlotWidget* GetSkillSlot(int32 SlotIndex) const;
 
 protected:
+    // Main overlay container for the entire skill bar area
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "Skill Bar Widget")
+    UOverlay* SkillBarContainerOverlay;
+
     // Widget components
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "Skill Bar Widget")
     UHorizontalBox* SkillSlotsContainer;

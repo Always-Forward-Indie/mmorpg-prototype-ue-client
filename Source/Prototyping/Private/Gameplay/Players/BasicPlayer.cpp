@@ -373,6 +373,11 @@ void ABasicPlayer::BeginPlay()
 					{
 						UIManager->SetPlayerController(PC);
 						UE_LOG(LogTemp, Warning, TEXT("UIManager: PlayerController set during initialization"));
+
+						UIManager->InitFTCManager(PC);
+						UE_LOG(LogTemp, Warning, TEXT("UIManager: Init called for FCT system"));
+
+                        PlayerHUD = UIManager->GetPlayerInterfaceWidget()->GetPlayerHUD();
 					}
 					else
 					{
@@ -424,85 +429,10 @@ void ABasicPlayer::BeginPlay()
 //Create HUD
 void ABasicPlayer::CreateHUD()
 {
-	if (HUDWidgetClass)
-	{
-		if (!GetIsOtherClient()) {
-			//debug 
-			UE_LOG(LogTemp, Warning, TEXT("Creating Player HUD Widget"));
-			this->PlayerHUD = CreateWidget<UPlayerHUD>(GetWorld(), HUDWidgetClass);
-			if (PlayerHUD)
-			{
-				PlayerHUD->AddToViewport();
-
-                APlayerController* PC = Cast<APlayerController>(GetController());
-
-                if (PlayerHUD->GetDamageCanvas() && PC && MyGameInstance) {
-                    // Initialize FCTManager with immediate setup
-                    UUIManager* GameUIManager = MyGameInstance->GetUIManager();
-                    if (GameUIManager)
-                    {
-                        GameUIManager->Init(PC, PlayerHUD->GetDamageCanvas(), DamageTextWidgetClass);
-                        
-                        // Verify FCTManager was created successfully
-                        if (UFloatingCombatTextManager* FCTManager = GameUIManager->GetFCTManager())
-                        {
-                            UE_LOG(LogTemp, Warning, TEXT("CreateHUD: FCTManager successfully initialized and ready"));
-                        }
-                        else
-                        {
-                            UE_LOG(LogTemp, Error, TEXT("CreateHUD: FCTManager failed to initialize!"));
-                        }
-
-						// Initialize experience data if ExperienceManager is available
-						if (UExperienceManager* ExperienceManager = MyGameInstance->GetExperienceManager())
-						{
-							if (playerData.characterData.characterId > 0)
-							{
-								// Create initial progression data from current player data
-								FPlayerProgressionStruct InitialProgression;
-								InitialProgression.characterId = playerData.characterData.characterId;
-								InitialProgression.currentLevel = playerData.characterData.characterLevel;
-								InitialProgression.currentExperience = playerData.characterData.characterExperiencePoints;
-								InitialProgression.totalExperience = playerData.characterData.characterExperiencePoints;
-								InitialProgression.expForNextLevel = playerData.characterData.characterExpForLevelEnd;
-								InitialProgression.expForCurrentLevel = 0; // Will be calculated by server
-								InitialProgression.bHasPendingLevelUp = false;
-								InitialProgression.pendingLevelGained = 0;
-
-								// Update ExperienceManager with initial progression data
-								ExperienceManager->UpdateCharacterProgression(playerData.characterData.characterId, InitialProgression);
-
-								UE_LOG(LogTemp, Warning, TEXT("CreateHUD: Initial experience data set for character %d: Level %d, XP %d/%d"), 
-									playerData.characterData.characterId, 
-									InitialProgression.currentLevel,
-									InitialProgression.currentExperience,
-									InitialProgression.expForNextLevel);
-							}
-						}
-                    }
-                    else
-                    {
-                        UE_LOG(LogTemp, Error, TEXT("CreateHUD: UIManager not found in GameInstance"));
-                    }
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Error, TEXT("CreateHUD: Missing required components - Canvas: %s, PC: %s, GameInstance: %s"), 
-                        PlayerHUD->GetDamageCanvas() ? TEXT("Valid") : TEXT("NULL"),
-                        PC ? TEXT("Valid") : TEXT("NULL"),
-                        MyGameInstance ? TEXT("Valid") : TEXT("NULL"));
-                }
-			}
-		}
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("HUDWidgetClass is not set in ABasicPlayer!"));
-	}
+    //RefreshHUD();
 }
 
 // update HUD
-
 void ABasicPlayer::UpdateHUD()
 {
     if (PlayerHUD)
@@ -510,7 +440,7 @@ void ABasicPlayer::UpdateHUD()
         if (!GetIsOtherClient())
         {
             //debug 
-			//UE_LOG(LogTemp, Warning, TEXT("Updating Player HUD for player with id"));
+			//UE_LOG(LogTemp, Warning, TEXT("Updating Player HUD for player"));
 
             //get player max HP, Mana and XP from attributes
             float MaxHealth = 1.0f;
@@ -1286,7 +1216,7 @@ void ABasicPlayer::RefreshHUD()
 	}
 
 	// Update HUD with current values
-	PlayerHUD->SetHP(static_cast<float>(playerData.characterData.characterCurrentHealth), MaxHealth);
-	PlayerHUD->SetMana(static_cast<float>(playerData.characterData.characterCurrentMana), MaxMana);
+    PlayerHUD->SetHP(static_cast<float>(playerData.characterData.characterCurrentHealth), MaxHealth);
+    PlayerHUD->SetMana(static_cast<float>(playerData.characterData.characterCurrentMana), MaxMana);
 }
 

@@ -99,8 +99,6 @@ void UMyGameInstance::Init()
 	NetworkManager->OnGameServerSocketConnected.AddDynamic(this, &UMyGameInstance::StartPingGameServer);
 	NetworkManager->OnLoginServerSocketConnected.AddDynamic(this, &UMyGameInstance::StartPingLoginServer);
 
-	UIManager = NewObject<UUIManager>(this);
-
 	InitGameSystems();
 }
 
@@ -763,7 +761,7 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
                     
                     // Possess the player and create the HUD
                     PlayerController->Possess(Player);
-                    NewPlayer->CreateHUD();
+                    //NewPlayer->CreateHUD();
 
 					// Request inventory data for the current player
 					if (InventoryManager)
@@ -775,11 +773,6 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 			}
 		}
 	}
-}
-
-UUIManager* UMyGameInstance::GetUIManager()
-{
-	return UIManager;
 }
 
 void UMyGameInstance::SetCurrentClientID(int32 ClientID)
@@ -1085,50 +1078,7 @@ void UMyGameInstance::UpdateMobHealth(int32 TargetId, int32 NewHealth, int32 New
 			return;
 		}
 	}
-	
-	//// Fallback to legacy method if combat system not available
-	//FString MobUid = FString::FromInt(TargetId);
-	//TArray<AActor*> FoundActors;
-	//UGameplayStatics::GetAllActorsWithTag(GetWorld(), FName(*MobUid), FoundActors);
-	//
-	//if (FoundActors.Num() > 0)
-	//{
-	//	ABasicMOB* MOB = Cast<ABasicMOB>(FoundActors[0]);
-	//	if (MOB)
-	//	{
-	//		// Update the mob's health
-	//		MOB->SetMOBCurrentHealth(NewHealth);
-	//		MOB->SetMOBCurrentMana(NewMana);
-	//		MOB->SetMobIsDamaged(bIsDamaged);
-	//		
-	//		if (bIsDead)
-	//		{
-	//			MOB->SetMOBIsDead(true);
-	//			// Handle mob death
-	//			MOB->Die();
-	//		}
-	//		
-	//		// Update UI
-	//		MOB->ForceUpdateUI();
-	//		
-	//		// Show damage numbers if damaged
-	//		//if (bIsDamaged && DamageDealt > 0)
-	//		//{
-	//	//FVector HitLoc = MOB->GetActorLocation() + FVector(0, 0, 120);
-	//	//	
-	//	//	if (UIManager && UIManager->GetFCTManager())
-	//	//	{
-	//	//		UE_LOG(LogTemp, Warning, TEXT("Showing mob damage: %d at location %s"), 
-	//	//			DamageDealt, *HitLoc.ToString());
-	//	//		UIManager->GetFCTManager()->ShowDamage(HitLoc, DamageDealt, false, EDamageType::Physical);
-	//	//	}
-	//	//	else
-	//	//	{
-	//	//		UE_LOG(LogTemp, Error, TEXT("Cannot show damage: FCT Manager is invalid"));
-	//	//	}
-	//	//}
-	//	}
-	//}
+
 }
 
 void UMyGameInstance::UpdatePlayerHealth(int32 TargetId, int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt)
@@ -1164,40 +1114,6 @@ void UMyGameInstance::UpdatePlayerHealth(int32 TargetId, int32 NewHealth, int32 
 			return;
 		}
 	}
-	
-	//// Fallback to legacy method if combat system not available
-	//ABasicPlayer* TargetPlayer = GetPlayerByCharacterId(TargetId);
-	//
-	//if (TargetPlayer)
-	//{
-	//	// Update the player's health, mana, and other status
-	//	TargetPlayer->SetPlayerCurrentHPPoints(NewHealth);
-	//	TargetPlayer->SetPlayerCurrentMPPoints(NewMana);
-	//	
-	//	// Update the player's HUD
-	//	TargetPlayer->UpdateHUD();
-	//	
-	//	// Show damage numbers if damaged
-	//	//if (bIsDamaged && DamageDealt > 0)
-	//	//{
-	//	//	FVector HitLoc = TargetPlayer->GetActorLocation() + FVector(0, 0, 120);
-	//	//	
-	//	//	if (UIManager && UIManager->GetFCTManager())
-	//	//	{
-	//	//		UE_LOG(LogTemp, Warning, TEXT("Showing player damage: %d at location %s"), 
-	//	//			DamageDealt, *HitLoc.ToString());
-	//	//		UIManager->GetFCTManager()->ShowDamage(HitLoc, DamageDealt, false, EDamageType::Physical);
-	//	//	}
-	//	//}
-	//	
-	//	// Handle player death if needed
-	//	if (bIsDead)
-	//	{
-	//		UE_LOG(LogTemp, Warning, TEXT("Player %d has died!"), TargetId);
-	//		// TODO: Implement death handling in BasicPlayer class
-	//		// TargetPlayer->HandleDeath();
-	//	}
-	//}
 }
 
 void UMyGameInstance::UpdateTargetHealth(int32 TargetId, int32 TargetType, const FString& TargetTypeString, 

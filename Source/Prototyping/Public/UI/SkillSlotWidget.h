@@ -125,10 +125,18 @@ protected:
     UFUNCTION()
     void OnSkillButtonReleased();
 
+    // Skill manager event handlers
+    UFUNCTION()
+    void OnSkillCooldownStarted(const FString& SkillSlug);
+
+    UFUNCTION()
+    void OnSkillReady(const FString& SkillSlug);
+
     // Native overrides
     virtual void NativeConstruct() override;
     virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
     virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+    virtual void BeginDestroy() override;
 
     // Drag and Drop support
     TWeakObjectPtr<UDragDropOperation> ActiveDragOp;

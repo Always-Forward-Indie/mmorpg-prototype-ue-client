@@ -142,16 +142,14 @@ bool UPlayerSkillManager::TryCastSkill(const FString& SkillSlug, int32 TargetId,
         return false;
     }
 
-    // Cast skill through existing system
+    // Cast skill through existing system - DON'T start cooldown here anymore
     if (SkillSystemManager)
     {
         bool bSuccess = SkillSystemManager->CastSkill(CharacterId, TargetId, SkillSlug, TargetType);
         
         if (bSuccess)
         {
-            // Start cooldown
-            StartSkillCooldown(SkillSlug);
-            UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Successfully cast skill %s"), *SkillSlug);
+            UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Successfully sent skill request %s - waiting for server confirmation"), *SkillSlug);
         }
         
         return bSuccess;
@@ -162,40 +160,36 @@ bool UPlayerSkillManager::TryCastSkill(const FString& SkillSlug, int32 TargetId,
 
 bool UPlayerSkillManager::IsSkillOnCooldown(const FString& SkillSlug) const
 {
-    if (const FPlayerSkillData* SkillData = PlayerSkills.Find(SkillSlug))
-    {
-        float CurrentTime = GetCurrentTime();
-        return CurrentTime < SkillData->cooldownEndTime;
+    if (const FPlayerSkillData* S = PlayerSkills.Find(SkillSlug)) {
+        const double now = NowFor(S);
+        return now < S->cooldownEndTime;
     }
     return false;
 }
 
 float UPlayerSkillManager::GetSkillCooldownRemaining(const FString& SkillSlug) const
 {
-    if (const FPlayerSkillData* SkillData = PlayerSkills.Find(SkillSlug))
-    {
-        float CurrentTime = GetCurrentTime();
-        float Remaining = SkillData->cooldownEndTime - CurrentTime;
-        return FMath::Max(0.0f, Remaining);
+    if (const FPlayerSkillData* S = PlayerSkills.Find(SkillSlug)) {
+        const double now = NowFor(S);
+        const double rem = S->cooldownEndTime - now;
+        return rem > 0.0 ? static_cast<float>(rem) : 0.0f;
     }
     return 0.0f;
 }
 
 void UPlayerSkillManager::StartSkillCooldown(const FString& SkillSlug)
 {
-    if (FPlayerSkillData* SkillData = PlayerSkills.Find(SkillSlug))
-    {
-        float CurrentTime = GetCurrentTime();
-        float CooldownDuration = SkillData->networkData.cooldownMs / 1000.0f; // Convert ms to seconds
-        
-        SkillData->cooldownEndTime = CurrentTime + CooldownDuration;
-        SkillData->bIsOnCooldown = true;
-        SkillData->bIsReady = false;
+    if (FPlayerSkillData* S = PlayerSkills.Find(SkillSlug)) {
+        const double dur = static_cast<double>(S->networkData.cooldownMs) / 1000.0;
+        if (dur <= 0.0) { UE_LOG(LogTemp, Error, TEXT("Invalid cooldown")); return; }
+
+        S->bCooldownUsesServerClock = true;              // единая таймбаза
+        const double now = GetServerSeconds();
+        S->cooldownEndTime = now + dur;                  // double + server seconds
+        S->bIsOnCooldown = true;
+        S->bIsReady = false;
 
         OnSkillCooldownStarted.Broadcast(SkillSlug);
-
-        UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Started cooldown for skill %s (%.1fs)"), 
-            *SkillSlug, CooldownDuration);
     }
 }
 
@@ -273,22 +267,15 @@ FString UPlayerSkillManager::GetSkillSlugFromSlot(int32 SlotIndex) const
 
 void UPlayerSkillManager::UpdateCooldowns(float DeltaTime)
 {
-    float CurrentTime = GetCurrentTime();
-    
-    for (auto& SkillPair : PlayerSkills)
-    {
-        FPlayerSkillData& SkillData = SkillPair.Value;
-        
-        if (SkillData.bIsOnCooldown && CurrentTime >= SkillData.cooldownEndTime)
-        {
-            SkillData.bIsOnCooldown = false;
-            SkillData.bIsReady = true;
-            SkillData.cooldownEndTime = 0.0f;
-
-            OnSkillReady.Broadcast(SkillPair.Key);
-            
-            UE_LOG(LogTemp, Verbose, TEXT("PlayerSkillManager: Skill %s is ready"), 
-                *SkillPair.Key);
+    for (auto& Pair : PlayerSkills) {
+        FPlayerSkillData& S = Pair.Value;
+        if (!S.bIsOnCooldown) continue;
+        const double now = NowFor(&S);
+        if (now >= S.cooldownEndTime) {
+            S.bIsOnCooldown = false;
+            S.bIsReady = true;
+            S.cooldownEndTime = 0.0;
+            OnSkillReady.Broadcast(Pair.Key);
         }
     }
 }
@@ -331,20 +318,41 @@ FPlayerSkillData UPlayerSkillManager::CreatePlayerSkillData(const FPlayerSkillNe
 
 float UPlayerSkillManager::GetCurrentTime() const
 {
-    // Use synchronized time if available, otherwise fallback to world time
+    // Use the same time system as SkillSystemManager for consistency
+    if (SkillSystemManager)
+    {
+        return SkillSystemManager->GetSynchronizedWorldTime();
+    }
+    
+    // Fallback to synchronized time if SkillSystemManager is not available
     if (TimeSyncService && TimeSyncService->IsTimeSyncValid())
     {
         int64 ServerTimeMs = TimeSyncService->GetEstimatedServerTimeMs();
         return static_cast<float>(ServerTimeMs) / 1000.0f;
     }
     
-    // Fallback to world time
+    // Last resort fallback to world time
     if (SkillSystemManager)
     {
         return SkillSystemManager->GetWorldTime();
     }
     
     return 0.0f;
+}
+
+UWorld* UPlayerSkillManager::GetWorld() const
+{
+    // Try to get world through SkillSystemManager
+    if (SkillSystemManager)
+    {
+        // We can't directly access private members, so let's try through outer
+        if (UObject* Outer = GetOuter())
+        {
+            return Outer->GetWorld();
+        }
+    }
+    
+    return nullptr;
 }
 
 void UPlayerSkillManager::UpdateSkillCooldownState(FPlayerSkillData& SkillData)
@@ -357,4 +365,47 @@ void UPlayerSkillManager::UpdateSkillCooldownState(FPlayerSkillData& SkillData)
 bool UPlayerSkillManager::ValidateSkillSlot(int32 SlotIndex) const
 {
     return SlotIndex >= 0 && SlotIndex < MaxSkillSlots;
+}
+
+void UPlayerSkillManager::HandleSkillInitiation(const FString& SkillSlug, int32 CasterId)
+{
+    // Only handle initiations for our character
+    if (CasterId != CharacterId)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("PlayerSkillManager: Ignoring skill initiation for other character %d (ours: %d)"), 
+            CasterId, CharacterId);
+        return;
+    }
+    
+    UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Handling server-confirmed skill initiation for %s"), *SkillSlug);
+    
+    // NOW start the cooldown since server confirmed the skill cast
+    if (HasSkill(SkillSlug))
+    {
+        StartSkillCooldown(SkillSlug);
+        UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Started cooldown for server-confirmed skill %s"), *SkillSlug);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Server confirmed skill %s but we don't have it"), *SkillSlug);
+    }
+}
+
+double UPlayerSkillManager::GetServerSeconds() const {
+    if (TimeSyncService && TimeSyncService->IsTimeSyncValid()) {
+        return static_cast<double>(TimeSyncService->GetEstimatedServerTimeMs()) / 1000.0;
+    }
+    // фолбек: переводим world->time в "серверные" через постоянный offset, если есть
+    if (UWorld* W = GetWorld()) return static_cast<double>(W->GetTimeSeconds());
+    return 0.0;
+}
+
+double UPlayerSkillManager::GetWorldSeconds() const {
+    if (UWorld* W = GetWorld()) return static_cast<double>(W->GetTimeSeconds());
+    return 0.0;
+}
+
+double UPlayerSkillManager::NowFor(const FPlayerSkillData* Skill) const {
+    if (Skill && Skill->bCooldownUsesServerClock) return GetServerSeconds();
+    return GetWorldSeconds();
 }

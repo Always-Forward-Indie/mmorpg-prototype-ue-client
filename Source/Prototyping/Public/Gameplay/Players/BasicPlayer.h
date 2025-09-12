@@ -11,7 +11,7 @@
 #include "InputMappingContext.h"
 #include "Components/AudioComponent.h"
 #include <Kismet/GameplayStatics.h>
-#include "Gameplay/UI/PlayerHUD.h"
+#include "Gameplay/UI/PlayerInterfaceWidget.h"
 #include "Gameplay/Combat/ICombatable.h"
 #include "BasicPlayer.generated.h"
 
@@ -358,8 +358,7 @@ public:
 		UFUNCTION(BlueprintCallable, Category = "Player")
 		int32 GetPlayerCharacterID() const { return playerData.characterData.characterId; }
 
-		UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
-		TSubclassOf<class UDamageTextWidget> DamageTextWidgetClass;
+
 
 
 			UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
@@ -384,6 +383,9 @@ public:
 			// Force refresh HUD with current player stats
 			UFUNCTION(BlueprintCallable, Category = "UI")
 			void RefreshHUD();
+
+			UFUNCTION(BlueprintCallable, Category = "UI")
+			UUIManager* GetUIManager() const { return UIManager; }
 
 		protected:
 			UFUNCTION()

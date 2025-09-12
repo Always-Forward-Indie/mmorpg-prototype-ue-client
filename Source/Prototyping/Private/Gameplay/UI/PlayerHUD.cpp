@@ -4,6 +4,20 @@
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 
+void UPlayerHUD::NativeConstruct()
+{
+    Super::NativeConstruct();
+    
+    UE_LOG(LogTemp, Warning, TEXT("PlayerHUD: Constructed"));
+}
+
+void UPlayerHUD::NativeDestruct()
+{
+    Super::NativeDestruct();
+    
+    UE_LOG(LogTemp, Warning, TEXT("PlayerHUD: Destructed"));
+}
+
 void UPlayerHUD::SetHP(float NewHP, float MaxHP)
 {
     if (HealthBar)
@@ -36,4 +50,10 @@ void UPlayerHUD::SetMana(float NewMana, float MaxMana)
         FString ManaText = FString::Printf(TEXT("%.0f/%.0f"), NewMana, MaxMana);
         ManaBarTextValue->SetText(FText::FromString(ManaText));
     }
+}
+
+bool UPlayerHUD::IsHUDReady() const
+{
+    return IsValid(HealthBar) && IsValid(ManaBar) && 
+           IsValid(HealthBarTextValue) && IsValid(ManaBarTextValue);
 }

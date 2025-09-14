@@ -21,7 +21,7 @@ UItemTooltipWidget::UItemTooltipWidget(const FObjectInitializer& ObjectInitializ
 	FadeInDuration = 0.2f;
 	FadeOutDuration = 0.1f;
 	bIsVisible = false;
-	bIsFocusable = false;
+	SetIsFocusable(false);
 }
 
 void UItemTooltipWidget::NativeConstruct()

@@ -94,6 +94,7 @@ public:
 	virtual FVector GetCombatPosition_Implementation() const override { return GetActorLocation() + FVector(0, 0, 120); }
 	
 	virtual void SetTarget_Implementation(int32 TargetId, ECasterType TargetType) override;
+	virtual void SetIsAggressiveState_Implementation(int32 TargetId, ECasterType TargetType, bool bIsAggressive) override;
 	virtual void ClearTarget_Implementation() override;
 	
 	virtual void PlaySkillAnimation_Implementation(const FString& AnimationName, float Duration = 0.0f) override;

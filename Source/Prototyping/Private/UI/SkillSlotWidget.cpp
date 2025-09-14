@@ -265,7 +265,7 @@ void USkillSlotWidget::NativeOnDragCancelled(const FDragDropEvent& E, UDragDropO
 }
 
 
-void USkillSlotWidget::Initialize(int32 InSlotIndex, UPlayerSkillManager* InSkillManager)
+void USkillSlotWidget::SlotInitialize(int32 InSlotIndex, UPlayerSkillManager* InSkillManager)
 {
     SlotIndex = InSlotIndex;
     SkillManager = InSkillManager;
@@ -565,17 +565,46 @@ void USkillSlotWidget::UpdateCooldownDisplay()
 
 void USkillSlotWidget::UpdateHotkeyDisplay()
 {
-    if (HotkeyText)
+    if (!HotkeyText)
     {
-        if (CurrentSlotData.boundKey.IsValid())
+        return;
+    }
+
+    if (CurrentSlotData.boundKey.IsValid())
+    {
+        // Получаем читаемое имя клавиши
+        FString HotkeyString = CurrentSlotData.boundKey.GetDisplayName().ToString();
+
+        // Подменяем слова на цифры
+        static const TMap<FString, FString> Replacement = {
+            {TEXT("One"), TEXT("1")},
+            {TEXT("Two"), TEXT("2")},
+            {TEXT("Three"), TEXT("3")},
+            {TEXT("Four"), TEXT("4")},
+            {TEXT("Five"), TEXT("5")},
+            {TEXT("Six"), TEXT("6")},
+            {TEXT("Seven"), TEXT("7")},
+            {TEXT("Eight"), TEXT("8")},
+            {TEXT("Nine"), TEXT("9")},
+            {TEXT("Zero"), TEXT("0")}
+        };
+
+        if (const FString* ReplacementValue = Replacement.Find(HotkeyString))
         {
-            FString HotkeyString = CurrentSlotData.boundKey.ToString();
-            HotkeyText->SetText(FText::FromString(HotkeyString));
-            HotkeyText->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+            HotkeyString = *ReplacementValue;
         }
-        else
-        {
-            HotkeyText->SetVisibility(ESlateVisibility::Hidden);
+
+        HotkeyText->SetText(FText::FromString(HotkeyString));
+        HotkeyText->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+        if (HotkeyBackground) {
+            HotkeyBackground->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+        }
+    }
+    else
+    {
+        HotkeyText->SetVisibility(ESlateVisibility::Hidden);
+        if (HotkeyBackground) {
+            HotkeyBackground->SetVisibility(ESlateVisibility::Hidden);
         }
     }
 }

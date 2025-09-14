@@ -219,7 +219,7 @@ void UUIManager::CreatePlayerInterfaceWidget()
 	// Initialize with GameInstance
 	if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetWorld()->GetGameInstance()))
 	{
-		PlayerInterfaceWidget->Initialize(GameInstance);
+		PlayerInterfaceWidget->InterfaceInitialize(GameInstance);
 		
 		// Setup skill bar
 		PlayerInterfaceWidget->SetupSkillBar(SkillBarSlots);
@@ -494,7 +494,7 @@ void UUIManager::CreateSkillWidgets()
 			// Get game instance for initialization
 			if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetWorld()->GetGameInstance()))
 			{
-				AvailableSkillsWidget->Initialize(GameInstance);
+				AvailableSkillsWidget->SkillInitialize(GameInstance);
 				UE_LOG(LogTemp, Warning, TEXT("UIManager: Available skills widget created and initialized"));
 			}
 			else

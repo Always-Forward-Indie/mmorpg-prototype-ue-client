@@ -298,6 +298,19 @@ void ABasicMOB::ClearTarget_Implementation()
     UE_LOG(LogTemp, Log, TEXT("MOB %d cleared target"), GetActorId_Implementation());
 }
 
+void ABasicMOB::SetIsAggressiveState_Implementation(int32 TargetId, ECasterType TargetType, bool bIsAggressive)
+{
+	SetMOBIsAggressive(bIsAggressive);
+
+	if (MobHeadInfo)
+	{
+		MobHeadInfo->UpdateMobAggressive(bIsAggressive);
+	}
+	
+	UE_LOG(LogTemp, Log, TEXT("MOB %d is now %s"), 
+		GetActorId_Implementation(), bIsAggressive ? TEXT("Aggressive") : TEXT("Passive"));
+}
+
 void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, float Duration)
 {
     UE_LOG(LogTemp, Log, TEXT("MOB %d playing skill animation: %s (Duration: %.1f)"), 
@@ -982,6 +995,11 @@ void ABasicMOB::Die()
 
 	// set aggressive to false
 	SetMOBIsAggressive(false);
+
+	if (MobHeadInfo)
+	{
+		MobHeadInfo->UpdateMobAggressive(false);
+	}
 
 	// dubug mob is dead
 	UE_LOG(LogTemp, Warning, TEXT("MOB %s (ID:%d) has died."), *MOBData.mobName, MOBData.mobID);

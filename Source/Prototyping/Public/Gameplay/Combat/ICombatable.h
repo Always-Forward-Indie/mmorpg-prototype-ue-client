@@ -81,6 +81,11 @@ public:
     void SetTarget(int32 TargetId, ECasterType TargetType);
     virtual void SetTarget_Implementation(int32 TargetId, ECasterType TargetType) {}
 
+    // Target system
+    UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Combatable|Targeting")
+    void SetIsAggressiveState(int32 TargetId, ECasterType TargetType, bool isAggressive);
+    virtual void SetIsAggressiveState_Implementation(int32 TargetId, ECasterType TargetType, bool isAggressive) {}
+
     UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Combatable|Targeting")
     void ClearTarget();
     virtual void ClearTarget_Implementation() {}

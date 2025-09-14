@@ -78,7 +78,7 @@ protected:
 
 	// Format damage/healing text
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Skill Tooltip")
-	FText FormatDamageText(int32 MinDamage, int32 MaxDamage) const;
+	FText FormatDamageText(int32 Flat, float Coeff) const;
 
 protected:
 	// UI Components (bind these in Blueprint)

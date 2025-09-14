@@ -165,10 +165,12 @@ void USkillTooltipWidget::UpdateSkillStats()
         ManaCostText->SetText(ManaCostDisplayText);
     }
 
-    // Update damage - показываем общую информацию, поскольку конкретных значений дамага нет
+    // Update damage
     if (DamageText)
     {
-        FText DamageDisplayText = FText::FromString(TEXT("Damage: Variable"));
+        FText DamageDisplayText = FormatDamageText(
+            CurrentSkillData.networkData.flatAdd,
+            CurrentSkillData.networkData.coeff);
         DamageText->SetText(DamageDisplayText);
     }
 
@@ -202,7 +204,7 @@ void USkillTooltipWidget::UpdateSkillLevelInfo()
 {
     if (SkillLevelText)
     {
-        FString LevelText = FString::Printf(TEXT("Level %d"), CurrentSkillData.networkData.skillLevel);
+        FString LevelText = FString::Printf(TEXT("lvl %d"), CurrentSkillData.networkData.skillLevel);
         SkillLevelText->SetText(FText::FromString(LevelText));
     }
 }
@@ -257,18 +259,11 @@ FText USkillTooltipWidget::FormatManaCostText(int32 ManaCost) const
     }
 }
 
-FText USkillTooltipWidget::FormatDamageText(int32 MinDamage, int32 MaxDamage) const
+FText USkillTooltipWidget::FormatDamageText(int32 Flat, float Coeff) const
 {
-    if (MinDamage > 0 || MaxDamage > 0)
+    if (Flat > 0 && Coeff > 0)
     {
-        if (MinDamage == MaxDamage)
-        {
-            return FText::FromString(FString::Printf(TEXT("Damage: %d"), MinDamage));
-        }
-        else
-        {
-            return FText::FromString(FString::Printf(TEXT("Damage: %d - %d"), MinDamage, MaxDamage));
-        }
+        return FText::FromString(FString::Printf(TEXT("Damage: Flat: %d * Coeff: %.2f + Stats Value"), Flat, static_cast<double>(Coeff)));
     }
     else
     {

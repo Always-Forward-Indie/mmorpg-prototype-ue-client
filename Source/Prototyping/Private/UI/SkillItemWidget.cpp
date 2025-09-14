@@ -266,7 +266,7 @@ void USkillItemWidget::UpdateVisualDisplay()
     // Update skill level (keep this for quick reference)
     if (SkillLevelText)
     {
-        FString LevelText = FString::Printf(TEXT("Lv.%d"), CurrentSkillData.networkData.skillLevel);
+        FString LevelText = FString::Printf(TEXT("lvl %d"), CurrentSkillData.networkData.skillLevel);
         SkillLevelText->SetText(FText::FromString(LevelText));
         
         // In compact layout, show level; in full layout, you might want to hide it

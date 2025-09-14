@@ -31,7 +31,7 @@ void UPlayerInterfaceWidget::NativeDestruct()
     UE_LOG(LogTemp, Warning, TEXT("PlayerInterfaceWidget: Destructed"));
 }
 
-void UPlayerInterfaceWidget::Initialize(UMyGameInstance* InGameInstance)
+void UPlayerInterfaceWidget::InterfaceInitialize(UMyGameInstance* InGameInstance)
 {
     if (!InGameInstance)
     {
@@ -46,7 +46,7 @@ void UPlayerInterfaceWidget::Initialize(UMyGameInstance* InGameInstance)
     // Initialize skill bar widget
     if (SkillBarWidget)
     {
-        SkillBarWidget->Initialize(GameInstance);
+        SkillBarWidget->BarInitialize(GameInstance);
         UE_LOG(LogTemp, Warning, TEXT("PlayerInterfaceWidget: SkillBar initialized"));
     }
     else

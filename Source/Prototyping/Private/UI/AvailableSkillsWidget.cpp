@@ -18,8 +18,6 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Input/Events.h"
 
-// ========== UAvailableSkillsWidget ==========
-
 void UAvailableSkillsWidget::NativeConstruct()
 {
     Super::NativeConstruct();
@@ -263,7 +261,7 @@ void UAvailableSkillsWidget::UpdateWindowDragPosition(const FVector2D& ScreenCur
     SetPositionInViewport(Pos, false);
 }
 
-void UAvailableSkillsWidget::Initialize(UMyGameInstance* InGameInstance)
+void UAvailableSkillsWidget::SkillInitialize(UMyGameInstance* InGameInstance)
 {
     if (!InGameInstance)
     {

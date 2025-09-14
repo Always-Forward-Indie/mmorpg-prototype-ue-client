@@ -34,7 +34,7 @@ public:
 
     // Initialization
     UFUNCTION(BlueprintCallable, Category = "Skill Slot Widget")
-    void Initialize(int32 InSlotIndex, UPlayerSkillManager* InSkillManager);
+    void SlotInitialize(int32 InSlotIndex, UPlayerSkillManager* InSkillManager);
 
     // Skill slot management
     UFUNCTION(BlueprintCallable, Category = "Skill Slot Widget")
@@ -107,6 +107,9 @@ protected:
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "Skill Slot Widget")
     UTextBlock* HotkeyText;
+
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "Skill Slot Widget")
+    UImage* HotkeyBackground;
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "Skill Slot Widget")
     UImage* HighlightBorder;

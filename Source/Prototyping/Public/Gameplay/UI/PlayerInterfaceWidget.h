@@ -25,7 +25,7 @@ class PROTOTYPING_API UPlayerInterfaceWidget : public UUserWidget
 public:
     /** Initialize the player interface with game instance */
     UFUNCTION(BlueprintCallable, Category = "Player Interface")
-    void Initialize(UMyGameInstance* InGameInstance);
+    void InterfaceInitialize(UMyGameInstance* InGameInstance);
 
     /** Get the skill bar widget */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Interface")

@@ -256,6 +256,7 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
         {
             ECasterType TargetType = static_cast<ECasterType>(SkillData.targetType);
             ICombatable::Execute_SetTarget(CasterObject, SkillData.targetId, TargetType);
+			ICombatable::Execute_SetIsAggressiveState(CasterObject, SkillData.targetId, TargetType, SkillData.skillEffectType == ESkillEffectType::Damage);
         }
     }
     else

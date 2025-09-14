@@ -69,7 +69,7 @@ FReply USkillBarWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyE
     return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }
 
-void USkillBarWidget::Initialize(UMyGameInstance* InGameInstance)
+void USkillBarWidget::BarInitialize(UMyGameInstance* InGameInstance)
 {
     if (!InGameInstance)
     {
@@ -524,7 +524,7 @@ USkillSlotWidget* USkillBarWidget::CreateSkillSlotWidget(int32 SlotIndex)
     USkillSlotWidget* SlotWidget = CreateWidget<USkillSlotWidget>(this, SkillSlotWidgetClass);
     if (SlotWidget)
     {
-        SlotWidget->Initialize(SlotIndex, SkillManager);
+        SlotWidget->SlotInitialize(SlotIndex, SkillManager);
         
         // Bind events
         SlotWidget->OnSkillSlotClicked.AddDynamic(this, &USkillBarWidget::OnSkillSlotClicked);

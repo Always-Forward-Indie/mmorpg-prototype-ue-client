@@ -32,7 +32,7 @@ public:
 
     // Initialization
     UFUNCTION(BlueprintCallable, Category = "Skill Bar Widget")
-    void Initialize(UMyGameInstance* InGameInstance);
+    void BarInitialize(UMyGameInstance* InGameInstance);
 
     // Skill slot management
     UFUNCTION(BlueprintCallable, Category = "Skill Bar Widget")

@@ -38,7 +38,7 @@ class PROTOTYPING_API UAvailableSkillsWidget : public UUserWidget
 public:
     // Initialize with game instance
     UFUNCTION(BlueprintCallable, Category = "Available Skills Widget")
-    void Initialize(UMyGameInstance* InGameInstance);
+    void SkillInitialize(UMyGameInstance* InGameInstance);
 
     // Refresh the skill list
     UFUNCTION(BlueprintCallable, Category = "Available Skills Widget")

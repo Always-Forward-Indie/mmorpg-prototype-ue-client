@@ -106,7 +106,7 @@ void USkillDragVisualWidget::CreateDragVisualComponents()
     SkillIcon = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("SkillIcon"));
     UVerticalBoxSlot* IconSlot = VBox->AddChildToVerticalBox(SkillIcon);
     IconSlot->SetHorizontalAlignment(HAlign_Center);
-    SkillIcon->SetBrushSize(FVector2D(64.f, 64.f));
+    SkillIcon->SetDesiredSizeOverride(FVector2D(64.f, 64.f));
     SkillIcon->SetColorAndOpacity(DragOpacity); // альфа берётся из DragOpacity (0.8 по умолчанию)
 
     // Текст (по желанию можно скрывать)

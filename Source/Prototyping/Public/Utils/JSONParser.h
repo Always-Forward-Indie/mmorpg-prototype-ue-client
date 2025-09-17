@@ -124,4 +124,12 @@ public:
     static TArray<FPlayerSkillNetworkData> DeserializePlayerSkillsArray(const TArray<TSharedPtr<FJsonValue>>& JsonArray);
     static FPlayerSkillsInitializationData DeserializePlayerSkillsInitialization(const TSharedPtr<FJsonObject>& Body);
     static FPlayerSkillsInitializationData DeserializePlayerSkillsInitialization(const FString& JsonString);
+
+    // NPC system parsers
+    static FNPCStatsStruct DeserializeNPCStats(const TSharedPtr<FJsonObject>& StatsObj);
+    static FNPCHealthManaStruct DeserializeNPCHealthMana(const TSharedPtr<FJsonObject>& HealthManaObj);
+    static FNPCStruct DeserializeNPCData(const TSharedPtr<FJsonObject>& NPCObj);
+    static TArray<FNPCStruct> DeserializeNPCsList(const TArray<TSharedPtr<FJsonValue>>& JsonArray);
+    static FNPCSpawnDataStruct DeserializeNPCSpawnData(const TSharedPtr<FJsonObject>& Body);
+    static FNPCSpawnDataStruct DeserializeNPCSpawnData(const FString& JsonString);
 };

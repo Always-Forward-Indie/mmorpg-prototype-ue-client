@@ -159,6 +159,13 @@ public:
 	UPROPERTY()
 	UTimeSyncService* TimeSyncService;
 
+	// NPC System
+	UPROPERTY()
+	class UNPCManager* NPCManager;
+
+	UPROPERTY()
+	class UNPCNetworkHandler* NPCNetworkHandler;
+
 	TMap<int32, FClientDataStruct> ConnectedPlayers;
 
 	TMap<int32, ABasicPlayer*> SpawnedPlayers;
@@ -188,6 +195,10 @@ public:
 	// get baic mob class
 	UFUNCTION(BlueprintCallable, Category = "MOB")
 	TSubclassOf<class ABasicMOB> GetBasicMOBClass();
+
+	// get NPC class
+	UFUNCTION(BlueprintCallable, Category = "NPC")
+	TSubclassOf<class ABasicNPC> GetBasicNPCClass();
 
 	// get spawn zone manager
 	UFUNCTION(BlueprintCallable, Category = "Network")
@@ -353,6 +364,10 @@ public:
 	TSubclassOf<class ABasicPlayer> MainPlayerClass;
 
 	// add a reference to the MOB actor blueprint
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC")
+	TSubclassOf<class ABasicNPC> BasicNPCClass;
+
+	// add a reference to the MOB actor blueprint
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MOB")
 	TSubclassOf<class ABasicMOB> BasicMOBClass;
 
@@ -445,4 +460,40 @@ public:
 		// Get player by character ID
 		UFUNCTION(BlueprintCallable, Category = "Player")
 		ABasicPlayer* GetPlayerByCharacterId(int32 CharacterId);
+
+		// NPC System getters
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
+		UNPCManager* GetNPCManager() const { return NPCManager; }
+
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
+		UNPCNetworkHandler* GetNPCNetworkHandler() const { return NPCNetworkHandler; }
+
+		// Data tables and configuration
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game Instance Data")
+	class UDataTable* MobDefinitionTable;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game Instance Data")
+	class UDataTable* NPCDefinitionTable;
+
+		// Data table getters
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Data")
+	UDataTable* GetMobDefinitionTable() const { return MobDefinitionTable; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Data")
+	UDataTable* GetNPCDefinitionTable() const { return NPCDefinitionTable; }
 };
+
+// Forward declarations
+class UPlayerManager;
+class UMOBManager;
+class USpawnZoneManager;
+class UItemManager;
+class UInventoryManager;
+class UHarvestManager;
+class UExperienceManager;
+class UPlayerSkillManager;
+class UCombatSystemManager;
+class UTimeSyncService;
+class UUIManager;
+class UNPCManager; // Add NPC Manager forward declaration
+class UNPCNetworkHandler; // Add NPC Network Handler forward declaration

@@ -17,6 +17,13 @@
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Gameplay/Skills/PlayerSkillNetworkHandler.h"
 #include "Gameplay/Skills/PlayerSkillSystemFactory.h"
+#include "Gameplay/UI/PlayerInterfaceWidget.h"
+#include "Gameplay/UI/PlayerExperienceWidget.h"
+#include "Services/TimeSyncService.h"
+#include "Networking/PingManager.h"
+#include "UI/UIManager.h"
+#include "Gameplay/NPCs/NPCManager.h"
+#include "Gameplay/NPCs/NPCNetworkHandler.h"
 
 UMyGameInstance::UMyGameInstance(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -65,6 +72,10 @@ void UMyGameInstance::Init()
 	CombatSystemManager = NewObject<UCombatSystemManager>(this);
 	SkillSystemManager = NewObject<USkillSystemManager>(this);
 	CombatNetworkHandler = NewObject<UCombatNetworkHandler>(this);
+
+	// Initialize NPC System
+	NPCManager = NewObject<UNPCManager>(this);
+	NPCNetworkHandler = NewObject<UNPCNetworkHandler>(this);
 
 	// Initialize time sync service
 	TimeSyncService = NewObject<UTimeSyncService>(this);
@@ -291,6 +302,33 @@ void UMyGameInstance::InitNetworkingSetup()
 		UE_LOG(LogTemp, Warning, TEXT("CombatNetworkHandler initialized centrally"));
 	}
 
+	// Initialize NPC Manager
+	if (NPCManager)
+	{
+		NPCManager->SetWorldContext(GetWorld());
+		NPCManager->SetGameInstance(this);
+		NPCManager->Initialize(GetNetworkManager());
+		NPCManager->SubscribeToNetworkManager();
+		
+		// Set NPCDefinitionTable if available
+		if (NPCDefinitionTable)
+		{
+			NPCManager->SetNPCDefinitionTable(NPCDefinitionTable);
+			UE_LOG(LogTemp, Warning, TEXT("NPCManager: NPCDefinitionTable assigned from GameInstance"));
+		}
+		
+		UE_LOG(LogTemp, Warning, TEXT("NPCManager initialized"));
+	}
+
+	// Initialize NPC Network Handler
+	if (NPCNetworkHandler && NPCManager)
+	{
+		NPCNetworkHandler->Initialize(NPCManager, GetNetworkManager());
+		NPCNetworkHandler->SubscribeToNetworkEvents();
+		
+		UE_LOG(LogTemp, Warning, TEXT("NPCNetworkHandler initialized"));
+	}
+
 	if (NetworkManager != nullptr) {
 		// Start polling the data from login server
 		NetworkManager->StartPollingLoginServer();
@@ -386,6 +424,12 @@ TSubclassOf<class ABasicMOB> UMyGameInstance::GetBasicMOBClass()
 {
 	return BasicMOBClass;
 }
+
+TSubclassOf<class ABasicNPC> UMyGameInstance::GetBasicNPCClass()
+{
+	return BasicNPCClass;
+}
+
 
 USpawnZoneManager* UMyGameInstance::GetSpawnZoneManager()
 {

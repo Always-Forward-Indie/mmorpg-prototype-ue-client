@@ -1444,3 +1444,164 @@ struct FSkillSlotData
         bIsAssigned = false;
     }
 };
+
+
+//////////////////////////////////////////////////////////////////////////
+// NPC System Structures
+//////////////////////////////////////////////////////////////////////////
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FNPCStatsStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Stats")
+    int32 current = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Stats")
+    int32 max = 0;
+
+    FNPCStatsStruct() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FNPCHealthManaStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Health Mana")
+    FNPCStatsStruct health;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Health Mana")
+    FNPCStatsStruct mana;
+
+    FNPCHealthManaStruct() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FNPCStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
+    int32 id = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
+    FString name = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
+    FString slug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
+    FString race = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
+    int32 level = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
+    FString npcType = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
+    bool isInteractable = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
+    FString dialogueId = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
+    FString questId = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
+    FPositionDataStruct position;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
+    TArray<FAttributeDataStruct> attributes;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
+    FNPCHealthManaStruct stats;
+
+    FNPCStruct() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FNPCSpawnDataStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Spawn Data")
+    int32 npcCount = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Spawn Data")
+    float spawnRadius = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Spawn Data")
+    TArray<FNPCStruct> npcsSpawn;
+
+    FNPCSpawnDataStruct() {}
+};
+
+//////////////////////////////////////////////////////////////////////////
+// NPC Definition Structures (для DataTable)
+//////////////////////////////////////////////////////////////////////////
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FNPCVisualData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TSoftObjectPtr<USkeletalMesh> SkeletalMesh;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TSoftClassPtr<UAnimInstance> AnimBPClass;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FVector ActorScale = FVector(1.0f);
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FName NPCName;
+
+    FNPCVisualData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FNPCAudioData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TSoftObjectPtr<USoundBase> GreetingSound;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TSoftObjectPtr<USoundBase> InteractSound;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TSoftObjectPtr<USoundBase> FarewellSound;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<TSoftObjectPtr<USoundBase>> IdleSounds;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<TSoftObjectPtr<USoundBase>> WalkSounds;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<TSoftObjectPtr<USoundBase>> RunSounds;
+
+    FNPCAudioData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FNPCDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FName NPCType;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FNPCVisualData Visual;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FNPCAudioData Audio;
+
+    FNPCDefinition() {}
+};

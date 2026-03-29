@@ -454,3 +454,11 @@ FString UCombatSystemManager::CreateCombatableKey(int32 ActorId, ECasterType Act
 {
     return FString::Printf(TEXT("%d_%d"), ActorId, static_cast<int32>(ActorType));
 }
+
+void UCombatSystemManager::NotifyHitPoint(int32 CasterId)
+{
+    // Called from the animation notify hit-point delegate.
+    // Propagate to any registered skill-effect handlers that are waiting
+    // for the animation to reach the impact frame before applying damage.
+    UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: HitPoint notify from caster %d"), CasterId);
+}

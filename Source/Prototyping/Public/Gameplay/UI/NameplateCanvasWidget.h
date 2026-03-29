@@ -1,0 +1,181 @@
+﻿#pragma once
+
+#include "CoreMinimal.h"
+#include "Blueprint/UserWidget.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Gameplay/UI/W_PlayerNameplateWidget.h"
+#include "Gameplay/UI/W_NPCNameplateWidget.h"
+#include "Data/DataStructs.h"
+#include "NameplateCanvasWidget.generated.h"
+
+// -----------------------------------------------------------------------
+// Data carried per-registered actor
+// -----------------------------------------------------------------------
+USTRUCT()
+struct FNameplateEntry
+{
+    GENERATED_BODY()
+
+    /** Weak pointer – safe if the actor is destroyed between frames. */
+    UPROPERTY()
+    TWeakObjectPtr<AActor> Actor;
+
+    /** The nameplate widget sitting in the canvas. */
+    UPROPERTY()
+    UUserWidget* Widget = nullptr;
+
+    /** Z-offset (cm) applied on top of actor origin to reach the head. */
+    float HeadOffsetZ = 200.0f;
+
+    /** Cached distance from local pawn – updated each tick. */
+    float DistanceCm = 0.0f;
+
+    /** Current render opacity [0..1]. */
+    float CurrentOpacity = 0.0f;
+
+    // ---- NPC-only fields ----
+    float InteractRadius   = 300.0f;
+    bool  bIsNPC           = false;
+    bool  bIsLocalPlayer   = false;
+};
+
+/**
+ * Single full-screen Canvas that renders all world nameplates as Screen-space
+ * 2-D widgets positioned via ProjectWorldLocationToScreen every tick.
+ *
+ * One instance lives inside WBP_PlayerInterface (bound via BindWidget).
+ * All actors register / unregister through UNameplateManager.
+ *
+ * Blueprint layout required:
+ *   NameplateCanvas   (CanvasPanel)  – fills the whole viewport, HitTest=Invisible
+ */
+UCLASS(BlueprintType, Blueprintable)
+class PROTOTYPING_API UNameplateCanvasWidget : public UUserWidget
+{
+    GENERATED_BODY()
+
+public:
+    // ------------------------------------------------------------------
+    // Registration API  (called by UNameplateManager)
+    // ------------------------------------------------------------------
+
+    /**
+     * Register a remote player actor.
+     * The widget is created from PlayerNameplateWidgetClass and added to the canvas.
+     * Safe to call multiple times – duplicate registrations are silently ignored.
+     */
+    void RegisterPlayer(AActor*          Actor,
+                        const FString&   Name,
+                        const FString&   Class,
+                        int32            Level,
+                        bool             bIsDead,
+                        float            HeadOffsetZ = 200.0f);
+
+    /**
+     * Register an NPC actor.
+     * The widget is created from NPCNameplateWidgetClass and added to the canvas.
+     */
+    void RegisterNPC(AActor*                Actor,
+                     const FString&         Name,
+                     const FString&         NPCType,
+                     int32                  Level,
+                     ENPCInteractionState   InteractionState,
+                     float                  InteractRadius,
+                     float                  HeadOffsetZ = 100.0f);
+
+    /** Remove nameplate for this actor (call on despawn / out-of-range). */
+    void Unregister(AActor* Actor);
+
+    /** Remove all nameplate entries (level transition, disconnect). */
+    void UnregisterAll();
+
+    // ------------------------------------------------------------------
+    // Live update API  (forwarded from network packets)
+    // ------------------------------------------------------------------
+
+    void UpdatePlayerHealth(AActor* Actor, int32 CurrentHP, int32 MaxHP);
+    void SetPlayerDeadState(AActor* Actor, bool bDead);
+    void SetNPCInteractionState(AActor* Actor, ENPCInteractionState NewState);
+
+    // ------------------------------------------------------------------
+    // Configuration  (set in the BP CDO or UIManager)
+    // ------------------------------------------------------------------
+
+    /** Widget class used for remote player nameplates. Assign in BP. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Classes")
+    TSubclassOf<UW_PlayerNameplateWidget> PlayerNameplateWidgetClass;
+
+    /** Widget class used for NPC nameplates. Assign in BP. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Classes")
+    TSubclassOf<UW_NPCNameplateWidget> NPCNameplateWidgetClass;
+
+    /** Distance at which a nameplate is fully opaque (cm). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Visibility")
+    float MinVisibleDistance = 150.0f;
+
+    /** Distance at which a nameplate is fully hidden (cm). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Visibility")
+    float MaxVisibleDistance = 2500.0f;
+
+    /** Linear opacity interpolation speed (units / sec). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Visibility")
+    float FadeSpeed = 3.0f;
+
+    /**
+     * Distance (cm) at which a nameplate renders at scale 1.0.
+     * Should be roughly your "comfortable reading distance" in-game.
+     * Nameplates closer than this shrink toward MinScale;
+     * farther away they are locked at 1.0 (no upscale = no blur).
+     * 1200 cm = ~12 m, a typical MMO mid-range for nameplates.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Scale")
+    float ReferenceDistance = 1200.0f;
+
+    /**
+     * Floor scale – applied when the actor is very close.
+     * Keeps the nameplate readable without it filling the screen.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Scale")
+    float MinScale = 0.7f;
+
+    /**
+     * Ceiling scale – hard cap to prevent nameplates blowing up at distance.
+     * Keep this ≤ 1.0 if you want pixel-crisp text (no upscale blur).
+     * 1.2 gives a small growth budget without obvious softness.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Scale")
+    float MaxScale = 1.1f;
+
+protected:
+    // ------------------------------------------------------------------
+    // UUserWidget overrides
+    // ------------------------------------------------------------------
+    virtual void NativeConstruct() override;
+    virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+
+    /** Canvas panel bound in the Blueprint layout. */
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
+    UCanvasPanel* NameplateCanvas;
+
+private:
+    // ------------------------------------------------------------------
+    // Internal helpers
+    // ------------------------------------------------------------------
+
+    FNameplateEntry* FindEntry(AActor* Actor);
+
+    /** Create a widget of the given class and add it as Collapsed to the canvas. */
+    UUserWidget* AddWidgetToCanvas(TSubclassOf<UUserWidget> WidgetClass);
+
+    /** Reposition, rescale and update opacity for a single entry. */
+    void TickEntry(FNameplateEntry& Entry, APlayerController* PC,
+                   const FVector& PawnLocation, float DeltaTime);
+
+    // ------------------------------------------------------------------
+    // State
+    // ------------------------------------------------------------------
+
+    UPROPERTY()
+    TArray<FNameplateEntry> Entries;
+};

@@ -86,6 +86,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Player Skill Manager") 
     void HandleSkillInitiation(const FString& SkillSlug, int32 CasterId);
 
+    // Called when the attack animation finishes to release the cast lock
+    void NotifyAnimationEnded();
+
     double GetServerSeconds() const;
 
     double GetWorldSeconds() const;

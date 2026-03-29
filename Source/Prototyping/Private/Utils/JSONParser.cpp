@@ -2226,3 +2226,64 @@ FNPCSpawnDataStruct JSONParser::DeserializeNPCSpawnData(const FString& JsonStrin
     
     return SpawnData;
 }
+
+FEffectTickData JSONParser::DeserializeEffectTick(const FString& JsonString)
+{
+    FEffectTickData TickData;
+
+    TSharedPtr<FJsonObject> Root;
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return TickData;
+
+    const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+    if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr) return TickData;
+
+    const TSharedPtr<FJsonObject>& Body = *BodyPtr;
+    Body->TryGetNumberField(TEXT("characterId"), TickData.characterId);
+    Body->TryGetStringField(TEXT("effectSlug"), TickData.effectSlug);
+    Body->TryGetStringField(TEXT("effectTypeSlug"), TickData.effectTypeSlug);
+    Body->TryGetNumberField(TEXT("value"), TickData.value);
+    Body->TryGetBoolField(TEXT("isHeal"), TickData.bIsHeal);
+    Body->TryGetNumberField(TEXT("newHealth"), TickData.newHealth);
+    Body->TryGetNumberField(TEXT("newMana"), TickData.newMana);
+    Body->TryGetBoolField(TEXT("targetDied"), TickData.targetDied);
+
+    return TickData;
+}
+
+TArray<FActiveEffectEntry> JSONParser::DeserializeActiveEffectsPacket(const FString& JsonString)
+{
+    TArray<FActiveEffectEntry> Effects;
+
+    TSharedPtr<FJsonObject> Root;
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return Effects;
+
+    const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+    if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr) return Effects;
+
+    const TArray<TSharedPtr<FJsonValue>>* EffectsArray = nullptr;
+    if (!(*BodyPtr)->TryGetArrayField(TEXT("activeEffects"), EffectsArray)) return Effects;
+
+    for (const TSharedPtr<FJsonValue>& Val : *EffectsArray)
+    {
+        const TSharedPtr<FJsonObject>* ObjPtr = nullptr;
+        if (!Val->TryGetObject(ObjPtr)) continue;
+
+        FActiveEffectEntry Entry;
+        (*ObjPtr)->TryGetStringField(TEXT("slug"), Entry.slug);
+        (*ObjPtr)->TryGetStringField(TEXT("effectType"), Entry.effectType);
+        (*ObjPtr)->TryGetStringField(TEXT("effectTypeSlug"), Entry.effectTypeSlug);
+        (*ObjPtr)->TryGetStringField(TEXT("attributeSlug"), Entry.attributeSlug);
+        (*ObjPtr)->TryGetStringField(TEXT("sourceType"), Entry.sourceType);
+        double Tmp = 0.0;
+        if ((*ObjPtr)->TryGetNumberField(TEXT("value"), Tmp)) Entry.value = static_cast<float>(Tmp);
+        if ((*ObjPtr)->TryGetNumberField(TEXT("expiresAt"), Tmp)) Entry.expiresAt = static_cast<int64>(Tmp);
+        (*ObjPtr)->TryGetBoolField(TEXT("isPercentage"), Entry.bIsPercentage);
+        (*ObjPtr)->TryGetBoolField(TEXT("isPermanent"), Entry.bIsPermanent);
+
+        Effects.Add(Entry);
+    }
+
+    return Effects;
+}

@@ -46,4 +46,27 @@ class PROTOTYPING_API UMOBManager : public UObject
 		void SpawnMOB(const FMOBStruct& MOBData);
 		UFUNCTION(BlueprintCallable, Category = "MOBManager")
 		bool MOBExists(UWorld* World, const FName& Tag);
+
+		/** Find the spawned ABasicMOB actor for a given mob unique ID. Returns nullptr if not found. */
+		UFUNCTION(BlueprintCallable, Category = "MOBManager")
+		AActor* FindMobActor(int32 MobUID) const;
+
+		/** Register a spawned mob actor in the UID-to-actor map. */
+		void RegisterMob(int32 MobUID, class ABasicMOB* MobActor);
+
+		/** Unregister a mob actor from the UID-to-actor map. */
+		void UnregisterMob(int32 MobUID);
+
+		/** Register a player actor so mobs can find their aggro targets. */
+		void RegisterPlayer(int32 PlayerId, class ABasicPlayer* PlayerActor);
+
+		/** Unregister a player actor. */
+		void UnregisterPlayer(int32 PlayerId);
+
+	private:
+		/** Fast UID ? actor lookup map populated by RegisterMob. */
+		TMap<int32, TWeakObjectPtr<class ABasicMOB>> MobActorRegistry;
+
+		/** Player registry for target resolution. */
+		TMap<int32, TWeakObjectPtr<class ABasicPlayer>> PlayerRegistry;
 };

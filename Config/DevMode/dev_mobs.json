@@ -1,0 +1,97 @@
+{
+    "mobs": [
+        {
+            "mobID": 1,
+            "mobUniqueID": "9901",
+            "mobZoneID": 1,
+            "mobName": "Small Fox",
+            "mobSlug": "SmallFox",
+            "mobRace": "Beast",
+            "mobLevel": 5,
+            "mobCurrentHealth": 200,
+            "mobCurrentMana": 0,
+            "bIsDead": false,
+            "bIsAggressive": true,
+            "bIsMoving": false,
+            "bIsGotDamage": false,
+            "bHasBeenHarvested": false,
+            "mobCombatState": 0,
+            "mobTargetId": 0,
+            "mobTargetType": "",
+            "mobPosition": {
+                "positionX": 300.0,
+                "positionY": 200.0,
+                "positionZ": 90.0,
+                "rotationZ": 180.0
+            },
+            "mobVelocity": { "dirX": 0.0, "dirY": 0.0, "speed": 0.0 },
+            "mobAttributes": {
+                "MAX_HP": { "attributeId": 6, "attributeSlug": "MAX_HP", "attributeName": "Max HP", "attributeValue": 200 },
+                "PATK":   { "attributeId": 8, "attributeSlug": "PATK",   "attributeName": "P.Atk",  "attributeValue": 35  },
+                "PDEF":   { "attributeId": 9, "attributeSlug": "PDEF",   "attributeName": "P.Def",  "attributeValue": 20  }
+            }
+        },
+        {
+            "mobID": 2,
+            "mobUniqueID": "9902",
+            "mobZoneID": 1,
+            "mobName": "Grey Wolf",
+            "mobSlug": "GreyWolf",
+            "mobRace": "Beast",
+            "mobLevel": 12,
+            "mobCurrentHealth": 800,
+            "mobCurrentMana": 0,
+            "bIsDead": false,
+            "bIsAggressive": true,
+            "bIsMoving": true,
+            "bIsGotDamage": false,
+            "bHasBeenHarvested": false,
+            "mobCombatState": 0,
+            "mobTargetId": 0,
+            "mobTargetType": "",
+            "mobPosition": {
+                "positionX": -400.0,
+                "positionY": 350.0,
+                "positionZ": 90.0,
+                "rotationZ": 45.0
+            },
+            "mobVelocity": { "dirX": 1.0, "dirY": 0.0, "speed": 120.0 },
+            "mobAttributes": {
+                "MAX_HP": { "attributeId": 6, "attributeSlug": "MAX_HP", "attributeName": "Max HP", "attributeValue": 800 },
+                "PATK":   { "attributeId": 8, "attributeSlug": "PATK",   "attributeName": "P.Atk",  "attributeValue": 95  },
+                "PDEF":   { "attributeId": 9, "attributeSlug": "PDEF",   "attributeName": "P.Def",  "attributeValue": 60  }
+            }
+        },
+        {
+            "mobID": 3,
+            "mobUniqueID": "9903",
+            "mobZoneID": 1,
+            "mobName": "Skeleton Archer",
+            "mobSlug": "skeleton_archer",
+            "mobRace": "Undead",
+            "mobLevel": 8,
+            "mobCurrentHealth": 350,
+            "mobCurrentMana": 100,
+            "bIsDead": false,
+            "bIsAggressive": false,
+            "bIsMoving": false,
+            "bIsGotDamage": false,
+            "bHasBeenHarvested": false,
+            "mobCombatState": 0,
+            "mobTargetId": 0,
+            "mobTargetType": "",
+            "mobPosition": {
+                "positionX": 600.0,
+                "positionY": -300.0,
+                "positionZ": 90.0,
+                "rotationZ": 270.0
+            },
+            "mobVelocity": { "dirX": 0.0, "dirY": 0.0, "speed": 0.0 },
+            "mobAttributes": {
+                "MAX_HP": { "attributeId": 6, "attributeSlug": "MAX_HP", "attributeName": "Max HP", "attributeValue": 350 },
+                "PATK":   { "attributeId": 8, "attributeSlug": "PATK",   "attributeName": "P.Atk",  "attributeValue": 70  },
+                "PDEF":   { "attributeId": 9, "attributeSlug": "PDEF",   "attributeName": "P.Def",  "attributeValue": 30  }
+            }
+        }
+    ]
+}

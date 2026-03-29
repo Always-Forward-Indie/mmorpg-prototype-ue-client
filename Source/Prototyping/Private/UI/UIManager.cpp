@@ -1,4 +1,5 @@
 #include "UI/UIManager.h"
+#include "UI/UIManager.h"
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
 #include "UI/HarvestLootWidget.h"
@@ -14,6 +15,18 @@
 #include "Gameplay/UI/FloatingCombatTextManager.h"
 #include "Blueprint/UserWidget.h"
 #include "Engine/Engine.h"
+
+// Forward declaration includes for new manager types
+class UDialogueManager;
+class UQuestManager;
+class UEquipmentManager;
+class UVendorManager;
+class URepairManager;
+class UTradeManager;
+class UPlayerStatsManager;
+class UBestiaryNetworkHandler;
+#include "Camera/CameraShakeBase.h"
+#include "Camera/PlayerCameraManager.h"
 #include "Engine/World.h"
 #include "MyGameInstance.h"
 
@@ -671,4 +684,147 @@ bool UUIManager::ShouldShowCursor() const
 		bAnyWidgetVisible ? TEXT("YES") : TEXT("NO"));
 	
 	return bAnyWidgetVisible;
+}
+
+void UUIManager::PlayCombatCameraShake(float Intensity)
+{
+	if (!GetWorld()) return;
+	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+	{
+		if (PC->PlayerCameraManager)
+		{
+			PC->PlayerCameraManager->StartCameraShake(
+				TSubclassOf<UCameraShakeBase>(),
+				Intensity);
+		}
+	}
+}
+
+void UUIManager::ShowMobTargetFrame(const FString& MobSlug, const FString& MobName, int32 MobLevel, int32 CurrentHP, int32 MaxHP, bool bIsAggro, UTexture2D* MobIcon)
+{
+	// Forward to PlayerInterfaceWidget if available
+	if (PlayerInterfaceWidget)
+	{
+		// TODO: implement UI forwarding when MobTargetFrameWidget is connected
+		UE_LOG(LogTemp, Verbose, TEXT("UIManager::ShowMobTargetFrame: %s Lv%d HP=%d/%d Aggro=%s"),
+			*MobName, MobLevel, CurrentHP, MaxHP, bIsAggro ? TEXT("true") : TEXT("false"));
+	}
+}
+
+void UUIManager::HideMobTargetFrame()
+{
+	// TODO: implement UI forwarding when MobTargetFrameWidget is connected
+	UE_LOG(LogTemp, Verbose, TEXT("UIManager::HideMobTargetFrame"));
+}
+
+void UUIManager::ToggleGameMenu()
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleGameMenu"));
+	// TODO: implement game menu toggle when widget is connected
+}
+
+void UUIManager::InitializeDialogueAndQuestWidgets(UDialogueManager* InDialogueManager, UQuestManager* InQuestManager)
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeDialogueAndQuestWidgets"));
+	// TODO: connect dialogue and quest widgets
+}
+
+void UUIManager::InitializeItemSystemWidgets(UEquipmentManager* InEquipmentManager, UVendorManager* InVendorManager, URepairManager* InRepairManager, UTradeManager* InTradeManager)
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeItemSystemWidgets"));
+	// TODO: connect equipment, vendor, repair, trade widgets
+}
+
+void UUIManager::InitializeStatsWidget(UPlayerStatsManager* InStatsManager)
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeStatsWidget"));
+	// TODO: connect stats widget
+}
+
+void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiaryHandler)
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeNotificationSystem"));
+	// TODO: connect notification system
+}
+
+void UUIManager::CreateExperienceWidget()
+{
+	// Experience widget is now managed by PlayerInterfaceWidget
+	// This method is kept for compatibility but delegates to PlayerInterfaceWidget
+	UE_LOG(LogTemp, Log, TEXT("UIManager::CreateExperienceWidget - handled by PlayerInterfaceWidget"));
+}
+
+void UUIManager::OnMenuBarBestiaryClicked()
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::OnMenuBarBestiaryClicked"));
+	// TODO: implement bestiary panel toggle when widget is connected
+}
+
+void UUIManager::HandleGameMenuResumeClicked()
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::HandleGameMenuResumeClicked"));
+	// TODO: implement game menu resume when widget is connected
+}
+
+void UUIManager::ToggleEquipment()
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleEquipment"));
+	// TODO: implement equipment panel toggle when widget is connected
+}
+
+void UUIManager::ToggleAltCursor()
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleAltCursor"));
+	// TODO: implement alt cursor toggle
+}
+
+void UUIManager::TogglePlayerStats()
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::TogglePlayerStats"));
+	// TODO: implement player stats panel toggle when widget is connected
+}
+
+void UUIManager::ToggleBestiary()
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleBestiary"));
+	// TODO: implement bestiary panel toggle when widget is connected
+}
+
+void UUIManager::ToggleQuestJournal()
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleQuestJournal"));
+	// TODO: implement quest journal toggle when widget is connected
+}
+
+void UUIManager::ShowDeathScreen(int32 RespawnTimeSec)
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::ShowDeathScreen RespawnTime=%d"), RespawnTimeSec);
+	// TODO: implement death screen when widget is connected
+}
+
+void UUIManager::HideDeathScreen()
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::HideDeathScreen"));
+	// TODO: implement death screen hide when widget is connected
+}
+
+void UUIManager::UpdateMobTargetFrameHP(int32 CurrentHP, int32 MaxHP)
+{
+	// Forward to PlayerInterfaceWidget if available
+	if (PlayerInterfaceWidget)
+	{
+		// TODO: implement HP update when MobTargetFrameWidget is connected
+	}
+}
+
+void UUIManager::ShowHealScreenFlash()
+{
+	UE_LOG(LogTemp, Verbose, TEXT("UIManager::ShowHealScreenFlash"));
+	// TODO: implement heal screen flash when widget is connected
+}
+
+void UUIManager::ShowDamageScreenFlash()
+{
+	UE_LOG(LogTemp, Verbose, TEXT("UIManager::ShowDamageScreenFlash"));
+	// TODO: implement damage screen flash when widget is connected
 }

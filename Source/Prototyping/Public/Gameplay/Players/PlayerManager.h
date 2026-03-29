@@ -59,6 +59,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void SendPlayerAttackRequest(const FClientDataStruct& ClientData, int32 TargetID, const FString& SkillSlug, int32 TargetTypeId);
 
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	void SendRespawnRequest(const FClientDataStruct& ClientData);
+
 private:
 	// Initialize combat network handler
 	void InitializeCombatNetworkHandler();

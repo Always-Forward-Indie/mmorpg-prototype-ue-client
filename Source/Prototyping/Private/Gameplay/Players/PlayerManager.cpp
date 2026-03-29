@@ -561,3 +561,29 @@ void UPlayerManager::SendPlayerAttackRequest(const FClientDataStruct& ClientData
 		UE_LOG(LogTemp, Error, TEXT("NetworkManager is null, cannot send attack request"));
 	}
 }
+
+void UPlayerManager::SendRespawnRequest(const FClientDataStruct& ClientData)
+{
+	TMap<FString, TSharedPtr<FJsonValue>> HeaderData;
+	TMap<FString, TSharedPtr<FJsonValue>> BodyData;
+
+	TSharedPtr<FJsonValueNumber> ClientIDValue = MakeShareable(new FJsonValueNumber(ClientData.clientId));
+	TSharedPtr<FJsonValueString> HashValue = MakeShareable(new FJsonValueString(ClientData.hash));
+
+	HeaderData.Add("clientId", ClientIDValue);
+	HeaderData.Add("hash", HashValue);
+
+	BodyData.Add("characterId", MakeShareable(new FJsonValueNumber(ClientData.characterData.characterId)));
+
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync("respawn", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::ChunkServer);
+
+	if (networkManager != nullptr)
+	{
+		networkManager->SendDataToChunkServer(JsonString);
+		UE_LOG(LogTemp, Warning, TEXT("Respawn request sent: %s"), *JsonString);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("NetworkManager is null, cannot send respawn request"));
+	}
+}

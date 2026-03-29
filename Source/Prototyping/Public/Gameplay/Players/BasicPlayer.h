@@ -16,6 +16,8 @@
 #include "BasicPlayer.generated.h"
 
 class UMyGameInstance;
+class ABasicMOB;
+class ABasicNPC;
 
 // Event declaration
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnZoneUpdated, int32, PlayerID);
@@ -34,6 +36,86 @@ private:
 	FMessageDataStruct messageData;
 
 	UMyGameInstance* MyGameInstance;
+
+	// Camera components
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	class USpringArmComponent* CameraBoom;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	class UCameraComponent* FollowCamera;
+
+	// Zoom
+	float DesiredZoom = 600.0f;
+	float ZoomStep = 30.0f;
+	float ZoomMin = 200.0f;
+	float ZoomMax = 1200.0f;
+	float ZoomInterpSpeed = 8.0f;
+
+	// Mouse button state
+	bool bIsRightMouseDown = false;
+	bool bIsLeftMouseDown = false;
+
+	// Mesh rotation speed (degrees per second for keyboard turning)
+	float MeshRotationSpeed = 180.0f;
+
+	// Remote player animation data
+	float RemoteSpeed = 0.0f;
+	float RemoteDirection = 0.0f;
+
+	// Walk speed tracking for overweight penalty
+	float BaseWalkSpeed = 0.0f;
+	bool bOverweightPenaltyActive = false;
+
+	// Server move_speed -> Unreal units conversion scale
+	float MoveSpeedScale = 1.0f;
+
+	// NPC interaction tracking
+	UPROPERTY()
+	ABasicNPC* TrackedNPC = nullptr;
+
+	// Animation delegate handles
+	FDelegateHandle HitPointDelegateHandle;
+	FDelegateHandle AnimEndDelegateHandle;
+	FTimerHandle HitPointTimerHandle;
+
+	// Event sounds
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (AllowPrivateAccess = "true"))
+	TSoftObjectPtr<USoundBase> LevelUpSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (AllowPrivateAccess = "true"))
+	TSoftObjectPtr<USoundBase> HealReceivedSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (AllowPrivateAccess = "true"))
+	TSoftObjectPtr<USoundBase> ReviveSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (AllowPrivateAccess = "true"))
+	TSoftObjectPtr<USoundBase> DeathSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (AllowPrivateAccess = "true"))
+	TSoftObjectPtr<USoundBase> HitReceivedSound;
+
+	// Nameplate component
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI", meta = (AllowPrivateAccess = "true"))
+	class UPlayerNameplateComponent* NameplateComponent;
+
+	// Equipment visual component
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
+	class UEquipmentVisualComponent* EquipmentVisualComponent;
+
+	// Pickup lock
+	bool bIsPickingUp = false;
+
+	// Auto-attack animation delegate handle
+	FDelegateHandle AutoAttackAnimEndDelegateHandle;
+
+	// Auto-attack swing delay
+	float AutoAttackSwingDelay = 0.5f;
+
+	// Attack range (Unreal units)
+	float AttackRange = 300.0f;
+
+	// Tolerance for server range comparison
+	float AttackRangeServerTolerance = 50.0f;
 	
 	// Zone Name
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Character Data", meta = (AllowPrivateAccess = "true"))
@@ -46,6 +128,19 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Configuration", meta = (AllowPrivateAccess = "true"))
 	//skill name
 	FString CurrentSkillName = "basic_attack";
+
+	// Previous soft-highlighted target
+	UPROPERTY()
+	ABasicMOB* PrevSoftTarget = nullptr;
+
+	// Approach movement state
+	bool bIsApproachingTarget = false;
+	FString PendingSkillSlug;
+	FTimerHandle AutoAttackRetryTimerHandle;
+
+	// Mesh rotation desire
+	float DesiredMeshYaw = 0.f;
+	bool bHasDesiredMeshYaw = false;
 
 
 	// set editable variables
@@ -95,6 +190,8 @@ private:
 	UPlayerHUD* PlayerHUD;
 
 	void AttackActor(AActor* TargetActor, const FString& SkillSlug);
+
+	class UPlayerAnimInstance* GetPlayerAnimInstance() const;
 
 	UFUNCTION()
 	void OnAttackInput();
@@ -425,4 +522,143 @@ public:
 
 	UFUNCTION()
 	void OnSkill5Input();
+
+public:
+	// Target lock system
+	UPROPERTY()
+	ABasicMOB* LockedTarget = nullptr;
+
+	bool bIsAutoAttacking = false;
+	bool bLastKnownTargetAggro = false;
+
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void SetLockedTarget(ABasicMOB* NewTarget);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Combat")
+	ABasicMOB* GetLockedTarget() const { return LockedTarget; }
+
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void ClearLockedTarget();
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Combat")
+	float GetCurrentSkillRange() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void DoAutoAttack();
+
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void FaceLockedTarget();
+
+	// Stop auto-attack but keep target lock
+	void StopAutoAttack();
+
+	// Update approach movement towards locked target
+	void UpdateApproach(float DeltaTime);
+
+	// Get skill range by slug
+	float GetSkillRange(const FString& SkillSlug) const;
+
+	// Try to cast skill with approach if out of range
+	void TryCastSkillWithApproach(const FString& SkillSlug);
+
+	// Get skill slot index for a given slug
+	int32 GetSkillSlotIndexForSlug(const FString& SkillSlug) const;
+
+	// Tab target cycling
+	void OnTabTargetInput();
+
+	// Pickup lock/unlock movement
+	void LockMovementForPickup();
+	void UnlockMovementAfterPickup();
+
+	// Right/Left mouse button handlers
+	void OnRightMousePressed();
+	void OnRightMouseReleased();
+	void OnLeftMousePressed();
+	void OnLeftMouseReleased();
+	void OnScroll(const FInputActionValue& Value);
+	void ApplyMouseCaptureIfNoUIOpen();
+	void RestoreCursorToUIManager();
+	void UpdateMeshRotation(float DeltaTime);
+
+	// Initialise nameplate
+	void InitialiseNameplate(bool bIsLocal);
+
+	// Play event sound from soft ref
+	void PlayEventSound(const TSoftObjectPtr<USoundBase>& SoundRef);
+
+	// Additional input toggles
+	UFUNCTION()
+	void OnQuestJournalToggle();
+	UFUNCTION()
+	void OnEquipmentToggle();
+	UFUNCTION()
+	void OnAltCursorToggle();
+	UFUNCTION()
+	void OnStatsToggle();
+	UFUNCTION()
+	void OnBestiaryToggle();
+	UFUNCTION()
+	void OnGameMenuToggle();
+	UFUNCTION()
+	void OnInteractInput();
+
+	void CheckForNPC();
+
+	// Death screen
+	void ShowDeathScreen();
+	void HideDeathScreen();
+
+	// Called when the player is revived
+	void OnRevive();
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Data")
+	float GetRemoteSpeed() const { return RemoteSpeed; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Data")
+	float GetRemoteDirection() const { return RemoteDirection; }
+
+	UFUNCTION()
+	void OnRespawnClicked();
+
+	// Level-up handler
+	UFUNCTION()
+	void HandleLevelUp(int32 OldLevel, int32 NewLevel, int32 NewTotalExperience);
+
+	// Weight status handler
+	void HandleWeightStatusChanged(const FWeightStatusData& WeightStatus);
+
+	// Additional input actions
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* TabTargetAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* RightMouseAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* LeftMouseAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* ScrollAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* QuestJournalAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* EquipmentAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* AltCursorAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* StatsAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* BestiaryAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* GameMenuAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* InteractAction;
 };

@@ -391,6 +391,12 @@ void UPlayerSkillManager::HandleSkillInitiation(const FString& SkillSlug, int32 
     }
 }
 
+void UPlayerSkillManager::NotifyAnimationEnded()
+{
+    UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Animation ended, cast lock released"));
+    // TODO: release cast lock if one is implemented
+}
+
 double UPlayerSkillManager::GetServerSeconds() const {
     if (TimeSyncService && TimeSyncService->IsTimeSyncValid()) {
         return static_cast<double>(TimeSyncService->GetEstimatedServerTimeMs()) / 1000.0;

@@ -132,4 +132,10 @@ public:
     static TArray<FNPCStruct> DeserializeNPCsList(const TArray<TSharedPtr<FJsonValue>>& JsonArray);
     static FNPCSpawnDataStruct DeserializeNPCSpawnData(const TSharedPtr<FJsonObject>& Body);
     static FNPCSpawnDataStruct DeserializeNPCSpawnData(const FString& JsonString);
+
+    // Effect tick parser (DoT/HoT tick data)
+    static FEffectTickData DeserializeEffectTick(const FString& JsonString);
+
+    // Active effects packet parser
+    static TArray<FActiveEffectEntry> DeserializeActiveEffectsPacket(const FString& JsonString);
 };

@@ -23,6 +23,7 @@ class USkillBarWidget;
 class UAvailableSkillsWidget;
 class UPlayerInterfaceWidget;
 class UDamageCanvasWidget;
+class UNameplateManager;
 
 // Delegate for UI Manager initialization completion
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnUIManagerInitialized);
@@ -73,6 +74,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void ToggleSkillsPanel();
 
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ToggleGameMenu();
+
+	// Initialize dialogue and quest widgets
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void InitializeDialogueAndQuestWidgets(class UDialogueManager* InDialogueManager, class UQuestManager* InQuestManager);
+
+	// Initialize item system widgets (equipment, vendor, repair, trade)
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void InitializeItemSystemWidgets(class UEquipmentManager* InEquipmentManager, class UVendorManager* InVendorManager, class URepairManager* InRepairManager, class UTradeManager* InTradeManager);
+
+	// Initialize stats widget
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void InitializeStatsWidget(class UPlayerStatsManager* InStatsManager);
+
+	// Initialize notification system
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void InitializeNotificationSystem(class UBestiaryNetworkHandler* InBestiaryHandler);
+
 	// Input action handlers
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void HandleInventoryToggle(const FInputActionValue& Value);
@@ -120,6 +140,47 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	bool IsInitialized() const { return bIsInitialized; }
 
+	// Centralized cursor and input mode management
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void UpdateCursorAndInputMode();
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	bool ShouldShowCursor() const;
+
+	// Additional UI toggles
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ToggleEquipment();
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ToggleAltCursor();
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void TogglePlayerStats();
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ToggleBestiary();
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ToggleQuestJournal();
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ShowDeathScreen(int32 RespawnTimeSec);
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void HideDeathScreen();
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void UpdateMobTargetFrameHP(int32 CurrentHP, int32 MaxHP);
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ShowHealScreenFlash();
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ShowDamageScreenFlash();
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UNameplateManager* GetNameplateManager() const { return NameplateManager; }
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI Manager")
 	TSubclassOf<class UDamageTextWidget> DamageTextWidgetClass;
 
@@ -142,10 +203,6 @@ protected:
 
 	UFUNCTION()
 	void OnHarvestLootVisibilityChanged(bool bIsVisible);
-
-	// Centralized cursor and input mode management
-	void UpdateCursorAndInputMode();
-	bool ShouldShowCursor() const;
 
 protected:
 	// Widget class references (set in Blueprint)
@@ -212,6 +269,9 @@ protected:
 	UPROPERTY()
 	UFloatingCombatTextManager* FCTManager;
 
+	UPROPERTY()
+	UNameplateManager* NameplateManager = nullptr;
+
 	// Player controller reference
 	UPROPERTY()
 	APlayerController* PlayerController;
@@ -223,4 +283,23 @@ protected:
 	bool bInventoryVisible;
 	bool bSkillsPanelVisible;
 	bool bHarvestLootVisible;
+
+	UFUNCTION()
+	void OnMenuBarBestiaryClicked();
+
+	UFUNCTION()
+	void HandleGameMenuResumeClicked();
+
+public:
+	/** Trigger a camera shake effect for combat feedback. Intensity in [0..1]. */
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void PlayCombatCameraShake(float Intensity = 1.0f);
+
+	/** Show/update the mob target frame (health bar, name, level, icon). */
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ShowMobTargetFrame(const FString& MobSlug, const FString& MobName, int32 MobLevel, int32 CurrentHP, int32 MaxHP, bool bIsAggro, UTexture2D* MobIcon = nullptr);
+
+	/** Hide the mob target frame. */
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void HideMobTargetFrame();
 };

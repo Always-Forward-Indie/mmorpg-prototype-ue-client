@@ -3,6 +3,7 @@
 
 #include "Gameplay/Mobs/MOBManager.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Players/BasicPlayer.h"
 
 //constructor
 UMOBManager::UMOBManager(const FObjectInitializer& ObjectInitializer)
@@ -359,4 +360,45 @@ bool UMOBManager::MOBExists(UWorld* World, const FName& Tag)
 
 	// If the array is not empty, then actors with the tag exist
 	return FoundActors.Num() > 0;
+}
+
+AActor* UMOBManager::FindMobActor(int32 MobUID) const
+{
+	const TWeakObjectPtr<ABasicMOB>* Found = MobActorRegistry.Find(MobUID);
+	if (Found && Found->IsValid())
+	{
+		return Found->Get();
+	}
+	// Fallback: tag-based search
+	if (!worldContext) return nullptr;
+	const FName UIDTag = FName(*FString::FromInt(MobUID));
+	TArray<AActor*> FoundActors;
+	UGameplayStatics::GetAllActorsWithTag(worldContext, UIDTag, FoundActors);
+	return FoundActors.Num() > 0 ? FoundActors[0] : nullptr;
+}
+
+void UMOBManager::RegisterMob(int32 MobUID, ABasicMOB* MobActor)
+{
+	if (MobUID > 0 && IsValid(MobActor))
+	{
+		MobActorRegistry.Add(MobUID, MobActor);
+	}
+}
+
+void UMOBManager::UnregisterMob(int32 MobUID)
+{
+	MobActorRegistry.Remove(MobUID);
+}
+
+void UMOBManager::RegisterPlayer(int32 PlayerId, ABasicPlayer* PlayerActor)
+{
+	if (PlayerId > 0 && IsValid(PlayerActor))
+	{
+		PlayerRegistry.Add(PlayerId, PlayerActor);
+	}
+}
+
+void UMOBManager::UnregisterPlayer(int32 PlayerId)
+{
+	PlayerRegistry.Remove(PlayerId);
 }

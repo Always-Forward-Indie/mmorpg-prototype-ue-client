@@ -1,7 +1,10 @@
 #pragma once
+#pragma once
 #include "CoreMinimal.h"
 #include "Engine/DataTable.h"
 #include "DataStructs.generated.h"
+
+class UNiagaraSystem;
 
 USTRUCT(BlueprintType)
 struct FPositionDataStruct
@@ -55,6 +58,8 @@ struct FCharacterDataStruct
 	int characterExpForLevelStart = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
 	int characterExpForLevelEnd = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
+    int characterExperienceDebt = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
     int characterCurrentHealth = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
@@ -243,6 +248,41 @@ struct FMOBStruct {
 	// Harvest state
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
 	bool bHasBeenHarvested = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+	int32 mobCombatState = 0;
+
+	// Inline velocity struct used by DevMode JSON loader
+	struct FMobVelocityEntry
+	{
+		float dirX  = 0.f;
+		float dirY  = 0.f;
+		float speed = 0.f;
+	} mobVelocity;
+};
+
+// Mob movement packet entry (server move broadcast)
+USTRUCT(BlueprintType)
+struct FMobMoveEntryStruct
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Move Entry")
+	FPositionDataStruct position;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Move Entry")
+	int32 combatState = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Move Entry")
+	float velocityX = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Move Entry")
+	float velocityY = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Move Entry")
+	float speed = 0.f;
+
+	FMobMoveEntryStruct() {}
 };
 
 // New Combat System Data Structures for the new server format
@@ -558,6 +598,13 @@ struct FMobVisualData
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FName MobName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TSoftObjectPtr<UTexture2D> Icon;
+
+    // Height offset for combat hit effects (socket-based)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float CombatHitHeight = 120.0f;
 };
 
 USTRUCT(BlueprintType)
@@ -601,7 +648,42 @@ struct FMobDefinition : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FMobAudioData Audio;
 
-    // Will be other data
+    // Armor material type used for impact sound lookup (e.g. "leather", "plate")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FName ArmorMaterialType = NAME_None;
+};
+
+// ============================================================
+// Item Use Effect Entry (consumable effect descriptor)
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FItemUseEffectEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Use Effect")
+    FString effectSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Use Effect")
+    FString attributeSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Use Effect")
+    float value = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Use Effect")
+    int32 durationSeconds = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Use Effect")
+    int32 tickMs = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Use Effect")
+    int32 cooldownSeconds = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Use Effect")
+    bool isInstant = false;
+
+    FItemUseEffectEntry() {}
 };
 
 // Inventory item structure that matches server format
@@ -609,6 +691,9 @@ USTRUCT(BlueprintType)
 struct FInventoryItemStruct
 {
 	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 id = 0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	int32 itemId = 0;
@@ -623,19 +708,118 @@ struct FInventoryItemStruct
 	int32 stackSize = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 maxQuantity = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 inventorySlotId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 slotIndex = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 equip_slot_id = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	int32 durability_max = 100;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	int32 durability_current = 100;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 durabilityMax = 100;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 durabilityMin = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 levelRequirement = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    int32 rarityId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    int32 rarity_id = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    int32 characterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    FString rarityName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    FString raritySlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    FString rarity_slug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	FString itemSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	FString itemType = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	FString itemTypeName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    FString itemTypeSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    FString item_type_slug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    int32 item_type_id = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    FString equip_slot_slug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	FString equipSlotSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	FString masterySlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	FString setId = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 set_id = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	FString setSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	FString set_slug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	bool is_durable = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	bool isDurable = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	bool isDurabilityWarning = false;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	bool is_tradable = true;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	bool isTradable = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	bool is_equippable = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	bool isEquippable = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	bool is_equipped = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	bool is_two_handed = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	bool isTwoHanded = false;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	int32 vendor_price_buy = 0;
@@ -644,10 +828,43 @@ struct FInventoryItemStruct
     int32 vendor_price_sell = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 priceBuy = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 priceSell = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
     bool is_container = false;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    bool isContainer = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
     bool is_quest_item = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    bool isQuestItem = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    bool isUsable = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    bool is_usable = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    bool isHarvestItem = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    bool is_harvest = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    bool addedToInventory = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    int32 killCount = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+    TArray<FItemUseEffectEntry> useEffects;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
     FString slug = "";
@@ -672,26 +889,60 @@ struct FInventoryItemStruct
 
 	FInventoryItemStruct()
 	{
+		id = 0;
 		itemId = 0;
 		quantity = 0;
 		name = "";
         slug = "";
+		itemSlug = "";
 		description = "";
 		type = "";
 		rarity = "";
+		rarityId = 0;
+		rarityName = "";
+		raritySlug = "";
+		itemType = "";
+		itemTypeName = "";
+		itemTypeSlug = "";
         level_requirement = 0;
+		levelRequirement = 0;
 		weight = 0.0f;
 		stackSize = 0;
+		maxQuantity = 0;
+		inventorySlotId = 0;
 		durability_max = 100;
 		durability_current = 100;
+		durabilityMax = 100;
+		durabilityMin = 0;
 		vendor_price_buy = 0;
 		vendor_price_sell = 0;
+		priceBuy = 0;
+		priceSell = 0;
+		equip_slot_slug = "";
+		equipSlotSlug = "";
+		masterySlug = "";
+		setId = "";
+		setSlug = "";
+		killCount = 0;
 
         is_durable = false;
+		isDurable = false;
+		isDurabilityWarning = false;
         is_tradable = true;
+		isTradable = true;
         is_equippable = false;
+		isEquippable = false;
+		is_equipped = false;
+		is_two_handed = false;
+		isTwoHanded = false;
 		is_container = false;
+		isContainer = false;
 		is_quest_item = false;
+		isQuestItem = false;
+		is_usable = false;
+		isUsable = false;
+		isHarvestItem = false;
+		addedToInventory = false;
 
 		attributes.Empty();
 	}
@@ -707,11 +958,15 @@ struct FCharacterInventoryStruct
 	int32 characterId = 0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Inventory")
+	int32 gold = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Inventory")
 	TArray<FInventoryItemStruct> items;
 
 	FCharacterInventoryStruct()
 	{
 		characterId = 0;
+		gold = 0;
 		items.Empty();
 	}
 };
@@ -745,7 +1000,8 @@ enum class EDamageType : uint8
     Physical,
     Fire,
     Ice,
-    Poison
+    Poison,
+    Heal
 };
 
 USTRUCT(BlueprintType)
@@ -772,6 +1028,24 @@ struct FMobTargetLostStruct
         mobUID = 0;
         position = FPositionDataStruct();
     }
+};
+
+// Mob health update (sent during RETURNING state for leash regen)
+USTRUCT(BlueprintType)
+struct FMobHealthUpdateStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Health Update")
+    int32 mobId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Health Update")
+    int32 currentHealth = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Health Update")
+    int32 maxHealth = 0;
+
+    FMobHealthUpdateStruct() {}
 };
 
 // Harvest system structures
@@ -1140,6 +1414,9 @@ struct FPlayerProgressionStruct
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Progression")
     int32 pendingLevelGained = 0;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Progression")
+    int32 experienceDebt = 0;
+
     FPlayerProgressionStruct()
     {
         characterId = 0;
@@ -1150,6 +1427,7 @@ struct FPlayerProgressionStruct
         expForCurrentLevel = 0;
         bHasPendingLevelUp = false;
         pendingLevelGained = 0;
+        experienceDebt = 0;
     }
 };
 
@@ -1206,6 +1484,80 @@ struct FExperienceGainEventStruct
     }
 };
 
+// ============================================================
+// Stat Attribute Entry (used by PlayerStatsUpdateStruct)
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FStatAttributeEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stat Attribute")
+    FString slug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stat Attribute")
+    FString name = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stat Attribute")
+    float baseValue = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stat Attribute")
+    float base = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stat Attribute")
+    float totalValue = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stat Attribute")
+    float effective = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stat Attribute")
+    float bonus = 0.0f;
+
+    FStatAttributeEntry() {}
+};
+
+// ============================================================
+// Active Effect Entry (used by PlayerStatsUpdateStruct)
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FActiveEffectEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Active Effect")
+    FString slug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Active Effect")
+    FString effectType = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Active Effect")
+    FString effectTypeSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Active Effect")
+    FString attributeSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Active Effect")
+    float value = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Active Effect")
+    bool bIsPercentage = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Active Effect")
+    bool bIsPermanent = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Active Effect")
+    int64 expiresAt = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Active Effect")
+    FString sourceType = "";
+
+    bool IsPassive() const { return effectTypeSlug.Equals(TEXT("passive"), ESearchCase::IgnoreCase) || bIsPermanent; }
+
+    FActiveEffectEntry() {}
+};
+
 // Player Stats Update Structure - matches server format for stats_update event
 USTRUCT(BlueprintType)
 struct FPlayerStatsUpdateStruct
@@ -1232,6 +1584,31 @@ struct FPlayerStatsUpdateStruct
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
     int32 manaMax = 0;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
+    TArray<FStatAttributeEntry> attributes;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
+    TArray<FActiveEffectEntry> activeEffects;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
+    float weightCurrent = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
+    float weightMax = 0.0f;
+
+    // Experience fields
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
+    int32 experienceCurrent = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
+    int32 experienceLevelStart = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
+    int32 experienceNextLevel = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
+    int32 experienceDebt = 0;
+
     FPlayerStatsUpdateStruct()
     {
         characterId = 0;
@@ -1240,6 +1617,10 @@ struct FPlayerStatsUpdateStruct
         healthMax = 0;
         manaCurrent = 0;
         manaMax = 0;
+        experienceCurrent = 0;
+        experienceLevelStart = 0;
+        experienceNextLevel = 0;
+        experienceDebt = 0;
     }
 };
 
@@ -1366,6 +1747,32 @@ struct FSkillDefinitionData : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
     TSoftObjectPtr<UParticleSystem> projectileEffect;
 
+    // Niagara visual effects (preferred over Cascade)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition|Niagara")
+    TSoftObjectPtr<UNiagaraSystem> castEffectNiagara;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition|Niagara")
+    TSoftObjectPtr<UNiagaraSystem> hitEffectNiagara;
+
+    // Socket names for effect attachment
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition|Sockets")
+    FName CastSocketName = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition|Sockets")
+    FName HitSocketName = NAME_None;
+
+    // Swing sound played during melee attacks before impact
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    TSoftObjectPtr<USoundBase> swingSound;
+
+    // Weapon impact type for impact sound lookup (e.g. "slash", "blunt")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    FName WeaponImpactType = NAME_None;
+
+    // Projectile actor class to spawn when the skill fires
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    TSoftClassPtr<AActor> projectileClass;
+
     FSkillDefinitionData()
     {
         skillSlug = "";
@@ -1478,6 +1885,9 @@ struct PROTOTYPING_API FNPCHealthManaStruct
     FNPCHealthManaStruct() {}
 };
 
+// Forward declaration needed by FNPCStruct::ComputeInteractionState
+enum class ENPCInteractionState : uint8;
+
 USTRUCT(BlueprintType)
 struct PROTOTYPING_API FNPCStruct
 {
@@ -1518,6 +1928,12 @@ struct PROTOTYPING_API FNPCStruct
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
     FNPCHealthManaStruct stats;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
+    int32 radius = 300;
+
+    /** Compute the interaction state based on NPC data fields. */
+    ENPCInteractionState ComputeInteractionState() const;
 
     FNPCStruct() {}
 };
@@ -1604,4 +2020,1419 @@ struct PROTOTYPING_API FNPCDefinition : public FTableRowBase
     FNPCAudioData Audio;
 
     FNPCDefinition() {}
+};
+
+// ============================================================
+// NPC Interaction State
+// ============================================================
+
+UENUM(BlueprintType)
+enum class ENPCInteractionState : uint8
+{
+    None            UMETA(DisplayName = "None"),
+    NotInteractable UMETA(DisplayName = "Not Interactable"),
+    QuestAvailable  UMETA(DisplayName = "Quest Available"),
+    QuestInProgress UMETA(DisplayName = "Quest In Progress"),
+    QuestComplete   UMETA(DisplayName = "Quest Complete"),
+    Dialogue        UMETA(DisplayName = "Dialogue"),
+    DialogueOnly    UMETA(DisplayName = "Dialogue Only"),
+};
+
+// ============================================================
+// Effect Tick Data
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FEffectTickData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect Tick")
+    int32 characterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect Tick")
+    FString effectSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect Tick")
+    FString effectTypeSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect Tick")
+    int32 value = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect Tick")
+    bool bIsHeal = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect Tick")
+    int32 newHealth = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect Tick")
+    int32 newMana = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect Tick")
+    bool targetDied = false;
+
+    FEffectTickData() {}
+};
+
+// ============================================================
+// Equipment Structures
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FEquipmentSlotData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Slot")
+    FString slotSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Slot")
+    int32 inventoryItemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Slot")
+    int32 itemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Slot")
+    FString itemSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Slot")
+    FString itemName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Slot")
+    int32 durability = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Slot")
+    int32 maxDurability = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Slot")
+    int32 durabilityCurrent = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Slot")
+    int32 durabilityMax = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Slot")
+    bool bIsOccupied = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Slot")
+    bool blockedByTwoHanded = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Slot")
+    bool isDurabilityWarning = false;
+
+    FEquipmentSlotData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FEquipmentStateData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment State")
+    int32 characterId = 0;
+
+    // keyed by slotSlug ("main_hand", "head", etc.)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment State")
+    TMap<FString, FEquipmentSlotData> slots;
+
+    FEquipmentStateData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FEquipResultData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equip Result")
+    int32 characterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equip Result")
+    bool bSuccess = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equip Result")
+    FString errorCode = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equip Result")
+    FString slotSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equip Result")
+    FString equipSlotSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equip Result")
+    FString action = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equip Result")
+    int32 inventoryItemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equip Result")
+    int32 swappedOutInventoryItemId = 0;
+
+    FEquipResultData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FWeightStatusData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weight Status")
+    int32 characterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weight Status")
+    float currentWeight = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weight Status")
+    float maxWeight = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weight Status")
+    float weightLimit = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weight Status")
+    float weightCurrent = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weight Status")
+    bool isOverweight = false;
+
+    FWeightStatusData() {}
+};
+
+// ============================================================
+// Chat
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FChatMessageStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chat Message")
+    FString channel = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chat Message")
+    FString senderName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chat Message")
+    int32 senderId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chat Message")
+    FString text = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chat Message")
+    int64 timestamp = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chat Message")
+    bool bIsError = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chat Message")
+    FString errorMessage = "";
+
+    FChatMessageStruct() {}
+};
+
+// ============================================================
+// Trade
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FTradeOfferItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Offer Item")
+    int32 inventoryItemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Offer Item")
+    int32 itemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Offer Item")
+    FString itemName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Offer Item")
+    FString itemSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Offer Item")
+    int32 quantity = 1;
+
+    FTradeOfferItem() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FTradeInviteData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Invite")
+    FString sessionId = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Invite")
+    int32 initiatorId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Invite")
+    FString initiatorName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Invite")
+    FString fromCharacterName = "";
+
+    FTradeInviteData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FTradeStateData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade State")
+    FString sessionId = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade State")
+    int32 myCharacterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade State")
+    int32 partnerCharacterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade State")
+    FString partnerName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade State")
+    TArray<FInventoryItemStruct> myItems;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade State")
+    TArray<FTradeOfferItem> partnerItems;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade State")
+    TArray<FInventoryItemStruct> theirItems;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade State")
+    int32 myGold = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade State")
+    int32 partnerGold = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade State")
+    int32 theirGold = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade State")
+    int32 myGoldBalance = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade State")
+    bool bMyConfirmed = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade State")
+    bool bPartnerConfirmed = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade State")
+    bool myConfirmed = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade State")
+    bool theirConfirmed = false;
+
+    FTradeStateData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FTradeDeclinedData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Declined")
+    FString sessionId = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Declined")
+    int32 decliningCharacterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Declined")
+    FString byCharacterName = "";
+
+    FTradeDeclinedData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FTradeCancelledData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Cancelled")
+    FString sessionId = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Cancelled")
+    FString reason = "";
+
+    FTradeCancelledData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FTradeReceivedItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Received Item")
+    int32 itemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Received Item")
+    FString slug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Received Item")
+    int32 quantity = 0;
+
+    FTradeReceivedItem() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FTradeCompleteData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Complete")
+    FString sessionId = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Complete")
+    bool bSuccess = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Complete")
+    int32 receivedGold = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Complete")
+    int32 newGoldBalance = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade Complete")
+    TArray<FTradeReceivedItem> receivedItems;
+
+    FTradeCompleteData() {}
+};
+
+// ============================================================
+// Vendor / Shop
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FVendorShopItemData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    int32 id = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    int32 itemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    FString itemSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    FString slug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    FString itemName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    FString itemTypeName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    FString rarityName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    int32 itemType = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    int32 rarityId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    FString raritySlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    FString description = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    int32 equipSlot = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    FString equipSlotSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    FString itemTypeSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    TArray<FItemUseEffectEntry> useEffects;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    FString masterySlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    int32 killCount = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    int32 price = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    int32 priceBuy = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    int32 priceSell = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    int32 sellPrice = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    int32 stock = -1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    int32 stockCurrent = -1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    int32 stockMax = -1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    int32 stackMax = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    int32 levelRequirement = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    int32 setId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    FString setSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    float weight = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    int32 durabilityMax = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    bool isEquippable = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    bool isUsable = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    bool isTwoHanded = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    bool isQuestItem = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    bool isContainer = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    bool isHarvest = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    bool isTradable = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    bool isDurable = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    TArray<int32> allowedClassIds;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop Item")
+    TMap<FString, FString> attributes;
+
+    FVendorShopItemData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FVendorCartEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Cart Entry")
+    int32 itemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Cart Entry")
+    int32 inventoryItemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Cart Entry")
+    FString itemSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Cart Entry")
+    FString itemName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Cart Entry")
+    FString slug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Cart Entry")
+    int32 quantity = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Cart Entry")
+    int32 maxQuantity = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Cart Entry")
+    int32 pricePerUnit = 0;
+
+    FVendorCartEntry() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FVendorShopData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop")
+    int32 npcId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop")
+    FString npcName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop")
+    FString npcSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop")
+    int32 goldBalance = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop")
+    TArray<FVendorShopItemData> items;
+
+    FVendorShopData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FBuyItemResultData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Item Result")
+    bool bSuccess = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Item Result")
+    int32 npcId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Item Result")
+    int32 itemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Item Result")
+    int32 quantity = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Item Result")
+    int32 goldSpent = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Item Result")
+    int32 totalPrice = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Item Result")
+    int32 newGoldBalance = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Item Result")
+    FString errorCode = "";
+
+    FBuyItemResultData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FSellItemResultData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Item Result")
+    bool bSuccess = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Item Result")
+    int32 npcId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Item Result")
+    int32 inventoryItemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Item Result")
+    int32 inventorySlotId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Item Result")
+    int32 quantity = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Item Result")
+    int32 goldReceived = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Item Result")
+    int32 newGoldBalance = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Item Result")
+    FString errorCode = "";
+
+    FSellItemResultData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FBuyBatchItemResult
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Batch Item Result")
+    int32 itemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Batch Item Result")
+    int32 quantity = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Batch Item Result")
+    int32 totalPrice = 0;
+
+    FBuyBatchItemResult() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FBuyItemBatchResultData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Batch Result")
+    bool bSuccess = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Batch Result")
+    int32 totalGoldSpent = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Batch Result")
+    int32 newGoldBalance = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Batch Result")
+    TArray<FBuyBatchItemResult> items;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Batch Result")
+    FString errorCode = "";
+
+    FBuyItemBatchResultData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FSellBatchItemResult
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Batch Item Result")
+    int32 inventoryItemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Batch Item Result")
+    int32 itemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Batch Item Result")
+    int32 quantity = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Batch Item Result")
+    int32 goldReceived = 0;
+
+    FSellBatchItemResult() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FSellItemBatchResultData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Batch Result")
+    bool bSuccess = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Batch Result")
+    int32 totalGoldReceived = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Batch Result")
+    TArray<FSellBatchItemResult> items;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Batch Result")
+    FString errorCode = "";
+
+    FSellItemBatchResultData() {}
+};
+
+// ============================================================
+// Repair Shop
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FRepairShopItemData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop Item")
+    int32 inventoryItemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop Item")
+    int32 itemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop Item")
+    FString itemName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop Item")
+    FString slug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop Item")
+    int32 durabilityCurrent = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop Item")
+    int32 durabilityMax = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop Item")
+    int32 repairCost = 0;
+
+    FRepairShopItemData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FRepairedItemEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repaired Item Entry")
+    int32 inventoryItemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repaired Item Entry")
+    int32 itemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repaired Item Entry")
+    int32 durabilityMax = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repaired Item Entry")
+    int32 goldSpent = 0;
+
+    FRepairedItemEntry() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FRepairShopData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop")
+    int32 npcId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop")
+    FString npcName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop")
+    int32 totalRepairCost = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop")
+    int32 repairAllCost = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop")
+    TArray<FRepairShopItemData> items;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop")
+    TArray<FEquipmentSlotData> repairableItems;
+
+    FRepairShopData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FRepairItemResultData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Item Result")
+    bool bSuccess = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Item Result")
+    int32 inventoryItemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Item Result")
+    int32 itemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Item Result")
+    int32 goldSpent = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Item Result")
+    int32 durabilityMax = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Item Result")
+    int32 newGoldBalance = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Item Result")
+    FString errorCode = "";
+
+    FRepairItemResultData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FRepairAllResultData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair All Result")
+    bool bSuccess = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair All Result")
+    int32 totalGoldSpent = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair All Result")
+    int32 goldSpent = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair All Result")
+    int32 newGoldBalance = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair All Result")
+    TArray<FRepairedItemEntry> repairedItems;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair All Result")
+    FString errorCode = "";
+
+    FRepairAllResultData() {}
+};
+
+// ============================================================
+// Quest
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FQuestProgressData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    FString questSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    FString questTitle = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    FString status = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    FString currentStep = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    FString clientStepKey = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    int32 stepIndex = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    int32 totalSteps = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    TArray<FString> completedSteps;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    TMap<FString, int32> objectiveCounts;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    int32 questId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    FString clientQuestKey = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    FString questState = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    FString state = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    FString currentStepKey = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    FString stepType = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    int32 stepCurrentCount = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    int32 stepRequiredCount = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    int32 progressCurrent = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    int32 progressRequired = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    FString progressJson = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    FString requiredJson = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    FString completionMode = "";
+
+    FQuestProgressData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FQuestOfferedData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Offered")
+    int32 questId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Offered")
+    FString clientQuestKey = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Offered")
+    int32 npcId = 0;
+
+    FQuestOfferedData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FQuestTurnedInData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Turned In")
+    int32 questId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Turned In")
+    FString clientQuestKey = "";
+
+    FQuestTurnedInData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FExpReceivedData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Exp Received")
+    int32 amount = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Exp Received")
+    FString source = "";
+
+    FExpReceivedData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FItemReceivedData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Received")
+    int32 itemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Received")
+    FString itemSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Received")
+    FString itemName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Received")
+    int32 quantity = 1;
+
+    FItemReceivedData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FGoldReceivedData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gold Received")
+    int32 amount = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gold Received")
+    FString source = "";
+
+    FGoldReceivedData() {}
+};
+
+// ============================================================
+// Dialogue
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FDialogueChoice
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Choice")
+    int32 edgeId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Choice")
+    FString clientChoiceKey = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Choice")
+    FString displayText = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Choice")
+    bool conditionMet = true;
+
+    FDialogueChoice() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FDialogueNodeData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Node")
+    FString sessionId = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Node")
+    int32 npcId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Node")
+    int32 nodeId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Node")
+    int32 speakerNpcId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Node")
+    FString clientNodeKey = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Node")
+    FString type = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Node")
+    FString npcText = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Node")
+    TArray<FDialogueChoice> choices;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Node")
+    bool bIsEndNode = false;
+
+    FDialogueNodeData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FDialogueErrorData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Error")
+    FString sessionId = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Error")
+    FString errorCode = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Error")
+    FString message = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Error")
+    FString factionSlug = "";
+
+    FDialogueErrorData() {}
+};
+
+// ============================================================
+// World Notifications
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FWorldNotificationStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Notification")
+    FString notificationType = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Notification")
+    FString notificationId = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Notification")
+    FString channel = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Notification")
+    FString priority = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Notification")
+    FString text = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Notification")
+    int32 characterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Notification")
+    FString mobSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Notification")
+    int32 unlockedTier = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Notification")
+    FString categorySlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Notification")
+    FString zoneSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Notification")
+    FString extraData = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Notification")
+    TMap<FString, FString> dataFields;
+
+    FWorldNotificationStruct() {}
+};
+
+// ============================================================
+// Bestiary
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FBestiaryLootEntryStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Loot")
+    FString itemSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Loot")
+    float chance = 0.0f;
+
+    FBestiaryLootEntryStruct() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FBestiaryTierStruct
+{
+    GENERATED_BODY()
+
+    // Matches server field "tier"
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    int32 tier = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    FString categorySlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    bool unlocked = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    int32 requiredKills = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    int32 requiredKillsLeft = 0;
+
+    // basic_info fields
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    int32 level = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    FString rank = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    int32 hpMin = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    int32 hpMax = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    FString mobType = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    FString biomeSlug = "";
+
+    // lore fields
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    FString loreKey = "";
+
+    // combat_info fields
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    TArray<FString> weaknesses;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    TArray<FString> resistances;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    TArray<FString> abilities;
+
+    // loot_table / drop_rates fields
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    TArray<FString> lootItems;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    TArray<FBestiaryLootEntryStruct> loot;
+
+    // hunter_mastery fields
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    FString titleSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Tier")
+    FString achievementSlug = "";
+
+    FBestiaryTierStruct() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FBestiaryEntryStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Entry")
+    FString mobSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Entry")
+    int32 killCount = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Entry")
+    TArray<FBestiaryTierStruct> tiers;
+
+    FBestiaryEntryStruct() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FBestiaryOverviewEntryStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Overview Entry")
+    FString mobSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Overview Entry")
+    int32 killCount = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Overview Entry")
+    int32 highestUnlockedTier = 0;
+
+    FBestiaryOverviewEntryStruct() {}
+};
+
+// ============================================================
+// Localization DataTable Row Structs
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FQuestDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Definition")
+    FText displayName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Definition")
+    FText description;
+
+    FQuestDefinition() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FQuestStepDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Step Definition")
+    FText description;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Step Definition")
+    FText hint;
+
+    FQuestStepDefinition() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FDialogueNodeDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Node Definition")
+    FText nodeText;
+
+    FDialogueNodeDefinition() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FDialogueChoiceDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Choice Definition")
+    FText choiceText;
+
+    FDialogueChoiceDefinition() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FItemLocaleDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Locale")
+    FText displayName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Locale")
+    FText description;
+
+    FItemLocaleDefinition() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FMobLocaleDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Locale")
+    FText displayName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Locale")
+    FText description;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Locale")
+    FText loreText;
+
+    FMobLocaleDefinition() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FNPCLocaleDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Locale")
+    FText displayName;
+
+    FNPCLocaleDefinition() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FBestiaryCategoryDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Category")
+    FText categoryTitle;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary Category")
+    FText lockedHint;
+
+    FBestiaryCategoryDefinition() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FZoneLocaleDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zone Locale")
+    FText displayName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zone Locale")
+    FText description;
+
+    FZoneLocaleDefinition() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FNotificationLocaleDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Notification Locale")
+    FText textTemplate;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Notification Locale")
+    FText title;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Notification Locale")
+    FString iconPath = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Notification Locale")
+    FString soundPath = "";
+
+    // Icon soft reference for optional icon display
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Notification Locale")
+    TSoftObjectPtr<UTexture2D> Icon;
+
+    FNotificationLocaleDefinition() {}
+};
+
+// ============================================================
+// Impact Sound Data (for weapon impact ? armor material lookup)
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FImpactSoundData : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Impact Sound")
+    TArray<TSoftObjectPtr<USoundBase>> ImpactSounds;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Impact Sound")
+    TSoftObjectPtr<UNiagaraSystem> ImpactVFX;
+
+    FImpactSoundData() {}
 };

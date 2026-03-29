@@ -11,6 +11,8 @@
 #include "Gameplay/Items/InventoryManager.h"
 #include "UI/UIManager.h"
 #include "Services/TimeSyncService.h"
+#include "Audio/AudioManager.h"
+#include "DevMode/DevModeDataProvider.h"
 
 #include <Kismet/GameplayStatics.h>
 #include "Blueprint/UserWidget.h"
@@ -165,6 +167,54 @@ public:
 
 	UPROPERTY()
 	class UNPCNetworkHandler* NPCNetworkHandler;
+
+	// Audio system
+	UPROPERTY()
+	UAudioManager* AudioManager;
+
+	// Player stats manager
+	UPROPERTY()
+	class UPlayerStatsManager* PlayerStatsManager;
+
+	// Player stats network handler
+	UPROPERTY()
+	class UPlayerStatsNetworkHandler* PlayerStatsNetworkHandler;
+
+	// Dialogue manager
+	UPROPERTY()
+	class UDialogueManager* DialogueManager;
+
+	// Quest manager
+	UPROPERTY()
+	class UQuestManager* QuestManager;
+
+	// Equipment manager
+	UPROPERTY()
+	class UEquipmentManager* EquipmentManager;
+
+	// Vendor manager
+	UPROPERTY()
+	class UVendorManager* VendorManager;
+
+	// Repair manager
+	UPROPERTY()
+	class URepairManager* RepairManager;
+
+	// Trade manager
+	UPROPERTY()
+	class UTradeManager* TradeManager;
+
+	// Bestiary network handler
+	UPROPERTY()
+	class UBestiaryNetworkHandler* BestiaryNetworkHandler;
+
+	// Chat manager
+	UPROPERTY()
+	class UChatManager* ChatManager;
+
+	// DevMode configuration (editable in Blueprint defaults)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DevMode")
+	FDevModeConfig DevModeConfig;
 
 	TMap<int32, FClientDataStruct> ConnectedPlayers;
 
@@ -386,6 +436,26 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Player Skills")
 	UDataTable* SkillDefinitionsDataTable;
 
+	// Footstep sounds data table (row struct = FFootstepSoundData)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Audio")
+	UDataTable* FootstepSoundsTable;
+
+	// Impact sounds data table (row struct = FImpactSoundData)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Audio")
+	UDataTable* ImpactSoundsTable;
+
+	/** Returns the FootstepSoundsTable for use by anim notifies. */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Audio")
+	UDataTable* GetFootstepSoundsTable() const { return FootstepSoundsTable; }
+
+	/** Returns the ImpactSoundsTable for weapon impact sound lookup. */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Audio")
+	UDataTable* GetImpactSoundsTable() const { return ImpactSoundsTable; }
+
+	/** Returns the ItemVisualsDataTable for item visual data lookup. */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Items")
+	UDataTable* GetItemVisualsDataTable() const { return ItemVisualsDataTable; }
+
 	// add a reference to the camera actor blueprint
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Player")
 	TSubclassOf<class AMyCameraActor> LoginCameraClass;
@@ -467,6 +537,46 @@ public:
 
 		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
 		UNPCNetworkHandler* GetNPCNetworkHandler() const { return NPCNetworkHandler; }
+
+		// Audio manager getter
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
+		UAudioManager* GetAudioManager() const { return AudioManager; }
+
+		// Player stats manager getter (returns nullptr if not initialized)
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
+		class UPlayerStatsManager* GetPlayerStatsManager() const;
+
+		// Dialogue manager
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
+		class UDialogueManager* GetDialogueManager() const;
+
+		// Quest manager
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
+		class UQuestManager* GetQuestManager() const;
+
+		// Equipment manager
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
+		class UEquipmentManager* GetEquipmentManager() const;
+
+		// Vendor manager
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
+		class UVendorManager* GetVendorManager() const;
+
+		// Repair manager
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
+		class URepairManager* GetRepairManager() const;
+
+		// Trade manager
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
+		class UTradeManager* GetTradeManager() const;
+
+		// Bestiary network handler
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
+		class UBestiaryNetworkHandler* GetBestiaryNetworkHandler() const;
+
+		// Chat manager
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
+		class UChatManager* GetChatManager() const;
 
 		// Data tables and configuration
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game Instance Data")

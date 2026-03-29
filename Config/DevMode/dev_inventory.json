@@ -1,0 +1,69 @@
+{
+    "items": [
+        {
+            "itemId": 101,
+            "itemSlug": "iron_sword",
+            "itemName": "Iron Sword",
+            "itemType": "Weapon",
+            "itemSubType": "Sword",
+            "itemCount": 1,
+            "itemWeight": 5.0,
+            "itemPrice": 500,
+            "itemLevel": 1,
+            "bIsEquipped": false,
+            "slotId": 0
+        },
+        {
+            "itemId": 102,
+            "itemSlug": "leather_armor",
+            "itemName": "Leather Armor",
+            "itemType": "Armor",
+            "itemSubType": "Chest",
+            "itemCount": 1,
+            "itemWeight": 8.0,
+            "itemPrice": 350,
+            "itemLevel": 1,
+            "bIsEquipped": false,
+            "slotId": 0
+        },
+        {
+            "itemId": 201,
+            "itemSlug": "health_potion",
+            "itemName": "Health Potion",
+            "itemType": "Consumable",
+            "itemSubType": "Potion",
+            "itemCount": 10,
+            "itemWeight": 0.5,
+            "itemPrice": 50,
+            "itemLevel": 1,
+            "bIsEquipped": false,
+            "slotId": 0
+        },
+        {
+            "itemId": 202,
+            "itemSlug": "mana_potion",
+            "itemName": "Mana Potion",
+            "itemType": "Consumable",
+            "itemSubType": "Potion",
+            "itemCount": 5,
+            "itemWeight": 0.5,
+            "itemPrice": 75,
+            "itemLevel": 1,
+            "bIsEquipped": false,
+            "slotId": 0
+        },
+        {
+            "itemId": 301,
+            "itemSlug": "gold_coin",
+            "itemName": "Gold Coin",
+            "itemType": "Currency",
+            "itemSubType": "Coin",
+            "itemCount": 1250,
+            "itemWeight": 0.01,
+            "itemPrice": 1,
+            "itemLevel": 0,
+            "bIsEquipped": false,
+            "slotId": 0
+        }
+    ]
+}

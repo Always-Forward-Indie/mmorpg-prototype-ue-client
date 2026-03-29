@@ -112,4 +112,8 @@ private:
 private:
     // Helper function to create a unique key for combatable registration
     FString CreateCombatableKey(int32 ActorId, ECasterType ActorType) const;
+
+public:
+    /** Called by the hit-point anim notify delegate when the animation reaches the impact frame. */
+    void NotifyHitPoint(int32 CasterId);
 };

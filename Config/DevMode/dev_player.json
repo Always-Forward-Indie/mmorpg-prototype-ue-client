@@ -1,0 +1,100 @@
+{
+    "clientId": 9001,
+    "clientLogin": "dev_player",
+    "hash": "devmode_hash",
+    "characterData": {
+        "characterId": 9001,
+        "characterName": "DevHero",
+        "characterClass": "Warrior",
+        "characterRace": "Human",
+        "characterLevel": 10,
+        "characterCurrentHealth": 1000,
+        "characterCurrentMana": 500,
+        "characterExperiencePoints": 45000,
+        "characterExpForLevelStart": 40000,
+        "characterExpForLevelEnd": 55000,
+        "characterExperienceDebt": 0,
+        "bIsDead": false,
+        "bIsMoving": false,
+        "characterPosition": {
+            "positionX": 0.0,
+            "positionY": 0.0,
+            "positionZ": 90.0,
+            "rotationZ": 0.0
+        },
+      "characterAttributes": {
+        "STR": {
+          "attributeId": 1,
+          "attributeSlug": "STR",
+          "attributeName": "Strength",
+          "attributeValue": 42
+        },
+        "DEX": {
+          "attributeId": 2,
+          "attributeSlug": "DEX",
+          "attributeName": "Dexterity",
+          "attributeValue": 30
+        },
+        "CON": {
+          "attributeId": 3,
+          "attributeSlug": "CON",
+          "attributeName": "Constitution",
+          "attributeValue": 35
+        },
+        "INT": {
+          "attributeId": 4,
+          "attributeSlug": "INT",
+          "attributeName": "Intelligence",
+          "attributeValue": 20
+        },
+        "WIS": {
+          "attributeId": 5,
+          "attributeSlug": "WIS",
+          "attributeName": "Wisdom",
+          "attributeValue": 18
+        },
+        "MAX_HP": {
+          "attributeId": 6,
+          "attributeSlug": "MAX_HP",
+          "attributeName": "Max HP",
+          "attributeValue": 1000
+        },
+        "MAX_MP": {
+          "attributeId": 7,
+          "attributeSlug": "MAX_MP",
+          "attributeName": "Max MP",
+          "attributeValue": 500
+        },
+        "PATK": {
+          "attributeId": 8,
+          "attributeSlug": "PATK",
+          "attributeName": "P.Atk",
+          "attributeValue": 185
+        },
+        "PDEF": {
+          "attributeId": 9,
+          "attributeSlug": "PDEF",
+          "attributeName": "P.Def",
+          "attributeValue": 120
+        },
+        "MATK": {
+          "attributeId": 10,
+          "attributeSlug": "MATK",
+          "attributeName": "M.Atk",
+          "attributeValue": 60
+        },
+        "MDEF": {
+          "attributeId": 11,
+          "attributeSlug": "MDEF",
+          "attributeName": "M.Def",
+          "attributeValue": 80
+        },
+        "move_speed": {
+          "attributeId": 12,
+          "attributeSlug": "move_speed",
+          "attributeName": "Speed",
+          "attributeValue": 100
+        }
+      }
+    }
+}

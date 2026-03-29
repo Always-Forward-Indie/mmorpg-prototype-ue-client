@@ -105,4 +105,12 @@ public:
     /** Update HUD with current player stats */
     UFUNCTION(BlueprintCallable, Category = "Player Interface")
     void UpdatePlayerStats(float CurrentHP, float MaxHP, float CurrentMana, float MaxMana);
+
+    /** Returns the active effects widget, if available (may be nullptr). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Interface")
+    class UActiveEffectsWidget* GetActiveEffectsWidget() const { return ActiveEffectsWidget; }
+
+private:
+    UPROPERTY()
+    class UActiveEffectsWidget* ActiveEffectsWidget = nullptr;
 };

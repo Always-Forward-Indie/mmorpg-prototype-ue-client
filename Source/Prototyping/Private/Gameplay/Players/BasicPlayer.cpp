@@ -4,6 +4,7 @@
 #include "Gameplay/Players/BasicPlayer.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Players/PlayerManager.h"
 #include "UI/UIManager.h"
 #include "UI/SkillBarWidget.h"
 #include "Gameplay/Items/InventoryManager.h"
@@ -13,62 +14,565 @@
 #include "Gameplay/Combat/SkillSystemManager.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
+#include "Gameplay/UI/DamageTextWidget.h"
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Gameplay/NPCs/BasicNPC.h"
+#include "Gameplay/Dialogue/DialogueManager.h"
+#include "Gameplay/Quest/QuestManager.h"
+#include "Gameplay/Equipment/EquipmentManager.h"
+#include "Gameplay/Equipment/EquipmentVisualComponent.h"
+#include "Gameplay/Vendor/VendorManager.h"
+#include "Gameplay/Repair/RepairManager.h"
+#include "Gameplay/Trade/TradeManager.h"
+#include "Gameplay/Player/PlayerStatsManager.h"
+#include "Gameplay/Bestiary/BestiaryNetworkHandler.h"
 #include "Utils/PlayerAttributeParser.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/SpringArmComponent.h"
+#include "Camera/CameraComponent.h"
+#include "Gameplay/UI/ActiveEffectsWidget.h"
+#include "Gameplay/UI/PlayerInterfaceWidget.h"
+#include "Gameplay/Players/PlayerAnimInstance.h"
+#include "Gameplay/UI/PlayerNameplateComponent.h"
+#include "Gameplay/Skills/SkillDefinitionRepository.h"
+#include "Kismet/GameplayStatics.h"
+#include "Engine/World.h"
+#include "Particles/ParticleSystem.h"
+#include "NiagaraSystem.h"
+#include "NiagaraFunctionLibrary.h"
+
+// Convert ESkillSchool to EDamageType for FloatingCombatTextManager
+static EDamageType SchoolToDamageType(ESkillSchool School)
+{
+    switch (School)
+    {
+    case ESkillSchool::Fire:    return EDamageType::Fire;
+    case ESkillSchool::Ice:     return EDamageType::Ice;
+    default:                    return EDamageType::Physical;
+    }
+}
 
 // Implementation of missing input methods
 void ABasicPlayer::OnAttackInput()
 {
-    UE_LOG(LogTemp, Warning, TEXT("Attack input pressed"));
-    
-    // Look for nearby MOBs to attack
-    TArray<AActor*> FoundActors;
-    UGameplayStatics::GetAllActorsOfClass(GetWorld(), ABasicMOB::StaticClass(), FoundActors);
-    
-    ABasicMOB* ClosestMob = nullptr;
-    float ClosestDistance = 500.0f; // Attack range
-    
-    for (AActor* Actor : FoundActors)
+    if (playerData.characterData.bIsDead) return;
+
+    // If we already have a locked target and auto-attack is running, toggle it off
+    if (LockedTarget && bIsAutoAttacking)
     {
-        ABasicMOB* Mob = Cast<ABasicMOB>(Actor);
-        if (Mob && !Mob->GetMOBIsDead())
+        ClearLockedTarget();
+        UE_LOG(LogTemp, Warning, TEXT("Auto-attack cancelled"));
+        return;
+    }
+
+    // If we have a soft-highlight target from CheckForMOB, lock it and start attacking
+    // (CheckForMOB stores result in a temporary Ч we search again here to find it)
+    ABasicMOB* BestTarget = LockedTarget; // re-use existing lock if present
+
+    if (!BestTarget)
+    {
+        // Search within twice the current skill range so approaching still makes sense
+        const float SearchRadius = GetCurrentSkillRange() * 2.0f;
+        FVector Start = GetActorLocation();
+        FVector End   = Start + GetActorForwardVector() * SearchRadius;
+
+        FCollisionQueryParams Params;
+        Params.AddIgnoredActor(this);
+
+        TArray<FHitResult> HitResults;
+        GetWorld()->SweepMultiByChannel(HitResults, Start, End, FQuat::Identity,
+            ECC_Pawn, FCollisionShape::MakeCapsule(80.0f, 100.0f), Params);
+
+        float ClosestDist = FLT_MAX;
+        for (const FHitResult& Hit : HitResults)
         {
-            float Distance = FVector::Dist(GetActorLocation(), Mob->GetActorLocation());
-            if (Distance < ClosestDistance)
+            ABasicMOB* Mob = Cast<ABasicMOB>(Hit.GetActor());
+            if (Mob && !Mob->GetMOBIsDead())
             {
-                ClosestDistance = Distance;
-                ClosestMob = Mob;
+                float Dist = FVector::Dist(GetActorLocation(), Mob->GetActorLocation());
+                if (Dist < ClosestDist)
+                {
+                    ClosestDist = Dist;
+                    BestTarget  = Mob;
+                }
             }
         }
     }
-    
-    if (ClosestMob)
+
+    if (BestTarget)
     {
-        //convert mob uid to int
-		int32 MobId = FCString::Atoi(*ClosestMob->GetMOBUId());
-
-
-        // Attack the closest mob with a basic attack skill
-        AttackTarget(MobId, CurrentSkillName, 3);
+        SetLockedTarget(BestTarget);
+        bIsAutoAttacking = true;
+        DoAutoAttack();
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("No MOBs in range to attack"));
+        UE_LOG(LogTemp, Warning, TEXT("No MOB in range to attack"));
     }
+}
+
+void ABasicPlayer::SetLockedTarget(ABasicMOB* NewTarget)
+{
+    if (LockedTarget == NewTarget) return;
+
+    // Hide head info of the old locked target before switching
+    if (LockedTarget && LockedTarget->MobHeadInfo)
+    {
+        LockedTarget->MobHeadInfo->ShowWidget(false);
+    }
+
+    LockedTarget = NewTarget;
+
+    if (LockedTarget)
+        {
+            const int32 MobId = FCString::Atoi(*LockedTarget->GetMOBUId());
+            if (UIManager)
+            {
+                UIManager->SetSkillTarget(MobId, ECasterType::Mob);
+
+                // bIsAggro: prefer the runtime flag (set by server aggro packet);
+                // fall back to the definition table's IsAggressive flag so the
+                // target frame shows the correct color even before the first aggro packet.
+                bool bIsAggro = LockedTarget->GetMOBIsAggressive();
+
+                UIManager->ShowMobTargetFrame(
+                    LockedTarget->GetMOBData().mobSlug,
+                    LockedTarget->GetMobName(),
+                    LockedTarget->GetMOBLevel(),
+                    LockedTarget->GetMOBCurrentHealth(),
+                    LockedTarget->GetMOBAttributes().attributesData.Contains(TEXT("max_health"))
+                        ? LockedTarget->GetMOBAttributes().attributesData[TEXT("max_health")].attributeValue
+                        : 100,
+                    bIsAggro,
+                    LockedTarget->CachedIcon);
+                bLastKnownTargetAggro = bIsAggro;
+            }
+
+        // Keep the head info widget always visible for the locked target
+        if (LockedTarget->MobHeadInfo)
+        {
+            LockedTarget->MobHeadInfo->ShowWidget(true);
+        }
+
+        FaceLockedTarget();
+        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Locked target -> MOB %d (%s)"),
+            MobId, *LockedTarget->GetMobName());
+    }
+}
+
+void ABasicPlayer::ClearLockedTarget()
+{
+    if (LockedTarget)
+    {
+        // Stop keeping the head info widget forced visible
+        if (LockedTarget->MobHeadInfo)
+        {
+            LockedTarget->MobHeadInfo->ShowWidget(false);
+        }
+        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Cleared locked target"));
+    }
+
+    LockedTarget = nullptr;
+    PrevSoftTarget = nullptr;
+    bIsAutoAttacking = false;
+    bIsApproachingTarget = false;
+    PendingSkillSlug.Empty();
+
+    GetWorld()->GetTimerManager().ClearTimer(AutoAttackRetryTimerHandle);
+
+    if (UIManager)
+    {
+        UIManager->SetSkillTarget(0, ECasterType::None);
+        UIManager->HideMobTargetFrame();
+    }
+}
+
+void ABasicPlayer::StopAutoAttack()
+{
+    // Interrupt the attack cycle and any approach movement but keep LockedTarget
+    // so the player can resume attacking after repositioning.
+    bIsAutoAttacking = false;
+    bIsApproachingTarget = false;
+    PendingSkillSlug.Empty();
+
+    GetWorld()->GetTimerManager().ClearTimer(AutoAttackRetryTimerHandle);
+
+    UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Auto-attack stopped (target lock retained)"));
+}
+
+void ABasicPlayer::FaceLockedTarget()
+{
+    if (!LockedTarget) return;
+
+    FVector ToTarget = LockedTarget->GetActorLocation() - GetActorLocation();
+    ToTarget.Z = 0.f;
+    if (ToTarget.IsNearlyZero()) return;
+
+    DesiredMeshYaw    = ToTarget.Rotation().Yaw;
+    bHasDesiredMeshYaw = true;
+}
+
+void ABasicPlayer::UpdateApproach(float DeltaTime)
+{
+    if (!bIsApproachingTarget) return;
+
+    if (!IsValid(LockedTarget) || LockedTarget->GetMOBIsDead())
+    {
+        bIsApproachingTarget = false;
+        PendingSkillSlug.Empty();
+        ClearLockedTarget();
+        return;
+    }
+
+    // Move toward the target every frame using CharacterMovementComponent
+    FVector ToTarget = LockedTarget->GetActorLocation() - GetActorLocation();
+    ToTarget.Z = 0.f;
+    const float Dist = ToTarget.Size();
+    const FVector Direction = ToTarget.GetSafeNormal();
+
+    AddMovementInput(Direction, 1.0f);
+    DesiredMeshYaw = Direction.Rotation().Yaw;
+    bHasDesiredMeshYaw = true;
+
+    // Check if we have arrived
+    const bool bIsPendingSkill = !PendingSkillSlug.IsEmpty();
+    const float EffectiveRange = bIsPendingSkill ? GetSkillRange(PendingSkillSlug) : GetCurrentSkillRange();
+
+    if (Dist <= EffectiveRange)
+    {
+        bIsApproachingTarget = false;
+
+        if (bIsPendingSkill)
+        {
+            UE_LOG(LogTemp, Log, TEXT("BasicPlayer: UpdateApproach - reached range (%.0f <= %.0f), casting %s"),
+                Dist, EffectiveRange, *PendingSkillSlug);
+
+            FaceLockedTarget();
+            const FString SkillToCast = PendingSkillSlug;
+            PendingSkillSlug.Empty();
+
+            if (SkillToCast == CurrentSkillName)
+            {
+                // Auto-attack skill: start the repeating loop
+                bIsAutoAttacking = true;
+                DoAutoAttack();
+            }
+            else
+            {
+                // Targeted skill: single cast
+                const int32 SlotIndex = GetSkillSlotIndexForSlug(SkillToCast);
+                if (SlotIndex >= 0 && UIManager && UIManager->GetSkillBarWidget())
+                {
+                    UIManager->GetSkillBarWidget()->CastSkillFromSlot(SlotIndex);
+                }
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Log, TEXT("BasicPlayer: UpdateApproach - reached target (%.0f <= %.0f), attacking"),
+                Dist, EffectiveRange);
+            DoAutoAttack();
+        }
+    }
+}
+
+int32 ABasicPlayer::GetSkillSlotIndexForSlug(const FString& SkillSlug) const
+{
+    if (!MyGameInstance) return -1;
+    UPlayerSkillManager* SkillMgr = MyGameInstance->GetPlayerSkillManager();
+    if (!SkillMgr) return -1;
+
+    TArray<FSkillSlotData> AllSlots = SkillMgr->GetAllSkillSlots();
+    for (const FSkillSlotData& Slot : AllSlots)
+    {
+        if (Slot.bIsAssigned && Slot.skillSlug == SkillSlug)
+        {
+            return Slot.slotIndex;
+        }
+    }
+    return -1;
+}
+
+float ABasicPlayer::GetSkillRange(const FString& SkillSlug) const
+{
+    if (MyGameInstance)
+    {
+        if (UPlayerSkillManager* SkillMgr = MyGameInstance->GetPlayerSkillManager())
+        {
+            if (SkillMgr->HasSkill(SkillSlug))
+            {
+                const float ServerRange = SkillMgr->GetSkillData(SkillSlug).networkData.maxRange;
+                if (ServerRange > 0.0f)
+                {
+                    return ServerRange * 100.0f - AttackRangeServerTolerance;
+                }
+            }
+        }
+    }
+    return AttackRange - AttackRangeServerTolerance;
+}
+
+float ABasicPlayer::GetCurrentSkillRange() const
+{
+    // Try to read maxRange from the server-initialized skill data.
+    // The server stores range in "game units" and compares as: distance > maxRange * 100.0f
+    // so we apply the same multiplier here for an identical range check on the client.
+    if (MyGameInstance)
+    {
+        if (UPlayerSkillManager* SkillMgr = MyGameInstance->GetPlayerSkillManager())
+        {
+            if (SkillMgr->HasSkill(CurrentSkillName))
+            {
+                const float ServerRange = SkillMgr->GetSkillData(CurrentSkillName).networkData.maxRange;
+                if (ServerRange > 0.0f)
+                {
+                    return ServerRange * 100.0f - AttackRangeServerTolerance;
+                }
+            }
+        }
+    }
+
+    // Fallback: use the Blueprint-editable AttackRange with tolerance applied.
+    return AttackRange - AttackRangeServerTolerance;
+}
+
+void ABasicPlayer::TryCastSkillWithApproach(const FString& SkillSlug)
+{
+    if (playerData.characterData.bIsDead) return;
+
+    // Need a locked target to approach/cast
+    if (!LockedTarget)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: TryCastSkillWithApproach - no locked target"));
+        return;
+    }
+
+    if (LockedTarget->GetMOBIsDead())
+    {
+        ClearLockedTarget();
+        return;
+    }
+
+    const float Dist = FVector::Dist(GetActorLocation(), LockedTarget->GetActorLocation());
+    const float EffectiveRange = GetSkillRange(SkillSlug);
+
+    UE_LOG(LogTemp, Log, TEXT("BasicPlayer: TryCastSkillWithApproach - skill=%s dist=%.0f range=%.0f"),
+        *SkillSlug, Dist, EffectiveRange);
+
+    if (Dist <= EffectiveRange)
+    {
+        // Already in range
+        FaceLockedTarget();
+        if (SkillSlug == CurrentSkillName)
+        {
+            // Auto-attack skill: start the repeating attack loop
+            bIsAutoAttacking = true;
+            DoAutoAttack();
+        }
+        else
+        {
+            // Targeted skill: single cast via skill bar
+            if (UIManager && UIManager->GetSkillBarWidget())
+            {
+                UIManager->GetSkillBarWidget()->CastSkillFromSlot(
+                    GetSkillSlotIndexForSlug(SkillSlug));
+            }
+        }
+    }
+    else
+    {
+        // Out of range Ч store pending skill and start approach
+        PendingSkillSlug = SkillSlug;
+        // For the auto-attack skill keep bIsAutoAttacking true so DoAutoAttack
+        // can continue the loop after the first swing.
+        bIsAutoAttacking  = (SkillSlug == CurrentSkillName);
+        bIsApproachingTarget = true;
+
+        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: TryCastSkillWithApproach - out of range (%.0f > %.0f), approaching for skill %s"),
+            Dist, EffectiveRange, *SkillSlug);
+    }
+}
+
+void ABasicPlayer::DoAutoAttack()
+{
+
+    if (playerData.characterData.bIsDead || !bIsAutoAttacking) return;
+
+    // Validate target
+    if (!IsValid(LockedTarget) || LockedTarget->GetMOBIsDead())
+    {
+        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: DoAutoAttack - target gone, clearing lock"));
+        ClearLockedTarget();
+        return;
+    }
+
+    // Range check Ч use the same formula the server applies: maxRange * 100.0f
+    const float Dist = FVector::Dist(GetActorLocation(), LockedTarget->GetActorLocation());
+    const float EffectiveRange = GetCurrentSkillRange();
+
+    UE_LOG(LogTemp, Log, TEXT("BasicPlayer: DoAutoAttack - dist=%.0f, effectiveRange=%.0f (skill=%s)"),
+        Dist, EffectiveRange, *CurrentSkillName);
+
+    if (Dist > EffectiveRange)
+    {
+        if (!bIsApproachingTarget)
+        {
+            bIsApproachingTarget = true;
+            UE_LOG(LogTemp, Log, TEXT("BasicPlayer: DoAutoAttack - out of range (%.0f > %.0f), starting approach"), Dist, EffectiveRange);
+        }
+        return;
+    }
+
+    // In range Ч make sure any lingering approach is stopped
+    if (bIsApproachingTarget)
+    {
+        bIsApproachingTarget = false;
+    }
+
+    // Face the target before swinging
+    FaceLockedTarget();
+
+    const int32 MobId = FCString::Atoi(*LockedTarget->GetMOBUId());
+
+    // Bind next swing to fire after this animation ends
+    if (UPlayerAnimInstance* AnimInst = GetPlayerAnimInstance())
+    {
+        if (AutoAttackAnimEndDelegateHandle.IsValid())
+        {
+            AnimInst->OnAttackEnded.Remove(AutoAttackAnimEndDelegateHandle);
+            AutoAttackAnimEndDelegateHandle.Reset();
+        }
+
+        AutoAttackAnimEndDelegateHandle = AnimInst->OnAttackEnded.AddLambda([this]()
+        {
+            // Small delay after swing ends before the next one begins
+            if (bIsAutoAttacking && IsValid(LockedTarget) && !LockedTarget->GetMOBIsDead())
+            {
+                GetWorld()->GetTimerManager().SetTimer(AutoAttackRetryTimerHandle,
+                    this, &ABasicPlayer::DoAutoAttack, AutoAttackSwingDelay, false);
+            }
+            else
+            {
+                ClearLockedTarget();
+            }
+        });
+    }
+    else
+    {
+        // No AnimInstance Ч retry by simple timer as fallback
+        GetWorld()->GetTimerManager().SetTimer(AutoAttackRetryTimerHandle,
+            this, &ABasicPlayer::DoAutoAttack, 1.5f, false);
+    }
+
+    AttackTarget(MobId, CurrentSkillName, 3);
+}
+
+void ABasicPlayer::OnTabTargetInput()
+{
+    if (playerData.characterData.bIsDead || playerData.isOtherClient) return;
+
+    APlayerController* PC = Cast<APlayerController>(GetController());
+    if (!PC) return;
+
+    FVector CameraLocation;
+    FRotator CameraRotation;
+    PC->GetPlayerViewPoint(CameraLocation, CameraRotation);
+    const FVector CameraForward = CameraRotation.Vector();
+
+    const float MaxTabRange = 1500.0f;
+    const FVector PlayerLoc = GetActorLocation();
+
+    // Collect all living mobs within range Ч no cone filter so Tab cycles
+    // through everything nearby regardless of which way the mesh faces
+    TArray<ABasicMOB*> Candidates;
+    for (TActorIterator<ABasicMOB> It(GetWorld()); It; ++It)
+    {
+        ABasicMOB* Mob = *It;
+        if (!Mob || Mob->GetMOBIsDead()) continue;
+
+        if (FVector::Dist(PlayerLoc, Mob->GetActorLocation()) > MaxTabRange) continue;
+
+        Candidates.Add(Mob);
+    }
+
+    if (Candidates.Num() == 0)
+    {
+        ClearLockedTarget();
+        return;
+    }
+
+    // Sort by dot product to camera forward Ч mobs closest to crosshair come first,
+    // then by distance as a tiebreaker
+    Candidates.Sort([&CameraLocation, &CameraForward](const ABasicMOB& A, const ABasicMOB& B)
+    {
+        const FVector ToA = (A.GetActorLocation() - CameraLocation).GetSafeNormal();
+        const FVector ToB = (B.GetActorLocation() - CameraLocation).GetSafeNormal();
+        const float DotA = FVector::DotProduct(CameraForward, ToA);
+        const float DotB = FVector::DotProduct(CameraForward, ToB);
+        if (FMath::Abs(DotA - DotB) > 0.01f)
+            return DotA > DotB;
+        return FVector::DistSquared(CameraLocation, A.GetActorLocation())
+             < FVector::DistSquared(CameraLocation, B.GetActorLocation());
+    });
+
+    // Cycle: advance past the current lock to the next candidate
+    int32 NextIndex = 0;
+    if (LockedTarget)
+    {
+        for (int32 i = 0; i < Candidates.Num(); ++i)
+        {
+            if (Candidates[i] == LockedTarget)
+            {
+                NextIndex = (i + 1) % Candidates.Num();
+                break;
+            }
+        }
+    }
+
+    SetLockedTarget(Candidates[NextIndex]);
+}
+
+void ABasicPlayer::LockMovementForPickup()
+{
+    if (bIsPickingUp) return;
+    bIsPickingUp = true;
+
+    // Stop any active approach/auto-attack so the player stands still
+    StopAutoAttack();
+
+    if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+    {
+        MoveComp->DisableMovement();
+    }
+    UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Movement locked for pickup"));
+}
+
+void ABasicPlayer::UnlockMovementAfterPickup()
+{
+    if (!bIsPickingUp) return;
+    bIsPickingUp = false;
+
+    if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+    {
+        MoveComp->SetMovementMode(MOVE_Walking);
+    }
+    UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Movement unlocked after pickup"));
 }
 
 void ABasicPlayer::OnPickupInput()
 {
+    if (playerData.characterData.bIsDead) return;
+    if (bIsPickingUp) return;
     UE_LOG(LogTemp, Warning, TEXT("Pickup input pressed"));
-    
-    if (InventoryManager)
-    {
-        InventoryManager->PickupNearbyItem();
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Inventory manager not found"));
-    }
+
+    if (!InventoryManager) return;
+
+    // NotifyPickup() + delegate binding + server request are all handled
+    // inside InventoryManager::PickupNearbyItem -> ItemManager::SendPickUpItemRequest.
+    // Calling NotifyPickup() here first and then delaying the request via a
+    // timer caused the montage to be started twice (once here, once inside
+    // SendPickUpItemRequest), which produced the double-animation bug.
+    InventoryManager->PickupNearbyItem();
 }
 
 void ABasicPlayer::OnInventoryToggle()
@@ -87,6 +591,7 @@ void ABasicPlayer::OnInventoryToggle()
 
 void ABasicPlayer::OnHarvestInput()
 {
+    if (playerData.characterData.bIsDead) return;
     UE_LOG(LogTemp, Warning, TEXT("Harvest input pressed"));
     
     if (!MyGameInstance)
@@ -120,11 +625,26 @@ void ABasicPlayer::OnSkillsPanelToggle()
     }
 }
 
+void ABasicPlayer::OnGameMenuToggle()
+{
+    if (UIManager)
+    {
+        UIManager->ToggleGameMenu();
+    }
+}
+
 void ABasicPlayer::OnSkill1Input()
 {
-    UE_LOG(LogTemp, Warning, TEXT("Skill 1 input pressed"));
-    
-    if (UIManager && UIManager->GetSkillBarWidget())
+    if (playerData.characterData.bIsDead) return;
+    if (!MyGameInstance || !UIManager || !UIManager->GetSkillBarWidget()) return;
+
+    UPlayerSkillManager* SkillMgr = MyGameInstance->GetPlayerSkillManager();
+    const FString SkillSlug = SkillMgr ? SkillMgr->GetSkillSlugFromSlot(0) : TEXT("");
+    if (!SkillSlug.IsEmpty() && LockedTarget)
+    {
+        TryCastSkillWithApproach(SkillSlug);
+    }
+    else
     {
         UIManager->GetSkillBarWidget()->CastSkillFromSlot(0);
     }
@@ -132,9 +652,16 @@ void ABasicPlayer::OnSkill1Input()
 
 void ABasicPlayer::OnSkill2Input()
 {
-    UE_LOG(LogTemp, Warning, TEXT("Skill 2 input pressed"));
-    
-    if (UIManager && UIManager->GetSkillBarWidget())
+    if (playerData.characterData.bIsDead) return;
+    if (!MyGameInstance || !UIManager || !UIManager->GetSkillBarWidget()) return;
+
+    UPlayerSkillManager* SkillMgr = MyGameInstance->GetPlayerSkillManager();
+    const FString SkillSlug = SkillMgr ? SkillMgr->GetSkillSlugFromSlot(1) : TEXT("");
+    if (!SkillSlug.IsEmpty() && LockedTarget)
+    {
+        TryCastSkillWithApproach(SkillSlug);
+    }
+    else
     {
         UIManager->GetSkillBarWidget()->CastSkillFromSlot(1);
     }
@@ -142,9 +669,16 @@ void ABasicPlayer::OnSkill2Input()
 
 void ABasicPlayer::OnSkill3Input()
 {
-    UE_LOG(LogTemp, Warning, TEXT("Skill 3 input pressed"));
-    
-    if (UIManager && UIManager->GetSkillBarWidget())
+    if (playerData.characterData.bIsDead) return;
+    if (!MyGameInstance || !UIManager || !UIManager->GetSkillBarWidget()) return;
+
+    UPlayerSkillManager* SkillMgr = MyGameInstance->GetPlayerSkillManager();
+    const FString SkillSlug = SkillMgr ? SkillMgr->GetSkillSlugFromSlot(2) : TEXT("");
+    if (!SkillSlug.IsEmpty() && LockedTarget)
+    {
+        TryCastSkillWithApproach(SkillSlug);
+    }
+    else
     {
         UIManager->GetSkillBarWidget()->CastSkillFromSlot(2);
     }
@@ -152,9 +686,16 @@ void ABasicPlayer::OnSkill3Input()
 
 void ABasicPlayer::OnSkill4Input()
 {
-    UE_LOG(LogTemp, Warning, TEXT("Skill 4 input pressed"));
-    
-    if (UIManager && UIManager->GetSkillBarWidget())
+    if (playerData.characterData.bIsDead) return;
+    if (!MyGameInstance || !UIManager || !UIManager->GetSkillBarWidget()) return;
+
+    UPlayerSkillManager* SkillMgr = MyGameInstance->GetPlayerSkillManager();
+    const FString SkillSlug = SkillMgr ? SkillMgr->GetSkillSlugFromSlot(3) : TEXT("");
+    if (!SkillSlug.IsEmpty() && LockedTarget)
+    {
+        TryCastSkillWithApproach(SkillSlug);
+    }
+    else
     {
         UIManager->GetSkillBarWidget()->CastSkillFromSlot(3);
     }
@@ -162,9 +703,16 @@ void ABasicPlayer::OnSkill4Input()
 
 void ABasicPlayer::OnSkill5Input()
 {
-    UE_LOG(LogTemp, Warning, TEXT("Skill 5 input pressed"));
-    
-    if (UIManager && UIManager->GetSkillBarWidget())
+    if (playerData.characterData.bIsDead) return;
+    if (!MyGameInstance || !UIManager || !UIManager->GetSkillBarWidget()) return;
+
+    UPlayerSkillManager* SkillMgr = MyGameInstance->GetPlayerSkillManager();
+    const FString SkillSlug = SkillMgr ? SkillMgr->GetSkillSlugFromSlot(4) : TEXT("");
+    if (!SkillSlug.IsEmpty() && LockedTarget)
+    {
+        TryCastSkillWithApproach(SkillSlug);
+    }
+    else
     {
         UIManager->GetSkillBarWidget()->CastSkillFromSlot(4);
     }
@@ -187,9 +735,27 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
         Subsystem->ClearAllMappings();
         Subsystem->AddMappingContext(InputMappingContext, 1);
  
-        // Bind Enhanced Input actions
+		// Bind Enhanced Input actions
         EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ABasicPlayer::Move);
         EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ABasicPlayer::Look);
+
+        // WoW-style mouse button bindings
+        if (RightMouseAction)
+        {
+            EnhancedInputComponent->BindAction(RightMouseAction, ETriggerEvent::Started,   this, &ABasicPlayer::OnRightMousePressed);
+            EnhancedInputComponent->BindAction(RightMouseAction, ETriggerEvent::Completed, this, &ABasicPlayer::OnRightMouseReleased);
+        }
+        if (LeftMouseAction)
+        {
+            EnhancedInputComponent->BindAction(LeftMouseAction, ETriggerEvent::Started,   this, &ABasicPlayer::OnLeftMousePressed);
+            EnhancedInputComponent->BindAction(LeftMouseAction, ETriggerEvent::Completed, this, &ABasicPlayer::OnLeftMouseReleased);
+        }
+
+        // Mouse wheel zoom
+        if (ScrollAction)
+        {
+            EnhancedInputComponent->BindAction(ScrollAction, ETriggerEvent::Triggered, this, &ABasicPlayer::OnScroll);
+        }
 
         // bind start movement simulation
         EnhancedInputComponent->BindAction(StartMovementSimulationAction, ETriggerEvent::Triggered, this, &ABasicPlayer::StartMovementSimulation);
@@ -201,6 +767,12 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
         {
             // Bind attack action (you'll need to add AttackAction to your header file)
             EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Triggered, this, &ABasicPlayer::OnAttackInput);
+        }
+
+        // Tab-target: cycle to nearest MOB in forward cone
+        if (TabTargetAction)
+        {
+            EnhancedInputComponent->BindAction(TabTargetAction, ETriggerEvent::Started, this, &ABasicPlayer::OnTabTargetInput);
         }
 
         // Pickup item action
@@ -252,6 +824,53 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
         {
             EnhancedInputComponent->BindAction(Skill5Action, ETriggerEvent::Triggered, this, &ABasicPlayer::OnSkill5Input);
         }
+
+        // Interact with NPC
+        if (InteractAction)
+        {
+            EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &ABasicPlayer::OnInteractInput);
+            UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: InteractAction bound successfully"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("BasicPlayer: InteractAction is NULL - assign it in the player Blueprint (Details > Input > InteractAction)"));
+        }
+
+        // Quest Journal toggle
+        if (QuestJournalAction)
+        {
+            EnhancedInputComponent->BindAction(QuestJournalAction, ETriggerEvent::Started, this, &ABasicPlayer::OnQuestJournalToggle);
+        }
+
+        // Equipment toggle
+        if (EquipmentAction)
+        {
+            EnhancedInputComponent->BindAction(EquipmentAction, ETriggerEvent::Started, this, &ABasicPlayer::OnEquipmentToggle);
+        }
+
+        // Alt-cursor: toggle mouse cursor on/off
+        if (AltCursorAction)
+        {
+            EnhancedInputComponent->BindAction(AltCursorAction, ETriggerEvent::Started, this, &ABasicPlayer::OnAltCursorToggle);
+        }
+
+        // Character stats window toggle
+        if (StatsAction)
+        {
+            EnhancedInputComponent->BindAction(StatsAction, ETriggerEvent::Started, this, &ABasicPlayer::OnStatsToggle);
+        }
+
+        // Bestiary window toggle
+        if (BestiaryAction)
+        {
+            EnhancedInputComponent->BindAction(BestiaryAction, ETriggerEvent::Started, this, &ABasicPlayer::OnBestiaryToggle);
+        }
+
+        // Main game menu toggle (Escape)
+        if (GameMenuAction)
+        {
+            EnhancedInputComponent->BindAction(GameMenuAction, ETriggerEvent::Started, this, &ABasicPlayer::OnGameMenuToggle);
+        }
     }
 }
 
@@ -261,20 +880,47 @@ ABasicPlayer::ABasicPlayer()
  	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 
-    //Create audio component
+	//Create audio component
     AudioComponent = CreateDefaultSubobject<UAudioComponent>(TEXT("AudioComponent"));
     AudioComponent->SetupAttachment(RootComponent);
 
-    // Create UI Manager component
+    // Create spring arm Ч controls camera distance and pitch
+    CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
+    CameraBoom->SetupAttachment(RootComponent);
+    CameraBoom->TargetArmLength       = DesiredZoom;  // initial distance
+    CameraBoom->bUsePawnControlRotation = true;        // arm rotates with controller
+    CameraBoom->bEnableCameraLag       = true;
+    CameraBoom->CameraLagSpeed         = 8.0f;
+    CameraBoom->bEnableCameraRotationLag = false;
+
+    // Create the follow camera
+    FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
+    FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
+    FollowCamera->bUsePawnControlRotation = false; // camera does not rotate Ч arm does
+
+	// Create UI Manager component
 	UIManager = CreateDefaultSubobject<UUIManager>(TEXT("UIManager"));
 
 	// Create Inventory Manager component  
 	InventoryManager = CreateDefaultSubobject<UInventoryManager>(TEXT("InventoryManager"));
 
+	// Create nameplate component Ч auto-hidden for local player, visible for remote players
+	NameplateComponent = CreateDefaultSubobject<UPlayerNameplateComponent>(TEXT("NameplateComponent"));
+
+	// Create equipment visual component Ч attaches item meshes to skeleton sockets
+	EquipmentVisualComponent = CreateDefaultSubobject<UEquipmentVisualComponent>(TEXT("EquipmentVisualComponent"));
+
     // Init simulation variables
     SquareCenter = FVector(0.f, 0.f, 90.f); // Assuming Z is up and you want to move around this center
     SideLength = 1000.f; // The length of the side of the square
     TargetPosition = SquareCenter + FVector(SideLength / 2, 0.f, 0.f); // Start with a target position
+
+    // Sync CharacterMovementComponent speed with MoveSpeed so AddMovementInput(dir, 1.0)
+    // produces a frame-rate-independent velocity matching the server attribute move_speed.
+    if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+    {
+        CMC->MaxWalkSpeed = MoveSpeed;
+    }
 }
 
 // Called when the game starts or when spawned
@@ -286,6 +932,19 @@ void ABasicPlayer::BeginPlay()
     if (MyGameInstance)
     {
         UE_LOG(LogTemp, Warning, TEXT("GameInstance found"));
+
+        // Route the player's AudioComponent through the SFX SoundClass
+        if (AudioComponent && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
+        {
+            AudioComponent->SoundClassOverride = MyGameInstance->AudioManager->SFXClass;
+        }
+
+        // Register in O(1) actor registry so FindTargetActor skips GetAllActorsOfClass
+        const int32 ActorId = GetActorId_Implementation();
+        if (MyGameInstance->MOBManager && ActorId > 0)
+        {
+            MyGameInstance->MOBManager->RegisterPlayer(ActorId, this);
+        }
 
         // Register with combat system if this is the local player
         if (!playerData.isOtherClient)
@@ -351,6 +1010,14 @@ void ABasicPlayer::BeginPlay()
 			FTimerHandle TimerHandle;
 			GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
 			{
+				// Guard: skip UI initialization for other-client (remote) players.
+				// isOtherClient is false at BeginPlay time but may be set to true before
+				// the timer fires when this actor represents another connected client.
+				if (playerData.isOtherClient)
+				{
+					return;
+				}
+
 				if (InventoryManager)
 				{
 					// Get PlayerController
@@ -359,8 +1026,14 @@ void ABasicPlayer::BeginPlay()
 					// Get HarvestManager from GameInstance
 					UHarvestManager* HarvestManager = MyGameInstance ? MyGameInstance->GetHarvestManager() : nullptr;
 
-					//get ExperienceManager from GameInstance
+				//get ExperienceManager from GameInstance
 					UExperienceManager* ExperienceManager = MyGameInstance ? MyGameInstance->GetExperienceManager() : nullptr;
+
+					// Subscribe to level-up events so we can play LevelUpSound
+					if (ExperienceManager && !playerData.isOtherClient)
+					{
+						ExperienceManager->OnLevelUp.AddDynamic(this, &ABasicPlayer::HandleLevelUp);
+					}
 					
 					// Get SkillManager from GameInstance
 					UPlayerSkillManager* SkillManager = MyGameInstance ? MyGameInstance->GetPlayerSkillManager() : nullptr;
@@ -386,31 +1059,16 @@ void ABasicPlayer::BeginPlay()
 					
 					UE_LOG(LogTemp, Warning, TEXT("UIManager initialized with all managers including SkillManager"));
 
-					// Initialize experience widget for this character and set initial progression data
+					// Initialize experience widget for this character.
+					// ExperienceManager already has correct progression data
+					// (including expForCurrentLevel) set by SpawnPlayerForClient
+					// before BeginPlay fires.
 					if (ExperienceManager && playerData.characterData.characterId > 0)
 					{
-						// Create initial progression data from current player data
-						FPlayerProgressionStruct InitialProgression;
-						InitialProgression.characterId = playerData.characterData.characterId;
-						InitialProgression.currentLevel = playerData.characterData.characterLevel;
-						InitialProgression.currentExperience = playerData.characterData.characterExperiencePoints;
-						InitialProgression.totalExperience = playerData.characterData.characterExperiencePoints;
-						InitialProgression.expForNextLevel = playerData.characterData.characterExpForLevelEnd;
-						InitialProgression.expForCurrentLevel = 0; // Will be calculated by server
-						InitialProgression.bHasPendingLevelUp = false;
-						InitialProgression.pendingLevelGained = 0;
-
-						// Update ExperienceManager with initial progression data FIRST
-						ExperienceManager->UpdateCharacterProgression(playerData.characterData.characterId, InitialProgression);
-
-						// THEN initialize experience widget
 						UIManager->InitializeExperienceWidget(playerData.characterData.characterId);
 
-						UE_LOG(LogTemp, Warning, TEXT("ExperienceWidget initialized for character %d with initial data: Level %d, XP %d/%d"), 
-							playerData.characterData.characterId, 
-							InitialProgression.currentLevel,
-							InitialProgression.currentExperience,
-							InitialProgression.expForNextLevel);
+						UE_LOG(LogTemp, Warning, TEXT("ExperienceWidget initialized for character %d"), 
+							playerData.characterData.characterId);
 					}
 
 					// Initialize skill widgets if SkillManager is available
@@ -418,6 +1076,77 @@ void ABasicPlayer::BeginPlay()
 					{
 						UIManager->InitializeSkillWidgets();
 						UE_LOG(LogTemp, Warning, TEXT("Skill widgets initialized"));
+					}
+
+				// Bind dialogue and quest widgets to their managers
+					UDialogueManager* DlgMgr   = MyGameInstance ? MyGameInstance->GetDialogueManager()  : nullptr;
+					UQuestManager*    QuestMgr  = MyGameInstance ? MyGameInstance->GetQuestManager()     : nullptr;
+					UIManager->InitializeDialogueAndQuestWidgets(DlgMgr, QuestMgr);
+
+				// Bind equipment / vendor / repair / trade widgets to their managers
+					UIManager->InitializeItemSystemWidgets(
+						MyGameInstance ? MyGameInstance->GetEquipmentManager() : nullptr,
+						MyGameInstance ? MyGameInstance->GetVendorManager()    : nullptr,
+						MyGameInstance ? MyGameInstance->GetRepairManager()    : nullptr,
+						MyGameInstance ? MyGameInstance->GetTradeManager()     : nullptr);
+
+				// Bind character stats widget to the stats manager
+					UIManager->InitializeStatsWidget(
+						MyGameInstance ? MyGameInstance->GetPlayerStatsManager() : nullptr);
+
+					// Initialize world notification system (bestiary + toast/zone/etc.)
+					if (MyGameInstance && MyGameInstance->GetBestiaryNetworkHandler())
+					{
+						UIManager->InitializeNotificationSystem(MyGameInstance->GetBestiaryNetworkHandler());
+						UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: WorldNotificationManager initialized"));
+
+						// Request the bestiary overview so the mob list is populated on login
+						if (playerData.characterData.characterId > 0)
+						{
+							MyGameInstance->GetBestiaryNetworkHandler()->RequestBestiaryOverview(
+								playerData.characterData.characterId);
+							UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Requested bestiary overview for character %d"),
+								playerData.characterData.characterId);
+						}
+					}
+
+			// Subscribe to weight status and initialize equipment visuals
+				if (UEquipmentManager* EqMgr = MyGameInstance ? MyGameInstance->GetEquipmentManager() : nullptr)
+				{
+					EqMgr->OnWeightStatusChangedDelegate.AddDynamic(this, &ABasicPlayer::HandleWeightStatusChanged);
+					UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Subscribed to weight status events"));
+
+					// Initialize equipment visual component so equipped items appear on the mesh
+					if (EquipmentVisualComponent)
+					{
+						UItemManager* ItemMgr = MyGameInstance->GetItemManager();
+						EquipmentVisualComponent->Initialize(EqMgr, ItemMgr);
+						UE_LOG(LogTemp, Log, TEXT("BasicPlayer: EquipmentVisualComponent initialized"));
+					}
+
+					// Explicitly request equipment state from server.
+					// EQUIPMENT_STATE may arrive before the visual component binds its delegate,
+					// but Initialize() above already replays the cached state.
+					// This request ensures we get up-to-date data even if the server
+					// does not push EQUIPMENT_STATE automatically on join.
+					if (playerData.characterData.characterId > 0)
+					{
+						EqMgr->RequestGetEquipment(playerData.characterData.characterId);
+						UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Requested equipment state for character %d"),
+							playerData.characterData.characterId);
+					}
+				}
+
+					// If the player was dead when joining (server sent isDead=true),
+					// show the death screen now that UIManager is fully initialized.
+					if (playerData.characterData.bIsDead)
+					{
+						if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+						{
+							Movement->DisableMovement();
+						}
+						ShowDeathScreen();
+						UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Player joined as dead - showing death screen"));
 					}
 				}
                 
@@ -430,6 +1159,41 @@ void ABasicPlayer::BeginPlay()
 void ABasicPlayer::CreateHUD()
 {
     //RefreshHUD();
+}
+
+void ABasicPlayer::HandleLevelUp(int32 OldLevel, int32 NewLevel, int32 NewTotalExperience)
+{
+    if (playerData.isOtherClient) return;
+
+    UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Level up! %d -> %d"), OldLevel, NewLevel);
+    PlayEventSound(LevelUpSound);
+}
+
+void ABasicPlayer::HandleWeightStatusChanged(const FWeightStatusData& WeightStatus)
+{
+    UCharacterMovementComponent* Movement = GetCharacterMovement();
+    if (!Movement) return;
+
+    // Capture the base speed the first time we receive a weight update
+    if (BaseWalkSpeed <= 0.f)
+    {
+        BaseWalkSpeed = Movement->MaxWalkSpeed;
+    }
+
+    const bool bNowOverweight = WeightStatus.isOverweight;
+    if (bNowOverweight && !bOverweightPenaltyActive)
+    {
+        Movement->MaxWalkSpeed = BaseWalkSpeed * 0.7f;
+        bOverweightPenaltyActive = true;
+        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Overweight penalty applied (%.0f -> %.0f)"),
+            BaseWalkSpeed, Movement->MaxWalkSpeed);
+    }
+    else if (!bNowOverweight && bOverweightPenaltyActive)
+    {
+        Movement->MaxWalkSpeed = BaseWalkSpeed;
+        bOverweightPenaltyActive = false;
+        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Overweight penalty removed, speed restored to %.0f"), BaseWalkSpeed);
+    }
 }
 
 // update HUD
@@ -446,7 +1210,6 @@ void ABasicPlayer::UpdateHUD()
             float MaxHealth = 1.0f;
             float MaxMana = 1.0f;
 
-            // ѕровер€ем, есть ли в attributesData нужные ключи
             if (const FAttributeDataStruct* HealthAttr = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_health")))
             {
                 MaxHealth = HealthAttr->attributeValue;
@@ -483,6 +1246,17 @@ void ABasicPlayer::Tick(float DeltaTime)
     {
         // Update player movement for local player
 		UpdateCurrentPlayerMovement(DeltaTime);
+        // Smoothly rotate mesh toward DesiredMeshYaw
+        UpdateMeshRotation(DeltaTime);
+        // Drive approach movement every frame so CharacterMovementComponent gets
+        // AddMovementInput on the same frame it is consumed Ч no more 1mm jitter.
+        UpdateApproach(DeltaTime);
+        // Smoothly interpolate camera zoom
+        if (CameraBoom)
+        {
+            CameraBoom->TargetArmLength = FMath::FInterpTo(
+                CameraBoom->TargetArmLength, DesiredZoom, DeltaTime, ZoomInterpSpeed);
+        }
     }
 
     // Update player movement for remote player
@@ -505,29 +1279,100 @@ void ABasicPlayer::Tick(float DeltaTime)
 	}
 
     CheckForMOB();
+    CheckForNPC();
+
+    // Keep the locked-target frame in sync every Tick
+    if (LockedTarget && UIManager && !playerData.isOtherClient)
+    {
+        const int32 CurrentHP = LockedTarget->GetMOBCurrentHealth();
+        const int32 MaxHP = LockedTarget->GetMOBAttributes().attributesData.Contains(TEXT("max_health"))
+            ? static_cast<int32>(LockedTarget->GetMOBAttributes().attributesData[TEXT("max_health")].attributeValue)
+            : 100;
+        UIManager->UpdateMobTargetFrameHP(CurrentHP, MaxHP);
+
+        // Re-call SetMobInfo only when the aggro state has actually flipped
+        const bool bCurrentAggro = LockedTarget->GetMOBIsAggressive();
+        if (bCurrentAggro != bLastKnownTargetAggro)
+        {
+            bLastKnownTargetAggro = bCurrentAggro;
+
+            UIManager->ShowMobTargetFrame(
+                LockedTarget->GetMOBData().mobSlug,
+                LockedTarget->GetMobName(),
+                LockedTarget->GetMOBLevel(),
+                CurrentHP, MaxHP,
+                bCurrentAggro,
+                LockedTarget->CachedIcon);
+        }
+    }
 }
 
 void ABasicPlayer::Move(const FInputActionValue& Value)
 {
-    if (Controller != nullptr)
+    if (Controller == nullptr) return;
+
+    // Manual WASD input interrupts the auto-attack cycle and any approach walk,
+    // but keeps the target lock so the player can reposition during combat.
+    if (bIsAutoAttacking || bIsApproachingTarget)
     {
-        const FVector2D MoveValue = Value.Get<FVector2D>().GetSafeNormal(); // Normalize input vector
-        const FRotator MovementRotation(0, Controller->GetControlRotation().Yaw, 0);
+        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Auto-attack interrupted by manual movement"));
+        StopAutoAttack();
+    }
 
-        // Calculate movement direction based on control rotation
-        const FVector ForwardDirection = MovementRotation.RotateVector(FVector::ForwardVector);
-        const FVector RightDirection = MovementRotation.RotateVector(FVector::RightVector);
+    const FVector2D MoveValue = Value.Get<FVector2D>(); // NOT normalized Ч keep X/Y separate
+    const float CameraYaw = Controller->GetControlRotation().Yaw;
 
-        // Calculate movement input based on normalized MoveValue
-        const FVector MovementInput = (ForwardDirection * MoveValue.Y + RightDirection * MoveValue.X).GetSafeNormal();
+    if (bIsRightMouseDown || bIsLeftMouseDown)
+    {
+        // ---- Mouse held: WASD strafes/moves relative to camera, mesh follows camera yaw ----
+        const FRotator ControlYaw(0, CameraYaw, 0);
+        const FVector Forward = ControlYaw.RotateVector(FVector::ForwardVector);
+        const FVector Right   = ControlYaw.RotateVector(FVector::RightVector);
 
-        // Apply movement input with constant speed
-        AddMovementInput(MovementInput, MoveSpeed * GetWorld()->GetDeltaSeconds());
+        const FVector Input = (Forward * MoveValue.Y + Right * MoveValue.X).GetSafeNormal();
+        AddMovementInput(Input, 1.0f);
+
+        // Mesh should face camera yaw (handled smoothly by UpdateMeshRotation)
+        DesiredMeshYaw = CameraYaw;
+        bHasDesiredMeshYaw = true;
+    }
+    else
+    {
+        // ---- No mouse button: WoW keyboard-turn mode ----
+        // W/S: move forward/backward along current mesh facing, no rotation change.
+        // A/D: rotate the mesh in place (keyboard turn), no strafing.
+
+        if (!FMath::IsNearlyZero(MoveValue.Y))
+        {
+            // Forward or backward along the current actor facing
+            const FVector MeshForward = GetActorForwardVector();
+            AddMovementInput(MeshForward, MoveValue.Y > 0.f ? 1.0f : -1.0f);
+        }
+
+        if (!FMath::IsNearlyZero(MoveValue.X))
+        {
+            // A/D: accumulate yaw rotation toward camera Ч mesh turns, no strafe
+            // Rotate the desired yaw by a fixed amount per second (handled in UpdateMeshRotation).
+            // Here we simply push the desired yaw directly based on input magnitude.
+            const float TurnAmount = MoveValue.X * MeshRotationSpeed * GetWorld()->GetDeltaSeconds();
+            DesiredMeshYaw = GetActorRotation().Yaw + TurnAmount;
+            bHasDesiredMeshYaw = true;
+
+            // Also move forward slightly while turning (WoW behaviour: A/D turn + walk)
+            if (!FMath::IsNearlyZero(MoveValue.Y))
+            {
+                const FVector MeshForward = GetActorForwardVector();
+                AddMovementInput(MeshForward, MoveValue.Y > 0.f ? 1.0f : -1.0f);
+            }
+        }
     }
 }
 
 void ABasicPlayer::Look(const FInputActionValue& Value)
 {
+    // Only process mouse look when at least one mouse button is held (WoW-style)
+    if (!bIsRightMouseDown && !bIsLeftMouseDown) return;
+
     if (Controller != nullptr)
     {
         const FVector2D LookValue = Value.Get<FVector2D>();
@@ -535,12 +1380,112 @@ void ABasicPlayer::Look(const FInputActionValue& Value)
         if (LookValue.X != 0.f)
         {
             AddControllerYawInput(LookValue.X);
+
+            // RMB held: mesh follows camera Ч feed desired yaw so UpdateMeshRotation
+            // interpolates smoothly instead of snapping instantly.
+            if (bIsRightMouseDown)
+            {
+                DesiredMeshYaw    = Controller->GetControlRotation().Yaw;
+                bHasDesiredMeshYaw = true;
+            }
         }
 
         if (LookValue.Y != 0.f)
         {
             AddControllerPitchInput(LookValue.Y * -1);
         }
+    }
+}
+
+void ABasicPlayer::OnRightMousePressed()
+{
+    bIsRightMouseDown = true;
+    ApplyMouseCaptureIfNoUIOpen();
+}
+
+void ABasicPlayer::OnRightMouseReleased()
+{
+    bIsRightMouseDown = false;
+
+    if (!bIsLeftMouseDown)
+    {
+        RestoreCursorToUIManager();
+    }
+}
+
+void ABasicPlayer::OnLeftMousePressed()
+{
+    bIsLeftMouseDown = true;
+    ApplyMouseCaptureIfNoUIOpen();
+}
+
+void ABasicPlayer::OnLeftMouseReleased()
+{
+    bIsLeftMouseDown = false;
+
+    if (!bIsRightMouseDown)
+    {
+        RestoreCursorToUIManager();
+    }
+}
+
+void ABasicPlayer::OnScroll(const FInputActionValue& Value)
+{
+    if (!CameraBoom) return;
+
+    // Don't zoom if any UI window is open Ч let the scroll reach the widget
+    if (UIManager && UIManager->ShouldShowCursor()) return;
+
+    // Value is a float: positive = scroll up (zoom in), negative = scroll down (zoom out)
+    const float ScrollDelta = Value.Get<float>();
+    DesiredZoom = FMath::Clamp(DesiredZoom - ScrollDelta * ZoomStep, ZoomMin, ZoomMax);
+}
+
+void ABasicPlayer::ApplyMouseCaptureIfNoUIOpen()
+{
+    // Don't capture the mouse if any UI window is open Ч the player needs
+    // the cursor to interact with inventory, vendor, etc.
+    if (UIManager && UIManager->ShouldShowCursor()) return;
+
+    if (APlayerController* PC = Cast<APlayerController>(GetController()))
+    {
+        PC->bShowMouseCursor = false;
+        PC->SetInputMode(FInputModeGameOnly());
+    }
+}
+
+void ABasicPlayer::RestoreCursorToUIManager()
+{
+    // Hand cursor and input mode back to UIManager so it re-applies
+    // its own state (show if any window is open, hide otherwise).
+    if (UIManager)
+    {
+        UIManager->UpdateCursorAndInputMode();
+        return;
+    }
+
+    // Fallback if UIManager is not available
+    if (APlayerController* PC = Cast<APlayerController>(GetController()))
+    {
+        PC->bShowMouseCursor = true;
+        PC->SetInputMode(FInputModeGameAndUI());
+    }
+}
+
+void ABasicPlayer::UpdateMeshRotation(float DeltaTime)
+{
+    if (!bHasDesiredMeshYaw) return;
+
+    const FRotator Current = GetActorRotation();
+    const FRotator Target(Current.Pitch, DesiredMeshYaw, Current.Roll);
+    const FRotator Smoothed = FMath::RInterpTo(Current, Target, DeltaTime, MeshRotationSpeed / 90.0f);
+    SetActorRotation(Smoothed);
+
+    // Stop interpolating once we are close enough
+    if (FMath::Abs(FRotator::NormalizeAxis(Smoothed.Yaw - DesiredMeshYaw)) < 0.5f)
+    {
+        SetActorRotation(Target);
+        bHasDesiredMeshYaw = false;
     }
 }
 
@@ -553,27 +1498,27 @@ void ABasicPlayer::UpdateCurrentPlayerMovement(float DeltaTime)
         playerData.characterData.characterPosition.positionY,
         playerData.characterData.characterPosition.positionZ);
 
-    FVector MovementDirection = (currentLocation - newLocation).GetSafeNormal();
-    if (!MovementDirection.IsNearlyZero())
+    // Always write the actual actor yaw so the server receives the correct facing direction.
+    if (!bSimulateMovement)
     {
-        // Calculate the desired rotation based on the movement direction
-        FRotator DesiredRotation = MovementDirection.Rotation();
-        DesiredRotation.Pitch = 0.0f; // Keep the pitch level, adjust if your game needs vertical aiming
-        DesiredRotation.Roll = 0.0f;  // Typically, you don't need to roll the character
-
-        if (!bSimulateMovement) {
-            playerData.characterData.characterPosition.rotationZ = DesiredRotation.Yaw;
-        }
+        playerData.characterData.characterPosition.rotationZ = currentRotation.Yaw;
     }
 
     // Compare current position and rotation to the last sent values
     bool hasPositionChanged = !currentLocation.Equals(LastSentPosition, PositionThreshold);
     //bool hasRotationChanged = !FMath::IsNearlyEqual(currentRotation.Yaw, LastSentRotation.Yaw, RotationThreshold);
 
-    TimeSinceLastUpdate += DeltaTime;
+    TimeSinceLastUpdate = FMath::Min(TimeSinceLastUpdate + DeltaTime, UpdateInterval * 2.0f);
 
     if (hasPositionChanged && TimeSinceLastUpdate >= UpdateInterval)
     {
+        // Do not send movement packets while the player is dead
+        if (playerData.characterData.bIsDead)
+        {
+            TimeSinceLastUpdate = 0.0f;
+            return;
+        }
+
         // Update player data with current state
         playerData.characterData.characterPosition.positionX = currentLocation.X;
         playerData.characterData.characterPosition.positionY = currentLocation.Y;
@@ -599,8 +1544,8 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     float LerpFactor = FMath::Clamp(TimeSinceLastPositionUpdate / ServerPositionUpdateInterval, 0.f, 1.f);
 
     FVector NewPosition = FMath::Lerp(LastReceivedPosition, TargetReceivedPosition, LerpFactor);
-    // ѕлавно интерполируем вращение независимо от позиции, с умеренной скоростью
-    float RotationInterpSpeed = 15.0f; // ѕерсонаж повернетс€ на 15 градусов за секунду
+
+    float RotationInterpSpeed = 15.0f;
 
     FRotator NewRotation = FMath::RInterpTo(GetActorRotation(), TargetReceivedRotation, GetWorld()->GetDeltaSeconds(), RotationInterpSpeed);
  
@@ -616,12 +1561,20 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     }
 
     SetActorRotation(NewRotation);
+
+    // Once we've consumed the full interpolation window without a new packet,
+    // the remote player has stopped Ч decay RemoteSpeed to zero so the anim
+    // transitions back to idle.
+    if (TimeSinceLastPositionUpdate >= ServerPositionUpdateInterval * 2.0f)
+    {
+        RemoteSpeed = 0.0f;
+    }
 }
 
 float ABasicPlayer::CalculateRotationInterpSpeed()
 {
     float AngleDifference = FMath::Abs(LastReceivedRotation.Yaw - TargetReceivedRotation.Yaw);
-    AngleDifference = FMath::Min(AngleDifference, 360.f - AngleDifference); // ”читываем переходы через 360∞
+    AngleDifference = FMath::Min(AngleDifference, 360.f - AngleDifference);
     return AngleDifference / ServerPositionUpdateInterval;
 }
 
@@ -672,6 +1625,11 @@ int32 ABasicPlayer::GetPlayerCurrentHPPoints() const
 int32 ABasicPlayer::GetPlayerCurrentMPPoints() const
 {
     return playerData.characterData.characterCurrentMana;
+}
+
+UPlayerAnimInstance* ABasicPlayer::GetPlayerAnimInstance() const
+{
+    return Cast<UPlayerAnimInstance>(GetMesh()->GetAnimInstance());
 }
 
 // Set message data
@@ -745,6 +1703,14 @@ void ABasicPlayer::SetPlayerLevel(int32 Level)
 	UpdateExperienceData(); // Update ExperienceManager when level changes
 }
 
+void ABasicPlayer::InitialiseNameplate(bool bIsLocal)
+{
+    if (NameplateComponent)
+    {
+        NameplateComponent->InitialiseFromCharacterData(playerData.characterData, bIsLocal, false);
+    }
+}
+
 // set player experience points
 void ABasicPlayer::SetPlayerExpPoints(int32 ExpPoints)
 {
@@ -770,24 +1736,25 @@ void ABasicPlayer::UpdateExperienceData()
 	UExperienceManager* ExperienceManager = MyGameInstance->GetExperienceManager();
 	if (ExperienceManager && playerData.characterData.characterId > 0)
 	{
-		// Create updated progression data from current player data
 		FPlayerProgressionStruct UpdatedProgression;
-		UpdatedProgression.characterId = playerData.characterData.characterId;
-		UpdatedProgression.currentLevel = playerData.characterData.characterLevel;
+		UpdatedProgression.characterId       = playerData.characterData.characterId;
+		UpdatedProgression.currentLevel      = playerData.characterData.characterLevel;
 		UpdatedProgression.currentExperience = playerData.characterData.characterExperiencePoints;
-		UpdatedProgression.totalExperience = playerData.characterData.characterExperiencePoints;
-		UpdatedProgression.expForNextLevel = playerData.characterData.characterExpForLevelEnd;
-		UpdatedProgression.expForCurrentLevel = 0; // Will be calculated by server
+		UpdatedProgression.totalExperience   = playerData.characterData.characterExperiencePoints;
+		UpdatedProgression.expForNextLevel   = playerData.characterData.characterExpForLevelEnd;
+		// characterExpForLevelStart is always kept current by UpdateCharacterDataFromStatsUpdate
+		UpdatedProgression.expForCurrentLevel = playerData.characterData.characterExpForLevelStart;
+		UpdatedProgression.experienceDebt    = playerData.characterData.characterExperienceDebt;
 		UpdatedProgression.bHasPendingLevelUp = false;
 		UpdatedProgression.pendingLevelGained = 0;
 
-		// Update ExperienceManager with current progression data
 		ExperienceManager->UpdateCharacterProgression(playerData.characterData.characterId, UpdatedProgression);
 
-		UE_LOG(LogTemp, Log, TEXT("Updated experience data for character %d: Level %d, XP %d/%d"), 
+		UE_LOG(LogTemp, Log, TEXT("Updated experience data for character %d: Level %d, XP %d [%d-%d]"), 
 			playerData.characterData.characterId, 
 			UpdatedProgression.currentLevel,
 			UpdatedProgression.currentExperience,
+			UpdatedProgression.expForCurrentLevel,
 			UpdatedProgression.expForNextLevel);
 	}
 }
@@ -796,12 +1763,45 @@ void ABasicPlayer::UpdateExperienceData()
 void ABasicPlayer::SetPlayerCurrentHPPoints(int32 CurrentHPPoints)
 {
     playerData.characterData.characterCurrentHealth = CurrentHPPoints;
+
+    if (MyGameInstance && !playerData.isOtherClient)
+    {
+        if (UPlayerStatsManager* StatsMgr = MyGameInstance->GetPlayerStatsManager())
+        {
+            FPlayerStatsUpdateStruct Updated = StatsMgr->GetCachedStats();
+            if (Updated.characterId > 0)
+            {
+                Updated.healthCurrent = CurrentHPPoints;
+                StatsMgr->ApplyStatsUpdate(Updated);
+            }
+        }
+    }
+
+    // Update HP bar on the nameplate for remote players
+    if (playerData.isOtherClient && NameplateComponent)
+    {
+        const int32 MaxHP = GetMaxHealth_Implementation();
+        NameplateComponent->UpdateHealth(CurrentHPPoints, MaxHP);
+    }
 }
 
 // set player current MP points
 void ABasicPlayer::SetPlayerCurrentMPPoints(int32 CurrentMPPoints)
 {
     playerData.characterData.characterCurrentMana = CurrentMPPoints;
+
+    if (MyGameInstance && !playerData.isOtherClient)
+    {
+        if (UPlayerStatsManager* StatsMgr = MyGameInstance->GetPlayerStatsManager())
+        {
+            FPlayerStatsUpdateStruct Updated = StatsMgr->GetCachedStats();
+            if (Updated.characterId > 0)
+            {
+                Updated.manaCurrent = CurrentMPPoints;
+                StatsMgr->ApplyStatsUpdate(Updated);
+            }
+        }
+    }
 }
 
 // set player attributes
@@ -827,9 +1827,36 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
     playerData.characterData.characterPosition.positionZ = z;
     playerData.characterData.characterPosition.rotationZ = rotZ;
 
+    const FVector NewTarget(x, y, z);
+
+    // Estimate 2D speed from the XY displacement between consecutive server positions.
+    // This feeds PlayerAnimInstance::Speed for remote (other-client) players whose
+    // CharacterMovementComponent velocity is always 0 (we drive them via SetActorLocation).
+    if (playerData.isOtherClient && ServerPositionUpdateInterval > 0.0f)
+    {
+        const float Dist2D = FVector::Dist2D(TargetReceivedPosition, NewTarget);
+        RemoteSpeed = Dist2D / ServerPositionUpdateInterval;
+
+        // Compute direction angle relative to the actor's current facing.
+        // This mirrors what PlayerAnimInstance does for the local player via CMC velocity.
+        if (Dist2D > 1.0f)
+        {
+            const FVector Delta2D = FVector(NewTarget.X - TargetReceivedPosition.X,
+                                            NewTarget.Y - TargetReceivedPosition.Y, 0.0f).GetSafeNormal();
+            const FVector ActorForward = GetActorForwardVector();
+            const FVector ActorRight   = GetActorRightVector();
+            RemoteDirection = FMath::RadiansToDegrees(
+                FMath::Atan2(FVector::DotProduct(Delta2D, ActorRight),
+                             FVector::DotProduct(Delta2D, ActorForward)));
+        }
+        else
+        {
+            RemoteDirection = 0.0f;
+        }
+    }
 
     LastReceivedPosition = GetActorLocation();
-    TargetReceivedPosition = FVector(x, y, z);
+    TargetReceivedPosition = NewTarget;
 
     LastReceivedRotation = GetActorRotation();
     TargetReceivedRotation = FRotator(0, rotZ, 0);
@@ -850,6 +1877,19 @@ void ABasicPlayer::PlaySound(USoundBase* Sound)
 void ABasicPlayer::StopSound()
 {
     AudioComponent->Stop();
+}
+
+void ABasicPlayer::PlayEventSound(const TSoftObjectPtr<USoundBase>& SoundRef)
+{
+    if (SoundRef.IsNull()) return;
+    if (USoundBase* Sound = SoundRef.LoadSynchronous())
+    {
+        UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, Sound, GetActorLocation());
+        if (AC && MyGameInstance && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
+        {
+            AC->SoundClassOverride = MyGameInstance->AudioManager->SFXClass;
+        }
+    }
 }
 
 void ABasicPlayer::StartMovementSimulation()
@@ -900,71 +1940,280 @@ void ABasicPlayer::UpdateMovementSimulation(float DeltaTime)
     }
 }
 
-void ABasicPlayer::CheckForMOB()
+void ABasicPlayer::OnQuestJournalToggle()
 {
-    // Use the player's forward direction instead of the camera
-    FVector Start = GetActorLocation();
-    FVector ForwardVector = GetActorForwardVector();
-    FVector End = Start + ForwardVector * 1000.0f;
+    if (playerData.isOtherClient)
+    {
+        return;
+    }
+
+    if (UIManager)
+    {
+        UIManager->ToggleQuestJournal();
+    }
+}
+
+void ABasicPlayer::OnEquipmentToggle()
+{
+    if (playerData.isOtherClient)
+    {
+        return;
+    }
+
+    if (UIManager)
+    {
+        UIManager->ToggleEquipment();
+    }
+}
+
+void ABasicPlayer::OnAltCursorToggle()
+{
+    if (playerData.isOtherClient) return;
+    if (UIManager) UIManager->ToggleAltCursor();
+}
+
+void ABasicPlayer::OnStatsToggle()
+{
+    if (playerData.isOtherClient) return;
+    if (UIManager) UIManager->TogglePlayerStats();
+}
+
+void ABasicPlayer::OnBestiaryToggle()
+{
+    if (playerData.isOtherClient) return;
+    if (UIManager) UIManager->ToggleBestiary();
+}
+
+void ABasicPlayer::CheckForNPC()
+{
+    if (playerData.isOtherClient)
+    {
+        return;
+    }
+
+    APlayerController* PC = Cast<APlayerController>(GetController());
+    if (!PC)
+    {
+        return;
+    }
+
+    FVector CameraLocation;
+    FRotator CameraRotation;
+    PC->GetPlayerViewPoint(CameraLocation, CameraRotation);
+    const FVector CameraForward = CameraRotation.Vector();
+
+    // First try a line trace with ECC_Pawn to hit NPC capsules directly
+    const float TraceDistance = 1500.0f;
+    FVector TraceEnd = CameraLocation + CameraForward * TraceDistance;
 
     FCollisionQueryParams Params;
     Params.AddIgnoredActor(this);
 
-    float CapsuleRadius = 50.0f;
-    float CapsuleHalfHeight = 100.0f;
+    FHitResult Hit;
+    bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, CameraLocation, TraceEnd, ECC_Pawn, Params);
+    ABasicNPC* HitNPC = bHit ? Cast<ABasicNPC>(Hit.GetActor()) : nullptr;
 
-    TArray<FHitResult> HitResults;
-
-    bool bHit = GetWorld()->SweepMultiByChannel(
-        HitResults, Start, End, FQuat::Identity,
-        ECC_Visibility, FCollisionShape::MakeCapsule(CapsuleRadius, CapsuleHalfHeight),
-        Params
-    );
-
-    ABasicMOB* ClosestMob = nullptr;
-    float ClosestDistance = FLT_MAX;
-
-    if (bHit)
+    // Fallback: find the NPC closest to the camera crosshair within range
+    if (!HitNPC)
     {
-        for (const FHitResult& Hit : HitResults)
+        TArray<AActor*> AllNPCs;
+        UGameplayStatics::GetAllActorsOfClass(GetWorld(), ABasicNPC::StaticClass(), AllNPCs);
+
+        ABasicNPC* BestNPC = nullptr;
+        float BestDot = 0.97f; // ~14 degree cone around crosshair
+
+        for (AActor* Actor : AllNPCs)
         {
-            ABasicMOB* Mob = Cast<ABasicMOB>(Hit.GetActor());
-            if (Mob)
+            ABasicNPC* NPC = Cast<ABasicNPC>(Actor);
+            if (!NPC) continue;
+
+            const float Dist = FVector::Dist(CameraLocation, NPC->GetActorLocation());
+            if (Dist > TraceDistance) continue;
+
+            const FVector ToNPC = (NPC->GetActorLocation() - CameraLocation).GetSafeNormal();
+            const float Dot = FVector::DotProduct(CameraForward, ToNPC);
+            if (Dot > BestDot)
             {
-                float Distance = (Hit.ImpactPoint - Start).Size();
-                if (Distance < ClosestDistance)
+                BestDot = Dot;
+                BestNPC = NPC;
+            }
+        }
+        HitNPC = BestNPC;
+    }
+
+    if (HitNPC && !HitNPC->IsNPCInteractable())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: CheckForNPC hit NPC '%s' but IsNPCInteractable() is false"), *HitNPC->GetNPCName());
+    }
+
+    TrackedNPC = (HitNPC && HitNPC->IsNPCInteractable()) ? HitNPC : nullptr;
+}
+
+void ABasicPlayer::OnInteractInput()
+{
+    UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: OnInteractInput triggered"));
+
+    if (playerData.characterData.bIsDead) return;
+
+    if (playerData.isOtherClient)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: OnInteractInput skipped - isOtherClient"));
+        return;
+    }
+
+    if (!TrackedNPC)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: OnInteractInput - TrackedNPC is NULL (no interactable NPC in crosshair within 600 units)"));
+    }
+    if (!MyGameInstance)
+    {
+        UE_LOG(LogTemp, Error, TEXT("BasicPlayer: OnInteractInput - MyGameInstance is NULL"));
+    }
+    if (!TrackedNPC || !MyGameInstance)
+    {
+        return;
+    }
+
+    UDialogueManager* DlgManager = MyGameInstance->GetDialogueManager();
+    if (!DlgManager)
+    {
+        UE_LOG(LogTemp, Error, TEXT("BasicPlayer: DialogueManager not found"));
+        return;
+    }
+
+    if (DlgManager->IsDialogueActive())
+    {
+        // Close running session before opening a new one
+        DlgManager->CloseDialogue();
+        return;
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Opening dialogue with NPC %d (%s)"),
+        TrackedNPC->GetNPCId(), *TrackedNPC->GetNPCName());
+
+    DlgManager->OpenDialogue(TrackedNPC->GetNPCId());
+}
+
+void ABasicPlayer::CheckForMOB()
+{
+    if (playerData.isOtherClient) return;
+
+    APlayerController* PC = Cast<APlayerController>(GetController());
+    if (!PC) return;
+
+    // Trace from the camera viewpoint Ч consistent with CheckForNPC
+    FVector CameraLocation;
+    FRotator CameraRotation;
+    PC->GetPlayerViewPoint(CameraLocation, CameraRotation);
+    const FVector CameraForward = CameraRotation.Vector();
+
+    const float TraceDistance = 1500.0f;
+    const FVector TraceEnd = CameraLocation + CameraForward * TraceDistance;
+
+    FCollisionQueryParams Params;
+    Params.AddIgnoredActor(this);
+
+    ABasicMOB* SoftTarget = nullptr;
+
+    // Primary: direct line trace against pawn capsules
+    FHitResult Hit;
+    if (GetWorld()->LineTraceSingleByChannel(Hit, CameraLocation, TraceEnd, ECC_Pawn, Params))
+    {
+        ABasicMOB* Mob = Cast<ABasicMOB>(Hit.GetActor());
+        if (Mob && !Mob->GetMOBIsDead())
+        {
+            SoftTarget = Mob;
+        }
+    }
+
+    // Fallback: dot-product cone search (handles meshes that block ECC_Pawn poorly)
+    if (!SoftTarget)
+    {
+        float BestDot = 0.97f; // ~14 degree cone around crosshair
+        TArray<AActor*> AllMOBs;
+        UGameplayStatics::GetAllActorsOfClass(GetWorld(), ABasicMOB::StaticClass(), AllMOBs);
+        for (AActor* Actor : AllMOBs)
+        {
+            ABasicMOB* Mob = Cast<ABasicMOB>(Actor);
+            if (!Mob || Mob->GetMOBIsDead()) continue;
+
+            const float Dist = FVector::Dist(CameraLocation, Mob->GetActorLocation());
+            if (Dist > TraceDistance) continue;
+
+            const FVector ToMob = (Mob->GetActorLocation() - CameraLocation).GetSafeNormal();
+            const float Dot = FVector::DotProduct(CameraForward, ToMob);
+            if (Dot > BestDot)
+            {
+                // LOS check: is the mob actually visible through world geometry?
+                FHitResult LOSHit;
+                FCollisionQueryParams LOSParams;
+                LOSParams.AddIgnoredActor(this);
+                LOSParams.AddIgnoredActor(Mob);
+                const bool bBlocked = GetWorld()->LineTraceSingleByChannel(
+                    LOSHit, CameraLocation, Mob->GetActorLocation(), ECC_Visibility, LOSParams);
+                if (!bBlocked)
                 {
-                    ClosestDistance = Distance;
-                    ClosestMob = Mob;
+                    BestDot = Dot;
+                    SoftTarget = Mob;
                 }
             }
         }
     }
 
-    // Store the current target for skill system
-    int32 CurrentTargetMobId = 0;
-    if (ClosestMob)
+    // Auto-clear locked target when mob dies
+    if (LockedTarget && LockedTarget->GetMOBIsDead())
     {
-        CurrentTargetMobId = FCString::Atoi(*ClosestMob->GetMOBUId());
+        ClearLockedTarget();
     }
 
-    // Update skill target when selecting new target
+    // Auto-clear locked target when player runs too far away (leash)
+    const float MaxLeashDistance = 3000.0f;
+    if (LockedTarget && !bIsAutoAttacking && !bIsApproachingTarget)
+    {
+        if (FVector::Dist(GetActorLocation(), LockedTarget->GetActorLocation()) > MaxLeashDistance)
+        {
+            ClearLockedTarget();
+        }
+    }
+
+    // Effective target: hard lock takes priority over soft hover
+    ABasicMOB* EffectiveTarget = LockedTarget ? LockedTarget : SoftTarget;
+
+    // Update skill system target
+    const int32 EffectiveTargetId = EffectiveTarget
+        ? FCString::Atoi(*EffectiveTarget->GetMOBUId()) : 0;
+
     if (UIManager)
     {
-        UIManager->SetSkillTarget(CurrentTargetMobId, CurrentTargetMobId > 0 ? ECasterType::Mob : ECasterType::None);
+        UIManager->SetSkillTarget(EffectiveTargetId,
+            EffectiveTargetId > 0 ? ECasterType::Mob : ECasterType::None);
+
+        if (LockedTarget)
+        {
+            const int32 MaxHP = LockedTarget->GetMOBAttributes().attributesData.Contains(TEXT("max_health"))
+                ? LockedTarget->GetMOBAttributes().attributesData[TEXT("max_health")].attributeValue
+                : 100;
+            UIManager->UpdateMobTargetFrameHP(LockedTarget->GetMOBCurrentHealth(), MaxHP);
+        }
     }
 
-    // Show/hide MOB head info
-    for (TActorIterator<ABasicMOB> It(GetWorld()); It; ++It)
+    // Show/hide head widget using a cached pointer Ч no TActorIterator every Tick
+    if (PrevSoftTarget != EffectiveTarget)
     {
-        if (*It == ClosestMob)
+        // Hide the widget on the mob that just left the crosshair
+        // (skip if it is the hard-locked target Ч SetLockedTarget already manages it)
+        if (PrevSoftTarget && PrevSoftTarget != LockedTarget && IsValid(PrevSoftTarget))
         {
-            It->MobHeadInfo->ShowWidget(true);
+            PrevSoftTarget->MobHeadInfo->ShowWidget(false);
         }
-        else
+
+        // Show the widget on the new effective target
+        if (EffectiveTarget && IsValid(EffectiveTarget))
         {
-            It->MobHeadInfo->ShowWidget(false);
+            EffectiveTarget->MobHeadInfo->ShowWidget(true);
         }
+
+        PrevSoftTarget = EffectiveTarget;
     }
 }
 
@@ -1036,12 +2285,21 @@ void ABasicPlayer::AttackTarget(int32 TargetID, const FString& SkillSlug, int32 
 // Called when the actor is being destroyed
 void ABasicPlayer::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    // Unregister from actor registry
+    if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        const int32 ActorId = GetActorId_Implementation();
+        if (GameInstance->MOBManager && ActorId > 0)
+        {
+            GameInstance->MOBManager->UnregisterPlayer(ActorId);
+        }
+    }
+
     // Unregister from combat system
     if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetGameInstance()))
     {
         if (UCombatSystemManager* CombatManager = GameInstance->GetCombatSystemManager())
         {
-            // Ѕезопасно отписываемс€ только если объект ещЄ валиден
             if (IsValid(this) && GetActorId_Implementation() > 0)
             {
                 TScriptInterface<ICombatable> CombatableInterface;
@@ -1079,23 +2337,70 @@ int32 ABasicPlayer::GetMaxMana_Implementation() const
 void ABasicPlayer::SetDead_Implementation(bool bNewDead)
 {
     playerData.characterData.bIsDead = bNewDead;
-    
+
+    // Sync dead state on the nameplate (works for both local and remote Ч local is already hidden)
+    if (NameplateComponent)
+    {
+        NameplateComponent->SetDeadState(bNewDead);
+    }
+
     if (bNewDead)
     {
         UE_LOG(LogTemp, Warning, TEXT("Player %d has died"), GetActorId_Implementation());
         OnDeath_Implementation();
+    }
+    else
+    {
+        // Revive: restore movement and hide the death screen
+        if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+        {
+            Movement->SetMovementMode(MOVE_Walking);
+        }
+        HideDeathScreen();
+        // Play revive sound
+        PlayEventSound(ReviveSound);
+        // Notify Blueprint AnimBP so it can exit the death state
+        OnRevive();
+        UE_LOG(LogTemp, Warning, TEXT("Player %d has been revived"), GetActorId_Implementation());
     }
 }
 
 void ABasicPlayer::OnDeath_Implementation()
 {
     UE_LOG(LogTemp, Warning, TEXT("Player %s died"), *playerData.characterData.characterName);
-    
+
     // Clear target when dying
     ClearTarget_Implementation();
-    
-    // Handle player death logic here
-    // For example: disable movement, play death animation, etc.
+    ClearLockedTarget();
+
+    // Play death sound
+    PlayEventSound(DeathSound);
+
+    // Disable movement so the player can't walk while dead
+    if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+    {
+        Movement->DisableMovement();
+    }
+
+    // Drive the AnimBP death state
+    if (UPlayerAnimInstance* AnimInst = GetPlayerAnimInstance())
+    {
+        AnimInst->NotifyDeath();
+    }
+
+    // Show the death screen overlay
+    ShowDeathScreen();
+}
+
+void ABasicPlayer::OnRevive()
+{
+    UE_LOG(LogTemp, Log, TEXT("Player %d OnRevive"), GetActorId_Implementation());
+
+    // Notify AnimBP so it can transition out of the death state
+    if (UPlayerAnimInstance* AnimInst = GetPlayerAnimInstance())
+    {
+        AnimInst->NotifyRevive();
+    }
 }
 
 void ABasicPlayer::SetTarget_Implementation(int32 TargetId, ECasterType TargetType)
@@ -1117,25 +2422,387 @@ void ABasicPlayer::ClearTarget_Implementation()
 
 void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationName, float Duration)
 {
-    UE_LOG(LogTemp, Log, TEXT("Player %d playing skill animation: %s (Duration: %.1f)"), 
+    UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] PlaySkillAnimation: player=%d anim='%s' duration=%.3fs"),
         GetActorId_Implementation(), *AnimationName, Duration);
-    
-    // Play animation logic here
-    // You might want to trigger animation montages or other visual effects
+
+    if (!MyGameInstance) return;
+    UCombatSystemManager* CombatMgr = MyGameInstance->GetCombatSystemManager();
+    if (!CombatMgr) return;
+
+    const int32 CasterId = GetActorId_Implementation();
+
+    if (UPlayerAnimInstance* AnimInst = GetPlayerAnimInstance())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] AnimInstance found (%s), calling StartAttack"),
+            *AnimInst->GetClass()->GetName());
+
+        // Remove any previous OnHitPoint binding so we never fire twice
+        if (HitPointDelegateHandle.IsValid())
+        {
+            AnimInst->OnHitPoint.Remove(HitPointDelegateHandle);
+            HitPointDelegateHandle.Reset();
+        }
+
+        HitPointDelegateHandle = AnimInst->OnHitPoint.AddLambda([CombatMgr](int32 InCasterId)
+        {
+            if (IsValid(CombatMgr))
+            {
+                CombatMgr->NotifyHitPoint(InCasterId);
+            }
+        });
+
+        // Bind OnAttackEnded > PlayerSkillManager::NotifyAnimationEnded so the cast
+        // lock is released only after the montage fully completes, preventing spam.
+        if (AnimEndDelegateHandle.IsValid())
+        {
+            AnimInst->OnAttackEnded.Remove(AnimEndDelegateHandle);
+            AnimEndDelegateHandle.Reset();
+        }
+        if (UPlayerSkillManager* SkillMgr = MyGameInstance ? MyGameInstance->GetPlayerSkillManager() : nullptr)
+        {
+            AnimEndDelegateHandle = AnimInst->OnAttackEnded.AddUObject(
+                SkillMgr, &UPlayerSkillManager::NotifyAnimationEnded);
+        }
+
+        FSkillInitiationData SkillData;
+        SkillData.animationName      = AnimationName;
+        SkillData.animationDuration  = Duration;
+        SkillData.casterId           = CasterId;
+        AnimInst->StartAttack(SkillData);
+
+        // --- Cast sound & projectile from SkillDefinitionRepository ---
+        if (MyGameInstance)
+        {
+            if (USkillDefinitionRepository* Repo = MyGameInstance->GetSkillDefinitionRepository())
+            {
+                const FSkillDefinitionData& Def = Repo->GetDefinition(AnimationName);
+
+                // Play cast sound at player location
+                if (!Def.castSound.IsNull())
+                {
+                    if (USoundBase* Sound = Def.castSound.LoadSynchronous())
+                    {
+                        UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, Sound, GetActorLocation());
+                        if (AC && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
+                        {
+                            AC->SoundClassOverride = MyGameInstance->AudioManager->SFXClass;
+                        }
+                    }
+                }
+
+                // Spawn cast particle effect at socket or player location
+                if (!Def.castEffect.IsNull())
+                {
+                    if (UParticleSystem* Effect = Def.castEffect.LoadSynchronous())
+                    {
+                        FVector CastLoc = GetActorLocation();
+                        FRotator CastRot = GetActorRotation();
+                        if (Def.CastSocketName != NAME_None && GetMesh() && GetMesh()->DoesSocketExist(Def.CastSocketName))
+                        {
+                            CastLoc = GetMesh()->GetSocketLocation(Def.CastSocketName);
+                            CastRot = GetMesh()->GetSocketRotation(Def.CastSocketName);
+                        }
+                        UGameplayStatics::SpawnEmitterAtLocation(
+                            GetWorld(), Effect, CastLoc, CastRot);
+                    }
+                }
+
+                // Niagara cast effect (preferred over Cascade)
+                if (!Def.castEffectNiagara.IsNull())
+                {
+                    if (UNiagaraSystem* NiagaraEffect = Def.castEffectNiagara.LoadSynchronous())
+                    {
+                        FVector CastLoc = GetActorLocation();
+                        FRotator CastRot = GetActorRotation();
+                        if (Def.CastSocketName != NAME_None && GetMesh() && GetMesh()->DoesSocketExist(Def.CastSocketName))
+                        {
+                            CastLoc = GetMesh()->GetSocketLocation(Def.CastSocketName);
+                            CastRot = GetMesh()->GetSocketRotation(Def.CastSocketName);
+                        }
+                        UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+                            GetWorld(), NiagaraEffect, CastLoc, CastRot);
+                    }
+                }
+
+                // Play swing sound if defined (melee woosh before impact)
+                if (!Def.swingSound.IsNull())
+                {
+                    if (USoundBase* Swing = Def.swingSound.LoadSynchronous())
+                    {
+                        UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, Swing, GetActorLocation());
+                        if (AC && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
+                        {
+                            AC->SoundClassOverride = MyGameInstance->AudioManager->SFXClass;
+                        }
+                    }
+                }
+
+                // Spawn projectile if defined
+                if (!Def.projectileClass.IsNull())
+                {
+                    UClass* ProjClass = Def.projectileClass.LoadSynchronous();
+                    if (ProjClass && GetWorld())
+                    {
+                        // Spawn at CastSocketName if defined for this skill,
+                        // fallback to "ProjectileSpawn" socket, then actor location + eye height.
+                        FName ProjSocket = (Def.CastSocketName != NAME_None) ? Def.CastSocketName : FName(TEXT("ProjectileSpawn"));
+                        FVector SpawnLoc = GetMesh() && GetMesh()->DoesSocketExist(ProjSocket)
+                            ? GetMesh()->GetSocketLocation(ProjSocket)
+                            : GetActorLocation() + FVector(0, 0, BaseEyeHeight);
+
+                        // Face the current combat target if one is set.
+                        FRotator SpawnRot = GetActorRotation();
+                        if (CurrentTargetId > 0 && CombatMgr)
+                        {
+                            TScriptInterface<ICombatable> TargetCombatable =
+                                CombatMgr->FindCombatableById(CurrentTargetId, CurrentTargetType);
+                            if (TargetCombatable.GetObject() && IsValid(TargetCombatable.GetObject()))
+                            {
+                                AActor* TargetActor = Cast<AActor>(TargetCombatable.GetObject());
+                                if (TargetActor)
+                                {
+                                    SpawnRot = (TargetActor->GetActorLocation() - SpawnLoc).Rotation();
+                                }
+                            }
+                        }
+
+                        FActorSpawnParameters Params;
+                        Params.SpawnCollisionHandlingOverride =
+                            ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+                        Params.Instigator = this;
+
+                        GetWorld()->SpawnActor<AActor>(ProjClass, SpawnLoc, SpawnRot, Params);
+                        UE_LOG(LogTemp, Log, TEXT("[PlayerAnim] Spawned projectile '%s' for skill '%s'"),
+                            *ProjClass->GetName(), *AnimationName);
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        // AnimBP parent class is not UPlayerAnimInstance Ч log the actual class so we can fix it
+        if (GetMesh() && GetMesh()->GetAnimInstance())
+        {
+            UE_LOG(LogTemp, Error,
+                TEXT("[PlayerAnim] GetPlayerAnimInstance() returned nullptr! "
+                     "Actual AnimInstance class: %s. "
+                     "Set Anim Class parent to UPlayerAnimInstance in the Anim BP."),
+                *GetMesh()->GetAnimInstance()->GetClass()->GetName());
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error,
+                TEXT("[PlayerAnim] GetPlayerAnimInstance() returned nullptr and no AnimInstance exists on mesh!"));
+        }
+
+        // Fallback: no AnimInstance assigned yet Ч schedule timer directly
+        const float HitDelay = FMath::Max(Duration * 0.45f, 0.05f);
+        UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] FALLBACK timer: HitDelay=%.3fs"), HitDelay);
+        if (UWorld* World = GetWorld())
+        {
+            World->GetTimerManager().ClearTimer(HitPointTimerHandle);
+            World->GetTimerManager().SetTimer(HitPointTimerHandle, [CombatMgr, CasterId]()
+            {
+                if (IsValid(CombatMgr))
+                {
+                    CombatMgr->NotifyHitPoint(CasterId);
+                }
+            }, HitDelay, false);
+        }
+    }
 }
 
 void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, ESkillSchool School)
 {
-    UE_LOG(LogTemp, Log, TEXT("Player %d taking %d %s damage (Critical: %s, School: %s)"), 
-        GetActorId_Implementation(), Damage, bIsCritical ? TEXT("CRITICAL") : TEXT("normal"),
+    UE_LOG(LogTemp, Log, TEXT("Player %d taking %d damage (Critical: %s, School: %s)"),
+        GetActorId_Implementation(), Damage,
         bIsCritical ? TEXT("true") : TEXT("false"), *UEnum::GetValueAsString(School));
-    
+
+    // Trigger hit-react animation
+    if (UPlayerAnimInstance* AnimInst = GetPlayerAnimInstance())
+    {
+        AnimInst->NotifyHit();
+    }
+
+    // Play hit received sound (generic player grunt / armor clank)
+    PlayEventSound(HitReceivedSound);
+
+    // NOTE: Floating combat text is handled by DamageEffectHandler::ShowFloatingDamageText
+    // to avoid duplicates. Do NOT call FCT->ShowDamage here.
+
+    // --- Hit sound + hit particle from the skill that caused the damage ---
+    // CurrentSkillName is set by the server via combatInitiation before combatResult.
+    if (MyGameInstance)
+    {
+        if (USkillDefinitionRepository* Repo = MyGameInstance->GetSkillDefinitionRepository())
+        {
+            const FSkillDefinitionData& Def = Repo->GetDefinition(CurrentSkillName);
+            bool bHitSoundPlayed = false;
+
+            // --- Impact sound: WeaponImpactType ? ArmorMaterialType lookup ---
+            // ArmorMaterialType is read from the chest slot item in DT_ItemVisuals.
+            if (Def.WeaponImpactType != NAME_None)
+            {
+                if (UDataTable* ImpactTable = MyGameInstance->GetImpactSoundsTable())
+                {
+                    // Resolve ArmorMaterialType from the equipped chest piece via DT_ItemVisuals
+                    FName ArmorMat = NAME_None;
+                    if (UEquipmentManager* EqMgr = MyGameInstance->GetEquipmentManager())
+                    {
+                        FEquipmentSlotData ChestSlot = EqMgr->GetSlot(TEXT("chest"));
+                        if (ChestSlot.bIsOccupied && !ChestSlot.itemSlug.IsEmpty())
+                        {
+                            if (UDataTable* VisualsTable = MyGameInstance->GetItemVisualsDataTable())
+                            {
+                                FName VisualKey = FName(*ChestSlot.itemSlug);
+                                if (const FItemVisualData* VisRow = VisualsTable->FindRow<FItemVisualData>(VisualKey, TEXT("")))
+                                {
+                                    ArmorMat = VisRow->ArmorMaterialType;
+                                }
+                            }
+                        }
+                    }
+
+                    // Fallback: no chest armor = flesh
+                    if (ArmorMat == NAME_None)
+                    {
+                        ArmorMat = FName(TEXT("flesh"));
+                    }
+
+                    FName ImpactKey = FName(*FString::Printf(TEXT("%s_%s"),
+                        *Def.WeaponImpactType.ToString(), *ArmorMat.ToString()));
+
+                    if (const FImpactSoundData* ImpactRow = ImpactTable->FindRow<FImpactSoundData>(ImpactKey, TEXT("")))
+                    {
+                        if (ImpactRow->ImpactSounds.Num() > 0)
+                        {
+                            int32 Idx = FMath::RandRange(0, ImpactRow->ImpactSounds.Num() - 1);
+                            if (USoundBase* ImpactSound = ImpactRow->ImpactSounds[Idx].LoadSynchronous())
+                            {
+                                UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, ImpactSound, GetActorLocation());
+                                if (AC && MyGameInstance && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
+                                {
+                                    AC->SoundClassOverride = MyGameInstance->AudioManager->SFXClass;
+                                }
+                                bHitSoundPlayed = true;
+                            }
+                        }
+
+                        // Spawn impact VFX if defined
+                        if (!ImpactRow->ImpactVFX.IsNull())
+                        {
+                            if (UNiagaraSystem* ImpactVFX = ImpactRow->ImpactVFX.LoadSynchronous())
+                            {
+                                FVector HitLoc = GetCombatPosition_Implementation();
+                                if (Def.HitSocketName != NAME_None && GetMesh() && GetMesh()->DoesSocketExist(Def.HitSocketName))
+                                {
+                                    HitLoc = GetMesh()->GetSocketLocation(Def.HitSocketName);
+                                }
+                                UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), ImpactVFX, HitLoc);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Fallback: generic hitSound from skill definition
+            if (!bHitSoundPlayed && !Def.hitSound.IsNull())
+            {
+                if (USoundBase* Sound = Def.hitSound.LoadSynchronous())
+                {
+                    UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, Sound, GetActorLocation());
+                    if (AC && MyGameInstance && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
+                    {
+                        AC->SoundClassOverride = MyGameInstance->AudioManager->SFXClass;
+                    }
+                }
+            }
+
+            if (!Def.hitEffect.IsNull())
+            {
+                if (UParticleSystem* Effect = Def.hitEffect.LoadSynchronous())
+                {
+                    FVector HitLoc = GetCombatPosition_Implementation();
+                    FRotator HitRot = FRotator::ZeroRotator;
+                    if (Def.HitSocketName != NAME_None && GetMesh() && GetMesh()->DoesSocketExist(Def.HitSocketName))
+                    {
+                        HitLoc = GetMesh()->GetSocketLocation(Def.HitSocketName);
+                        HitRot = GetMesh()->GetSocketRotation(Def.HitSocketName);
+                    }
+                    UGameplayStatics::SpawnEmitterAtLocation(
+                        GetWorld(), Effect, HitLoc, HitRot);
+                }
+            }
+
+            // Niagara hit effect (preferred over Cascade)
+            if (!Def.hitEffectNiagara.IsNull())
+            {
+                if (UNiagaraSystem* NiagaraEffect = Def.hitEffectNiagara.LoadSynchronous())
+                {
+                    FVector HitLoc = GetCombatPosition_Implementation();
+                    FRotator HitRot = FRotator::ZeroRotator;
+                    if (Def.HitSocketName != NAME_None && GetMesh() && GetMesh()->DoesSocketExist(Def.HitSocketName))
+                    {
+                        HitLoc = GetMesh()->GetSocketLocation(Def.HitSocketName);
+                        HitRot = GetMesh()->GetSocketRotation(Def.HitSocketName);
+                    }
+                    UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+                        GetWorld(), NiagaraEffect, HitLoc, HitRot);
+                }
+            }
+        }
+    }
+
+    // --- Local player only: Camera Shake + Screen Flash + Hit Stop on self ---
+    if (!playerData.isOtherClient)
+    {
+        // Camera shake
+        if (UIManager)
+        {
+            const float ShakeIntensity = bIsCritical ? 1.0f : 0.5f;
+            UIManager->PlayCombatCameraShake(ShakeIntensity);
+            UIManager->ShowDamageScreenFlash();
+        }
+    }
+
+    // --- Hit Stop: freeze this actor briefly so the impact feels weighty ---
+    if (UWorld* W = GetWorld())
+    {
+        CustomTimeDilation = 0.0f;
+        FTimerHandle HitStopTimer;
+        TWeakObjectPtr<ABasicPlayer> WeakSelf(this);
+        W->GetTimerManager().SetTimer(HitStopTimer, [WeakSelf]()
+        {
+            if (WeakSelf.IsValid())
+            {
+                WeakSelf->CustomTimeDilation = 1.0f;
+            }
+        }, 0.06f, false);
+    }
 }
 
 void ABasicPlayer::ShowHealingEffect_Implementation(int32 Healing)
 {
     UE_LOG(LogTemp, Log, TEXT("Player %d healed for %d"), GetActorId_Implementation(), Healing);
-    
+
+    // Play heal received sound
+    PlayEventSound(HealReceivedSound);
+
+    // Floating green heal number
+    if (UIManager)
+    {
+        if (UFloatingCombatTextManager* FCT = UIManager->GetFCTManager())
+        {
+            FCT->ShowDamage(GetCombatPosition_Implementation(), static_cast<float>(Healing), false, EDamageType::Heal);
+        }
+
+        // Screen flash only for local player
+        if (!playerData.isOtherClient)
+        {
+            UIManager->ShowHealScreenFlash();
+        }
+    }
 }
 
 void ABasicPlayer::ShowBuffEffect_Implementation(const FAppliedEffectData& Effect)
@@ -1145,6 +2812,51 @@ void ABasicPlayer::ShowBuffEffect_Implementation(const FAppliedEffectData& Effec
     
     // Handle buff/debuff visual effects here
     // You might want to show icons, particle effects, etc.
+}
+
+void ABasicPlayer::ShowDeathScreen()
+{
+    if (playerData.isOtherClient) return;
+
+    if (UIManager)
+    {
+        UIManager->ShowDeathScreen(0);
+    }
+}
+
+void ABasicPlayer::HideDeathScreen()
+{
+    if (UIManager)
+    {
+        UIManager->HideDeathScreen();
+    }
+}
+
+void ABasicPlayer::OnRespawnClicked()
+{
+    // Only the local player can request a respawn, and only when dead
+    if (playerData.isOtherClient || !playerData.characterData.bIsDead)
+    {
+        return;
+    }
+
+    if (!MyGameInstance)
+    {
+        UE_LOG(LogTemp, Error, TEXT("BasicPlayer: OnRespawnClicked - MyGameInstance is null"));
+        return;
+    }
+
+    UPlayerManager* PM = MyGameInstance->GetPlayerManager();
+    if (!PM)
+    {
+        UE_LOG(LogTemp, Error, TEXT("BasicPlayer: OnRespawnClicked - PlayerManager is null"));
+        return;
+    }
+
+    FClientDataStruct ClientData = MyGameInstance->GetCurrentClientData();
+    PM->SendRespawnRequest(ClientData);
+    UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Respawn requested for character %d"),
+        playerData.characterData.characterId);
 }
 
 // Add these method implementations at the end of the file, before the closing brace
@@ -1177,18 +2889,74 @@ void ABasicPlayer::UpdatePlayerStats(const FPlayerStatsUpdateStruct& StatsUpdate
 
 void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdate)
 {
-	// Update the player data
+	// Capture old level BEFORE UpdatePlayerStats overwrites characterData
+	const int32 OldLevel = playerData.characterData.characterLevel;
+
+	// Update HP/MP/level on the character data
 	UpdatePlayerStats(StatsUpdate);
-	
-	// Refresh the UI to reflect new stats
+
+	// Refresh the HP/MP HUD
 	RefreshHUD();
-	
-	// Update experience data if level changed
-	if (StatsUpdate.level != playerData.characterData.characterLevel)
+
+	// Always sync all experience fields from the stats packet into characterData.
+	// The join packet no longer carries exp/stats Ч stats_update is the sole source
+	// of truth for level, XP, XP thresholds, HP max, and MP max.
+	playerData.characterData.characterExperiencePoints  = StatsUpdate.experienceCurrent;
+	playerData.characterData.characterExpForLevelStart  = StatsUpdate.experienceLevelStart;
+	playerData.characterData.characterExpForLevelEnd    = StatsUpdate.experienceNextLevel;
+	playerData.characterData.characterExperienceDebt    = StatsUpdate.experienceDebt;
+
+	UpdateExperienceData();
+
+	// Apply move_speed attribute from the server to the CharacterMovementComponent.
+	// The server sends speed in its own units; MoveSpeedScale converts them to UU/s.
+	if (!playerData.isOtherClient)
 	{
-		UpdateExperienceData();
+		const FStatAttributeEntry* SpeedAttr = StatsUpdate.attributes.FindByPredicate(
+			[](const FStatAttributeEntry& A){ return A.slug.Equals(TEXT("move_speed"), ESearchCase::IgnoreCase); });
+
+		if (SpeedAttr && SpeedAttr->effective > 0.f)
+		{
+			const float NewSpeed = SpeedAttr->effective * MoveSpeedScale;
+			if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+			{
+				// Update the base speed and re-apply any active overweight penalty.
+				BaseWalkSpeed = NewSpeed;
+				CMC->MaxWalkSpeed = bOverweightPenaltyActive ? NewSpeed * 0.7f : NewSpeed;
+				UE_LOG(LogTemp, Log, TEXT("BasicPlayer: MaxWalkSpeed updated to %.1f (server move_speed=%.1f, scale=%.1f)"),
+					CMC->MaxWalkSpeed, static_cast<float>(SpeedAttr->effective), MoveSpeedScale);
+			}
+		}
 	}
-	
+
+	// Forward the full active-effects list to the HUD widget (replaces previous snapshot).
+	// ActiveEffectsWidget keeps its own per-second tick for countdown labels.
+	if (UIManager)
+	{
+		if (UPlayerInterfaceWidget* PIW = UIManager->GetPlayerInterfaceWidget())
+		{
+			if (UActiveEffectsWidget* AEW = PIW->GetActiveEffectsWidget())
+			{
+				AEW->RefreshEffects(StatsUpdate.activeEffects);
+			}
+		}
+	}
+
+	// Log each effect for diagnostics and fire ShowBuffEffect for Blueprint hooks.
+	for (const FActiveEffectEntry& Effect : StatsUpdate.activeEffects)
+	{
+		FAppliedEffectData EffectData;
+		EffectData.effectName = Effect.slug;
+		EffectData.effectType = Effect.effectTypeSlug;
+		if (Effect.expiresAt > 0)
+		{
+			const int64 NowSec = static_cast<int64>(FDateTime::UtcNow().ToUnixTimestamp());
+			EffectData.duration = static_cast<float>(FMath::Max<int64>(Effect.expiresAt - NowSec, 0));
+		}
+		EffectData.value = static_cast<int32>(Effect.value);
+		ShowBuffEffect_Implementation(EffectData);
+	}
+
 	UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Processed stats update and refreshed UI"));
 }
 

@@ -1,13 +1,34 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
+
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Gameplay/Players/BasicPlayer.h"
+#include "Gameplay/Mobs/MOBAnimInstance.h"
 #include "Gameplay/Combat/CombatSystemManager.h"
 #include "MyGameInstance.h"
+#include "Services/LocalizationSubsystem.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
+#include "Gameplay/UI/DamageTextWidget.h"
+#include "UI/UIManager.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Engine/Engine.h"
 #include "Components/CapsuleComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Gameplay/Skills/SkillDefinitionRepository.h"
+#include "Particles/ParticleSystem.h"
+#include "NiagaraSystem.h"
+#include "NiagaraFunctionLibrary.h"
+
+// Convert ESkillSchool to EDamageType for floating combat text
+static EDamageType MOBSchoolToDamageType(ESkillSchool School)
+{
+    switch (School)
+    {
+    case ESkillSchool::Fire:    return EDamageType::Fire;
+    case ESkillSchool::Ice:     return EDamageType::Ice;
+    default:                    return EDamageType::Physical;
+    }
+}
 
 // Sets default values
 ABasicMOB::ABasicMOB()
@@ -44,7 +65,32 @@ ABasicMOB::ABasicMOB()
 void ABasicMOB::BeginPlay()
 {
 	Super::BeginPlay();
-	
+
+	// Inject TimeSyncService into movement component so dead-reckoning
+	// uses the calibrated clock offset instead of raw wall-clock delta
+	if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+	{
+		if (MOBMovementComponent)
+		{
+			MOBMovementComponent->SetTimeSyncService(GI->GetTimeSyncService());
+		}
+
+		// Route mob audio through the SFX SoundClass so the SFX volume slider works
+		if (GI->AudioManager && GI->AudioManager->SFXClass)
+		{
+			if (AudioComponentMain)  { AudioComponentMain->SoundClassOverride  = GI->AudioManager->SFXClass; }
+			if (AudioComponentSecond) { AudioComponentSecond->SoundClassOverride = GI->AudioManager->SFXClass; }
+		}
+
+
+		// Register in O(1) actor registry so FindTargetActor skips GetAllActorsOfClass
+		const int32 Uid = GetActorId_Implementation();
+		if (GI->MOBManager && Uid > 0)
+		{
+			GI->MOBManager->RegisterMob(Uid, this);
+		}
+	}
+
 	// Инициализируем UI с небольшой задержкой, чтобы убедиться, что все данные загружены
 	if (GetWorld())
 	{
@@ -58,6 +104,16 @@ void ABasicMOB::BeginPlay()
 // Override EndPlay to unregister from combat system
 void ABasicMOB::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    // Unregister from actor registry
+    if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        const int32 Uid = GetActorId_Implementation();
+        if (GameInstance->MOBManager && Uid > 0)
+        {
+            GameInstance->MOBManager->UnregisterMob(Uid);
+        }
+    }
+
     // Unregister from combat system
     if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetGameInstance()))
     {
@@ -79,15 +135,172 @@ void ABasicMOB::EndPlay(const EEndPlayReason::Type EndPlayReason)
     Super::EndPlay(EndPlayReason);
 }
 
+void ABasicMOB::OnReceiveSkillInitiation(const FSkillInitiationData& SkillData)
+{
+	// Broadcast to Blueprint / AnimBP for cast animation
+	OnSkillInitiated.Broadcast(SkillData, SkillData.animationDuration);
+
+	// This method is only called by CombatSystemManager when this mob IS the caster,
+	// so we unconditionally drive the animation and hit-point notify binding.
+	PlaySkillAnimation_Implementation(SkillData.animationName, SkillData.animationDuration);
+
+	if (UMOBAnimInstance* AnimInst = Cast<UMOBAnimInstance>(GetMesh()->GetAnimInstance()))
+	{
+		if (HitPointDelegateHandle.IsValid())
+		{
+			AnimInst->OnHitPoint.Remove(HitPointDelegateHandle);
+			HitPointDelegateHandle.Reset();
+		}
+
+		if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+		{
+			if (UCombatSystemManager* CombatMgr = GI->GetCombatSystemManager())
+			{
+				HitPointDelegateHandle = AnimInst->OnHitPoint.AddLambda([CombatMgr](int32 InCasterId)
+				{
+					if (IsValid(CombatMgr))
+					{
+						CombatMgr->NotifyHitPoint(InCasterId);
+					}
+				});
+			}
+		}
+
+		AnimInst->StartAttack(SkillData);
+	}
+}
+
+void ABasicMOB::OnReceiveSkillResult(const FSkillResultData& SkillResult)
+{
+	// Update health/mana with authoritative server values
+	if (SkillResult.targetId == GetActorId_Implementation())
+	{
+		SetMOBCurrentHealth(SkillResult.finalTargetHealth);
+		SetMOBCurrentMana(SkillResult.finalTargetMana);
+
+		if (!SkillResult.isMissed)
+		{
+			if (SkillResult.damage > 0)
+			{
+				SetMobIsDamaged(true);
+
+				if (UMOBAnimInstance* AnimInst = Cast<UMOBAnimInstance>(GetMesh()->GetAnimInstance()))
+				{
+					AnimInst->NotifyHit();
+				}
+			}
+		}
+
+		if (SkillResult.targetDied)
+		{
+			SetMOBIsDead(true);
+			Die();
+			OnMOBDied.Broadcast();
+		}
+
+		ForceUpdateUI();
+	}
+
+	OnSkillResult.Broadcast(SkillResult);
+}
+
+void ABasicMOB::OnReceiveEffectTick(const FEffectTickData& EffectData)
+{
+	// characterId in effectTick matches mobUniqueID (numeric form)
+	if (EffectData.characterId != GetActorId_Implementation())
+	{
+		return;
+	}
+
+	SetMOBCurrentHealth(EffectData.newHealth);
+	SetMOBCurrentMana(EffectData.newMana);
+
+	// Damage-over-time: flag as damaged for visual feedback
+	if (EffectData.value > 0 && EffectData.effectTypeSlug.Contains(TEXT("damage")))
+	{
+		SetMobIsDamaged(true);
+	}
+
+	if (EffectData.targetDied)
+	{
+		SetMOBIsDead(true);
+		Die();
+		OnMOBDied.Broadcast();
+	}
+
+	ForceUpdateUI();
+	OnEffectTick.Broadcast(EffectData);
+}
+
+void ABasicMOB::OnReceiveTargetLost()
+{
+	SetMobTargetId(0);
+	SetMobTargetType(TEXT(""));
+	SetMOBIsAggressive(false);
+	bAggroLockedOut = true;
+
+	if (MobHeadInfo)
+	{
+		MobHeadInfo->UpdateMobAggressive(false);
+	}
+
+	if (UMOBAnimInstance* AnimInst = Cast<UMOBAnimInstance>(GetMesh()->GetAnimInstance()))
+	{
+		AnimInst->NotifyTargetLost();
+	}
+
+	OnMOBTargetLost.Broadcast();
+}
+
 void ABasicMOB::OnReceiveServerPacket(const FPositionDataStruct& MOBPosition)
 {
-	// Store position in MOB data
 	MOBData.mobPosition = MOBPosition;
 
 	if (MOBMovementComponent)
 	{
 		MOBMovementComponent->OnReceiveServerPacket(MOBPosition);
 	}
+}
+
+void ABasicMOB::OnReceiveMovePacket(const FMobMoveEntryStruct& MoveEntry, int64 ServerSendMs, int64 ClientRecvMs)
+{
+	// Update stored position.
+	MOBData.mobPosition = MoveEntry.position;
+
+	// Forward combatState to movement component so it can freeze/unfreeze.
+	if (MOBMovementComponent)
+	{
+		MOBMovementComponent->SetCombatState(MoveEntry.combatState);
+	}
+
+	// Only states 1 (CHASING) and 2/3/4 (attack cycle) mean the mob is
+	// actively targeting a player and should display as aggressive.
+	// States 5 (RETURNING), 6 (EVADING), 7 (FLEEING) mean the mob already
+	// lost or is disengaging — aggro is cleared via OnReceiveTargetLost.
+	// State 0 (PATROLLING) is neutral.
+	const bool bActivelyEngaging = (MoveEntry.combatState >= 1 && MoveEntry.combatState <= 4);
+	if (bActivelyEngaging)
+	{
+		if (bAggroLockedOut)
+		{
+			// New aggro after a target-lost: unlock and enable aggro
+			bAggroLockedOut = false;
+		}
+		MOBData.bIsAggressive = true;
+	}
+
+	if (MOBMovementComponent)
+	{
+		MOBMovementComponent->OnReceiveMovePacket(MoveEntry, ServerSendMs, ClientRecvMs);
+	}
+}
+
+void ABasicMOB::OnReceiveMobHealthUpdate(const FMobHealthUpdateStruct& HealthUpdate)
+{
+	// Server sends this during RETURNING state (leash regen 10%/sec).
+	// Simply update HP and refresh the head-info widget.
+	SetMOBCurrentHealth(HealthUpdate.currentHealth);
+	ForceUpdateUI();
 }
 
 // Called every frame
@@ -143,10 +356,6 @@ void ABasicMOB::Tick(float DeltaTime)
 		// 3. Есть данные для отображения (mobID != 0)
 		if ((LastHealth != MOBData.mobCurrentHealth || LastMana != MOBData.mobCurrentMana || !bUIInitialized) && MOBData.mobID != 0)
 		{
-			// Добавляем логи для отладки
-			UE_LOG(LogTemp, Warning, TEXT("MOB %s (ID:%d): Updating Health %d->%d, Mana %d->%d, MaxHP: %f, MaxMP: %f, UI Initialized: %s"), 
-				*MOBData.mobName, MOBData.mobID, LastHealth, MOBData.mobCurrentHealth, LastMana, MOBData.mobCurrentMana, MaxHealth, MaxMana, bUIInitialized ? TEXT("true") : TEXT("false"));
-
 			MobHeadInfo->UpdateInfo(
 				MOBData.mobCurrentHealth,
 				MaxHealth,
@@ -302,11 +511,56 @@ void ABasicMOB::SetIsAggressiveState_Implementation(int32 TargetId, ECasterType 
 {
 	SetMOBIsAggressive(bIsAggressive);
 
+	// Explicit aggro event from server — unlock movePacket aggro gate.
+	if (bIsAggressive)
+	{
+		bAggroLockedOut = false;
+		// Play aggro sound when the mob first becomes aggressive
+		PlaySoundByName("Aggro");
+	}
+
 	if (MobHeadInfo)
 	{
 		MobHeadInfo->UpdateMobAggressive(bIsAggressive);
 	}
-	
+
+	// Auto-lock: if mob just aggroed the local player and player has no lock
+	if (bIsAggressive && TargetType == ECasterType::Player)
+	{
+		if (UWorld* W = GetWorld())
+		{
+			APlayerController* PC = W->GetFirstPlayerController();
+			if (PC)
+			{
+				if (ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn()))
+				{
+					if (!Player->GetLockedTarget())
+					{
+						Player->SetLockedTarget(this);
+					}
+					else if (Player->GetLockedTarget() == this)
+					{
+						// This mob is already locked — refresh the target frame name color
+						if (UUIManager* UIMgr = Player->GetUIManager())
+						{
+							const int32 MaxHP = MOBData.mobAttributes.attributesData.Contains(TEXT("max_health"))
+								? MOBData.mobAttributes.attributesData[TEXT("max_health")].attributeValue
+								: 100;
+							UIMgr->ShowMobTargetFrame(
+								MOBData.mobSlug,
+								MOBData.mobName,
+								MOBData.mobLevel,
+								MOBData.mobCurrentHealth,
+								MaxHP,
+								bIsAggressive,
+								CachedIcon);
+						}
+					}
+				}
+			}
+		}
+	}
+
 	UE_LOG(LogTemp, Log, TEXT("MOB %d is now %s"), 
 		GetActorId_Implementation(), bIsAggressive ? TEXT("Aggressive") : TEXT("Passive"));
 }
@@ -315,29 +569,237 @@ void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, 
 {
     UE_LOG(LogTemp, Log, TEXT("MOB %d playing skill animation: %s (Duration: %.1f)"), 
         GetActorId_Implementation(), *AnimationName, Duration);
-    
-    // Play sound based on animation type
-    if (AnimationName.Contains(TEXT("attack"), ESearchCase::IgnoreCase))
+
+    // Remember which skill is being cast so ShowDamageEffect can look up hitSound/hitEffect
+    CurrentSkillName = AnimationName;
+
+    // --- Cast sound + cast particle from SkillDefinitionRepository ---
+    bool bCastSoundPlayed = false;
+    if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
     {
-        PlaySoundByName("Attack");
+        if (USkillDefinitionRepository* Repo = GI->GetSkillDefinitionRepository())
+        {
+            const FSkillDefinitionData& Def = Repo->GetDefinition(AnimationName);
+
+            if (!Def.castSound.IsNull())
+            {
+                if (USoundBase* Sound = Def.castSound.LoadSynchronous())
+                {
+                    UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, Sound, GetActorLocation());
+                    if (AC && GI->AudioManager && GI->AudioManager->SFXClass)
+                    {
+                        AC->SoundClassOverride = GI->AudioManager->SFXClass;
+                    }
+                    bCastSoundPlayed = true;
+                }
+            }
+
+            if (!Def.castEffect.IsNull())
+            {
+                if (UParticleSystem* Effect = Def.castEffect.LoadSynchronous())
+                {
+                    // Use socket-based position if CastSocketName is set
+                    FVector CastLoc = GetActorLocation();
+                    FRotator CastRot = GetActorRotation();
+                    if (Def.CastSocketName != NAME_None && GetMesh() && GetMesh()->DoesSocketExist(Def.CastSocketName))
+                    {
+                        CastLoc = GetMesh()->GetSocketLocation(Def.CastSocketName);
+                        CastRot = GetMesh()->GetSocketRotation(Def.CastSocketName);
+                    }
+                    UGameplayStatics::SpawnEmitterAtLocation(
+                        GetWorld(), Effect, CastLoc, CastRot);
+                }
+            }
+
+            // Niagara cast effect (preferred over Cascade)
+            if (!Def.castEffectNiagara.IsNull())
+            {
+                if (UNiagaraSystem* NiagaraEffect = Def.castEffectNiagara.LoadSynchronous())
+                {
+                    FVector CastLoc = GetActorLocation();
+                    FRotator CastRot = GetActorRotation();
+                    if (Def.CastSocketName != NAME_None && GetMesh() && GetMesh()->DoesSocketExist(Def.CastSocketName))
+                    {
+                        CastLoc = GetMesh()->GetSocketLocation(Def.CastSocketName);
+                        CastRot = GetMesh()->GetSocketRotation(Def.CastSocketName);
+                    }
+                    UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+                        GetWorld(), NiagaraEffect, CastLoc, CastRot);
+                }
+            }
+
+            // Play swing sound if defined (melee woosh before impact)
+            if (!Def.swingSound.IsNull())
+            {
+                if (USoundBase* Swing = Def.swingSound.LoadSynchronous())
+                {
+                    UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, Swing, GetActorLocation());
+                    if (AC && GI->AudioManager && GI->AudioManager->SFXClass)
+                    {
+                        AC->SoundClassOverride = GI->AudioManager->SFXClass;
+                    }
+                }
+            }
+        }
     }
-    else if (AnimationName.Contains(TEXT("hit"), ESearchCase::IgnoreCase))
+
+    // Legacy per-type sound fallback — only when DataTable has no castSound assigned
+    if (!bCastSoundPlayed)
     {
-        PlaySoundByName("Hit");
+        if (AnimationName.Contains(TEXT("attack"), ESearchCase::IgnoreCase))
+        {
+            PlaySoundByName("Attack");
+        }
     }
 }
 
 void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, ESkillSchool School)
 {
-    UE_LOG(LogTemp, Log, TEXT("MOB %d taking %d %s damage (Critical: %s, School: %s)"), 
-        GetActorId_Implementation(), Damage, bIsCritical ? TEXT("CRITICAL") : TEXT("normal"),
+    UE_LOG(LogTemp, Log, TEXT("MOB %d taking %d damage (Critical: %s, School: %s)"), 
+        GetActorId_Implementation(), Damage,
         bIsCritical ? TEXT("true") : TEXT("false"), *UEnum::GetValueAsString(School));
     
     // Set damage flag for visual feedback
     SetMobIsDamaged(true);
-    
-    // Play hit sound
-    PlaySoundByName("Hit");
+
+    // --- Hit sound + hit particle from SkillDefinitionRepository ---
+    // CurrentSkillName is set by DamageEffectHandler before this call so it
+    // always reflects the actual incoming skill, regardless of who the caster is.
+    bool bHitSoundPlayed = false;
+    if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (USkillDefinitionRepository* Repo = GI->GetSkillDefinitionRepository())
+        {
+            const FSkillDefinitionData& Def = Repo->GetDefinition(CurrentSkillName);
+
+            // --- Impact sound: WeaponImpactType × ArmorMaterialType lookup ---
+            if (Def.WeaponImpactType != NAME_None)
+            {
+                if (UDataTable* ImpactTable = GI->GetImpactSoundsTable())
+                {
+                    // Resolve ArmorMaterialType from MobDefinitionTable
+                    FName ArmorMat = NAME_None;
+                    if (MobDefinitionTable)
+                    {
+                        FName SlugKey = FName(*MOBData.mobSlug);
+                        if (const FMobDefinition* MobDef = MobDefinitionTable->FindRow<FMobDefinition>(SlugKey, TEXT("")))
+                        {
+                            ArmorMat = MobDef->ArmorMaterialType;
+                        }
+                    }
+
+                    if (ArmorMat != NAME_None)
+                    {
+                        FName ImpactKey = FName(*FString::Printf(TEXT("%s_%s"),
+                            *Def.WeaponImpactType.ToString(), *ArmorMat.ToString()));
+
+                        if (const FImpactSoundData* ImpactRow = ImpactTable->FindRow<FImpactSoundData>(ImpactKey, TEXT("")))
+                        {
+                        if (ImpactRow->ImpactSounds.Num() > 0)
+                        {
+                            int32 Idx = FMath::RandRange(0, ImpactRow->ImpactSounds.Num() - 1);
+                            if (USoundBase* ImpactSound = ImpactRow->ImpactSounds[Idx].LoadSynchronous())
+                            {
+                                UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, ImpactSound, GetActorLocation());
+                                if (AC && GI->AudioManager && GI->AudioManager->SFXClass)
+                                {
+                                    AC->SoundClassOverride = GI->AudioManager->SFXClass;
+                                }
+                                bHitSoundPlayed = true;
+                            }
+                        }
+
+                            // Spawn impact VFX if defined
+                            if (!ImpactRow->ImpactVFX.IsNull())
+                            {
+                                if (UNiagaraSystem* ImpactVFX = ImpactRow->ImpactVFX.LoadSynchronous())
+                                {
+                                    FVector HitLoc = GetCombatPosition_Implementation();
+                                    if (Def.HitSocketName != NAME_None && GetMesh() && GetMesh()->DoesSocketExist(Def.HitSocketName))
+                                    {
+                                        HitLoc = GetMesh()->GetSocketLocation(Def.HitSocketName);
+                                    }
+                                    UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), ImpactVFX, HitLoc);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Fallback: generic hitSound from skill definition
+            if (!bHitSoundPlayed && !Def.hitSound.IsNull())
+            {
+                if (USoundBase* Sound = Def.hitSound.LoadSynchronous())
+                {
+                    UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, Sound, GetActorLocation());
+                    if (AC && GI->AudioManager && GI->AudioManager->SFXClass)
+                    {
+                        AC->SoundClassOverride = GI->AudioManager->SFXClass;
+                    }
+                    bHitSoundPlayed = true;
+                }
+            }
+
+            if (!Def.hitEffect.IsNull())
+            {
+                if (UParticleSystem* Effect = Def.hitEffect.LoadSynchronous())
+                {
+                    // Use socket-based position if HitSocketName is set on the target
+                    FVector HitLoc = GetCombatPosition_Implementation();
+                    FRotator HitRot = FRotator::ZeroRotator;
+                    if (Def.HitSocketName != NAME_None && GetMesh() && GetMesh()->DoesSocketExist(Def.HitSocketName))
+                    {
+                        HitLoc = GetMesh()->GetSocketLocation(Def.HitSocketName);
+                        HitRot = GetMesh()->GetSocketRotation(Def.HitSocketName);
+                    }
+                    UGameplayStatics::SpawnEmitterAtLocation(
+                        GetWorld(), Effect, HitLoc, HitRot);
+                }
+            }
+
+            // Niagara hit effect (preferred over Cascade)
+            if (!Def.hitEffectNiagara.IsNull())
+            {
+                if (UNiagaraSystem* NiagaraEffect = Def.hitEffectNiagara.LoadSynchronous())
+                {
+                    FVector HitLoc = GetCombatPosition_Implementation();
+                    FRotator HitRot = FRotator::ZeroRotator;
+                    if (Def.HitSocketName != NAME_None && GetMesh() && GetMesh()->DoesSocketExist(Def.HitSocketName))
+                    {
+                        HitLoc = GetMesh()->GetSocketLocation(Def.HitSocketName);
+                        HitRot = GetMesh()->GetSocketRotation(Def.HitSocketName);
+                    }
+                    UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+                        GetWorld(), NiagaraEffect, HitLoc, HitRot);
+                }
+            }
+        }
+    }
+
+    // Legacy fallback hit sound — only when DataTable has no hitSound assigned
+    if (!bHitSoundPlayed)
+    {
+        PlaySoundByName("Hit");
+    }
+
+    // NOTE: Floating combat text is handled by DamageEffectHandler::ShowFloatingDamageText
+    // to avoid duplicates. Do NOT call FCT->ShowDamage here.
+
+    // --- Hit Stop: freeze this MOB briefly so the impact feels weighty ---
+    if (UWorld* W = GetWorld())
+    {
+        CustomTimeDilation = 0.0f;
+        FTimerHandle HitStopTimer;
+        TWeakObjectPtr<ABasicMOB> WeakSelf(this);
+        W->GetTimerManager().SetTimer(HitStopTimer, [WeakSelf]()
+        {
+            if (WeakSelf.IsValid())
+            {
+                WeakSelf->CustomTimeDilation = 1.0f;
+            }
+        }, 0.06f, false);
+    }
 }
 
 void ABasicMOB::ShowHealingEffect_Implementation(int32 Healing)
@@ -363,9 +825,20 @@ void ABasicMOB::SetupMobVisual(FName MobSlug)
 
 	FStreamableManager& Streamable = UAssetManager::GetStreamableManager();
 
-	Streamable.RequestAsyncLoad(VisualData.SkeletalMesh.ToSoftObjectPath(), [this, &VisualData]()
+	// Load the icon synchronously so it is always ready when the player targets this mob.
+	if (!VisualData.Icon.IsNull())
+	{
+		CachedIcon = VisualData.Icon.LoadSynchronous();
+	}
+
+	// Capture soft pointers by value -- VisualData is a local stack reference that will
+	// be gone by the time the async callbacks fire (dangling reference -> crash).
+	TSoftObjectPtr<USkeletalMesh> SoftMesh   = VisualData.SkeletalMesh;
+	TSoftClassPtr<UAnimInstance>  SoftAnimBP = VisualData.AnimBPClass;
+
+	Streamable.RequestAsyncLoad(SoftMesh.ToSoftObjectPath(), [this, SoftMesh]()
 		{
-			if (USkeletalMesh* LoadedMesh = VisualData.SkeletalMesh.Get())
+		if (USkeletalMesh* LoadedMesh = SoftMesh.Get())
 			{
 				GetMesh()->SetSkeletalMesh(LoadedMesh);
 
@@ -399,15 +872,18 @@ void ABasicMOB::SetupMobVisual(FName MobSlug)
 			}
 		});
 
-	Streamable.RequestAsyncLoad(VisualData.AnimBPClass.ToSoftObjectPath(), [this, &VisualData]()
+	Streamable.RequestAsyncLoad(SoftAnimBP.ToSoftObjectPath(), [this, SoftAnimBP]()
 		{
-			if (UClass* AnimClass = VisualData.AnimBPClass.Get())
+			if (UClass* AnimClass = SoftAnimBP.Get())
 			{
 				GetMesh()->SetAnimInstanceClass(AnimClass);
 			}
 		});
 
 	SetActorScale3D(VisualData.ActorScale);
+
+	// Cache per-mob combat hit height from the DataTable row
+	CachedCombatHitHeight = VisualData.CombatHitHeight;
 }
 
 void ABasicMOB::SetupMobAudio(FName MobSlug)
@@ -523,7 +999,7 @@ void ABasicMOB::PlayWalkRandomSound()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ABasicMOB::PlayWalkRandomSound - No walk sounds available"));
+		// No walk sounds assigned in editor - suppress log to avoid spam
 	}
 }
 
@@ -542,7 +1018,7 @@ void ABasicMOB::PlayRunRandomSound()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ABasicMOB::PlayRunRandomSound - No run sounds available"));
+		// No run sounds assigned in editor - suppress log to avoid spam
 	}
 }
 
@@ -924,15 +1400,27 @@ void ABasicMOB::ForceUpdateUI()
 			MaxMana = ManaAttr->attributeValue;
 		}
 
-		UE_LOG(LogTemp, Warning, TEXT("ForceUpdateUI for MOB %s (ID:%d): HP=%d/%f, MP=%d/%f"), 
-			*MOBData.mobName, MOBData.mobID, MOBData.mobCurrentHealth, MaxHealth, MOBData.mobCurrentMana, MaxMana);
+		// Resolve localised name from slug; fall back to server-provided name
+		FString DisplayName = MOBData.mobName;
+		if (!MOBData.mobSlug.IsEmpty())
+		{
+			if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+			{
+				if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+				{
+					FText Localized = Loc->GetMobDisplayName(MOBData.mobSlug);
+					if (!Localized.IsEmpty())
+						DisplayName = Localized.ToString();
+				}
+			}
+		}
 
 		MobHeadInfo->UpdateInfo(
 			MOBData.mobCurrentHealth,
 			MaxHealth,
 			MOBData.mobCurrentMana,
 			MaxMana,
-			MOBData.mobName,
+			DisplayName,
 			MOBData.mobLevel,
 			MOBData.bIsAggressive
 		);
@@ -942,46 +1430,29 @@ void ABasicMOB::ForceUpdateUI()
 		LastMana = MOBData.mobCurrentMana;
 		bUIInitialized = true;
 		
-		// Применяем начальный масштаб виджета при инициализации
 		if (HeadWidget)
 		{
-			// Устанавливаем масштаб виджета на основе настроек по умолчанию
-			float InitialScale = widgetScaleFactor;
-			HeadWidget->SetWidgetScale(InitialScale);
-			
-			// Делаем виджет видимым
-			MobHeadInfo->SetVisibility(true);
-			
-			UE_LOG(LogTemp, Warning, TEXT("ForceUpdateUI: Setting initial widget scale to %f for MOB %s"), InitialScale, *MOBData.mobName);
-		}
-		else
-		{
-			UE_LOG(LogTemp, Error, TEXT("ForceUpdateUI: HeadWidget is null for MOB %s"), *MOBData.mobName);
+			HeadWidget->SetWidgetScale(widgetScaleFactor);
+			// Widget hidden by default - BasicPlayer controls visibility via ShowWidget()
+			MobHeadInfo->SetVisibility(false);
 		}
 	}
 }
 
+
 void ABasicMOB::InitializeUIDelayed()
 {
-	// Пытаемся инициализировать UI, если есть данные
 	if (MOBData.mobID != 0 && !bUIInitialized)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("InitializeUIDelayed for MOB %s (ID:%d)"), *MOBData.mobName, MOBData.mobID);
 		ForceUpdateUI();
 	}
 	
-	// Убедимся, что HeadWidget проинициализирован 
 	if (!HeadWidget)
 	{
 		HeadWidget = Cast<UW_MOBHeadInfoWidget>(MobHeadInfo->GetUserWidgetObject());
 		if (HeadWidget)
 		{
-			MobHeadInfo->SetVisibility(true);
-			UE_LOG(LogTemp, Warning, TEXT("InitializeUIDelayed: Successfully initialized HeadWidget for MOB %s"), *MOBData.mobName);
-		}
-		else
-		{
-			UE_LOG(LogTemp, Error, TEXT("InitializeUIDelayed: Failed to get HeadWidget for MOB %s"), *MOBData.mobName);
+			MobHeadInfo->SetVisibility(false);
 		}
 	}
 }
@@ -1001,7 +1472,12 @@ void ABasicMOB::Die()
 		MobHeadInfo->UpdateMobAggressive(false);
 	}
 
-	// dubug mob is dead
+	// Notify AnimInstance — triggers death animation, clears all combat states
+	if (UMOBAnimInstance* AnimInst = Cast<UMOBAnimInstance>(GetMesh()->GetAnimInstance()))
+	{
+		AnimInst->NotifyDeath();
+	}
+
 	UE_LOG(LogTemp, Warning, TEXT("MOB %s (ID:%d) has died."), *MOBData.mobName, MOBData.mobID);
 
 	// Отключаем взаимодействие

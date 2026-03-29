@@ -13,6 +13,7 @@
 #include "Gameplay/Combat/ICombatable.h"
 #include "Gameplay/Player/ExperienceManager.h"
 #include "Gameplay/Player/ExperienceNetworkHandler.h"
+#include "Gameplay/Player/PlayerStatsManager.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Gameplay/Skills/PlayerSkillNetworkHandler.h"
@@ -24,6 +25,16 @@
 #include "UI/UIManager.h"
 #include "Gameplay/NPCs/NPCManager.h"
 #include "Gameplay/NPCs/NPCNetworkHandler.h"
+
+// Forward declarations for manager types
+class UDialogueManager;
+class UQuestManager;
+class UEquipmentManager;
+class UVendorManager;
+class URepairManager;
+class UTradeManager;
+class UBestiaryNetworkHandler;
+class UChatManager;
 
 UMyGameInstance::UMyGameInstance(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -76,6 +87,9 @@ void UMyGameInstance::Init()
 	// Initialize NPC System
 	NPCManager = NewObject<UNPCManager>(this);
 	NPCNetworkHandler = NewObject<UNPCNetworkHandler>(this);
+
+	// Initialize player stats manager
+	PlayerStatsManager = NewObject<UPlayerStatsManager>(this);
 
 	// Initialize time sync service
 	TimeSyncService = NewObject<UTimeSyncService>(this);
@@ -1189,7 +1203,12 @@ void UMyGameInstance::UpdateTargetHealth(int32 TargetId, int32 TargetType, const
 
 void UMyGameInstance::InitGameSystems()
 {
-	// Other initialization code...
+	// Initialize the AudioManager
+	AudioManager = NewObject<UAudioManager>(this);
+	if (AudioManager)
+	{
+		UE_LOG(LogTemp, Log, TEXT("AudioManager created"));
+	}
 
 	// Initialize the item manager with the visuals data table if available
 	if (ItemManager && ItemVisualsDataTable)
@@ -1233,4 +1252,49 @@ void UMyGameInstance::ProcessTimeSyncData(const FMessageDataStruct& MessageData)
 		UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Updated time sync data - RequestId: %s, ServerRecv: %lld, ServerSend: %lld"),
 			*RequestId, MessageData.serverRecvMs, MessageData.serverSendMs);
 	}
+}
+
+UPlayerStatsManager* UMyGameInstance::GetPlayerStatsManager() const
+{
+	return PlayerStatsManager;
+}
+
+UDialogueManager* UMyGameInstance::GetDialogueManager() const
+{
+	return DialogueManager;
+}
+
+UQuestManager* UMyGameInstance::GetQuestManager() const
+{
+	return QuestManager;
+}
+
+UEquipmentManager* UMyGameInstance::GetEquipmentManager() const
+{
+	return EquipmentManager;
+}
+
+UVendorManager* UMyGameInstance::GetVendorManager() const
+{
+	return VendorManager;
+}
+
+URepairManager* UMyGameInstance::GetRepairManager() const
+{
+	return RepairManager;
+}
+
+UTradeManager* UMyGameInstance::GetTradeManager() const
+{
+	return TradeManager;
+}
+
+UBestiaryNetworkHandler* UMyGameInstance::GetBestiaryNetworkHandler() const
+{
+	return BestiaryNetworkHandler;
+}
+
+UChatManager* UMyGameInstance::GetChatManager() const
+{
+	return ChatManager;
 }

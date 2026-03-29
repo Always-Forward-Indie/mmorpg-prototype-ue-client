@@ -4,6 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "DataStructs.h"
+#include "NiagaraSystem.h"
+#include "Engine/SkeletalMesh.h"
 #include "ItemStruct.generated.h"
 
 // Represents an item attribute (like damage, defense, etc.)
@@ -149,4 +151,34 @@ struct FItemVisualData : public FTableRowBase
 	// Whether to use the custom ground rotation instead of randomizing
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual")
 	bool bUseCustomGroundRotation = false;
+
+	// ---- Equipped visuals ----
+
+	/** Static mesh used when this item is equipped on the character */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual|Equipped")
+	TSoftObjectPtr<UStaticMesh> EquippedStaticMesh;
+
+	/** Skeletal mesh used when this item is equipped (e.g. animated weapons) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual|Equipped")
+	TSoftObjectPtr<USkeletalMesh> EquippedSkeletalMesh;
+
+	/** Socket on the character skeleton to attach the equipped mesh to */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual|Equipped")
+	FName EquipSocketName = NAME_None;
+
+	/** Local-space transform applied to the equipped mesh after socket attachment */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual|Equipped")
+	FTransform EquippedRelativeTransform;
+
+	/** Niagara VFX spawned and attached to the weapon socket during a swing anim */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual|Equipped")
+	TSoftObjectPtr<UNiagaraSystem> EquippedSwingVFX;
+
+	/** Niagara VFX that loops while the item is idle-equipped (e.g. flame on a torch) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual|Equipped")
+	TSoftObjectPtr<UNiagaraSystem> EquippedIdleVFX;
+
+	/** Armor material type for impact sound lookup (e.g. "leather", "plate", "cloth") */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual|Equipped")
+	FName ArmorMaterialType = NAME_None;
 };

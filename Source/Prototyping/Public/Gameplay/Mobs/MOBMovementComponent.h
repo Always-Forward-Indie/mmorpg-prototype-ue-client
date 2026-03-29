@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Data/DataStructs.h"
+#include "Services/TimeSyncService.h"
 #include "MOBMovementComponent.generated.h"
 
 
@@ -69,6 +70,12 @@ public:
 	// Is the mob currently moving
 	bool IsMoving() const { return bIsMoving; }
 
+	// Current interpolation speed (units/sec) for animation blend
+	float GetCurrentSpeed() const { return CurrentInterpSpeed; }
+
+	// True when the server combat state is FLEEING (state 7)
+	bool IsFleeing() const { return CombatState == 7; }
+
 	// Target tracking functionality
 	UPROPERTY(EditAnywhere, Category = "Target Tracking")
 	bool bEnableTargetTracking = true;
@@ -91,6 +98,18 @@ public:
 	// Get current target ID
 	int32 GetTargetId() const { return CurrentTargetId; }
 
+	/** Set the combat state (DevMode / debug). Value matches server EMobCombatState int. */
+	void SetCombatState(int32 NewState) { CombatState = NewState; }
+
+	/** Get the current combat state int. */
+	int32 GetCombatState() const { return CombatState; }
+
+	/** Inject the TimeSyncService so dead-reckoning uses the calibrated clock. */
+	void SetTimeSyncService(class UTimeSyncService* InService) { TimeSyncServiceRef = InService; }
+
+	/** Process a server-side move packet that includes combat state. */
+	void OnReceiveMovePacket(const FMobMoveEntryStruct& MoveEntry, int64 ServerSendMs, int64 ClientRecvMs);
+
 private:
 	// Internal movement state
 	FVector PrevServerPos;
@@ -104,6 +123,11 @@ private:
 	bool bIsMoving = false;
 
 	float TimeSinceLastGroundCheck = 0.0f;
+
+	int32 CombatState = 0;
+
+	// Optional TimeSyncService for dead-reckoning calibration
+	TWeakObjectPtr<class UTimeSyncService> TimeSyncServiceRef;
 
 	// Function to notify owner that movement state changed
 	void UpdateMovingState(bool bNewIsMoving);

@@ -16,8 +16,21 @@
 #include "Gameplay/Combat/ICombatable.h"
 #include "BasicMOB.generated.h"
 
-// Event declaration
+// Forward declarations
+struct FSkillInitiationData;
+struct FSkillResultData;
+struct FEffectTickData;
+struct FMobMoveEntryStruct;
+
+struct FMobHealthUpdateStruct;
+
+// Event declarations
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMOBDataUpdated);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMOBDied);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMOBTargetLost);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnMOBSkillInitiated, const FSkillInitiationData&, SkillData, float, Duration);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMOBSkillResult,     const FSkillResultData&,     SkillResult);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMOBEffectTick,      const FEffectTickData&,      EffectData);
 
 /**
  *
@@ -381,7 +394,7 @@ public:
 
 		FTimerHandle IdleSoundTimer;
 
-		// Check if MOB can be harvested
+	// Check if MOB can be harvested
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Harvest")
 	bool CanBeHarvested() const;
 
@@ -392,4 +405,45 @@ public:
 	// Set MOB as harvested
 	UFUNCTION(BlueprintCallable, Category = "Harvest")
 	void SetHarvested(bool bHarvested);
+
+	// ?? New skill / combat system callbacks ???????????????????????????????
+	void OnReceiveSkillInitiation(const FSkillInitiationData& SkillData);
+	void OnReceiveSkillResult(const FSkillResultData& SkillResult);
+	void OnReceiveEffectTick(const FEffectTickData& EffectData);
+	void OnReceiveTargetLost();
+	void OnReceiveMovePacket(const FMobMoveEntryStruct& MoveEntry, int64 ServerSendMs, int64 ClientRecvMs);
+
+	void OnReceiveMobHealthUpdate(const FMobHealthUpdateStruct& HealthUpdate);
+
+	// ?? Delegates broadcast to Blueprint / other systems ?????????????????
+	UPROPERTY(BlueprintAssignable, Category = "MOB|Events")
+	FOnMOBSkillInitiated OnSkillInitiated;
+
+	UPROPERTY(BlueprintAssignable, Category = "MOB|Events")
+	FOnMOBSkillResult OnSkillResult;
+
+	UPROPERTY(BlueprintAssignable, Category = "MOB|Events")
+	FOnMOBEffectTick OnEffectTick;
+
+	UPROPERTY(BlueprintAssignable, Category = "MOB|Events")
+	FOnMOBDied OnMOBDied;
+
+	UPROPERTY(BlueprintAssignable, Category = "MOB|Events")
+	FOnMOBTargetLost OnMOBTargetLost;
+
+	// Delegate handle for anim-notify hit-point binding
+	FDelegateHandle HitPointDelegateHandle;
+
+	// Lock-out flag set after target is lost to prevent immediate re-aggro
+	bool bAggroLockedOut = false;
+
+	// Current skill name set during combat (used for VFX/SFX lookup)
+	FString CurrentSkillName;
+
+	// Cached icon loaded from MobDefinitionTable
+	UPROPERTY()
+	UTexture2D* CachedIcon = nullptr;
+
+	// Cached combat hit height from MobDefinitionTable
+	float CachedCombatHitHeight = 120.0f;
 };

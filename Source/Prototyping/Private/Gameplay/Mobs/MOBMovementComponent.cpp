@@ -545,3 +545,12 @@ void UMOBMovementComponent::RotateTowardsTarget(AActor* TargetActor, float Delta
     FRotator NewRotation = FMath::RInterpTo(CurrentRotation, TargetRotation, DeltaTime, TargetTrackingSpeed / 180.0f);
     GetOwner()->SetActorRotation(NewRotation);
 }
+
+void UMOBMovementComponent::OnReceiveMovePacket(const FMobMoveEntryStruct& MoveEntry, int64 ServerSendMs, int64 ClientRecvMs)
+{
+    // Update combat state so movement logic can freeze/unfreeze accordingly
+    CombatState = MoveEntry.combatState;
+
+    // Delegate position interpolation to the standard server-packet handler
+    OnReceiveServerPacket(MoveEntry.position);
+}

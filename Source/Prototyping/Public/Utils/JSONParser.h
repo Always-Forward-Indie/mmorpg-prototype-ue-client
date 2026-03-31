@@ -69,6 +69,15 @@ public:
 
     static TArray<FMOBStruct> DeserializeMobsList(const TSharedPtr<FJsonObject>& Body);
 
+    // Parse a mobMoveUpdate packet — returns an array of lightweight move entries
+    // paired with their mob UID. Body is the "body" JSON object.
+    struct FMobMovePacketEntry
+    {
+        int32               uid          = 0;
+        FMobMoveEntryStruct moveEntry;
+    };
+    static TArray<FMobMovePacketEntry> DeserializeMobMoveUpdate(const TSharedPtr<FJsonObject>& Body, int64 ServerSendMs);
+
     // Item data parsers
     static FItemAttributeStruct DeserializeItemAttribute(const TSharedPtr<FJsonObject>& AttributeObj);
     static TArray<FItemAttributeStruct> DeserializeItemAttributes(const TArray<TSharedPtr<FJsonValue>>& JsonArray);

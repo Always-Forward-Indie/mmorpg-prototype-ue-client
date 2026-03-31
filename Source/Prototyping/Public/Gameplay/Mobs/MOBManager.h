@@ -22,9 +22,14 @@ class PROTOTYPING_API UMOBManager : public UObject
 	GENERATED_BODY()
 
 	private:
-		UWorld* worldContext = nullptr;
-		UNetworkManager* networkManager;
-		UMyGameInstance* gameInstance;
+		UPROPERTY()
+		TObjectPtr<UWorld> worldContext = nullptr;
+
+		UPROPERTY()
+		UNetworkManager* networkManager = nullptr;
+
+		UPROPERTY()
+		UMyGameInstance* gameInstance = nullptr;
 
 		// Check if event is combat-related
 		bool IsCombatEvent(const FString& EventType) const;

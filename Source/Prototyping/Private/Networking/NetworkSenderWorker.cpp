@@ -29,7 +29,7 @@ void NetworkSenderWorker::SetTimeSyncService(UTimeSyncService* InTimeSyncService
 
 FString NetworkSenderWorker::UpdateClientSendTimestamp(const FString& JsonData)
 {
-    if (!TimeSyncService)
+    if (!TimeSyncService.IsValid())
     {
         return JsonData;
     }
@@ -51,18 +51,27 @@ FString NetworkSenderWorker::UpdateClientSendTimestamp(const FString& JsonData)
     }
 
     TSharedPtr<FJsonObject> Header = *HeaderPtr;
-    
-    // Update timestamp for ping requests (have requestId) or any packet with clientSendMs field
-    bool bShouldUpdateTimestamp = Header->HasField(TEXT("requestId")) || Header->HasField(TEXT("clientSendMs"));
-    
-    if (!bShouldUpdateTimestamp)
-    {
-        return JsonData; // Not a sync/ping request, return original
-    }
 
-    // Update clientSendMs with current precise timestamp (t0)
-    int64 PreciseClientSendMs = TimeSyncService->GetCurrentClientTimeMs();
-    Header->SetNumberField(TEXT("clientSendMs"), PreciseClientSendMs);
+    // Per protocol: timestamps are a sub-object inside header containing
+    // clientSendMsEcho and requestId. Update clientSendMsEcho with precise time.
+    int64 PreciseClientSendMs = 0;
+    const TSharedPtr<FJsonObject>* TimestampsPtr = nullptr;
+    if (Header->TryGetObjectField(TEXT("timestamps"), TimestampsPtr) && TimestampsPtr && (*TimestampsPtr).IsValid())
+    {
+        PreciseClientSendMs = TimeSyncService.Get()->GetCurrentClientTimeMs();
+        (*TimestampsPtr)->SetNumberField(TEXT("clientSendMsEcho"), PreciseClientSendMs);
+    }
+    else
+    {
+        // Fallback: check for legacy flat fields
+        bool bShouldUpdateTimestamp = Header->HasField(TEXT("requestId")) || Header->HasField(TEXT("clientSendMs"));
+        if (!bShouldUpdateTimestamp)
+        {
+            return JsonData;
+        }
+        PreciseClientSendMs = TimeSyncService.Get()->GetCurrentClientTimeMs();
+        Header->SetNumberField(TEXT("clientSendMs"), PreciseClientSendMs);
+    }
 
     // Rebuild the JSON string
     FString UpdatedJsonString;
@@ -142,18 +151,12 @@ void NetworkSenderWorker::Exit()
     Stop();
 }
 
+
 NetworkSenderWorker::~NetworkSenderWorker()
 {
 	// Stop the thread
-	if (!bRunThread)
-	{
-        Stop();
-	}
-
-	// Clean up the socket
-    if (Socket)
-    {
-        Socket->Close();
-        ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(Socket);
-    }
+	Stop();
+	// Note: socket lifetime is managed by NetworkManager, not here
 }
+
+

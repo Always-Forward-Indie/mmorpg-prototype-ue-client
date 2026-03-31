@@ -15,48 +15,59 @@ class PROTOTYPING_API UMOBMovementComponent : public UActorComponent
 	GENERATED_BODY()
 
 public:
-	// Sets default values for this component's properties
 	UMOBMovementComponent();
 
 protected:
-	// Called when the game starts
 	virtual void BeginPlay() override;
 
 public:
-	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-	// Movement configuration
-	UPROPERTY(EditAnywhere, Category = "Movement")
-	float MaxAcceleration = 800.f; // Maximum acceleration (units/sec^2)
+	// ---- Configuration -------------------------------------------------------
 
-	// Minimum speed (units/sec) to maintain for small distances
+	UPROPERTY(EditAnywhere, Category = "Movement")
+	float MaxAcceleration = 800.f;
+
 	UPROPERTY(EditAnywhere, Category = "Movement")
 	float MinMoveSpeed = 580.f;
 
-	// Distance (units) for direct snapping without interpolation
 	UPROPERTY(EditAnywhere, Category = "Movement")
 	float SnapDistance = 10.f;
 
-	// Debug visualization for ground adjustment
-	UPROPERTY(EditDefaultsOnly, Category = "Movement|Debug")
-	bool bDebugGroundAdjustment = true;
+	UPROPERTY(EditAnywhere, Category = "Movement")
+	float TeleportThreshold = 2000.f;
 
-	// Set new position target from server packet
+	UPROPERTY(EditAnywhere, Category = "Movement")
+	float GroundTraceHeight = 200.f;
+
+	UPROPERTY(EditAnywhere, Category = "Movement")
+	float GroundTraceDepth = 400.f;
+
+	UPROPERTY(EditAnywhere, Category = "Movement")
+	float GroundInterpSpeedDown = 15.f;
+
+	UPROPERTY(EditAnywhere, Category = "Movement")
+	float GroundInterpSpeedUp = 8.f;
+
+	UPROPERTY(EditAnywhere, Category = "Movement|Rotation")
+	float MoveRotationSpeed = 10.f;
+
+	UPROPERTY(EditAnywhere, Category = "Movement|Rotation")
+	float AttackRotationSpeed = 8.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Movement|Debug")
+	bool bDebugGroundAdjustment = false;
+
+	// ---- Public API ----------------------------------------------------------
+
 	void OnReceiveServerPacket(const FPositionDataStruct& MOBPosition);
 
-	// Adjust movement position to ground with priority control
 	FVector AdjustToGround(const FVector& Location, float DeltaTime, float Priority = 1.0f);
-
 	void SnapToGround();
 
-	// Process movement interpolation 
 	void ProcessMovement(float DeltaTime);
-
-	// Handles movement when close to target position
 	void HandleCloseRangeMovement(const FVector& CurrentLocation, float DeltaTime);
 
-	// Calculates the next position during movement
 	FVector CalculateMovementPosition(
 		const FVector& CurrentLocation,
 		const FVector& TargetXY,
@@ -64,85 +75,82 @@ public:
 		float HorizontalDist,
 		float DeltaTime);
 
-	// Handles character rotation during movement
 	void HandleRotation(const FVector& MoveVector, float DeltaTime);
 
-	// Is the mob currently moving
 	bool IsMoving() const { return bIsMoving; }
-
-	// Current interpolation speed (units/sec) for animation blend
 	float GetCurrentSpeed() const { return CurrentInterpSpeed; }
-
-	// True when the server combat state is FLEEING (state 7)
 	bool IsFleeing() const { return CombatState == 7; }
+	bool IsInCombatState() const { return CombatState >= 1 && CombatState <= 4; }
 
-	// Target tracking functionality
+	// ---- Target tracking -----------------------------------------------------
+
 	UPROPERTY(EditAnywhere, Category = "Target Tracking")
 	bool bEnableTargetTracking = true;
 
 	UPROPERTY(EditAnywhere, Category = "Target Tracking")
-	float TargetTrackingSpeed = 360.0f; // Degrees per second
+	float TargetTrackingSpeed = 360.0f;
 
 	UPROPERTY(EditAnywhere, Category = "Target Tracking")
-	float MinAngleThreshold = 5.0f; // Don't rotate if already facing target within this angle
+	float MinAngleThreshold = 5.0f;
 
-	// Set target for tracking
 	void SetTargetId(int32 NewTargetId);
-
-	// Set target type (e.g., "Player", "Mob")
 	void SetTargetType(const FString& NewTargetType);
-
-	// Clear current target
 	void ClearTarget();
-
-	// Get current target ID
 	int32 GetTargetId() const { return CurrentTargetId; }
 
-	/** Set the combat state (DevMode / debug). Value matches server EMobCombatState int. */
-	void SetCombatState(int32 NewState) { CombatState = NewState; }
+	// ---- State setters -------------------------------------------------------
 
-	/** Get the current combat state int. */
+	void SetCombatState(int32 NewState) { CombatState = NewState; }
 	int32 GetCombatState() const { return CombatState; }
 
-	/** Inject the TimeSyncService so dead-reckoning uses the calibrated clock. */
 	void SetTimeSyncService(class UTimeSyncService* InService) { TimeSyncServiceRef = InService; }
 
-	/** Process a server-side move packet that includes combat state. */
 	void OnReceiveMovePacket(const FMobMoveEntryStruct& MoveEntry, int64 ServerSendMs, int64 ClientRecvMs);
 
 private:
-	// Internal movement state
-	FVector PrevServerPos;
-	FVector TargetServerPos;
-	FVector ServerVelocity;
+	// ---- Dead-reckoning / interpolation state --------------------------------
+
+	FVector  PrevServerPos;
+	FVector  TargetServerPos;
+	FVector  ServerVelocity;
+	FVector  Waypoint;
+	bool     bHasWaypoint = false;
 	FRotator PrevServerRot;
 	FRotator TargetServerRot;
-	float LastMovePacketTime;
-	bool bHasVelocity;
-	float CurrentInterpSpeed = 0.f;
-	bool bIsMoving = false;
 
-	float TimeSinceLastGroundCheck = 0.0f;
+	float    ServerSpeed = 0.f;
 
-	int32 CombatState = 0;
+	int64    LastStepTimestampMs = 0;
+	int64    LastPacketClientRecvMs = 0;
+	float    LastMovePacketTime = 0.f;
+	bool     bHasReceivedPacket = false;
 
-	// Optional TimeSyncService for dead-reckoning calibration
+	float    CurrentInterpSpeed = 0.f;
+	bool     bIsMoving = false;
+
+	float    TimeSinceLastGroundCheck = 0.0f;
+
+	FVector  SmoothedGroundZ;
+	float    CachedGroundZ = 0.f;
+	bool     bHasCachedGroundZ = false;
+
+	int32    CombatState = 0;
+
 	TWeakObjectPtr<class UTimeSyncService> TimeSyncServiceRef;
 
-	// Function to notify owner that movement state changed
 	void UpdateMovingState(bool bNewIsMoving);
 
-	// Target tracking state
-	int32 CurrentTargetId = 0;
-	// Current Target Type (e.g., "Player", "Mob")
+	FVector ComputeDeadReckonedTarget(float DeltaTime) const;
+
+	FVector TraceGround(const FVector& Location) const;
+
+	// ---- Target tracking state -----------------------------------------------
+
+	int32   CurrentTargetId = 0;
 	FString CurrentTargetType;
-	// Time since last target update
-	float TimeSinceLastTargetUpdate = 0.0f;
+	float   TimeSinceLastTargetUpdate = 0.0f;
 
-
-
-	// Target tracking methods
-	void UpdateTargetTracking(float DeltaTime);
+	void    UpdateTargetTracking(float DeltaTime);
 	AActor* FindTargetActor(int32 TargetId, FString TargetType = "");
-	void RotateTowardsTarget(AActor* TargetActor, float DeltaTime);
+	void    RotateTowardsTarget(AActor* TargetActor, float DeltaTime);
 };

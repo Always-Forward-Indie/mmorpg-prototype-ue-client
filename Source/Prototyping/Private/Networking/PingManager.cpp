@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Networking/PingManager.h"
+#include "MyGameInstance.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
@@ -81,6 +82,22 @@ void UPingManager::StopPingUpdates()
 	}
 }
 
+void UPingManager::RestartPingUpdates()
+{
+	if (!worldContext)
+	{
+		UE_LOG(LogTemp, Error, TEXT("PingManager::RestartPingUpdates - WorldContext is null"));
+		return;
+	}
+
+	// Handles from the old world are stale - invalidate before re-registering
+	PingUpdateTimerHandle.Invalidate();
+	PingRequestTimerHandle.Invalidate();
+
+	StartPingUpdates();
+	UE_LOG(LogTemp, Warning, TEXT("PingManager: Ping timers restarted in new world"));
+}
+
 float UPingManager::GetServerPing(EServerType ServerType) const
 {
 	if (!TimeSyncService)
@@ -119,14 +136,27 @@ void UPingManager::SendPingRequestToServer(EServerType ServerType)
 	// Generate unique request ID for this ping
 	FString RequestId = TimeSyncService->GenerateAndRegisterSyncRequest(ServerType);
 	
-	// Create the ping request JSON
+	// Create the ping request JSON per protocol spec (1.4 pingClient)
 	TSharedPtr<FJsonObject> HeaderObject = MakeShareable(new FJsonObject);
 	HeaderObject->SetStringField("eventType", "pingClient");
-	HeaderObject->SetStringField("requestId", RequestId);
 	
-	// Add precise client send timestamp
+	// Per protocol: header must include clientId and hash
+	if (worldContext)
+	{
+		UMyGameInstance* MyGI = Cast<UMyGameInstance>(worldContext->GetGameInstance());
+		if (MyGI)
+		{
+			HeaderObject->SetNumberField("clientId", MyGI->GetCurrentClientID());
+			HeaderObject->SetStringField("hash", MyGI->GetCurrentClientHash());
+		}
+	}
+	
+	// Per protocol: timestamps sub-object with clientSendMsEcho and requestId
+	TSharedPtr<FJsonObject> TimestampsObject = MakeShareable(new FJsonObject);
 	int64 ClientSendMs = TimeSyncService->GetCurrentClientTimeMs();
-	HeaderObject->SetNumberField("clientSendMs", ClientSendMs);
+	TimestampsObject->SetNumberField("clientSendMsEcho", ClientSendMs);
+	TimestampsObject->SetStringField("requestId", RequestId);
+	HeaderObject->SetObjectField("timestamps", TimestampsObject);
 
 	// Create the main JSON object
 	TSharedPtr<FJsonObject> MainJsonObject = MakeShareable(new FJsonObject);
@@ -151,17 +181,14 @@ void UPingManager::SendPingRequestToServer(EServerType ServerType)
 	{
 		case EServerType::LoginServer:
 			networkManager->SendDataToLoginServer(OutputString);
-			UE_LOG(LogTemp, VeryVerbose, TEXT("PingManager: Sent ping request to Login Server with ID: %s"), *RequestId);
 			break;
 			
 		case EServerType::GameServer:
 			networkManager->SendDataToGameServer(OutputString);
-			UE_LOG(LogTemp, VeryVerbose, TEXT("PingManager: Sent ping request to Game Server with ID: %s"), *RequestId);
 			break;
 			
 		case EServerType::ChunkServer:
 			networkManager->SendDataToChunkServer(OutputString);
-			UE_LOG(LogTemp, VeryVerbose, TEXT("PingManager: Sent ping request to Chunk Server with ID: %s"), *RequestId);
 			break;
 			
 		default:
@@ -172,7 +199,7 @@ void UPingManager::SendPingRequestToServer(EServerType ServerType)
 
 void UPingManager::UpdatePingDisplay()
 {
-	if (!MonitorStatsWidget || !TimeSyncService)
+	if (!IsValid(MonitorStatsWidget) || !IsValid(TimeSyncService))
 	{
 		return;
 	}

@@ -46,6 +46,9 @@ public:
     void OnItemReceived(const FItemReceivedData& Data);
     void OnGoldReceived(const FGoldReceivedData& Data);
 
+    // Update NPC quest icons based on quest state change
+    void UpdateNPCQuestIcons(const FString& QuestSlug, const FString& NewState);
+
     // --- Queries ---
 
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Quest")

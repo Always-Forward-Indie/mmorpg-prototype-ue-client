@@ -52,6 +52,15 @@ public:
     UFUNCTION()
     void RefreshAllSlots(const FEquipmentStateData& State);
 
+    // Callback for PLAYER_EQUIPMENT_UPDATE packets (remote players).
+    // Filters by OwnerCharacterId so only this component's owner is updated.
+    UFUNCTION()
+    void HandleRemoteEquipmentState(const FEquipmentStateData& State);
+
+    // Set the character ID this component belongs to (needed for remote filtering).
+    void SetOwnerCharacterId(int32 InCharacterId) { OwnerCharacterId = InCharacterId; }
+    int32 GetOwnerCharacterId() const { return OwnerCharacterId; }
+
     // Remove the mesh for a single slot (e.g. on unequip before the full state update arrives).
     UFUNCTION(BlueprintCallable, Category = "Equipment Visuals")
     void ClearSlotMesh(const FString& SlotSlug);
@@ -107,4 +116,8 @@ private:
 
     UPROPERTY()
     UItemManager* ItemManager = nullptr;
+
+    // Character ID this component belongs to.
+    // Used to filter PLAYER_EQUIPMENT_UPDATE packets for remote players.
+    int32 OwnerCharacterId = 0;
 };

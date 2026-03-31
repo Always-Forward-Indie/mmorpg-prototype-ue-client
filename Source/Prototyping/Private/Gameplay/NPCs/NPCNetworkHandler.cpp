@@ -323,19 +323,23 @@ bool UNPCNetworkHandler::ValidateNPCEventData(const FString& JsonData) const
         return false;
     }
 
-    // Get header and validate status
+    // Get header and validate
     TSharedPtr<FJsonObject> Header = Root->GetObjectField(TEXT("header"));
     if (Header.IsValid())
     {
-        FString Status;
-        if (Header->TryGetStringField(TEXT("status"), Status))
+        // Check message field (server uses "message" not "status")
+        FString Message;
+        if (Header->TryGetStringField(TEXT("message"), Message))
         {
-            // Only process successful events
-            return Status == TEXT("success");
+            // Reject explicit error messages
+            if (Message == TEXT("error"))
+            {
+                return false;
+            }
         }
     }
 
-    return false;
+    return true;
 }
 
 void UNPCNetworkHandler::LogNetworkEvent(const FString& Event, const FString& Details) const

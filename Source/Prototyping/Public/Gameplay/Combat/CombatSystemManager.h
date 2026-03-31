@@ -20,6 +20,14 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnActorDied, int32, DeadActorId);
  * Main manager for the combat system following SOLID principles
  * Handles skill initiation, processing, and result application
  * Uses only UE5 UINTERFACE system for proper type safety
+ *
+ * DEFERRED HIT-POINT ARCHITECTURE:
+ *   combatInitiation  -> PlaySkillAnimation (start montage, sounds, VFX)
+ *   combatResult      -> Store as PendingSkillResult (DO NOT apply yet)
+ *   AnimNotify HitPoint -> NotifyHitPoint() -> ApplySkillEffects (damage/heal/FCT)
+ *
+ *   This ensures damage numbers, HP bar changes and camera shake fire at the
+ *   exact animation frame of impact, not when the server packet arrives.
  */
 UCLASS(BlueprintType, Blueprintable)
 class PROTOTYPING_API UCombatSystemManager : public UObject
@@ -81,6 +89,9 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Combat System|Events")
     FOnActorDied OnActorDied;
 
+    /** Called by the hit-point anim notify delegate when the animation reaches the impact frame. */
+    void NotifyHitPoint(int32 CasterId);
+
 protected:
     // Find the appropriate effect handler for the skill type
     TScriptInterface<ISkillEffectHandler> FindEffectHandler(ESkillEffectType EffectType);
@@ -101,19 +112,48 @@ private:
     UPROPERTY()
     TObjectPtr<UNetworkManager> NetworkManager;
 
-    // Registry of all combatable actors using proper UE interface system
-    UPROPERTY()
-    TMap<FString, TScriptInterface<ICombatable>> RegisteredCombatables;
+    // Registry of all combatable actors.
+    // TWeakObjectPtr is used for the validity check so that a GC'd actor
+    // (whose FObjectHandle may read as 0xFFFFFFFFFFFFFFFF) is safely detected
+    // before we ever call through the interface pointer.
+    struct FCombatableEntry
+    {
+        TWeakObjectPtr<UObject> WeakObject;
+        ICombatable*            Interface = nullptr;
+    };
+    TMap<FString, FCombatableEntry> RegisteredCombatables;
 
-    // Registry of effect handlers using proper UE interface system
-    UPROPERTY()
-    TArray<TScriptInterface<ISkillEffectHandler>> EffectHandlers;
+    // Registry of effect handlers.
+    struct FEffectHandlerEntry
+    {
+        TWeakObjectPtr<UObject> WeakObject;
+        ISkillEffectHandler*    Interface = nullptr;
+    };
+    TArray<FEffectHandlerEntry> EffectHandlers;
+
+    // --- Deferred Hit-Point Result Queue ---
+    // When combatResult arrives, we store it here keyed by casterId.
+    // When NotifyHitPoint(casterId) fires from the animation, we pop
+    // the result and apply damage/heal/effects at the visual impact moment.
+    struct FPendingResult
+    {
+        FSkillResultData ResultData;
+        double           StoredAtWorldTime = 0.0;
+    };
+    TMap<int32, TArray<FPendingResult>> PendingSkillResults;
+
+    // Safety timeout (seconds): if the hit-point notify never fires (no montage,
+    // broken anim), we apply the result after this delay so combat still works.
+    static constexpr double PendingResultTimeoutSeconds = 3.0;
+
+    // Flush any pending results for a caster.  Called from NotifyHitPoint
+    // and also from a safety-timeout timer.
+    void FlushPendingResults(int32 CasterId);
+
+    // Start a safety-timeout timer for a pending result
+    void StartPendingResultTimeout(int32 CasterId);
 
 private:
     // Helper function to create a unique key for combatable registration
     FString CreateCombatableKey(int32 ActorId, ECasterType ActorType) const;
-
-public:
-    /** Called by the hit-point anim notify delegate when the animation reaches the impact frame. */
-    void NotifyHitPoint(int32 CasterId);
 };

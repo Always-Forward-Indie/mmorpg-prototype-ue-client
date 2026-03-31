@@ -17,7 +17,10 @@ void UMOBManager::Initialize(UNetworkManager* NetworkManager)
 	networkManager = NetworkManager;
 
 	// Get the game instance
-	gameInstance = Cast<UMyGameInstance>(worldContext->GetGameInstance());
+	if (worldContext)
+	{
+		gameInstance = Cast<UMyGameInstance>(worldContext->GetGameInstance());
+	}
 
 	if (gameInstance)
 	{
@@ -117,6 +120,12 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Received moveMOB event"));
 
+		if (!worldContext || !worldContext->IsValidLowLevel())
+		{
+			UE_LOG(LogTemp, Error, TEXT("MOBManager: Cannot process zoneMoveMobs - no valid world context"));
+			return;
+		}
+
 		// Deserialize the JSON string into a list of MOBs
 		TArray<FMOBStruct> MobsData = JSONParser::DeserializeMobsList(Body);
 		for (FMOBStruct MobData : MobsData)
@@ -137,6 +146,12 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 	}
 	else if (MessageData.eventType == "mobDeath" && MessageData.status == "success")
 	{
+		if (!worldContext || !worldContext->IsValidLowLevel())
+		{
+			UE_LOG(LogTemp, Error, TEXT("MOBManager: Cannot process mobDeath - no valid world context"));
+			return;
+		}
+
 		// Extract the mobUID from the response body
 		FString MobUID;
 		if (Body->TryGetStringField(TEXT("mobUID"), MobUID))
@@ -173,9 +188,84 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 			UE_LOG(LogTemp, Error, TEXT("Failed to extract mobUID from death event"));
 		}
 	}
+	else if (MessageData.eventType == "mobMoveUpdate" && MessageData.status == "success")
+	{
+		if (!worldContext || !worldContext->IsValidLowLevel()) return;
+
+		int64 ServerSendMs = 0;
+		{
+			const TSharedPtr<FJsonObject>* HdrPtr = nullptr;
+			if (Root->TryGetObjectField(TEXT("header"), HdrPtr) && HdrPtr)
+			{
+				double RawMs = 0.0;
+				if ((*HdrPtr)->TryGetNumberField(TEXT("serverSendMs"), RawMs))
+				{
+					ServerSendMs = static_cast<int64>(RawMs);
+				}
+			}
+		}
+
+		const FDateTime UtcNow    = FDateTime::UtcNow();
+		const int64 ClientRecvMs  = UtcNow.ToUnixTimestamp() * 1000 + UtcNow.GetMillisecond();
+
+		TArray<JSONParser::FMobMovePacketEntry> Entries =
+			JSONParser::DeserializeMobMoveUpdate(Body, ServerSendMs);
+
+		for (const JSONParser::FMobMovePacketEntry& Entry : Entries)
+		{
+			TWeakObjectPtr<ABasicMOB>* FoundWeak = MobActorRegistry.Find(Entry.uid);
+			if (!FoundWeak || !FoundWeak->IsValid()) continue;
+
+			ABasicMOB* MOB = FoundWeak->Get();
+			if (IsValid(MOB))
+			{
+				MOB->OnReceiveMovePacket(Entry.moveEntry, ServerSendMs, ClientRecvMs);
+			}
+		}
+	}
+	else if (MessageData.eventType == "mobHealthUpdate")
+	{
+		UE_LOG(LogTemp, Log, TEXT("MOBManager: Received mobHealthUpdate event"));
+
+		if (!worldContext || !worldContext->IsValidLowLevel()) return;
+
+		int32 MobUID = 0;
+		int32 CurrentHP = 0;
+		int32 MaxHP = 0;
+		if (Body.IsValid())
+		{
+			Body->TryGetNumberField(TEXT("mobUID"), MobUID);
+			Body->TryGetNumberField(TEXT("currentHealth"), CurrentHP);
+			Body->TryGetNumberField(TEXT("maxHealth"), MaxHP);
+		}
+
+		if (MobUID > 0)
+		{
+			TWeakObjectPtr<ABasicMOB>* FoundWeak = MobActorRegistry.Find(MobUID);
+			if (FoundWeak && FoundWeak->IsValid())
+			{
+				ABasicMOB* MOB = FoundWeak->Get();
+				FMobHealthUpdateStruct HealthUpdate;
+				HealthUpdate.mobId = MobUID;
+				HealthUpdate.currentHealth = CurrentHP;
+				HealthUpdate.maxHealth = MaxHP;
+				MOB->OnReceiveMobHealthUpdate(HealthUpdate);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("MOBManager: Mob UID %d not found in registry for mobHealthUpdate"), MobUID);
+			}
+		}
+	}
 	else if (MessageData.eventType == "mobTargetLost" && MessageData.status == "success")
 	{
 		UE_LOG(LogTemp, Warning, TEXT("MOBManager: Received mob target lost event"));
+
+		if (!worldContext || !worldContext->IsValidLowLevel())
+		{
+			UE_LOG(LogTemp, Error, TEXT("MOBManager: Cannot process mobTargetLost - no valid world context"));
+			return;
+		}
 
 		FMobTargetLostStruct TargetLostData = JSONParser::DeserializeMobTargetLost(Body);
 
@@ -213,6 +303,23 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 			UE_LOG(LogTemp, Warning, TEXT("Mob with UID %d not found for target lost event"), TargetLostData.mobUID);
 		}
 	}
+	else if (MessageData.eventType == "effectTick")
+	{
+		// Route effectTick to the target mob so its HP bar and visual feedback updates.
+		// Player effectTick is already handled by PlayerStatsNetworkHandler; here we only
+		// forward to mobs whose characterId matches a mob UID in the registry.
+		if (!worldContext || !worldContext->IsValidLowLevel()) return;
+
+		FEffectTickData TickData = JSONParser::DeserializeEffectTick(ReceivedData);
+		if (TickData.characterId > 0)
+		{
+			TWeakObjectPtr<ABasicMOB>* FoundWeak = MobActorRegistry.Find(TickData.characterId);
+			if (FoundWeak && FoundWeak->IsValid())
+			{
+				FoundWeak->Get()->OnReceiveEffectTick(TickData);
+			}
+		}
+	}
 }
 
 // Send join game request
@@ -248,6 +355,12 @@ void UMOBManager::SendGetMobData(const FClientDataStruct& ClientData)
 // Update mob health based on combat result
 void UMOBManager::UpdateMobHealth(const FCombatResultData& ResultData)
 {
+	if (!worldContext || !worldContext->IsValidLowLevel())
+	{
+		UE_LOG(LogTemp, Error, TEXT("MOBManager: Cannot update mob health - no valid world context"));
+		return;
+	}
+
 	// Find the mob in the world by ID
 	FString MobUidStr = FString::FromInt(ResultData.TargetId);
 	
@@ -306,6 +419,12 @@ void UMOBManager::UpdateMobHealth(const FCombatResultData& ResultData)
 // Spawn a MOB
 void UMOBManager::SpawnMOB(const FMOBStruct& MOBData)
 {
+	if (!worldContext || !worldContext->IsValidLowLevel())
+	{
+		UE_LOG(LogTemp, Error, TEXT("MOBManager: Cannot spawn MOB - no valid world context"));
+		return;
+	}
+
 	// If MOB exists in the world do not spawn it
 	if (MOBExists(worldContext, FName(MOBData.mobUniqueID)))
 	{
@@ -355,6 +474,12 @@ void UMOBManager::SpawnMOB(const FMOBStruct& MOBData)
 // Check if a MOB exists in the world
 bool UMOBManager::MOBExists(UWorld* World, const FName& Tag)
 {
+	if (!World || !World->IsValidLowLevel())
+	{
+		UE_LOG(LogTemp, Error, TEXT("MOBManager::MOBExists: Invalid world context"));
+		return false;
+	}
+
 	TArray<AActor*> FoundActors;
 	UGameplayStatics::GetAllActorsWithTag(World, Tag, FoundActors);
 

@@ -6,6 +6,7 @@
 #include "TimerManager.h"
 #include "Engine/AssetManager.h"
 #include "Engine/StreamableManager.h"
+#include "Gameplay/UI/NPCNameplateComponent.h"
 
 // Sets default values
 ABasicNPC::ABasicNPC()
@@ -49,7 +50,12 @@ void ABasicNPC::BeginPlay()
 
 void ABasicNPC::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// Clean up any resources if needed
+	// Clear the idle sound timer to prevent callbacks after destruction
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(IdleSoundTimerHandle);
+	}
+
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -132,6 +138,20 @@ void ABasicNPC::SetNPCData(const FNPCStruct& Data)
 void ABasicNPC::SetNPCId(int32 NPCId)
 {
 	NPCData.id = NPCId;
+}
+
+void ABasicNPC::UpdateNPCQuestData(const TArray<FNPCQuestEntry>& NewQuests)
+{
+	NPCData.quests = NewQuests;
+
+	// Refresh nameplate interaction state
+	if (UNPCNameplateComponent* NP = FindComponentByClass<UNPCNameplateComponent>())
+	{
+		NP->InitialiseFromNPCData(NPCData, true);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("NPC %s (ID:%d): Quest data updated, %d quests"),
+		*NPCData.name, NPCData.id, NewQuests.Num());
 }
 
 void ABasicNPC::SetNPCName(const FString& NPCName)
@@ -277,32 +297,34 @@ void ABasicNPC::SetupNPCVisual(FName NPCSlug)
 	const FNPCDefinition* Def = NPCDefinitionTable->FindRow<FNPCDefinition>(NPCSlug, TEXT("Load NPC Definition"));
 	if (!Def) { UE_LOG(LogTemp, Warning, TEXT("No row for %s"), *NPCSlug.ToString()); return; }
 
-	const auto SkeletalMeshSoft = Def->Visual.SkeletalMesh;     // захватываем по значению
+	const auto SkeletalMeshSoft = Def->Visual.SkeletalMesh;
 	const auto AnimBPSoft = Def->Visual.AnimBPClass;
 	SetActorScale3D(Def->Visual.ActorScale);
 
 	FStreamableManager& Streamable = UAssetManager::GetStreamableManager();
+	TWeakObjectPtr<ABasicNPC> WeakThis(this);
 
 	if (!SkeletalMeshSoft.IsNull())
 	{
-		Streamable.RequestAsyncLoad(SkeletalMeshSoft.ToSoftObjectPath(), [this, SkeletalMeshSoft]()
+		Streamable.RequestAsyncLoad(SkeletalMeshSoft.ToSoftObjectPath(), [WeakThis, SkeletalMeshSoft]()
 			{
+				ABasicNPC* Self = WeakThis.Get();
+				if (!Self) { return; }
+
 				if (USkeletalMesh* Mesh = SkeletalMeshSoft.Get())
 				{
-					USkeletalMeshComponent* MC = GetMesh();
+					USkeletalMeshComponent* MC = Self->GetMesh();
 					if (MC) {
 						MC->SetSkeletalMesh(Mesh);
 
-						// Аккуратнее с капсулой/смещением (см. пункт 2)
 						const FBoxSphereBounds B = Mesh->GetBounds();
-						if (UCapsuleComponent* Cap = GetCapsuleComponent())
+						if (UCapsuleComponent* Cap = Self->GetCapsuleComponent())
 						{
 							const float CapsuleRadius = FMath::Max(B.BoxExtent.X, B.BoxExtent.Y);
-							const float CapsuleHalf = B.BoxExtent.Z; // это половина высоты бокса
+							const float CapsuleHalf = B.BoxExtent.Z;
 							Cap->SetCapsuleRadius(CapsuleRadius);
 							Cap->SetCapsuleHalfHeight(CapsuleHalf);
 
-							// Для ACharacter обычно mesh Z = -CapsuleHalfHeight (ноги на земле)
 							MC->SetRelativeLocation(FVector(0, 0, -Cap->GetUnscaledCapsuleHalfHeight()));
 						}
 					}
@@ -315,11 +337,14 @@ void ABasicNPC::SetupNPCVisual(FName NPCSlug)
 
 	if (!AnimBPSoft.IsNull())
 	{
-		Streamable.RequestAsyncLoad(AnimBPSoft.ToSoftObjectPath(), [this, AnimBPSoft]()
+		Streamable.RequestAsyncLoad(AnimBPSoft.ToSoftObjectPath(), [WeakThis, AnimBPSoft]()
 			{
+				ABasicNPC* Self = WeakThis.Get();
+				if (!Self) { return; }
+
 				if (UClass* AnimClass = AnimBPSoft.Get())
 				{
-					if (USkeletalMeshComponent* MC = GetMesh())
+					if (USkeletalMeshComponent* MC = Self->GetMesh())
 						MC->SetAnimInstanceClass(AnimClass);
 				}
 			});
@@ -335,15 +360,18 @@ void ABasicNPC::SetupNPCAudio(FName NPCSlug)
 	const FNPCDefinition* Def = NPCDefinitionTable->FindRow<FNPCDefinition>(NPCSlug, TEXT("Load NPC Audio"));
 	if (!Def) return;
 
-	const auto Audio = Def->Audio; // по значению
+	const auto Audio = Def->Audio;
 	FStreamableManager& S = UAssetManager::GetStreamableManager();
+	TWeakObjectPtr<ABasicNPC> WeakThis(this);
 
-	auto LoadOne = [this, &S](FName Key, TSoftObjectPtr<USoundBase> Soft)
+	auto LoadOne = [WeakThis, &S](FName Key, TSoftObjectPtr<USoundBase> Soft)
 		{
 			if (Soft.IsNull()) return;
-			S.RequestAsyncLoad(Soft.ToSoftObjectPath(), [this, Key, Soft]()
+			S.RequestAsyncLoad(Soft.ToSoftObjectPath(), [WeakThis, Key, Soft]()
 				{
-					if (USoundBase* Snd = Soft.Get()) { SoundMap.Add(Key, Snd); }
+					ABasicNPC* Self = WeakThis.Get();
+					if (!Self) { return; }
+					if (USoundBase* Snd = Soft.Get()) { Self->SoundMap.Add(Key, Snd); }
 				});
 		};
 
@@ -351,14 +379,26 @@ void ABasicNPC::SetupNPCAudio(FName NPCSlug)
 	LoadOne("Interact", Audio.InteractSound);
 	LoadOne("Farewell", Audio.FarewellSound);
 
-	auto LoadArray = [this, &S](const TArray<TSoftObjectPtr<USoundBase>>& Src, TArray<USoundBase*>& Dst)
+	// Use an enum-like index to identify which array to populate, avoiding
+	// capturing a reference to a member array that may dangle.
+	auto LoadArray = [WeakThis, &S](const TArray<TSoftObjectPtr<USoundBase>>& Src, int32 ArrayIndex)
 		{
 			for (auto Soft : Src)
 			{
 				if (Soft.IsNull()) continue;
-				S.RequestAsyncLoad(Soft.ToSoftObjectPath(), [this, Soft, &Dst]()
+				S.RequestAsyncLoad(Soft.ToSoftObjectPath(), [WeakThis, Soft, ArrayIndex]()
 					{
-						if (USoundBase* Snd = Soft.Get()) { Dst.Add(Snd); }
+						ABasicNPC* Self = WeakThis.Get();
+						if (!Self) { return; }
+						if (USoundBase* Snd = Soft.Get())
+						{
+							switch (ArrayIndex)
+							{
+							case 0: Self->IdleSounds.Add(Snd); break;
+							case 1: Self->WalkSounds.Add(Snd); break;
+							case 2: Self->RunSounds.Add(Snd);  break;
+							}
+						}
 					});
 			}
 		};
@@ -367,11 +407,10 @@ void ABasicNPC::SetupNPCAudio(FName NPCSlug)
 	WalkSounds.Reset();
 	RunSounds.Reset();
 
-	LoadArray(Audio.IdleSounds, IdleSounds);
-	LoadArray(Audio.WalkSounds, WalkSounds);
-	LoadArray(Audio.RunSounds, RunSounds);
+	LoadArray(Audio.IdleSounds, 0);
+	LoadArray(Audio.WalkSounds, 1);
+	LoadArray(Audio.RunSounds, 2);
 
-	// Периодический idle с рандомным интервалом
 	ScheduleNextIdleSound();
 }
 

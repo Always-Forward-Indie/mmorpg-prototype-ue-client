@@ -20,11 +20,16 @@ class PROTOTYPING_API UAuthenticationManager : public UObject
 {
 	GENERATED_BODY()
 private:
-	UWorld* worldContext = nullptr;
-	// ping manager
-	UPingManager* pingManager;
-	UNetworkManager* networkManager;
-	UMyGameInstance* gameInstance;
+UWorld* worldContext = nullptr;
+// ping manager
+UPROPERTY()
+UPingManager* pingManager = nullptr;
+
+UPROPERTY()
+UNetworkManager* networkManager = nullptr;
+
+UPROPERTY()
+UMyGameInstance* gameInstance = nullptr;
 
 public:
 	UAuthenticationManager(const FObjectInitializer& ObjectInitializer);

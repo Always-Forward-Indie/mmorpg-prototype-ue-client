@@ -126,6 +126,7 @@ FQuestProgressData UQuestNetworkHandler::ParseQuestUpdate(const TSharedPtr<FJson
     FQuestProgressData Data;
 
     Body->TryGetNumberField(TEXT("questId"),     Data.questId);
+    Body->TryGetStringField(TEXT("questSlug"),      Data.questSlug);
     Body->TryGetStringField(TEXT("clientQuestKey"), Data.clientQuestKey);
     Body->TryGetStringField(TEXT("state"),       Data.state);
     Body->TryGetNumberField(TEXT("currentStep"), Data.stepIndex);

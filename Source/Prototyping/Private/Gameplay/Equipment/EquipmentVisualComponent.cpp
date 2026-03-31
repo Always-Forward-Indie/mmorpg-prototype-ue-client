@@ -68,7 +68,17 @@ void UEquipmentVisualComponent::InitializeForRemotePlayer(UItemManager* InItemMa
         return;
     }
     ItemManager = InItemManager;
-    UE_LOG(LogTemp, Log, TEXT("EquipmentVisualComponent: Initialized for remote player"));
+    UE_LOG(LogTemp, Log, TEXT("EquipmentVisualComponent: Initialized for remote player (CharID=%d)"), OwnerCharacterId);
+}
+
+void UEquipmentVisualComponent::HandleRemoteEquipmentState(const FEquipmentStateData& State)
+{
+    // Filter: only process state for our specific remote character
+    if (OwnerCharacterId <= 0 || State.characterId != OwnerCharacterId)
+    {
+        return;
+    }
+    RefreshAllSlots(State);
 }
 
 // ---------------------------------------------------------------------------

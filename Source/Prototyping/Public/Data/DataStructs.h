@@ -282,6 +282,18 @@ struct FMobMoveEntryStruct
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Move Entry")
 	float speed = 0.f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Move Entry")
+	int64 stepTimestampMs = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Move Entry")
+	float waypointX = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Move Entry")
+	float waypointY = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Move Entry")
+	bool bHasWaypoint = false;
+
 	FMobMoveEntryStruct() {}
 };
 
@@ -396,6 +408,12 @@ struct FSkillInitiationData
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
     bool success = false;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    int32 cooldownMs = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    int32 gcdMs = 0;
+
     FSkillInitiationData()
     {
         skillName = "";
@@ -411,6 +429,8 @@ struct FSkillInitiationData
         skillEffectType = ESkillEffectType::None;
         skillSchool = ESkillSchool::None;
         success = false;
+        cooldownMs = 0;
+        gcdMs = 0;
     }
 };
 
@@ -485,6 +505,10 @@ struct FSkillResultData
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
     TArray<FAppliedEffectData> appliedEffects;
 
+    // Final caster mana after skill use
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    int32 finalCasterMana = 0;
+
     FSkillResultData()
     {
         skillName = "";
@@ -505,6 +529,7 @@ struct FSkillResultData
         success = false;
         skillEffectType = ESkillEffectType::None;
         skillSchool = ESkillSchool::None;
+        finalCasterMana = 0;
     }
 };
 
@@ -1889,6 +1914,20 @@ struct PROTOTYPING_API FNPCHealthManaStruct
 enum class ENPCInteractionState : uint8;
 
 USTRUCT(BlueprintType)
+struct PROTOTYPING_API FNPCQuestEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Quest Entry")
+    FString slug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Quest Entry")
+    FString status = "";
+
+    FNPCQuestEntry() {}
+};
+
+USTRUCT(BlueprintType)
 struct PROTOTYPING_API FNPCStruct
 {
     GENERATED_BODY()
@@ -1919,6 +1958,9 @@ struct PROTOTYPING_API FNPCStruct
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
     FString questId = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
+    TArray<FNPCQuestEntry> quests;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
     FPositionDataStruct position;

@@ -2,6 +2,8 @@
 #include "Gameplay/Quest/QuestManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
+#include "Gameplay/NPCs/NPCManager.h"
+#include "Gameplay/NPCs/BasicNPC.h"
 
 UQuestManager::UQuestManager()
 {
@@ -37,6 +39,21 @@ void UQuestManager::OnQuestUpdated(const FQuestProgressData& Data)
         Data.questId, *Data.state, Data.stepIndex);
 
     OnQuestUpdatedDelegate.Broadcast(Merged);
+
+    // Update NPC quest icons based on the new quest state
+    if (!Data.questSlug.IsEmpty())
+    {
+        FString NpcStatus;
+        if (Data.state == TEXT("active"))       NpcStatus = TEXT("in_progress");
+        else if (Data.state == TEXT("completed")) NpcStatus = TEXT("completable");
+        else if (Data.state == TEXT("turned_in")) NpcStatus = TEXT("turned_in");
+        else if (Data.state == TEXT("failed"))    NpcStatus = TEXT("failed");
+
+        if (!NpcStatus.IsEmpty())
+        {
+            UpdateNPCQuestIcons(Data.questSlug, NpcStatus);
+        }
+    }
 }
 
 void UQuestManager::OnQuestOffered(const FQuestOfferedData& Data)
@@ -110,4 +127,41 @@ TArray<FQuestProgressData> UQuestManager::GetCompletedQuests() const
         }
     }
     return Out;
+}
+
+void UQuestManager::UpdateNPCQuestIcons(const FString& QuestSlug, const FString& NewState)
+{
+    if (!GameInstance)
+    {
+        return;
+    }
+
+    UNPCManager* NPCMgr = GameInstance->GetNPCManager();
+    if (!NPCMgr)
+    {
+        return;
+    }
+
+    TArray<ABasicNPC*> AllNPCs = NPCMgr->GetAllNPCs();
+    for (ABasicNPC* NPC : AllNPCs)
+    {
+        if (!NPC) continue;
+
+        FNPCStruct Data = NPC->GetNPCData();
+        bool bUpdated = false;
+
+        for (FNPCQuestEntry& Quest : Data.quests)
+        {
+            if (Quest.slug == QuestSlug)
+            {
+                Quest.status = NewState;
+                bUpdated = true;
+            }
+        }
+
+        if (bUpdated)
+        {
+            NPC->UpdateNPCQuestData(Data.quests);
+        }
+    }
 }

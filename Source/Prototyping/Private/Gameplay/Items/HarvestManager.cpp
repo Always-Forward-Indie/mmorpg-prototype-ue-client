@@ -96,6 +96,13 @@ void UHarvestManager::SetWorldContext(UWorld* World)
 {
 	worldContext = World;
 	UE_LOG(LogTemp, Warning, TEXT("HarvestManager: World context set to %s"), World ? TEXT("Valid") : TEXT("NULL"));
+
+	// Re-register the tick timer in the new world after a level transition
+	if (worldContext)
+	{
+		TickTimerHandle.Invalidate();
+		StartTicking();
+	}
 }
 
 void UHarvestManager::SetGameInstance(UMyGameInstance* GameInstance)

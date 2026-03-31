@@ -93,16 +93,20 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
         
         if (!RequestId.IsEmpty())
         {
-            // Add requestId to header but DO NOT set clientSendMs here
-            // NetworkSenderWorker will set the precise clientSendMs right before sending
-            HeaderObject->SetStringField(TEXT("requestId"), RequestId);
+            // Per protocol: create a "timestamps" sub-object in header
+            // with clientSendMsEcho and requestId. NetworkSenderWorker will
+            // update clientSendMsEcho with the precise value right before sending.
+            TSharedPtr<FJsonObject> TimestampsObject = MakeShareable(new FJsonObject);
+            TimestampsObject->SetStringField(TEXT("requestId"), RequestId);
+            TimestampsObject->SetNumberField(TEXT("clientSendMsEcho"), 0); // placeholder, updated by sender
+            HeaderObject->SetObjectField(TEXT("timestamps"), TimestampsObject);
             
-            UE_LOG(LogTemp, Verbose, TEXT("JSONParser::SerializeJsonWithTimeSync - Added requestId: %s (clientSendMs will be set by NetworkSenderWorker)"), 
+            UE_LOG(LogTemp, Verbose, TEXT("JSONParser::SerializeJsonWithTimeSync - Added timestamps.requestId: %s (clientSendMsEcho will be set by NetworkSenderWorker)"), 
                 *RequestId);
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("JSONParser::SerializeJsonWithTimeSync - RequestId is empty, not adding time sync fields"));
+            UE_LOG(LogTemp, Warning, TEXT("JSONParser::SerializeJsonWithTimeSync - RequestId is empty, not adding timestamps sub-object"));
         }
     }
 	else
@@ -371,6 +375,25 @@ FClientDataStruct JSONParser::DeserializeClientData(const FString& JsonString)
 
 
 		 }
+
+		 // Per protocol (§1.4 pongClient): timestamps may also be a root-level object
+		 const TSharedPtr<FJsonObject>* TimestampsObject = nullptr;
+		 if (JsonObject->TryGetObjectField(TEXT("timestamps"), TimestampsObject) && TimestampsObject != nullptr)
+		 {
+			 if ((*TimestampsObject)->HasField(TEXT("serverRecvMs")))
+			 {
+				 MessageData.serverRecvMs = static_cast<int64>((*TimestampsObject)->GetNumberField(TEXT("serverRecvMs")));
+			 }
+			 if ((*TimestampsObject)->HasField(TEXT("serverSendMs")))
+			 {
+				 MessageData.serverSendMs = static_cast<int64>((*TimestampsObject)->GetNumberField(TEXT("serverSendMs")));
+			 }
+			 if ((*TimestampsObject)->HasField(TEXT("clientSendMsEcho")))
+			 {
+				 MessageData.clientSendMsEcho = static_cast<int64>((*TimestampsObject)->GetNumberField(TEXT("clientSendMsEcho")));
+				 MessageData.clientSendMs = MessageData.clientSendMsEcho;
+			 }
+		 }
 	 }
 
 	 return MessageData;
@@ -549,6 +572,62 @@ TArray<FMOBStruct> JSONParser::DeserializeMobsList(const TSharedPtr<FJsonObject>
 		}
 	}
 	return MobsList;
+}
+
+// Parse a mobMoveUpdate packet body into lightweight per-mob move entries
+TArray<JSONParser::FMobMovePacketEntry> JSONParser::DeserializeMobMoveUpdate(const TSharedPtr<FJsonObject>& Body, int64 ServerSendMs)
+{
+	TArray<FMobMovePacketEntry> Result;
+	if (!Body.IsValid()) return Result;
+
+	const TArray<TSharedPtr<FJsonValue>>* MobsArray = nullptr;
+	if (!Body->TryGetArrayField(TEXT("mobs"), MobsArray) || !MobsArray) return Result;
+
+	for (const TSharedPtr<FJsonValue>& MobValue : *MobsArray)
+	{
+		TSharedPtr<FJsonObject> Obj = MobValue->AsObject();
+		if (!Obj.IsValid()) continue;
+
+		FMobMovePacketEntry Entry;
+		Entry.uid = Obj->GetIntegerField(TEXT("uid"));
+
+		// position
+		const TSharedPtr<FJsonObject>* PosObjPtr = nullptr;
+		if (Obj->TryGetObjectField(TEXT("position"), PosObjPtr) && PosObjPtr)
+		{
+			Entry.moveEntry.position.positionX = (*PosObjPtr)->GetNumberField(TEXT("x"));
+			Entry.moveEntry.position.positionY = (*PosObjPtr)->GetNumberField(TEXT("y"));
+			Entry.moveEntry.position.positionZ = (*PosObjPtr)->GetNumberField(TEXT("z"));
+			Entry.moveEntry.position.rotationZ = (*PosObjPtr)->GetNumberField(TEXT("rotationZ"));
+		}
+
+		// velocity
+		const TSharedPtr<FJsonObject>* VelObjPtr = nullptr;
+		if (Obj->TryGetObjectField(TEXT("velocity"), VelObjPtr) && VelObjPtr)
+		{
+			Entry.moveEntry.velocityX = static_cast<float>((*VelObjPtr)->GetNumberField(TEXT("dirX")));
+			Entry.moveEntry.velocityY = static_cast<float>((*VelObjPtr)->GetNumberField(TEXT("dirY")));
+			Entry.moveEntry.speed     = static_cast<float>((*VelObjPtr)->GetNumberField(TEXT("speed")));
+		}
+
+		Entry.moveEntry.combatState     = Obj->GetIntegerField(TEXT("combatState"));
+		double RawStepMs = 0.0;
+		Obj->TryGetNumberField(TEXT("stepTimestampMs"), RawStepMs);
+		Entry.moveEntry.stepTimestampMs = static_cast<int64>(RawStepMs);
+
+		// optional waypoint
+		const TSharedPtr<FJsonObject>* WpObjPtr = nullptr;
+		if (Obj->TryGetObjectField(TEXT("waypoint"), WpObjPtr) && WpObjPtr)
+		{
+			Entry.moveEntry.waypointX    = static_cast<float>((*WpObjPtr)->GetNumberField(TEXT("x")));
+			Entry.moveEntry.waypointY    = static_cast<float>((*WpObjPtr)->GetNumberField(TEXT("y")));
+			Entry.moveEntry.bHasWaypoint = true;
+		}
+
+		Result.Add(Entry);
+	}
+
+	return Result;
 }
 
 FMOBStruct JSONParser::DeserializeMobData(const TSharedPtr<FJsonObject>& MobObject)
@@ -1526,6 +1605,12 @@ FSkillInitiationData JSONParser::DeserializeSkillInitiation(const TSharedPtr<FJs
 		SkillData.skillSchool = JSONParser::ParseSkillSchool(SchoolStr);
 	}
 
+	if (InitiationObj->HasField(TEXT("cooldownMs")))
+		SkillData.cooldownMs = InitiationObj->GetIntegerField(TEXT("cooldownMs"));
+
+	if (InitiationObj->HasField(TEXT("gcdMs")))
+		SkillData.gcdMs = InitiationObj->GetIntegerField(TEXT("gcdMs"));
+
 	return SkillData;
 }
 
@@ -1587,6 +1672,9 @@ FSkillResultData JSONParser::DeserializeSkillResult(const TSharedPtr<FJsonObject
 	
 	if (ResultObj->HasField(TEXT("finalTargetMana")))
 		SkillResult.finalTargetMana = ResultObj->GetIntegerField(TEXT("finalTargetMana"));
+	
+	if (ResultObj->HasField(TEXT("finalCasterMana")))
+		SkillResult.finalCasterMana = ResultObj->GetIntegerField(TEXT("finalCasterMana"));
 	
 	if (ResultObj->HasField(TEXT("isCritical")))
 		SkillResult.isCritical = ResultObj->GetBoolField(TEXT("isCritical"));
@@ -1714,6 +1802,34 @@ FNetworkHeaderStruct JSONParser::DeserializeNetworkHeader(const FString& JsonStr
             if ((*HeaderObject)->HasField(TEXT("clientSendMsEcho")))
             {
                 NetworkHeader.clientSendMsEcho = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("clientSendMsEcho")));
+            }
+        }
+
+        // Per protocol (§1.4 pongClient), timestamps may be a root-level object
+        // (sibling of "header") instead of fields inside "header". Check and override
+        // if present so that pongClient responses are parsed correctly.
+        const TSharedPtr<FJsonObject>* TimestampsObject = nullptr;
+        if (JsonObject->TryGetObjectField(TEXT("timestamps"), TimestampsObject) && TimestampsObject != nullptr)
+        {
+            if ((*TimestampsObject)->HasField(TEXT("serverRecvMs")))
+            {
+                NetworkHeader.serverRecvMs = static_cast<int64>((*TimestampsObject)->GetNumberField(TEXT("serverRecvMs")));
+            }
+            if ((*TimestampsObject)->HasField(TEXT("serverSendMs")))
+            {
+                NetworkHeader.serverSendMs = static_cast<int64>((*TimestampsObject)->GetNumberField(TEXT("serverSendMs")));
+            }
+            if ((*TimestampsObject)->HasField(TEXT("clientSendMsEcho")))
+            {
+                NetworkHeader.clientSendMsEcho = static_cast<int64>((*TimestampsObject)->GetNumberField(TEXT("clientSendMsEcho")));
+            }
+            if ((*TimestampsObject)->HasField(TEXT("requestId")))
+            {
+                NetworkHeader.requestId = (*TimestampsObject)->GetStringField(TEXT("requestId"));
+            }
+            else if ((*TimestampsObject)->HasField(TEXT("requestIdEcho")))
+            {
+                NetworkHeader.requestId = (*TimestampsObject)->GetStringField(TEXT("requestIdEcho"));
             }
         }
     }
@@ -2161,6 +2277,23 @@ FNPCStruct JSONParser::DeserializeNPCData(const TSharedPtr<FJsonObject>& NPCObj)
             }
         }
         
+        // Parse quests
+        const TArray<TSharedPtr<FJsonValue>>* QuestsArray = nullptr;
+        if (NPCObj->TryGetArrayField(TEXT("quests"), QuestsArray))
+        {
+            for (const auto& QuestValue : *QuestsArray)
+            {
+                const TSharedPtr<FJsonObject>* QuestObj = nullptr;
+                if (QuestValue->TryGetObject(QuestObj) && QuestObj)
+                {
+                    FNPCQuestEntry Entry;
+                    (*QuestObj)->TryGetStringField(TEXT("slug"), Entry.slug);
+                    (*QuestObj)->TryGetStringField(TEXT("status"), Entry.status);
+                    NPC.quests.Add(Entry);
+                }
+            }
+        }
+
         // Parse stats
         const TSharedPtr<FJsonObject>* StatsObj = nullptr;
         if (NPCObj->TryGetObjectField(TEXT("stats"), StatsObj) && StatsObj)

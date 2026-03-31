@@ -23,10 +23,17 @@ class PROTOTYPING_API USpawnZoneManager : public UObject
 	GENERATED_BODY()
 
 	private:
-		UWorld* worldContext = nullptr;
-		UNetworkManager* networkManager;
-		UMyGameInstance* gameInstance;
+		UPROPERTY()
+		TObjectPtr<UWorld> worldContext = nullptr;
+
+		UPROPERTY()
+		UNetworkManager* networkManager = nullptr;
+
+		UPROPERTY()
+		UMyGameInstance* gameInstance = nullptr;
+
 		//list of spawn zones
+		UPROPERTY()
 		TArray<AMobSpawnZone*> SpawnZones;
 
 	public:

@@ -46,8 +46,13 @@ void UTimeSyncService::SetWorldContext(UWorld* World)
 {
     WorldContext = World;
     
-    // If we have a world context and cleanup timer is not set, try to start it
-    if (WorldContext && !CleanupTimerHandle.IsValid())
+    // Invalidate the stale handle from the previous world before checking IsValid().
+    // After a level transition the old TimerManager is destroyed so the handle
+    // may report IsValid()==true but actually point into freed memory.
+    CleanupTimerHandle.Invalidate();
+
+    // Re-register the cleanup timer in the new world's TimerManager
+    if (WorldContext)
     {
         FTimerManager& TimerManager = WorldContext->GetTimerManager();
         TimerManager.SetTimer(CleanupTimerHandle, this, &UTimeSyncService::CleanupExpiredRequests, 30.0f, true);
@@ -473,7 +478,7 @@ bool UTimeSyncService::IsSampleValid(const FTimeSyncData& SyncData) const
     // Check server processing ratio - if server processing is too large compared to RTT,
     // it indicates the server was overloaded and this sample should be discarded
     float ProcessingRatio = ServerProcessing / RTT;
-    if (ProcessingRatio > 0.5f) // Server processing shouldn't be more than 50% of RTT
+    if (ProcessingRatio > 0.8f) // Server processing shouldn't be more than 80% of RTT
     {
         return false;
     }
@@ -551,13 +556,9 @@ void UTimeSyncService::ApplyEWMAFiltering(EServerType ServerType, const FTimeSyn
         float OffsetDelta = NewOffset - ServerData->FilteredOffsetMs;
         float LatencyDelta = NewLatency - ServerData->FilteredLatencyMs;
         
-        // Clamp offset change to ±50ms per sample to prevent sudden jumps
-        float MaxOffsetStep = 50.0f;
-        OffsetDelta = FMath::Clamp(OffsetDelta, -MaxOffsetStep, MaxOffsetStep);
-        
-        // Clamp latency change to ±20ms per sample
-        float MaxLatencyStep = 20.0f;
-        LatencyDelta = FMath::Clamp(LatencyDelta, -MaxLatencyStep, MaxLatencyStep);
+        // Clamp offset/latency change per sample to prevent sudden jumps
+        OffsetDelta = FMath::Clamp(OffsetDelta, -MaxOffsetStepMs, MaxOffsetStepMs);
+        LatencyDelta = FMath::Clamp(LatencyDelta, -MaxLatencyStepMs, MaxLatencyStepMs);
         
         // Apply clamped EWMA
         ServerData->FilteredOffsetMs += Alpha * OffsetDelta;
@@ -702,30 +703,31 @@ bool UTimeSyncService::RemovePendingRequest(const FString& RequestId)
 
 int64 UTimeSyncService::GetSystemTimeMs() const
 {
-    // Гибридный подход: системное время + высокоточный счетчик для интерполяции
-    static int64 LastSystemTimeMs = 0;
-    static double LastPerformanceTime = 0.0;
-    static int32 CallsSinceLastCalibration = 0;
+    // Hybrid approach: periodic wall-clock calibration + high-precision counter
+    // between calibrations to avoid FDateTime resolution jitter.
+    //
+    // Using mutable-style statics is acceptable here because the function is
+    // logically read-only from the caller's perspective; the statics are an
+    // implementation detail for caching.
+    static int64  AnchorSystemMs    = 0;
+    static double AnchorPerfSeconds = 0.0;
 
-    const double CurrentPerformanceTime = FPlatformTime::Seconds();
-    const int32 CalibrationInterval = 10; // Калибровка каждые 10 вызовов
+    const double CurrentPerfSeconds = FPlatformTime::Seconds();
 
-    // Периодическая калибровка к системному времени
-    if (LastSystemTimeMs == 0 || CallsSinceLastCalibration >= CalibrationInterval)
+    // Re-calibrate every 5 seconds or on first call
+    const double CalibrationIntervalSec = 5.0;
+    const bool bNeedsCalibration = (AnchorSystemMs == 0)
+        || ((CurrentPerfSeconds - AnchorPerfSeconds) >= CalibrationIntervalSec);
+
+    if (bNeedsCalibration)
     {
         const FDateTime Now = FDateTime::UtcNow();
-        LastSystemTimeMs = Now.ToUnixTimestamp() * 1000 + Now.GetMillisecond();
-        LastPerformanceTime = CurrentPerformanceTime;
-        CallsSinceLastCalibration = 0;
-
-        UE_LOG(LogTemp, VeryVerbose, TEXT("TimeSyncService: Calibrated time to %lld"), LastSystemTimeMs);
-        return LastSystemTimeMs;
+        AnchorSystemMs    = Now.ToUnixTimestamp() * 1000LL + Now.GetMillisecond();
+        AnchorPerfSeconds = CurrentPerfSeconds;
+        return AnchorSystemMs;
     }
 
-    // Используем высокоточный счетчик между калибровками
-    const double ElapsedSeconds = CurrentPerformanceTime - LastPerformanceTime;
-    const int64 ElapsedMs = static_cast<int64>(ElapsedSeconds * 1000.0);
-    CallsSinceLastCalibration++;
-
-    return LastSystemTimeMs + ElapsedMs;
+    // Between calibrations, use the high-resolution counter for sub-ms stability
+    const double ElapsedSec = CurrentPerfSeconds - AnchorPerfSeconds;
+    return AnchorSystemMs + static_cast<int64>(ElapsedSec * 1000.0);
 }

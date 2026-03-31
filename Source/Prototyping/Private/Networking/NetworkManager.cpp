@@ -110,6 +110,28 @@ void UNetworkManager::StartPollingChunkServer()
 	}
 }
 
+void UNetworkManager::RestartPolling()
+{
+	if (!WorldContext)
+	{
+		UE_LOG(LogTemp, Error, TEXT("NetworkManager::RestartPolling - WorldContext is null, cannot restart polling timers"));
+		return;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("NetworkManager::RestartPolling - Re-registering poll timers in new world"));
+
+	// The old TimerManager is gone after level transition - register fresh timers
+	// in the new world's TimerManager. ClearTimer on a stale handle is a no-op so
+	// it is safe to call even if the handle references the destroyed old world.
+	NetworkLoginServerPollTimerHandle.Invalidate();
+	NetworkGameServerPollTimerHandle.Invalidate();
+	NetworkChunkServerPollTimerHandle.Invalidate();
+
+	StartPollingLoginServer();
+	StartPollingGameServer();
+	StartPollingChunkServer();
+}
+
 //start connection to login server
 void UNetworkManager::ConnectLoginServer()
 {
@@ -549,8 +571,12 @@ void UNetworkManager::Shutdown() {
 		WorldContext->GetTimerManager().ClearTimer(NetworkLoginServerPollTimerHandle);
 		WorldContext->GetTimerManager().ClearTimer(NetworkGameServerPollTimerHandle);
 		WorldContext->GetTimerManager().ClearTimer(NetworkChunkServerPollTimerHandle);
+		WorldContext->GetTimerManager().ClearTimer(LoginServerConnectionTimerHandle);
+		WorldContext->GetTimerManager().ClearTimer(GameServerConnectionTimerHandle);
+		WorldContext->GetTimerManager().ClearTimer(ChunkServerConnectionTimerHandle);
 	}
 
+	// Stop and join all receiver/sender threads, then delete workers and threads
 
 	if (ReceiverLoginServerWorker != nullptr)
 	{
@@ -558,11 +584,11 @@ void UNetworkManager::Shutdown() {
 		if (ReceiverLoginServerThread != nullptr)
 		{
 			ReceiverLoginServerThread->WaitForCompletion();
-			//delete ReceiverLoginServerWorker;
-			//ReceiverLoginServerWorker = nullptr;
-			//delete ReceiverLoginServerThread;
-			//ReceiverLoginServerThread = nullptr;
+			delete ReceiverLoginServerThread;
+			ReceiverLoginServerThread = nullptr;
 		}
+		delete ReceiverLoginServerWorker;
+		ReceiverLoginServerWorker = nullptr;
 	}
 
 	if (SenderLoginServerWorker != nullptr)
@@ -571,11 +597,11 @@ void UNetworkManager::Shutdown() {
 		if (SenderLoginServerThread != nullptr)
 		{
 			SenderLoginServerThread->WaitForCompletion();
-			//delete SenderLoginServerWorker;
-			//SenderLoginServerWorker = nullptr;
-			//delete SenderLoginServerThread;
-			//SenderLoginServerThread = nullptr;
+			delete SenderLoginServerThread;
+			SenderLoginServerThread = nullptr;
 		}
+		delete SenderLoginServerWorker;
+		SenderLoginServerWorker = nullptr;
 	}
 
 	if (ReceiverGameServerWorker != nullptr)
@@ -584,25 +610,24 @@ void UNetworkManager::Shutdown() {
 		if (ReceiverGameServerThread != nullptr)
 		{
 			ReceiverGameServerThread->WaitForCompletion();
-			//delete ReceiverGameServerWorker;
-			//ReceiverGameServerWorker = nullptr;
-			//delete ReceiverGameServerThread;
-			//ReceiverGameServerThread = nullptr;
+			delete ReceiverGameServerThread;
+			ReceiverGameServerThread = nullptr;
 		}
+		delete ReceiverGameServerWorker;
+		ReceiverGameServerWorker = nullptr;
 	}
 
 	if (SenderGameServerWorker != nullptr)
 	{
 		SenderGameServerWorker->Stop();
-
 		if (SenderGameServerThread != nullptr)
 		{
 			SenderGameServerThread->WaitForCompletion();
-			//delete SenderGameServerWorker;
-			//SenderGameServerWorker = nullptr;
-			//delete SenderGameServerThread;
-			//SenderGameServerThread = nullptr;
+			delete SenderGameServerThread;
+			SenderGameServerThread = nullptr;
 		}
+		delete SenderGameServerWorker;
+		SenderGameServerWorker = nullptr;
 	}
 
 	if (ReceiverChunkServerWorker != nullptr)
@@ -611,7 +636,11 @@ void UNetworkManager::Shutdown() {
 		if (ReceiverChunkServerThread != nullptr)
 		{
 			ReceiverChunkServerThread->WaitForCompletion();
+			delete ReceiverChunkServerThread;
+			ReceiverChunkServerThread = nullptr;
 		}
+		delete ReceiverChunkServerWorker;
+		ReceiverChunkServerWorker = nullptr;
 	}
 
 	if (SenderChunkServerWorker != nullptr)
@@ -620,7 +649,11 @@ void UNetworkManager::Shutdown() {
 		if (SenderChunkServerThread != nullptr)
 		{
 			SenderChunkServerThread->WaitForCompletion();
+			delete SenderChunkServerThread;
+			SenderChunkServerThread = nullptr;
 		}
+		delete SenderChunkServerWorker;
+		SenderChunkServerWorker = nullptr;
 	}
 
 	// Shutdown the sockets
@@ -629,19 +662,28 @@ void UNetworkManager::Shutdown() {
 	{
 		LoginServerSocket->Close();
 		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(LoginServerSocket);
+		LoginServerSocket = nullptr;
 	}
 
 	if (GameServerSocket != nullptr)
 	{
 		GameServerSocket->Close();
 		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(GameServerSocket);
+		GameServerSocket = nullptr;
 	}
 
 	if (ChunkServerSocket != nullptr)
 	{
 		ChunkServerSocket->Close();
 		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ChunkServerSocket);
+		ChunkServerSocket = nullptr;
 	}
+}
+
+UNetworkManager::~UNetworkManager()
+{
+	// Ensure clean shutdown if Shutdown() was not called explicitly
+	Shutdown();
 }
 
 void UNetworkManager::ProcessIncomingData(const FString& ReceivedData)

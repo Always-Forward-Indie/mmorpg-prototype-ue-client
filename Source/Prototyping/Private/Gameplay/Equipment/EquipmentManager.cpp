@@ -115,23 +115,53 @@ FEquipmentSlotData UEquipmentManager::GetSlot(const FString& SlotSlug) const
 
 void UEquipmentManager::OnEquipmentStateReceived(const FEquipmentStateData& State)
 {
+    // Only apply to local equipment state if this packet is for our character.
+    // If GameInstance is set and the characterId doesn't match, skip updating
+    // local state (the EquipmentVisualComponent on the remote player handles it
+    // via OnRemoteEquipmentStateReceivedDelegate).
+    if (GameInstance && State.characterId > 0 &&
+        State.characterId != GameInstance->GetCurrentCharacterID())
+    {
+        // Route as remote player equipment update instead
+        OnRemoteEquipmentStateReceived(State);
+        return;
+    }
+
     EquipmentState = State;
     OnEquipmentStateChangedDelegate.Broadcast(State);
 }
 
 void UEquipmentManager::OnEquipResultReceived(const FEquipResultData& Result)
 {
+    // Only broadcast equip results for our own character
+    if (GameInstance && Result.characterId > 0 &&
+        Result.characterId != GameInstance->GetCurrentCharacterID())
+    {
+        return;
+    }
     OnEquipResultReceivedDelegate.Broadcast(Result);
 }
 
 void UEquipmentManager::OnWeightStatusReceived(const FWeightStatusData& Status)
 {
+    // Only apply weight status for our own character
+    if (GameInstance && Status.characterId > 0 &&
+        Status.characterId != GameInstance->GetCurrentCharacterID())
+    {
+        return;
+    }
     WeightStatus = Status;
     OnWeightStatusChangedDelegate.Broadcast(Status);
 }
 
 void UEquipmentManager::OnAttributesUpdated(int32 CharacterId, const TArray<FAttributeDataStruct>& Attributes)
 {
+    // Only broadcast attribute updates for our own character
+    if (GameInstance && CharacterId > 0 &&
+        CharacterId != GameInstance->GetCurrentCharacterID())
+    {
+        return;
+    }
     OnAttributesUpdatedDelegate.Broadcast(CharacterId, Attributes);
 }
 

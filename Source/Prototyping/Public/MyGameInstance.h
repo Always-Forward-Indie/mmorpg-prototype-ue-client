@@ -52,32 +52,48 @@ class PROTOTYPING_API UMyGameInstance : public UGameInstance
 	GENERATED_BODY()
 
 private:
-	FTimerHandle LoadLoginLevelTimerHandle; // Timer handle for loading the login level
+FTimerHandle LoadLoginLevelTimerHandle; // Timer handle for loading the login level
 
-	FTimerHandle RemoveLoadingScreenTimerHandle; // Timer handle for loading the game level
+FTimerHandle RemoveLoadingScreenTimerHandle; // Timer handle for loading the game level
 
-	FTimerHandle NetworkServersPingTimerHandle; // Timer handle for ping game server
+FTimerHandle NetworkServersPingTimerHandle; // Timer handle for ping game server
 
-	// ClientData
-	FClientDataStruct ClientData;
+FTimerHandle GameWorldReadyTimerHandle; // Timer handle for polling game world readiness
 
-	// Client ID
-	int32 CurrentClientID;
+// ClientData
+FClientDataStruct ClientData;
 
-	// Client token
-	FString CurrentClientSecret;
+// Client ID
+int32 CurrentClientID;
 
-	// Client login
-	FString CurrentClientLogin;
+// Client token
+FString CurrentClientSecret;
 
-	// Client Character ID
-	int32 CurrentCharacterID;
+// Client login
+FString CurrentClientLogin;
 
-	// Time variables to measure ping
-	FDateTime SendTimeGameServer;
-	FDateTime SendTimeLoginServer;
-	FDateTime ReceiveTimeGameServer;
-	FDateTime ReceiveTimeLoginServer;
+// Client Character ID
+int32 CurrentCharacterID;
+
+// Time variables to measure ping
+FDateTime SendTimeGameServer;
+FDateTime SendTimeLoginServer;
+FDateTime ReceiveTimeGameServer;
+FDateTime ReceiveTimeLoginServer;
+
+	// --- Level transition state ---
+	// True while we are in the process of transitioning from Login to GameWorld
+	bool bTransitioningToGameWorld = false;
+
+	// True once the game world (WorldMapV1) is fully loaded and ready for gameplay
+	bool bGameWorldReady = false;
+
+public:
+	// Client ID of the local player that needs to be spawned once game world is ready
+	int32 PendingSpawnClientId = 0;
+
+	// Pending spawn data for players that arrived during level transition
+	TArray<FClientDataStruct> PendingRemotePlayerSpawns;
 
 public:
 	UMyGameInstance(const FObjectInitializer& ObjectInitializer);
@@ -89,6 +105,21 @@ public:
 	void InitGameSystems();
 
 	void Shutdown();
+
+	// Refresh WorldContext on all managers after a level transition
+	void RefreshManagerWorldContexts();
+
+	// Called when the game world is fully loaded and ready for gameplay
+	void OnGameWorldReady();
+
+	// Polls whether the game world is ready after OpenLevel
+	void CheckGameWorldReady();
+
+	// Process any player spawns that were queued during level transition
+	void ProcessPendingSpawns();
+
+	// Returns true if the game world is loaded and ready
+	bool IsGameWorldReady() const { return bGameWorldReady; }
 
 	UPROPERTY()
 	// Network manager
@@ -184,25 +215,49 @@ public:
 	UPROPERTY()
 	class UDialogueManager* DialogueManager;
 
+	// Dialogue network handler
+	UPROPERTY()
+	class UDialogueNetworkHandler* DialogueNetworkHandler;
+
 	// Quest manager
 	UPROPERTY()
 	class UQuestManager* QuestManager;
+
+	// Quest network handler
+	UPROPERTY()
+	class UQuestNetworkHandler* QuestNetworkHandler;
 
 	// Equipment manager
 	UPROPERTY()
 	class UEquipmentManager* EquipmentManager;
 
+	// Equipment network handler
+	UPROPERTY()
+	class UEquipmentNetworkHandler* EquipmentNetworkHandler;
+
 	// Vendor manager
 	UPROPERTY()
 	class UVendorManager* VendorManager;
+
+	// Vendor network handler
+	UPROPERTY()
+	class UVendorNetworkHandler* VendorNetworkHandler;
 
 	// Repair manager
 	UPROPERTY()
 	class URepairManager* RepairManager;
 
+	// Repair network handler
+	UPROPERTY()
+	class URepairNetworkHandler* RepairNetworkHandler;
+
 	// Trade manager
 	UPROPERTY()
 	class UTradeManager* TradeManager;
+
+	// Trade network handler
+	UPROPERTY()
+	class UTradeNetworkHandler* TradeNetworkHandler;
 
 	// Bestiary network handler
 	UPROPERTY()
@@ -212,12 +267,17 @@ public:
 	UPROPERTY()
 	class UChatManager* ChatManager;
 
+	// Chat network handler
+	UPROPERTY()
+	class UChatNetworkHandler* ChatNetworkHandler;
+
 	// DevMode configuration (editable in Blueprint defaults)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DevMode")
 	FDevModeConfig DevModeConfig;
 
 	TMap<int32, FClientDataStruct> ConnectedPlayers;
 
+	UPROPERTY()
 	TMap<int32, ABasicPlayer*> SpawnedPlayers;
 
 	UPROPERTY(BlueprintAssignable, Category = "Network")
@@ -337,13 +397,18 @@ public:
 	// spawn players
 	void SpawnPlayerForClient(int32 ClientID);
 
+	// Load a streaming sub-level (Login, Debug). NOT used for World Partition game maps.
 	UFUNCTION(BlueprintCallable, Category = "Level")
-	void LoadLevel(const FName& LevelName);
+	void LoadStreamingLevel(const FName& LevelName);
+
+	// Transition to the game world map (World Partition) via OpenLevel
+	UFUNCTION(BlueprintCallable, Category = "Level")
+	void TransitionToGameWorld();
 
 	void LoadLoginLevel();
 
 	UFUNCTION(BlueprintCallable, Category = "Level")
-	void OnLevelLoaded();
+	void OnLoginLevelLoaded();
 
 	UFUNCTION(BlueprintCallable, Category = "Level")
 	void OnLevelUnloaded();
@@ -371,8 +436,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Game")
 	void JoinSelectedCharacterToGame();
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Level")
-	FName GameLevelName;
+	// Game world map asset (World Partition). Pick the map directly in the Details panel.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Level", meta = (AllowedClasses = "/Script/Engine.World"))
+	TSoftObjectPtr<UWorld> GameWorldMap;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Level")
 	FName LoginLevelName;
@@ -382,10 +448,14 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<UUserWidget> LoadingScreenWidgetClass;
+
+	UPROPERTY()
 	UUserWidget* LoadingScreenWidget;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<ULoginWidget> LoginScreenWidgetClass;
+
+	UPROPERTY()
 	ULoginWidget* LoginScreenWidget;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
@@ -393,6 +463,8 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<UMonitorStatsWidget> MonitorStatsWidgetClass;
+
+	UPROPERTY()
 	UMonitorStatsWidget* MonitorStatsWidget;
 
 	// Класс виджета, который создаётся в Blueprint
@@ -404,9 +476,11 @@ public:
 	FName LevelBeingLoaded;
 
 	// Camera actor for the login level
+	UPROPERTY()
 	AMyCameraActor* LoginLevelCamera;
 
 	// Player actor for the game level
+	UPROPERTY()
 	ABasicPlayer* Player;
 
 	// add a reference to the player actor blueprint
@@ -489,6 +563,7 @@ public:
 	bool bDebug;
 
 	// Loading screen actor
+	UPROPERTY()
 	ALoadingSceenActor* LoadingScreenActor;
 
 	// Ping servers
@@ -605,5 +680,6 @@ class UPlayerSkillManager;
 class UCombatSystemManager;
 class UTimeSyncService;
 class UUIManager;
-class UNPCManager; // Add NPC Manager forward declaration
-class UNPCNetworkHandler; // Add NPC Network Handler forward declaration
+class UNPCManager;
+class UNPCNetworkHandler;
+class UChatNetworkHandler;

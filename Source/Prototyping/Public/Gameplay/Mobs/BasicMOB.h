@@ -155,6 +155,7 @@ public:
 	float DamageFlagResetTime = 0.5f; // Time in seconds before damage flag
 
 
+	UPROPERTY()
 	UW_MOBHeadInfoWidget* HeadWidget;
 
 	// Constant movement speed

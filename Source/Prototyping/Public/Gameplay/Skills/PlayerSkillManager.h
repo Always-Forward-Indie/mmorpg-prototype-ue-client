@@ -82,9 +82,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Player Skill Manager")
     float GetCurrentTime() const;
 
-    // Handle combat events from server
+    // Handle combat events from server (with per-cast cooldown/gcd from initiation packet)
     UFUNCTION(BlueprintCallable, Category = "Player Skill Manager") 
-    void HandleSkillInitiation(const FString& SkillSlug, int32 CasterId);
+    void HandleSkillInitiation(const FString& SkillSlug, int32 CasterId,
+        int32 CooldownMs = 0, int32 GcdMs = 0);
 
     // Called when the attack animation finishes to release the cast lock
     void NotifyAnimationEnded();
@@ -94,6 +95,13 @@ public:
     double GetWorldSeconds() const;
 
     double NowFor(const FPlayerSkillData* Skill) const;
+
+    // GCD query
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Skill Manager")
+    bool IsGCDActive() const;
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Skill Manager")
+    float GetGCDRemaining() const;
 
 protected:
     // Get world for time calculations
@@ -132,4 +140,8 @@ private:
     bool ValidateSkillSlot(int32 SlotIndex) const;
 
     bool bIsInitialized = false;
+
+    // Global Cooldown (GCD) tracking
+    double GCDEndTime = 0.0;
+    bool   bGCDUsesServerClock = true;
 };

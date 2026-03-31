@@ -29,15 +29,20 @@ void UHealingEffectHandler::ProcessSkillResult_Implementation(const FSkillResult
         ProcessCriticalHeal(SkillResult, TargetObject);
     }
 
-    // Apply healing using Execute_ methods
-    int32 CurrentHealth = ICombatable::Execute_GetCurrentHealth(TargetObject);
-    int32 MaxHealth = ICombatable::Execute_GetMaxHealth(TargetObject);
-    int32 NewHealth = FMath::Min(MaxHealth, CurrentHealth + FinalHealing);
-    
-    // Calculate actual healing done (in case of overheal)
-    int32 ActualHealing = NewHealth - CurrentHealth;
-    
+    // Use server-authoritative finalTargetHealth instead of local calculation.
+    // The server already computed the correct HP after healing (clamped to max).
+    int32 OldHealth = ICombatable::Execute_GetCurrentHealth(TargetObject);
+    int32 NewHealth = SkillResult.finalTargetHealth;
     ICombatable::Execute_SetCurrentHealth(TargetObject, NewHealth);
+    ICombatable::Execute_SetCurrentMana(TargetObject, SkillResult.finalTargetMana);
+
+    // Calculate actual healing done for display (in case of overheal)
+    int32 ActualHealing = FMath::Max(0, NewHealth - OldHealth);
+    if (ActualHealing == 0 && FinalHealing > 0)
+    {
+        // Edge case: server says same HP but healing was non-zero (full HP heal)
+        ActualHealing = FinalHealing;
+    }
 
     // Show healing effect
     ICombatable::Execute_ShowHealingEffect(TargetObject, ActualHealing);

@@ -125,6 +125,14 @@ bool UPlayerSkillManager::CanCastSkill(const FString& SkillSlug) const
         return false;
     }
 
+    // Check GCD
+    if (IsGCDActive())
+    {
+        UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Cannot cast %s - GCD active (%.1fs remaining)"),
+            *SkillSlug, GetGCDRemaining());
+        return false;
+    }
+
     // Use existing skill system validation
     if (SkillSystemManager)
     {
@@ -367,7 +375,8 @@ bool UPlayerSkillManager::ValidateSkillSlot(int32 SlotIndex) const
     return SlotIndex >= 0 && SlotIndex < MaxSkillSlots;
 }
 
-void UPlayerSkillManager::HandleSkillInitiation(const FString& SkillSlug, int32 CasterId)
+void UPlayerSkillManager::HandleSkillInitiation(const FString& SkillSlug, int32 CasterId,
+    int32 CooldownMs, int32 GcdMs)
 {
     // Only handle initiations for our character
     if (CasterId != CharacterId)
@@ -377,17 +386,43 @@ void UPlayerSkillManager::HandleSkillInitiation(const FString& SkillSlug, int32 
         return;
     }
     
-    UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Handling server-confirmed skill initiation for %s"), *SkillSlug);
+    UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Server-confirmed skill %s (cooldownMs=%d, gcdMs=%d)"),
+        *SkillSlug, CooldownMs, GcdMs);
     
-    // NOW start the cooldown since server confirmed the skill cast
+    // Start per-skill cooldown using per-cast cooldownMs from the initiation packet
     if (HasSkill(SkillSlug))
     {
-        StartSkillCooldown(SkillSlug);
-        UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Started cooldown for server-confirmed skill %s"), *SkillSlug);
+        if (FPlayerSkillData* S = PlayerSkills.Find(SkillSlug))
+        {
+            // Use per-cast cooldownMs if provided, otherwise fall back to networkData.cooldownMs
+            const int32 EffectiveCooldownMs = (CooldownMs > 0) ? CooldownMs : S->networkData.cooldownMs;
+            const double CooldownSec = static_cast<double>(EffectiveCooldownMs) / 1000.0;
+
+            if (CooldownSec > 0.0)
+            {
+                S->bCooldownUsesServerClock = true;
+                const double Now = GetServerSeconds();
+                S->cooldownEndTime = Now + CooldownSec;
+                S->bIsOnCooldown = true;
+                S->bIsReady = false;
+
+                OnSkillCooldownStarted.Broadcast(SkillSlug);
+                UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Started cooldown %.1fs for %s"), CooldownSec, *SkillSlug);
+            }
+        }
     }
     else
     {
         UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Server confirmed skill %s but we don't have it"), *SkillSlug);
+    }
+
+    // Start GCD (affects all skills)
+    if (GcdMs > 0)
+    {
+        const double GcdSec = static_cast<double>(GcdMs) / 1000.0;
+        bGCDUsesServerClock = true;
+        GCDEndTime = GetServerSeconds() + GcdSec;
+        UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Started GCD %.1fs"), GcdSec);
     }
 }
 
@@ -414,4 +449,17 @@ double UPlayerSkillManager::GetWorldSeconds() const {
 double UPlayerSkillManager::NowFor(const FPlayerSkillData* Skill) const {
     if (Skill && Skill->bCooldownUsesServerClock) return GetServerSeconds();
     return GetWorldSeconds();
+}
+
+bool UPlayerSkillManager::IsGCDActive() const
+{
+    const double Now = bGCDUsesServerClock ? GetServerSeconds() : GetWorldSeconds();
+    return Now < GCDEndTime;
+}
+
+float UPlayerSkillManager::GetGCDRemaining() const
+{
+    const double Now = bGCDUsesServerClock ? GetServerSeconds() : GetWorldSeconds();
+    const double Rem = GCDEndTime - Now;
+    return Rem > 0.0 ? static_cast<float>(Rem) : 0.0f;
 }

@@ -44,6 +44,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "NPC")
 	void SetNPCData(const FNPCStruct& Data);
 
+	/** Update only the quest entries in NPC data and refresh the nameplate icon. */
+	UFUNCTION(BlueprintCallable, Category = "NPC")
+	void UpdateNPCQuestData(const TArray<FNPCQuestEntry>& NewQuests);
+
 	// Individual setters for NPC properties
 	UFUNCTION(BlueprintCallable, Category = "NPC")
 	void SetNPCId(int32 NPCId);

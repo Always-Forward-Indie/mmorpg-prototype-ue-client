@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+п»ї// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Gameplay/Mobs/MOBMovementComponent.h"
@@ -9,346 +9,392 @@
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Mobs/BasicMOB.h"
 
-// Sets default values for this component's properties
+// ---------------------------------------------------------------------------
 UMOBMovementComponent::UMOBMovementComponent()
 {
-    // Set this component to be initialized when the game starts, and to be ticked every frame.
     PrimaryComponentTick.bCanEverTick = true;
 
     PrevServerPos = TargetServerPos = FVector::ZeroVector;
     PrevServerRot = TargetServerRot = FRotator::ZeroRotator;
     ServerVelocity = FVector::ZeroVector;
+    Waypoint = FVector::ZeroVector;
     LastMovePacketTime = 0.f;
-    bHasVelocity = false;
+    bHasReceivedPacket = false;
 }
 
-
-// Called when the game starts
+// ---------------------------------------------------------------------------
 void UMOBMovementComponent::BeginPlay()
 {
     Super::BeginPlay();
 
-    // Initialize positions with owner's location if available
     if (GetOwner())
     {
         PrevServerPos = TargetServerPos = GetOwner()->GetActorLocation();
         PrevServerRot = TargetServerRot = GetOwner()->GetActorRotation();
-
-        // Immediately snap to ground when spawned
         SnapToGround();
     }
 }
 
-
-// Called every frame
+// ---------------------------------------------------------------------------
 void UMOBMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-    // Process movement if we have valid data
-    if (bHasVelocity)
+    if (bHasReceivedPacket)
     {
         ProcessMovement(DeltaTime);
     }
     else if (GetOwner())
     {
-        // Even when not moving, periodically check ground
         TimeSinceLastGroundCheck += DeltaTime;
-
-        // Adjust every second when not moving
-        if (TimeSinceLastGroundCheck >= 0.2f)
+        if (TimeSinceLastGroundCheck >= 0.25f)
         {
-            FVector AdjustedLocation = AdjustToGround(GetOwner()->GetActorLocation(), DeltaTime, 20.f);
-            GetOwner()->SetActorLocation(AdjustedLocation);
+            FVector Loc = GetOwner()->GetActorLocation();
+            FVector Ground = TraceGround(Loc);
+            if (!Ground.IsZero())
+            {
+                Loc.Z = FMath::FInterpTo(Loc.Z, Ground.Z, DeltaTime, GroundInterpSpeedDown);
+                GetOwner()->SetActorLocation(Loc);
+            }
             TimeSinceLastGroundCheck = 0.0f;
         }
     }
 
-    // Add target tracking when not moving or moving slowly
     if (bEnableTargetTracking && CurrentTargetId != 0)
     {
         UpdateTargetTracking(DeltaTime);
     }
 }
 
+// ---------------------------------------------------------------------------
 void UMOBMovementComponent::OnReceiveServerPacket(const FPositionDataStruct& MOBPosition)
 {
-    // Get world reference for time/debug
     UWorld* World = GetWorld();
     if (!World) return;
 
-    // Debug visualization if enabled
     if (bDebugGroundAdjustment)
     {
         DrawDebugSphere(World, FVector(MOBPosition.positionX, MOBPosition.positionY, MOBPosition.positionZ),
             20.0f, 12, FColor::Red, false, 5.0f);
     }
 
-    float Now = World->GetTimeSeconds();
+    const float Now = World->GetTimeSeconds();
 
-    // Create new position vector (keep current Z for now)
     FVector NewPos(MOBPosition.positionX,
         MOBPosition.positionY,
         GetOwner() ? GetOwner()->GetActorLocation().Z : MOBPosition.positionZ);
 
-    //FRotator NewRot(0.f, MOBPosition.rotationZ, 0.f);
-
-    // First position update - just set the position directly
-    if (!bHasVelocity)
+    if (!bHasReceivedPacket)
     {
-        // Start interpolation immediately
         PrevServerPos = GetOwner() ? GetOwner()->GetActorLocation() : NewPos;
         TargetServerPos = NewPos;
-
-        //PrevServerRot = GetActorRotation();
-        //TargetServerRot = NewRot;
-
         ServerVelocity = FVector::ZeroVector;
+        ServerSpeed = 0.f;
         LastMovePacketTime = Now;
-        bHasVelocity = true;
-
-        // Make sure we're on the ground after first position
+        bHasReceivedPacket = true;
         SnapToGround();
     }
     else
     {
-        // Calculate time delta since last packet
-        float DeltaT = FMath::Max(Now - LastMovePacketTime, 0.016f); // Minimum 1/60 sec to avoid spikes
+        const float DeltaT = FMath::Max(Now - LastMovePacketTime, 0.016f);
+        LastMovePacketTime = Now;
+        PrevServerPos = TargetServerPos;
+        TargetServerPos = NewPos;
+
+        const FVector DerivedVel = (TargetServerPos - PrevServerPos) / DeltaT;
+        ServerVelocity = FMath::VInterpTo(ServerVelocity, DerivedVel, DeltaT, 3.0f);
+        ServerSpeed = ServerVelocity.Size2D();
+    }
+}
+
+// ---------------------------------------------------------------------------
+void UMOBMovementComponent::OnReceiveMovePacket(const FMobMoveEntryStruct& MoveEntry, int64 ServerSendMs, int64 ClientRecvMs)
+{
+    CombatState = MoveEntry.combatState;
+
+    UWorld* World = GetWorld();
+    if (!World || !GetOwner()) return;
+
+    const float Now = World->GetTimeSeconds();
+
+    FVector NewPos(MoveEntry.position.positionX,
+                   MoveEntry.position.positionY,
+                   GetOwner()->GetActorLocation().Z);
+
+    const bool bHasServerVel = (MoveEntry.speed > 0.f);
+    FVector PacketVelocity = FVector::ZeroVector;
+    if (bHasServerVel)
+    {
+        PacketVelocity = FVector(MoveEntry.velocityX, MoveEntry.velocityY, 0.f) * MoveEntry.speed;
+    }
+
+    bHasWaypoint = MoveEntry.bHasWaypoint;
+    if (bHasWaypoint)
+    {
+        Waypoint = FVector(MoveEntry.waypointX, MoveEntry.waypointY, 0.f);
+    }
+
+    LastStepTimestampMs = MoveEntry.stepTimestampMs;
+    LastPacketClientRecvMs = ClientRecvMs;
+
+    const float DistToNew = FVector::Dist2D(GetOwner()->GetActorLocation(), NewPos);
+    if (DistToNew > TeleportThreshold)
+    {
+        GetOwner()->SetActorLocation(FVector(NewPos.X, NewPos.Y, GetOwner()->GetActorLocation().Z));
+        PrevServerPos = TargetServerPos = NewPos;
+        ServerVelocity = PacketVelocity;
+        ServerSpeed = MoveEntry.speed;
+        LastMovePacketTime = Now;
+        bHasReceivedPacket = true;
+        SnapToGround();
+        return;
+    }
+
+    if (!bHasReceivedPacket)
+    {
+        PrevServerPos = GetOwner()->GetActorLocation();
+        TargetServerPos = NewPos;
+        ServerVelocity = PacketVelocity;
+        ServerSpeed = MoveEntry.speed;
+        LastMovePacketTime = Now;
+        bHasReceivedPacket = true;
+        SnapToGround();
+    }
+    else
+    {
+        const float DeltaT = FMath::Max(Now - LastMovePacketTime, 0.016f);
         LastMovePacketTime = Now;
 
-        // Use CURRENT target as previous, instead of actual position
-        // This prevents jerky movement when packets arrive late
         PrevServerPos = TargetServerPos;
-        //PrevServerRot = TargetServerRot;
-
-        // Update target position
         TargetServerPos = NewPos;
-        //TargetServerRot = NewRot;
 
-        // Calculate velocity with smoothing for more natural movement
-        FVector NewVelocity = (TargetServerPos - PrevServerPos) / DeltaT;
-
-        // Smooth velocity changes to prevent jerking
-        // Use more aggressive smoothing for big velocity changes
-        float VelocityMagnitudeDiff = FMath::Abs(NewVelocity.Size() - ServerVelocity.Size());
-        float SmoothingFactor = FMath::Clamp(VelocityMagnitudeDiff / 300.f, 0.3f, 0.7f);
-
-        // Blend between previous and new velocity
-        ServerVelocity = FMath::Lerp(ServerVelocity, NewVelocity, SmoothingFactor);
-
-        // Debug significant changes
-        float MoveDist = FVector::Dist(PrevServerPos, TargetServerPos);
-        if (MoveDist > 20.0f && bDebugGroundAdjustment)
+        if (bHasServerVel)
         {
-            UE_LOG(LogTemp, Verbose, TEXT("MOB Movement: dist: %.1f, speed: %.1f, time: %.3fs"),
-                MoveDist, ServerVelocity.Size(), DeltaT);
+            ServerVelocity = FMath::VInterpTo(ServerVelocity, PacketVelocity, DeltaT, 4.0f);
+            ServerSpeed = FMath::FInterpTo(ServerSpeed, MoveEntry.speed, DeltaT, 4.0f);
+        }
+        else
+        {
+            const FVector DerivedVel = (TargetServerPos - PrevServerPos) / DeltaT;
+            ServerVelocity = FMath::VInterpTo(ServerVelocity, DerivedVel, DeltaT, 3.0f);
+            ServerSpeed = ServerVelocity.Size2D();
         }
     }
 }
 
+// ---------------------------------------------------------------------------
+FVector UMOBMovementComponent::ComputeDeadReckonedTarget(float DeltaTime) const
+{
+    if (ServerSpeed < 1.0f)
+    {
+        return TargetServerPos;
+    }
+
+    FVector Predicted = TargetServerPos + ServerVelocity * DeltaTime;
+
+    if (bHasWaypoint)
+    {
+        const float DistToWP = FVector::Dist2D(TargetServerPos, Waypoint);
+        const float DistPredicted = FVector::Dist2D(TargetServerPos, Predicted);
+        if (DistPredicted > DistToWP && DistToWP > 1.0f)
+        {
+            Predicted.X = Waypoint.X;
+            Predicted.Y = Waypoint.Y;
+        }
+    }
+
+    return Predicted;
+}
+
+// ---------------------------------------------------------------------------
+FVector UMOBMovementComponent::TraceGround(const FVector& Location) const
+{
+    UWorld* World = GetWorld();
+    if (!World) return FVector::ZeroVector;
+
+    ACharacter* Character = Cast<ACharacter>(GetOwner());
+    if (!Character) return FVector::ZeroVector;
+
+    UCapsuleComponent* Capsule = Character->GetCapsuleComponent();
+    if (!Capsule) return FVector::ZeroVector;
+
+    FCollisionQueryParams Params;
+    Params.AddIgnoredActor(Character);
+    Params.bTraceComplex = false;
+
+    FCollisionObjectQueryParams ObjectParams;
+    ObjectParams.AddObjectTypesToQuery(ECC_WorldStatic);
+
+    const FVector Start = Location + FVector(0, 0, GroundTraceHeight);
+    const FVector End   = Location - FVector(0, 0, GroundTraceDepth);
+    FHitResult Hit;
+
+    if (World->LineTraceSingleByObjectType(Hit, Start, End, ObjectParams, Params))
+    {
+        const float DesiredZ = Hit.Location.Z + Capsule->GetScaledCapsuleHalfHeight();
+        return FVector(Location.X, Location.Y, DesiredZ);
+    }
+
+    return FVector::ZeroVector;
+}
+
+// ---------------------------------------------------------------------------
 FVector UMOBMovementComponent::AdjustToGround(const FVector& Location, float DeltaTime, float Priority)
 {
     FVector AdjustedLocation = Location;
     UWorld* World = GetWorld();
     if (!World) return AdjustedLocation;
 
-    // Get character and capsule
     ACharacter* Character = Cast<ACharacter>(GetOwner());
     if (!Character) return AdjustedLocation;
 
     UCapsuleComponent* Capsule = Character->GetCapsuleComponent();
     if (!Capsule) return AdjustedLocation;
 
-    // Start multiple traces for more stable ground detection
-    const int32 NumTraces = 3;
-    const float TraceSpacing = 30.0f; // Distance between traces
-    TArray<float> GroundHeights;
-    GroundHeights.Reserve(NumTraces);
-
-    // Trace parameters
-    float TraceHeight = 200.0f;
-    float TraceDepth = 400.0f;
-
-    // Create trace params that ignore this actor
     FCollisionQueryParams Params;
     Params.AddIgnoredActor(Character);
-
-    FCollisionObjectQueryParams ObjectParams;
-    ObjectParams.AddObjectTypesToQuery(ECC_WorldStatic); // Only hit static world geometry
-
     Params.bTraceComplex = false;
     Params.bReturnPhysicalMaterial = false;
 
-    // Perform multiple traces around the mob for better ground detection
+    FCollisionObjectQueryParams ObjectParams;
+    ObjectParams.AddObjectTypesToQuery(ECC_WorldStatic);
+
+    TArray<float, TInlineAllocator<5>> GroundHeights;
     bool bFoundGround = false;
-    float AverageGroundHeight = 0.0f;
 
-    // Add the center point first
-    FVector CenterStart = Location + FVector(0, 0, TraceHeight);
-    FVector CenterEnd = Location - FVector(0, 0, TraceDepth);
-    FHitResult CenterHit;
-
-    if (World->LineTraceSingleByObjectType(CenterHit, CenterStart, CenterEnd, ObjectParams, Params))
+    auto DoTrace = [&](const FVector& Origin)
     {
-        GroundHeights.Add(CenterHit.Location.Z);
-        bFoundGround = true;
-
-        if (bDebugGroundAdjustment)
+        const FVector Start = FVector(Origin.X, Origin.Y, Location.Z + GroundTraceHeight);
+        const FVector End   = FVector(Origin.X, Origin.Y, Location.Z - GroundTraceDepth);
+        FHitResult HitResult;
+        if (World->LineTraceSingleByObjectType(HitResult, Start, End, ObjectParams, Params))
         {
-            DrawDebugLine(World, CenterStart, CenterHit.Location, FColor::Green, false, 0.05f);
-            DrawDebugSphere(World, CenterHit.Location, 5.0f, 8, FColor::Red, false, 0.05f);
+            GroundHeights.Add(HitResult.Location.Z);
+            bFoundGround = true;
+            if (bDebugGroundAdjustment)
+            {
+                DrawDebugLine(World, Start, HitResult.Location, FColor::Green, false, 0.05f);
+            }
         }
-    }
-    else if (bDebugGroundAdjustment)
-    {
-        DrawDebugLine(World, CenterStart, CenterEnd, FColor::Red, false, 0.05f);
-    }
+    };
 
-    // Add additional traces in a small radius if the mob is moving
-    // This helps prevent jitter when crossing uneven terrain
+    DoTrace(Location);
+
     if (bIsMoving)
     {
-        // Get mob forward direction and right direction
-        FVector Forward = Character->GetActorForwardVector();
-        FVector Right = Character->GetActorRightVector();
-
-        // Add traces in front and to the sides
-        TArray<FVector> TraceOffsets;
-        TraceOffsets.Add(Forward * TraceSpacing);  // Forward
-        TraceOffsets.Add(-Forward * TraceSpacing); // Back
-        TraceOffsets.Add(Right * TraceSpacing);    // Right
-        TraceOffsets.Add(-Right * TraceSpacing);   // Left
-
-        for (const FVector& Offset : TraceOffsets)
-        {
-            FVector TraceStart = Location + Offset + FVector(0, 0, TraceHeight);
-            FVector TraceEnd = Location + Offset - FVector(0, 0, TraceDepth);
-            FHitResult Hit;
-
-            if (World->LineTraceSingleByObjectType(Hit, TraceStart, TraceEnd, ObjectParams, Params))
-            {
-                GroundHeights.Add(Hit.Location.Z);
-                bFoundGround = true;
-
-                if (bDebugGroundAdjustment)
-                {
-                    DrawDebugLine(World, TraceStart, Hit.Location, FColor::Yellow, false, 0.05f);
-                    DrawDebugSphere(World, Hit.Location, 3.0f, 8, FColor::Orange, false, 0.05f);
-                }
-            }
-        }
+        const float Spacing = 30.0f;
+        const FVector Fwd = Character->GetActorForwardVector() * Spacing;
+        const FVector Rgt = Character->GetActorRightVector() * Spacing;
+        DoTrace(Location + Fwd);
+        DoTrace(Location - Fwd);
+        DoTrace(Location + Rgt);
+        DoTrace(Location - Rgt);
     }
 
-    // Calculate the target Z position based on the average ground height
-    if (bFoundGround)
+    if (!bFoundGround) return AdjustedLocation;
+
+    float MedianGround;
+    if (GroundHeights.Num() >= 3)
     {
-        // Sort heights and take the median to avoid outliers
-        if (GroundHeights.Num() > 2)
-        {
-            GroundHeights.Sort();
-            AverageGroundHeight = GroundHeights[GroundHeights.Num() / 2]; // Median value
-        }
-        else
-        {
-            // Just use the average if we only have 1-2 points
-            for (float Height : GroundHeights)
-            {
-                AverageGroundHeight += Height;
-            }
-            AverageGroundHeight /= GroundHeights.Num();
-        }
+        GroundHeights.Sort();
+        MedianGround = GroundHeights[GroundHeights.Num() / 2];
+    }
+    else
+    {
+        float Sum = 0.f;
+        for (float H : GroundHeights) Sum += H;
+        MedianGround = Sum / GroundHeights.Num();
+    }
 
-        // Add capsule half height to get the proper actor Z position
-        float DesiredZ = AverageGroundHeight + Capsule->GetScaledCapsuleHalfHeight();
+    const float DesiredZ = MedianGround + Capsule->GetScaledCapsuleHalfHeight();
+    const float CurrentZ = Location.Z;
+    const float ZDiff    = DesiredZ - CurrentZ;
 
-        // Apply different smoothing rates based on whether we're going up or down
-        // This prevents the "popping" effect when terrain changes
-        float CurrentZ = Location.Z;
-        float ZDifference = DesiredZ - CurrentZ;
+    if (FMath::Abs(ZDiff) < 1.5f)
+    {
+        AdjustedLocation.Z = CurrentZ;
+        return AdjustedLocation;
+    }
 
-        const float GroundZThreshold = 2.0f;
-        if (FMath::Abs(ZDifference) < GroundZThreshold)
-        {
-            // Difference too small - keep current height
-            AdjustedLocation.Z = CurrentZ;
-            return AdjustedLocation;
-        }
+    float InterpSpeed;
+    if (ZDiff < 0.f)
+    {
+        InterpSpeed = GroundInterpSpeedDown * Priority;
+    }
+    else
+    {
+        const float UpFactor = FMath::Clamp(FMath::Abs(ZDiff) / 50.0f, 0.5f, 1.5f);
+        InterpSpeed = GroundInterpSpeedUp * Priority * UpFactor;
+    }
 
-        // Use faster interpolation for downward movement (falling)
-        // Use slower interpolation for upward movement (climbing)
-        float InterpSpeed;
-        if (ZDifference < 0)
-        {
-            // Going down - faster
-            InterpSpeed = 15.0f * Priority;
-        }
-        else
-        {
-            // Going up - slower and smoother
-            // Scale speed by how far we need to go up
-            float UpFactor = FMath::Clamp(FMath::Abs(ZDifference) / 50.0f, 0.5f, 1.5f);
-            InterpSpeed = 8.0f * Priority * UpFactor;
-        }
+    if (FMath::Abs(ZDiff) > 100.0f)
+    {
+        InterpSpeed *= 2.0f;
+    }
 
-        // Special case: if we're very far from the ground, move faster to catch up
-        if (FMath::Abs(ZDifference) > 100.0f)
-        {
-            InterpSpeed *= 2.0f;
-        }
+    AdjustedLocation.Z = FMath::FInterpTo(CurrentZ, DesiredZ, DeltaTime, InterpSpeed);
 
-        // Apply the vertical adjustment with the calculated interpolation speed
-        AdjustedLocation.Z = FMath::FInterpTo(CurrentZ, DesiredZ, DeltaTime, InterpSpeed);
-
-        // Debug visualization for target height
-        if (bDebugGroundAdjustment)
-        {
-            DrawDebugSphere(World, FVector(AdjustedLocation.X, AdjustedLocation.Y, DesiredZ),
-                8.0f, 8, FColor::Blue, false, 0.05f);
-        }
+    if (bDebugGroundAdjustment)
+    {
+        DrawDebugSphere(World, FVector(AdjustedLocation.X, AdjustedLocation.Y, DesiredZ),
+            8.0f, 8, FColor::Blue, false, 0.05f);
     }
 
     return AdjustedLocation;
 }
 
+// ---------------------------------------------------------------------------
 void UMOBMovementComponent::ProcessMovement(float DeltaTime)
 {
     if (!GetOwner()) return;
 
     const FVector CurrentLocation = GetOwner()->GetActorLocation();
-    const FVector TargetXY(TargetServerPos.X, TargetServerPos.Y, 0.f);
+    const FVector DeadReckoned = ComputeDeadReckonedTarget(DeltaTime);
+
+    const FVector TargetXY(DeadReckoned.X, DeadReckoned.Y, 0.f);
     const FVector CurrentXY(CurrentLocation.X, CurrentLocation.Y, 0.f);
     const float HorizontalDist = FVector::Dist(CurrentXY, TargetXY);
 
-    // If close enough, handle with simple interpolation
     if (HorizontalDist <= SnapDistance)
     {
         HandleCloseRangeMovement(CurrentLocation, DeltaTime);
         return;
     }
 
-    // Calculate and apply position update
     FVector NewLocation = CalculateMovementPosition(CurrentLocation, TargetXY, CurrentXY, HorizontalDist, DeltaTime);
 
-    // Adjust to ground and set position
-    const float Priority = FMath::Clamp(1.0f - (HorizontalDist / 500.0f), 0.3f, 1.0f);
-    NewLocation = AdjustToGround(NewLocation, DeltaTime, Priority);
+    NewLocation = AdjustToGround(NewLocation, DeltaTime, 1.0f);
     GetOwner()->SetActorLocation(NewLocation);
 
-    // Handle rotation separately
-    HandleRotation(TargetXY - CurrentXY, DeltaTime);
+    const bool bInCombat = IsInCombatState() && CurrentTargetId != 0;
+    if (!bInCombat)
+    {
+        HandleRotation(TargetXY - CurrentXY, DeltaTime);
+    }
 
-    // Mark as moving
     UpdateMovingState(true);
 }
 
+// ---------------------------------------------------------------------------
 void UMOBMovementComponent::HandleCloseRangeMovement(const FVector& CurrentLocation, float DeltaTime)
 {
     FVector NewLoc = FMath::VInterpTo(CurrentLocation, TargetServerPos, DeltaTime, 20.0f);
     NewLoc = AdjustToGround(NewLoc, DeltaTime);
     GetOwner()->SetActorLocation(NewLoc);
-    UpdateMovingState(FVector::Dist2D(CurrentLocation, TargetServerPos) > 1.f);
+
+    const float Remaining = FVector::Dist2D(CurrentLocation, TargetServerPos);
+    if (Remaining < 1.f && ServerSpeed < 1.f)
+    {
+        UpdateMovingState(false);
+        CurrentInterpSpeed = FMath::FInterpTo(CurrentInterpSpeed, 0.f, DeltaTime, 6.0f);
+    }
+    else
+    {
+        UpdateMovingState(Remaining > 1.f);
+    }
 }
 
+// ---------------------------------------------------------------------------
 FVector UMOBMovementComponent::CalculateMovementPosition(
     const FVector& CurrentLocation,
     const FVector& TargetXY,
@@ -356,25 +402,23 @@ FVector UMOBMovementComponent::CalculateMovementPosition(
     float HorizontalDist,
     float DeltaTime)
 {
-    // Speed interpolation
-    CurrentInterpSpeed = FMath::FInterpTo(CurrentInterpSpeed,
-        FMath::Max(ServerVelocity.Size(), MinMoveSpeed), DeltaTime, 2.0f);
+    const float DesiredSpeed = FMath::Max(ServerSpeed, MinMoveSpeed);
+    CurrentInterpSpeed = FMath::FInterpTo(CurrentInterpSpeed, DesiredSpeed, DeltaTime, 4.0f);
 
-    // Movement direction
     FVector MoveDir = (TargetXY - CurrentXY).GetSafeNormal();
     FVector NewLocation = CurrentLocation + MoveDir * CurrentInterpSpeed * DeltaTime;
 
-    // Prevent overshooting
     const FVector NewXY(NewLocation.X, NewLocation.Y, 0.f);
     if (FVector::Dist(NewXY, TargetXY) > HorizontalDist)
     {
-        NewLocation.X = TargetServerPos.X;
-        NewLocation.Y = TargetServerPos.Y;
+        NewLocation.X = TargetXY.X;
+        NewLocation.Y = TargetXY.Y;
     }
 
     return NewLocation;
 }
 
+// ---------------------------------------------------------------------------
 void UMOBMovementComponent::HandleRotation(const FVector& MoveVector, float DeltaTime)
 {
     if (MoveVector.IsNearlyZero()) return;
@@ -386,51 +430,39 @@ void UMOBMovementComponent::HandleRotation(const FVector& MoveVector, float Delt
     DesiredRot.Pitch = 0;
     DesiredRot.Roll = 0;
 
-    const float AngleDiff = FMath::Abs(FMath::FindDeltaAngleDegrees(
-        Character->GetActorRotation().Yaw, DesiredRot.Yaw));
-
-    const float TurnSpeed = FMath::Lerp(2.0f, 8.0f,
-        FMath::Clamp(AngleDiff / 90.0f, 0.f, 1.f));
-
-    Character->SetActorRotation(FMath::RInterpTo(
-        Character->GetActorRotation(), DesiredRot, DeltaTime, TurnSpeed));
+    Character->SetActorRotation(
+        FMath::RInterpTo(Character->GetActorRotation(), DesiredRot, DeltaTime, MoveRotationSpeed));
 }
 
+// ---------------------------------------------------------------------------
 void UMOBMovementComponent::UpdateMovingState(bool bNewIsMoving)
 {
     if (bIsMoving != bNewIsMoving)
     {
         bIsMoving = bNewIsMoving;
-
-        // Notify owner about movement state change
-        // Could use a delegate here if needed
     }
 }
 
+// ---------------------------------------------------------------------------
 void UMOBMovementComponent::SnapToGround()
 {
     if (!GetOwner()) return;
 
-    // Perform a more aggressive ground adjustment for initial placement
-    FVector CurrentLocation = GetOwner()->GetActorLocation();
-    FVector AdjustedLocation = AdjustToGround(CurrentLocation, 0.016f, 2.0f);
-
-    // Use immediate placement rather than interpolation
-    GetOwner()->SetActorLocation(AdjustedLocation);
-
-    if (bDebugGroundAdjustment)
+    FVector Loc = GetOwner()->GetActorLocation();
+    FVector Ground = TraceGround(Loc);
+    if (!Ground.IsZero())
     {
-        UE_LOG(LogTemp, Warning, TEXT("MOB snapped to ground: Z adjustment = %f"),
-            AdjustedLocation.Z - CurrentLocation.Z);
+        Loc.Z = Ground.Z;
+        GetOwner()->SetActorLocation(Loc);
     }
 }
 
+// ---------------------------------------------------------------------------
 void UMOBMovementComponent::SetTargetType(const FString& NewTargetType)
 {
     if (CurrentTargetType != NewTargetType)
     {
         CurrentTargetType = NewTargetType;
-        // Reset target update timer
         TimeSinceLastTargetUpdate = 0.0f;
     }
 }
@@ -440,13 +472,7 @@ void UMOBMovementComponent::SetTargetId(int32 NewTargetId)
     if (CurrentTargetId != NewTargetId)
     {
         CurrentTargetId = NewTargetId;
-		// Reset target update timer
         TimeSinceLastTargetUpdate = 0.0f;
-
-        if (bDebugGroundAdjustment) // Reuse debug flag for now
-        {
-            UE_LOG(LogTemp, Log, TEXT("MOBMovementComponent: Target set to ID %d"), NewTargetId);
-        }
     }
 }
 
@@ -457,21 +483,13 @@ void UMOBMovementComponent::ClearTarget()
 
 void UMOBMovementComponent::UpdateTargetTracking(float DeltaTime)
 {
-    // Don't update target rotation too frequently
-    TimeSinceLastTargetUpdate += DeltaTime;
-    if (TimeSinceLastTargetUpdate < 0.001f) // Update 10 times per second
-        return;
-
-    TimeSinceLastTargetUpdate = 0.0f;
-
-	AActor* TargetActor = FindTargetActor(CurrentTargetId, CurrentTargetType);
+    AActor* TargetActor = FindTargetActor(CurrentTargetId, CurrentTargetType);
     if (TargetActor)
     {
         RotateTowardsTarget(TargetActor, DeltaTime);
     }
     else
     {
-        // Target not found, clear it
         ClearTarget();
     }
 }
@@ -485,7 +503,6 @@ AActor* UMOBMovementComponent::FindTargetActor(int32 TargetId, FString TargetTyp
 
     TArray<AActor*> FoundActors;
 
-    // Выбираем класс поиска
     if (TargetType.Equals("Player", ESearchCase::IgnoreCase))
     {
         UGameplayStatics::GetAllActorsOfClass(World, ABasicPlayer::StaticClass(), FoundActors);
@@ -496,14 +513,9 @@ AActor* UMOBMovementComponent::FindTargetActor(int32 TargetId, FString TargetTyp
     }
     else
     {
-        if (bDebugGroundAdjustment)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("MOBMovementComponent: Unknown TargetType '%s'"), *TargetType);
-        }
         return nullptr;
     }
 
-    // Ищем по тегу = TargetId
     const FName TargetIdTag = FName(*FString::FromInt(TargetId));
     for (AActor* Actor : FoundActors)
     {
@@ -513,11 +525,6 @@ AActor* UMOBMovementComponent::FindTargetActor(int32 TargetId, FString TargetTyp
         }
     }
 
-    if (bDebugGroundAdjustment)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("MOBMovementComponent: No %s found with ID %d"), *TargetType, TargetId);
-    }
-
     return nullptr;
 }
 
@@ -525,32 +532,21 @@ void UMOBMovementComponent::RotateTowardsTarget(AActor* TargetActor, float Delta
 {
     if (!GetOwner() || !TargetActor) return;
 
-    // Don't rotate while moving fast - let movement rotation handle it
-    //if (bIsMoving && CurrentInterpSpeed > MinMoveSpeed * 0.8f)
-    //    return;
-
     FVector DirectionToTarget = (TargetActor->GetActorLocation() - GetOwner()->GetActorLocation()).GetSafeNormal();
+    if (DirectionToTarget.IsNearlyZero()) return;
+
     FRotator TargetRotation = DirectionToTarget.Rotation();
-    TargetRotation.Pitch = 0.0f; // Keep mob upright
+    TargetRotation.Pitch = 0.0f;
     TargetRotation.Roll = 0.0f;
 
     FRotator CurrentRotation = GetOwner()->GetActorRotation();
 
-    // Check if we're already facing the target
-    float AngleDifference = FMath::Abs(FMath::FindDeltaAngleDegrees(CurrentRotation.Yaw, TargetRotation.Yaw));
-    if (AngleDifference <= MinAngleThreshold)
+    float AngleDiff = FMath::Abs(FMath::FindDeltaAngleDegrees(CurrentRotation.Yaw, TargetRotation.Yaw));
+    if (AngleDiff <= MinAngleThreshold)
         return;
 
-    // Smooth rotation towards target
-    FRotator NewRotation = FMath::RInterpTo(CurrentRotation, TargetRotation, DeltaTime, TargetTrackingSpeed / 180.0f);
+    const float Speed = IsInCombatState() ? AttackRotationSpeed : (TargetTrackingSpeed / 45.0f);
+
+    FRotator NewRotation = FMath::RInterpTo(CurrentRotation, TargetRotation, DeltaTime, Speed);
     GetOwner()->SetActorRotation(NewRotation);
-}
-
-void UMOBMovementComponent::OnReceiveMovePacket(const FMobMoveEntryStruct& MoveEntry, int64 ServerSendMs, int64 ClientRecvMs)
-{
-    // Update combat state so movement logic can freeze/unfreeze accordingly
-    CombatState = MoveEntry.combatState;
-
-    // Delegate position interpolation to the standard server-packet handler
-    OnReceiveServerPacket(MoveEntry.position);
 }

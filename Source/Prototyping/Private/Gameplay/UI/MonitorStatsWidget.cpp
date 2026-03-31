@@ -6,7 +6,7 @@
 // set the login server ping value
 void UMonitorStatsWidget::SetLoginServerPingValue(const FString& Value)
 {
-	if (LoginServerPingValue)
+	if (IsValid(LoginServerPingValue))
 	{
 		LoginServerPingValue->SetText(FText::FromString(Value));
 	}
@@ -15,7 +15,7 @@ void UMonitorStatsWidget::SetLoginServerPingValue(const FString& Value)
 // set the game server ping value
 void UMonitorStatsWidget::SetGameServerPingValue(const FString& Value)
 {
-	if (GameServerPingValue)
+	if (IsValid(GameServerPingValue))
 	{
 		GameServerPingValue->SetText(FText::FromString(Value));
 	}
@@ -24,7 +24,7 @@ void UMonitorStatsWidget::SetGameServerPingValue(const FString& Value)
 // set the chunk server ping value
 void UMonitorStatsWidget::SetChunkServerPingValue(const FString& Value)
 {
-	if (ChunkServerPingValue)
+	if (IsValid(ChunkServerPingValue))
 	{
 		ChunkServerPingValue->SetText(FText::FromString(Value));
 	}

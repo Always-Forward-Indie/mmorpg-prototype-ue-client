@@ -53,12 +53,21 @@ void UCombatNetworkHandler::ProcessChunkServerData(const FString& ReceivedData)
         return;
     }
 
-    // Handle new combat system events
-    if (MessageData.eventType == TEXT("combatInitiation"))
+    // Handle all skill initiation event types (damage, heal, buff, debuff, generic)
+    if (MessageData.eventType == TEXT("combatInitiation")
+        || MessageData.eventType == TEXT("healingInitiation")
+        || MessageData.eventType == TEXT("buffInitiation")
+        || MessageData.eventType == TEXT("debuffInitiation")
+        || MessageData.eventType == TEXT("skillInitiation"))
     {
         HandleSkillInitiation(ReceivedData);
     }
-    else if (MessageData.eventType == TEXT("combatResult"))
+    // Handle all skill result event types
+    else if (MessageData.eventType == TEXT("combatResult")
+        || MessageData.eventType == TEXT("healingResult")
+        || MessageData.eventType == TEXT("buffResult")
+        || MessageData.eventType == TEXT("debuffResult")
+        || MessageData.eventType == TEXT("skillResult"))
     {
         HandleSkillResult(ReceivedData);
     }

@@ -1,20 +1,22 @@
 #include "Gameplay/Player/PlayerStatsNetworkHandler.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "Networking/NetworkManager.h"
+#include "MyGameInstance.h"
 #include "Utils/JSONParser.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonReader.h"
 
-void UPlayerStatsNetworkHandler::Initialize(UPlayerStatsManager* InStatsManager, UNetworkManager* InNetworkManager)
+void UPlayerStatsNetworkHandler::Initialize(UPlayerStatsManager* InStatsManager, UNetworkManager* InNetworkManager, UMyGameInstance* InGameInstance)
 {
     if (!InStatsManager || !InNetworkManager)
     {
         UE_LOG(LogTemp, Error, TEXT("PlayerStatsNetworkHandler: Initialize called with null parameters"));
         return;
     }
-    StatsManager  = InStatsManager;
+    StatsManager   = InStatsManager;
     NetworkManager = InNetworkManager;
+    GameInstance   = InGameInstance;
 }
 
 void UPlayerStatsNetworkHandler::SubscribeToNetworkEvents()
@@ -47,6 +49,16 @@ void UPlayerStatsNetworkHandler::HandleChunkServerData(const FString& ReceivedDa
         if (!Root->TryGetObjectField(TEXT("body"), BodyPtr)) return;
 
         FPlayerStatsUpdateStruct Stats = ParseStatsUpdate(*BodyPtr);
+
+        // Only apply stats that belong to our local character.
+        // This is critical when multiple clients share the same network broadcast
+        // (PIE multi-player or multiple game windows on the same server).
+        if (GameInstance && Stats.characterId > 0 &&
+            Stats.characterId != GameInstance->GetCurrentCharacterID())
+        {
+            return;
+        }
+
         StatsManager->ApplyStatsUpdate(Stats);
     }
     else if (Msg.eventType == TEXT("setPlayerActiveEffects"))
@@ -59,9 +71,9 @@ void UPlayerStatsNetworkHandler::HandleChunkServerData(const FString& ReceivedDa
         FEffectTickData TickData = JSONParser::DeserializeEffectTick(ReceivedData);
         OnEffectTick.Broadcast(TickData);
 
-        // §9.1: Update the local player's cached HP/Mana immediately so the HUD
-        // reflects HoT/DoT ticks without waiting for the next stats_update.
-        if (StatsManager && TickData.characterId == StatsManager->GetCachedStats().characterId)
+        // Update the local player's cached HP/Mana immediately for our own character only.
+        const int32 LocalCharId = GameInstance ? GameInstance->GetCurrentCharacterID() : 0;
+        if (StatsManager && LocalCharId > 0 && TickData.characterId == LocalCharId)
         {
             FPlayerStatsUpdateStruct Updated = StatsManager->GetCachedStats();
             Updated.healthCurrent = TickData.newHealth;

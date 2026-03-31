@@ -86,7 +86,7 @@ void NetworkReceiverWorker::SetTimeSyncService(UTimeSyncService* InTimeSyncServi
 
 FString NetworkReceiverWorker::AddClientReceiveTimestamp(const FString& JsonData, int64 ClientRecvMs)
 {
-    if (!TimeSyncService)
+    if (!TimeSyncService.IsValid())
     {
         return JsonData;
     }
@@ -116,7 +116,7 @@ FString NetworkReceiverWorker::AddClientReceiveTimestamp(const FString& JsonData
     }
 
 
-    int64 PreciseClientRecvMs = TimeSyncService->GetCurrentClientTimeMs();
+    int64 PreciseClientRecvMs = TimeSyncService.Get()->GetCurrentClientTimeMs();
     Header->SetNumberField(TEXT("clientRecvMs"), PreciseClientRecvMs);
 
     // Rebuild the JSON string
@@ -185,7 +185,7 @@ uint32 NetworkReceiverWorker::Run()
                 FString ReceivedString(Converter.Length(), Converter.Get());
 
                 // t3 ДОЛЖЕН сниматься здесь, на каждый пакет:
-                const int64 PerPacketT3 = TimeSyncService ? TimeSyncService->GetCurrentClientTimeMs() : 0;
+                const int64 PerPacketT3 = TimeSyncService.IsValid() ? TimeSyncService.Get()->GetCurrentClientTimeMs() : 0;
                 // Add clientRecvMs timestamp if this is a server response
                 FString TimestampedString = AddClientReceiveTimestamp(ReceivedString, PerPacketT3);
 

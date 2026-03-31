@@ -24,6 +24,14 @@ class UAvailableSkillsWidget;
 class UPlayerInterfaceWidget;
 class UDamageCanvasWidget;
 class UNameplateManager;
+class UDialogueWidget;
+class UQuestJournalWidget;
+class UQuestTrackerWidget;
+class UVendorShopWidget;
+class UDeathScreenWidget;
+class URepairShopWidget;
+class UTradeWidget;
+class UEquipmentWidget;
 
 // Delegate for UI Manager initialization completion
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnUIManagerInitialized);
@@ -51,7 +59,7 @@ protected:
 public:
 	// Initialize the UI manager with required managers
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
-	void Initialize(UInventoryManager* InInventoryManager, UHarvestManager* InHarvestManager, 
+	void Initialize(UInventoryManager* InInventoryManager, UHarvestManager* InHarvestManager,
 		UExperienceManager* InExperienceManager, UPlayerSkillManager* InSkillManager);
 
 	// Initialize floating combat text system with the new damage canvas
@@ -136,6 +144,27 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UPlayerExperienceWidget* GetPlayerExperienceWidget() const;
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UDialogueWidget* GetDialogueWidget() const { return DialogueWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UQuestJournalWidget* GetQuestJournalWidget() const { return QuestJournalWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UQuestTrackerWidget* GetQuestTrackerWidget() const { return QuestTrackerWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UVendorShopWidget* GetVendorShopWidget() const { return VendorShopWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	URepairShopWidget* GetRepairShopWidget() const { return RepairShopWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UTradeWidget* GetTradeWidget() const { return TradeWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UEquipmentWidget* GetEquipmentWidget() const { return EquipmentWidget; }
+
 	// Check if UIManager is fully initialized
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	bool IsInitialized() const { return bIsInitialized; }
@@ -204,6 +233,24 @@ protected:
 	UFUNCTION()
 	void OnHarvestLootVisibilityChanged(bool bIsVisible);
 
+	UFUNCTION()
+	void OnDialogueVisibilityChanged(bool bIsVisible);
+
+	UFUNCTION()
+	void OnQuestJournalVisibilityChanged(bool bIsVisible);
+
+	UFUNCTION()
+	void OnVendorShopVisibilityChanged(bool bIsVisible);
+
+	UFUNCTION()
+	void OnRepairShopVisibilityChanged(bool bIsVisible);
+
+	UFUNCTION()
+	void OnTradeVisibilityChanged(bool bIsVisible);
+
+	UFUNCTION()
+	void OnEquipmentVisibilityChanged(bool bIsVisible);
+
 protected:
 	// Widget class references (set in Blueprint)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
@@ -223,6 +270,30 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UUserWidget> GameVersionWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UDialogueWidget> DialogueWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UQuestJournalWidget> QuestJournalWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UQuestTrackerWidget> QuestTrackerWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UVendorShopWidget> VendorShopWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<URepairShopWidget> RepairShopWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UTradeWidget> TradeWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UEquipmentWidget> EquipmentWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UDeathScreenWidget> DeathScreenWidgetClass;
 
 	// Configuration properties
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Configuration")
@@ -253,6 +324,30 @@ protected:
 	UPROPERTY()
 	UUserWidget* GameVersionWidget;
 
+	UPROPERTY()
+	UDialogueWidget* DialogueWidget;
+
+	UPROPERTY()
+	UQuestJournalWidget* QuestJournalWidget;
+
+	UPROPERTY()
+	UQuestTrackerWidget* QuestTrackerWidget;
+
+	UPROPERTY()
+	UVendorShopWidget* VendorShopWidget;
+
+	UPROPERTY()
+	URepairShopWidget* RepairShopWidget;
+
+	UPROPERTY()
+	UTradeWidget* TradeWidget;
+
+	UPROPERTY()
+	UEquipmentWidget* EquipmentWidget;
+
+	UPROPERTY()
+	UDeathScreenWidget* DeathScreenWidget;
+
 	// Manager references
 	UPROPERTY()
 	UInventoryManager* InventoryManager;
@@ -278,11 +373,22 @@ protected:
 
 	// State tracking
 	bool bIsInitialized;
-	
+
+	// Pending death screen: set to true if ShowDeathScreen() is called before
+	// PlayerController is assigned (e.g. character spawns dead at login).
+	bool bPendingDeathScreen = false;
+	int32 PendingDeathScreenDebt = 0;
+
 	// Widget visibility tracking for cursor management
 	bool bInventoryVisible;
 	bool bSkillsPanelVisible;
 	bool bHarvestLootVisible;
+	bool bDialogueVisible;
+	bool bQuestJournalVisible;
+	bool bVendorShopVisible;
+	bool bRepairShopVisible;
+	bool bTradeVisible;
+	bool bEquipmentVisible;
 
 	UFUNCTION()
 	void OnMenuBarBestiaryClicked();

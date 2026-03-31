@@ -14,7 +14,10 @@ void USpawnZoneManager::Initialize(UNetworkManager* NetworkManager)
 {
 	networkManager = NetworkManager;
 	// Get the game instance
-	gameInstance = Cast<UMyGameInstance>(worldContext->GetGameInstance());
+	if (worldContext)
+	{
+		gameInstance = Cast<UMyGameInstance>(worldContext->GetGameInstance());
+	}
 
 	if (gameInstance)
 	{
@@ -134,6 +137,12 @@ void USpawnZoneManager::CreateSpawnZone(const FSpawnZoneStruct& SpawnZoneData)
 {
 	UE_LOG(LogTemp, Warning, TEXT("Creating spawn zone"));
 
+	if (!worldContext || !worldContext->IsValidLowLevel())
+	{
+		UE_LOG(LogTemp, Error, TEXT("SpawnZoneManager: Cannot create spawn zone - no valid world context"));
+		return;
+	}
+
 	FString Tag = SpawnZoneData.zoneName + "_" + FString::FromInt(SpawnZoneData.zoneID);
 
 	// if spawn zone does not exist in the world by tag
@@ -184,6 +193,12 @@ void USpawnZoneManager::CreateSpawnZone(const FSpawnZoneStruct& SpawnZoneData)
 // Check if a Spawn Zone exists in the world
 bool USpawnZoneManager::SpawnZoneExists(UWorld* World, const FName& Tag)
 {
+	if (!World || !World->IsValidLowLevel())
+	{
+		UE_LOG(LogTemp, Error, TEXT("SpawnZoneManager::SpawnZoneExists: Invalid world context"));
+		return false;
+	}
+
 	TArray<AActor*> FoundActors;
 	UGameplayStatics::GetAllActorsWithTag(World, Tag, FoundActors);
 

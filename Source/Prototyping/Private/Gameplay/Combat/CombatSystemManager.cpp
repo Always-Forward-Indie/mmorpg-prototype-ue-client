@@ -1,4 +1,5 @@
 #include "Gameplay/Combat/CombatSystemManager.h"
+#include "Gameplay/Combat/CombatSystemManager.h"
 #include "Gameplay/Combat/ISkillEffectHandler.h"
 #include "Gameplay/Combat/ICombatable.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
@@ -8,6 +9,8 @@
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
 #include "Engine/World.h"
+#include "Engine/Engine.h"
+#include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"
 
 UCombatSystemManager::UCombatSystemManager()
@@ -42,10 +45,10 @@ void UCombatSystemManager::RegisterCombatable(const TScriptInterface<ICombatable
     }
 
     UObject* CombatableObject = CombatableActor.GetObject();
-    
+
     int32 ActorId = ICombatable::Execute_GetActorId(CombatableObject);
     ECasterType ActorType = ICombatable::Execute_GetActorType(CombatableObject);
-    
+
     if (ActorId <= 0 || ActorType == ECasterType::None)
     {
         UE_LOG(LogTemp, Error, TEXT("CombatSystemManager: Invalid actor ID (%d) or type (%d)"), ActorId, (int32)ActorType);
@@ -53,16 +56,19 @@ void UCombatSystemManager::RegisterCombatable(const TScriptInterface<ICombatable
     }
 
     FString Key = CreateCombatableKey(ActorId, ActorType);
-    
+
     if (RegisteredCombatables.Contains(Key))
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Actor with ID %d and type %s already registered"), 
+        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Actor with ID %d and type %s already registered"),
             ActorId, *ICombatable::Execute_GetActorTypeString(CombatableObject));
         return;
     }
 
-    RegisteredCombatables.Add(Key, CombatableActor);
-    UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Registered combatable %d (%s)"), 
+    FCombatableEntry Entry;
+    Entry.WeakObject = CombatableObject;
+    Entry.Interface  = CombatableActor.GetInterface();
+    RegisteredCombatables.Add(Key, Entry);
+    UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Registered combatable %d (%s)"),
         ActorId, *ICombatable::Execute_GetActorTypeString(CombatableObject));
 }
 
@@ -75,20 +81,20 @@ void UCombatSystemManager::UnregisterCombatable(const TScriptInterface<ICombatab
     }
 
     UObject* CombatableObject = CombatableActor.GetObject();
-    
+
     int32 ActorId = ICombatable::Execute_GetActorId(CombatableObject);
     ECasterType ActorType = ICombatable::Execute_GetActorType(CombatableObject);
-    
+
     FString Key = CreateCombatableKey(ActorId, ActorType);
-    
+
     if (RegisteredCombatables.Remove(Key) > 0)
     {
-        UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Unregistered combatable %d (%s)"), 
+        UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Unregistered combatable %d (%s)"),
             ActorId, *ICombatable::Execute_GetActorTypeString(CombatableObject));
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Actor %d (%s) was not registered"), 
+        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Actor %d (%s) was not registered"),
             ActorId, *ICombatable::Execute_GetActorTypeString(CombatableObject));
     }
 }
@@ -101,59 +107,65 @@ void UCombatSystemManager::RegisterEffectHandler(const TScriptInterface<ISkillEf
         return;
     }
 
-    // Check if this handler is already registered
-    if (EffectHandlers.Contains(Handler))
+    UObject* HandlerObject = Handler.GetObject();
+
+    // Check if already registered via TWeakObjectPtr comparison
+    for (const FEffectHandlerEntry& Existing : EffectHandlers)
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Effect handler already registered, skipping"));
-        return;
+        if (Existing.WeakObject.IsValid() && Existing.WeakObject.Get() == HandlerObject)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Effect handler already registered, skipping"));
+            return;
+        }
     }
 
-    UObject* HandlerObject = Handler.GetObject();
-    ISkillEffectHandler* HandlerInterface = Handler.GetInterface();
-    
     // Get handler priority for insertion order
     int32 HandlerPriority = ISkillEffectHandler::Execute_GetPriority(HandlerObject);
-    
-    // Insert handler in priority order (higher priority first)
+
+    // Insert in priority order (higher priority first), purging stale entries along the way
     int32 InsertIndex = 0;
     for (int32 i = 0; i < EffectHandlers.Num(); i++)
     {
-        const TScriptInterface<ISkillEffectHandler>& ExistingHandler = EffectHandlers[i];
-        if (ExistingHandler.GetInterface() && ExistingHandler.GetObject() && IsValid(ExistingHandler.GetObject()))
+        FEffectHandlerEntry& ExistingEntry = EffectHandlers[i];
+        if (!ExistingEntry.WeakObject.IsValid())
         {
-            int32 ExistingPriority = ISkillEffectHandler::Execute_GetPriority(ExistingHandler.GetObject());
-            if (ExistingPriority >= HandlerPriority)
-            {
-                InsertIndex = i + 1;
-            }
-            else
-            {
-                break;
-            }
+            UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Removing stale handler during registration at index %d"), i);
+            EffectHandlers.RemoveAt(i);
+            i--;
+            continue;
+        }
+        int32 ExistingPriority = ISkillEffectHandler::Execute_GetPriority(ExistingEntry.WeakObject.Get());
+        if (ExistingPriority >= HandlerPriority)
+        {
+            InsertIndex = i + 1;
         }
         else
         {
-            // Remove invalid handler found during registration
-            UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Removing invalid handler during registration at index %d"), i);
-            EffectHandlers.RemoveAt(i);
-            i--; // Adjust index since we removed an element
+            break;
         }
     }
 
-    EffectHandlers.Insert(Handler, InsertIndex);
-    UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Registered effect handler '%s' with priority %d at index %d"), 
-        HandlerObject ? *HandlerObject->GetClass()->GetName() : TEXT("Unknown"), HandlerPriority, InsertIndex);
+    FEffectHandlerEntry NewEntry;
+    NewEntry.WeakObject = HandlerObject;
+    NewEntry.Interface  = Handler.GetInterface();
+    EffectHandlers.Insert(NewEntry, InsertIndex);
+    UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Registered effect handler '%s' with priority %d at index %d"),
+        *HandlerObject->GetClass()->GetName(), HandlerPriority, InsertIndex);
 }
 
 void UCombatSystemManager::UnregisterEffectHandler(const TScriptInterface<ISkillEffectHandler>& Handler)
 {
-    if (!Handler.GetInterface())
+    if (!Handler.GetInterface() || !Handler.GetObject())
     {
         UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Attempted to unregister null effect handler"));
         return;
     }
 
-    int32 RemovedCount = EffectHandlers.Remove(Handler);
+    UObject* HandlerObject = Handler.GetObject();
+    int32 RemovedCount = EffectHandlers.RemoveAll([HandlerObject](const FEffectHandlerEntry& Entry)
+    {
+        return !Entry.WeakObject.IsValid() || Entry.WeakObject.Get() == HandlerObject;
+    });
     if (RemovedCount > 0)
     {
         UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Unregistered effect handler (removed %d instances)"), RemovedCount);
@@ -166,69 +178,48 @@ void UCombatSystemManager::UnregisterEffectHandler(const TScriptInterface<ISkill
 
 void UCombatSystemManager::CleanupInvalidHandlers()
 {
-    UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Cleaning up invalid effect handlers (current count: %d)"), EffectHandlers.Num());
-    
-    int32 InitialCount = EffectHandlers.Num();
-    
-    for (int32 i = EffectHandlers.Num() - 1; i >= 0; i--)
+    int32 RemovedHandlers = EffectHandlers.RemoveAll([](const FEffectHandlerEntry& Entry)
     {
-        const TScriptInterface<ISkillEffectHandler>& Handler = EffectHandlers[i];
-        
-        if (!Handler.GetInterface() || !Handler.GetObject() || !IsValid(Handler.GetObject()))
-        {
-            UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Removing invalid handler at index %d"), i);
-            EffectHandlers.RemoveAt(i);
-        }
-    }
-    
-    int32 FinalCount = EffectHandlers.Num();
-    int32 RemovedCount = InitialCount - FinalCount;
-    
-    if (RemovedCount > 0)
+        return !Entry.WeakObject.IsValid();
+    });
+    if (RemovedHandlers > 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Removed %d invalid effect handlers (remaining: %d)"), RemovedCount, FinalCount);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: No invalid effect handlers found"));
+        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Removed %d stale effect handlers (remaining: %d)"),
+            RemovedHandlers, EffectHandlers.Num());
     }
 
-    // Also cleanup invalid combatables
+    // Cleanup stale combatables
     TArray<FString> KeysToRemove;
     for (const auto& Pair : RegisteredCombatables)
     {
-        const TScriptInterface<ICombatable>& Combatable = Pair.Value;
-        if (!Combatable.GetInterface() || !Combatable.GetObject() || !IsValid(Combatable.GetObject()))
+        if (!Pair.Value.WeakObject.IsValid())
         {
             KeysToRemove.Add(Pair.Key);
         }
     }
-    
     for (const FString& Key : KeysToRemove)
     {
         RegisteredCombatables.Remove(Key);
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Removed invalid combatable with key: %s"), *Key);
+        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Removed stale combatable with key: %s"), *Key);
     }
 }
 
 void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& SkillData)
 {
     LogCombatEvent("Skill Initiation", 
-        FString::Printf(TEXT("Skill: %s, Caster: %d (%s), Target: %d (%s)"), 
+        FString::Printf(TEXT("Skill: %s, Caster: %d (%s), Target: %d (%s), cooldownMs: %d, gcdMs: %d"), 
             *SkillData.skillName, SkillData.casterId, *SkillData.casterTypeString,
-            SkillData.targetId, *SkillData.targetTypeString));
+            SkillData.targetId, *SkillData.targetTypeString,
+            SkillData.cooldownMs, SkillData.gcdMs));
 
-    // NEW: Handle skill initiation in PlayerSkillManager for cooldown management
+    // Handle skill initiation in PlayerSkillManager for cooldown + GCD management
     if (GameInstance)
     {
         UPlayerSkillManager* PlayerSkillManager = GameInstance->GetPlayerSkillManager();
         if (PlayerSkillManager)
         {
-            FString SkillSlug = "";
-
-			SkillSlug = SkillData.skillSlug;
-            
-            PlayerSkillManager->HandleSkillInitiation(SkillSlug, SkillData.casterId);
+            PlayerSkillManager->HandleSkillInitiation(SkillData.skillSlug, SkillData.casterId,
+                SkillData.cooldownMs, SkillData.gcdMs);
         }
         else
         {
@@ -243,14 +234,14 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
     UE_LOG(LogTemp, Warning, TEXT("INIT: casterId=%d netType=%d(%s) mapped=%d key=%s"),
         SkillData.casterId, SkillData.casterType, *SkillData.casterTypeString,
         (int32)CasterType, *CreateCombatableKey(SkillData.casterId, CasterType));
-    
+
     if (Caster.GetInterface() && Caster.GetObject() && IsValid(Caster.GetObject()))
     {
         UObject* CasterObject = Caster.GetObject();
-        
-        // Play animation on caster
+
+        // Play animation on caster (animationDuration drives PlayRate)
         ICombatable::Execute_PlaySkillAnimation(CasterObject, SkillData.animationName, SkillData.animationDuration);
-        
+
         // Set target if specified
         if (SkillData.targetId > 0)
         {
@@ -261,7 +252,7 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Could not find caster %d (%s) for skill initiation"), 
+        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Could not find caster %d (%s) for skill initiation"),
             SkillData.casterId, *SkillData.casterTypeString);
     }
 
@@ -271,52 +262,49 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
 
 ECasterType UCombatSystemManager::MapNetCasterType(int32 Net, const FString& Str)
 {
+    // String-based mapping takes priority (always present in server packets)
     if (Str.Equals(TEXT("PLAYER"), ESearchCase::IgnoreCase)) return ECasterType::Player;
     if (Str.Equals(TEXT("MOB"), ESearchCase::IgnoreCase)) return ECasterType::Mob;
     if (Str.Equals(TEXT("NPC"), ESearchCase::IgnoreCase)) return ECasterType::NPC;
     if (Str.Equals(TEXT("SELF"), ESearchCase::IgnoreCase)) return ECasterType::Self;
 
-    // на случай, если строки нет Ч хардкод по текущему серверному контракту
-    switch (Net) { case 1: return ECasterType::Player; case 3: return ECasterType::Mob; case 4: return ECasterType::NPC; }
-                         return ECasterType::None;
+    // Fallback by server protocol integer: SELF=0, PLAYER=1, MOB=2, AREA=3, NONE=4
+    switch (Net) { case 0: return ECasterType::Self; case 1: return ECasterType::Player; case 2: return ECasterType::Mob; case 4: return ECasterType::NPC; }
+    return ECasterType::None;
 }
 
 void UCombatSystemManager::ProcessSkillResult(const FSkillResultData& SkillResult)
 {
-    LogCombatEvent("Skill Result", 
-        FString::Printf(TEXT("Skill: %s, Target: %d (%s), Effect: %s, Missed: %s, Blocked: %s, Critical: %s, Damage: %d"), 
-            *SkillResult.skillName, SkillResult.targetId, *SkillResult.targetTypeString,
+    LogCombatEvent("Skill Result (DEFERRED)", 
+        FString::Printf(TEXT("Skill: %s, Caster: %d, Target: %d (%s), Effect: %s, Damage: %d"), 
+            *SkillResult.skillName, SkillResult.casterId, SkillResult.targetId, *SkillResult.targetTypeString,
             *UEnum::GetValueAsString(SkillResult.skillEffectType),
-            SkillResult.isMissed ? TEXT("true") : TEXT("false"),
-            SkillResult.isBlocked ? TEXT("true") : TEXT("false"),
-            SkillResult.isCritical ? TEXT("true") : TEXT("false"),
             SkillResult.damage));
 
-    // Find target
-    ECasterType TargetType = static_cast<ECasterType>(SkillResult.targetType);
-    TScriptInterface<ICombatable> Target = FindCombatableById(SkillResult.targetId, TargetType);
-    
-    if (Target.GetInterface() && Target.GetObject() && IsValid(Target.GetObject()))
+    // --- Update caster mana immediately (UI responsiveness) ---
+    if (SkillResult.finalCasterMana >= 0 && GameInstance)
     {
-        UObject* TargetObject = Target.GetObject();
-
-            ApplySkillEffects(SkillResult, Target);
-            
-            
-            // Check for death only if effects were applied
-            if (SkillResult.targetDied || ICombatable::Execute_IsDead(TargetObject))
-            {
-                OnActorDied.Broadcast(ICombatable::Execute_GetActorId(TargetObject));
-            }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Could not find target %d (%s) for skill result"), 
-            SkillResult.targetId, *SkillResult.targetTypeString);
+        ECasterType CasterCombatType = MapNetCasterType(SkillResult.casterType, SkillResult.casterTypeString);
+        TScriptInterface<ICombatable> Caster = FindCombatableById(SkillResult.casterId, CasterCombatType);
+        if (Caster.GetInterface() && Caster.GetObject() && IsValid(Caster.GetObject()))
+        {
+            ICombatable::Execute_SetCurrentMana(Caster.GetObject(), SkillResult.finalCasterMana);
+        }
     }
 
-    // Broadcast event
-    OnSkillCompleted.Broadcast(SkillResult);
+    // --- Store the result for deferred application at the animation hit-point ---
+    FPendingResult Pending;
+    Pending.ResultData = SkillResult;
+    Pending.StoredAtWorldTime = WorldContext ? WorldContext->GetTimeSeconds() : 0.0;
+
+    TArray<FPendingResult>& Queue = PendingSkillResults.FindOrAdd(SkillResult.casterId);
+    Queue.Add(MoveTemp(Pending));
+
+    UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Queued pending result for caster %d (%d in queue)"),
+        SkillResult.casterId, Queue.Num());
+
+    // Start a safety-timeout so results are applied even if the anim notify never fires
+    StartPendingResultTimeout(SkillResult.casterId);
 }
 
 TScriptInterface<ICombatable> UCombatSystemManager::FindCombatableById(int32 ActorId, ECasterType ActorType)
@@ -329,29 +317,31 @@ TScriptInterface<ICombatable> UCombatSystemManager::FindCombatableById(int32 Act
 
     FString Key = CreateCombatableKey(ActorId, ActorType);
 
-    if (TScriptInterface<ICombatable>* Found = RegisteredCombatables.Find(Key))
+    if (FCombatableEntry* Found = RegisteredCombatables.Find(Key))
     {
-        const TScriptInterface<ICombatable>& Combatable = *Found;
-        
-        // Validate the found combatable
-        if (!Combatable.GetInterface() || !Combatable.GetObject() || !IsValid(Combatable.GetObject()))
+        // Safe validity check through TWeakObjectPtr Ч never touches a raw FObjectHandle
+        if (!Found->WeakObject.IsValid())
         {
-            UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Found invalid combatable for ID %d, removing from registry"), ActorId);
+            UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Stale combatable for ID %d, removing"), ActorId);
             RegisteredCombatables.Remove(Key);
             return TScriptInterface<ICombatable>();
         }
 
-        // Validate the actor ID matches
-        UObject* CombatableObject = Combatable.GetObject();
+        UObject* CombatableObject = Found->WeakObject.Get();
+
+        // Verify the stored ID still matches (defensive sanity check)
         if (ICombatable::Execute_GetActorId(CombatableObject) != ActorId)
         {
-            UE_LOG(LogTemp, Error, TEXT("CombatSystemManager: Actor ID mismatch - expected %d, got %d"), 
+            UE_LOG(LogTemp, Error, TEXT("CombatSystemManager: Actor ID mismatch - expected %d, got %d"),
                 ActorId, ICombatable::Execute_GetActorId(CombatableObject));
             RegisteredCombatables.Remove(Key);
             return TScriptInterface<ICombatable>();
         }
 
-        return Combatable;
+        TScriptInterface<ICombatable> Result;
+        Result.SetObject(CombatableObject);
+        Result.SetInterface(Found->Interface);
+        return Result;
     }
 
     return TScriptInterface<ICombatable>();
@@ -389,30 +379,31 @@ void UCombatSystemManager::SendAttackRequest(int32 AttackerId, int32 TargetId, c
 
 TScriptInterface<ISkillEffectHandler> UCombatSystemManager::FindEffectHandler(ESkillEffectType EffectType)
 {
-    // Clean up invalid handlers first
-    for (int32 i = EffectHandlers.Num() - 1; i >= 0; i--)
+    // Iterate forward: handlers are stored highest-priority-first (index 0 = highest)
+    for (int32 i = 0; i < EffectHandlers.Num(); i++)
     {
-        const TScriptInterface<ISkillEffectHandler>& Handler = EffectHandlers[i];
-        
-        if (!Handler.GetInterface() || !Handler.GetObject() || !IsValid(Handler.GetObject()))
+        FEffectHandlerEntry& Entry = EffectHandlers[i];
+
+        if (!Entry.WeakObject.IsValid())
         {
-            UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Removing invalid handler at index %d during search"), i);
+            UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Removing stale handler at index %d during search"), i);
             EffectHandlers.RemoveAt(i);
+            i--;
             continue;
         }
 
-        UObject* HandlerObject = Handler.GetObject();
-        
-        // Check if handler can handle this effect type
+        UObject* HandlerObject = Entry.WeakObject.Get();
+
         if (ISkillEffectHandler::Execute_CanHandle(HandlerObject, EffectType))
         {
-            UE_LOG(LogTemp, Verbose, TEXT("CombatSystemManager: Found handler for effect type %s"), 
-                *UEnum::GetValueAsString(EffectType));
-            return Handler;
+            TScriptInterface<ISkillEffectHandler> Result;
+            Result.SetObject(HandlerObject);
+            Result.SetInterface(Entry.Interface);
+            return Result;
         }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: No valid handler found for effect type: %s"), 
+    UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: No valid handler found for effect type: %s"),
         *UEnum::GetValueAsString(EffectType));
     return TScriptInterface<ISkillEffectHandler>();
 }
@@ -457,8 +448,92 @@ FString UCombatSystemManager::CreateCombatableKey(int32 ActorId, ECasterType Act
 
 void UCombatSystemManager::NotifyHitPoint(int32 CasterId)
 {
-    // Called from the animation notify hit-point delegate.
-    // Propagate to any registered skill-effect handlers that are waiting
-    // for the animation to reach the impact frame before applying damage.
-    UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: HitPoint notify from caster %d"), CasterId);
+    UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: HitPoint notify from caster %d"), CasterId);
+    FlushPendingResults(CasterId);
+}
+
+void UCombatSystemManager::FlushPendingResults(int32 CasterId)
+{
+    TArray<FPendingResult>* Queue = PendingSkillResults.Find(CasterId);
+    if (!Queue || Queue->Num() == 0)
+    {
+        UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: No pending results for caster %d"), CasterId);
+        return;
+    }
+
+    // Take a copy and clear the queue before processing to avoid re-entrancy issues
+    TArray<FPendingResult> ResultsToApply = MoveTemp(*Queue);
+    PendingSkillResults.Remove(CasterId);
+
+    UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Flushing %d pending result(s) for caster %d"),
+        ResultsToApply.Num(), CasterId);
+
+    for (const FPendingResult& Pending : ResultsToApply)
+    {
+        const FSkillResultData& SkillResult = Pending.ResultData;
+
+        // Find target Ч use MapNetCasterType for robust string-first mapping
+        ECasterType TargetType = MapNetCasterType(SkillResult.targetType, SkillResult.targetTypeString);
+        TScriptInterface<ICombatable> Target = FindCombatableById(SkillResult.targetId, TargetType);
+
+        if (Target.GetInterface() && Target.GetObject() && IsValid(Target.GetObject()))
+        {
+            UObject* TargetObject = Target.GetObject();
+
+            ApplySkillEffects(SkillResult, Target);
+
+            // Check for death
+            if (SkillResult.targetDied || ICombatable::Execute_IsDead(TargetObject))
+            {
+                OnActorDied.Broadcast(ICombatable::Execute_GetActorId(TargetObject));
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Could not find target %d (%s) for deferred result"),
+                SkillResult.targetId, *SkillResult.targetTypeString);
+        }
+
+        // Broadcast event
+        OnSkillCompleted.Broadcast(SkillResult);
+    }
+}
+
+void UCombatSystemManager::StartPendingResultTimeout(int32 CasterId)
+{
+    // Prefer the stored WorldContext; fall back to GEngine->GetWorldContexts() if stale.
+    UWorld* World = WorldContext;
+    if (!World || !World->IsValidLowLevel())
+    {
+        if (GEngine && GEngine->GetWorldContexts().Num() > 0)
+        {
+            for (const FWorldContext& Ctx : GEngine->GetWorldContexts())
+            {
+                if (Ctx.World() && Ctx.WorldType == EWorldType::Game)
+                {
+                    World = Ctx.World();
+                    WorldContext = World;
+                    break;
+                }
+            }
+        }
+    }
+    if (!World) return;
+
+    FTimerHandle TimerHandle;
+    TWeakObjectPtr<UCombatSystemManager> WeakSelf(this);
+    World->GetTimerManager().SetTimer(TimerHandle, [WeakSelf, CasterId]()
+    {
+        if (WeakSelf.IsValid())
+        {
+            // Only flush if results are still pending (hit-point may have already fired)
+            if (WeakSelf->PendingSkillResults.Contains(CasterId))
+            {
+                UE_LOG(LogTemp, Warning,
+                    TEXT("CombatSystemManager: Safety timeout - flushing stale pending results for caster %d"),
+                    CasterId);
+                WeakSelf->FlushPendingResults(CasterId);
+            }
+        }
+    }, static_cast<float>(PendingResultTimeoutSeconds), false);
 }

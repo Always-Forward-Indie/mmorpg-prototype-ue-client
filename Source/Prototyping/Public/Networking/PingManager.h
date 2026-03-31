@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -18,14 +18,17 @@ class PROTOTYPING_API UPingManager: public UObject
 {
 	GENERATED_BODY()
 private:
-	// Network manager reference
-	UNetworkManager* networkManager;
-	// World context to get the world time and manage timers
-	UWorld* worldContext;
-	// Monitor stats widget to update the ping time
-	UMonitorStatsWidget* MonitorStatsWidget;
-	// TimeSyncService for accurate ping measurements
-	UTimeSyncService* TimeSyncService;
+// Network manager reference
+UPROPERTY()
+UNetworkManager* networkManager;
+// World context to get the world time and manage timers
+UWorld* worldContext = nullptr;
+// Monitor stats widget to update the ping time
+UPROPERTY()
+UMonitorStatsWidget* MonitorStatsWidget;
+// TimeSyncService for accurate ping measurements
+UPROPERTY()
+UTimeSyncService* TimeSyncService;
 	// Timer handle for periodic ping updates
 	FTimerHandle PingUpdateTimerHandle;
 	// Timer handle for periodic ping requests
@@ -48,6 +51,10 @@ public:
 	
 	// Stop periodic ping updates and requests
 	void StopPingUpdates();
+
+	// Re-register ping timers after a level transition.
+	// Must be called after SetWorldContext() so timers run in the new world.
+	void RestartPingUpdates();
 	
 	// Get current ping for a specific server type
 	UFUNCTION(BlueprintCallable, Category = "Ping")

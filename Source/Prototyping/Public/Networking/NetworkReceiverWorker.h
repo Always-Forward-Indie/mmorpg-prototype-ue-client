@@ -18,7 +18,7 @@ private:
 	FSocket* Socket; // Socket to receive data on
     bool bRunThread; // Flag to control thread execution
     TQueue<FString, EQueueMode::Mpsc> DataQueue; // Thread-safe queue for messages
-    UTimeSyncService* TimeSyncService; // Reference to TimeSyncService for timestamp updates
+    TWeakObjectPtr<UTimeSyncService> TimeSyncService; // Weak ref - GC-safe access from worker thread
 
 public:
     // Constructor

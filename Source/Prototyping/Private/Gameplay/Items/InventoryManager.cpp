@@ -1,4 +1,4 @@
-#include "Gameplay/Items/InventoryManager.h"
+п»ї#include "Gameplay/Items/InventoryManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
 #include "Utils/JSONParser.h"
@@ -141,10 +141,19 @@ void UInventoryManager::ProcessInventoryData(const FString& JsonData)
 		return;
 	}
 
-	// Parse character ID
+	// Parse character ID пїЅ must do this first so we can filter early
 	int32 CharacterId = 0;
 	if (Body->TryGetNumberField(TEXT("characterId"), CharacterId))
 	{
+		// If OwnerCharacterId is set, reject packets that belong to another character.
+		// This prevents inventory cross-contamination when multiple players are on
+		// the same broadcast channel (PIE multi-player or multi-window sessions).
+		if (OwnerCharacterId > 0 && CharacterId > 0 && CharacterId != OwnerCharacterId)
+		{
+			UE_LOG(LogTemp, Verbose, TEXT("InventoryManager: Ignoring inventory data for CharID=%d (owner=%d)"),
+				CharacterId, OwnerCharacterId);
+			return;
+		}
 		CurrentInventory.characterId = CharacterId;
 	}
 
@@ -194,13 +203,13 @@ void UInventoryManager::ProcessInventoryData(const FString& JsonData)
 						if (!AttrObj.IsValid()) continue;
 
 						FString AttrName;
-						// value может быть числом или строкой
-						// Сохраняем в строку (как и раньше в Item.attributes: TMap<FString, FString>)
+						// value пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+						// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ Item.attributes: TMap<FString, FString>)
 						FString ValueAsString;
 
 						AttrObj->TryGetStringField(TEXT("name"), AttrName);
 
-						// Пробуем число
+						// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 						double NumVal = 0.0;
 						if (AttrObj->TryGetNumberField(TEXT("value"), NumVal))
 						{
@@ -208,7 +217,7 @@ void UInventoryManager::ProcessInventoryData(const FString& JsonData)
 						}
 						else
 						{
-							// иначе строка
+							// пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
 							AttrObj->TryGetStringField(TEXT("value"), ValueAsString);
 						}
 
@@ -263,6 +272,13 @@ void UInventoryManager::ProcessInventoryUpdate(const FString& JsonData)
 		int32 CharacterId = 0;
 		DataObject->TryGetNumberField(TEXT("characterId"), CharacterId);
 		NewInventory.characterId = CharacterId;
+
+		// Filter: ignore updates that belong to a different character.
+		if (OwnerCharacterId > 0 && CharacterId > 0 && CharacterId != OwnerCharacterId)
+		{
+			UE_LOG(LogTemp, Verbose, TEXT("InventoryManager: Ignoring INVENTORY_UPDATE for CharID=%d (owner=%d)"), CharacterId, OwnerCharacterId);
+			return;
+		}
 
 		// Parse simplified items array (only itemId and quantity)
 		const TArray<TSharedPtr<FJsonValue>>* ItemsArray = nullptr;

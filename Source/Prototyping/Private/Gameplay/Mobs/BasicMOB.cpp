@@ -319,18 +319,21 @@ void ABasicMOB::Tick(float DeltaTime)
 		}
 	}
 
-	if (MOBData.bIsMoving)
+	if (IsValid(AudioComponentSecond))
 	{
-		if (!AudioComponentSecond->IsPlaying())
+		if (MOBData.bIsMoving)
 		{
-			PlayWalkRandomSound();
+			if (!AudioComponentSecond->IsPlaying())
+			{
+				PlayWalkRandomSound();
+			}
 		}
-	}
-	else
-	{
-		if (AudioComponentSecond->IsPlaying())
+		else
 		{
-			AudioComponentSecond->Stop();
+			if (AudioComponentSecond->IsPlaying())
+			{
+				AudioComponentSecond->Stop();
+			}
 		}
 	}
 
@@ -651,6 +654,40 @@ void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, 
             PlaySoundByName("Attack");
         }
     }
+
+    // --- Drive the AnimBP attack montage and bind hit-point notify ---
+    // This ensures the deferred-hit-point pipeline in CombatSystemManager fires
+    // when the animation reaches the impact frame (or via fallback timer).
+    if (UMOBAnimInstance* AnimInst = Cast<UMOBAnimInstance>(GetMesh()->GetAnimInstance()))
+    {
+        // Remove any previous hit-point binding to avoid double-fire
+        if (HitPointDelegateHandle.IsValid())
+        {
+            AnimInst->OnHitPoint.Remove(HitPointDelegateHandle);
+            HitPointDelegateHandle.Reset();
+        }
+
+        if (UMyGameInstance* GI2 = Cast<UMyGameInstance>(GetGameInstance()))
+        {
+            if (UCombatSystemManager* CombatMgr = GI2->GetCombatSystemManager())
+            {
+                HitPointDelegateHandle = AnimInst->OnHitPoint.AddLambda([CombatMgr](int32 InCasterId)
+                {
+                    if (IsValid(CombatMgr))
+                    {
+                        CombatMgr->NotifyHitPoint(InCasterId);
+                    }
+                });
+            }
+        }
+
+        // Build a minimal FSkillInitiationData so StartAttack can resolve the montage
+        FSkillInitiationData InitData;
+        InitData.animationName     = AnimationName;
+        InitData.animationDuration = Duration;
+        InitData.casterId          = GetActorId_Implementation();
+        AnimInst->StartAttack(InitData);
+    }
 }
 
 void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, ESkillSchool School)
@@ -836,17 +873,20 @@ void ABasicMOB::SetupMobVisual(FName MobSlug)
 	TSoftObjectPtr<USkeletalMesh> SoftMesh   = VisualData.SkeletalMesh;
 	TSoftClassPtr<UAnimInstance>  SoftAnimBP = VisualData.AnimBPClass;
 
-	Streamable.RequestAsyncLoad(SoftMesh.ToSoftObjectPath(), [this, SoftMesh]()
+	TWeakObjectPtr<ABasicMOB> WeakThis(this);
+	Streamable.RequestAsyncLoad(SoftMesh.ToSoftObjectPath(), [WeakThis, SoftMesh]()
 		{
-		if (USkeletalMesh* LoadedMesh = SoftMesh.Get())
+			if (!WeakThis.IsValid()) { return; }
+			ABasicMOB* Self = WeakThis.Get();
+			if (USkeletalMesh* LoadedMesh = SoftMesh.Get())
 			{
-				GetMesh()->SetSkeletalMesh(LoadedMesh);
+				Self->GetMesh()->SetSkeletalMesh(LoadedMesh);
 
 				const FBoxSphereBounds MeshBounds = LoadedMesh->GetBounds();
 				const FVector BoxExtent = MeshBounds.BoxExtent;
 				const FVector MeshOrigin = MeshBounds.Origin;
 
-				UCapsuleComponent* Capsule = GetCapsuleComponent();
+				UCapsuleComponent* Capsule = Self->GetCapsuleComponent();
 				if (Capsule)
 				{
 					float CapsuleRadius = FMath::Max(BoxExtent.X, BoxExtent.Y);
@@ -859,24 +899,25 @@ void ABasicMOB::SetupMobVisual(FName MobSlug)
 					float MeshBottom = MeshOrigin.Z - BoxExtent.Z;
 					float CapsuleBottom = -Capsule->GetUnscaledCapsuleHalfHeight();
 					float MeshOffset = CapsuleBottom - MeshBottom;
-					GetMesh()->SetRelativeLocation(FVector(0, 0, MeshOffset));
+					Self->GetMesh()->SetRelativeLocation(FVector(0, 0, MeshOffset));
 				}
 
 				//setup MobHeadInfo position
-				if (Capsule && MobHeadInfo && GetCapsuleComponent())
+				if (Capsule && Self->MobHeadInfo && Self->GetCapsuleComponent())
 				{
 					float CapsuleHalfHeight = Capsule->GetUnscaledCapsuleHalfHeight();
 					float WidgetOffset = 40.0f; // Можно подобрать опытным путём
-					MobHeadInfo->SetRelativeLocation(FVector(0, 0, CapsuleHalfHeight + WidgetOffset));
+					Self->MobHeadInfo->SetRelativeLocation(FVector(0, 0, CapsuleHalfHeight + WidgetOffset));
 				}
 			}
 		});
 
-	Streamable.RequestAsyncLoad(SoftAnimBP.ToSoftObjectPath(), [this, SoftAnimBP]()
+	Streamable.RequestAsyncLoad(SoftAnimBP.ToSoftObjectPath(), [WeakThis, SoftAnimBP]()
 		{
+			if (!WeakThis.IsValid()) { return; }
 			if (UClass* AnimClass = SoftAnimBP.Get())
 			{
-				GetMesh()->SetAnimInstanceClass(AnimClass);
+				WeakThis->GetMesh()->SetAnimInstanceClass(AnimClass);
 			}
 		});
 
@@ -904,13 +945,15 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 		{ "Death",  AudioData.DeathSound }
 	};
 
+	TWeakObjectPtr<ABasicMOB> WeakThis(this);
 	for (const auto& Pair : SoundsToLoad)
 	{
-		Streamable.RequestAsyncLoad(Pair.Value.ToSoftObjectPath(), [this, Pair]()
+		Streamable.RequestAsyncLoad(Pair.Value.ToSoftObjectPath(), [WeakThis, Pair]()
 			{
+				if (!WeakThis.IsValid()) { return; }
 				if (USoundBase* Loaded = Pair.Value.Get())
 				{
-					SoundMap.Add(Pair.Key, Loaded);
+					WeakThis->SoundMap.Add(Pair.Key, Loaded);
 				}
 			});
 	}
@@ -918,11 +961,12 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 	// Idle звуки
 	for (const auto& SoundSoft : AudioData.IdleSounds)
 	{
-		Streamable.RequestAsyncLoad(SoundSoft.ToSoftObjectPath(), [this, SoundSoft]()
+		Streamable.RequestAsyncLoad(SoundSoft.ToSoftObjectPath(), [WeakThis, SoundSoft]()
 			{
+				if (!WeakThis.IsValid()) { return; }
 				if (USoundBase* Loaded = SoundSoft.Get())
 				{
-					IdleSounds.Add(Loaded);
+					WeakThis->IdleSounds.Add(Loaded);
 				}
 			});
 	}
@@ -930,11 +974,12 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 	// Run звуки
 	for (const auto& SoundSoft : AudioData.RunSounds)
 	{
-		Streamable.RequestAsyncLoad(SoundSoft.ToSoftObjectPath(), [this, SoundSoft]()
+		Streamable.RequestAsyncLoad(SoundSoft.ToSoftObjectPath(), [WeakThis, SoundSoft]()
 			{
+				if (!WeakThis.IsValid()) { return; }
 				if (USoundBase* Loaded = SoundSoft.Get())
 				{
-					RunSounds.Add(Loaded);
+					WeakThis->RunSounds.Add(Loaded);
 				}
 			});
 	}
@@ -942,11 +987,12 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 	// Walk звуки
 	for (const auto& SoundSoft : AudioData.WalkSounds)
 	{
-		Streamable.RequestAsyncLoad(SoundSoft.ToSoftObjectPath(), [this, SoundSoft]()
+		Streamable.RequestAsyncLoad(SoundSoft.ToSoftObjectPath(), [WeakThis, SoundSoft]()
 			{
+				if (!WeakThis.IsValid()) { return; }
 				if (USoundBase* Loaded = SoundSoft.Get())
 				{
-					WalkSounds.Add(Loaded);
+					WeakThis->WalkSounds.Add(Loaded);
 				}
 			});
 	}
@@ -1070,9 +1116,22 @@ void ABasicMOB::SetMOBData(const FMOBStruct& Data)
 		UE_LOG(LogTemp, Warning, TEXT("MOB Data set for %s (ID:%d, UID:%s): HP=%d, MP=%d"), 
 			*MOBData.mobName, MOBData.mobID, *MOBData.mobUniqueID, MOBData.mobCurrentHealth, MOBData.mobCurrentMana);
 
+		// Register with MOB registry so mobMoveUpdate packets can find this actor by UID.
+		// BeginPlay fires before SetMOBData so the uid is 0 there; we do it here instead.
+		int32 ActorId = GetActorId_Implementation();
+		if (ActorId > 0)
+		{
+			if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetGameInstance()))
+			{
+				if (GameInstance->MOBManager)
+				{
+					GameInstance->MOBManager->RegisterMob(ActorId, this);
+				}
+			}
+		}
+
 		// Register with combat system now that we have valid data
 		// Only register if we have a valid actor ID (converted from UID)
-		int32 ActorId = GetActorId_Implementation();
 		if (ActorId > 0)
 		{
 			if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetGameInstance()))
@@ -1181,11 +1240,13 @@ void ABasicMOB::SetMOBLevel(const int& MOBLevel)
 void ABasicMOB::SetMOBCurrentHealth(const int& MOBCurrentHealth)
 {
 	MOBData.mobCurrentHealth = MOBCurrentHealth;
+	ForceUpdateUI();
 }
 
 void ABasicMOB::SetMOBCurrentMana(const int& MOBCurrentMana)
 {
 	MOBData.mobCurrentMana = MOBCurrentMana;
+	ForceUpdateUI();
 }
 
 // Improve the position setting function

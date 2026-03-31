@@ -68,19 +68,29 @@ void USkillSlotWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
     if (SkillManager && !AssignedSkillSlug.IsEmpty())
     {
         bool bWasOnCooldown = bIsOnCooldown;
-        bIsOnCooldown = SkillManager->IsSkillOnCooldown(AssignedSkillSlug);
+
+        // Skill is on cooldown if either per-skill CD or GCD is active
+        const bool bSkillCD = SkillManager->IsSkillOnCooldown(AssignedSkillSlug);
+        const bool bGCD     = SkillManager->IsGCDActive();
+        bIsOnCooldown = bSkillCD || bGCD;
         
         if (bIsOnCooldown)
         {
-            CooldownRemainingTime = SkillManager->GetSkillCooldownRemaining(AssignedSkillSlug);
-            
-            // Add periodic logging for debugging (every 60 frames ~1 second)
-            static int32 TickCounter = 0;
-            TickCounter++;
-            if (TickCounter % 60 == 0)
+            // Show the longer of skill CD remaining vs GCD remaining
+            const float SkillCDRemaining = SkillManager->GetSkillCooldownRemaining(AssignedSkillSlug);
+            const float GCDRemaining     = SkillManager->GetGCDRemaining();
+            CooldownRemainingTime = FMath::Max(SkillCDRemaining, GCDRemaining);
+
+            // Use the matching total time for progress bar
+            if (SkillCDRemaining >= GCDRemaining)
             {
-                UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: NativeTick - Skill: %s, OnCooldown: %s, Remaining: %.1f"), 
-                    SlotIndex, *AssignedSkillSlug, bIsOnCooldown ? TEXT("TRUE") : TEXT("FALSE"), CooldownRemainingTime);
+                // Per-skill cooldown dominates
+                CooldownTotalTime = CurrentSkillData.networkData.cooldownMs / 1000.0f;
+            }
+            else
+            {
+                // GCD dominates — use GCD duration as total (reasonable approximation)
+                CooldownTotalTime = FMath::Max(CooldownTotalTime, GCDRemaining + 0.01f);
             }
             
             UpdateCooldownDisplay();
@@ -89,7 +99,6 @@ void USkillSlotWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
         {
             // Cooldown just finished
             CooldownRemainingTime = 0.0f;
-            UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Natural cooldown finished for %s"), SlotIndex, *AssignedSkillSlug);
             UpdateCooldownDisplay();
             UpdateVisualState();
         }

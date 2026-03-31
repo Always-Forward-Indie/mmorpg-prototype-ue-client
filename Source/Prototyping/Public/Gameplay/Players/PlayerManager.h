@@ -25,14 +25,20 @@ class PROTOTYPING_API UPlayerManager : public UObject
 	GENERATED_BODY()
 
 private:
-	UWorld* worldContext = nullptr;
-	UPingManager* pingManager;
-	UNetworkManager* networkManager;
-	UMyGameInstance* gameInstance;
+UWorld* worldContext = nullptr;
 
-	// Combat network handler for delegating combat events
-	UPROPERTY()
-	UCombatNetworkHandler* CombatNetworkHandler;
+UPROPERTY()
+UPingManager* pingManager = nullptr;
+
+UPROPERTY()
+UNetworkManager* networkManager = nullptr;
+
+UPROPERTY()
+UMyGameInstance* gameInstance = nullptr;
+
+// Combat network handler for delegating combat events
+UPROPERTY()
+UCombatNetworkHandler* CombatNetworkHandler;
 
 public:
 	UPlayerManager(const FObjectInitializer& ObjectInitializer);
@@ -48,6 +54,14 @@ public:
 	void SendJoinGameRequest(const FClientDataStruct& ClientData);
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	void SendJoinCharacterChunkRequest(const FClientDataStruct& ClientData);
+
+	// Phase 1: Register client session on Chunk Server (joinGameClient)
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	void SendJoinClientChunkRequest(const FClientDataStruct& ClientData);
+
+	// Phase 3: Send playerReady ACK after game world is fully loaded
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	void SendPlayerReadyRequest(const FClientDataStruct& ClientData);
 
 	void SendGetConnectedPlayersRequest(FClientDataStruct& ClientData);
 	void SendMovePlayerRequest(FClientDataStruct& ClientData);

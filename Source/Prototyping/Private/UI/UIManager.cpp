@@ -1,9 +1,16 @@
-#include "UI/UIManager.h"
+ï»¿#include "UI/UIManager.h"
 #include "UI/UIManager.h"
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
 #include "UI/HarvestLootWidget.h"
 #include "UI/AvailableSkillsWidget.h"
+#include "UI/DialogueWidget.h"
+#include "UI/QuestJournalWidget.h"
+#include "UI/QuestTrackerWidget.h"
+#include "UI/VendorShopWidget.h"
+#include "UI/RepairShopWidget.h"
+#include "UI/TradeWidget.h"
+#include "UI/EquipmentWidget.h"
 #include "Gameplay/UI/PlayerExperienceWidget.h"
 #include "Gameplay/UI/PlayerInterfaceWidget.h"
 #include "Gameplay/UI/DamageCanvasWidget.h"
@@ -13,16 +20,17 @@
 #include "Gameplay/Player/ExperienceManager.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
+#include "Gameplay/Dialogue/DialogueManager.h"
+#include "Gameplay/Quest/QuestManager.h"
+#include "Gameplay/Equipment/EquipmentManager.h"
+#include "Gameplay/UI/DeathScreenWidget.h"
+#include "Gameplay/Players/BasicPlayer.h"
+#include "Gameplay/Vendor/VendorManager.h"
+#include "Gameplay/Repair/RepairManager.h"
+#include "Gameplay/Trade/TradeManager.h"
 #include "Blueprint/UserWidget.h"
 #include "Engine/Engine.h"
 
-// Forward declaration includes for new manager types
-class UDialogueManager;
-class UQuestManager;
-class UEquipmentManager;
-class UVendorManager;
-class URepairManager;
-class UTradeManager;
 class UPlayerStatsManager;
 class UBestiaryNetworkHandler;
 #include "Camera/CameraShakeBase.h"
@@ -39,6 +47,13 @@ UUIManager::UUIManager()
 	HarvestProgressWidget = nullptr;
 	HarvestLootWidget = nullptr;
 	AvailableSkillsWidget = nullptr;
+	DialogueWidget = nullptr;
+	QuestJournalWidget = nullptr;
+	QuestTrackerWidget = nullptr;
+	VendorShopWidget = nullptr;
+	RepairShopWidget = nullptr;
+	TradeWidget = nullptr;
+	EquipmentWidget = nullptr;
 	InventoryManager = nullptr;
 	HarvestManager = nullptr;
 	ExperienceManager = nullptr;
@@ -52,6 +67,12 @@ UUIManager::UUIManager()
 	bInventoryVisible = false;
 	bSkillsPanelVisible = false;
 	bHarvestLootVisible = false;
+	bDialogueVisible = false;
+	bQuestJournalVisible = false;
+	bVendorShopVisible = false;
+	bRepairShopVisible = false;
+	bTradeVisible = false;
+	bEquipmentVisible = false;
 }
 
 void UUIManager::BeginPlay()
@@ -79,7 +100,45 @@ void UUIManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		HarvestLootWidget->OnHarvestLootVisibilityChanged.RemoveDynamic(this, &UUIManager::OnHarvestLootVisibilityChanged);
 	}
-	
+
+	if (DialogueWidget)
+	{
+		DialogueWidget->OnDialogueVisibilityChanged.RemoveDynamic(this, &UUIManager::OnDialogueVisibilityChanged);
+	}
+
+	if (QuestJournalWidget)
+	{
+		QuestJournalWidget->OnQuestJournalVisibilityChanged.RemoveDynamic(this, &UUIManager::OnQuestJournalVisibilityChanged);
+	}
+
+	if (VendorShopWidget)
+	{
+		VendorShopWidget->OnVendorShopVisibilityChanged.RemoveDynamic(this, &UUIManager::OnVendorShopVisibilityChanged);
+	}
+
+	if (RepairShopWidget)
+	{
+		RepairShopWidget->OnRepairShopVisibilityChanged.RemoveDynamic(this, &UUIManager::OnRepairShopVisibilityChanged);
+	}
+
+	if (TradeWidget)
+	{
+		TradeWidget->OnTradeVisibilityChanged.RemoveDynamic(this, &UUIManager::OnTradeVisibilityChanged);
+	}
+
+	if (EquipmentWidget)
+	{
+		EquipmentWidget->OnEquipmentVisibilityChanged.RemoveDynamic(this, &UUIManager::OnEquipmentVisibilityChanged);
+	}
+
+	if (DeathScreenWidget)
+	{
+		if (ABasicPlayer* OwnerPlayer = Cast<ABasicPlayer>(GetOwner()))
+		{
+			DeathScreenWidget->OnRespawnRequested.RemoveDynamic(OwnerPlayer, &ABasicPlayer::OnRespawnClicked);
+		}
+	}
+
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -172,6 +231,15 @@ void UUIManager::InitFTCManager(APlayerController* InPC)
 	{
 		UE_LOG(LogTemp, Error, TEXT("UIManager: FCT Manager validation failed after init"));
 		// Don't null out FCTManager here, as it might still be partially functional
+	}
+
+	// If death screen was requested before PlayerController was ready, show it now
+	if (bPendingDeathScreen)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: Showing pending death screen (debt=%d)"), PendingDeathScreenDebt);
+		ShowDeathScreen(PendingDeathScreenDebt);
+		bPendingDeathScreen = false;
+		PendingDeathScreenDebt = 0;
 	}
 }
 
@@ -429,14 +497,14 @@ void UUIManager::ToggleInventory()
 
 	if (InventoryManager)
 	{
-		// Îáíîâëÿåì ñîñòîÿíèå âèäèìîñòè èíâåíòàðÿ
+		// ÐžÐ±Ð½Ð¾Ð²Ð»ÑÐµÐ¼ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ðµ Ð²Ð¸Ð´Ð¸Ð¼Ð¾ÑÑ‚Ð¸ Ð¸Ð½Ð²ÐµÐ½Ñ‚Ð°Ñ€Ñ
 		bool bWasVisible = bInventoryVisible;
 		InventoryManager->ToggleInventoryUI();
 		
-		// Îïðåäåëÿåì íîâîå ñîñòîÿíèå (èíâåðòèðóåì ïðåäûäóùåå)
+		// ÐžÐ¿Ñ€ÐµÐ´ÐµÐ»ÑÐµÐ¼ Ð½Ð¾Ð²Ð¾Ðµ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ðµ (Ð¸Ð½Ð²ÐµÑ€Ñ‚Ð¸Ñ€ÑƒÐµÐ¼ Ð¿Ñ€ÐµÐ´Ñ‹Ð´ÑƒÑ‰ÐµÐµ)
 		bInventoryVisible = !bWasVisible;
 		
-		// Îáíîâëÿåì êóðñîð è ðåæèì ââîäà
+		// ÐžÐ±Ð½Ð¾Ð²Ð»ÑÐµÐ¼ ÐºÑƒÑ€ÑÐ¾Ñ€ Ð¸ Ñ€ÐµÐ¶Ð¸Ð¼ Ð²Ð²Ð¾Ð´Ð°
 		UpdateCursorAndInputMode();
 		
 		UE_LOG(LogTemp, Log, TEXT("UIManager: Toggled inventory UI - now %s"), 
@@ -565,25 +633,25 @@ void UUIManager::ToggleSkillsPanel()
 		return;
 	}
 
-	// Èñïîëüçóåì òåêóùåå ñîñòîÿíèå âèäèìîñòè âèäæåòà âìåñòî íàøåé ïåðåìåííîé
+	// Ð˜ÑÐ¿Ð¾Ð»ÑŒÐ·ÑƒÐµÐ¼ Ñ‚ÐµÐºÑƒÑ‰ÐµÐµ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ðµ Ð²Ð¸Ð´Ð¸Ð¼Ð¾ÑÑ‚Ð¸ Ð²Ð¸Ð´Ð¶ÐµÑ‚Ð° Ð²Ð¼ÐµÑÑ‚Ð¾ Ð½Ð°ÑˆÐµÐ¹ Ð¿ÐµÑ€ÐµÐ¼ÐµÐ½Ð½Ð¾Ð¹
 	bool bCurrentlyVisible = AvailableSkillsWidget->IsWidgetVisible();
 	
 	if (!bCurrentlyVisible)
 	{
-		// ÈÑÏÐÀÂËÅÍÎ: Èñïîëüçóåì ShowWidget() âìåñòî SetVisibility(SelfHitTestInvisible)
+		// Ð˜Ð¡ÐŸÐ ÐÐ’Ð›Ð•ÐÐž: Ð˜ÑÐ¿Ð¾Ð»ÑŒÐ·ÑƒÐµÐ¼ ShowWidget() Ð²Ð¼ÐµÑÑ‚Ð¾ SetVisibility(SelfHitTestInvisible)
 		AvailableSkillsWidget->ShowWidget();
 		
 		UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel opened using ShowWidget()"));
 	}
 	else
 	{
-		// Èñïîëüçóåì HideWidget() äëÿ ïîñëåäîâàòåëüíîñòè
+		// Ð˜ÑÐ¿Ð¾Ð»ÑŒÐ·ÑƒÐµÐ¼ HideWidget() Ð´Ð»Ñ Ð¿Ð¾ÑÐ»ÐµÐ´Ð¾Ð²Ð°Ñ‚ÐµÐ»ÑŒÐ½Ð¾ÑÑ‚Ð¸
 		AvailableSkillsWidget->HideWidget();
 		
 		UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel closed using HideWidget()"));
 	}
 
-	// bSkillsPanelVisible áóäåò àâòîìàòè÷åñêè îáíîâëåíà ÷åðåç OnAvailableSkillsVisibilityChanged
+	// bSkillsPanelVisible Ð±ÑƒÐ´ÐµÑ‚ Ð°Ð²Ñ‚Ð¾Ð¼Ð°Ñ‚Ð¸Ñ‡ÐµÑÐºÐ¸ Ð¾Ð±Ð½Ð¾Ð²Ð»ÐµÐ½Ð° Ñ‡ÐµÑ€ÐµÐ· OnAvailableSkillsVisibilityChanged
 	UE_LOG(LogTemp, Log, TEXT("UIManager: Skills panel %s"), !bCurrentlyVisible ? TEXT("opened") : TEXT("closed"));
 }
 
@@ -613,10 +681,10 @@ void UUIManager::SetPlayerController(APlayerController* InPlayerController)
 
 void UUIManager::OnAvailableSkillsVisibilityChanged(bool bIsVisible)
 {
-	// Ñèíõðîíèçîðóåì ñîñòîÿíèå âèäèìîñòè ñ âíóòðåííèì ñîñòîÿíèåì âèäæåòà
+	// Ð¡Ð¸Ð½Ñ…Ñ€Ð¾Ð½Ð¸Ð·Ð¾Ñ€ÑƒÐµÐ¼ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ðµ Ð²Ð¸Ð´Ð¸Ð¼Ð¾ÑÑ‚Ð¸ Ñ Ð²Ð½ÑƒÑ‚Ñ€ÐµÐ½Ð½Ð¸Ð¼ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸ÐµÐ¼ Ð²Ð¸Ð´Ð¶ÐµÑ‚Ð°
 	bSkillsPanelVisible = bIsVisible;
 	
-	// Îáíîâëÿåì êóðñîð è ðåæèì ââîäà
+	// ÐžÐ±Ð½Ð¾Ð²Ð»ÑÐµÐ¼ ÐºÑƒÑ€ÑÐ¾Ñ€ Ð¸ Ñ€ÐµÐ¶Ð¸Ð¼ Ð²Ð²Ð¾Ð´Ð°
 	UpdateCursorAndInputMode();
 	
 	UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel visibility synced: %s"), 
@@ -641,6 +709,60 @@ void UUIManager::OnHarvestLootVisibilityChanged(bool bIsVisible)
 		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
+void UUIManager::OnDialogueVisibilityChanged(bool bIsVisible)
+{
+	bDialogueVisible = bIsVisible;
+	UpdateCursorAndInputMode();
+	
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Dialogue visibility synced: %s"), 
+		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
+}
+
+void UUIManager::OnQuestJournalVisibilityChanged(bool bIsVisible)
+{
+	bQuestJournalVisible = bIsVisible;
+	UpdateCursorAndInputMode();
+	
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Quest journal visibility synced: %s"), 
+		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
+}
+
+void UUIManager::OnVendorShopVisibilityChanged(bool bIsVisible)
+{
+	bVendorShopVisible = bIsVisible;
+	UpdateCursorAndInputMode();
+	
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Vendor shop visibility synced: %s"), 
+		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
+}
+
+void UUIManager::OnRepairShopVisibilityChanged(bool bIsVisible)
+{
+	bRepairShopVisible = bIsVisible;
+	UpdateCursorAndInputMode();
+	
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Repair shop visibility synced: %s"), 
+		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
+}
+
+void UUIManager::OnTradeVisibilityChanged(bool bIsVisible)
+{
+	bTradeVisible = bIsVisible;
+	UpdateCursorAndInputMode();
+	
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Trade visibility synced: %s"), 
+		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
+}
+
+void UUIManager::OnEquipmentVisibilityChanged(bool bIsVisible)
+{
+	bEquipmentVisible = bIsVisible;
+	UpdateCursorAndInputMode();
+	
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Equipment visibility synced: %s"), 
+		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
+}
+
 void UUIManager::UpdateCursorAndInputMode()
 {
 	if (!PlayerController)
@@ -654,7 +776,7 @@ void UUIManager::UpdateCursorAndInputMode()
 
 	if (bShouldShow)
 	{
-		// Åñòü àêòèâíûå UI âèäæåòû - èñïîëüçóåì ðåæèì Game+UI
+		// Ð•ÑÑ‚ÑŒ Ð°ÐºÑ‚Ð¸Ð²Ð½Ñ‹Ðµ UI Ð²Ð¸Ð´Ð¶ÐµÑ‚Ñ‹ - Ð¸ÑÐ¿Ð¾Ð»ÑŒÐ·ÑƒÐµÐ¼ Ñ€ÐµÐ¶Ð¸Ð¼ Game+UI
 		FInputModeGameAndUI InputMode;
 		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
 		InputMode.SetHideCursorDuringCapture(false);
@@ -664,7 +786,7 @@ void UUIManager::UpdateCursorAndInputMode()
 	}
 	else
 	{
-		// Íåò àêòèâíûõ UI âèäæåòîâ - ïåðåõîäèì â èãðîâîé ðåæèì
+		// ÐÐµÑ‚ Ð°ÐºÑ‚Ð¸Ð²Ð½Ñ‹Ñ… UI Ð²Ð¸Ð´Ð¶ÐµÑ‚Ð¾Ð² - Ð¿ÐµÑ€ÐµÑ…Ð¾Ð´Ð¸Ð¼ Ð² Ð¸Ð³Ñ€Ð¾Ð²Ð¾Ð¹ Ñ€ÐµÐ¶Ð¸Ð¼
 		FInputModeGameOnly InputMode;
 		PlayerController->SetInputMode(InputMode);
 		
@@ -674,13 +796,12 @@ void UUIManager::UpdateCursorAndInputMode()
 
 bool UUIManager::ShouldShowCursor() const
 {
-	// Ïîêàçûâàåì êóðñîð åñëè õîòÿ áû îäèí èç UI âèäæåòîâ âèäèì
-	bool bAnyWidgetVisible = bInventoryVisible || bSkillsPanelVisible || bHarvestLootVisible;
+	// Show cursor if any UI element is open
+	bool bAnyWidgetVisible = bInventoryVisible || bSkillsPanelVisible || bHarvestLootVisible 
+		|| bDialogueVisible || bQuestJournalVisible
+|| bVendorShopVisible || bRepairShopVisible || bTradeVisible || bEquipmentVisible;
 	
-	UE_LOG(LogTemp, Verbose, TEXT("UIManager: Cursor check - Inventory: %s, Skills: %s, Harvest: %s -> Show: %s"),
-		bInventoryVisible ? TEXT("visible") : TEXT("hidden"),
-		bSkillsPanelVisible ? TEXT("visible") : TEXT("hidden"),
-		bHarvestLootVisible ? TEXT("visible") : TEXT("hidden"),
+	UE_LOG(LogTemp, Verbose, TEXT("UIManager: Cursor check -> Show: %s"),
 		bAnyWidgetVisible ? TEXT("YES") : TEXT("NO"));
 	
 	return bAnyWidgetVisible;
@@ -725,14 +846,170 @@ void UUIManager::ToggleGameMenu()
 
 void UUIManager::InitializeDialogueAndQuestWidgets(UDialogueManager* InDialogueManager, UQuestManager* InQuestManager)
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeDialogueAndQuestWidgets"));
-	// TODO: connect dialogue and quest widgets
+	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeDialogueAndQuestWidgets - Starting initialization"));
+
+	if (!InDialogueManager || !InQuestManager)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UIManager::InitializeDialogueAndQuestWidgets - DialogueManager or QuestManager is null!"));
+		return;
+	}
+
+	// Create dialogue widget if class is set
+	if (DialogueWidgetClass && !DialogueWidget)
+	{
+		DialogueWidget = CreateWidget<UDialogueWidget>(GetWorld(), DialogueWidgetClass);
+		if (DialogueWidget)
+		{
+			DialogueWidget->AddToViewport(100); // High Z-order for dialogue
+			DialogueWidget->SetVisibility(ESlateVisibility::Collapsed);
+			DialogueWidget->BindToDialogueManager(InDialogueManager);
+			DialogueWidget->OnDialogueVisibilityChanged.AddDynamic(this, &UUIManager::OnDialogueVisibilityChanged);
+			UE_LOG(LogTemp, Log, TEXT("UIManager: DialogueWidget created and bound"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create DialogueWidget"));
+		}
+	}
+	else if (!DialogueWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: DialogueWidgetClass is not set in Blueprint"));
+	}
+
+	// Create quest journal widget if class is set
+	if (QuestJournalWidgetClass && !QuestJournalWidget)
+	{
+		QuestJournalWidget = CreateWidget<UQuestJournalWidget>(GetWorld(), QuestJournalWidgetClass);
+		if (QuestJournalWidget)
+		{
+			QuestJournalWidget->AddToViewport(100); // High Z-order for journal
+			QuestJournalWidget->SetVisibility(ESlateVisibility::Collapsed);
+			QuestJournalWidget->BindToQuestManager(InQuestManager);
+			QuestJournalWidget->OnQuestJournalVisibilityChanged.AddDynamic(this, &UUIManager::OnQuestJournalVisibilityChanged);
+			UE_LOG(LogTemp, Log, TEXT("UIManager: QuestJournalWidget created and bound"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create QuestJournalWidget"));
+		}
+	}
+	else if (!QuestJournalWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: QuestJournalWidgetClass is not set in Blueprint"));
+	}
+
+	// Create quest tracker widget if class is set (HUD overlay)
+	if (QuestTrackerWidgetClass && !QuestTrackerWidget)
+	{
+		QuestTrackerWidget = CreateWidget<UQuestTrackerWidget>(GetWorld(), QuestTrackerWidgetClass);
+		if (QuestTrackerWidget)
+		{
+			QuestTrackerWidget->AddToViewport(50); // Medium Z-order for HUD element
+			QuestTrackerWidget->BindToQuestManager(InQuestManager);
+			UE_LOG(LogTemp, Log, TEXT("UIManager: QuestTrackerWidget created and bound"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create QuestTrackerWidget"));
+		}
+	}
+	else if (!QuestTrackerWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: QuestTrackerWidgetClass is not set in Blueprint"));
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeDialogueAndQuestWidgets - Completed"));
 }
 
 void UUIManager::InitializeItemSystemWidgets(UEquipmentManager* InEquipmentManager, UVendorManager* InVendorManager, URepairManager* InRepairManager, UTradeManager* InTradeManager)
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeItemSystemWidgets"));
-	// TODO: connect equipment, vendor, repair, trade widgets
+	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeItemSystemWidgets - Starting initialization"));
+
+	// Create equipment widget
+	if (EquipmentWidgetClass && !EquipmentWidget)
+	{
+		EquipmentWidget = CreateWidget<UEquipmentWidget>(GetWorld(), EquipmentWidgetClass);
+		if (EquipmentWidget)
+		{
+			EquipmentWidget->AddToViewport(90);
+			EquipmentWidget->SetVisibility(ESlateVisibility::Collapsed);
+			if (InEquipmentManager)
+			{
+				EquipmentWidget->BindToEquipmentManager(InEquipmentManager, InventoryManager);
+			}
+			EquipmentWidget->OnEquipmentVisibilityChanged.AddDynamic(this, &UUIManager::OnEquipmentVisibilityChanged);
+			UE_LOG(LogTemp, Log, TEXT("UIManager: EquipmentWidget created and bound"));
+		}
+	}
+	else if (!EquipmentWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: EquipmentWidgetClass is not set in Blueprint"));
+	}
+
+	// Create vendor shop widget
+	if (VendorShopWidgetClass && !VendorShopWidget)
+	{
+		VendorShopWidget = CreateWidget<UVendorShopWidget>(GetWorld(), VendorShopWidgetClass);
+		if (VendorShopWidget)
+		{
+			VendorShopWidget->AddToViewport(95);
+			VendorShopWidget->SetVisibility(ESlateVisibility::Collapsed);
+			if (InVendorManager)
+			{
+				VendorShopWidget->BindToManagers(InVendorManager, InventoryManager);
+			}
+			VendorShopWidget->OnVendorShopVisibilityChanged.AddDynamic(this, &UUIManager::OnVendorShopVisibilityChanged);
+			UE_LOG(LogTemp, Log, TEXT("UIManager: VendorShopWidget created and bound"));
+		}
+	}
+	else if (!VendorShopWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: VendorShopWidgetClass is not set in Blueprint"));
+	}
+
+	// Create repair shop widget
+	if (RepairShopWidgetClass && !RepairShopWidget)
+	{
+		RepairShopWidget = CreateWidget<URepairShopWidget>(GetWorld(), RepairShopWidgetClass);
+		if (RepairShopWidget)
+		{
+			RepairShopWidget->AddToViewport(95);
+			RepairShopWidget->SetVisibility(ESlateVisibility::Collapsed);
+			if (InRepairManager)
+			{
+				RepairShopWidget->BindToRepairManager(InRepairManager);
+			}
+			RepairShopWidget->OnRepairShopVisibilityChanged.AddDynamic(this, &UUIManager::OnRepairShopVisibilityChanged);
+			UE_LOG(LogTemp, Log, TEXT("UIManager: RepairShopWidget created and bound"));
+		}
+	}
+	else if (!RepairShopWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: RepairShopWidgetClass is not set in Blueprint"));
+	}
+
+	// Create trade widget
+	if (TradeWidgetClass && !TradeWidget)
+	{
+		TradeWidget = CreateWidget<UTradeWidget>(GetWorld(), TradeWidgetClass);
+		if (TradeWidget)
+		{
+			TradeWidget->AddToViewport(95);
+			TradeWidget->SetVisibility(ESlateVisibility::Collapsed);
+			if (InTradeManager)
+			{
+				TradeWidget->BindToManagers(InTradeManager, InventoryManager);
+			}
+			TradeWidget->OnTradeVisibilityChanged.AddDynamic(this, &UUIManager::OnTradeVisibilityChanged);
+			UE_LOG(LogTemp, Log, TEXT("UIManager: TradeWidget created and bound"));
+		}
+	}
+	else if (!TradeWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: TradeWidgetClass is not set in Blueprint"));
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeItemSystemWidgets - Completed"));
 }
 
 void UUIManager::InitializeStatsWidget(UPlayerStatsManager* InStatsManager)
@@ -768,8 +1045,14 @@ void UUIManager::HandleGameMenuResumeClicked()
 
 void UUIManager::ToggleEquipment()
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleEquipment"));
-	// TODO: implement equipment panel toggle when widget is connected
+	if (!EquipmentWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::ToggleEquipment - EquipmentWidget not initialized"));
+		return;
+	}
+
+	EquipmentWidget->ToggleEquipment();
+	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleEquipment - Toggled"));
 }
 
 void UUIManager::ToggleAltCursor()
@@ -792,20 +1075,73 @@ void UUIManager::ToggleBestiary()
 
 void UUIManager::ToggleQuestJournal()
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleQuestJournal"));
-	// TODO: implement quest journal toggle when widget is connected
+	if (!QuestJournalWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::ToggleQuestJournal - QuestJournalWidget not initialized"));
+		return;
+	}
+
+	QuestJournalWidget->ToggleJournal();
+	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleQuestJournal - Toggled"));
 }
 
 void UUIManager::ShowDeathScreen(int32 RespawnTimeSec)
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::ShowDeathScreen RespawnTime=%d"), RespawnTimeSec);
-	// TODO: implement death screen when widget is connected
+	UE_LOG(LogTemp, Warning, TEXT("UIManager::ShowDeathScreen RespawnTime=%d"), RespawnTimeSec);
+
+	// If PlayerController is not yet assigned, defer the death screen until InitFTCManager is called
+	if (!PlayerController)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::ShowDeathScreen - PlayerController not ready, deferring"));
+		bPendingDeathScreen = true;
+		PendingDeathScreenDebt = RespawnTimeSec;
+		return;
+	}
+
+	// Create widget lazily if not yet created
+	if (!DeathScreenWidget && DeathScreenWidgetClass)
+	{
+		DeathScreenWidget = CreateWidget<UDeathScreenWidget>(PlayerController, DeathScreenWidgetClass);
+		if (DeathScreenWidget)
+		{
+			DeathScreenWidget->AddToViewport(100);
+
+			// Wire the respawn button to the owning ABasicPlayer.
+			// UIManager is an ActorComponent whose owner is ABasicPlayer.
+			if (ABasicPlayer* OwnerPlayer = Cast<ABasicPlayer>(GetOwner()))
+			{
+				DeathScreenWidget->OnRespawnRequested.AddDynamic(OwnerPlayer, &ABasicPlayer::OnRespawnClicked);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("UIManager::ShowDeathScreen - owner is not ABasicPlayer, respawn button will not work"));
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("UIManager::ShowDeathScreen - failed to create DeathScreenWidget"));
+			return;
+		}
+	}
+
+	if (DeathScreenWidget)
+	{
+		DeathScreenWidget->ShowDeathScreen(RespawnTimeSec);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::ShowDeathScreen - DeathScreenWidgetClass not set in Blueprint"));
+	}
 }
 
 void UUIManager::HideDeathScreen()
 {
 	UE_LOG(LogTemp, Log, TEXT("UIManager::HideDeathScreen"));
-	// TODO: implement death screen hide when widget is connected
+
+	if (DeathScreenWidget)
+	{
+		DeathScreenWidget->HideDeathScreen();
+	}
 }
 
 void UUIManager::UpdateMobTargetFrameHP(int32 CurrentHP, int32 MaxHP)

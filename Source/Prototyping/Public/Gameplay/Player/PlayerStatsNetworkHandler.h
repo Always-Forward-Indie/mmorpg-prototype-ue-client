@@ -7,6 +7,7 @@
 
 class UPlayerStatsManager;
 class UNetworkManager;
+class UMyGameInstance;
 
 // Fired when an effectTick packet arrives (broadcast by server for any DoT/HoT tick)
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEffectTick, const FEffectTickData&, TickData);
@@ -14,6 +15,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEffectTick, const FEffectTickData
 /**
  * Subscribes to the chunk-server feed, picks up "stats_update" packets
  * and forwards parsed data to UPlayerStatsManager.
+ * Only processes packets whose characterId matches the local player.
  */
 UCLASS()
 class PROTOTYPING_API UPlayerStatsNetworkHandler : public UObject
@@ -21,7 +23,7 @@ class PROTOTYPING_API UPlayerStatsNetworkHandler : public UObject
     GENERATED_BODY()
 
 public:
-    void Initialize(UPlayerStatsManager* InStatsManager, UNetworkManager* InNetworkManager);
+    void Initialize(UPlayerStatsManager* InStatsManager, UNetworkManager* InNetworkManager, UMyGameInstance* InGameInstance = nullptr);
 
     UFUNCTION(BlueprintCallable, Category = "Player Stats Network")
     void SubscribeToNetworkEvents();
@@ -45,6 +47,9 @@ void HandleSetPlayerActiveEffects(const FString& ReceivedData) const;
 
     UPROPERTY()
     UNetworkManager* NetworkManager = nullptr;
+
+    UPROPERTY()
+    UMyGameInstance* GameInstance = nullptr;
 
     bool bIsSubscribed = false;
 };

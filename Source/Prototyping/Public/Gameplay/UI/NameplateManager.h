@@ -71,11 +71,15 @@ public:
                      float                 InteractRadius,
                      float                 HeadOffsetZ = 100.f);
 
-    UFUNCTION(BlueprintCallable, Category = "Nameplate Manager")
-    void UnregisterNPC(AActor* Actor);
+	UFUNCTION(BlueprintCallable, Category = "Nameplate Manager")
+	void UnregisterNPC(AActor* Actor);
 
-    // ------------------------------------------------------------------
-    // Bulk operations
+	/** Update the interaction-state icon on a registered NPC nameplate. */
+	UFUNCTION(BlueprintCallable, Category = "Nameplate Manager")
+	void UpdateNPCInteractionState(AActor* Actor, ENPCInteractionState NewState);
+
+	// ------------------------------------------------------------------
+	// Bulk operations
     // ------------------------------------------------------------------
 
     /** Called on level transition, disconnect, or game shutdown. */

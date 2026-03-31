@@ -55,6 +55,19 @@ void UNPCManager::SetWorldContext(UWorld* World)
 {
 	worldContext = World;
 	UE_LOG(LogTemp, Warning, TEXT("NPCManager: World context set to %s"), World ? TEXT("Valid") : TEXT("NULL"));
+
+	// Re-register the cleanup timer in the new world after a level transition
+	if (worldContext && bAutoCleanupInvalidNPCs)
+	{
+		CleanupTimerHandle.Invalidate();
+		worldContext->GetTimerManager().SetTimer(
+			CleanupTimerHandle,
+			this,
+			&UNPCManager::CleanupInvalidNPCs,
+			CleanupInterval,
+			true
+		);
+	}
 }
 
 void UNPCManager::SetGameInstance(UMyGameInstance* GameInstance)

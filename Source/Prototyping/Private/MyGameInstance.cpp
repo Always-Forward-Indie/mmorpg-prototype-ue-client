@@ -1,7 +1,10 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+п»ї// Fill out your copyright notice in the Description page of Project Settings.
+
+
 
 
 #include "MyGameInstance.h"
+#include "Containers/Ticker.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
 #include "Gameplay/Items/HarvestManager.h"
 #include "Gameplay/Combat/CombatSystemManager.h"
@@ -25,16 +28,24 @@
 #include "UI/UIManager.h"
 #include "Gameplay/NPCs/NPCManager.h"
 #include "Gameplay/NPCs/NPCNetworkHandler.h"
+#include "Gameplay/Dialogue/DialogueManager.h"
+#include "Gameplay/Dialogue/DialogueNetworkHandler.h"
+#include "Gameplay/Quest/QuestManager.h"
+#include "Gameplay/Quest/QuestNetworkHandler.h"
+#include "Gameplay/Trade/TradeManager.h"
+#include "Gameplay/Trade/TradeNetworkHandler.h"
+#include "Gameplay/Equipment/EquipmentManager.h"
+#include "Gameplay/Equipment/EquipmentNetworkHandler.h"
+#include "Gameplay/Equipment/EquipmentVisualComponent.h"
+#include "Gameplay/Vendor/VendorManager.h"
+#include "Gameplay/Vendor/VendorNetworkHandler.h"
+#include "Gameplay/Repair/RepairManager.h"
+#include "Gameplay/Repair/RepairNetworkHandler.h"
 
-// Forward declarations for manager types
-class UDialogueManager;
-class UQuestManager;
-class UEquipmentManager;
-class UVendorManager;
-class URepairManager;
-class UTradeManager;
-class UBestiaryNetworkHandler;
-class UChatManager;
+#include "Gameplay/Bestiary/BestiaryNetworkHandler.h"
+#include "Gameplay/Chat/ChatManager.h"
+#include "Gameplay/Chat/ChatNetworkHandler.h"
+#include "Gameplay/Player/PlayerStatsNetworkHandler.h"
 
 UMyGameInstance::UMyGameInstance(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -88,8 +99,40 @@ void UMyGameInstance::Init()
 	NPCManager = NewObject<UNPCManager>(this);
 	NPCNetworkHandler = NewObject<UNPCNetworkHandler>(this);
 
+	// Initialize Dialogue System
+	DialogueManager = NewObject<UDialogueManager>(this);
+	DialogueNetworkHandler = NewObject<UDialogueNetworkHandler>(this);
+
+	// Initialize Quest System
+	QuestManager = NewObject<UQuestManager>(this);
+	QuestNetworkHandler = NewObject<UQuestNetworkHandler>(this);
+
+	// Initialize Trade System
+	TradeManager = NewObject<UTradeManager>(this);
+	TradeNetworkHandler = NewObject<UTradeNetworkHandler>(this);
+
+	// Initialize Equipment System
+	EquipmentManager = NewObject<UEquipmentManager>(this);
+	EquipmentNetworkHandler = NewObject<UEquipmentNetworkHandler>(this);
+
+	// Initialize Vendor System
+	VendorManager = NewObject<UVendorManager>(this);
+	VendorNetworkHandler = NewObject<UVendorNetworkHandler>(this);
+
+	// Initialize Repair System
+	RepairManager = NewObject<URepairManager>(this);
+	RepairNetworkHandler = NewObject<URepairNetworkHandler>(this);
+
 	// Initialize player stats manager
 	PlayerStatsManager = NewObject<UPlayerStatsManager>(this);
+	PlayerStatsNetworkHandler = NewObject<UPlayerStatsNetworkHandler>(this);
+
+	// Initialize Bestiary system
+	BestiaryNetworkHandler = NewObject<UBestiaryNetworkHandler>(this);
+
+	// Initialize Chat system
+	ChatManager = NewObject<UChatManager>(this);
+	ChatNetworkHandler = NewObject<UChatNetworkHandler>(this);
 
 	// Initialize time sync service
 	TimeSyncService = NewObject<UTimeSyncService>(this);
@@ -343,6 +386,120 @@ void UMyGameInstance::InitNetworkingSetup()
 		UE_LOG(LogTemp, Warning, TEXT("NPCNetworkHandler initialized"));
 	}
 
+	// Initialize Dialogue System
+	if (DialogueManager)
+	{
+		DialogueManager->Initialize(GetNetworkManager(), this);
+		UE_LOG(LogTemp, Warning, TEXT("DialogueManager initialized"));
+	}
+
+	if (DialogueNetworkHandler && DialogueManager)
+	{
+		DialogueNetworkHandler->Initialize(DialogueManager, GetNetworkManager());
+		DialogueNetworkHandler->SubscribeToNetworkEvents();
+		UE_LOG(LogTemp, Warning, TEXT("DialogueNetworkHandler initialized and subscribed"));
+	}
+
+	// Initialize Quest System
+	if (QuestManager)
+	{
+		QuestManager->Initialize(GetNetworkManager(), this);
+		UE_LOG(LogTemp, Warning, TEXT("QuestManager initialized"));
+	}
+
+	if (QuestNetworkHandler && QuestManager)
+	{
+		QuestNetworkHandler->Initialize(QuestManager, GetNetworkManager());
+		QuestNetworkHandler->SubscribeToNetworkEvents();
+		UE_LOG(LogTemp, Warning, TEXT("QuestNetworkHandler initialized and subscribed"));
+	}
+
+	// Initialize Equipment System
+	if (EquipmentManager)
+	{
+		EquipmentManager->Initialize(GetNetworkManager(), this);
+		UE_LOG(LogTemp, Warning, TEXT("EquipmentManager initialized"));
+	}
+
+	if (EquipmentNetworkHandler && EquipmentManager)
+	{
+		EquipmentNetworkHandler->Initialize(EquipmentManager, GetNetworkManager());
+		EquipmentNetworkHandler->SubscribeToNetworkEvents();
+		UE_LOG(LogTemp, Warning, TEXT("EquipmentNetworkHandler initialized and subscribed"));
+	}
+
+	// Initialize Vendor System
+	if (VendorManager)
+	{
+		VendorManager->Initialize(GetNetworkManager(), this);
+		UE_LOG(LogTemp, Warning, TEXT("VendorManager initialized"));
+	}
+
+	if (VendorNetworkHandler && VendorManager)
+	{
+		VendorNetworkHandler->Initialize(VendorManager, GetNetworkManager());
+		VendorNetworkHandler->SubscribeToNetworkEvents();
+		UE_LOG(LogTemp, Warning, TEXT("VendorNetworkHandler initialized and subscribed"));
+	}
+
+	// Initialize Repair System
+	if (RepairManager)
+	{
+		RepairManager->Initialize(GetNetworkManager(), this);
+		UE_LOG(LogTemp, Warning, TEXT("RepairManager initialized"));
+	}
+
+	if (RepairNetworkHandler && RepairManager)
+	{
+		RepairNetworkHandler->Initialize(RepairManager, GetNetworkManager());
+		RepairNetworkHandler->SubscribeToNetworkEvents();
+		UE_LOG(LogTemp, Warning, TEXT("RepairNetworkHandler initialized and subscribed"));
+	}
+
+	// Initialize Trade System
+	if (TradeManager)
+	{
+		TradeManager->Initialize(GetNetworkManager(), this);
+		UE_LOG(LogTemp, Warning, TEXT("TradeManager initialized"));
+	}
+
+	if (TradeNetworkHandler && TradeManager)
+	{
+		TradeNetworkHandler->Initialize(TradeManager, GetNetworkManager());
+		TradeNetworkHandler->SubscribeToNetworkEvents();
+		UE_LOG(LogTemp, Warning, TEXT("TradeNetworkHandler initialized and subscribed"));
+	}
+
+	// Initialize Bestiary System
+	if (BestiaryNetworkHandler)
+	{
+		BestiaryNetworkHandler->Initialize(this, GetNetworkManager());
+		BestiaryNetworkHandler->SubscribeToNetworkEvents();
+		UE_LOG(LogTemp, Warning, TEXT("BestiaryNetworkHandler initialized and subscribed"));
+	}
+
+	// Initialize PlayerStats network handler
+	if (PlayerStatsNetworkHandler && PlayerStatsManager)
+	{
+		PlayerStatsNetworkHandler->Initialize(PlayerStatsManager, GetNetworkManager(), this);
+		PlayerStatsNetworkHandler->SubscribeToNetworkEvents();
+		UE_LOG(LogTemp, Warning, TEXT("PlayerStatsNetworkHandler initialized and subscribed"));
+	}
+
+	// Initialize Chat System
+	if (ChatManager)
+	{
+		ChatManager->Initialize(this, GetNetworkManager());
+		UE_LOG(LogTemp, Warning, TEXT("ChatManager initialized"));
+	}
+
+	if (ChatNetworkHandler && ChatManager)
+	{
+		ChatNetworkHandler->Initialize(ChatManager, GetNetworkManager());
+		ChatNetworkHandler->SubscribeToNetworkEvents();
+		UE_LOG(LogTemp, Warning, TEXT("ChatNetworkHandler initialized and subscribed"));
+	}
+
 	if (NetworkManager != nullptr) {
 		// Start polling the data from login server
 		NetworkManager->StartPollingLoginServer();
@@ -375,10 +532,10 @@ void UMyGameInstance::StartPingLoginServer()
 void UMyGameInstance::LoadLoginLevel()
 {
 	if (bDebug) {
-		LoadLevel(DebugLevelName);
+		LoadStreamingLevel(DebugLevelName);
 	}
 	else {
-		LoadLevel(LoginLevelName);
+		LoadStreamingLevel(LoginLevelName);
 	}
 }
 
@@ -402,7 +559,10 @@ void UMyGameInstance::Shutdown()
 
 
 	// Shutdown the network manager
-	NetworkManager->Shutdown();
+	if (NetworkManager)
+	{
+		NetworkManager->Shutdown();
+	}
 }
 
 // get the network manager
@@ -520,23 +680,22 @@ TSubclassOf<class ADroppedItemActor> UMyGameInstance::GetDroppedItemActorClass()
 	return DroppedItemActorClass;
 }
 
-void UMyGameInstance::LoadLevel(const FName& LevelName)
+void UMyGameInstance::LoadStreamingLevel(const FName& LevelName)
 {
 	// Store the level name
 	LevelBeingLoaded = LevelName;
 
-	UE_LOG(LogTemp, Warning, TEXT("GameInstance address: %p"), this);
+	UE_LOG(LogTemp, Warning, TEXT("LoadStreamingLevel: %s (GameInstance: %p)"), *LevelName.ToString(), this);
 
 	// Show loading screen
 	AddLoadingScreen();
 
-	// Asynchronously load the game level
+	// Asynchronously load the streaming sub-level
 	FLatentActionInfo LatentInfo;
 	LatentInfo.CallbackTarget = this;
-	LatentInfo.ExecutionFunction = "OnLevelLoaded";
+	LatentInfo.ExecutionFunction = "OnLoginLevelLoaded";
 	LatentInfo.Linkage = 0;
 	LatentInfo.UUID = 1;
-
 
 	UWorld* TargetWorld = GetWorld();
 	if (TargetWorld)
@@ -545,67 +704,141 @@ void UMyGameInstance::LoadLevel(const FName& LevelName)
 	}
 }
 
-// This function is called when the level loading is complete
-void UMyGameInstance::OnLevelLoaded()
+void UMyGameInstance::TransitionToGameWorld()
 {
-	// level loaded
-	UE_LOG(LogTemp, Warning, TEXT("Level loaded %s"), *LevelBeingLoaded.ToString());
-	
+	if (GameWorldMap.IsNull())
+	{
+		UE_LOG(LogTemp, Error, TEXT("TransitionToGameWorld: GameWorldMap is not set! Assign it in the GameInstance Blueprint defaults."));
+		return;
+	}
 
-	// Check if the level being loaded is the LoginLevel
+	if (bTransitioningToGameWorld)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("TransitionToGameWorld: Already transitioning, ignoring duplicate call"));
+		return;
+	}
+
+	// Extract just the map name from the soft object path
+	// E.g., "/Game/Maps/WorldMapV1.WorldMapV1" -> "WorldMapV1"
+	FString MapAssetPath = GameWorldMap.ToSoftObjectPath().GetAssetPath().ToString();
+	FString MapName = FPackageName::GetShortName(MapAssetPath);
+	
+	// If the asset path ends with .MapName (e.g., WorldMapV1.WorldMapV1), strip the extension
+	if (MapName.Contains(TEXT(".")))
+	{
+		MapName = MapName.Left(MapName.Find(TEXT(".")));
+	}
+	
+	UE_LOG(LogTemp, Warning, TEXT("TransitionToGameWorld: Starting transition to map '%s' (from path '%s')"), 
+		*MapName, *MapAssetPath);
+
+	bTransitioningToGameWorld = true;
+	bGameWorldReady = false;
+
+	// Clean up Login level UI and actors before the level switch
+	RemoveLoginWidgetFromViewport();
+	if (LoginLevelCamera)
+	{
+		LoginLevelCamera->StopSound();
+		LoginLevelCamera->Destroy();
+		LoginLevelCamera = nullptr;
+	}
+
+	// Show the loading screen before the transition so it is visible during the map load.
+	// We tear it down first (if stale) then re-add so AddLoadingScreen's guard works correctly.
+	if (LoadingScreenActor)
+	{
+		LoadingScreenActor->StopSound();
+		LoadingScreenActor->Destroy();
+		LoadingScreenActor = nullptr;
+	}
+	if (LoadingScreenWidget)
+	{
+		LoadingScreenWidget->RemoveFromParent();
+		LoadingScreenWidget = nullptr;
+	}
+	AddLoadingScreen();
+
+	// Also clear the monitor stats widget as it will be recreated later
+	if (MonitorStatsWidget)
+	{
+		MonitorStatsWidget->RemoveFromParent();
+		MonitorStatsWidget = nullptr;
+	}
+
+	// Clear spawned actor references вЂ” the old world (and its actors) will be destroyed.
+	// ConnectedPlayers / PendingSpawnClientId / PendingRemotePlayerSpawns intentionally
+	// survive the transition: they carry the data needed to spawn players once the new
+	// game world is ready (ProcessPendingSpawns reads them in OnGameWorldReady).
+	SpawnedPlayers.Empty();
+	Player = nullptr;
+
+	// Travel to the game world map.
+	// In PIE, UGameplayStatics::OpenLevel triggers a PKG_PlayInEditor assertion on World
+	// Partition external actor packages. ServerTravel is the PIE-safe alternative and
+	// works identically in packaged builds.
+	UWorld* CurrentWorld = GetWorld();
+	if (CurrentWorld)
+	{
+		CurrentWorld->ServerTravel(MapName, true);
+
+		// After ServerTravel the current world will be replaced and a new one created.
+		// Poll for the new world to become ready. We use a core ticker so the delegate
+		// survives the world's own timer manager being torn down.
+		FTSTicker::GetCoreTicker().AddTicker(
+			FTickerDelegate::CreateLambda([this](float DeltaTime) -> bool
+			{
+				CheckGameWorldReady();
+				// Return false to remove the ticker once the world is ready
+				return !bGameWorldReady;
+			}),
+			0.2f // Poll every 200ms
+		);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("TransitionToGameWorld: GetWorld() returned nullptr"));
+		bTransitioningToGameWorld = false;
+	}
+}
+
+// This function is called when a streaming sub-level finishes loading (Login or Debug)
+void UMyGameInstance::OnLoginLevelLoaded()
+{
+	UE_LOG(LogTemp, Warning, TEXT("OnLoginLevelLoaded: %s"), *LevelBeingLoaded.ToString());
+
+	// Handle Login level
 	if (LevelBeingLoaded == LoginLevelName)
 	{
-		// Add login widget to viewport
 		AddLoginWidgetToViewport();
-
-		// Add monitor stats widget to viewport
 		AddMonitorStatsWidgetToViewport();
 
-		//show mouse cursor
-		GetWorld()->GetFirstPlayerController()->bShowMouseCursor = true;
+		if (GetWorld() && GetWorld()->GetFirstPlayerController())
+		{
+			GetWorld()->GetFirstPlayerController()->bShowMouseCursor = true;
+		}
 
-		// Spawn the custom camera actor and set it as the view target
 		LoginLevelCamera = GetWorld()->SpawnActor<AMyCameraActor>(LoginCameraClass, LoginLevelCameraLocation, LoginLevelCameraRotation);
-		//check if camera is valid
 		if (LoginLevelCamera)
 		{
-			//set view target with blend using camera reference if player controller is valid
 			if (GetWorld()->GetFirstPlayerController())
 			{
 				GetWorld()->GetFirstPlayerController()->SetViewTargetWithBlend(LoginLevelCamera, 0.5f);
-
-				//play sound
 				LoginLevelCamera->PlaySound(LoginMusicSoundSource);
 			}
 		}
 
-		// Initialize networking setup
 		InitNetworkingSetup();
 	}
-	else
-	{
-		RemoveLoginWidgetFromViewport();
-	}
 
-	// Check if the level being loaded is the GameLevel
-	if (LevelBeingLoaded == GameLevelName)
-	{
-		RemoveLoginWidgetFromViewport();
-		GetWorld()->GetFirstPlayerController()->bShowMouseCursor = false;
-
-		// remove the camera from the viewport
-		if (LoginLevelCamera)
-		{
-			LoginLevelCamera->StopSound();
-			LoginLevelCamera->Destroy();
-		}
-	}
-
+	// Handle Debug level
 	if (LevelBeingLoaded == DebugLevelName)
 	{
 		RemoveLoginWidgetFromViewport();
-		GetWorld()->GetFirstPlayerController()->bShowMouseCursor = false;
-
+		if (GetWorld() && GetWorld()->GetFirstPlayerController())
+		{
+			GetWorld()->GetFirstPlayerController()->bShowMouseCursor = false;
+		}
 
 		FClientDataStruct clientData;
 		clientData.clientId = 1;
@@ -618,39 +851,158 @@ void UMyGameInstance::OnLevelLoaded()
 
 		ClientData = clientData;
 
-
-
 		AddPlayerData(clientData.clientId, clientData);
 		SpawnPlayerForClient(clientData.clientId);
+
+		UWorld* TargetWorld = GetWorld();
+		if (TargetWorld)
+		{
+			FLatentActionInfo LatentInfo;
+			LatentInfo.CallbackTarget = this;
+			LatentInfo.Linkage = 0;
+			LatentInfo.ExecutionFunction = "OnLevelUnloaded";
+			LatentInfo.UUID = 2;
+
+			UGameplayStatics::UnloadStreamLevel(TargetWorld, LoginLevelName, LatentInfo, false);
+		}
 	}
-
-	UWorld* TargetWorld = GetWorld();
-	if (TargetWorld && LevelBeingLoaded != LoginLevelName)
-	{
-		// Unload the prev level
-		FLatentActionInfo LatentInfo;
-		LatentInfo.CallbackTarget = this;
-		LatentInfo.Linkage = 0;
-		LatentInfo.ExecutionFunction = "OnLevelUnloaded";
-		LatentInfo.UUID = 2; // Any unique ID
-
-		UGameplayStatics::UnloadStreamLevel(TargetWorld, LoginLevelName, LatentInfo, false);
-	}
-
 
 	// Remove loading screen
 	if (LoadingScreenWidget)
 	{
-		// Schedule the loading screen removal after some delay
-		const float Delay = 0.7f; // Adjust to your needs
-		GetWorld()->GetTimerManager().SetTimer(RemoveLoadingScreenTimerHandle, this, &UMyGameInstance::RemoveLoadingScreen, Delay, false);
+		const float Delay = 0.7f;
+		if (GetWorld())
+		{
+			GetWorld()->GetTimerManager().SetTimer(RemoveLoadingScreenTimerHandle, this, &UMyGameInstance::RemoveLoadingScreen, Delay, false);
+		}
 	}
+}
+
+void UMyGameInstance::CheckGameWorldReady()
+{
+	UWorld* NewWorld = GetWorld();
+	if (!NewWorld) { return; }
+
+	// Re-create the loading screen in the new world's viewport as soon as possible
+	if (!LoadingScreenWidget && LoadingScreenWidgetClass)
+	{
+		LoadingScreenWidget = CreateWidget<UUserWidget>(this, LoadingScreenWidgetClass);
+		if (LoadingScreenWidget)
+		{
+			LoadingScreenWidget->AddToViewport(999);
+			UE_LOG(LogTemp, Warning, TEXT("CheckGameWorldReady: Loading screen re-created in new world"));
+		}
+	}
+
+	APlayerController* PC = NewWorld->GetFirstPlayerController();
+	if (!PC) { return; }
+
+	UE_LOG(LogTemp, Warning, TEXT("CheckGameWorldReady: Game world is ready!"));
+	OnGameWorldReady();
+}
+
+void UMyGameInstance::OnGameWorldReady()
+{
+	if (bGameWorldReady) { return; }
+
+	bGameWorldReady = true;
+	bTransitioningToGameWorld = false;
+
+	UE_LOG(LogTemp, Warning, TEXT("OnGameWorldReady: Initializing gameplay in game world"));
+
+	UWorld* GameWorld = GetWorld();
+	if (!GameWorld)
+	{
+		UE_LOG(LogTemp, Error, TEXT("OnGameWorldReady: GetWorld() is null!"));
+		return;
+	}
+
+	APlayerController* PC = GameWorld->GetFirstPlayerController();
+	if (PC) { PC->bShowMouseCursor = false; }
+
+	RefreshManagerWorldContexts();
+	ProcessPendingSpawns();
+
+	// Phase 3: Send playerReady ACK to server.
+	// Server will auto-send Phase 4 world-state: spawnNPCs, spawnMobsInZone,
+	// nearbyItems, PLAYER_EQUIPMENT_UPDATE for all online players.
+	if (PlayerManager)
+	{
+		PlayerManager->SendPlayerReadyRequest(ClientData);
+		UE_LOG(LogTemp, Warning, TEXT("OnGameWorldReady: playerReady sent to server (Phase 3)"));
+	}
+
+	if (LoadingScreenWidget)
+	{
+		const float Delay = 0.7f;
+		GameWorld->GetTimerManager().SetTimer(RemoveLoadingScreenTimerHandle, this, &UMyGameInstance::RemoveLoadingScreen, Delay, false);
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("OnGameWorldReady: Game world initialization complete"));
+}
+
+void UMyGameInstance::RefreshManagerWorldContexts()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		UE_LOG(LogTemp, Error, TEXT("RefreshManagerWorldContexts: World is null"));
+		return;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("RefreshManagerWorldContexts: Refreshing world context on all managers"));
+
+	if (NetworkManager)
+	{
+		NetworkManager->SetWorldContext(World);
+		// Poll timers were registered in the old world's TimerManager which is now
+		// destroyed. Re-register them in the new world so incoming server data is
+		// still processed after the level transition.
+		NetworkManager->RestartPolling();
+	}
+	if (PingManager)
+	{
+		PingManager->SetWorldContext(World);
+		// Re-register ping timers in the new world's TimerManager
+		PingManager->RestartPingUpdates();
+	}
+	if (AuthenticationManager) { AuthenticationManager->SetWorldContext(World); }
+	if (PlayerManager) { PlayerManager->SetWorldContext(World); }
+	if (MOBManager) { MOBManager->SetWorldContext(World); }
+	if (SpawnZoneManager) { SpawnZoneManager->SetWorldContext(World); }
+	if (ItemManager) { ItemManager->SetWorldContext(World); }
+	if (InventoryManager) { InventoryManager->SetWorldContext(World); }
+	if (HarvestManager) { HarvestManager->SetWorldContext(World); }
+	if (CombatSystemManager) { CombatSystemManager->SetWorldContext(World); }
+	if (NPCManager) { NPCManager->SetWorldContext(World); }
+	if (TimeSyncService) { TimeSyncService->SetWorldContext(World); }
+}
+
+void UMyGameInstance::ProcessPendingSpawns()
+{
+	UE_LOG(LogTemp, Warning, TEXT("ProcessPendingSpawns: PendingSpawnClientId=%d, PendingRemote=%d"),
+		PendingSpawnClientId, PendingRemotePlayerSpawns.Num());
+
+	if (PendingSpawnClientId > 0)
+	{
+		int32 ClientIdToSpawn = PendingSpawnClientId;
+		PendingSpawnClientId = 0;
+		SpawnPlayerForClient(ClientIdToSpawn);
+		// NOTE: No manual getConnectedCharacters/getSpawnZones needed.
+		// Per protocol, server auto-sends Phase 4 world-state after playerReady ACK.
+	}
+
+	for (const FClientDataStruct& RemoteData : PendingRemotePlayerSpawns)
+	{
+		AddPlayerData(RemoteData.clientId, RemoteData);
+		SpawnPlayerForClient(RemoteData.clientId);
+	}
+	PendingRemotePlayerSpawns.Empty();
 }
 
 void UMyGameInstance::OnLevelUnloaded()
 {
-	UE_LOG(LogTemp, Warning, TEXT("Level unloaded trigerred and loaded new level: %s"), *LevelBeingLoaded.ToString());
-
+	UE_LOG(LogTemp, Warning, TEXT("Level unloaded triggered: %s"), *LevelBeingLoaded.ToString());
 }
 
 // add monitor to viewport
@@ -732,107 +1084,133 @@ void UMyGameInstance::RemoveLoadingScreen()
 
 void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 {
-	if (ConnectedPlayers.Contains(ClientID))
+	if (!ConnectedPlayers.Contains(ClientID))
 	{
-		// Check if the player has already been spawned
-		if (!SpawnedPlayers.Contains(ClientID))
+		UE_LOG(LogTemp, Error, TEXT("SpawnPlayerForClient: ClientID %d not in ConnectedPlayers"), ClientID);
+		return;
+	}
+
+	if (SpawnedPlayers.Contains(ClientID))
+	{
+		ABasicPlayer* Existing = SpawnedPlayers[ClientID];
+		if (IsValid(Existing) && !Existing->IsActorBeingDestroyed())
 		{
-			FClientDataStruct PlayerData = ConnectedPlayers[ClientID];
+			UE_LOG(LogTemp, Warning, TEXT("SpawnPlayerForClient: ClientID %d already spawned, skipping"), ClientID);
+			return;
+		}
+		SpawnedPlayers.Remove(ClientID);
+	}
 
-			FVector SpawnLocation = FVector(PlayerData.characterData.characterPosition.positionX, 
-				PlayerData.characterData.characterPosition.positionY, 
-				PlayerData.characterData.characterPosition.positionZ); // Determine spawn location
-			FRotator SpawnRotation = FRotator(0.0f, PlayerData.characterData.characterPosition.rotationZ, 0.0f); // Determine spawn rotation
+	FClientDataStruct PlayerData = ConnectedPlayers[ClientID];
+	const bool bIsLocal = (ClientID == CurrentClientID);
 
-			// Spawn the new player
-			ABasicPlayer* NewPlayer = GetWorld()->SpawnActor<ABasicPlayer>(MainPlayerClass, SpawnLocation, SpawnRotation);
-			if (NewPlayer)
-			{
-				UE_LOG(LogTemp, Warning, TEXT("SpawnPlayerForClient with pos %d %f %f %f rot %f"), ClientID, SpawnLocation.X, SpawnLocation.Y, SpawnLocation.Z, SpawnRotation.Yaw);
+	FVector SpawnLocation(
+		PlayerData.characterData.characterPosition.positionX,
+		PlayerData.characterData.characterPosition.positionY,
+		PlayerData.characterData.characterPosition.positionZ);
+	FRotator SpawnRotation(0.0f, PlayerData.characterData.characterPosition.rotationZ, 0.0f);
 
-				// Set the player's data
-				NewPlayer->SetIsOtherClient(true);
-				NewPlayer->SetClientID(PlayerData.clientId);
-				NewPlayer->SetCharacterID(PlayerData.characterData.characterId);
-				NewPlayer->SetCoordinates(PlayerData.characterData.characterPosition.positionX, 
-					PlayerData.characterData.characterPosition.positionY,
-					PlayerData.characterData.characterPosition.positionZ,
-					PlayerData.characterData.characterPosition.rotationZ
-				);
-				NewPlayer->SetPlayerName(PlayerData.characterData.characterName);
-				NewPlayer->SetPlayerClass(PlayerData.characterData.characterClass);
-				NewPlayer->SetPlayerRace(PlayerData.characterData.characterRace);
-				NewPlayer->SetPlayerLevel(PlayerData.characterData.characterLevel);
-				//set next level exp
-				NewPlayer->SetPlayerNextLevelExp(PlayerData.characterData.characterExpForLevelEnd);
+	ABasicPlayer* NewPlayer = GetWorld()->SpawnActor<ABasicPlayer>(MainPlayerClass, SpawnLocation, SpawnRotation);
+	if (!NewPlayer)
+	{
+		UE_LOG(LogTemp, Error, TEXT("SpawnPlayerForClient: Failed to spawn ABasicPlayer for ClientID %d"), ClientID);
+		return;
+	}
 
-				//set exp points
-				NewPlayer->SetPlayerExpPoints(PlayerData.characterData.characterExperiencePoints);
-				NewPlayer->SetPlayerCurrentHPPoints(PlayerData.characterData.characterCurrentHealth);
-				NewPlayer->SetPlayerCurrentMPPoints(PlayerData.characterData.characterCurrentMana);
-				//set attributes
-				NewPlayer->SetPlayerAttributes(PlayerData.characterData.characterAttributes.attributesData);
-				//set tag
-				NewPlayer->SetPlayerTag(*FString::FromInt(PlayerData.characterData.characterId));
-				NewPlayer->SetPlayerTag("Player");
+	UE_LOG(LogTemp, Warning, TEXT("SpawnPlayerForClient: Spawned ClientID=%d CharID=%d IsLocal=%d Pos=(%.0f,%.0f,%.0f)"),
+		ClientID, PlayerData.characterData.characterId, bIsLocal,
+		SpawnLocation.X, SpawnLocation.Y, SpawnLocation.Z);
 
+	NewPlayer->SetIsOtherClient(!bIsLocal);
+	NewPlayer->SetClientID(PlayerData.clientId);
+	NewPlayer->SetCharacterID(PlayerData.characterData.characterId);
+	NewPlayer->SetCoordinates(
+		PlayerData.characterData.characterPosition.positionX,
+		PlayerData.characterData.characterPosition.positionY,
+		PlayerData.characterData.characterPosition.positionZ,
+		PlayerData.characterData.characterPosition.rotationZ);
+	NewPlayer->SetPlayerName(PlayerData.characterData.characterName);
+	NewPlayer->SetPlayerClass(PlayerData.characterData.characterClass);
+	NewPlayer->SetPlayerRace(PlayerData.characterData.characterRace);
+	NewPlayer->SetPlayerLevel(PlayerData.characterData.characterLevel);
+	NewPlayer->SetPlayerNextLevelExp(PlayerData.characterData.characterExpForLevelEnd);
+	NewPlayer->SetPlayerExpPoints(PlayerData.characterData.characterExperiencePoints);
+	NewPlayer->SetPlayerCurrentHPPoints(PlayerData.characterData.characterCurrentHealth);
+	NewPlayer->SetPlayerCurrentMPPoints(PlayerData.characterData.characterCurrentMana);
+	NewPlayer->SetPlayerAttributes(PlayerData.characterData.characterAttributes.attributesData);
+	NewPlayer->SetPlayerTag(*FString::FromInt(PlayerData.characterData.characterId));
+	NewPlayer->SetPlayerTag(TEXT("Player"));
 
-				// Register with combat system now that player has valid data
-				if (CombatSystemManager && PlayerData.characterData.characterId > 0)
-				{
-					// Убедимся что объект валиден перед регистрацией
-					if (IsValid(NewPlayer) && !NewPlayer->IsActorBeingDestroyed())
-					{
-						TScriptInterface<ICombatable> CombatableInterface;
-						CombatableInterface.SetObject(NewPlayer);
-						CombatableInterface.SetInterface(Cast<ICombatable>(NewPlayer));
-						
-						CombatSystemManager->RegisterCombatable(CombatableInterface);
-						UE_LOG(LogTemp, Warning, TEXT("Player %d registered with combat system"), PlayerData.characterData.characterId);
-					}
-					else
-					{
-						UE_LOG(LogTemp, Error, TEXT("Player %d is invalid or being destroyed, not registering"), PlayerData.characterData.characterId);
-					}
-				}
-				else
-				{
-					UE_LOG(LogTemp, Warning, TEXT("Cannot register player with combat system - invalid data or CombatSystemManager null"));
-				}
+	// Apply dead state from server before UI is shown so the death screen
+	// appears immediately if the character was dead at login.
+	if (PlayerData.characterData.bIsDead)
+	{
+		NewPlayer->SetDead_Implementation(true);
+		UE_LOG(LogTemp, Warning, TEXT("SpawnPlayerForClient: CharID=%d spawned as DEAD"), PlayerData.characterData.characterId);
+	}
 
-				// Get the first player controller
-				APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
+	if (CombatSystemManager && PlayerData.characterData.characterId > 0 &&
+		IsValid(NewPlayer) && !NewPlayer->IsActorBeingDestroyed())
+	{
+		TScriptInterface<ICombatable> CombatableInterface;
+		CombatableInterface.SetObject(NewPlayer);
+		CombatableInterface.SetInterface(Cast<ICombatable>(NewPlayer));
+		CombatSystemManager->RegisterCombatable(CombatableInterface);
+		UE_LOG(LogTemp, Warning, TEXT("SpawnPlayerForClient: Registered CharID=%d with CombatSystem"), PlayerData.characterData.characterId);
+	}
 
-				// Add to spawned players map
-				SpawnedPlayers.Add(ClientID, NewPlayer);
+	if (MOBManager && PlayerData.characterData.characterId > 0)
+	{
+		MOBManager->RegisterPlayer(PlayerData.characterData.characterId, NewPlayer);
+	}
 
-				// If this is the current client, possession happens in the player's begin play
-				if (ClientID == CurrentClientID)
-				{
-					// Set the character as the current player's character
-					Player = NewPlayer;
-					Player->SetIsOtherClient(false);
-                    
-                    // Set additional important secret data
-                    NewPlayer->SetClientLogin(PlayerData.clientLogin);
-                    NewPlayer->SetClientSecret(PlayerData.hash);
-                    
-                    // Possess the player and create the HUD
-                    PlayerController->Possess(Player);
-                    //NewPlayer->CreateHUD();
+	SpawnedPlayers.Add(ClientID, NewPlayer);
 
-					// Request inventory data for the current player
-					if (InventoryManager)
-					{
-						InventoryManager->RequestInventoryData(PlayerData.characterData.characterId);
-						UE_LOG(LogTemp, Warning, TEXT("Requested inventory data for character ID: %d"), PlayerData.characterData.characterId);
-					}
-				}
-			}
+	if (bIsLocal)
+	{
+		Player = NewPlayer;
+		Player->SetIsOtherClient(false);
+		NewPlayer->SetClientLogin(PlayerData.clientLogin);
+		NewPlayer->SetClientSecret(PlayerData.hash);
+
+		// GetFirstLocalPlayerController() is on UGameInstance and is PIE-safe:
+		// returns the controller owned by THIS GameInstance's LocalPlayer,
+		// not always Player 1's controller.
+		APlayerController* PC = GetFirstLocalPlayerController(GetWorld());
+		if (PC)
+		{
+			PC->Possess(Player);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("SpawnPlayerForClient: No local PlayerController for ClientID=%d"), ClientID);
+		}
+
+		if (InventoryManager)
+		{
+			// Stamp the owner character ID on the global InventoryManager so it only
+			// processes packets for our local character, not other players on the same feed.
+			InventoryManager->SetOwnerCharacterId(PlayerData.characterData.characterId);
+			InventoryManager->RequestInventoryData(PlayerData.characterData.characterId);
+			UE_LOG(LogTemp, Warning, TEXT("SpawnPlayerForClient: Requested inventory for CharID=%d"), PlayerData.characterData.characterId);
+		}
+	}
+	else
+	{
+		// Remote player: bind equipment visuals to PLAYER_EQUIPMENT_UPDATE packets,
+		// filtered per character ID so each remote player only sees its own updates.
+		UEquipmentVisualComponent* VisComp = NewPlayer->GetEquipmentVisualComponent();
+		if (VisComp && EquipmentManager && ItemManager)
+		{
+			const int32 RemoteCharId = PlayerData.characterData.characterId;
+			VisComp->SetOwnerCharacterId(RemoteCharId);
+			VisComp->InitializeForRemotePlayer(ItemManager);
+			EquipmentManager->OnRemoteEquipmentStateReceivedDelegate.AddDynamic(
+				VisComp, &UEquipmentVisualComponent::HandleRemoteEquipmentState);
+			UE_LOG(LogTemp, Log, TEXT("SpawnPlayerForClient: Equipment visuals bound for remote CharID=%d"), RemoteCharId);
 		}
 	}
 }
-
 void UMyGameInstance::SetCurrentClientID(int32 ClientID)
 {
 	CurrentClientID = ClientID;
@@ -890,11 +1268,14 @@ void UMyGameInstance::JoinSelectedCharacterToGame()
         return;
     }
     
-    // Send the join game request
+    // PRE-PHASE: Send joinGameClient to Game Server first.
+    // The Game Server will respond with chunkServerData, and the response handler
+    // (ProcessGameServerData) will chain to Phase 1 (joinGameClient on Chunk Server),
+    // then Phase 1 continued (joinGameCharacter on Chunk Server).
     if (PlayerManager)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Sending join game request for character %d"), CurrentCharacterID);
-        PlayerManager->SendJoinCharacterChunkRequest(ClientData);
+        UE_LOG(LogTemp, Warning, TEXT("PRE-PHASE: Sending joinGameClient to Game Server for character %d"), CurrentCharacterID);
+        PlayerManager->SendJoinGameRequest(ClientData);
     }
     else
     {
@@ -904,10 +1285,19 @@ void UMyGameInstance::JoinSelectedCharacterToGame()
 
 void UMyGameInstance::AddPlayerData(int32 ClientID, const FClientDataStruct clientData)
 {
-	// Check if the player ID already exists to avoid duplicates
-	if (!ConnectedPlayers.Contains(ClientID))
+	if (ConnectedPlayers.Contains(ClientID))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AddPlayerData %d"), clientData.clientId);
+		// Update existing entry so a reconnecting player gets fresh data.
+		// If the player actor is already spawned we leave it in place;
+		// SpawnPlayerForClient guards against double-spawning.
+		ConnectedPlayers[ClientID] = clientData;
+		UE_LOG(LogTemp, Warning, TEXT("AddPlayerData: Updated existing entry for ClientID=%d CharID=%d"),
+			clientData.clientId, clientData.characterData.characterId);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("AddPlayerData: Added ClientID=%d CharID=%d"),
+			clientData.clientId, clientData.characterData.characterId);
 		ConnectedPlayers.Add(ClientID, clientData);
 	}
 }
@@ -919,12 +1309,40 @@ void UMyGameInstance::RemovePlayerData(int32 ClientID)
 	{
 		ConnectedPlayers.Remove(ClientID);
 
-		// If the player was spawned, remove it from the map and destroy it
+		// If the player was spawned, clean up delegate bindings before destroying
 		if (SpawnedPlayers.Contains(ClientID))
 		{
 			ABasicPlayer* PlayerToRemove = SpawnedPlayers[ClientID];
-			if (PlayerToRemove)
+			if (IsValid(PlayerToRemove) && !PlayerToRemove->IsActorBeingDestroyed())
 			{
+				// Unsubscribe remote equipment visual component from the delegate
+				// to prevent dangling callbacks after actor destruction.
+				UEquipmentVisualComponent* VisComp = PlayerToRemove->GetEquipmentVisualComponent();
+				if (VisComp && EquipmentManager)
+				{
+					EquipmentManager->OnRemoteEquipmentStateReceivedDelegate.RemoveDynamic(
+						VisComp, &UEquipmentVisualComponent::HandleRemoteEquipmentState);
+				}
+
+				// Unregister from combat system
+				if (CombatSystemManager)
+				{
+					TScriptInterface<ICombatable> CombatableInterface;
+					CombatableInterface.SetObject(PlayerToRemove);
+					CombatableInterface.SetInterface(Cast<ICombatable>(PlayerToRemove));
+					CombatSystemManager->UnregisterCombatable(CombatableInterface);
+				}
+
+				// Unregister from MOBManager player registry
+				if (MOBManager)
+				{
+					const int32 CharId = PlayerToRemove->GetPlayerCharacterID();
+					if (CharId > 0)
+					{
+						MOBManager->UnregisterPlayer(CharId);
+					}
+				}
+
 				PlayerToRemove->Destroy();
 			}
 			SpawnedPlayers.Remove(ClientID);
@@ -988,9 +1406,15 @@ void UMyGameInstance::UpdatePlayerCoordinates(int32 PlayerID, double x, double y
 // Set character items to list view widget
 void UMyGameInstance::SetCharacterItems(TArray<FCharacterDataStruct> Items)
 {
+	if (!LoginScreenWidget)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Failed to set character items - LoginScreenWidget is null"));
+		return;
+	}
+
 	UListView* CharacterListView = LoginScreenWidget->GetCharactersListView();
 
-	if (LoginScreenWidget && CharacterListView)
+	if (CharacterListView)
 	{
 		// Clear existing items first
 		CharacterListView->ClearListItems();

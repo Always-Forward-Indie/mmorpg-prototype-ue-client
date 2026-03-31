@@ -35,6 +35,7 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Character Data", meta = (AllowPrivateAccess = "true"))
 	FMessageDataStruct messageData;
 
+	UPROPERTY()
 	UMyGameInstance* MyGameInstance;
 
 	// Camera components
@@ -50,6 +51,25 @@ private:
 	float ZoomMin = 200.0f;
 	float ZoomMax = 1200.0f;
 	float ZoomInterpSpeed = 8.0f;
+
+	// WoW-like camera tuning
+	UPROPERTY(EditAnywhere, Category = "Camera")
+	float CameraPitchMin = -80.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Camera")
+	float CameraPitchMax = 45.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Camera")
+	float CameraPitchSensitivity = 1.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Camera")
+	float CameraYawSensitivity = 1.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Movement")
+	bool bEnableMouseButtonsMoveForward = true;
+
+	UPROPERTY(EditAnywhere, Category = "Movement")
+	float MouseButtonsMoveForwardScale = 1.0f;
 
 	// Mouse button state
 	bool bIsRightMouseDown = false;
@@ -77,6 +97,9 @@ private:
 	FDelegateHandle HitPointDelegateHandle;
 	FDelegateHandle AnimEndDelegateHandle;
 	FTimerHandle HitPointTimerHandle;
+
+	// Timer for deferred UI initialization in BeginPlay
+	FTimerHandle UIInitTimerHandle;
 
 	// Event sounds
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (AllowPrivateAccess = "true"))
@@ -422,6 +445,7 @@ public:
 	class UInputAction* Skill5Action;
 
 	// Reference to the login camera actor
+	UPROPERTY()
 	ACameraActor* LoginCameraActor;
 
 	// Audio component
@@ -580,9 +604,15 @@ public:
 	void ApplyMouseCaptureIfNoUIOpen();
 	void RestoreCursorToUIManager();
 	void UpdateMeshRotation(float DeltaTime);
+	void HandleMouseButtonsMoveForward();
+	void ClampControlPitch();
 
 	// Initialise nameplate
 	void InitialiseNameplate(bool bIsLocal);
+
+	// Get equipment visual component (for external initialization of remote players)
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
+	class UEquipmentVisualComponent* GetEquipmentVisualComponent() const { return EquipmentVisualComponent; }
 
 	// Play event sound from soft ref
 	void PlayEventSound(const TSoftObjectPtr<USoundBase>& SoundRef);
@@ -626,6 +656,7 @@ public:
 	void HandleLevelUp(int32 OldLevel, int32 NewLevel, int32 NewTotalExperience);
 
 	// Weight status handler
+	UFUNCTION()
 	void HandleWeightStatusChanged(const FWeightStatusData& WeightStatus);
 
 	// Additional input actions

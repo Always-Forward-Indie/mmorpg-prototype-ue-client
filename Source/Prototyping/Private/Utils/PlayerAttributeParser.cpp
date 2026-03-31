@@ -132,10 +132,11 @@ bool PlayerAttributeParser::ValidateStatsData(const FPlayerStatsUpdateStruct& St
     }
     
     // Check if level is valid
+    // Treat level == 0 as a warning but do not reject the packet: a death
+    // stats_update is valid even if the server omits or zeroes the level field.
     if (StatsData.level <= 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerAttributeParser: Invalid level: %d"), StatsData.level);
-        return false;
+        UE_LOG(LogTemp, Warning, TEXT("PlayerAttributeParser: Unexpected level value: %d (packet still processed)"), StatsData.level);
     }
     
     // Check if health values are valid

@@ -84,6 +84,14 @@ void UNameplateManager::UnregisterNPC(AActor* Actor)
     }
 }
 
+void UNameplateManager::UpdateNPCInteractionState(AActor* Actor, ENPCInteractionState NewState)
+{
+    if (CanvasWidget)
+    {
+        CanvasWidget->SetNPCInteractionState(Actor, NewState);
+    }
+}
+
 // -----------------------------------------------------------------------
 // Bulk
 // -----------------------------------------------------------------------

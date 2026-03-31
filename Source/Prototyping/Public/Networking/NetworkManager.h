@@ -37,7 +37,11 @@ UCLASS()
 class PROTOTYPING_API UNetworkManager : public UObject
 {
 	GENERATED_BODY()
+public:
+	virtual ~UNetworkManager();
+
 private:
+	UPROPERTY()
 	UWorld* WorldContext = nullptr;
 
 	// Login server details
@@ -118,6 +122,9 @@ public:
 	void StartPollingLoginServer();
 	void StartPollingGameServer();
 	void StartPollingChunkServer();
+	// Re-register all three poll timers in the current WorldContext.
+	// Must be called after SetWorldContext() following a level transition.
+	void RestartPolling();
 	void ConnectLoginServer();
 	void ConnectChunkServer();
 	void SendDataToLoginServer(const FString& Data);

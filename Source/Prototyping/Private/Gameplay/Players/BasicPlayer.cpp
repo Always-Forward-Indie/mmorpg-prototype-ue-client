@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Gameplay/Players/BasicPlayer.h"
@@ -66,7 +66,7 @@ void ABasicPlayer::OnAttackInput()
     }
 
     // If we have a soft-highlight target from CheckForMOB, lock it and start attacking
-    // (CheckForMOB stores result in a temporary — we search again here to find it)
+    // (CheckForMOB stores result in a temporary ï¿½ we search again here to find it)
     ABasicMOB* BestTarget = LockedTarget; // re-use existing lock if present
 
     if (!BestTarget)
@@ -381,7 +381,7 @@ void ABasicPlayer::TryCastSkillWithApproach(const FString& SkillSlug)
     }
     else
     {
-        // Out of range — store pending skill and start approach
+        // Out of range ï¿½ store pending skill and start approach
         PendingSkillSlug = SkillSlug;
         // For the auto-attack skill keep bIsAutoAttacking true so DoAutoAttack
         // can continue the loop after the first swing.
@@ -406,7 +406,7 @@ void ABasicPlayer::DoAutoAttack()
         return;
     }
 
-    // Range check — use the same formula the server applies: maxRange * 100.0f
+    // Range check ï¿½ use the same formula the server applies: maxRange * 100.0f
     const float Dist = FVector::Dist(GetActorLocation(), LockedTarget->GetActorLocation());
     const float EffectiveRange = GetCurrentSkillRange();
 
@@ -423,7 +423,7 @@ void ABasicPlayer::DoAutoAttack()
         return;
     }
 
-    // In range — make sure any lingering approach is stopped
+    // In range ï¿½ make sure any lingering approach is stopped
     if (bIsApproachingTarget)
     {
         bIsApproachingTarget = false;
@@ -459,7 +459,7 @@ void ABasicPlayer::DoAutoAttack()
     }
     else
     {
-        // No AnimInstance — retry by simple timer as fallback
+        // No AnimInstance ï¿½ retry by simple timer as fallback
         GetWorld()->GetTimerManager().SetTimer(AutoAttackRetryTimerHandle,
             this, &ABasicPlayer::DoAutoAttack, 1.5f, false);
     }
@@ -482,7 +482,7 @@ void ABasicPlayer::OnTabTargetInput()
     const float MaxTabRange = 1500.0f;
     const FVector PlayerLoc = GetActorLocation();
 
-    // Collect all living mobs within range — no cone filter so Tab cycles
+    // Collect all living mobs within range ï¿½ no cone filter so Tab cycles
     // through everything nearby regardless of which way the mesh faces
     TArray<ABasicMOB*> Candidates;
     for (TActorIterator<ABasicMOB> It(GetWorld()); It; ++It)
@@ -501,7 +501,7 @@ void ABasicPlayer::OnTabTargetInput()
         return;
     }
 
-    // Sort by dot product to camera forward — mobs closest to crosshair come first,
+    // Sort by dot product to camera forward ï¿½ mobs closest to crosshair come first,
     // then by distance as a tiebreaker
     Candidates.Sort([&CameraLocation, &CameraForward](const ABasicMOB& A, const ABasicMOB& B)
     {
@@ -567,8 +567,7 @@ void ABasicPlayer::OnPickupInput()
 
     if (!InventoryManager) return;
 
-    // NotifyPickup() + delegate binding + server request are all handled
-    // inside InventoryManager::PickupNearbyItem -> ItemManager::SendPickUpItemRequest.
+    // NotifyPickup() + delegate binding + server request are all inside InventoryManager::PickupNearbyItem -> ItemManager::SendPickUpItemRequest.
     // Calling NotifyPickup() here first and then delaying the request via a
     // timer caused the montage to be started twice (once here, once inside
     // SendPickUpItemRequest), which produced the double-animation bug.
@@ -880,11 +879,15 @@ ABasicPlayer::ABasicPlayer()
  	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 
+    bUseControllerRotationPitch = false;
+    bUseControllerRotationRoll = false;
+    bUseControllerRotationYaw = false;
+
 	//Create audio component
     AudioComponent = CreateDefaultSubobject<UAudioComponent>(TEXT("AudioComponent"));
     AudioComponent->SetupAttachment(RootComponent);
 
-    // Create spring arm — controls camera distance and pitch
+    // Create spring arm ï¿½ controls camera distance and pitch
     CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
     CameraBoom->SetupAttachment(RootComponent);
     CameraBoom->TargetArmLength       = DesiredZoom;  // initial distance
@@ -896,7 +899,7 @@ ABasicPlayer::ABasicPlayer()
     // Create the follow camera
     FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
     FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
-    FollowCamera->bUsePawnControlRotation = false; // camera does not rotate — arm does
+    FollowCamera->bUsePawnControlRotation = false; // camera does not rotate ï¿½ arm does
 
 	// Create UI Manager component
 	UIManager = CreateDefaultSubobject<UUIManager>(TEXT("UIManager"));
@@ -904,10 +907,10 @@ ABasicPlayer::ABasicPlayer()
 	// Create Inventory Manager component  
 	InventoryManager = CreateDefaultSubobject<UInventoryManager>(TEXT("InventoryManager"));
 
-	// Create nameplate component — auto-hidden for local player, visible for remote players
+	// Create nameplate component ï¿½ auto-hidden for local player, visible for remote players
 	NameplateComponent = CreateDefaultSubobject<UPlayerNameplateComponent>(TEXT("NameplateComponent"));
 
-	// Create equipment visual component — attaches item meshes to skeleton sockets
+	// Create equipment visual component ï¿½ attaches item meshes to skeleton sockets
 	EquipmentVisualComponent = CreateDefaultSubobject<UEquipmentVisualComponent>(TEXT("EquipmentVisualComponent"));
 
     // Init simulation variables
@@ -920,6 +923,8 @@ ABasicPlayer::ABasicPlayer()
     if (UCharacterMovementComponent* CMC = GetCharacterMovement())
     {
         CMC->MaxWalkSpeed = MoveSpeed;
+        CMC->bOrientRotationToMovement = false;
+        CMC->bUseControllerDesiredRotation = false;
     }
 }
 
@@ -976,6 +981,12 @@ void ABasicPlayer::BeginPlay()
 		{
 			InventoryManager->SetWorldContext(GetWorld());
 			InventoryManager->SetGameInstance(MyGameInstance);
+
+			// Stamp owner character ID BEFORE subscribing so packet filter is active from the first message.
+			if (playerData.characterData.characterId > 0)
+			{
+				InventoryManager->SetOwnerCharacterId(playerData.characterData.characterId);
+			}
 			
 			// Get network manager from game instance and initialize inventory
 			if (UNetworkManager* NetworkManager = MyGameInstance->GetNetworkManager())
@@ -1007,8 +1018,7 @@ void ABasicPlayer::BeginPlay()
 		// Initialize UI manager with slight delay to ensure everything is ready
 		if (UIManager)
 		{
-			FTimerHandle TimerHandle;
-			GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
+			GetWorld()->GetTimerManager().SetTimer(UIInitTimerHandle, [this]()
 			{
 				// Guard: skip UI initialization for other-client (remote) players.
 				// isOtherClient is false at BeginPlay time but may be set to true before
@@ -1137,17 +1147,9 @@ void ABasicPlayer::BeginPlay()
 					}
 				}
 
-					// If the player was dead when joining (server sent isDead=true),
-					// show the death screen now that UIManager is fully initialized.
-					if (playerData.characterData.bIsDead)
-					{
-						if (UCharacterMovementComponent* Movement = GetCharacterMovement())
-						{
-							Movement->DisableMovement();
-						}
-						ShowDeathScreen();
-						UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Player joined as dead - showing death screen"));
-					}
+				// The death screen will be shown automatically via the pending mechanism
+				// in UIManager if the character spawned as dead (SetDead_Implementation
+				// already called in SpawnPlayerForClient before this timer fires).
 				}
                 
 			}, 0.5f, false);
@@ -1203,27 +1205,30 @@ void ABasicPlayer::UpdateHUD()
     {
         if (!GetIsOtherClient())
         {
-            //debug 
-			//UE_LOG(LogTemp, Warning, TEXT("Updating Player HUD for player"));
-
-            //get player max HP, Mana and XP from attributes
-            float MaxHealth = 1.0f;
-            float MaxMana = 1.0f;
+            // Get max HP/Mana from attributes; fall back to current HP/MP if attributes
+            // haven't arrived yet (prevents the "435/1" display before first stats_update).
+            float MaxHealth = 0.0f;
+            float MaxMana = 0.0f;
 
             if (const FAttributeDataStruct* HealthAttr = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_health")))
             {
                 MaxHealth = HealthAttr->attributeValue;
-
-                //UE_LOG(LogTemp, Warning, TEXT("Max Player Health: %f"), MaxHealth);
-                //UE_LOG(LogTemp, Warning, TEXT("Current Player Health: %d"), playerData.characterData.characterCurrentHealth);
             }
 
             if (const FAttributeDataStruct* ManaAttr = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_mana")))
             {
                 MaxMana = ManaAttr->attributeValue;
+            }
 
-                //UE_LOG(LogTemp, Warning, TEXT("Max Player Mana: %f"), MaxMana);
-                //UE_LOG(LogTemp, Warning, TEXT("Current Player Health: %d"), playerData.characterData.characterCurrentMana);
+            // Guard: if max_health attribute is not yet populated (no stats_update received),
+            // use current health as max so the bar shows full instead of "435/1".
+            if (MaxHealth <= 0.0f)
+            {
+                MaxHealth = FMath::Max(1.0f, static_cast<float>(playerData.characterData.characterCurrentHealth));
+            }
+            if (MaxMana <= 0.0f)
+            {
+                MaxMana = FMath::Max(1.0f, static_cast<float>(playerData.characterData.characterCurrentMana));
             }
 
             // Update HUD with current and max values
@@ -1244,12 +1249,15 @@ void ABasicPlayer::Tick(float DeltaTime)
 
     if (MyGameInstance && !playerData.isOtherClient)
     {
+        HandleMouseButtonsMoveForward();
+        ClampControlPitch();
+
         // Update player movement for local player
 		UpdateCurrentPlayerMovement(DeltaTime);
         // Smoothly rotate mesh toward DesiredMeshYaw
         UpdateMeshRotation(DeltaTime);
         // Drive approach movement every frame so CharacterMovementComponent gets
-        // AddMovementInput on the same frame it is consumed — no more 1mm jitter.
+        // AddMovementInput on the same frame it is consumed ï¿½ no more 1mm jitter.
         UpdateApproach(DeltaTime);
         // Smoothly interpolate camera zoom
         if (CameraBoom)
@@ -1286,7 +1294,7 @@ void ABasicPlayer::Tick(float DeltaTime)
     {
         const int32 CurrentHP = LockedTarget->GetMOBCurrentHealth();
         const int32 MaxHP = LockedTarget->GetMOBAttributes().attributesData.Contains(TEXT("max_health"))
-            ? static_cast<int32>(LockedTarget->GetMOBAttributes().attributesData[TEXT("max_health")].attributeValue)
+            ? LockedTarget->GetMOBAttributes().attributesData[TEXT("max_health")].attributeValue
             : 100;
         UIManager->UpdateMobTargetFrameHP(CurrentHP, MaxHP);
 
@@ -1319,12 +1327,12 @@ void ABasicPlayer::Move(const FInputActionValue& Value)
         StopAutoAttack();
     }
 
-    const FVector2D MoveValue = Value.Get<FVector2D>(); // NOT normalized — keep X/Y separate
+    const FVector2D MoveValue = Value.Get<FVector2D>(); // NOT normalized ï¿½ keep X/Y separate
     const float CameraYaw = Controller->GetControlRotation().Yaw;
 
-    if (bIsRightMouseDown || bIsLeftMouseDown)
+    if (bIsRightMouseDown)
     {
-        // ---- Mouse held: WASD strafes/moves relative to camera, mesh follows camera yaw ----
+        // RMB mode: movement is relative to camera (W/S forward/back, A/D strafe)
         const FRotator ControlYaw(0, CameraYaw, 0);
         const FVector Forward = ControlYaw.RotateVector(FVector::ForwardVector);
         const FVector Right   = ControlYaw.RotateVector(FVector::RightVector);
@@ -1332,38 +1340,23 @@ void ABasicPlayer::Move(const FInputActionValue& Value)
         const FVector Input = (Forward * MoveValue.Y + Right * MoveValue.X).GetSafeNormal();
         AddMovementInput(Input, 1.0f);
 
-        // Mesh should face camera yaw (handled smoothly by UpdateMeshRotation)
         DesiredMeshYaw = CameraYaw;
         bHasDesiredMeshYaw = true;
     }
     else
     {
-        // ---- No mouse button: WoW keyboard-turn mode ----
-        // W/S: move forward/backward along current mesh facing, no rotation change.
-        // A/D: rotate the mesh in place (keyboard turn), no strafing.
-
+        // Keyboard-turn mode (no RMB): W/S move by mesh facing, A/D rotate mesh
         if (!FMath::IsNearlyZero(MoveValue.Y))
         {
-            // Forward or backward along the current actor facing
             const FVector MeshForward = GetActorForwardVector();
             AddMovementInput(MeshForward, MoveValue.Y > 0.f ? 1.0f : -1.0f);
         }
 
         if (!FMath::IsNearlyZero(MoveValue.X))
         {
-            // A/D: accumulate yaw rotation toward camera — mesh turns, no strafe
-            // Rotate the desired yaw by a fixed amount per second (handled in UpdateMeshRotation).
-            // Here we simply push the desired yaw directly based on input magnitude.
             const float TurnAmount = MoveValue.X * MeshRotationSpeed * GetWorld()->GetDeltaSeconds();
             DesiredMeshYaw = GetActorRotation().Yaw + TurnAmount;
             bHasDesiredMeshYaw = true;
-
-            // Also move forward slightly while turning (WoW behaviour: A/D turn + walk)
-            if (!FMath::IsNearlyZero(MoveValue.Y))
-            {
-                const FVector MeshForward = GetActorForwardVector();
-                AddMovementInput(MeshForward, MoveValue.Y > 0.f ? 1.0f : -1.0f);
-            }
         }
     }
 }
@@ -1377,22 +1370,21 @@ void ABasicPlayer::Look(const FInputActionValue& Value)
     {
         const FVector2D LookValue = Value.Get<FVector2D>();
 
-        if (LookValue.X != 0.f)
+        if (!FMath::IsNearlyZero(LookValue.X))
         {
-            AddControllerYawInput(LookValue.X);
+            AddControllerYawInput(LookValue.X * CameraYawSensitivity);
 
-            // RMB held: mesh follows camera — feed desired yaw so UpdateMeshRotation
-            // interpolates smoothly instead of snapping instantly.
+            // RMB held: character follows camera yaw
             if (bIsRightMouseDown)
             {
-                DesiredMeshYaw    = Controller->GetControlRotation().Yaw;
+                DesiredMeshYaw = Controller->GetControlRotation().Yaw;
                 bHasDesiredMeshYaw = true;
             }
         }
 
-        if (LookValue.Y != 0.f)
+        if (!FMath::IsNearlyZero(LookValue.Y))
         {
-            AddControllerPitchInput(LookValue.Y * -1);
+            AddControllerPitchInput(LookValue.Y * -CameraPitchSensitivity);
         }
     }
 }
@@ -1433,7 +1425,7 @@ void ABasicPlayer::OnScroll(const FInputActionValue& Value)
 {
     if (!CameraBoom) return;
 
-    // Don't zoom if any UI window is open — let the scroll reach the widget
+    // Don't zoom if any UI window is open ï¿½ let the scroll reach the widget
     if (UIManager && UIManager->ShouldShowCursor()) return;
 
     // Value is a float: positive = scroll up (zoom in), negative = scroll down (zoom out)
@@ -1443,7 +1435,7 @@ void ABasicPlayer::OnScroll(const FInputActionValue& Value)
 
 void ABasicPlayer::ApplyMouseCaptureIfNoUIOpen()
 {
-    // Don't capture the mouse if any UI window is open — the player needs
+    // Don't capture the mouse if any UI window is open - the player needs
     // the cursor to interact with inventory, vendor, etc.
     if (UIManager && UIManager->ShouldShowCursor()) return;
 
@@ -1487,6 +1479,37 @@ void ABasicPlayer::UpdateMeshRotation(float DeltaTime)
         SetActorRotation(Target);
         bHasDesiredMeshYaw = false;
     }
+}
+
+void ABasicPlayer::HandleMouseButtonsMoveForward()
+{
+    if (!bEnableMouseButtonsMoveForward) return;
+    if (!bIsLeftMouseDown || !bIsRightMouseDown) return;
+    if (playerData.characterData.bIsDead || bIsPickingUp) return;
+    if (UIManager && UIManager->ShouldShowCursor()) return;
+    if (!Controller) return;
+
+    if (bIsAutoAttacking || bIsApproachingTarget)
+    {
+        StopAutoAttack();
+    }
+
+    const FRotator ControlYaw(0.0f, Controller->GetControlRotation().Yaw, 0.0f);
+    const FVector Forward = ControlYaw.RotateVector(FVector::ForwardVector);
+    AddMovementInput(Forward, MouseButtonsMoveForwardScale);
+
+    DesiredMeshYaw = Controller->GetControlRotation().Yaw;
+    bHasDesiredMeshYaw = true;
+}
+
+void ABasicPlayer::ClampControlPitch()
+{
+    if (!Controller) return;
+
+    FRotator ControlRotation = Controller->GetControlRotation();
+    ControlRotation.Pitch = FMath::ClampAngle(ControlRotation.Pitch, CameraPitchMin, CameraPitchMax);
+    ControlRotation.Roll = 0.0f;
+    Controller->SetControlRotation(ControlRotation);
 }
 
 void ABasicPlayer::UpdateCurrentPlayerMovement(float DeltaTime)
@@ -1563,7 +1586,7 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     SetActorRotation(NewRotation);
 
     // Once we've consumed the full interpolation window without a new packet,
-    // the remote player has stopped — decay RemoteSpeed to zero so the anim
+    // the remote player has stopped ï¿½ decay RemoteSpeed to zero so the anim
     // transitions back to idle.
     if (TimeSinceLastPositionUpdate >= ServerPositionUpdateInterval * 2.0f)
     {
@@ -1783,6 +1806,12 @@ void ABasicPlayer::SetPlayerCurrentHPPoints(int32 CurrentHPPoints)
         const int32 MaxHP = GetMaxHealth_Implementation();
         NameplateComponent->UpdateHealth(CurrentHPPoints, MaxHP);
     }
+
+    // Refresh local HUD immediately so HP bar updates in combat
+    if (!playerData.isOtherClient)
+    {
+        RefreshHUD();
+    }
 }
 
 // set player current MP points
@@ -1801,6 +1830,12 @@ void ABasicPlayer::SetPlayerCurrentMPPoints(int32 CurrentMPPoints)
                 StatsMgr->ApplyStatsUpdate(Updated);
             }
         }
+    }
+
+    // Refresh local HUD immediately so MP bar updates in combat
+    if (!playerData.isOtherClient)
+    {
+        RefreshHUD();
     }
 }
 
@@ -2034,8 +2069,18 @@ void ABasicPlayer::CheckForNPC()
             const float Dot = FVector::DotProduct(CameraForward, ToNPC);
             if (Dot > BestDot)
             {
-                BestDot = Dot;
-                BestNPC = NPC;
+                // LOS check: is the NPC actually visible through world geometry?
+                FHitResult LOSHit;
+                FCollisionQueryParams LOSParams;
+                LOSParams.AddIgnoredActor(this);
+                LOSParams.AddIgnoredActor(NPC);
+                const bool bBlocked = GetWorld()->LineTraceSingleByChannel(
+                    LOSHit, CameraLocation, NPC->GetActorLocation(), ECC_Visibility, LOSParams);
+                if (!bBlocked)
+                {
+                    BestDot = Dot;
+                    BestNPC = NPC;
+                }
             }
         }
         HitNPC = BestNPC;
@@ -2101,7 +2146,7 @@ void ABasicPlayer::CheckForMOB()
     APlayerController* PC = Cast<APlayerController>(GetController());
     if (!PC) return;
 
-    // Trace from the camera viewpoint — consistent with CheckForNPC
+    // Trace from the camera viewpoint ï¿½ consistent with CheckForNPC
     FVector CameraLocation;
     FRotator CameraRotation;
     PC->GetPlayerViewPoint(CameraLocation, CameraRotation);
@@ -2176,7 +2221,7 @@ void ABasicPlayer::CheckForMOB()
         }
     }
 
-    // Effective target: hard lock takes priority over soft hover
+    // Effective target: hard lock takes priority over soft target
     ABasicMOB* EffectiveTarget = LockedTarget ? LockedTarget : SoftTarget;
 
     // Update skill system target
@@ -2197,11 +2242,11 @@ void ABasicPlayer::CheckForMOB()
         }
     }
 
-    // Show/hide head widget using a cached pointer — no TActorIterator every Tick
+    // Show/hide head widget using a cached pointer ï¿½ no TActorIterator every Tick
     if (PrevSoftTarget != EffectiveTarget)
     {
         // Hide the widget on the mob that just left the crosshair
-        // (skip if it is the hard-locked target — SetLockedTarget already manages it)
+        // (skip if it is the hard-locked target ï¿½ SetLockedTarget already manages it)
         if (PrevSoftTarget && PrevSoftTarget != LockedTarget && IsValid(PrevSoftTarget))
         {
             PrevSoftTarget->MobHeadInfo->ShowWidget(false);
@@ -2285,6 +2330,26 @@ void ABasicPlayer::AttackTarget(int32 TargetID, const FString& SkillSlug, int32 
 // Called when the actor is being destroyed
 void ABasicPlayer::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    // Clear any pending timers to avoid use-after-free in lambdas
+    if (GetWorld())
+    {
+        GetWorld()->GetTimerManager().ClearTimer(UIInitTimerHandle);
+        GetWorld()->GetTimerManager().ClearTimer(AutoAttackRetryTimerHandle);
+        GetWorld()->GetTimerManager().ClearTimer(HitPointTimerHandle);
+    }
+
+    // For remote players: remove the equipment visual delegate binding.
+    // This is a safety net â€” RemovePlayerData() does it first, but if the actor
+    // is destroyed by other means (e.g. level unload) this prevents dangling callbacks.
+    if (playerData.isOtherClient && MyGameInstance && EquipmentVisualComponent)
+    {
+        if (UEquipmentManager* EqMgr = MyGameInstance->GetEquipmentManager())
+        {
+            EqMgr->OnRemoteEquipmentStateReceivedDelegate.RemoveDynamic(
+                EquipmentVisualComponent, &UEquipmentVisualComponent::HandleRemoteEquipmentState);
+        }
+    }
+
     // Unregister from actor registry
     if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetGameInstance()))
     {
@@ -2320,25 +2385,33 @@ int32 ABasicPlayer::GetMaxHealth_Implementation() const
 {
     if (const FAttributeDataStruct* HealthAttr = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_health")))
     {
-        return HealthAttr->attributeValue;
+        if (HealthAttr->attributeValue > 0)
+        {
+            return HealthAttr->attributeValue;
+        }
     }
-    return 100; // Default value
+    // Fallback: if max_health not yet received from stats_update, return current HP
+    // so percentage calculations don't produce absurd values (e.g. 435/1).
+    return FMath::Max(1, playerData.characterData.characterCurrentHealth);
 }
 
 int32 ABasicPlayer::GetMaxMana_Implementation() const
 {
     if (const FAttributeDataStruct* ManaAttr = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_mana")))
     {
-        return ManaAttr->attributeValue;
+        if (ManaAttr->attributeValue > 0)
+        {
+            return ManaAttr->attributeValue;
+        }
     }
-    return 100; // Default value
+    return FMath::Max(1, playerData.characterData.characterCurrentMana);
 }
 
 void ABasicPlayer::SetDead_Implementation(bool bNewDead)
 {
     playerData.characterData.bIsDead = bNewDead;
 
-    // Sync dead state on the nameplate (works for both local and remote — local is already hidden)
+    // Sync dead state on the nameplate (works for both local and remote ï¿½ local is already hidden)
     if (NameplateComponent)
     {
         NameplateComponent->SetDeadState(bNewDead);
@@ -2351,7 +2424,15 @@ void ABasicPlayer::SetDead_Implementation(bool bNewDead)
     }
     else
     {
-        // Revive: restore movement and hide the death screen
+        // Revive: clear any lingering combat / interaction state (#6)
+        bIsPickingUp = false;
+        bIsApproachingTarget = false;
+        if (GetWorld())
+        {
+            GetWorld()->GetTimerManager().ClearTimer(AutoAttackRetryTimerHandle);
+        }
+
+        // Restore movement so the player can walk again
         if (UCharacterMovementComponent* Movement = GetCharacterMovement())
         {
             Movement->SetMovementMode(MOVE_Walking);
@@ -2369,9 +2450,13 @@ void ABasicPlayer::OnDeath_Implementation()
 {
     UE_LOG(LogTemp, Warning, TEXT("Player %s died"), *playerData.characterData.characterName);
 
-    // Clear target when dying
-    ClearTarget_Implementation();
+    // Stop any ongoing auto-attack / approach cycle (#5)
+    StopAutoAttack();
     ClearLockedTarget();
+    ClearTarget_Implementation();
+
+    // Release pickup lock so it cannot block input after respawn (#6)
+    bIsPickingUp = false;
 
     // Play death sound
     PlayEventSound(DeathSound);
@@ -2439,7 +2524,7 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
         // Remove any previous OnHitPoint binding so we never fire twice
         if (HitPointDelegateHandle.IsValid())
         {
-            AnimInst->OnHitPoint.Remove(HitPointDelegateHandle);
+            AnimInst->OnAttackEnded.Remove(HitPointDelegateHandle);
             HitPointDelegateHandle.Reset();
         }
 
@@ -2581,14 +2666,14 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
     }
     else
     {
-        // AnimBP parent class is not UPlayerAnimInstance — log the actual class so we can fix it
+        // AnimBP parent class is not UPlayerAnimInstance ï¿½ log the actual class so we can fix it
         if (GetMesh() && GetMesh()->GetAnimInstance())
         {
             UE_LOG(LogTemp, Error,
                 TEXT("[PlayerAnim] GetPlayerAnimInstance() returned nullptr! "
                      "Actual AnimInstance class: %s. "
                      "Set Anim Class parent to UPlayerAnimInstance in the Anim BP."),
-                *GetMesh()->GetAnimInstance()->GetClass()->GetName());
+                *AnimInst->GetClass()->GetName());
         }
         else
         {
@@ -2596,7 +2681,7 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
                 TEXT("[PlayerAnim] GetPlayerAnimInstance() returned nullptr and no AnimInstance exists on mesh!"));
         }
 
-        // Fallback: no AnimInstance assigned yet — schedule timer directly
+        // Fallback: no AnimInstance assigned yet ï¿½ schedule timer directly
         const float HitDelay = FMath::Max(Duration * 0.45f, 0.05f);
         UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] FALLBACK timer: HitDelay=%.3fs"), HitDelay);
         if (UWorld* World = GetWorld())
@@ -2628,17 +2713,14 @@ void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritica
     // Play hit received sound (generic player grunt / armor clank)
     PlayEventSound(HitReceivedSound);
 
-    // NOTE: Floating combat text is handled by DamageEffectHandler::ShowFloatingDamageText
-    // to avoid duplicates. Do NOT call FCT->ShowDamage here.
-
     // --- Hit sound + hit particle from the skill that caused the damage ---
     // CurrentSkillName is set by the server via combatInitiation before combatResult.
+    bool bHitSoundPlayed = false;
     if (MyGameInstance)
     {
         if (USkillDefinitionRepository* Repo = MyGameInstance->GetSkillDefinitionRepository())
         {
             const FSkillDefinitionData& Def = Repo->GetDefinition(CurrentSkillName);
-            bool bHitSoundPlayed = false;
 
             // --- Impact sound: WeaponImpactType ? ArmorMaterialType lookup ---
             // ArmorMaterialType is read from the chest slot item in DT_ItemVisuals.
@@ -2681,7 +2763,7 @@ void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritica
                             if (USoundBase* ImpactSound = ImpactRow->ImpactSounds[Idx].LoadSynchronous())
                             {
                                 UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, ImpactSound, GetActorLocation());
-                                if (AC && MyGameInstance && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
+                                if (AC && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
                                 {
                                     AC->SoundClassOverride = MyGameInstance->AudioManager->SFXClass;
                                 }
@@ -2797,7 +2879,7 @@ void ABasicPlayer::ShowHealingEffect_Implementation(int32 Healing)
             FCT->ShowDamage(GetCombatPosition_Implementation(), static_cast<float>(Healing), false, EDamageType::Heal);
         }
 
-        // Screen flash only for local player
+        // Screen flash only for local players
         if (!playerData.isOtherClient)
         {
             UIManager->ShowHealScreenFlash();
@@ -2898,8 +2980,17 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 	// Refresh the HP/MP HUD
 	RefreshHUD();
 
+	// --- Death detection (#1) ---
+	// The server signals death via stats_update with health.current == 0.
+	// Transition into dead state only if we are not already dead to avoid
+	// re-triggering sounds / anim notifications on every repeated packet.
+	if (StatsUpdate.healthCurrent == 0 && !playerData.characterData.bIsDead)
+	{
+		SetDead_Implementation(true);
+	}
+
 	// Always sync all experience fields from the stats packet into characterData.
-	// The join packet no longer carries exp/stats — stats_update is the sole source
+	// The join packet no longer carries exp/stats ï¿½ stats_update is the sole source
 	// of truth for level, XP, XP thresholds, HP max, and MP max.
 	playerData.characterData.characterExperiencePoints  = StatsUpdate.experienceCurrent;
 	playerData.characterData.characterExpForLevelStart  = StatsUpdate.experienceLevelStart;
@@ -2910,8 +3001,8 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 
 	// Apply move_speed attribute from the server to the CharacterMovementComponent.
 	// The server sends speed in its own units; MoveSpeedScale converts them to UU/s.
-	if (!playerData.isOtherClient)
-	{
+    if (!playerData.isOtherClient)
+    {
 		const FStatAttributeEntry* SpeedAttr = StatsUpdate.attributes.FindByPredicate(
 			[](const FStatAttributeEntry& A){ return A.slug.Equals(TEXT("move_speed"), ESearchCase::IgnoreCase); });
 
@@ -2969,8 +3060,8 @@ void ABasicPlayer::RefreshHUD()
 	}
 
 	// Get max health and mana from attributes
-	float MaxHealth = 100.0f; // Default value
-	float MaxMana = 100.0f;   // Default value
+	float MaxHealth = 0.0f;
+	float MaxMana = 0.0f;
 
 	// Try to get max values from character attributes
 	if (const FAttributeDataStruct* HealthAttr = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_health")))
@@ -2983,8 +3074,27 @@ void ABasicPlayer::RefreshHUD()
 		MaxMana = static_cast<float>(ManaAttr->attributeValue);
 	}
 
+	// Guard: if max_health attribute is not yet populated, fall back to current values
+	if (MaxHealth <= 0.0f)
+	{
+		MaxHealth = FMath::Max(1.0f, static_cast<float>(playerData.characterData.characterCurrentHealth));
+	}
+	if (MaxMana <= 0.0f)
+	{
+		MaxMana = FMath::Max(1.0f, static_cast<float>(playerData.characterData.characterCurrentMana));
+	}
+
 	// Update HUD with current values
-    PlayerHUD->SetHP(static_cast<float>(playerData.characterData.characterCurrentHealth), MaxHealth);
-    PlayerHUD->SetMana(static_cast<float>(playerData.characterData.characterCurrentMana), MaxMana);
+	PlayerHUD->SetHP(static_cast<float>(playerData.characterData.characterCurrentHealth), MaxHealth);
+	PlayerHUD->SetMana(static_cast<float>(playerData.characterData.characterCurrentMana), MaxMana);
 }
+
+
+
+
+
+
+
+
+
 

@@ -23,6 +23,11 @@ void UDamageEffectHandler::ProcessSkillResult_Implementation(const FSkillResultD
 
     UObject* TargetObject = Target.GetObject();
 
+    UE_LOG(LogTemp, Warning, TEXT("DamageEffectHandler: Processing result for target %s - Damage=%d HP=%d?%d Died=%s"), 
+        *GetNameSafe(TargetObject), SkillResult.damage, 
+        ICombatable::Execute_GetCurrentHealth(TargetObject), SkillResult.finalTargetHealth,
+        SkillResult.targetDied ? TEXT("YES") : TEXT("NO"));
+
     // Применить здоровье/ману от сервера
     ICombatable::Execute_SetCurrentHealth(TargetObject, SkillResult.finalTargetHealth);
     ICombatable::Execute_SetCurrentMana(TargetObject, SkillResult.finalTargetMana);
@@ -47,13 +52,17 @@ void UDamageEffectHandler::ProcessSkillResult_Implementation(const FSkillResultD
         ProcessCriticalHit(SkillResult, TargetObject);
     }
 
-    // Проверка смерти
-    int32 CurrentHealth = ICombatable::Execute_GetCurrentHealth(TargetObject);
-    if (CurrentHealth <= 0 && !ICombatable::Execute_IsDead(TargetObject))
+    // Death check — use server-authoritative targetDied flag as primary source,
+    // with a fallback check on HP for safety.
+    if (!ICombatable::Execute_IsDead(TargetObject))
     {
-        ICombatable::Execute_SetDead(TargetObject, true);
-        ICombatable::Execute_OnDeath(TargetObject);
-        UE_LOG(LogTemp, Warning, TEXT("DamageEffectHandler: Target died from damage"));
+        if (SkillResult.targetDied || ICombatable::Execute_GetCurrentHealth(TargetObject) <= 0)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("DamageEffectHandler: Target %s is DEAD - calling SetDead(true)"), 
+                *GetNameSafe(TargetObject));
+            // SetDead(true) already calls OnDeath internally — do NOT call OnDeath separately.
+            ICombatable::Execute_SetDead(TargetObject, true);
+        }
     }
 
     LogDamageProcessing(SkillResult, TargetObject);

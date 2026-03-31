@@ -178,6 +178,14 @@ public:
 	void SendUseItemRequest(int32 ItemId, int32 Quantity);
 	void SendDropItemRequest(int32 ItemId, int32 Quantity);
 
+	// Set the character ID this manager owns.
+	// Called before SubscribeToNetworkManager so packets are filtered correctly.
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	void SetOwnerCharacterId(int32 InCharacterId) { OwnerCharacterId = InCharacterId; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	int32 GetOwnerCharacterId() const { return OwnerCharacterId; }
+
 	// References
 	UPROPERTY()
 	UNetworkManager* networkManager;
@@ -194,4 +202,9 @@ public:
 
 	// Flag to track if inventory has been loaded
 	bool bInventoryLoaded;
+
+private:
+	// Character ID this manager belongs to.
+	// Packets whose characterId doesn't match are silently ignored.
+	int32 OwnerCharacterId = 0;
 };

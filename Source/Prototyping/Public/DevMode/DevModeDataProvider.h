@@ -24,7 +24,7 @@ struct FDevModeConfig
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DevMode")
     bool bEnabled = false;
 
-    // Level to open. If NAME_None, falls back to GameLevelName on the GameInstance.
+    // Level to open. If NAME_None, falls back to GameWorldMapPath on the GameInstance.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DevMode")
     FName LevelOverride = NAME_None;
 

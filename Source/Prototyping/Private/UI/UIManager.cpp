@@ -1,4 +1,4 @@
-ï»¿#include "UI/UIManager.h"
+#include "UI/UIManager.h"
 #include "UI/UIManager.h"
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
@@ -28,11 +28,20 @@
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Gameplay/Repair/RepairManager.h"
 #include "Gameplay/Trade/TradeManager.h"
+#include "UI/PlayerStatsWidget.h"
+#include "UI/BestiaryWidget.h"
+#include "UI/ChatWidget.h"
+#include "UI/GameMenuBarWidget.h"
+#include "UI/GameMenuWidget.h"
+#include "UI/AudioSettingsWidget.h"
+#include "Gameplay/Bestiary/BestiaryNetworkHandler.h"
+#include "Gameplay/Chat/ChatManager.h"
+#include "Gameplay/Player/PlayerStatsManager.h"
+#include "Audio/AudioManager.h"
 #include "Blueprint/UserWidget.h"
+#include "Kismet/KismetSystemLibrary.h"
 #include "Engine/Engine.h"
 
-class UPlayerStatsManager;
-class UBestiaryNetworkHandler;
 #include "Camera/CameraShakeBase.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Engine/World.h"
@@ -54,6 +63,12 @@ UUIManager::UUIManager()
 	RepairShopWidget = nullptr;
 	TradeWidget = nullptr;
 	EquipmentWidget = nullptr;
+	PlayerStatsWidget = nullptr;
+	BestiaryWidget = nullptr;
+	ChatWidget = nullptr;
+	GameMenuBarWidget = nullptr;
+	GameMenuWidget = nullptr;
+	AudioSettingsWidget = nullptr;
 	InventoryManager = nullptr;
 	HarvestManager = nullptr;
 	ExperienceManager = nullptr;
@@ -73,6 +88,10 @@ UUIManager::UUIManager()
 	bRepairShopVisible = false;
 	bTradeVisible = false;
 	bEquipmentVisible = false;
+	bPlayerStatsVisible = false;
+	bBestiaryVisible = false;
+	bAltCursorActive = false;
+	bGameMenuVisible = false;
 }
 
 void UUIManager::BeginPlay()
@@ -129,6 +148,16 @@ void UUIManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (EquipmentWidget)
 	{
 		EquipmentWidget->OnEquipmentVisibilityChanged.RemoveDynamic(this, &UUIManager::OnEquipmentVisibilityChanged);
+	}
+
+	if (PlayerStatsWidget)
+	{
+		PlayerStatsWidget->OnStatsVisibilityChanged.RemoveDynamic(this, &UUIManager::OnPlayerStatsVisibilityChanged);
+	}
+
+	if (BestiaryWidget)
+	{
+		BestiaryWidget->OnBestiaryVisibilityChanged.RemoveDynamic(this, &UUIManager::OnBestiaryVisibilityChanged);
 	}
 
 	if (DeathScreenWidget)
@@ -266,8 +295,14 @@ void UUIManager::CreateUIWidgets()
 	CreateSkillWidgets();
 
 	// Create game version widget
-	CreateGameVersionWidget();
+	// Create game menu bar (always-visible bottom bar)
+	CreateGameMenuBarWidget();
+
+	// Create game menu (opened on Escape)
+	CreateGameMenuWidget();
 	
+	
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: All UI widgets created successfully"));
 	UE_LOG(LogTemp, Warning, TEXT("UIManager: All UI widgets created successfully"));
 }
 
@@ -487,6 +522,73 @@ void UUIManager::CreateGameVersionWidget()
 	UE_LOG(LogTemp, Warning, TEXT("UIManager: Game version widget created and added to viewport"));
 }
 
+void UUIManager::CreateGameMenuBarWidget()
+{
+	if (!GameMenuBarWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: GameMenuBarWidgetClass is not set in Blueprint"));
+		return;
+	}
+
+	if (GameMenuBarWidget)
+	{
+		GameMenuBarWidget->RemoveFromParent();
+		GameMenuBarWidget = nullptr;
+	}
+
+	GameMenuBarWidget = CreateWidget<UGameMenuBarWidget>(GetWorld(), GameMenuBarWidgetClass);
+	if (!GameMenuBarWidget)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create GameMenuBarWidget"));
+		return;
+	}
+
+	GameMenuBarWidget->AddToViewport(20);
+
+	// Wire all buttons to UIManager actions
+	GameMenuBarWidget->OnInventoryClicked.AddDynamic(this,    &UUIManager::OnMenuBarInventoryClicked);
+	GameMenuBarWidget->OnEquipmentClicked.AddDynamic(this,    &UUIManager::OnMenuBarEquipmentClicked);
+	GameMenuBarWidget->OnQuestJournalClicked.AddDynamic(this, &UUIManager::OnMenuBarQuestJournalClicked);
+	GameMenuBarWidget->OnSkillsClicked.AddDynamic(this,       &UUIManager::OnMenuBarSkillsClicked);
+	GameMenuBarWidget->OnStatsClicked.AddDynamic(this,        &UUIManager::OnMenuBarStatsClicked);
+	GameMenuBarWidget->OnBestiaryClicked.AddDynamic(this,     &UUIManager::OnMenuBarBestiaryClicked);
+	GameMenuBarWidget->OnMenuClicked.AddDynamic(this,         &UUIManager::OnMenuBarMenuClicked);
+
+	UE_LOG(LogTemp, Log, TEXT("UIManager: GameMenuBarWidget created and wired"));
+}
+
+void UUIManager::CreateGameMenuWidget()
+{
+	if (!GameMenuWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: GameMenuWidgetClass is not set in Blueprint"));
+		return;
+	}
+
+	if (GameMenuWidget)
+	{
+		GameMenuWidget->RemoveFromParent();
+		GameMenuWidget = nullptr;
+	}
+
+	GameMenuWidget = CreateWidget<UGameMenuWidget>(GetWorld(), GameMenuWidgetClass);
+	if (!GameMenuWidget)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create GameMenuWidget"));
+		return;
+	}
+
+	GameMenuWidget->AddToViewport(200);
+
+	// Wire game menu delegates to UIManager handlers
+	GameMenuWidget->OnResumeClicked.AddDynamic(this,        &UUIManager::HandleGameMenuResumeClicked);
+	GameMenuWidget->OnAudioSettingsClicked.AddDynamic(this, &UUIManager::HandleAudioSettingsClicked);
+	GameMenuWidget->OnExitToLoginClicked.AddDynamic(this,   &UUIManager::HandleExitToLoginClicked);
+	GameMenuWidget->OnExitToDesktopClicked.AddDynamic(this, &UUIManager::HandleExitToDesktopClicked);
+
+	UE_LOG(LogTemp, Log, TEXT("UIManager: GameMenuWidget created and wired"));
+}
+
 void UUIManager::ToggleInventory()
 {
 	if (!bIsInitialized)
@@ -497,14 +599,14 @@ void UUIManager::ToggleInventory()
 
 	if (InventoryManager)
 	{
-		// ÐžÐ±Ð½Ð¾Ð²Ð»ÑÐµÐ¼ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ðµ Ð²Ð¸Ð´Ð¸Ð¼Ð¾ÑÑ‚Ð¸ Ð¸Ð½Ð²ÐµÐ½Ñ‚Ð°Ñ€Ñ
+		// Îáíîâëÿåì ñîñòîÿíèå âèäèìîñòè èíâåíòàðÿ
 		bool bWasVisible = bInventoryVisible;
 		InventoryManager->ToggleInventoryUI();
 		
-		// ÐžÐ¿Ñ€ÐµÐ´ÐµÐ»ÑÐµÐ¼ Ð½Ð¾Ð²Ð¾Ðµ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ðµ (Ð¸Ð½Ð²ÐµÑ€Ñ‚Ð¸Ñ€ÑƒÐµÐ¼ Ð¿Ñ€ÐµÐ´Ñ‹Ð´ÑƒÑ‰ÐµÐµ)
+		// Îïðåäåëÿåì íîâîå ñîñòîÿíèå (èíâåðòèðóåì ïðåäûäóùåå)
 		bInventoryVisible = !bWasVisible;
 		
-		// ÐžÐ±Ð½Ð¾Ð²Ð»ÑÐµÐ¼ ÐºÑƒÑ€ÑÐ¾Ñ€ Ð¸ Ñ€ÐµÐ¶Ð¸Ð¼ Ð²Ð²Ð¾Ð´Ð°
+		// Îáíîâëÿåì êóðñîð è ðåæèì ââîäà
 		UpdateCursorAndInputMode();
 		
 		UE_LOG(LogTemp, Log, TEXT("UIManager: Toggled inventory UI - now %s"), 
@@ -633,25 +735,25 @@ void UUIManager::ToggleSkillsPanel()
 		return;
 	}
 
-	// Ð˜ÑÐ¿Ð¾Ð»ÑŒÐ·ÑƒÐµÐ¼ Ñ‚ÐµÐºÑƒÑ‰ÐµÐµ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ðµ Ð²Ð¸Ð´Ð¸Ð¼Ð¾ÑÑ‚Ð¸ Ð²Ð¸Ð´Ð¶ÐµÑ‚Ð° Ð²Ð¼ÐµÑÑ‚Ð¾ Ð½Ð°ÑˆÐµÐ¹ Ð¿ÐµÑ€ÐµÐ¼ÐµÐ½Ð½Ð¾Ð¹
+	// Èñïîëüçóåì òåêóùåå ñîñòîÿíèå âèäèìîñòè âèäæåòà âìåñòî íàøåé ïåðåìåííîé
 	bool bCurrentlyVisible = AvailableSkillsWidget->IsWidgetVisible();
 	
 	if (!bCurrentlyVisible)
 	{
-		// Ð˜Ð¡ÐŸÐ ÐÐ’Ð›Ð•ÐÐž: Ð˜ÑÐ¿Ð¾Ð»ÑŒÐ·ÑƒÐµÐ¼ ShowWidget() Ð²Ð¼ÐµÑÑ‚Ð¾ SetVisibility(SelfHitTestInvisible)
+		// ÈÑÏÐÀÂËÅÍÎ: Èñïîëüçóåì ShowWidget() âìåñòî SetVisibility(SelfHitTestInvisible)
 		AvailableSkillsWidget->ShowWidget();
 		
 		UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel opened using ShowWidget()"));
 	}
 	else
 	{
-		// Ð˜ÑÐ¿Ð¾Ð»ÑŒÐ·ÑƒÐµÐ¼ HideWidget() Ð´Ð»Ñ Ð¿Ð¾ÑÐ»ÐµÐ´Ð¾Ð²Ð°Ñ‚ÐµÐ»ÑŒÐ½Ð¾ÑÑ‚Ð¸
+		// Èñïîëüçóåì HideWidget() äëÿ ïîñëåäîâàòåëüíîñòè
 		AvailableSkillsWidget->HideWidget();
 		
 		UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel closed using HideWidget()"));
 	}
 
-	// bSkillsPanelVisible Ð±ÑƒÐ´ÐµÑ‚ Ð°Ð²Ñ‚Ð¾Ð¼Ð°Ñ‚Ð¸Ñ‡ÐµÑÐºÐ¸ Ð¾Ð±Ð½Ð¾Ð²Ð»ÐµÐ½Ð° Ñ‡ÐµÑ€ÐµÐ· OnAvailableSkillsVisibilityChanged
+	// bSkillsPanelVisible áóäåò àâòîìàòè÷åñêè îáíîâëåíà ÷åðåç OnAvailableSkillsVisibilityChanged
 	UE_LOG(LogTemp, Log, TEXT("UIManager: Skills panel %s"), !bCurrentlyVisible ? TEXT("opened") : TEXT("closed"));
 }
 
@@ -681,10 +783,10 @@ void UUIManager::SetPlayerController(APlayerController* InPlayerController)
 
 void UUIManager::OnAvailableSkillsVisibilityChanged(bool bIsVisible)
 {
-	// Ð¡Ð¸Ð½Ñ…Ñ€Ð¾Ð½Ð¸Ð·Ð¾Ñ€ÑƒÐµÐ¼ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ðµ Ð²Ð¸Ð´Ð¸Ð¼Ð¾ÑÑ‚Ð¸ Ñ Ð²Ð½ÑƒÑ‚Ñ€ÐµÐ½Ð½Ð¸Ð¼ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸ÐµÐ¼ Ð²Ð¸Ð´Ð¶ÐµÑ‚Ð°
+	// Ñèíõðîíèçîðóåì ñîñòîÿíèå âèäèìîñòè ñ âíóòðåííèì ñîñòîÿíèåì âèäæåòà
 	bSkillsPanelVisible = bIsVisible;
 	
-	// ÐžÐ±Ð½Ð¾Ð²Ð»ÑÐµÐ¼ ÐºÑƒÑ€ÑÐ¾Ñ€ Ð¸ Ñ€ÐµÐ¶Ð¸Ð¼ Ð²Ð²Ð¾Ð´Ð°
+	// Îáíîâëÿåì êóðñîð è ðåæèì ââîäà
 	UpdateCursorAndInputMode();
 	
 	UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel visibility synced: %s"), 
@@ -763,6 +865,24 @@ void UUIManager::OnEquipmentVisibilityChanged(bool bIsVisible)
 		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
+void UUIManager::OnPlayerStatsVisibilityChanged()
+{
+	bPlayerStatsVisible = PlayerStatsWidget && PlayerStatsWidget->GetVisibility() == ESlateVisibility::SelfHitTestInvisible;
+	UpdateCursorAndInputMode();
+	
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Player stats visibility synced: %s"), 
+		bPlayerStatsVisible ? TEXT("Visible") : TEXT("Hidden"));
+}
+
+void UUIManager::OnBestiaryVisibilityChanged(bool bIsVisible)
+{
+	bBestiaryVisible = bIsVisible;
+	UpdateCursorAndInputMode();
+	
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Bestiary visibility synced: %s"), 
+		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
+}
+
 void UUIManager::UpdateCursorAndInputMode()
 {
 	if (!PlayerController)
@@ -776,7 +896,7 @@ void UUIManager::UpdateCursorAndInputMode()
 
 	if (bShouldShow)
 	{
-		// Ð•ÑÑ‚ÑŒ Ð°ÐºÑ‚Ð¸Ð²Ð½Ñ‹Ðµ UI Ð²Ð¸Ð´Ð¶ÐµÑ‚Ñ‹ - Ð¸ÑÐ¿Ð¾Ð»ÑŒÐ·ÑƒÐµÐ¼ Ñ€ÐµÐ¶Ð¸Ð¼ Game+UI
+		// Åñòü àêòèâíûå UI âèäæåòû - èñïîëüçóåì ðåæèì Game+UI
 		FInputModeGameAndUI InputMode;
 		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
 		InputMode.SetHideCursorDuringCapture(false);
@@ -786,7 +906,7 @@ void UUIManager::UpdateCursorAndInputMode()
 	}
 	else
 	{
-		// ÐÐµÑ‚ Ð°ÐºÑ‚Ð¸Ð²Ð½Ñ‹Ñ… UI Ð²Ð¸Ð´Ð¶ÐµÑ‚Ð¾Ð² - Ð¿ÐµÑ€ÐµÑ…Ð¾Ð´Ð¸Ð¼ Ð² Ð¸Ð³Ñ€Ð¾Ð²Ð¾Ð¹ Ñ€ÐµÐ¶Ð¸Ð¼
+		// Íåò àêòèâíûõ UI âèäæåòîâ - ïåðåõîäèì â èãðîâîé ðåæèì
 		FInputModeGameOnly InputMode;
 		PlayerController->SetInputMode(InputMode);
 		
@@ -796,10 +916,11 @@ void UUIManager::UpdateCursorAndInputMode()
 
 bool UUIManager::ShouldShowCursor() const
 {
-	// Show cursor if any UI element is open
+	// Show cursor if any UI element is open or alt-cursor is active
 	bool bAnyWidgetVisible = bInventoryVisible || bSkillsPanelVisible || bHarvestLootVisible 
 		|| bDialogueVisible || bQuestJournalVisible
-|| bVendorShopVisible || bRepairShopVisible || bTradeVisible || bEquipmentVisible;
+		|| bVendorShopVisible || bRepairShopVisible || bTradeVisible || bEquipmentVisible
+		|| bPlayerStatsVisible || bBestiaryVisible || bAltCursorActive || bGameMenuVisible;
 	
 	UE_LOG(LogTemp, Verbose, TEXT("UIManager: Cursor check -> Show: %s"),
 		bAnyWidgetVisible ? TEXT("YES") : TEXT("NO"));
@@ -841,7 +962,87 @@ void UUIManager::HideMobTargetFrame()
 void UUIManager::ToggleGameMenu()
 {
 	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleGameMenu"));
-	// TODO: implement game menu toggle when widget is connected
+
+	// If the game menu itself is open, close it (Resume behaviour)
+	if (GameMenuWidget && GameMenuWidget->IsMenuOpen())
+	{
+		GameMenuWidget->CloseMenu();
+		bGameMenuVisible = false;
+		UpdateCursorAndInputMode();
+		return;
+	}
+
+	// Close any other open UI panels first (WoW-style: Escape dismisses topmost panel)
+	bool bClosedSomething = false;
+
+	if (bInventoryVisible && InventoryManager)
+	{
+		InventoryManager->ToggleInventoryUI();
+		bInventoryVisible = false;
+		bClosedSomething = true;
+	}
+	if (bSkillsPanelVisible && AvailableSkillsWidget)
+	{
+		AvailableSkillsWidget->HideWidget();
+		bClosedSomething = true;
+	}
+	if (bEquipmentVisible && EquipmentWidget)
+	{
+		EquipmentWidget->ToggleEquipment();
+		bClosedSomething = true;
+	}
+	if (bQuestJournalVisible && QuestJournalWidget)
+	{
+		QuestJournalWidget->ToggleJournal();
+		bClosedSomething = true;
+	}
+	if (bPlayerStatsVisible && PlayerStatsWidget)
+	{
+		PlayerStatsWidget->CloseStats();
+		bClosedSomething = true;
+	}
+	if (bBestiaryVisible && BestiaryWidget)
+	{
+		BestiaryWidget->CloseBestiary();
+		bClosedSomething = true;
+	}
+	if (bVendorShopVisible && VendorShopWidget)
+	{
+		VendorShopWidget->SetVisibility(ESlateVisibility::Collapsed);
+		bVendorShopVisible = false;
+		bClosedSomething = true;
+	}
+	if (bRepairShopVisible && RepairShopWidget)
+	{
+		RepairShopWidget->SetVisibility(ESlateVisibility::Collapsed);
+		bRepairShopVisible = false;
+		bClosedSomething = true;
+	}
+	if (bTradeVisible && TradeWidget)
+	{
+		TradeWidget->SetVisibility(ESlateVisibility::Collapsed);
+		bTradeVisible = false;
+		bClosedSomething = true;
+	}
+	if (bAltCursorActive)
+	{
+		bAltCursorActive = false;
+		bClosedSomething = true;
+	}
+
+	if (bClosedSomething)
+	{
+		UpdateCursorAndInputMode();
+		return;
+	}
+
+	// Nothing was open ? open the game menu
+	if (GameMenuWidget)
+	{
+		GameMenuWidget->OpenMenu();
+		bGameMenuVisible = true;
+		UpdateCursorAndInputMode();
+	}
 }
 
 void UUIManager::InitializeDialogueAndQuestWidgets(UDialogueManager* InDialogueManager, UQuestManager* InQuestManager)
@@ -1015,13 +1216,93 @@ void UUIManager::InitializeItemSystemWidgets(UEquipmentManager* InEquipmentManag
 void UUIManager::InitializeStatsWidget(UPlayerStatsManager* InStatsManager)
 {
 	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeStatsWidget"));
-	// TODO: connect stats widget
+
+	if (!InStatsManager)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::InitializeStatsWidget - StatsManager is null"));
+		return;
+	}
+
+	if (PlayerStatsWidgetClass && !PlayerStatsWidget)
+	{
+		PlayerStatsWidget = CreateWidget<UPlayerStatsWidget>(GetWorld(), PlayerStatsWidgetClass);
+		if (PlayerStatsWidget)
+		{
+			PlayerStatsWidget->AddToViewport(90);
+			PlayerStatsWidget->SetVisibility(ESlateVisibility::Collapsed);
+			PlayerStatsWidget->BindToStatsManager(InStatsManager);
+			PlayerStatsWidget->OnStatsVisibilityChanged.AddDynamic(this, &UUIManager::OnPlayerStatsVisibilityChanged);
+			UE_LOG(LogTemp, Log, TEXT("UIManager: PlayerStatsWidget created and bound"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create PlayerStatsWidget"));
+		}
+	}
+	else if (!PlayerStatsWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: PlayerStatsWidgetClass is not set in Blueprint"));
+	}
 }
 
 void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiaryHandler)
 {
 	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeNotificationSystem"));
-	// TODO: connect notification system
+
+	if (!InBestiaryHandler)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::InitializeNotificationSystem - BestiaryHandler is null"));
+		return;
+	}
+
+	// Create bestiary widget
+	if (BestiaryWidgetClass && !BestiaryWidget)
+	{
+		BestiaryWidget = CreateWidget<UBestiaryWidget>(GetWorld(), BestiaryWidgetClass);
+		if (BestiaryWidget)
+		{
+			BestiaryWidget->AddToViewport(90);
+			BestiaryWidget->SetVisibility(ESlateVisibility::Collapsed);
+			BestiaryWidget->BindToBestiaryHandler(InBestiaryHandler);
+			BestiaryWidget->OnBestiaryVisibilityChanged.AddDynamic(this, &UUIManager::OnBestiaryVisibilityChanged);
+			UE_LOG(LogTemp, Log, TEXT("UIManager: BestiaryWidget created and bound"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create BestiaryWidget"));
+		}
+	}
+	else if (!BestiaryWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: BestiaryWidgetClass is not set in Blueprint"));
+	}
+
+	// Create chat widget if ChatManager is available through GameInstance
+	if (ChatWidgetClass && !ChatWidget)
+	{
+		if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetWorld()->GetGameInstance()))
+		{
+			UChatManager* ChatMgr = GameInstance->GetChatManager();
+			if (ChatMgr)
+			{
+				ChatWidget = CreateWidget<UChatWidget>(GetWorld(), ChatWidgetClass);
+				if (ChatWidget)
+				{
+					ChatWidget->AddToViewport(15); // Low Z-order, always visible as HUD overlay
+					ChatWidget->InitializeChatWidget(ChatMgr);
+					UE_LOG(LogTemp, Log, TEXT("UIManager: ChatWidget created and bound to ChatManager"));
+				}
+				else
+				{
+					UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create ChatWidget"));
+				}
+			}
+		}
+	}
+	else if (!ChatWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: ChatWidgetClass is not set in Blueprint"));
+	}
 }
 
 void UUIManager::CreateExperienceWidget()
@@ -1033,15 +1314,73 @@ void UUIManager::CreateExperienceWidget()
 
 void UUIManager::OnMenuBarBestiaryClicked()
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::OnMenuBarBestiaryClicked"));
-	// TODO: implement bestiary panel toggle when widget is connected
+	ToggleBestiary();
 }
 
 void UUIManager::HandleGameMenuResumeClicked()
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::HandleGameMenuResumeClicked"));
-	// TODO: implement game menu resume when widget is connected
+	if (GameMenuWidget) { GameMenuWidget->CloseMenu(); }
+	bGameMenuVisible = false;
+	UpdateCursorAndInputMode();
 }
+
+void UUIManager::HandleAudioSettingsClicked()
+{
+	if (!AudioSettingsWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::HandleAudioSettingsClicked - AudioSettingsWidgetClass not set in Blueprint"));
+		return;
+	}
+
+	if (!AudioSettingsWidget)
+	{
+		AudioSettingsWidget = CreateWidget<UAudioSettingsWidget>(GetWorld(), AudioSettingsWidgetClass);
+		if (AudioSettingsWidget)
+		{
+			AudioSettingsWidget->AddToViewport(210);
+			AudioSettingsWidget->OnClosed.AddDynamic(this, &UUIManager::HandleAudioSettingsClosed);
+			UE_LOG(LogTemp, Log, TEXT("UIManager: AudioSettingsWidget created"));
+		}
+	}
+
+	if (AudioSettingsWidget)
+	{
+		AudioSettingsWidget->InitializeSettings();
+		AudioSettingsWidget->SetVisibility(ESlateVisibility::Visible);
+	}
+}
+
+void UUIManager::HandleAudioSettingsClosed()
+{
+	if (AudioSettingsWidget)
+		AudioSettingsWidget->SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UUIManager::HandleExitToLoginClicked()
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::HandleExitToLoginClicked"));
+	if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetWorld()->GetGameInstance()))
+	{
+		GI->LoadLoginLevel();
+	}
+}
+
+void UUIManager::HandleExitToDesktopClicked()
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::HandleExitToDesktopClicked"));
+	if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+	{
+		UKismetSystemLibrary::QuitGame(GetWorld(), PC, EQuitPreference::Quit, false);
+	}
+}
+
+// GameMenuBar button handlers
+void UUIManager::OnMenuBarInventoryClicked()    { ToggleInventory(); }
+void UUIManager::OnMenuBarEquipmentClicked()    { ToggleEquipment(); }
+void UUIManager::OnMenuBarQuestJournalClicked() { ToggleQuestJournal(); }
+void UUIManager::OnMenuBarSkillsClicked()       { ToggleSkillsPanel(); }
+void UUIManager::OnMenuBarStatsClicked()        { TogglePlayerStats(); }
+void UUIManager::OnMenuBarMenuClicked()         { ToggleGameMenu(); }
 
 void UUIManager::ToggleEquipment()
 {
@@ -1057,20 +1396,33 @@ void UUIManager::ToggleEquipment()
 
 void UUIManager::ToggleAltCursor()
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleAltCursor"));
-	// TODO: implement alt cursor toggle
+	bAltCursorActive = !bAltCursorActive;
+	UpdateCursorAndInputMode();
+	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleAltCursor - %s"), bAltCursorActive ? TEXT("Active") : TEXT("Inactive"));
 }
 
 void UUIManager::TogglePlayerStats()
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::TogglePlayerStats"));
-	// TODO: implement player stats panel toggle when widget is connected
+	if (!PlayerStatsWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::TogglePlayerStats - PlayerStatsWidget not initialized (assign PlayerStatsWidgetClass in Blueprint)"));
+		return;
+	}
+
+	PlayerStatsWidget->ToggleStats();
+	UE_LOG(LogTemp, Log, TEXT("UIManager::TogglePlayerStats - Toggled"));
 }
 
 void UUIManager::ToggleBestiary()
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleBestiary"));
-	// TODO: implement bestiary panel toggle when widget is connected
+	if (!BestiaryWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::ToggleBestiary - BestiaryWidget not initialized (assign BestiaryWidgetClass in Blueprint)"));
+		return;
+	}
+
+	BestiaryWidget->ToggleBestiary();
+	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleBestiary - Toggled"));
 }
 
 void UUIManager::ToggleQuestJournal()

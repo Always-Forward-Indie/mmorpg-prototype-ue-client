@@ -380,7 +380,7 @@ void UHarvestLootWidget::OnItemHovered(int32 ItemId, bool bIsHovered)
 		{
 			if (Item.itemId == ItemId)
 			{
-				FVector2D MousePosition;
+				FVector2D MousePosition = FVector2D::ZeroVector;
 				if (GetWorld() && GetWorld()->GetFirstPlayerController())
 				{
 					GetWorld()->GetFirstPlayerController()->GetMousePosition(MousePosition.X, MousePosition.Y);

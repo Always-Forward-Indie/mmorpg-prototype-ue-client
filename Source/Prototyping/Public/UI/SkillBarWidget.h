@@ -160,40 +160,9 @@ private:
     int32 FindSlotByHotkey(const FKey& Hotkey) const;
     void UpdateSlotFromSkillData(int32 SlotIndex, const FPlayerSkillData& SkillData);
 
-public:
-    // =========================
-    // DEBUG HELPER METHODS
-    // =========================
-    
-    // Print complete skill bar state
-    UFUNCTION(BlueprintCallable, Category = "Debug")
-    void DebugPrintSkillBarState();
-    
-    // Print all available skills
-    UFUNCTION(BlueprintCallable, Category = "Debug")
-    void DebugPrintAvailableSkills();
-    
-    // Test skill assignment for debugging
-    UFUNCTION(BlueprintCallable, Category = "Debug")
-    void DebugTestSkillAssignment(int32 SlotIndex, const FString& SkillSlug);
-    
-    // Check drag-drop setup for all slots
-    UFUNCTION(BlueprintCallable, Category = "Debug")
-    void DebugCheckDragDropSetup();
-    
-    // Test slot visibility and hit testing
-    UFUNCTION(BlueprintCallable, Category = "Debug")
-    void DebugTestSlotHitTesting();
-    
-    // Simulate a skill drop for testing
-    UFUNCTION(BlueprintCallable, Category = "Debug")
-    void DebugSimulateSkillDrop(int32 SlotIndex, const FString& SkillSlug);
-    
-    // Check for widget overlap and Canvas Panel issues
-    UFUNCTION(BlueprintCallable, Category = "Debug")
-    void DebugCheckWidgetOverlap();
-    
-    // Test hit-testing for each slot
-    UFUNCTION(BlueprintCallable, Category = "Debug")
-    void DebugTestSlotHitTestingDetailed();
+    // Guard against double event subscription
+    bool bEventsSubscribed = false;
+
+    // Guard against double slot creation
+    bool bSlotsCreated = false;
 };

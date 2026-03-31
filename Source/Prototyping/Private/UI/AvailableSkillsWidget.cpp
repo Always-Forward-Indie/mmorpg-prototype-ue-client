@@ -400,7 +400,7 @@ void UAvailableSkillsWidget::OnSkillItemHovered(const FPlayerSkillData& SkillDat
         HoveredSkillData = SkillData;
         
         // Get mouse position and show tooltip
-        FVector2D MousePosition;
+        FVector2D MousePosition = FVector2D::ZeroVector;
         if (GetWorld() && GetWorld()->GetFirstPlayerController())
         {
             GetWorld()->GetFirstPlayerController()->GetMousePosition(MousePosition.X, MousePosition.Y);

@@ -103,26 +103,26 @@ FTradeStateData UTradeNetworkHandler::ParseTradeState(const TSharedPtr<FJsonObje
             ItemObj->TryGetNumberField(TEXT("slotIndex"),       Item.slotIndex);
             ItemObj->TryGetStringField(TEXT("slug"),            Item.slug);
             ItemObj->TryGetNumberField(TEXT("itemType"),        Item.item_type_id);
-            ItemObj->TryGetStringField(TEXT("itemTypeSlug"),    Item.item_type_slug);
-            ItemObj->TryGetNumberField(TEXT("rarityId"),        Item.rarity_id);
-            ItemObj->TryGetStringField(TEXT("raritySlug"),      Item.rarity_slug);
-            ItemObj->TryGetNumberField(TEXT("durabilityMax"),   Item.durability_max);
-            if (!ItemObj->TryGetNumberField(TEXT("durabilityCurrent"), Item.durability_current))
-                Item.durability_current = Item.durability_max;
-            ItemObj->TryGetBoolField  (TEXT("isDurable"),       Item.is_durable);
-            ItemObj->TryGetBoolField  (TEXT("isTradable"),      Item.is_tradable);
-            ItemObj->TryGetBoolField  (TEXT("isEquippable"),    Item.is_equippable);
-            ItemObj->TryGetBoolField  (TEXT("isUsable"),        Item.is_usable);
-            ItemObj->TryGetBoolField  (TEXT("isTwoHanded"),     Item.is_two_handed);
+            ItemObj->TryGetStringField(TEXT("itemTypeSlug"),    Item.itemTypeSlug);
+            ItemObj->TryGetNumberField(TEXT("rarityId"),        Item.rarityId);
+            ItemObj->TryGetStringField(TEXT("raritySlug"),      Item.raritySlug);
+            ItemObj->TryGetNumberField(TEXT("durabilityMax"),   Item.durabilityMax);
+            if (!ItemObj->TryGetNumberField(TEXT("durabilityCurrent"), Item.durabilityCurrent))
+                Item.durabilityCurrent = Item.durabilityMax;
+            ItemObj->TryGetBoolField  (TEXT("isDurable"),       Item.isDurable);
+            ItemObj->TryGetBoolField  (TEXT("isTradable"),      Item.isTradable);
+            ItemObj->TryGetBoolField  (TEXT("isEquippable"),    Item.isEquippable);
+            ItemObj->TryGetBoolField  (TEXT("isUsable"),        Item.isUsable);
+            ItemObj->TryGetBoolField  (TEXT("isTwoHanded"),     Item.isTwoHanded);
             ItemObj->TryGetBoolField  (TEXT("isEquipped"),      Item.is_equipped);
-            ItemObj->TryGetBoolField  (TEXT("isQuestItem"),     Item.is_quest_item);
-            ItemObj->TryGetBoolField  (TEXT("isContainer"),     Item.is_container);
-            ItemObj->TryGetBoolField  (TEXT("isHarvest"),       Item.is_harvest);
+            ItemObj->TryGetBoolField  (TEXT("isQuestItem"),     Item.isQuestItem);
+            ItemObj->TryGetBoolField  (TEXT("isContainer"),     Item.isContainer);
+            ItemObj->TryGetBoolField  (TEXT("isHarvest"),       Item.isHarvestItem);
             ItemObj->TryGetNumberField(TEXT("equipSlot"),       Item.equip_slot_id);
-            ItemObj->TryGetStringField(TEXT("equipSlotSlug"),   Item.equip_slot_slug);
+            ItemObj->TryGetStringField(TEXT("equipSlotSlug"),   Item.equipSlotSlug);
             ItemObj->TryGetNumberField(TEXT("levelRequirement"),Item.level_requirement);
             ItemObj->TryGetNumberField(TEXT("setId"),           Item.set_id);
-            ItemObj->TryGetStringField(TEXT("setSlug"),         Item.set_slug);
+            ItemObj->TryGetStringField(TEXT("setSlug"),         Item.setSlug);
             ItemObj->TryGetStringField(TEXT("masterySlug"),     Item.masterySlug);
             ItemObj->TryGetNumberField(TEXT("killCount"),       Item.killCount);
 

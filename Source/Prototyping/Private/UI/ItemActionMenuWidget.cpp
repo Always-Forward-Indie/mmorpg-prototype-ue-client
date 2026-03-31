@@ -99,16 +99,16 @@ void UItemActionMenuWidget::RebuildActions()
 
 	if (CurrentItem.itemId <= 0) return;
 
-	if (CurrentItem.is_equippable && !CurrentItem.is_equipped)
+	if (CurrentItem.isEquippable && !CurrentItem.is_equipped)
 		AddActionRow(FText::FromString(TEXT("Equip")), EItemContextAction::Equip);
 
-	if (CurrentItem.is_equippable && CurrentItem.is_equipped)
+	if (CurrentItem.isEquippable && CurrentItem.is_equipped)
 		AddActionRow(FText::FromString(TEXT("Unequip")), EItemContextAction::Unequip);
 
-	if (CurrentItem.is_usable)
+	if (CurrentItem.isUsable)
 		AddActionRow(FText::FromString(TEXT("Use")), EItemContextAction::Use);
 
-	if (!CurrentItem.is_quest_item)
+	if (!CurrentItem.isQuestItem)
 		AddActionRow(FText::FromString(TEXT("Drop")), EItemContextAction::Drop);
 }
 
@@ -181,8 +181,8 @@ void UItemActionMenuWidget::ExecuteAction(EItemContextAction Action)
 			break;
 
 		case EItemContextAction::Unequip:
-			if (EquipmentManager && !CurrentItem.equip_slot_slug.IsEmpty())
-				EquipmentManager->RequestUnequipItem(CharacterId, CurrentItem.equip_slot_slug);
+			if (EquipmentManager && !CurrentItem.equipSlotSlug.IsEmpty())
+				EquipmentManager->RequestUnequipItem(CharacterId, CurrentItem.equipSlotSlug);
 			break;
 		}
 	}

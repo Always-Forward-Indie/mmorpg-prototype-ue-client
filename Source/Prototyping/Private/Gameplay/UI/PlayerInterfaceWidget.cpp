@@ -181,6 +181,13 @@ void UPlayerInterfaceWidget::CreateWidgetsDynamically()
         PlayerExperienceWidget = CreateWidget<UPlayerExperienceWidget>(GetWorld(), PlayerExperienceWidgetClass);
         UE_LOG(LogTemp, Warning, TEXT("PlayerInterfaceWidget: PlayerExperienceWidget created dynamically"));
     }
+
+    // Create ActiveEffectsWidget if needed
+    if (!ActiveEffectsWidget && ActiveEffectsWidgetClass)
+    {
+        ActiveEffectsWidget = CreateWidget<UActiveEffectsWidget>(GetWorld(), ActiveEffectsWidgetClass);
+        UE_LOG(LogTemp, Warning, TEXT("PlayerInterfaceWidget: ActiveEffectsWidget created dynamically"));
+    }
 }
 
 bool UPlayerInterfaceWidget::ValidateWidgets() const

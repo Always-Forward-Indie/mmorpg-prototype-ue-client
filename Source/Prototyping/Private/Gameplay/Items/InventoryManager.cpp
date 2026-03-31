@@ -180,16 +180,16 @@ void UInventoryManager::ProcessInventoryData(const FString& JsonData)
 				ItemObject->TryGetNumberField(TEXT("weight"), Item.weight);
 				ItemObject->TryGetNumberField(TEXT("levelRequirement"), Item.level_requirement);
 				ItemObject->TryGetNumberField(TEXT("stackSize"), Item.stackSize);
-				ItemObject->TryGetNumberField(TEXT("durabilityMax"), Item.durability_max);
-				ItemObject->TryGetNumberField(TEXT("durabilityCurrent"), Item.durability_current);
-				ItemObject->TryGetNumberField(TEXT("vendorPriceBuy"), Item.vendor_price_buy);
-				ItemObject->TryGetNumberField(TEXT("vendorPriceSell"), Item.vendor_price_sell);
-				// Parse boolean fields
-				ItemObject->TryGetBoolField(TEXT("isDurable"), Item.is_durable);
-				ItemObject->TryGetBoolField(TEXT("isTradable"), Item.is_tradable);
-				ItemObject->TryGetBoolField(TEXT("isEquippable"), Item.is_equippable);
-				ItemObject->TryGetBoolField(TEXT("isContainer"), Item.is_container);
-				ItemObject->TryGetBoolField(TEXT("isQuestItem"), Item.is_quest_item);
+			ItemObject->TryGetNumberField(TEXT("durabilityMax"), Item.durabilityMax);
+			ItemObject->TryGetNumberField(TEXT("durabilityCurrent"), Item.durabilityCurrent);
+			ItemObject->TryGetNumberField(TEXT("vendorPriceBuy"), Item.priceBuy);
+			ItemObject->TryGetNumberField(TEXT("vendorPriceSell"), Item.priceSell);
+			// Parse boolean fields
+			ItemObject->TryGetBoolField(TEXT("isDurable"), Item.isDurable);
+			ItemObject->TryGetBoolField(TEXT("isTradable"), Item.isTradable);
+			ItemObject->TryGetBoolField(TEXT("isEquippable"), Item.isEquippable);
+			ItemObject->TryGetBoolField(TEXT("isContainer"), Item.isContainer);
+			ItemObject->TryGetBoolField(TEXT("isQuestItem"), Item.isQuestItem);
 
 
 

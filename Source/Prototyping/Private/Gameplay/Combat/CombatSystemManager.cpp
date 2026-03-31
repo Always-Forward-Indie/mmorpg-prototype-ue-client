@@ -269,7 +269,7 @@ ECasterType UCombatSystemManager::MapNetCasterType(int32 Net, const FString& Str
     if (Str.Equals(TEXT("SELF"), ESearchCase::IgnoreCase)) return ECasterType::Self;
 
     // Fallback by server protocol integer: SELF=0, PLAYER=1, MOB=2, AREA=3, NONE=4
-    switch (Net) { case 0: return ECasterType::Self; case 1: return ECasterType::Player; case 2: return ECasterType::Mob; case 4: return ECasterType::NPC; }
+    switch (Net) { case 0: return ECasterType::Self; case 1: return ECasterType::Player; case 2: return ECasterType::Mob; case 3: return ECasterType::Area; case 4: return ECasterType::None; }
     return ECasterType::None;
 }
 

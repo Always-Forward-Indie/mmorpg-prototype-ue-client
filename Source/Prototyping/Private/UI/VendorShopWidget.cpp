@@ -200,8 +200,8 @@ void UVendorShopWidget::RefreshInventoryDisplay()
     for (const FInventoryItemStruct& Item : CachedInventory.items)
     {
         // Skip non-tradable, quest and currency items
-        if (!Item.is_tradable || Item.is_quest_item) continue;
-        if (Item.item_type_slug.Equals(TEXT("currency"), ESearchCase::IgnoreCase)) continue;
+        if (!Item.isTradable || Item.isQuestItem) continue;
+        if (Item.itemTypeSlug.Equals(TEXT("currency"), ESearchCase::IgnoreCase)) continue;
         if (Item.slug.Contains(TEXT("gold"), ESearchCase::IgnoreCase)) continue;
 
         UVendorSlotWidget* NewSlot = CreateWidget<UVendorSlotWidget>(GetOwningPlayer(), VendorSlotClass);
@@ -335,9 +335,9 @@ void UVendorShopWidget::HandleInvSlotClicked(int32 SlotIndex)
     const int32 PopupMax = Item.quantity;
 
     if (IsItemInSellCart(Item.id, CartIdx))
-        ActivePopup->OpenForUpdate(SlotIndex, GetLocalizedItemName(Item.slug), Item.vendor_price_sell, PopupMax, SellCart[CartIdx].quantity);
+        ActivePopup->OpenForUpdate(SlotIndex, GetLocalizedItemName(Item.slug), Item.priceSell, PopupMax, SellCart[CartIdx].quantity);
     else
-        ActivePopup->OpenForAdd(SlotIndex, GetLocalizedItemName(Item.slug), Item.vendor_price_sell, PopupMax);
+        ActivePopup->OpenForAdd(SlotIndex, GetLocalizedItemName(Item.slug), Item.priceSell, PopupMax);
 }
 
 void UVendorShopWidget::HandleBuyCartSlotClicked(int32 SlotIndex)
@@ -453,7 +453,7 @@ void UVendorShopWidget::HandleSellQuantityConfirmed(int32 SlotIndex, int32 Quant
         Entry.inventoryItemId = Item.id;
         Entry.slug            = Item.slug;
         Entry.quantity        = Quantity;
-        Entry.pricePerUnit    = Item.vendor_price_sell;
+        Entry.pricePerUnit    = Item.priceSell;
         Entry.maxQuantity     = Item.quantity;
         SellCart.Add(Entry);
     }

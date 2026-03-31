@@ -7,6 +7,7 @@
 #include "Gameplay/UI/PlayerHUD.h"
 #include "Gameplay/UI/DamageCanvasWidget.h"
 #include "Gameplay/UI/PlayerExperienceWidget.h"
+#include "Gameplay/UI/ActiveEffectsWidget.h"
 #include "PlayerInterfaceWidget.generated.h"
 
 // Forward declarations
@@ -65,6 +66,9 @@ protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "Player Interface")
     UPlayerExperienceWidget* PlayerExperienceWidget;
 
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Player Interface")
+    UActiveEffectsWidget* ActiveEffectsWidget = nullptr;
+
     // Widget classes for dynamic creation
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Interface")
     TSubclassOf<USkillBarWidget> SkillBarWidgetClass;
@@ -77,6 +81,9 @@ protected:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Interface")
     TSubclassOf<UPlayerExperienceWidget> PlayerExperienceWidgetClass;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Interface")
+    TSubclassOf<UActiveEffectsWidget> ActiveEffectsWidgetClass;
 
     // Widget overrides
     virtual void NativeConstruct() override;
@@ -108,9 +115,7 @@ public:
 
     /** Returns the active effects widget, if available (may be nullptr). */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Interface")
-    class UActiveEffectsWidget* GetActiveEffectsWidget() const { return ActiveEffectsWidget; }
+    UActiveEffectsWidget* GetActiveEffectsWidget() const { return ActiveEffectsWidget; }
 
 private:
-    UPROPERTY()
-    class UActiveEffectsWidget* ActiveEffectsWidget = nullptr;
 };

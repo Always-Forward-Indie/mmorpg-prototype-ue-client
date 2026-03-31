@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+п»ї// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Utils/JSONParser.h"
@@ -376,7 +376,7 @@ FClientDataStruct JSONParser::DeserializeClientData(const FString& JsonString)
 
 		 }
 
-		 // Per protocol (§1.4 pongClient): timestamps may also be a root-level object
+		 // Per protocol (пїЅ1.4 pongClient): timestamps may also be a root-level object
 		 const TSharedPtr<FJsonObject>* TimestampsObject = nullptr;
 		 if (JsonObject->TryGetObjectField(TEXT("timestamps"), TimestampsObject) && TimestampsObject != nullptr)
 		 {
@@ -946,7 +946,7 @@ FInventoryItemStruct JSONParser::DeserializeInventoryItem(const TSharedPtr<FJson
 	
 	if (!ItemObj.IsValid()) return Item;
 
-	// Простые числовые/строковые
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ/пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	if (ItemObj->HasField(TEXT("itemId")))
 		Item.itemId = ItemObj->GetIntegerField(TEXT("itemId"));
 
@@ -978,39 +978,39 @@ FInventoryItemStruct JSONParser::DeserializeInventoryItem(const TSharedPtr<FJson
 		Item.stackSize = ItemObj->GetIntegerField(TEXT("stackMax"));
 
 	if (ItemObj->HasField(TEXT("durabilityMax")))
-		Item.durability_max = ItemObj->GetIntegerField(TEXT("durabilityMax"));
+		Item.durabilityMax = ItemObj->GetIntegerField(TEXT("durabilityMax"));
 
-	// durabilityCurrent в пакете пока нет, оставляем дефолт = max
-	Item.durability_current = Item.durability_max;
+	// durabilityCurrent пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ = max
+	Item.durabilityCurrent = Item.durabilityMax;
 
-	// Флаги
+	// пїЅпїЅпїЅпїЅпїЅ
 	if (ItemObj->HasField(TEXT("isDurable")))
-		Item.is_durable = ItemObj->GetBoolField(TEXT("isDurable"));
+		Item.isDurable = ItemObj->GetBoolField(TEXT("isDurable"));
 
 	if (ItemObj->HasField(TEXT("isTradable")))
-		Item.is_tradable = ItemObj->GetBoolField(TEXT("isTradable"));
+		Item.isTradable = ItemObj->GetBoolField(TEXT("isTradable"));
 
 	if (ItemObj->HasField(TEXT("isContainer")))
-		Item.is_container = ItemObj->GetBoolField(TEXT("isContainer"));
+		Item.isContainer = ItemObj->GetBoolField(TEXT("isContainer"));
 
 	if (ItemObj->HasField(TEXT("isQuestItem")))
-		Item.is_quest_item = ItemObj->GetBoolField(TEXT("isQuestItem"));
+		Item.isQuestItem = ItemObj->GetBoolField(TEXT("isQuestItem"));
 
-	// Эквип — делаем флажок true если есть слот > 0
+	// пїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ true пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ > 0
 	if (ItemObj->HasField(TEXT("equipSlot")))
 	{
 		int32 SlotId = ItemObj->GetIntegerField(TEXT("equipSlot"));
-		Item.is_equippable = (SlotId > 0);
+		Item.isEquippable = (SlotId > 0);
 	}
 
-	// Цены
+	// пїЅпїЅпїЅпїЅ
 	if (ItemObj->HasField(TEXT("vendorPriceBuy")))
-		Item.vendor_price_buy = ItemObj->GetIntegerField(TEXT("vendorPriceBuy"));
+		Item.priceBuy = ItemObj->GetIntegerField(TEXT("vendorPriceBuy"));
 
 	if (ItemObj->HasField(TEXT("vendorPriceSell")))
-		Item.vendor_price_sell = ItemObj->GetIntegerField(TEXT("vendorPriceSell"));
+		Item.priceSell = ItemObj->GetIntegerField(TEXT("vendorPriceSell"));
 
-	// Attributes (массив объектов {name,value})
+	// Attributes (пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ {name,value})
 	if (ItemObj->HasTypedField<EJson::Array>(TEXT("attributes")))
 	{
 		const TArray<TSharedPtr<FJsonValue>> AttrArray = ItemObj->GetArrayField(TEXT("attributes"));
@@ -1022,7 +1022,7 @@ FInventoryItemStruct JSONParser::DeserializeInventoryItem(const TSharedPtr<FJson
 			FString AttrName;
 			if (AttrObj->TryGetStringField(TEXT("name"), AttrName))
 			{
-				// value может быть числом или строкой
+				// value пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 				FString StrVal;
 				double NumVal;
 				if (AttrObj->TryGetStringField(TEXT("value"), StrVal))
@@ -1501,17 +1501,20 @@ ESkillSchool JSONParser::ParseSkillSchool(const FString& SchoolString)
 	
 	return ESkillSchool::None;
 }
-
 ECasterType JSONParser::ParseCasterType(const FString& CasterTypeString)
 {
-	if (CasterTypeString.Equals(TEXT("PLAYER"), ESearchCase::IgnoreCase) || 
+	if (CasterTypeString.Equals(TEXT("SELF"), ESearchCase::IgnoreCase))
+		return ECasterType::Self;
+	if (CasterTypeString.Equals(TEXT("PLAYER"), ESearchCase::IgnoreCase) ||
 		CasterTypeString.Equals(TEXT("Player"), ESearchCase::IgnoreCase))
 		return ECasterType::Player;
-	else if (CasterTypeString.Equals(TEXT("MOB"), ESearchCase::IgnoreCase) || 
-			 CasterTypeString.Equals(TEXT("Mob"), ESearchCase::IgnoreCase))
+	if (CasterTypeString.Equals(TEXT("MOB"), ESearchCase::IgnoreCase) ||
+		CasterTypeString.Equals(TEXT("Mob"), ESearchCase::IgnoreCase))
 		return ECasterType::Mob;
-	else if (CasterTypeString.Equals(TEXT("NPC"), ESearchCase::IgnoreCase) || 
-			 CasterTypeString.Equals(TEXT("Npc"), ESearchCase::IgnoreCase))
+	if (CasterTypeString.Equals(TEXT("AREA"), ESearchCase::IgnoreCase))
+		return ECasterType::Area;
+	if (CasterTypeString.Equals(TEXT("NPC"), ESearchCase::IgnoreCase) ||
+		CasterTypeString.Equals(TEXT("Npc"), ESearchCase::IgnoreCase))
 		return ECasterType::NPC;
 	
 	return ECasterType::None;
@@ -1805,7 +1808,7 @@ FNetworkHeaderStruct JSONParser::DeserializeNetworkHeader(const FString& JsonStr
             }
         }
 
-        // Per protocol (§1.4 pongClient), timestamps may be a root-level object
+        // Per protocol (пїЅ1.4 pongClient), timestamps may be a root-level object
         // (sibling of "header") instead of fields inside "header". Check and override
         // if present so that pongClient responses are parsed correctly.
         const TSharedPtr<FJsonObject>* TimestampsObject = nullptr;
@@ -1846,14 +1849,14 @@ void JSONParser::ProcessTimeSyncFromHeader(const FString& JsonString, UTimeSyncS
 
 	FNetworkHeaderStruct NetworkHeader = DeserializeNetworkHeader(JsonString);
 
-	// Приоритет requestIdEcho для ответов сервера
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ requestIdEcho пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	FString RequestIdToUse;
 	if (!NetworkHeader.requestId.IsEmpty())
 	{
-		RequestIdToUse = NetworkHeader.requestId; // Может быть requestIdEcho от сервера
+		RequestIdToUse = NetworkHeader.requestId; // пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ requestIdEcho пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	}
 
-	// Обрабатываем только если есть серверные таймстампы
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	if (!RequestIdToUse.IsEmpty() &&
 		NetworkHeader.serverRecvMs > 0 &&
 		NetworkHeader.serverSendMs > 0)

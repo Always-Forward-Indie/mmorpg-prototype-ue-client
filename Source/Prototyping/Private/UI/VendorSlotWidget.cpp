@@ -58,7 +58,7 @@ void UVendorSlotWidget::SetupAsInvSlot(int32 InSlotIndex, const FInventoryItemSt
     bInCart      = bIsInCart;
     CartQuantity = InCartQuantity;
     // Disabled when: non-tradable, quest item, or full quantity already in cart
-    bIsDisabled  = (!InItem.is_tradable || InItem.is_quest_item) || bIsFullyInCart;
+    bIsDisabled  = (!InItem.isTradable || InItem.isQuestItem) || bIsFullyInCart;
     RefreshVisuals();
 }
 
@@ -118,7 +118,7 @@ FInventoryItemStruct UVendorSlotWidget::GetTooltipData() const
             Preview.id               = CartEntryData.inventoryItemId;
             Preview.slug             = CartEntryData.slug;
             Preview.quantity         = CartEntryData.quantity;
-            Preview.vendor_price_buy = CartEntryData.pricePerUnit;
+            Preview.priceBuy = CartEntryData.pricePerUnit;
             return Preview;
         }
         default: return FInventoryItemStruct();
@@ -217,7 +217,7 @@ void UVendorSlotWidget::RefreshVisuals()
         if (Mode == EVendorSlotMode::ShopItem)
             PriceStr = FString::Printf(TEXT("%d g"), ShopItemData.priceBuy);
         else if (Mode == EVendorSlotMode::InvItem)
-            PriceStr = FString::Printf(TEXT("%d g"), InvItemData.vendor_price_sell);
+        PriceStr = FString::Printf(TEXT("%d g"), InvItemData.priceSell);
         else
             PriceStr = FString::Printf(TEXT("%d g"), CartEntryData.pricePerUnit * CartEntryData.quantity);
 
@@ -291,15 +291,15 @@ void UVendorSlotWidget::AsyncLoad(const FSoftObjectPath& AssetPath, FStreamableD
 FInventoryItemStruct UVendorSlotWidget::MakePreviewFromShopItem(const FVendorShopItemData& V)
 {
     FInventoryItemStruct Out;
-    Out.itemId            = V.itemId;
-    Out.slug              = V.slug;
-    Out.item_type_slug    = V.itemTypeSlug;
-    Out.rarity_slug       = V.raritySlug;
-    Out.vendor_price_buy  = V.priceBuy;
-    Out.vendor_price_sell = V.priceSell;
-    Out.is_tradable       = V.isTradable;
-    Out.is_durable        = V.isDurable;
-    Out.quantity          = 1;
+    Out.itemId       = V.itemId;
+    Out.slug         = V.slug;
+    Out.itemTypeSlug = V.itemTypeSlug;
+    Out.raritySlug   = V.raritySlug;
+    Out.priceBuy     = V.priceBuy;
+    Out.priceSell    = V.priceSell;
+    Out.isTradable   = V.isTradable;
+    Out.isDurable    = V.isDurable;
+    Out.quantity     = 1;
     return Out;
 }
 

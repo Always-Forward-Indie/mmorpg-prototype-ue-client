@@ -323,14 +323,17 @@ enum class ESkillSchool : uint8
     Holy        UMETA(DisplayName = "Holy")
 };
 
+// Protocol integer mapping: SELF=0, PLAYER=1, MOB=2, AREA=3, NONE=4
+// NPC is a string-only type ("NPC"), mapped to 5 to avoid collision.
 UENUM(BlueprintType)
 enum class ECasterType : uint8
 {
-    None = 0 UMETA(DisplayName = "None"),
-    Self = 1 UMETA(DisplayName = "Self"),
-    Player = 2 UMETA(DisplayName = "Player"),
-    Mob = 3 UMETA(DisplayName = "Mob"),
-    NPC = 4 UMETA(DisplayName = "NPC")
+    Self   = 0 UMETA(DisplayName = "Self"),
+    Player = 1 UMETA(DisplayName = "Player"),
+    Mob    = 2 UMETA(DisplayName = "Mob"),
+    Area   = 3 UMETA(DisplayName = "Area"),
+    None   = 4 UMETA(DisplayName = "None"),
+    NPC    = 5 UMETA(DisplayName = "NPC")
 };
 
 // Applied Effect Data - for buffs/debuffs
@@ -745,25 +748,19 @@ struct FInventoryItemStruct
 	int32 equip_slot_id = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-	int32 durability_max = 100;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-	int32 durability_current = 100;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	int32 durabilityMax = 100;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	int32 durabilityMin = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	int32 durabilityCurrent = 100;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	int32 levelRequirement = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
     int32 rarityId = 0;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-    int32 rarity_id = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
     int32 characterId = 0;
@@ -773,9 +770,6 @@ struct FInventoryItemStruct
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
     FString raritySlug = "";
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-    FString rarity_slug = "";
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	FString itemSlug = "";
@@ -790,13 +784,7 @@ struct FInventoryItemStruct
     FString itemTypeSlug = "";
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-    FString item_type_slug = "";
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
     int32 item_type_id = 0;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-    FString equip_slot_slug = "";
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	FString equipSlotSlug = "";
@@ -805,19 +793,10 @@ struct FInventoryItemStruct
 	FString masterySlug = "";
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-	FString setId = "";
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	int32 set_id = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	FString setSlug = "";
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-	FString set_slug = "";
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-	bool is_durable = false;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	bool isDurable = false;
@@ -826,13 +805,7 @@ struct FInventoryItemStruct
 	bool isDurabilityWarning = false;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-	bool is_tradable = true;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	bool isTradable = true;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-	bool is_equippable = false;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	bool isEquippable = false;
@@ -841,16 +814,7 @@ struct FInventoryItemStruct
 	bool is_equipped = false;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-	bool is_two_handed = false;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	bool isTwoHanded = false;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-	int32 vendor_price_buy = 0;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-    int32 vendor_price_sell = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	int32 priceBuy = 0;
@@ -859,13 +823,7 @@ struct FInventoryItemStruct
 	int32 priceSell = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-    bool is_container = false;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
     bool isContainer = false;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-    bool is_quest_item = false;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
     bool isQuestItem = false;
@@ -874,13 +832,7 @@ struct FInventoryItemStruct
     bool isUsable = false;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-    bool is_usable = false;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
     bool isHarvestItem = false;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
-    bool is_harvest = false;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
     bool addedToInventory = false;
@@ -935,36 +887,24 @@ struct FInventoryItemStruct
 		stackSize = 0;
 		maxQuantity = 0;
 		inventorySlotId = 0;
-		durability_max = 100;
-		durability_current = 100;
 		durabilityMax = 100;
+		durabilityCurrent = 100;
 		durabilityMin = 0;
-		vendor_price_buy = 0;
-		vendor_price_sell = 0;
 		priceBuy = 0;
 		priceSell = 0;
-		equip_slot_slug = "";
 		equipSlotSlug = "";
 		masterySlug = "";
-		setId = "";
 		setSlug = "";
 		killCount = 0;
 
-        is_durable = false;
 		isDurable = false;
 		isDurabilityWarning = false;
-        is_tradable = true;
 		isTradable = true;
-        is_equippable = false;
 		isEquippable = false;
 		is_equipped = false;
-		is_two_handed = false;
 		isTwoHanded = false;
-		is_container = false;
 		isContainer = false;
-		is_quest_item = false;
 		isQuestItem = false;
-		is_usable = false;
 		isUsable = false;
 		isHarvestItem = false;
 		addedToInventory = false;
@@ -1061,8 +1001,13 @@ struct FMobHealthUpdateStruct
 {
     GENERATED_BODY()
 
+    // Template/base mob ID (mobId from server)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Health Update")
     int32 mobId = 0;
+
+    // Unique instance ID (mobUID from server) — use this to look up the actor
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Health Update")
+    int32 mobUID = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Health Update")
     int32 currentHealth = 0;

@@ -246,7 +246,8 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 			{
 				ABasicMOB* MOB = FoundWeak->Get();
 				FMobHealthUpdateStruct HealthUpdate;
-				HealthUpdate.mobId = MobUID;
+				HealthUpdate.mobUID = MobUID;
+				HealthUpdate.mobId  = Body.IsValid() ? Body->GetIntegerField(TEXT("mobId")) : 0;
 				HealthUpdate.currentHealth = CurrentHP;
 				HealthUpdate.maxHealth = MaxHP;
 				MOB->OnReceiveMobHealthUpdate(HealthUpdate);

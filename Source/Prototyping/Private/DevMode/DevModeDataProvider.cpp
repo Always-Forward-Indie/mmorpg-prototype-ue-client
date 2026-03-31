@@ -212,40 +212,40 @@ bool UDevModeDataProvider::ParseInventoryItem(const TSharedPtr<FJsonObject>& J,
 {
     if (!J.IsValid()) return false;
 
-    Item.characterId      = CharacterId;
-    Item.id               = J->GetIntegerField(TEXT("itemId"));
-    Item.itemId           = Item.id;
-    Item.slug             = J->GetStringField(TEXT("itemSlug"));
-    Item.quantity         = J->GetIntegerField(TEXT("itemCount"));
-    Item.weight           = static_cast<float>(J->GetNumberField(TEXT("itemWeight")));
-    Item.vendor_price_buy = J->GetIntegerField(TEXT("itemPrice"));
+    Item.characterId  = CharacterId;
+    Item.id           = J->GetIntegerField(TEXT("itemId"));
+    Item.itemId       = Item.id;
+    Item.slug         = J->GetStringField(TEXT("itemSlug"));
+    Item.quantity     = J->GetIntegerField(TEXT("itemCount"));
+    Item.weight       = static_cast<float>(J->GetNumberField(TEXT("itemWeight")));
+    Item.priceBuy     = J->GetIntegerField(TEXT("itemPrice"));
 
     const FString TypeStr = J->GetStringField(TEXT("itemType"));
-    Item.item_type_slug   = TypeStr.ToLower();
+    Item.itemTypeSlug   = TypeStr.ToLower();
 
     if (TypeStr.Equals(TEXT("Weapon"), ESearchCase::IgnoreCase))
     {
-        Item.item_type_id   = 1;
-        Item.is_equippable  = true;
+        Item.item_type_id = 1;
+        Item.isEquippable = true;
     }
     else if (TypeStr.Equals(TEXT("Armor"), ESearchCase::IgnoreCase))
     {
-        Item.item_type_id   = 2;
-        Item.is_equippable  = true;
+        Item.item_type_id = 2;
+        Item.isEquippable = true;
     }
     else if (TypeStr.Equals(TEXT("Consumable"), ESearchCase::IgnoreCase))
     {
         Item.item_type_id = 3;
-        Item.is_usable    = true;
+        Item.isUsable     = true;
     }
     else
     {
         Item.item_type_id = 0;
     }
 
-    Item.rarity_id   = 1;
-    Item.rarity_slug = TEXT("common");
-    Item.stackSize   = Item.quantity;
+    Item.rarityId   = 1;
+    Item.raritySlug = TEXT("common");
+    Item.stackSize  = Item.quantity;
 
     return true;
 }

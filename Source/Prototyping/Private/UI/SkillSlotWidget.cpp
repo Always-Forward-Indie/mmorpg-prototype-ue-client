@@ -1,4 +1,5 @@
 ﻿#include "UI/SkillSlotWidget.h"
+#include "UI/SkillSlotWidget.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
@@ -19,44 +20,30 @@ USkillSlotWidget::USkillSlotWidget(const FObjectInitializer& ObjectInitializer)
     bIsEnabled = true;
     bIsHighlighted = false;
     bIsDropHighlighted = false;
-    bMousePressed = false; // Initialize the mouse pressed state
+    bMousePressed = false;
     CooldownRemainingTime = 0.0f;
     CooldownTotalTime = 0.0f;
     
-    // Initialize drag & drop debouncing
     LastDragEnterTime = 0.0f;
     LastDragLeaveTime = 0.0f;
+    LastHighlightChangeTime = 0.0f;
 }
 
 void USkillSlotWidget::NativeConstruct()
 {
     Super::NativeConstruct();
 
-    // Log widget initialization state
-    UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: NativeConstruct - Widget initialization check:"), SlotIndex);
-    UE_LOG(LogTemp, Warning, TEXT("  - SkillButton: %s"), SkillButton ? TEXT("✅") : TEXT("❌"));
-    UE_LOG(LogTemp, Warning, TEXT("  - SkillIcon: %s"), SkillIcon ? TEXT("✅") : TEXT("❌"));
-    UE_LOG(LogTemp, Warning, TEXT("  - CooldownProgress: %s"), CooldownProgress ? TEXT("✅") : TEXT("❌"));
-    UE_LOG(LogTemp, Warning, TEXT("  - CooldownText: %s"), CooldownText ? TEXT("✅") : TEXT("❌"));
-    UE_LOG(LogTemp, Warning, TEXT("  - CooldownOverlay: %s"), CooldownOverlay ? TEXT("✅") : TEXT("❌"));
-    UE_LOG(LogTemp, Warning, TEXT("  - HotkeyText: %s"), HotkeyText ? TEXT("✅") : TEXT("❌"));
-    UE_LOG(LogTemp, Warning, TEXT("  - HighlightBorder: %s"), HighlightBorder ? TEXT("✅") : TEXT("❌"));
-    UE_LOG(LogTemp, Warning, TEXT("  - DropHighlightBorder: %s"), DropHighlightBorder ? TEXT("✅") : TEXT("❌"));
-
-    // Bind button events
     if (SkillButton)
     {
         SkillButton->OnClicked.AddDynamic(this, &USkillSlotWidget::OnSkillButtonClicked);
         SkillButton->OnPressed.AddDynamic(this, &USkillSlotWidget::OnSkillButtonPressed);
         SkillButton->OnReleased.AddDynamic(this, &USkillSlotWidget::OnSkillButtonReleased);
-        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Button events bound"), SlotIndex);
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("SkillSlotWidget[%d]: SkillButton is NULL - events not bound!"), SlotIndex);
     }
 
-    // Initialize visual state
     UpdateVisualState();
 }
 
@@ -124,99 +111,53 @@ void USkillSlotWidget::NativeOnDragEnter(const FGeometry& G, const FDragDropEven
     auto* SkillOp = Cast<USkillDragDropOperation>(Op);
     if (!SkillOp)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: DragEnter - not a skill operation"), SlotIndex);
         return;
     }
     
-    // Debouncing: игнорируем слишком частые события DragEnter
-    float CurrentTime = GetCurrentTime();
-    if (CurrentTime - LastDragEnterTime < DragEventDebounceTime)
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("SkillSlotWidget[%d]: DragEnter - Debounced (too soon)"), SlotIndex);
-        return;
-    }
-    LastDragEnterTime = CurrentTime;
-    
-    // Защита от повторных вызовов DragEnter для той же операции
+    // Guard against duplicate DragEnter for the same operation
     if (ActiveDragOp.Get() == Op)
     {
-        UE_LOG(LogTemp, Verbose, TEXT("SkillSlotWidget[%d]: DragEnter - Already handling this operation, ignoring"), SlotIndex);
         return;
     }
     
-    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: DragEnter - Skill: %s, Op: %p"), 
-        SlotIndex, *SkillOp->SkillData.networkData.skillSlug, Op);
-    
-    // Сбрасываем кэш при новой операции
     InvalidateDragCache();
-    
-    // Устанавливаем активную операцию
     ActiveDragOp = Op;
     
-    // Скрываем кнопку для визуального эффекта
     if (SkillButton) 
     {
         SkillButton->SetVisibility(ESlateVisibility::HitTestInvisible);
     }
     
-    // Проверяем и устанавливаем highlight один раз при входе
     bool bCanAccept = CanAcceptSkillDrop(SkillOp);
-    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: DragEnter - CanAccept: %s"), 
-        SlotIndex, bCanAccept ? TEXT("TRUE") : TEXT("FALSE"));
     SetDropHighlighted(bCanAccept);
 }
 
 bool USkillSlotWidget::NativeOnDragOver(const FGeometry& Geo, const FDragDropEvent& E, UDragDropOperation* Op)
 {
-    // Не вызываем SetDropHighlighted здесь - состояние уже установлено в DragEnter
     auto* SkillOp = Cast<USkillDragDropOperation>(Op);
     if (!SkillOp)
     {
         return false;
     }
 
-    // Просто возвращаем кэшированный результат
     return CanAcceptSkillDrop(SkillOp);
 }
 
 bool USkillSlotWidget::NativeOnDrop(const FGeometry& G, const FDragDropEvent& E, UDragDropOperation* Op)
 {
-    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Drop started"), SlotIndex);
-    
     auto* SkillOp = Cast<USkillDragDropOperation>(Op);
-    if (!SkillOp) 
+    if (!SkillOp || !CanAcceptSkillDrop(SkillOp))
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Drop failed - not a skill operation"), SlotIndex);
-        // Сбрасываем состояние при ошибке
-        SetDropHighlighted(false);
-        InvalidateDragCache();
-        if (SkillButton) SkillButton->SetVisibility(ESlateVisibility::Visible);
+        ResetDragVisualState();
         return false;
     }
 
-    if (!CanAcceptSkillDrop(SkillOp)) 
-    {
-        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Drop failed - cannot accept skill"), SlotIndex);
-        // Сбрасываем состояние при ошибке
-        SetDropHighlighted(false);
-        InvalidateDragCache();
-        if (SkillButton) SkillButton->SetVisibility(ESlateVisibility::Visible);
-        return false;
-    }
-
-    // Выполняем дроп
     OnSkillDroppedOnSlot.Broadcast(SlotIndex, SkillOp->SkillData, GetSlotHotkey());
-    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Successfully dropped skill %s"), 
+    
+    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Dropped skill '%s'"),
         SlotIndex, *SkillOp->SkillData.networkData.skillSlug);
     
-    // Сбрасываем состояние после успешного дропа
-    SetDropHighlighted(false);
-    InvalidateDragCache();
-    if (SkillButton) 
-    {
-        SkillButton->SetVisibility(ESlateVisibility::Visible);
-    }
-    
+    ResetDragVisualState();
     return true;
 }
 
@@ -224,53 +165,16 @@ void USkillSlotWidget::NativeOnDragLeave(const FDragDropEvent& E, UDragDropOpera
 {
     Super::NativeOnDragLeave(E, Op);
     
-    // Debouncing: игнорируем слишком частые события DragLeave
-    float CurrentTime = GetCurrentTime();
-    if (CurrentTime - LastDragLeaveTime < DragEventDebounceTime)
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("SkillSlotWidget[%d]: DragLeave - Debounced (too soon)"), SlotIndex);
-        return;
-    }
-    LastDragLeaveTime = CurrentTime;
-    
-    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: DragLeave - Op: %p, ActiveOp: %p"), 
-        SlotIndex, Op, ActiveDragOp.Get());
-    
-    // Проверяем, что это наша операция
+    // Only reset if this is the operation we're tracking
     if (ActiveDragOp.Get() == Op)
     {
-        // Сбрасываем состояние когда курсор покидает слот
-        ActiveDragOp.Reset();
-        InvalidateDragCache();
-        SetDropHighlighted(false);
-        
-        // Восстанавливаем видимость кнопки
-        if (SkillButton) 
-        {
-            SkillButton->SetVisibility(ESlateVisibility::Visible);
-        }
-        
-        UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: DragLeave - State reset, highlight removed"), SlotIndex);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("SkillSlotWidget[%d]: DragLeave - Operation mismatch, ignoring"), SlotIndex);
+        ResetDragVisualState();
     }
 }
 
 void USkillSlotWidget::NativeOnDragCancelled(const FDragDropEvent& E, UDragDropOperation* Op)
 {
-    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Drag operation cancelled"), SlotIndex);
-    
-    // При отмене операции принудительно сбрасываем все состояния
-    ActiveDragOp.Reset();
-    InvalidateDragCache();
-    SetDropHighlighted(false);
-    
-    if (SkillButton) 
-    {
-        SkillButton->SetVisibility(ESlateVisibility::Visible);
-    }
+    ResetDragVisualState();
 }
 
 
@@ -389,29 +293,10 @@ void USkillSlotWidget::SetHighlighted(bool bHighlighted)
 
 void USkillSlotWidget::SetDropHighlighted(bool bDropHighlighted)
 {
-    // Добавляем защиту от лишних обновлений
     if (bIsDropHighlighted == bDropHighlighted)
     {
-        return; // Состояние уже установлено, не обновляем
-    }
-    
-    // Дополнительная защита от слишком частых изменений highlight
-    static float LastHighlightChangeTime = 0.0f;
-    float CurrentTime = GetCurrentTime();
-    const float MinHighlightChangeInterval = 0.02f; // 20ms минимум между изменениями
-    
-    if (CurrentTime - LastHighlightChangeTime < MinHighlightChangeInterval)
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("SkillSlotWidget[%d]: SetDropHighlighted blocked - too frequent"), SlotIndex);
         return;
     }
-    
-    LastHighlightChangeTime = CurrentTime;
-    
-    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: SetDropHighlighted %s -> %s"),
-        SlotIndex, 
-        bIsDropHighlighted ? TEXT("TRUE") : TEXT("FALSE"),
-        bDropHighlighted ? TEXT("TRUE") : TEXT("FALSE"));
     
     bIsDropHighlighted = bDropHighlighted;
     UpdateVisualState();
@@ -492,7 +377,7 @@ void USkillSlotWidget::UpdateVisualState()
         }
     }
 
-    // Update drop highlight border with improved logging
+    // Update drop highlight border
     if (DropHighlightBorder)
     {
         ESlateVisibility NewVisibility = bIsDropHighlighted ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Hidden;
@@ -501,16 +386,7 @@ void USkillSlotWidget::UpdateVisualState()
         if (bIsDropHighlighted)
         {
             DropHighlightBorder->SetColorAndOpacity(DropHighlightColor);
-            UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: DROP HIGHLIGHT SHOWN"), SlotIndex);
         }
-        else
-        {
-            UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: DROP HIGHLIGHT HIDDEN"), SlotIndex);
-        }
-    }
-    else if (bIsDropHighlighted)
-    {
-        UE_LOG(LogTemp, Error, TEXT("SkillSlotWidget[%d]: DropHighlightBorder is NULL but trying to show highlight!"), SlotIndex);
     }
 
     // Update cooldown overlay
@@ -522,10 +398,6 @@ void USkillSlotWidget::UpdateVisualState()
 
 void USkillSlotWidget::UpdateCooldownDisplay()
 {
-   // UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: UpdateCooldownDisplay called - OnCooldown: %s, Remaining: %.1f, Total: %.1f"), 
-    //    SlotIndex, bIsOnCooldown ? TEXT("TRUE") : TEXT("FALSE"), CooldownRemainingTime, CooldownTotalTime);
-
-    // Update cooldown progress bar
     if (CooldownProgress)
     {
         if (bIsOnCooldown && CooldownTotalTime > 0.0f)
@@ -533,22 +405,13 @@ void USkillSlotWidget::UpdateCooldownDisplay()
             float Progress = 1.0f - (CooldownRemainingTime / CooldownTotalTime);
             CooldownProgress->SetPercent(Progress);
             CooldownProgress->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-            
-           // UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Progress bar updated - Progress: %.2f%%, Visibility: SelfHitTestInvisible"), 
-               // SlotIndex, Progress * 100.0f);
         }
         else
         {
             CooldownProgress->SetVisibility(ESlateVisibility::Hidden);
-            UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Progress bar hidden"), SlotIndex);
         }
     }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("SkillSlotWidget[%d]: CooldownProgress is NULL!"), SlotIndex);
-    }
 
-    // Update cooldown text
     if (CooldownText)
     {
         if (bIsOnCooldown && CooldownRemainingTime > 0.0f)
@@ -556,19 +419,11 @@ void USkillSlotWidget::UpdateCooldownDisplay()
             FString CooldownString = FormatCooldownTime(CooldownRemainingTime);
             CooldownText->SetText(FText::FromString(CooldownString));
             CooldownText->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-            
-            //UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Cooldown text updated - Text: '%s', Visibility: SelfHitTestInvisible"), 
-               // SlotIndex, *CooldownString);
         }
         else
         {
             CooldownText->SetVisibility(ESlateVisibility::Hidden);
-            UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Cooldown text hidden"), SlotIndex);
         }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("SkillSlotWidget[%d]: CooldownText is NULL!"), SlotIndex);
     }
 }
 
@@ -638,37 +493,23 @@ FString USkillSlotWidget::FormatCooldownTime(float Time) const
 
 bool USkillSlotWidget::CanAcceptSkillDrop(USkillDragDropOperation* DragDropOp) const
 {
-    if (!DragDropOp)
+    if (!DragDropOp || !SkillManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("SkillSlotWidget[%d]: CanAccept - NULL operation"), SlotIndex);
         return false;
     }
     
-    // Проверяем кэш
+    // Use cached result for the same operation
     if (bCacheValid && CachedDragOp.Get() == DragDropOp)
     {
-        UE_LOG(LogTemp, Verbose, TEXT("SkillSlotWidget[%d]: CanAccept - Using cached result: %s"), 
-            SlotIndex, bCachedCanAccept ? TEXT("TRUE") : TEXT("FALSE"));
         return bCachedCanAccept;
     }
-    
-    if (!SkillManager)
-    {
-        UE_LOG(LogTemp, Error, TEXT("SkillSlotWidget[%d]: CanAccept - NULL SkillManager"), SlotIndex);
-        return false;
-    }
 
-    // Вычисляем и кэшируем результат
     const FString& SkillSlug = DragDropOp->SkillData.networkData.skillSlug;
     bool bHasSkill = SkillManager->HasSkill(SkillSlug);
     
-    // Обновляем кэш
     CachedDragOp = DragDropOp;
     bCachedCanAccept = bHasSkill;
     bCacheValid = true;
-    
-    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: CanAccept - Skill: %s, HasSkill: %s (Cached)"), 
-        SlotIndex, *SkillSlug, bHasSkill ? TEXT("TRUE") : TEXT("FALSE"));
     
     return bHasSkill;
 }
@@ -701,6 +542,18 @@ void USkillSlotWidget::InvalidateDragCache()
     bCachedCanAccept = false;
 }
 
+void USkillSlotWidget::ResetDragVisualState()
+{
+    ActiveDragOp.Reset();
+    InvalidateDragCache();
+    SetDropHighlighted(false);
+    
+    if (SkillButton)
+    {
+        SkillButton->SetVisibility(ESlateVisibility::Visible);
+    }
+}
+
 float USkillSlotWidget::GetCurrentTime() const
 {
     if (UWorld* World = GetWorld())
@@ -712,26 +565,19 @@ float USkillSlotWidget::GetCurrentTime() const
 
 void USkillSlotWidget::ForceResetDragState()
 {
-    UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Force reset drag state called"), SlotIndex);
-
-    // Принудительный сброс всех состояний drag & drop
     ActiveDragOp.Reset();
     InvalidateDragCache();
 
-    // Принудительно убираем highlight
     if (bIsDropHighlighted)
     {
         bIsDropHighlighted = false;
         UpdateVisualState();
     }
 
-    // Восстанавливаем видимость кнопки
     if (SkillButton)
     {
         SkillButton->SetVisibility(ESlateVisibility::Visible);
     }
-
-    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Force reset completed"), SlotIndex);
 }
 
 void USkillSlotWidget::BeginDestroy()
@@ -748,28 +594,15 @@ void USkillSlotWidget::BeginDestroy()
 
 void USkillSlotWidget::OnSkillCooldownStarted(const FString& SkillSlug)
 {
-    // Only update if this slot contains the skill that went on cooldown
     if (SkillSlug == AssignedSkillSlug && SkillManager)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Cooldown event received for %s"), SlotIndex, *SkillSlug);
-        
         CooldownTotalTime = CurrentSkillData.networkData.cooldownMs / 1000.0f;
         CooldownRemainingTime = SkillManager->GetSkillCooldownRemaining(SkillSlug);
         bIsOnCooldown = (CooldownRemainingTime > 0.0f);
 
         UpdateCooldownDisplay();
         UpdateVisualState();
-        
-        UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Cooldown started for %s (%.1fs)"), 
-            SlotIndex, *SkillSlug, CooldownTotalTime);
     }
-    else
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("SkillSlotWidget[%d]: Ignoring cooldown event for %s (assigned: %s)"), 
-            SlotIndex, *SkillSlug, *AssignedSkillSlug);
-    }
-
-
 }
 
 void USkillSlotWidget::OnSkillReady(const FString& SkillSlug)

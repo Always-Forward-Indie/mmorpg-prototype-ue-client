@@ -340,7 +340,7 @@ void UInventoryWidget::OnSlotHovered(int32 SlotIndex, bool bIsHovered)
 		if (SlotWidget && SlotWidget->HasItem())
 		{
 			// Get mouse position for tooltip
-			FVector2D MousePosition;
+			FVector2D MousePosition = FVector2D::ZeroVector;
 			if (GetWorld() && GetWorld()->GetFirstPlayerController())
 			{
 				GetWorld()->GetFirstPlayerController()->GetMousePosition(MousePosition.X, MousePosition.Y);

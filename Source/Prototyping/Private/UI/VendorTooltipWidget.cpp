@@ -81,17 +81,17 @@ void UVendorTooltipWidget::SetDataFromShopItem(const FVendorShopItemData& Item)
 
 void UVendorTooltipWidget::SetDataFromInventoryItem(const FInventoryItemStruct& Item)
 {
-    ApplyCommonFields(TEXT(""), Item.item_type_slug, TEXT(""), Item.rarity_slug,
+    ApplyCommonFields(TEXT(""), Item.itemTypeSlug, TEXT(""), Item.raritySlug,
                       TEXT(""),
                       Item.weight,
-                      Item.durability_max, Item.durability_current, Item.is_durable,
+                      Item.durabilityMax, Item.durabilityCurrent, Item.isDurable,
                       Item.slug,
                       Item.level_requirement,
-                      Item.is_equippable,
-                      Item.equip_slot_slug,
-                      Item.is_two_handed,
-                      Item.is_quest_item,
-                      Item.is_tradable,
+                      Item.isEquippable,
+                      Item.equipSlotSlug,
+                      Item.isTwoHanded,
+                      Item.isQuestItem,
+                      Item.isTradable,
                       Item.attributes,
                       Item.useEffects,
                       Item.masterySlug,
@@ -99,7 +99,7 @@ void UVendorTooltipWidget::SetDataFromInventoryItem(const FInventoryItemStruct& 
 
     // Price: sell price
     if (PriceLabelText) { PriceLabelText->SetText(FText::FromString(TEXT("Sell:"))); PriceLabelText->SetVisibility(ESlateVisibility::Visible); }
-    if (PriceText)      { PriceText->SetText(FText::FromString(FString::Printf(TEXT("%d g"), Item.vendor_price_sell))); PriceText->SetVisibility(ESlateVisibility::Visible); }
+    if (PriceText)      { PriceText->SetText(FText::FromString(FString::Printf(TEXT("%d g"), Item.priceSell))); PriceText->SetVisibility(ESlateVisibility::Visible); }
 
     // Quantity owned
     if (QuantityText)

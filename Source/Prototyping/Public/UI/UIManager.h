@@ -32,6 +32,16 @@ class UDeathScreenWidget;
 class URepairShopWidget;
 class UTradeWidget;
 class UEquipmentWidget;
+class UPlayerStatsWidget;
+class UBestiaryWidget;
+class UChatWidget;
+class UPlayerStatsManager;
+class UBestiaryNetworkHandler;
+class UChatManager;
+class UGameMenuWidget;
+class UGameMenuBarWidget;
+class UAudioSettingsWidget;
+class UAudioManager;
 
 // Delegate for UI Manager initialization completion
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnUIManagerInitialized);
@@ -165,6 +175,24 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UEquipmentWidget* GetEquipmentWidget() const { return EquipmentWidget; }
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UPlayerStatsWidget* GetPlayerStatsWidget() const { return PlayerStatsWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UBestiaryWidget* GetBestiaryWidget() const { return BestiaryWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UChatWidget* GetChatWidget() const { return ChatWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UGameMenuBarWidget* GetGameMenuBarWidget() const { return GameMenuBarWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UGameMenuWidget* GetGameMenuWidget() const { return GameMenuWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UAudioSettingsWidget* GetAudioSettingsWidget() const { return AudioSettingsWidget; }
+
 	// Check if UIManager is fully initialized
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	bool IsInitialized() const { return bIsInitialized; }
@@ -222,6 +250,8 @@ protected:
 	void CreateExperienceWidget();
 	void CreateSkillWidgets();
 	void CreateGameVersionWidget();
+	void CreateGameMenuBarWidget();
+	void CreateGameMenuWidget();
 
 	// Event handlers for widget visibility changes
 	UFUNCTION()
@@ -250,6 +280,12 @@ protected:
 
 	UFUNCTION()
 	void OnEquipmentVisibilityChanged(bool bIsVisible);
+
+	UFUNCTION()
+	void OnPlayerStatsVisibilityChanged();
+
+	UFUNCTION()
+	void OnBestiaryVisibilityChanged(bool bIsVisible);
 
 protected:
 	// Widget class references (set in Blueprint)
@@ -294,6 +330,26 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UDeathScreenWidget> DeathScreenWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UPlayerStatsWidget> PlayerStatsWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UBestiaryWidget> BestiaryWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UChatWidget> ChatWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UGameMenuBarWidget> GameMenuBarWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UGameMenuWidget> GameMenuWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UAudioSettingsWidget> AudioSettingsWidgetClass;
+
+
 
 	// Configuration properties
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Configuration")
@@ -348,6 +404,24 @@ protected:
 	UPROPERTY()
 	UDeathScreenWidget* DeathScreenWidget;
 
+	UPROPERTY()
+	UPlayerStatsWidget* PlayerStatsWidget;
+
+	UPROPERTY()
+	UBestiaryWidget* BestiaryWidget;
+
+	UPROPERTY()
+	UChatWidget* ChatWidget;
+
+	UPROPERTY()
+	UGameMenuBarWidget* GameMenuBarWidget;
+
+	UPROPERTY()
+	UGameMenuWidget* GameMenuWidget;
+
+	UPROPERTY()
+	UAudioSettingsWidget* AudioSettingsWidget;
+
 	// Manager references
 	UPROPERTY()
 	UInventoryManager* InventoryManager;
@@ -389,12 +463,27 @@ protected:
 	bool bRepairShopVisible;
 	bool bTradeVisible;
 	bool bEquipmentVisible;
+	bool bPlayerStatsVisible;
+	bool bBestiaryVisible;
+	bool bAltCursorActive;
+	bool bGameMenuVisible;
 
-	UFUNCTION()
-	void OnMenuBarBestiaryClicked();
+public:
+	// Internal delegate handlers (must be public for AddDynamic)
+	UFUNCTION() void OnMenuBarBestiaryClicked();
+	UFUNCTION() void HandleGameMenuResumeClicked();
+	UFUNCTION() void HandleAudioSettingsClicked();
+	UFUNCTION() void HandleAudioSettingsClosed();
+	UFUNCTION() void HandleExitToLoginClicked();
+	UFUNCTION() void HandleExitToDesktopClicked();
+	UFUNCTION() void OnMenuBarInventoryClicked();
+	UFUNCTION() void OnMenuBarEquipmentClicked();
+	UFUNCTION() void OnMenuBarQuestJournalClicked();
+	UFUNCTION() void OnMenuBarSkillsClicked();
+	UFUNCTION() void OnMenuBarStatsClicked();
+	UFUNCTION() void OnMenuBarMenuClicked();
 
-	UFUNCTION()
-	void HandleGameMenuResumeClicked();
+protected:
 
 public:
 	/** Trigger a camera shake effect for combat feedback. Intensity in [0..1]. */

@@ -223,14 +223,14 @@ FInventoryItemStruct UEquipmentWidget::BuildTooltipItem(const FEquipmentSlotData
         if (Found.id > 0) return Found;
     }
     FInventoryItemStruct Stub;
-    Stub.id                 = SlotData.inventoryItemId;
-    Stub.itemId             = SlotData.itemId;
-    Stub.slug               = SlotData.itemSlug;
-    Stub.is_durable         = (SlotData.durabilityMax > 0);
-    Stub.durability_max     = SlotData.durabilityMax;
-    Stub.durability_current = SlotData.durabilityCurrent;
-    Stub.is_equippable      = true;
-    Stub.is_equipped        = true;
+    Stub.id               = SlotData.inventoryItemId;
+    Stub.itemId           = SlotData.itemId;
+    Stub.slug             = SlotData.itemSlug;
+    Stub.isDurable        = (SlotData.durabilityMax > 0);
+    Stub.durabilityMax    = SlotData.durabilityMax;
+    Stub.durabilityCurrent = SlotData.durabilityCurrent;
+    Stub.isEquippable     = true;
+    Stub.is_equipped      = true;
     return Stub;
 }
 

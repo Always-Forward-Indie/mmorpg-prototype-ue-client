@@ -178,7 +178,8 @@ private:
     // Drag & Drop debouncing to stabilize rapid enter/leave events
     float LastDragEnterTime = 0.0f;
     float LastDragLeaveTime = 0.0f;
-    const float DragEventDebounceTime = 0.1f; // Increased from 100ms for better stability
+    float LastHighlightChangeTime = 0.0f;
+    const float DragEventDebounceTime = 0.1f;
 
     // Visual settings
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot Widget", meta = (AllowPrivateAccess = "true"))
@@ -209,6 +210,7 @@ private:
     // New methods for drag-and-drop
     bool CanAcceptSkillDrop(USkillDragDropOperation* DragDropOp) const;
     void InvalidateDragCache();
+    void ResetDragVisualState();
     float GetCurrentTime() const;
     FKey GetSlotHotkey() const;
 };

@@ -87,7 +87,9 @@ private:
 	bool bOverweightPenaltyActive = false;
 
 	// Server move_speed -> Unreal units conversion scale
-	float MoveSpeedScale = 1.0f;
+	// Server validates: maxAllowedDist = move_speed * 40.0 * dt * 1.3 (30% buffer)
+	// Must match exactly so the client speed == server expectation.
+	float MoveSpeedScale = 40.0f;
 
 	// NPC interaction tracking
 	UPROPERTY()
@@ -101,7 +103,19 @@ private:
 	// Timer for deferred UI initialization in BeginPlay
 	FTimerHandle UIInitTimerHandle;
 
-	// Event sounds
+	// True once NotifyPlayerSpawned has been sent to GameInstance so we don't
+	// fire it more than once per spawn even if Tick runs before the flag is acked.
+	bool bSpawnNotified = false;
+
+	// Set to true by UIInitTimer after all widgets are ready. Tick checks this
+	// before firing NotifyPlayerSpawned so the flag is raised only after both
+	// the camera has had at least one real Tick and the UI is fully constructed.
+	bool bUIInitDone = false;
+
+public:
+	UCameraComponent* GetFollowCamera() const { return FollowCamera; }
+
+private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (AllowPrivateAccess = "true"))
 	TSoftObjectPtr<USoundBase> LevelUpSound;
 
@@ -508,6 +522,11 @@ public:
 			UFUNCTION(BlueprintCallable, Category = "UI")
 			UUIManager* GetUIManager() const { return UIManager; }
 
+			// Called by PlayerStatsManager::OnStatsUpdated to keep playerData and HUD in sync
+			// for all update paths (including effectTick).
+			UFUNCTION()
+			void HandleStatsManagerUpdate(const FPlayerStatsUpdateStruct& NewStats);
+
 		protected:
 			UFUNCTION()
 			void OnPickupInput();
@@ -658,6 +677,11 @@ public:
 	// Weight status handler
 	UFUNCTION()
 	void HandleWeightStatusChanged(const FWeightStatusData& WeightStatus);
+
+	// Called one tick after PlayerInterfaceWidget->AddToViewport() via UIManager delegate.
+	// This is the authoritative signal that the game UI is visible to the renderer.
+	UFUNCTION()
+	void HandleUIManagerInitialized();
 
 	// Additional input actions
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")

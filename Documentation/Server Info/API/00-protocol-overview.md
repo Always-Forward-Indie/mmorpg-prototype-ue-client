@@ -12,7 +12,7 @@
 | 05 | [NPC, диалоги и квесты](05-npc-dialogue-quests-protocol.md) | NPC-взаимодействие, диалоговые графы, квесты, флаги |
 | 06 | [Вендоры, трейд и ремонт](06-vendor-trade-repair-protocol.md) | Магазин NPC, P2P-торговля, ремонт |
 | 07 | [Лут и сбор ресурсов](07-loot-harvest-protocol.md) | Таблицы лута, сбор с трупов, дроп предметов |
-| 08 | [Прогрессия и характеристики](08-progression-stats-protocol.md) | Опыт, левелинг, статы, мастерство, репутация, изучение скиллов |
+| 08 | [Прогрессия и характеристики](08-progression-stats-protocol.md) | Опыт, левелинг, статы, OOC-регенерация, мастерство, репутация, изучение скиллов |
 | 09 | [Смерть и респавн](09-death-respawn-protocol.md) | Смерть, штрафы, респавн, воскрешение |
 | 10 | [Бестиарий](10-bestiary-protocol.md) | Тиры бестиария, отслеживание убийств |
 | 11 | [Чат и уведомления](11-chat-notifications-protocol.md) | Система чата, мировые уведомления |
@@ -218,10 +218,9 @@
 | `nearbyCorpsesResponse` | Unicast | Список трупов рядом |
 | `corpseLootInspect` | Unicast | Превью лута трупа |
 | `corpseLootPickup` | Unicast | Результат подбора лута |
-| `experienceUpdate` | Broadcast | Обновление опыта |
-| `levelUp` | Broadcast | Повышение уровня |
-| `characterExperience` | Unicast | Данные опыта |
-| `stats_update` | Unicast | Полное обновление статов |
+| `experience_update` | Broadcast | Обновление опыта (содержит `levelUp: true` при повышении уровня) |
+| `characterExperience` | Unicast | Данные опыта (ответ на `getCharacterExperience`) |
+| `stats_update` | Unicast | Полное обновление статов (включая тик регенерации) |
 | `initializePlayerSkills` | Unicast | Инициализация скиллов |
 | `respawnResult` | Unicast | Результат респавна |
 | `getBestiaryOverview` | Unicast | Обзор бестиария |

@@ -257,6 +257,10 @@ protected:
 	UFUNCTION()
 	void OnAvailableSkillsVisibilityChanged(bool bIsVisible);
 
+	// Called by PlayerInterfaceWidget on its first valid tick — relays OnUIManagerInitialized
+	UFUNCTION()
+	void HandlePlayerInterfaceReady();
+
 	UFUNCTION()
 	void OnInventoryVisibilityChanged(bool bIsVisible);
 

@@ -1,11 +1,12 @@
-# 08. Прогрессия: опыт, уровни, статы, мастерство, репутация
+# 08. Прогрессия: опыт, уровни, статы, регенерация, мастерство, репутация
 
 ## Обзор
 
-Прогрессия включает 5 взаимосвязанных систем:
+Прогрессия включает 6 взаимосвязанных систем:
 - **Опыт и уровни**: XP → level up → stat bonuses
 - **XP-долг**: Штраф за смерть, погашается из нового XP
 - **Статы**: base + equipment + effects + mastery + item soul
+- **OOC-регенерация**: Пассивное восстановление HP/MP вне боя
 - **Мастерство**: Прогресс 0-100 за каждый тип оружия
 - **Репутация**: Отношения с фракциями
 
@@ -35,6 +36,8 @@
 ```
 
 #### Сервер → Unicast (characterExperience)
+
+> **⚠ Внимание:** Этот ответ использует ключ `"event"` (не `"eventType"`) в заголовке — это особенность данного конкретного обработчика.
 
 ```json
 {
@@ -115,39 +118,24 @@
 
 ---
 
-### levelUp — Повышение уровня
+### Сигнал повышения уровня
 
-**Сервер → Broadcast** (всем в зоне)
+**Отдельного пакета `levelUp` нет.** Level-up сигнализируется через поле `levelUp: true` в `experience_update` + немедленный `stats_update` с новыми значениями HP/MP и атрибутов.
 
-```json
-{
-  "header": {
-    "message": "Level up achieved!",
-    "clientId": 42,
-    "eventType": "levelUp"
-  },
-  "body": {
-    "characterId": 7,
-    "oldLevel": 15,
-    "newLevel": 16,
-    "newExperience": 52500,
-    "expForNextLevel": 65000,
-    "newAbilities": []
-  },
-  "timestamps": {
-    "serverRecvMs": 1711709400200,
-    "serverSendMs": 1711709400220
-  }
-}
-```
+Клиент должен:
+1. При получении `experience_update` с `levelUp == true` — показать level-up анимацию/UI
+2. Дождаться следующего `stats_update` — в нём будут обновлённые HP/MP/атрибуты
+
+> Обработчик `eventType: "levelUp"` существует в коде сервера, но событие `LEVEL_UP`
+> никогда не попадает в EventQueue — это зарезервированный механизм. Клиент **не должен**
+> зависеть от пакета `levelUp`. Используйте `experience_update.levelUp` как единственный сигнал.
 
 ### Серверные действия при level up
 
-1. Запрос обновлённых атрибутов: `getCharacterAttributes` → game-server
-2. Бонус: **+10 HP** и **+5 MP** за каждый уровень
-3. Сохранение: `saveCharacterProgress` → game-server
-4. Отправка: `stats_update` клиенту
-5. Отправка: `levelUp` broadcast
+1. **+10 HP** и **+5 MP** к максимуму за каждый уровень
+2. Сохранение: `saveCharacterProgress` → game-server
+3. Отправка: `experience_update` (unicast + broadcast) с `levelUp: true`
+4. Отправка: `stats_update` (unicast, только повысившему уровень) с новыми статами
 
 ---
 
@@ -195,7 +183,19 @@ expForLevel(n) = BASE_EXP_PER_LEVEL × (EXP_MULTIPLIER ^ (n - 2))
 
 ## 8.2. stats_update — Полное обновление статов
 
-**Сервер → Unicast** (при изменении статов: level up, equip/unequip, эффект добавлен/удалён)
+**Сервер → Unicast** (при изменении статов)
+
+| Триггер | Источник |
+|---------|----------|
+| Вход в зону — загрузка инвентаря | `handleSetPlayerInventoryEvent` |
+| Вход в зону — загрузка активных эффектов | `handleSetPlayerActiveEffectsEvent` |
+| Использование скилла (потрачена мана, получен урон) | `CombatSystem::executeCombatAction` |
+| Тик DoT / HoT (изменение HP) | `CombatSystem::tickEffects` |
+| Получение XP / level-up | `ExperienceManager::grantExperience` |
+| Надевание / снятие предмета | `EquipmentEventHandler` |
+| Перезагрузка атрибутов с game-server | `CharacterEventHandler::handleSetCharacterAttributesEvent` |
+| Использование предмета (зелье, свиток) | `ItemEventHandler::handleUseItemEvent` |
+| OOC-регенерация HP/MP (каждые ~4 с) | `RegenManager::tickRegen` |
 
 ```json
 {
@@ -228,12 +228,15 @@ expForLevel(n) = BASE_EXP_PER_LEVEL × (EXP_MULTIPLIER ^ (n - 2))
       "max": 74.0
     },
     "attributes": [
-      { "slug": "strength", "name": "Strength", "base": 20, "effective": 25 },
-      { "slug": "agility", "name": "Agility", "base": 15, "effective": 17 },
-      { "slug": "intelligence", "name": "Intelligence", "base": 12, "effective": 12 },
-      { "slug": "physical_attack", "name": "Physical Attack", "base": 18, "effective": 33 },
-      { "slug": "physical_defense", "name": "Physical Defense", "base": 10, "effective": 22 },
-      { "slug": "crit_chance", "name": "Critical Chance", "base": 5, "effective": 8 }
+      { "slug": "strength",         "name": "Strength",         "base": 20, "effective": 25 },
+      { "slug": "constitution",      "name": "Constitution",     "base": 10, "effective": 12 },
+      { "slug": "wisdom",            "name": "Wisdom",           "base": 8,  "effective": 8  },
+      { "slug": "agility",           "name": "Agility",          "base": 15, "effective": 17 },
+      { "slug": "intelligence",      "name": "Intelligence",     "base": 12, "effective": 12 },
+      { "slug": "physical_attack",   "name": "Physical Attack",  "base": 18, "effective": 33 },
+      { "slug": "physical_defense",  "name": "Physical Defense", "base": 10, "effective": 22 },
+      { "slug": "crit_chance",       "name": "Critical Chance",  "base": 5,  "effective": 8  },
+      { "slug": "move_speed",        "name": "Move Speed",       "base": 5,  "effective": 5  }
     ],
     "activeEffects": [
       {
@@ -373,7 +376,73 @@ newValue = min(currentValue + delta, 100.0)
 
 ---
 
-## 8.5. Конфигурация
+## 8.5. OOC-регенерация HP/MP
+
+**Out-of-Combat (OOC) регенерация** — пассивное восстановление HP и MP, которое срабатывает каждые ~4 секунды, пока персонаж не в бою. Каждый тик, изменивший HP или MP, немедленно отправляет клиенту `stats_update`.
+
+### Условия тика
+
+| Условие | Описание |
+|---------|----------|
+| Персонаж жив | `currentHealth > 0` |
+| Вне боя | С момента последнего боевого события прошло `> regen.disableInCombatMs` (дефолт **8000 мс**) |
+| Не полные HP/MP | Хотя бы одно из значений ниже максимума |
+
+> «Боевое событие» — это момент нанесения или получения урона (обновление `lastInCombatAt`). Вход в бой сбрасывает обратный отсчёт регенерации.
+
+### Формулы
+
+```
+hpGain = regen.baseHpRegen + max(0, constitution × regen.hpRegenConCoeff)
+mpGain = regen.baseMpRegen + max(0, wisdom      × regen.mpRegenWisCoeff)
+
+newHp   = min(currentHp + hpGain, maxHp)
+newMp   = min(currentMp + mpGain, maxMp)
+```
+
+`constitution` и `wisdom` — `effective` значения из последнего снапшота атрибутов персонажа (включают бонусы от экипировки и эффектов).
+
+### Конфигурация регенерации
+
+| Config-ключ | Дефолт | Описание |
+|-------------|--------|----------|
+| `regen.tickIntervalMs` | `4000` | Интервал тика в мс |
+| `regen.baseHpRegen` | `2` | Базовое HP за тик |
+| `regen.baseMpRegen` | `1` | Базовое MP за тик |
+| `regen.hpRegenConCoeff` | `0.3` | Коэффициент Constitution → HP per tick |
+| `regen.mpRegenWisCoeff` | `0.5` | Коэффициент Wisdom → MP per tick |
+| `regen.disableInCombatMs` | `8000` | Задержка после боя (мс) |
+
+### Примеры расчёта
+
+| Constitution | Wisdom | hpGain/тик | mpGain/тик |
+|:---:|:---:|:---:|:---:|
+| 0 | 0 | 2 | 1 |
+| 10 | 10 | 5 | 6 |
+| 20 | 15 | 8 | 8 |
+| 50 | 30 | 17 | 16 |
+
+### Пакет на клиент
+
+Регенерация не имеет отдельного пакета — клиент получает стандартный `stats_update` с обновлёнными `health.current` и/или `mana.current`. Никакой отдельной обработки не требуется.
+
+```json
+{
+  "header": { "eventType": "stats_update", "status": "success", "requestId": "stats_update_7" },
+  "body": {
+    "characterId": 7,
+    "level": 10,
+    "health": { "current": 95, "max": 200 },
+    "mana":   { "current": 42, "max": 80 }
+  }
+}
+```
+
+> Клиент должен обновлять UI (health bar, mana bar) при **любом** `stats_update`, независимо от причины.
+
+---
+
+## 8.6. Конфигурация
 
 | Ключ | Default | Описание |
 |------|---------|----------|
@@ -381,6 +450,12 @@ newValue = min(currentValue + delta, 100.0)
 | `EXP_MULTIPLIER` | 1.15 | Множитель XP таблицы |
 | `DEATH_PENALTY_PERCENT` | 0.1 | Штраф за смерть (10%) |
 | `MAX_LEVEL` | 70 | Максимальный уровень |
+| `regen.tickIntervalMs` | 4000 | Интервал тика регенерации (мс) |
+| `regen.baseHpRegen` | 2 | Базовый HP за тик |
+| `regen.baseMpRegen` | 1 | Базовый MP за тик |
+| `regen.hpRegenConCoeff` | 0.3 | CON → HP per tick |
+| `regen.mpRegenWisCoeff` | 0.5 | WIS → MP per tick |
+| `regen.disableInCombatMs` | 8000 | Задержка после боя для начала регена |
 | `mastery.base_delta` | 0.5 | Базовый прирост мастерства |
 | `mastery.tier1_value` ... `tier4_value` | 20/50/80/100 | Пороги тиров |
 | `mastery.db_flush_every_hits` | 10 | Интервал сохранения |

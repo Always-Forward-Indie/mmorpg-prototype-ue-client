@@ -27,8 +27,22 @@ void UPlayerInterfaceWidget::NativeConstruct()
 void UPlayerInterfaceWidget::NativeDestruct()
 {
     Super::NativeDestruct();
-    
+
+    bReadySignalSent = false;
     UE_LOG(LogTemp, Warning, TEXT("PlayerInterfaceWidget: Destructed"));
+}
+
+void UPlayerInterfaceWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+    Super::NativeTick(MyGeometry, InDeltaTime);
+
+    if (bReadySignalSent) { return; }
+    if (!IsInterfaceReady()) { return; }
+
+    bReadySignalSent = true;
+
+    UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] PlayerInterfaceWidget: all child widgets valid — broadcasting OnPlayerInterfaceReady"));
+    OnPlayerInterfaceReady.Broadcast();
 }
 
 void UPlayerInterfaceWidget::InterfaceInitialize(UMyGameInstance* InGameInstance)

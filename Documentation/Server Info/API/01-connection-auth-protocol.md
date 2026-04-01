@@ -190,14 +190,14 @@
     }
   },
   "body": {
-    "characterId": 7
+    "id": 7
   }
 }
 ```
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `characterId` | int | ID персонажа из БД |
+| `body.id` | int | ID персонажа из БД. **Именно `id`, не `characterId`** — сервер читает `body["id"]` |
 
 ### Сервер → Broadcast
 
@@ -391,7 +391,7 @@ OneWay ≈ (serverRecvMs - clientSendMsEcho + currentTime - serverSendMs) / 2
 | `posZ` | float | Координата Z |
 | `rotZ` | float | Угол поворота (радианы) |
 
-### Сервер → Broadcast (всем кроме отправителя)
+### Сервер → Broadcast (всем в зоне, **включая отправителя**)
 
 ```json
 {
@@ -441,6 +441,18 @@ OneWay ≈ (serverRecvMs - clientSendMsEcho + currentTime - serverSendMs) / 2
 ```
 
 **Anti-cheat:** сервер проверяет дельту перемещения по `lastValidatedPosition` и `lastMoveSrvMs`. При невалидной дистанции — отправка коррекции.
+
+**Алгоритм валидации скорости:**
+```
+moveSpeedStat   = attributes["move_speed"].value  // default 5
+moveSpeedUnits  = moveSpeedStat × 40.0            // world-units/sec; default ~200 u/s
+deltaMs         = serverRecvMs - lastMoveSrvMs
+maxAllowedDist  = moveSpeedUnits × (deltaMs / 1000.0) × 1.3   // +30% buffer
+actualDist      = sqrt(ΔX² + ΔY²)               // только горизонталь, вертикаль не ограничена
+if (actualDist > maxAllowedDist) → positionCorrection
+```
+
+> При `positionCorrection` сервер сбрасывает `lastMoveSrvMs = 0`, чтобы следующий пакет пересчитывался с нуля и не попал в бесконечный rejec-цикл пока клиент обрабатывает телепорт.
 
 ---
 

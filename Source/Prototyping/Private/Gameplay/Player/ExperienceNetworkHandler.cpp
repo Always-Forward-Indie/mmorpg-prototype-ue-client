@@ -93,46 +93,80 @@ void UExperienceNetworkHandler::HandleChunkServerData(const FString& ReceivedDat
         return;
     }
 
-    // Parse message data to get event type
-    FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
-    
-    if (MessageData.eventType.IsEmpty())
+    // Parse raw JSON so we can check both "eventType" and "event" keys
+    TSharedPtr<FJsonObject> Root;
     {
-        return; // Not a valid message, ignore
+        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
+        if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+            return;
     }
 
-    // Check if this is an experience-related event
-    if (!IsExperienceEvent(MessageData.eventType))
+    // Resolve event type: try header.eventType first, then header.event (characterExperience quirk)
+    FString EventType;
+    FString Status;
+    TSharedPtr<FJsonObject> Header;
+    if (Root->HasField(TEXT("header")))
     {
-        return; // Not an experience event, ignore
+        Header = Root->GetObjectField(TEXT("header"));
+        if (Header.IsValid())
+        {
+            Header->TryGetStringField(TEXT("eventType"), EventType);
+            if (EventType.IsEmpty())
+                Header->TryGetStringField(TEXT("event"), EventType);
+            Header->TryGetStringField(TEXT("status"), Status);
+        }
     }
 
-    LogNetworkEvent(TEXT("Event Received"), 
-        FString::Printf(TEXT("Processing %s event"), *MessageData.eventType));
+    if (EventType.IsEmpty())
+        return;
 
-    // Validate event data before processing
-    if (!ValidateExperienceEventData(ReceivedData))
+    // Handle characterExperience — response to getCharacterExperience
+    // Body fields: characterId, currentLevel, currentExperience, expForCurrentLevel,
+    //              expForNextLevel, expInCurrentLevel, expNeededForNextLevel, progressToNextLevel
+    if (EventType == TEXT("characterExperience") && Status == TEXT("success"))
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceNetworkHandler: Invalid experience event data"));
+        if (!ExperienceManager || !IsValid(ExperienceManager)) return;
+
+        if (!Root->HasField(TEXT("body"))) return;
+        TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
+        if (!Body.IsValid()) return;
+
+        FPlayerProgressionStruct Prog;
+        Body->TryGetNumberField(TEXT("characterId"),       Prog.characterId);
+        Body->TryGetNumberField(TEXT("currentLevel"),      Prog.currentLevel);
+        Body->TryGetNumberField(TEXT("currentExperience"), Prog.currentExperience);
+        Prog.totalExperience = Prog.currentExperience;
+        Body->TryGetNumberField(TEXT("expForCurrentLevel"), Prog.expForCurrentLevel);
+        Body->TryGetNumberField(TEXT("expForNextLevel"),    Prog.expForNextLevel);
+
+        if (Prog.characterId > 0)
+        {
+            ExperienceManager->UpdateCharacterProgression(Prog.characterId, Prog);
+            UE_LOG(LogTemp, Warning, TEXT("ExperienceNetworkHandler: characterExperience applied for char %d Level=%d XP=%d [%d-%d]"),
+                Prog.characterId, Prog.currentLevel, Prog.currentExperience,
+                Prog.expForCurrentLevel, Prog.expForNextLevel);
+        }
         return;
     }
 
+    if (!IsExperienceEvent(EventType))
+        return;
+
+    if (Status != TEXT("success"))
+        return;
+
     // Process the specific experience event
-    if (MessageData.eventType == TEXT("experience_update"))
+    if (EventType == TEXT("experience_update"))
     {
         ProcessExperienceUpdateEvent(ReceivedData);
     }
-    else if (MessageData.eventType == TEXT("level_up"))
+    else if (EventType == TEXT("level_up"))
     {
         ProcessLevelUpEvent(ReceivedData);
     }
-    else if (MessageData.eventType == TEXT("progression_update"))
+    else if (EventType == TEXT("progression_update"))
     {
         ProcessProgressionUpdateEvent(ReceivedData);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceNetworkHandler: Unknown experience event type: %s"), *MessageData.eventType);
     }
 }
 

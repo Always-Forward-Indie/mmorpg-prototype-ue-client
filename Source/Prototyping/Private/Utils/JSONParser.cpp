@@ -239,6 +239,29 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 		 TSharedPtr<FJsonObject> Mana = Stats->GetObjectField(TEXT("mana"));
 		 Character.characterCurrentHealth = Health->GetIntegerField(TEXT("current"));
 		 Character.characterCurrentMana = Mana->GetIntegerField(TEXT("current"));
+
+		 // Also store max values in characterAttributes so RefreshHUD can use them
+		 // immediately after spawn, before the first stats_update arrives.
+		 const int32 MaxHealth = Health->HasField(TEXT("max")) ? Health->GetIntegerField(TEXT("max")) : 0;
+		 const int32 MaxMana   = Mana->HasField(TEXT("max"))   ? Mana->GetIntegerField(TEXT("max"))   : 0;
+
+		 if (MaxHealth > 0)
+		 {
+			 FAttributeDataStruct HealthAttr;
+			 HealthAttr.attributeSlug  = TEXT("max_health");
+			 HealthAttr.attributeName  = TEXT("Max Health");
+			 HealthAttr.attributeValue = MaxHealth;
+			 Character.characterAttributes.attributesData.Add(TEXT("max_health"), HealthAttr);
+		 }
+
+		 if (MaxMana >= 0)
+		 {
+			 FAttributeDataStruct ManaAttr;
+			 ManaAttr.attributeSlug  = TEXT("max_mana");
+			 ManaAttr.attributeName  = TEXT("Max Mana");
+			 ManaAttr.attributeValue = MaxMana;
+			 Character.characterAttributes.attributesData.Add(TEXT("max_mana"), ManaAttr);
+		 }
 	 }
 
 	 if (CD->HasField(TEXT("position")))

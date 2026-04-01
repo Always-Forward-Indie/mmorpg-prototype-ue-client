@@ -332,6 +332,13 @@ void UUIManager::CreatePlayerInterfaceWidget()
 	// Add to viewport with appropriate Z-Order
 	PlayerInterfaceWidget->AddToViewport(10);
 
+	// Subscribe to the widget's own ready signal.
+	// PlayerInterfaceWidget::NativeTick fires OnPlayerInterfaceReady on the first
+	// game-thread tick where all child widgets are valid, which is guaranteed to
+	// be at least one full render frame after AddToViewport.
+	// This replaces the old SetTimer(0.0f) approach which never fired in UE5.
+	PlayerInterfaceWidget->OnPlayerInterfaceReady.AddDynamic(this, &UUIManager::HandlePlayerInterfaceReady);
+
 	// Initialize with GameInstance
 	if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetWorld()->GetGameInstance()))
 	{
@@ -586,7 +593,8 @@ void UUIManager::CreateGameMenuWidget()
 	GameMenuWidget->OnExitToLoginClicked.AddDynamic(this,   &UUIManager::HandleExitToLoginClicked);
 	GameMenuWidget->OnExitToDesktopClicked.AddDynamic(this, &UUIManager::HandleExitToDesktopClicked);
 
-	UE_LOG(LogTemp, Log, TEXT("UIManager: GameMenuWidget created and wired"));
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: GameMenuWidget created and wired (class: %s)"),
+		*GameMenuWidgetClass->GetName());
 }
 
 void UUIManager::ToggleInventory()
@@ -599,14 +607,14 @@ void UUIManager::ToggleInventory()
 
 	if (InventoryManager)
 	{
-		// Обновляем состояние видимости инвентаря
+		// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 		bool bWasVisible = bInventoryVisible;
 		InventoryManager->ToggleInventoryUI();
 		
-		// Определяем новое состояние (инвертируем предыдущее)
+		// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
 		bInventoryVisible = !bWasVisible;
 		
-		// Обновляем курсор и режим ввода
+		// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 		UpdateCursorAndInputMode();
 		
 		UE_LOG(LogTemp, Log, TEXT("UIManager: Toggled inventory UI - now %s"), 
@@ -735,25 +743,25 @@ void UUIManager::ToggleSkillsPanel()
 		return;
 	}
 
-	// Используем текущее состояние видимости виджета вместо нашей переменной
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	bool bCurrentlyVisible = AvailableSkillsWidget->IsWidgetVisible();
 	
 	if (!bCurrentlyVisible)
 	{
-		// ИСПРАВЛЕНО: Используем ShowWidget() вместо SetVisibility(SelfHitTestInvisible)
+		// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ ShowWidget() пїЅпїЅпїЅпїЅпїЅпїЅ SetVisibility(SelfHitTestInvisible)
 		AvailableSkillsWidget->ShowWidget();
 		
 		UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel opened using ShowWidget()"));
 	}
 	else
 	{
-		// Используем HideWidget() для последовательности
+		// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ HideWidget() пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 		AvailableSkillsWidget->HideWidget();
 		
 		UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel closed using HideWidget()"));
 	}
 
-	// bSkillsPanelVisible будет автоматически обновлена через OnAvailableSkillsVisibilityChanged
+	// bSkillsPanelVisible пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ OnAvailableSkillsVisibilityChanged
 	UE_LOG(LogTemp, Log, TEXT("UIManager: Skills panel %s"), !bCurrentlyVisible ? TEXT("opened") : TEXT("closed"));
 }
 
@@ -783,14 +791,25 @@ void UUIManager::SetPlayerController(APlayerController* InPlayerController)
 
 void UUIManager::OnAvailableSkillsVisibilityChanged(bool bIsVisible)
 {
-	// Синхронизоруем состояние видимости с внутренним состоянием виджета
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	bSkillsPanelVisible = bIsVisible;
 	
-	// Обновляем курсор и режим ввода
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 	UpdateCursorAndInputMode();
 	
 	UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel visibility synced: %s"), 
 		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
+}
+
+void UUIManager::HandlePlayerInterfaceReady()
+{
+	if (PlayerInterfaceWidget)
+	{
+		PlayerInterfaceWidget->OnPlayerInterfaceReady.RemoveDynamic(this, &UUIManager::HandlePlayerInterfaceReady);
+	}
+
+	OnUIManagerInitialized.Broadcast();
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] HandlePlayerInterfaceReady: OnUIManagerInitialized broadcast"));
 }
 
 void UUIManager::OnInventoryVisibilityChanged(bool bIsVisible)
@@ -896,7 +915,7 @@ void UUIManager::UpdateCursorAndInputMode()
 
 	if (bShouldShow)
 	{
-		// Есть активные UI виджеты - используем режим Game+UI
+		// пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ UI пїЅпїЅпїЅпїЅпїЅпїЅпїЅ - пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ Game+UI
 		FInputModeGameAndUI InputMode;
 		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
 		InputMode.SetHideCursorDuringCapture(false);
@@ -906,7 +925,7 @@ void UUIManager::UpdateCursorAndInputMode()
 	}
 	else
 	{
-		// Нет активных UI виджетов - переходим в игровой режим
+		// пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ UI пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ - пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 		FInputModeGameOnly InputMode;
 		PlayerController->SetInputMode(InputMode);
 		
@@ -961,7 +980,9 @@ void UUIManager::HideMobTargetFrame()
 
 void UUIManager::ToggleGameMenu()
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleGameMenu"));
+	UE_LOG(LogTemp, Warning, TEXT("UIManager::ToggleGameMenu - GameMenuWidget: %s, IsMenuOpen: %s"),
+		GameMenuWidget ? TEXT("Valid") : TEXT("NULL"),
+		(GameMenuWidget && GameMenuWidget->IsMenuOpen()) ? TEXT("true") : TEXT("false"));
 
 	// If the game menu itself is open, close it (Resume behaviour)
 	if (GameMenuWidget && GameMenuWidget->IsMenuOpen())
@@ -1024,11 +1045,8 @@ void UUIManager::ToggleGameMenu()
 		bTradeVisible = false;
 		bClosedSomething = true;
 	}
-	if (bAltCursorActive)
-	{
-		bAltCursorActive = false;
-		bClosedSomething = true;
-	}
+	// Note: bAltCursorActive is intentionally NOT treated as "something to close" here.
+	// Alt-cursor is a passive state and should not block the game menu from opening.
 
 	if (bClosedSomething)
 	{
@@ -1036,12 +1054,20 @@ void UUIManager::ToggleGameMenu()
 		return;
 	}
 
-	// Nothing was open ? open the game menu
+	// Nothing was open - open the game menu
 	if (GameMenuWidget)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::ToggleGameMenu - Opening GameMenuWidget (Visibility was: %d)"),
+			(int32)GameMenuWidget->GetVisibility());
 		GameMenuWidget->OpenMenu();
 		bGameMenuVisible = true;
 		UpdateCursorAndInputMode();
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::ToggleGameMenu - GameMenuWidget opened (Visibility now: %d)"),
+			(int32)GameMenuWidget->GetVisibility());
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("UIManager::ToggleGameMenu - GameMenuWidget is NULL! Check GameMenuWidgetClass is set in Blueprint."));
 	}
 }
 
@@ -1243,7 +1269,20 @@ void UUIManager::InitializeStatsWidget(UPlayerStatsManager* InStatsManager)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("UIManager: PlayerStatsWidgetClass is not set in Blueprint"));
 	}
+
+	// Also bind the HUD experience bar to the same stats manager so it updates
+	// from every stats_update packet пїЅ identical to how PlayerStatsWidget works.
+	if (UPlayerExperienceWidget* ExpWidget = GetPlayerExperienceWidget())
+	{
+		ExpWidget->BindToStatsManager(InStatsManager);
+		UE_LOG(LogTemp, Log, TEXT("UIManager: PlayerExperienceWidget bound to PlayerStatsManager"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: PlayerExperienceWidget not available yet for StatsManager binding"));
+	}
 }
+
 
 void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiaryHandler)
 {

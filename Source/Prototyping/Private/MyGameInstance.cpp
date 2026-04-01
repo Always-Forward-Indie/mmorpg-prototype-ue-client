@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 
@@ -46,6 +46,11 @@
 #include "Gameplay/Chat/ChatManager.h"
 #include "Gameplay/Chat/ChatNetworkHandler.h"
 #include "Gameplay/Player/PlayerStatsNetworkHandler.h"
+#include "Services/LocalizationSubsystem.h"
+#include "Data/LocalizationDataAsset.h"
+#include "WorldPartition/WorldPartitionSubsystem.h"
+#include "Engine/GameViewportClient.h"
+#include "Camera/CameraComponent.h"
 
 UMyGameInstance::UMyGameInstance(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -145,6 +150,12 @@ void UMyGameInstance::Init()
 	else
 	{
 		UE_LOG(LogTemp, Error, TEXT("Failed to create TimeSyncService"));
+	}
+
+	// Initialize localization subsystem with the configured data asset
+	if (ULocalizationSubsystem* LocSys = GetSubsystem<ULocalizationSubsystem>())
+	{
+		LocSys->SetLocalizationData(LocalizationDataAsset);
 	}
 
 	UE_LOG(LogTemp, Warning, TEXT("GameInstance Init called"));
@@ -734,6 +745,29 @@ void UMyGameInstance::TransitionToGameWorld()
 
 	bTransitioningToGameWorld = true;
 	bGameWorldReady = false;
+	bPendingSpawnDispatched = false;
+	ReadyFlags = 0;
+	RenderedFrameCount.Store(0);
+	bLoadingScreenRemovePending.Store(false);
+
+	// Unsubscribe any leftover render-frame delegate from a previous session.
+	if (EndFrameDelegateHandle.IsValid())
+	{
+		FCoreDelegates::OnEndFrameRT.Remove(EndFrameDelegateHandle);
+		EndFrameDelegateHandle.Reset();
+	}
+	if (GTRemoveTicker.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(GTRemoveTicker);
+		GTRemoveTicker.Reset();
+	}
+
+	// Reset the "first stats delivered" flag so the next session's first
+	// stats_update will re-trigger the loading screen gate.
+	if (PlayerStatsNetworkHandler)
+	{
+		PlayerStatsNetworkHandler->ResetFirstStatsFlag();
+	}
 
 	// Clean up Login level UI and actors before the level switch
 	RemoveLoginWidgetFromViewport();
@@ -744,19 +778,9 @@ void UMyGameInstance::TransitionToGameWorld()
 		LoginLevelCamera = nullptr;
 	}
 
-	// Show the loading screen before the transition so it is visible during the map load.
-	// We tear it down first (if stale) then re-add so AddLoadingScreen's guard works correctly.
-	if (LoadingScreenActor)
-	{
-		LoadingScreenActor->StopSound();
-		LoadingScreenActor->Destroy();
-		LoadingScreenActor = nullptr;
-	}
-	if (LoadingScreenWidget)
-	{
-		LoadingScreenWidget->RemoveFromParent();
-		LoadingScreenWidget = nullptr;
-	}
+	// Show the loading screen before the transition.
+	// AddLoadingScreen uses GameViewportClient::AddViewportWidgetContent,
+	// which is world-independent and survives ServerTravel.
 	AddLoadingScreen();
 
 	// Also clear the monitor stats widget as it will be recreated later
@@ -766,7 +790,7 @@ void UMyGameInstance::TransitionToGameWorld()
 		MonitorStatsWidget = nullptr;
 	}
 
-	// Clear spawned actor references — the old world (and its actors) will be destroyed.
+	// Clear spawned actor references � the old world (and its actors) will be destroyed.
 	// ConnectedPlayers / PendingSpawnClientId / PendingRemotePlayerSpawns intentionally
 	// survive the transition: they carry the data needed to spawn players once the new
 	// game world is ready (ProcessPendingSpawns reads them in OnGameWorldReady).
@@ -781,6 +805,12 @@ void UMyGameInstance::TransitionToGameWorld()
 	if (CurrentWorld)
 	{
 		CurrentWorld->ServerTravel(MapName, true);
+
+		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 1. ServerTravel('%s') called � ticker polling every 200ms"), *MapName);
+
+		// The loading screen was added via AddViewportWidgetContent — it lives
+		// at the Slate/GameViewportClient level, NOT inside any UWorld viewport.
+		// It survives ServerTravel and will be removed only by RemoveLoadingScreen.
 
 		// After ServerTravel the current world will be replaced and a new one created.
 		// Poll for the new world to become ready. We use a core ticker so the delegate
@@ -829,6 +859,13 @@ void UMyGameInstance::OnLoginLevelLoaded()
 		}
 
 		InitNetworkingSetup();
+
+		// Login UI is now in the viewport. Remove the loading screen after one tick
+		// so the render thread has received the draw command first.
+		if (UWorld* W = GetWorld())
+		{
+			W->GetTimerManager().SetTimer(RemoveLoadingScreenTimerHandle, this, &UMyGameInstance::RemoveLoadingScreen, 0.05f, false);
+		}
 	}
 
 	// Handle Debug level
@@ -868,14 +905,22 @@ void UMyGameInstance::OnLoginLevelLoaded()
 	}
 
 	// Remove loading screen
-	if (LoadingScreenWidget)
+	// NOTE: For the Debug level the loading screen is removed here immediately
+	// since there is no full login→world transition flow (no ReadyFlags system).
+	if (LevelBeingLoaded == DebugLevelName)
 	{
-		const float Delay = 0.7f;
-		if (GetWorld())
+		if (LoadingScreenWidget)
 		{
-			GetWorld()->GetTimerManager().SetTimer(RemoveLoadingScreenTimerHandle, this, &UMyGameInstance::RemoveLoadingScreen, Delay, false);
+			const float Delay = 0.7f;
+			if (GetWorld())
+			{
+				GetWorld()->GetTimerManager().SetTimer(RemoveLoadingScreenTimerHandle, this, &UMyGameInstance::RemoveLoadingScreen, Delay, false);
+			}
 		}
 	}
+	// For the normal game world transition the loading screen is managed entirely
+	// by CheckGameWorldReady / CheckAllReadyFlags / StartFrameCountdown.
+	// Do NOT remove it here.
 }
 
 void UMyGameInstance::CheckGameWorldReady()
@@ -883,21 +928,83 @@ void UMyGameInstance::CheckGameWorldReady()
 	UWorld* NewWorld = GetWorld();
 	if (!NewWorld) { return; }
 
-	// Re-create the loading screen in the new world's viewport as soon as possible
-	if (!LoadingScreenWidget && LoadingScreenWidgetClass)
+	// Loading screen lives at Slate/GameViewportClient level — it survives
+	// ServerTravel.  No re-creation needed; just verify it is still there.
+	if (!LoadingScreenWidget)
 	{
-		LoadingScreenWidget = CreateWidget<UUserWidget>(this, LoadingScreenWidgetClass);
-		if (LoadingScreenWidget)
-		{
-			LoadingScreenWidget->AddToViewport(999);
-			UE_LOG(LogTemp, Warning, TEXT("CheckGameWorldReady: Loading screen re-created in new world"));
-		}
+		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] CheckGameWorldReady: no loading screen widget — re-creating via AddLoadingScreen"));
+		AddLoadingScreen();
 	}
 
+	// Gate 1: PlayerController must exist before we can do anything.
 	APlayerController* PC = NewWorld->GetFirstPlayerController();
-	if (!PC) { return; }
+	if (!PC)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] Gate1 WAIT: no PlayerController yet"));
+		return;
+	}
 
-	UE_LOG(LogTemp, Warning, TEXT("CheckGameWorldReady: Game world is ready!"));
+	// Spawn the pending local player exactly once as soon as the PC is ready.
+	// We do this eagerly so the pawn exists and World Partition can use the
+	// player's location as a streaming source to load the surrounding cells.
+	if (!bPendingSpawnDispatched && (PendingSpawnClientId > 0 || PendingRemotePlayerSpawns.Num() > 0))
+	{
+		bPendingSpawnDispatched = true;
+
+		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 3. Gate1 PASS: PC ready � dispatching spawn (PendingClientId=%d)"), PendingSpawnClientId);
+
+		// World context / managers must be refreshed before spawning so the new
+		// world's TimerManager / network polling are active.
+		RefreshManagerWorldContexts();
+		ProcessPendingSpawns();
+
+		// Phase 3: ACK the server so it sends Phase 4 world-state.
+		if (PlayerManager)
+		{
+			PlayerManager->SendPlayerReadyRequest(ClientData);
+			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 4. playerReady sent to server (Phase 3)"));
+		}
+
+		// Reset ready-flags and arm the safety fallback timer.
+		ReadyFlags = 0;
+		NewWorld->GetTimerManager().SetTimer(
+			LoadingScreenSafetyTimerHandle,
+			this,
+			&UMyGameInstance::RemoveLoadingScreen,
+			LoadingScreenSafetyTimeout,
+			false);
+		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Safety timer armed (%.0fs)"), LoadingScreenSafetyTimeout);
+	}
+
+	// Gate 2: Pawn must be possessed � Possess() is called inside SpawnPlayerForClient.
+	APawn* Pawn = PC->GetPawn();
+	if (!Pawn)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] Gate2 WAIT: PC exists but no Pawn yet (Possess not done)"));
+		return;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Gate2 PASS: Pawn='%s' possessed at Pos=(%.0f,%.0f,%.0f)"),
+		*Pawn->GetName(),
+		Pawn->GetActorLocation().X, Pawn->GetActorLocation().Y, Pawn->GetActorLocation().Z);
+
+	// Gate 3: World Partition streaming must be complete so no geometry pops in
+	// during the first rendered frame after the loading screen disappears.
+	if (UWorldPartitionSubsystem* WPS = NewWorld->GetSubsystem<UWorldPartitionSubsystem>())
+	{
+		if (!WPS->IsAllStreamingCompleted())
+		{
+			UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] Gate3 WAIT: World Partition still streaming..."));
+			return;
+		}
+		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Gate3 PASS: World Partition streaming complete"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Gate3 SKIP: no WorldPartitionSubsystem (not a WP map)"));
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 5. All gates passed � calling OnGameWorldReady"));
 	OnGameWorldReady();
 }
 
@@ -908,37 +1015,122 @@ void UMyGameInstance::OnGameWorldReady()
 	bGameWorldReady = true;
 	bTransitioningToGameWorld = false;
 
-	UE_LOG(LogTemp, Warning, TEXT("OnGameWorldReady: Initializing gameplay in game world"));
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 6. OnGameWorldReady: bGameWorldReady=true, ReadyFlags=0x%02X � calling CheckAllReadyFlags"), ReadyFlags);
 
 	UWorld* GameWorld = GetWorld();
 	if (!GameWorld)
 	{
-		UE_LOG(LogTemp, Error, TEXT("OnGameWorldReady: GetWorld() is null!"));
+		UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] OnGameWorldReady: GetWorld() is null!"));
 		return;
 	}
 
 	APlayerController* PC = GameWorld->GetFirstPlayerController();
 	if (PC) { PC->bShowMouseCursor = false; }
 
-	RefreshManagerWorldContexts();
-	ProcessPendingSpawns();
+	// All Notify* flags may already be accumulated while streaming was running.
+	// Attempt the frame countdown now in case we were the last gate to clear.
+	CheckAllReadyFlags();
 
-	// Phase 3: Send playerReady ACK to server.
-	// Server will auto-send Phase 4 world-state: spawnNPCs, spawnMobsInZone,
-	// nearbyItems, PLAYER_EQUIPMENT_UPDATE for all online players.
-	if (PlayerManager)
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] OnGameWorldReady: complete"));
+}
+
+void UMyGameInstance::NotifyPlayerReadyAck()
+{
+	if (!bPendingSpawnDispatched) { return; }
+	ReadyFlags |= ReadyFlag_PlayerReadyAck;
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] FLAG PlayerReadyAck set (mask=0x%02X, bGameWorldReady=%d)"), ReadyFlags, bGameWorldReady);
+	CheckAllReadyFlags();
+}
+
+void UMyGameInstance::NotifyUIInitialized()
+{
+	if (!bPendingSpawnDispatched) { return; }
+	ReadyFlags |= ReadyFlag_UIInitialized;
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] FLAG UIInitialized set (mask=0x%02X, bGameWorldReady=%d)"), ReadyFlags, bGameWorldReady);
+	CheckAllReadyFlags();
+}
+
+void UMyGameInstance::NotifyStatsReceived()
+{
+	if (!bPendingSpawnDispatched) { return; }
+	ReadyFlags |= ReadyFlag_StatsReceived;
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] FLAG StatsReceived set (mask=0x%02X, bGameWorldReady=%d)"), ReadyFlags, bGameWorldReady);
+	CheckAllReadyFlags();
+}
+
+void UMyGameInstance::NotifyPlayerSpawned()
+{
+	if (!bPendingSpawnDispatched) { return; }
+	ReadyFlags |= ReadyFlag_PlayerSpawned;
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] FLAG PlayerSpawned set (mask=0x%02X, bGameWorldReady=%d)"), ReadyFlags, bGameWorldReady);
+	CheckAllReadyFlags();
+}
+
+void UMyGameInstance::CheckAllReadyFlags()
+{
+	UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] CheckAllReadyFlags: mask=0x%02X required=0x%02X bGameWorldReady=%d frameCountdownActive=%d"),
+		ReadyFlags, ReadyFlag_AllRequired, (int)bGameWorldReady, EndFrameDelegateHandle.IsValid() ? 1 : 0);
+
+	if ((ReadyFlags & ReadyFlag_AllRequired) != ReadyFlag_AllRequired) { return; }
+	if (!LoadingScreenWidget) { return; }
+	if (EndFrameDelegateHandle.IsValid()) { return; }
+	if (!bGameWorldReady)
 	{
-		PlayerManager->SendPlayerReadyRequest(ClientData);
-		UE_LOG(LogTemp, Warning, TEXT("OnGameWorldReady: playerReady sent to server (Phase 3)"));
+		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] CheckAllReadyFlags: all flags ready but Gate3 (WP streaming) not done yet"));
+		return;
 	}
 
-	if (LoadingScreenWidget)
+	if (UWorld* W = GetWorld())
 	{
-		const float Delay = 0.7f;
-		GameWorld->GetTimerManager().SetTimer(RemoveLoadingScreenTimerHandle, this, &UMyGameInstance::RemoveLoadingScreen, Delay, false);
+		W->GetTimerManager().ClearTimer(LoadingScreenSafetyTimerHandle);
+		W->GetTimerManager().ClearTimer(RemoveLoadingScreenTimerHandle);
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("OnGameWorldReady: Game world initialization complete"));
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 7. ALL flags set (0x%02X) + WP streamed � starting frame countdown (%d frames)"),
+		ReadyFlags, MinRenderedFramesBeforeHide);
+	StartFrameCountdown();
+}
+void UMyGameInstance::StartFrameCountdown()
+{
+	RenderedFrameCount.Store(0);
+	bLoadingScreenRemovePending.Store(false);
+
+	// Count frames on the RENDER THREAD (OnEndFrameRT) so we are certain the
+	// loading screen has actually been composited by the GPU before we remove it.
+	// OnEndFrameRT fires at the true end of each render frame � not just the end
+	// of a game-thread tick � so it reliably reflects what the player has seen.
+	EndFrameDelegateHandle = FCoreDelegates::OnEndFrameRT.AddLambda([this]()
+	{
+		if (bLoadingScreenRemovePending.Load()) { return; }
+
+		const int32 NewCount = RenderedFrameCount.IncrementExchange() + 1;
+		UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] RT Frame %d / %d"), NewCount, MinRenderedFramesBeforeHide);
+
+		if (NewCount >= MinRenderedFramesBeforeHide)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 8. %d RT frames seen � signalling GT to remove loading screen"), MinRenderedFramesBeforeHide);
+			bLoadingScreenRemovePending.Store(true);
+		}
+	});
+
+	// Poll the atomic flag on the game thread once per tick.
+	// RemoveLoadingScreen touches UMG and TimerManager � GT only.
+	GTRemoveTicker = FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateLambda([this](float) -> bool
+		{
+			if (!bLoadingScreenRemovePending.Load()) { return true; }
+
+			if (EndFrameDelegateHandle.IsValid())
+			{
+				FCoreDelegates::OnEndFrameRT.Remove(EndFrameDelegateHandle);
+				EndFrameDelegateHandle.Reset();
+			}
+
+			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 9. GT ticker: removing loading screen NOW"));
+			RemoveLoadingScreen();
+			return false;   // unregister ticker
+		}),
+		0.0f);
 }
 
 void UMyGameInstance::RefreshManagerWorldContexts()
@@ -1040,45 +1232,108 @@ void UMyGameInstance::RemoveLoginWidgetFromViewport()
 	}
 }
 
+void UMyGameInstance::StartLoadingScreenMusic()
+{
+	if (!LoadingMusicSoundSource || !GetWorld()) { return; }
+
+	// Already playing — nothing to do
+	if (IsValid(LoadingScreenAudioComponent) && LoadingScreenAudioComponent->IsPlaying()) { return; }
+
+	// bPersistAcrossLevelTransition=true binds the component to the raw AudioDevice
+	// instead of a world actor, and sets bIgnoreForFlushing internally — so the
+	// sound is NOT flushed when ServerTravel tears down the old world.
+	// bAutoDestroy=false: we control the lifetime; StopLoadingScreenMusic() cleans up.
+	LoadingScreenAudioComponent = UGameplayStatics::SpawnSound2D(
+		GetWorld(),
+		LoadingMusicSoundSource,
+		/*VolumeMultiplier=*/1.0f,
+		/*PitchMultiplier=*/1.0f,
+		/*StartTime=*/0.0f,
+		/*ConcurrencySettings=*/nullptr,
+		/*bPersistAcrossLevelTransition=*/true,
+		/*bAutoDestroy=*/false);
+
+	if (LoadingScreenAudioComponent)
+	{
+		LoadingScreenAudioComponent->bIsUISound = true;
+		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Loading screen music started (persists across level transition)"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] StartLoadingScreenMusic: SpawnSound2D returned null"));
+	}
+}
+
 void UMyGameInstance::AddLoadingScreen()
 {
-	if (LoadingScreenWidgetClass)
+	if (!LoadingScreenWidgetClass) { return; }
+
+	// Already showing — nothing to do
+	if (LoadingScreenWidget && LoadingScreenSlateWidget.IsValid()) { return; }
+
+	UGameViewportClient* GVC = GetGameViewportClient();
+	if (!GVC)
 	{
-		if (!LoadingScreenWidget)
-		{
-			// Create the widget and add it to the viewport on top of the game UI
-			LoadingScreenWidget = CreateWidget<UUserWidget>(this, LoadingScreenWidgetClass);
-		}
-		if (LoadingScreenWidget)
-		{
-			LoadingScreenWidget->AddToViewport(999);
-
-			//spawn loading screen actor
-			LoadingScreenActor = GetWorld()->SpawnActor<ALoadingSceenActor>(ALoadingSceenActor::StaticClass(), FVector(0.0f, 0.0f, 0.0f), FRotator(0.0f, 0.0f, 0.0f));
-
-			//check if loading screen actor is valid
-			if (LoadingScreenActor)
-			{
-				//play sound
-				LoadingScreenActor->PlaySound(LoadingMusicSoundSource);
-			}
-		}
+		UE_LOG(LogTemp, Error, TEXT("AddLoadingScreen: no GameViewportClient"));
+		return;
 	}
+
+	// Create the UMG widget if needed
+	if (!LoadingScreenWidget)
+	{
+		LoadingScreenWidget = CreateWidget<UUserWidget>(this, LoadingScreenWidgetClass);
+	}
+	if (!LoadingScreenWidget) { return; }
+
+	// Take its Slate representation and add directly to the viewport overlay.
+	// This is world-independent — it survives ServerTravel.
+	LoadingScreenSlateWidget = LoadingScreenWidget->TakeWidget();
+	GVC->AddViewportWidgetContent(LoadingScreenSlateWidget.ToSharedRef(), MAX_int32);
+
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] AddLoadingScreen: widget added via GameViewportClient (world-independent)"));
+
+	StartLoadingScreenMusic();
 }
 
 void UMyGameInstance::RemoveLoadingScreen()
 {
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 9. RemoveLoadingScreen called � loading screen going away NOW"));
+
+	// Clean up render-thread and GT ticker if safety timer fired before countdown finished.
+	if (EndFrameDelegateHandle.IsValid())
+	{
+		FCoreDelegates::OnEndFrameRT.Remove(EndFrameDelegateHandle);
+		EndFrameDelegateHandle.Reset();
+	}
+	if (GTRemoveTicker.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(GTRemoveTicker);
+		GTRemoveTicker.Reset();
+	}
+	bLoadingScreenRemovePending.Store(false);
+
+	// Stop loading music (may already be null if world was torn down by ServerTravel)
+	if (IsValid(LoadingScreenAudioComponent))
+	{
+		LoadingScreenAudioComponent->Stop();
+		LoadingScreenAudioComponent->DestroyComponent();
+	}
+	LoadingScreenAudioComponent = nullptr;
+
+	// Remove from GameViewportClient (Slate level — world-independent)
+	if (LoadingScreenSlateWidget.IsValid())
+	{
+		if (UGameViewportClient* GVC = GetGameViewportClient())
+		{
+			GVC->RemoveViewportWidgetContent(LoadingScreenSlateWidget.ToSharedRef());
+		}
+		LoadingScreenSlateWidget.Reset();
+	}
+
 	if (LoadingScreenWidget)
 	{
-		// Destroy the loading screen actor
-		if (LoadingScreenActor)
-		{
-			LoadingScreenActor->StopSound();
-			LoadingScreenActor->Destroy();
-		}
-
 		LoadingScreenWidget->RemoveFromParent();
-		LoadingScreenWidget = nullptr; // Clear the reference
+		LoadingScreenWidget = nullptr;
 	}
 }
 
@@ -1179,7 +1434,16 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 		APlayerController* PC = GetFirstLocalPlayerController(GetWorld());
 		if (PC)
 		{
-			PC->Possess(Player);
+		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 3b. Calling PC->Possess(Player) � camera will switch NOW"));
+		PC->Possess(Player);
+		{
+			FRotator CR = PC->GetControlRotation();
+			FVector  CamLoc = Player->GetFollowCamera() ? Player->GetFollowCamera()->GetComponentLocation() : FVector::ZeroVector;
+			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 3c. PC->Possess done. Pawn=%s ControlRot=(P=%.1f Y=%.1f R=%.1f) CameraLoc=(%.0f,%.0f,%.0f)"),
+				PC->GetPawn() ? *PC->GetPawn()->GetName() : TEXT("NULL"),
+				CR.Pitch, CR.Yaw, CR.Roll,
+				CamLoc.X, CamLoc.Y, CamLoc.Z);
+		}
 		}
 		else
 		{

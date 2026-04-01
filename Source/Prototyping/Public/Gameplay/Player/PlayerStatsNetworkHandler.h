@@ -31,6 +31,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Player Stats Network")
     void UnsubscribeFromNetworkEvents();
 
+    /** Reset so the next stats_update re-triggers NotifyStatsReceived (call on level transition). */
+    void ResetFirstStatsFlag() { bFirstStatsDelivered = false; }
+
     // Fired for every effectTick packet (DoT/HoT tick on any character)
     UPROPERTY(BlueprintAssignable, Category = "Player Stats Network|Events")
     FOnEffectTick OnEffectTick;
@@ -52,4 +55,8 @@ void HandleSetPlayerActiveEffects(const FString& ReceivedData) const;
     UMyGameInstance* GameInstance = nullptr;
 
     bool bIsSubscribed = false;
+
+    // True after the first stats_update for our local character has been delivered.
+    // Used to signal the loading screen gate exactly once per session.
+    bool bFirstStatsDelivered = false;
 };

@@ -41,6 +41,9 @@ void UPlayerStatsNetworkHandler::HandleChunkServerData(const FString& ReceivedDa
 
     if (Msg.eventType == TEXT("stats_update"))
     {
+        UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: stats_update received (bFirstStatsDelivered=%d, localCharId=%d)"),
+            bFirstStatsDelivered, GameInstance ? GameInstance->GetCurrentCharacterID() : -1);
+
         TSharedPtr<FJsonObject> Root;
         TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
         if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
@@ -50,16 +53,29 @@ void UPlayerStatsNetworkHandler::HandleChunkServerData(const FString& ReceivedDa
 
         FPlayerStatsUpdateStruct Stats = ParseStatsUpdate(*BodyPtr);
 
+        UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: stats_update charId=%d hp=%d/%d"),
+            Stats.characterId, Stats.healthCurrent, Stats.healthMax);
+
         // Only apply stats that belong to our local character.
         // This is critical when multiple clients share the same network broadcast
         // (PIE multi-player or multiple game windows on the same server).
         if (GameInstance && Stats.characterId > 0 &&
             Stats.characterId != GameInstance->GetCurrentCharacterID())
         {
+            UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: charId mismatch, skipping"));
             return;
         }
 
         StatsManager->ApplyStatsUpdate(Stats);
+
+        // Signal the loading screen gate on the very first stats_update for our character.
+        // This ensures the loading screen stays up until the HUD has real data to display.
+        if (!bFirstStatsDelivered && GameInstance)
+        {
+            bFirstStatsDelivered = true;
+            GameInstance->NotifyStatsReceived();
+            UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: NotifyStatsReceived() fired"));
+        }
     }
     else if (Msg.eventType == TEXT("setPlayerActiveEffects"))
     {

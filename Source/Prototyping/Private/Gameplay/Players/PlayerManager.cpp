@@ -1,10 +1,13 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
+
 #include "Gameplay/Players/PlayerManager.h"
 #include "Gameplay/Combat/CombatSystemManager.h"
 #include "Gameplay/Combat/CombatNetworkHandler.h"
+#include "Gameplay/Player/ExperienceManager.h"
 #include "MyGameInstance.h"
+
 
 UPlayerManager::UPlayerManager(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -204,6 +207,8 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 		if (gameInstance && IsValid(gameInstance)) {
 			UE_LOG(LogTemp, Warning, TEXT("Server acknowledged playerReady - Phase 4 world-state will arrive automatically"));
 			// Server will now auto-send: spawnNPCs, spawnMobsInZone, nearbyItems, PLAYER_EQUIPMENT_UPDATE
+			// Signal the loading screen gate: Phase 4 has started, start the grace timer.
+			gameInstance->NotifyPlayerReadyAck();
 		}
 	}
 
@@ -311,6 +316,30 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 		else if (!gameInstance || !IsValid(gameInstance))
 		{
 			UE_LOG(LogTemp, Error, TEXT("PlayerManager: GameInstance is null or invalid in disconnectClient"));
+		}
+	}
+
+	// Handle experience_update (XP gain, level up)
+	if (MessageData.eventType == "experience_update" && MessageData.status == "success")
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PlayerManager: Received experience_update"));
+		FExperienceUpdateStruct ExpUpdate = JSONParser::DeserializeExperienceUpdate(ReceivedData);
+
+		if (gameInstance && IsValid(gameInstance) && ExpUpdate.characterId > 0)
+		{
+			UExperienceManager* ExpMgr = gameInstance->GetExperienceManager();
+			if (ExpMgr && IsValid(ExpMgr))
+			{
+				ExpMgr->ProcessExperienceUpdate(ExpUpdate);
+				UE_LOG(LogTemp, Log, TEXT("PlayerManager: Processed experience_update for character %d (+%d XP, Level %d->%d, LevelUp=%s)"),
+					ExpUpdate.characterId, ExpUpdate.experienceChange,
+					ExpUpdate.oldLevel, ExpUpdate.newLevel,
+					ExpUpdate.levelUp ? TEXT("true") : TEXT("false"));
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("PlayerManager: ExperienceManager not available for experience_update"));
+			}
 		}
 	}
 

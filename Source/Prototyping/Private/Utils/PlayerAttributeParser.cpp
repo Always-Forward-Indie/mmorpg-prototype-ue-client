@@ -63,7 +63,91 @@ FPlayerStatsUpdateStruct PlayerAttributeParser::DeserializePlayerStatsUpdate(con
         TSharedPtr<FJsonObject> ManaObj = Body->GetObjectField(TEXT("mana"));
         ParseManaData(ManaObj, StatsUpdate.manaCurrent, StatsUpdate.manaMax);
     }
-    
+
+    // Parse experience data from "experience" sub-object (stats_update format)
+    if (Body->HasField(TEXT("experience")))
+    {
+        TSharedPtr<FJsonObject> ExpObj = Body->GetObjectField(TEXT("experience"));
+        if (ExpObj.IsValid())
+        {
+            if (ExpObj->HasField(TEXT("current")))
+                StatsUpdate.experienceCurrent = ExpObj->GetIntegerField(TEXT("current"));
+            if (ExpObj->HasField(TEXT("levelStart")))
+                StatsUpdate.experienceLevelStart = ExpObj->GetIntegerField(TEXT("levelStart"));
+            if (ExpObj->HasField(TEXT("nextLevel")))
+                StatsUpdate.experienceNextLevel = ExpObj->GetIntegerField(TEXT("nextLevel"));
+            if (ExpObj->HasField(TEXT("debt")))
+                StatsUpdate.experienceDebt = ExpObj->GetIntegerField(TEXT("debt"));
+        }
+    }
+
+    // Parse attributes array
+    if (Body->HasField(TEXT("attributes")))
+    {
+        const TArray<TSharedPtr<FJsonValue>>* AttrsArray = nullptr;
+        if (Body->TryGetArrayField(TEXT("attributes"), AttrsArray))
+        {
+            for (const TSharedPtr<FJsonValue>& AttrVal : *AttrsArray)
+            {
+                TSharedPtr<FJsonObject> AttrObj = AttrVal->AsObject();
+                if (!AttrObj.IsValid()) continue;
+
+                FStatAttributeEntry Entry;
+                if (AttrObj->HasField(TEXT("slug")))
+                    Entry.slug = AttrObj->GetStringField(TEXT("slug"));
+                if (AttrObj->HasField(TEXT("name")))
+                    Entry.name = AttrObj->GetStringField(TEXT("name"));
+                if (AttrObj->HasField(TEXT("base")))
+                    Entry.base = AttrObj->GetNumberField(TEXT("base"));
+                if (AttrObj->HasField(TEXT("effective")))
+                    Entry.effective = AttrObj->GetNumberField(TEXT("effective"));
+                Entry.baseValue  = Entry.base;
+                Entry.totalValue = Entry.effective;
+                StatsUpdate.attributes.Add(Entry);
+            }
+        }
+    }
+
+    // Parse activeEffects array
+    if (Body->HasField(TEXT("activeEffects")))
+    {
+        const TArray<TSharedPtr<FJsonValue>>* EffectsArray = nullptr;
+        if (Body->TryGetArrayField(TEXT("activeEffects"), EffectsArray))
+        {
+            for (const TSharedPtr<FJsonValue>& EffectVal : *EffectsArray)
+            {
+                TSharedPtr<FJsonObject> EffObj = EffectVal->AsObject();
+                if (!EffObj.IsValid()) continue;
+
+                FActiveEffectEntry Effect;
+                if (EffObj->HasField(TEXT("slug")))
+                    Effect.slug = EffObj->GetStringField(TEXT("slug"));
+                if (EffObj->HasField(TEXT("effectTypeSlug")))
+                    Effect.effectTypeSlug = EffObj->GetStringField(TEXT("effectTypeSlug"));
+                if (EffObj->HasField(TEXT("attributeSlug")))
+                    Effect.attributeSlug = EffObj->GetStringField(TEXT("attributeSlug"));
+                if (EffObj->HasField(TEXT("value")))
+                    Effect.value = static_cast<float>(EffObj->GetNumberField(TEXT("value")));
+                if (EffObj->HasField(TEXT("expiresAt")))
+                    Effect.expiresAt = static_cast<int64>(EffObj->GetNumberField(TEXT("expiresAt")));
+                StatsUpdate.activeEffects.Add(Effect);
+            }
+        }
+    }
+
+    // Parse weight data
+    if (Body->HasField(TEXT("weight")))
+    {
+        TSharedPtr<FJsonObject> WeightObj = Body->GetObjectField(TEXT("weight"));
+        if (WeightObj.IsValid())
+        {
+            if (WeightObj->HasField(TEXT("current")))
+                StatsUpdate.weightCurrent = static_cast<float>(WeightObj->GetNumberField(TEXT("current")));
+            if (WeightObj->HasField(TEXT("max")))
+                StatsUpdate.weightMax = static_cast<float>(WeightObj->GetNumberField(TEXT("max")));
+        }
+    }
+
     // Validate the parsed data
     if (!ValidateStatsData(StatsUpdate))
     {
@@ -199,8 +283,19 @@ void PlayerAttributeParser::UpdateCharacterDataFromStatsUpdate(FCharacterDataStr
         CharacterData.characterAttributes.attributesData.Add(TEXT("max_mana"), ManaAttr);
     }
     
-    UE_LOG(LogTemp, Log, TEXT("PlayerAttributeParser: Updated character data for CharID: %d - Level: %d, HP: %d/%d, MP: %d/%d"),
+    // Sync experience fields into character data
+    if (StatsUpdate.experienceCurrent > 0 || StatsUpdate.experienceNextLevel > 0)
+    {
+        CharacterData.characterExperiencePoints = StatsUpdate.experienceCurrent;
+        CharacterData.characterExpForLevelStart  = StatsUpdate.experienceLevelStart;
+        CharacterData.characterExpForLevelEnd    = StatsUpdate.experienceNextLevel;
+        CharacterData.characterExperienceDebt    = StatsUpdate.experienceDebt;
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("PlayerAttributeParser: Updated character data for CharID: %d - Level: %d, HP: %d/%d, MP: %d/%d, XP: %d [%d-%d] Debt: %d"),
         CharacterData.characterId, CharacterData.characterLevel,
         CharacterData.characterCurrentHealth, StatsUpdate.healthMax,
-        CharacterData.characterCurrentMana, StatsUpdate.manaMax);
+        CharacterData.characterCurrentMana, StatsUpdate.manaMax,
+        StatsUpdate.experienceCurrent, StatsUpdate.experienceLevelStart,
+        StatsUpdate.experienceNextLevel, StatsUpdate.experienceDebt);
 }

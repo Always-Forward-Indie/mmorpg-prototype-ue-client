@@ -1,15 +1,19 @@
 #pragma once
 
+#pragma once
+
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Data/DataStructs.h"
 #include "Gameplay/Player/IPlayerProgression.h"
+
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "PlayerExperienceWidget.generated.h"
 
 // Forward declarations
 class UExperienceManager;
+class UPlayerStatsManager;
 
 /**
  * UI Widget for displaying player experience and level progression
@@ -39,6 +43,14 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Player Experience")
     void InitializeWidget(UExperienceManager* InExperienceManager, int32 CharacterId);
 
+    /**
+     * Bind to a PlayerStatsManager so every stats_update packet drives
+     * the XP bar directly — same pattern as PlayerStatsWidget.
+     * Call this right after InitializeWidget() (or instead of it).
+     */
+    UFUNCTION(BlueprintCallable, Category = "Player Experience")
+    void BindToStatsManager(UPlayerStatsManager* InStatsManager);
+
     // Manual update methods
     UFUNCTION(BlueprintCallable, Category = "Player Experience")
     void UpdateExperienceDisplay(int32 CurrentExp, int32 ExpForNextLevel, int32 Level);
@@ -48,6 +60,11 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Player Experience")
     void ShowLevelUpNotification(int32 NewLevel);
+
+
+    /** Update the XP debt progress bar (0..1). Pass 0 to hide it. */
+    UFUNCTION(BlueprintCallable, Category = "Player Experience")
+    void UpdateDebtBar(int32 DebtAmount, int32 ExpForNextLevel);
 
 protected:
     // UI Components (to be bound in Blueprint)
@@ -63,6 +80,13 @@ protected:
     UPROPERTY(meta = (BindWidget))
     UTextBlock* ExperienceGainText;
 
+    // Optional debt bar — BindWidgetOptional so it's not required in Blueprint
+    UPROPERTY(meta = (BindWidgetOptional))
+    UProgressBar* DebtProgressBar = nullptr;
+
+    UPROPERTY(meta = (BindWidgetOptional))
+    UTextBlock* DebtText = nullptr;
+
     // Animation and visual effects
     UFUNCTION(BlueprintImplementableEvent, Category = "Player Experience")
     void PlayExperienceGainAnimation(int32 ExpGained, const FString& Reason);
@@ -76,12 +100,22 @@ protected:
     // Internal update methods
     void UpdateProgressBar(float Percent);
     void UpdateLevelDisplay(int32 Level);
-    void UpdateExperienceTextDisplay(int32 CurrentExp, int32 ExpForNextLevel);
+    void UpdateExperienceTextDisplay(int32 CurrentExp, int32 ExpForCurrentLevel, int32 ExpForNextLevel, int32 DebtAmount);
 
 private:
     // System references
     UPROPERTY()
     TObjectPtr<UExperienceManager> ExperienceManager;
+
+    /** Direct stats-manager binding (primary data source, mirrors PlayerStatsWidget) */
+    UPROPERTY()
+    TObjectPtr<UPlayerStatsManager> StatsManager;
+
+    UFUNCTION()
+    void HandleStatsUpdated(const FPlayerStatsUpdateStruct& NewStats);
+
+    /** Refresh all XP/level UI from a stats-update packet directly */
+    void RefreshFromStatsUpdate(const FPlayerStatsUpdateStruct& Stats);
 
     // Current character data
     UPROPERTY()
@@ -107,3 +141,4 @@ private:
     // Timer handles for animations
     FTimerHandle ExperienceGainTimerHandle;
 };
+

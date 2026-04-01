@@ -14,6 +14,9 @@
 class UMyGameInstance;
 class UExperienceManager;
 
+// Fired on the game thread on the first tick after all child widgets are valid and in the viewport
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPlayerInterfaceReady);
+
 /**
  * Main player interface widget that combines SkillBar, PlayerHUD, DamageCanvas and PlayerExperience
  * This widget manages the layout and positioning of core UI elements
@@ -89,6 +92,7 @@ protected:
     virtual void NativeConstruct() override;
     virtual void NativeDestruct() override;
     virtual void NativePreConstruct() override;
+    virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 private:
     UPROPERTY()
@@ -100,10 +104,18 @@ private:
     /** Validate that all required widgets are available */
     bool ValidateWidgets() const;
 
+    // Set to true after OnPlayerInterfaceReady has been broadcast so it fires exactly once
+    bool bReadySignalSent = false;
+
 public:
     /** Check if the interface is fully initialized */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Interface")
     bool IsInterfaceReady() const;
+
+    /** Fired once on the first game-thread tick where all child widgets are valid.
+     *  UIManager and BasicPlayer subscribe to this to drive the loading-screen gate. */
+    UPROPERTY(BlueprintAssignable, Category = "Player Interface|Events")
+    FOnPlayerInterfaceReady OnPlayerInterfaceReady;
 
     /** Setup skill bar with specified number of slots */
     UFUNCTION(BlueprintCallable, Category = "Player Interface")

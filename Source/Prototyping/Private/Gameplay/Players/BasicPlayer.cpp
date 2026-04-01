@@ -931,11 +931,14 @@ ABasicPlayer::ABasicPlayer()
 // Called when the game starts or when spawned
 void ABasicPlayer::BeginPlay()
 {
-	Super::BeginPlay();
+Super::BeginPlay();
 
-    MyGameInstance = Cast<UMyGameInstance>(UGameplayStatics::GetGameInstance(this));
-    if (MyGameInstance)
-    {
+   MyGameInstance = Cast<UMyGameInstance>(UGameplayStatics::GetGameInstance(this));
+   if (MyGameInstance)
+   {
+       UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] BasicPlayer::BeginPlay — CharID=%d isOtherClient=%d Pos=(%.0f,%.0f,%.0f)"),
+           playerData.characterData.characterId, (int)playerData.isOtherClient,
+           GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z);
         UE_LOG(LogTemp, Warning, TEXT("GameInstance found"));
 
         // Route the player's AudioComponent through the SFX SoundClass
@@ -1061,6 +1064,16 @@ void ABasicPlayer::BeginPlay()
 						UE_LOG(LogTemp, Warning, TEXT("UIManager: Init called for FCT system"));
 
                         PlayerHUD = UIManager->GetPlayerInterfaceWidget()->GetPlayerHUD();
+
+						// Flush any stats that arrived before the HUD was ready.
+						RefreshHUD();
+
+						// Subscribe to StatsManager so effectTick and other paths that
+						// bypass ProcessStatsUpdate still update playerData and the HUD.
+						if (UPlayerStatsManager* StatsMgr = MyGameInstance ? MyGameInstance->GetPlayerStatsManager() : nullptr)
+						{
+							StatsMgr->OnStatsUpdated.AddDynamic(this, &ABasicPlayer::HandleStatsManagerUpdate);
+						}
 					}
 					else
 					{
@@ -1151,6 +1164,14 @@ void ABasicPlayer::BeginPlay()
 				// in UIManager if the character spawned as dead (SetDead_Implementation
 				// already called in SpawnPlayerForClient before this timer fires).
 				}
+
+				// Subscribe to UIManager's deferred ready signal.
+				// OnUIManagerInitialized is broadcast one game-thread tick AFTER
+				// PlayerInterfaceWidget->AddToViewport(), which guarantees the
+				// render thread has already received the widget before we signal
+				// the loading-screen countdown to start.
+				UIManager->OnUIManagerInitialized.AddDynamic(this, &ABasicPlayer::HandleUIManagerInitialized);
+				UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] UIInitTimer: subscribed to OnUIManagerInitialized"));
                 
 			}, 0.5f, false);
 		}
@@ -1169,6 +1190,28 @@ void ABasicPlayer::HandleLevelUp(int32 OldLevel, int32 NewLevel, int32 NewTotalE
 
     UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Level up! %d -> %d"), OldLevel, NewLevel);
     PlayEventSound(LevelUpSound);
+}
+
+void ABasicPlayer::HandleUIManagerInitialized()
+{
+    // Unsubscribe immediately — this must fire exactly once per spawn.
+    if (UIManager)
+    {
+        UIManager->OnUIManagerInitialized.RemoveDynamic(this, &ABasicPlayer::HandleUIManagerInitialized);
+    }
+
+    // At this point PlayerInterfaceWidget->AddToViewport() was called one game-thread
+    // tick ago, so the render thread has already received the draw command for the
+    // game UI. It is now safe to signal the loading-screen countdown gates.
+    bUIInitDone = true;
+
+    if (MyGameInstance)
+    {
+        MyGameInstance->NotifyUIInitialized();
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] HandleUIManagerInitialized: bUIInitDone=true, NotifyUIInitialized sent. Pos=(%.0f,%.0f,%.0f)"),
+        GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z);
 }
 
 void ABasicPlayer::HandleWeightStatusChanged(const FWeightStatusData& WeightStatus)
@@ -1205,35 +1248,21 @@ void ABasicPlayer::UpdateHUD()
     {
         if (!GetIsOtherClient())
         {
-            // Get max HP/Mana from attributes; fall back to current HP/MP if attributes
-            // haven't arrived yet (prevents the "435/1" display before first stats_update).
-            float MaxHealth = 0.0f;
-            float MaxMana = 0.0f;
+            // Only update HP/MP bars when we have real server-authoritative max values
+            // (populated by the first stats_update). Before that keep the bars hidden/empty
+            // so we don't show a fake full HP bar on join.
+            const FAttributeDataStruct* HealthAttr = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_health"));
+            const FAttributeDataStruct* ManaAttr   = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_mana"));
 
-            if (const FAttributeDataStruct* HealthAttr = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_health")))
+            if (HealthAttr && HealthAttr->attributeValue > 0 &&
+                ManaAttr   && ManaAttr->attributeValue   >= 0)
             {
-                MaxHealth = HealthAttr->attributeValue;
+                PlayerHUD->SetHP(playerData.characterData.characterCurrentHealth,
+                                 static_cast<float>(HealthAttr->attributeValue));
+                PlayerHUD->SetMana(playerData.characterData.characterCurrentMana,
+                                   static_cast<float>(ManaAttr->attributeValue));
             }
-
-            if (const FAttributeDataStruct* ManaAttr = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_mana")))
-            {
-                MaxMana = ManaAttr->attributeValue;
-            }
-
-            // Guard: if max_health attribute is not yet populated (no stats_update received),
-            // use current health as max so the bar shows full instead of "435/1".
-            if (MaxHealth <= 0.0f)
-            {
-                MaxHealth = FMath::Max(1.0f, static_cast<float>(playerData.characterData.characterCurrentHealth));
-            }
-            if (MaxMana <= 0.0f)
-            {
-                MaxMana = FMath::Max(1.0f, static_cast<float>(playerData.characterData.characterCurrentMana));
-            }
-
-            // Update HUD with current and max values
-            PlayerHUD->SetHP(playerData.characterData.characterCurrentHealth, MaxHealth);
-            PlayerHUD->SetMana(playerData.characterData.characterCurrentMana, MaxMana);
+            // else: bars remain at their last known state until stats_update arrives
         }
     }
 }
@@ -1242,6 +1271,34 @@ void ABasicPlayer::UpdateHUD()
 void ABasicPlayer::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
+
+    // First-Tick spawn gate: fires NotifyPlayerSpawned exactly once, only after
+    // UIInitTimer has completed (bUIInitDone) and the camera has had at least
+    // one real game frame to settle into the correct position behind the character.
+    if (!playerData.isOtherClient && bUIInitDone && !bSpawnNotified && MyGameInstance)
+    {
+        bSpawnNotified = true;
+        UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Tick: NotifyPlayerSpawned fired. Pawn Pos=(%.0f,%.0f,%.0f)"),
+            GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z);
+        MyGameInstance->NotifyPlayerSpawned();
+    }
+
+    // Log camera world position for the first 10 ticks of the local player to
+    // diagnose any residual "camera in ground" artifact after loading screen clears.
+    if (!playerData.isOtherClient && FollowCamera)
+    {
+        static int32 sCamLogCount = 0;
+        if (sCamLogCount < 10)
+        {
+            ++sCamLogCount;
+            APlayerController* DbgPC = Cast<APlayerController>(GetController());
+            FRotator CR = DbgPC ? DbgPC->GetControlRotation() : FRotator::ZeroRotator;
+            FVector  CamLoc = FollowCamera->GetComponentLocation();
+            UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] CamTick#%d CameraLoc=(%.0f,%.0f,%.0f) ControlRot=(P=%.1f Y=%.1f) bUIInitDone=%d bSpawnNotified=%d"),
+                sCamLogCount, CamLoc.X, CamLoc.Y, CamLoc.Z, CR.Pitch, CR.Yaw,
+                bUIInitDone ? 1 : 0, bSpawnNotified ? 1 : 0);
+        }
+    }
 
     FVector CurrentLocation = GetActorLocation();
     playerData.characterData.bIsMoving = !CurrentLocation.Equals(LastFrameLocation, 1.0f);
@@ -2377,6 +2434,15 @@ void ABasicPlayer::EndPlay(const EEndPlayReason::Type EndPlayReason)
         }
     }
 
+    // Unsubscribe from PlayerStatsManager to prevent dangling delegate callbacks.
+    if (!playerData.isOtherClient && MyGameInstance)
+    {
+        if (UPlayerStatsManager* StatsMgr = MyGameInstance->GetPlayerStatsManager())
+        {
+            StatsMgr->OnStatsUpdated.RemoveDynamic(this, &ABasicPlayer::HandleStatsManagerUpdate);
+        }
+    }
+
     Super::EndPlay(EndPlayReason);
 }
 
@@ -2980,6 +3046,13 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 	// Refresh the HP/MP HUD
 	RefreshHUD();
 
+	// Signal the loading screen gate: HUD has real server data.
+	// GameInstance guards against double-firing internally.
+	if (!playerData.isOtherClient && MyGameInstance)
+	{
+		MyGameInstance->NotifyStatsReceived();
+	}
+
 	// --- Death detection (#1) ---
 	// The server signals death via stats_update with health.current == 0.
 	// Transition into dead state only if we are not already dead to avoid
@@ -2989,15 +3062,30 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 		SetDead_Implementation(true);
 	}
 
-	// Always sync all experience fields from the stats packet into characterData.
-	// The join packet no longer carries exp/stats � stats_update is the sole source
-	// of truth for level, XP, XP thresholds, HP max, and MP max.
-	playerData.characterData.characterExperiencePoints  = StatsUpdate.experienceCurrent;
-	playerData.characterData.characterExpForLevelStart  = StatsUpdate.experienceLevelStart;
-	playerData.characterData.characterExpForLevelEnd    = StatsUpdate.experienceNextLevel;
-	playerData.characterData.characterExperienceDebt    = StatsUpdate.experienceDebt;
+	// Sync experience fields only when the packet actually carries them.
+	// Partial packets (e.g. regen ticks) omit the "experience" block so all
+	// four fields arrive as 0 -- we must not overwrite the last known values.
+	const bool bHasExpData = (StatsUpdate.experienceCurrent > 0
+		|| StatsUpdate.experienceNextLevel  > 0
+		|| StatsUpdate.experienceLevelStart > 0);
+	if (bHasExpData)
+	{
+		playerData.characterData.characterExperiencePoints = StatsUpdate.experienceCurrent;
+		playerData.characterData.characterExpForLevelStart = StatsUpdate.experienceLevelStart;
+		playerData.characterData.characterExpForLevelEnd   = StatsUpdate.experienceNextLevel;
+		playerData.characterData.characterExperienceDebt   = StatsUpdate.experienceDebt;
+		UpdateExperienceData();
+	}
 
-	UpdateExperienceData();
+	// Forward every stats_update to PlayerStatsManager so all subscribed widgets
+	// (PlayerStatsWidget, PlayerExperienceWidget) receive the authoritative snapshot.
+	if (MyGameInstance && !playerData.isOtherClient)
+	{
+		if (UPlayerStatsManager* StatsMgr = MyGameInstance->GetPlayerStatsManager())
+		{
+			StatsMgr->ApplyStatsUpdate(StatsUpdate);
+		}
+	}
 
 	// Apply move_speed attribute from the server to the CharacterMovementComponent.
 	// The server sends speed in its own units; MoveSpeedScale converts them to UU/s.
@@ -3051,6 +3139,22 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 	UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Processed stats update and refreshed UI"));
 }
 
+void ABasicPlayer::HandleStatsManagerUpdate(const FPlayerStatsUpdateStruct& NewStats)
+{
+	// Only handle updates for the local player and for our own character.
+	if (playerData.isOtherClient) return;
+	if (NewStats.characterId != playerData.characterData.characterId) return;
+
+	// Use the authoritative parser so that max_health / max_mana attributes in
+	// playerData are always kept in sync alongside the current vitals.
+	// Previously only healthCurrent/manaCurrent were updated here, which meant
+	// RefreshHUD could never find the max values and never drew the bars.
+	PlayerAttributeParser::UpdateCharacterDataFromStatsUpdate(playerData.characterData, NewStats);
+
+	RefreshHUD();
+}
+
+
 void ABasicPlayer::RefreshHUD()
 {
 	if (!PlayerHUD)
@@ -3059,35 +3163,41 @@ void ABasicPlayer::RefreshHUD()
 		return;
 	}
 
-	// Get max health and mana from attributes
-	float MaxHealth = 0.0f;
-	float MaxMana = 0.0f;
+	// Primary source: characterAttributes populated from joinGameCharacter (stats.health.max)
+	// and kept up-to-date by every stats_update via UpdateCharacterDataFromStatsUpdate.
+	const FAttributeDataStruct* HealthAttr = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_health"));
+	const FAttributeDataStruct* ManaAttr   = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_mana"));
 
-	// Try to get max values from character attributes
-	if (const FAttributeDataStruct* HealthAttr = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_health")))
+	float MaxHP  = (HealthAttr && HealthAttr->attributeValue > 0) ? static_cast<float>(HealthAttr->attributeValue) : 0.f;
+	float MaxMP  = (ManaAttr   && ManaAttr->attributeValue   > 0) ? static_cast<float>(ManaAttr->attributeValue)   : 0.f;
+
+	// Fallback: if characterAttributes are still empty (race condition between spawn
+	// and first stats_update), read from the PlayerStatsManager cache.
+	if (MaxHP <= 0.f && MyGameInstance)
 	{
-		MaxHealth = static_cast<float>(HealthAttr->attributeValue);
+		if (const UPlayerStatsManager* StatsMgr = MyGameInstance->GetPlayerStatsManager())
+		{
+			const FPlayerStatsUpdateStruct& Cached = StatsMgr->GetCachedStats();
+			if (Cached.characterId == playerData.characterData.characterId)
+			{
+				MaxHP = static_cast<float>(Cached.healthMax);
+				MaxMP = static_cast<float>(Cached.manaMax);
+			}
+		}
 	}
 
-	if (const FAttributeDataStruct* ManaAttr = playerData.characterData.characterAttributes.attributesData.Find(TEXT("max_mana")))
+	if (MaxHP > 0.f)
 	{
-		MaxMana = static_cast<float>(ManaAttr->attributeValue);
+		PlayerHUD->SetHP(static_cast<float>(playerData.characterData.characterCurrentHealth), MaxHP);
 	}
 
-	// Guard: if max_health attribute is not yet populated, fall back to current values
-	if (MaxHealth <= 0.0f)
+	if (MaxMP >= 0.f && (MaxHP > 0.f || MaxMP > 0.f))
 	{
-		MaxHealth = FMath::Max(1.0f, static_cast<float>(playerData.characterData.characterCurrentHealth));
+		PlayerHUD->SetMana(static_cast<float>(playerData.characterData.characterCurrentMana), MaxMP);
 	}
-	if (MaxMana <= 0.0f)
-	{
-		MaxMana = FMath::Max(1.0f, static_cast<float>(playerData.characterData.characterCurrentMana));
-	}
-
-	// Update HUD with current values
-	PlayerHUD->SetHP(static_cast<float>(playerData.characterData.characterCurrentHealth), MaxHealth);
-	PlayerHUD->SetMana(static_cast<float>(playerData.characterData.characterCurrentMana), MaxMana);
 }
+
+
 
 
 

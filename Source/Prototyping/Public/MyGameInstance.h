@@ -21,10 +21,10 @@
 #include "TimerManager.h"
 #include "Engine/GameInstance.h"
 #include "EngineUtils.h" 
+#include "Widgets/SWeakWidget.h"
 
 #include "Gameplay/Players/MyCameraActor.h"
 #include "Gameplay/Players/BasicPlayer.h"
-#include "Services/LoadingSceenActor.h"
 #include "Gameplay/UI/LoginWidget.h"
 #include "Gameplay/UI/CharacterListItem.h"
 #include "Gameplay/UI/MonitorStatsWidget.h"
@@ -88,6 +88,52 @@ FDateTime ReceiveTimeLoginServer;
 	// True once the game world (WorldMapV1) is fully loaded and ready for gameplay
 	bool bGameWorldReady = false;
 
+	// True once CheckGameWorldReady has dispatched the pending player spawn.
+	// Prevents SpawnPlayerForClient / RefreshManagerWorldContexts being called
+	// more than once per session from the 200ms polling ticker.
+	bool bPendingSpawnDispatched = false;
+
+	// Bitmask tracking which subsystems have finished initializing.
+	// Loading screen is hidden only when ALL required flags are set.
+	// 
+	//  Bit 0 (0x01) пїЅ playerReady ACK received (Phase 3 > Phase 4 started)
+	//  Bit 1 (0x02) пїЅ local player UI fully initialized (UIInitTimerHandle fired)
+	//  Bit 2 (0x04) пїЅ first stats_update received and HUD refreshed
+	//  Bit 3 (0x08) пїЅ local player actor physically spawned and present in world
+	//
+	static constexpr uint8 ReadyFlag_PlayerReadyAck = 0x01;
+	static constexpr uint8 ReadyFlag_UIInitialized  = 0x02;
+	static constexpr uint8 ReadyFlag_StatsReceived  = 0x04;
+	static constexpr uint8 ReadyFlag_PlayerSpawned  = 0x08;
+	static constexpr uint8 ReadyFlag_AllRequired    = ReadyFlag_PlayerReadyAck
+	                                                | ReadyFlag_UIInitialized
+	                                                | ReadyFlag_PlayerSpawned;  // StatsReceived excluded
+	uint8 ReadyFlags = 0;
+
+	// Safety fallback timer: removes loading screen even if some signals never arrive
+	FTimerHandle LoadingScreenSafetyTimerHandle;
+
+	// Number of render-thread frames observed since all ReadyFlags were set.
+	// Counted on the render thread via OnEndFrameRT; removal dispatched back to
+	// the game thread so UMG / TimerManager are touched only from GT.
+	TAtomic<int32> RenderedFrameCount{ 0 };
+	static constexpr int32 MinRenderedFramesBeforeHide = 3;
+
+	// Set to true by the render-thread callback once MinRenderedFramesBeforeHide
+	// frames have been seen. The next game-thread Tick reads this and removes
+	// the loading screen safely.
+	TAtomic<bool> bLoadingScreenRemovePending{ false };
+
+	// Handle for the OnEndFrameRT delegate that counts real render frames.
+	FDelegateHandle EndFrameDelegateHandle;
+
+	// Game-thread ticker that polls bLoadingScreenRemovePending once per tick
+	// and calls RemoveLoadingScreen when the render thread has seen enough frames.
+	FTSTicker::FDelegateHandle GTRemoveTicker;
+
+	// Begin counting rendered frames; removes loading screen after MinRenderedFramesBeforeHide.
+	void StartFrameCountdown();
+
 public:
 	// Client ID of the local player that needs to be spawned once game world is ready
 	int32 PendingSpawnClientId = 0;
@@ -120,6 +166,30 @@ public:
 
 	// Returns true if the game world is loaded and ready
 	bool IsGameWorldReady() const { return bGameWorldReady; }
+
+	// Called by PlayerManager when the server sends playerReady ACK (Phase 3 complete).
+	void NotifyPlayerReadyAck();
+
+	// Called by BasicPlayer after UIInitTimerHandle fires and all widgets are initialized.
+	void NotifyUIInitialized();
+
+	// Called by BasicPlayer after the first stats_update is processed and HUD is refreshed.
+	void NotifyStatsReceived();
+
+	// Called by BasicPlayer once the local pawn is physically present in the game world
+	// (UIInitTimer has fired, all widgets are up). Triggers the frame-counter gate.
+	void NotifyPlayerSpawned();
+
+private:
+	// Checks whether all ReadyFlags are set and hides the loading screen if so.
+	void CheckAllReadyFlags();
+
+public:
+
+	// Duration (seconds) to keep the loading screen up as a last-resort safety net.
+	// Configurable in Blueprint defaults пїЅ no rebuild needed.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI", meta = (ClampMin = "5.0", ClampMax = "30.0"))
+	float LoadingScreenSafetyTimeout = 15.0f;
 
 	UPROPERTY()
 	// Network manager
@@ -426,6 +496,9 @@ public:
 
 	void RemoveLoadingScreen();
 
+	// Starts loading screen background music that persists across ServerTravel.
+	void StartLoadingScreenMusic();
+
 	UFUNCTION(BlueprintCallable, Category = "Character")
 	void SetCurrentCharacterID(int32 CharacterID);
 
@@ -467,7 +540,7 @@ public:
 	UPROPERTY()
 	UMonitorStatsWidget* MonitorStatsWidget;
 
-	// Класс виджета, который создаётся в Blueprint
+	// пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ Blueprint
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
 	TSubclassOf<class UMessageBoxPopup> MessageBoxPopupClass;
 
@@ -562,9 +635,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Debug")
 	bool bDebug;
 
-	// Loading screen actor
+	// Slate handle used to keep the loading-screen widget in the viewport
+	// overlay via UGameViewportClient::AddViewportWidgetContent().
+	// This survives ServerTravel (world-independent).
+	TSharedPtr<SWidget> LoadingScreenSlateWidget;
+
+	// Audio component for loading screen music.
+	// Owned by the GameInstance so it survives world travel (unlike actors).
 	UPROPERTY()
-	ALoadingSceenActor* LoadingScreenActor;
+	UAudioComponent* LoadingScreenAudioComponent = nullptr;
 
 	// Ping servers
 	UFUNCTION()
@@ -653,7 +732,11 @@ public:
 		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
 		class UChatManager* GetChatManager() const;
 
-		// Data tables and configuration
+	// Localization data asset (assign in Blueprint defaults ? all locale DataTables)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization")
+	class ULocalizationDataAsset* LocalizationDataAsset;
+
+	// Data tables and configuration
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game Instance Data")
 	class UDataTable* MobDefinitionTable;
 

@@ -7,8 +7,27 @@
 void UPlayerHUD::NativeConstruct()
 {
     Super::NativeConstruct();
-    
-    UE_LOG(LogTemp, Warning, TEXT("PlayerHUD: Constructed"));
+
+    // Reset bars to 0 so the player never sees a fake 100/100 before the
+    // first stats_update arrives from the server.
+    if (HealthBar)
+    {
+        HealthBar->SetPercent(0.0f);
+    }
+    if (ManaBar)
+    {
+        ManaBar->SetPercent(0.0f);
+    }
+    if (HealthBarTextValue)
+    {
+        HealthBarTextValue->SetText(FText::FromString(TEXT("--/--")));
+    }
+    if (ManaBarTextValue)
+    {
+        ManaBarTextValue->SetText(FText::FromString(TEXT("--/--")));
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("PlayerHUD: Constructed - bars reset to 0"));
 }
 
 void UPlayerHUD::NativeDestruct()

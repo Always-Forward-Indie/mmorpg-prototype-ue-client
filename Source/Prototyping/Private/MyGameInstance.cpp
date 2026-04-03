@@ -853,7 +853,7 @@ void UMyGameInstance::OnLoginLevelLoaded()
 		{
 			if (GetWorld()->GetFirstPlayerController())
 			{
-				GetWorld()->GetFirstPlayerController()->SetViewTargetWithBlend(LoginLevelCamera, 0.5f);
+			GetWorld()->GetFirstPlayerController()->SetViewTargetWithBlend(LoginLevelCamera, 0.0f);
 				LoginLevelCamera->PlaySound(LoginMusicSoundSource);
 			}
 		}
@@ -864,7 +864,7 @@ void UMyGameInstance::OnLoginLevelLoaded()
 		// so the render thread has received the draw command first.
 		if (UWorld* W = GetWorld())
 		{
-			W->GetTimerManager().SetTimer(RemoveLoadingScreenTimerHandle, this, &UMyGameInstance::RemoveLoadingScreen, 0.05f, false);
+		W->GetTimerManager().SetTimer(RemoveLoadingScreenTimerHandle, this, &UMyGameInstance::RemoveLoadingScreen, 1.5f, false);
 		}
 	}
 
@@ -1168,6 +1168,11 @@ void UMyGameInstance::RefreshManagerWorldContexts()
 	if (CombatSystemManager) { CombatSystemManager->SetWorldContext(World); }
 	if (NPCManager) { NPCManager->SetWorldContext(World); }
 	if (TimeSyncService) { TimeSyncService->SetWorldContext(World); }
+
+	// Re-push the SoundMix and re-apply all cached volume overrides.
+	// The audio device loses its SoundMix modifier stack on world teardown,
+	// so without this call every volume slider becomes a no-op after a level transition.
+	if (AudioManager) { AudioManager->ReapplySoundMix(); }
 }
 
 void UMyGameInstance::ProcessPendingSpawns()
@@ -1256,6 +1261,13 @@ void UMyGameInstance::StartLoadingScreenMusic()
 	if (LoadingScreenAudioComponent)
 	{
 		LoadingScreenAudioComponent->bIsUISound = true;
+
+		// Route through MusicClass so the Music volume slider affects loading music
+		if (AudioManager && AudioManager->MusicClass)
+		{
+			LoadingScreenAudioComponent->SoundClassOverride = AudioManager->MusicClass;
+		}
+
 		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Loading screen music started (persists across level transition)"));
 	}
 	else
@@ -1420,6 +1432,20 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 	}
 
 	SpawnedPlayers.Add(ClientID, NewPlayer);
+
+	// Apply cached move_speed immediately so the player has the correct MaxWalkSpeed
+	// from frame 1. stats_update packets arrive before the actor is spawned (world travel),
+	// so the authoritative speed sits in PlayerStatsManager cache — apply it now.
+	if (bIsLocal && PlayerStatsManager)
+	{
+		FStatAttributeEntry SpeedAttr;
+		if (PlayerStatsManager->GetAttribute(TEXT("move_speed"), SpeedAttr) && SpeedAttr.effective > 0.f)
+		{
+			NewPlayer->ApplyServerMoveSpeed(SpeedAttr.effective);
+			UE_LOG(LogTemp, Log, TEXT("SpawnPlayerForClient: Applied cached move_speed=%.1f to CharID=%d"),
+				SpeedAttr.effective, PlayerData.characterData.characterId);
+		}
+	}
 
 	if (bIsLocal)
 	{
@@ -1895,6 +1921,7 @@ void UMyGameInstance::InitGameSystems()
 	AudioManager = NewObject<UAudioManager>(this);
 	if (AudioManager)
 	{
+		AudioManager->Init(this, AudioConfig);
 		UE_LOG(LogTemp, Log, TEXT("AudioManager created"));
 	}
 

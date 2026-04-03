@@ -7,6 +7,7 @@
 
 class UNetworkManager;
 class UMyGameInstance;
+class UInventoryManager;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEquipmentStateChanged, const FEquipmentStateData&, State);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEquipResultReceived,   const FEquipResultData&,    Result);
@@ -30,6 +31,10 @@ class PROTOTYPING_API UEquipmentManager : public UObject
 
 public:
     void Initialize(UNetworkManager* InNetworkManager, UMyGameInstance* InGameInstance);
+
+    // Link to InventoryManager so equip events keep is_equipped flags in sync
+    UFUNCTION(BlueprintCallable, Category = "Equipment")
+    void SetInventoryManager(UInventoryManager* InInventoryManager);
 
     // --- Outgoing requests ---
 
@@ -93,5 +98,12 @@ private:
     UPROPERTY()
     UMyGameInstance* GameInstance = nullptr;
 
+    // Weak reference - EquipmentManager does NOT own InventoryManager
+    UPROPERTY()
+    UInventoryManager* InventoryManager = nullptr;
+
     void SendPacket(const FString& JsonPayload);
+
+    // Rebuilds is_equipped on every item in InventoryManager based on current EquipmentState
+    void SyncEquippedFlagsToInventory();
 };

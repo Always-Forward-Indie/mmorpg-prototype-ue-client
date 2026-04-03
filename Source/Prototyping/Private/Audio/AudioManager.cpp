@@ -99,6 +99,12 @@ void UAudioManager::ApplyClassVolume(USoundClass* SoundClass, float Volume)
 		WorldContextObject, MasterSoundMix, SoundClass,
 		SafeVolume, /*Pitch*/ 1.0f, /*FadeInTime*/ 0.0f,
 		/*bApplyToChildren*/ true);
+
+	// Re-push the SoundMix so the audio device immediately re-evaluates
+	// the updated class overrides. Without this, setting volume to 0 and
+	// then raising it back does not restore sound because the audio device
+	// has already deactivated the override internally.
+	UGameplayStatics::PushSoundMixModifier(WorldContextObject, MasterSoundMix);
 }
 
 void UAudioManager::SetMasterVolume(float Volume)

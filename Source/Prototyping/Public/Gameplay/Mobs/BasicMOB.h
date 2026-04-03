@@ -75,6 +75,10 @@ private:
 
 	float CurrentInterpSpeed = 0.f;
 
+	// Per-instance tracking for UpdateWidgetScale throttle
+	float LastDisplayedWidgetScale = 0.0f;
+	float LastDisplayedWidgetDistance = 0.0f;
+
 public:
 	// Sets default values for this character's properties
 	ABasicMOB();

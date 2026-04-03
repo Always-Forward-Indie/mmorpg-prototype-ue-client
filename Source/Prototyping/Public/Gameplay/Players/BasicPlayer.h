@@ -82,10 +82,6 @@ private:
 	float RemoteSpeed = 0.0f;
 	float RemoteDirection = 0.0f;
 
-	// Walk speed tracking for overweight penalty
-	float BaseWalkSpeed = 0.0f;
-	bool bOverweightPenaltyActive = false;
-
 	// Server move_speed -> Unreal units conversion scale
 	// Server validates: maxAllowedDist = move_speed * 40.0 * dt * 1.3 (30% buffer)
 	// Must match exactly so the client speed == server expectation.
@@ -99,6 +95,7 @@ private:
 	FDelegateHandle HitPointDelegateHandle;
 	FDelegateHandle AnimEndDelegateHandle;
 	FTimerHandle HitPointTimerHandle;
+
 
 	// Timer for deferred UI initialization in BeginPlay
 	FTimerHandle UIInitTimerHandle;
@@ -381,6 +378,11 @@ public:
 	//set player attributes
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
 	void SetPlayerAttributes(TMap<FString, FAttributeDataStruct> Attributes);
+
+	// Apply server-authoritative move_speed to CharacterMovementComponent.
+	// ServerMoveSpeed is the raw server value; it is multiplied by MoveSpeedScale internally.
+	// This is the single source of truth for MaxWalkSpeed — no client-side modifiers.
+	void ApplyServerMoveSpeed(float ServerMoveSpeed);
 
 	// Set message data
 	UFUNCTION(BlueprintCallable, Category = "Player Data")

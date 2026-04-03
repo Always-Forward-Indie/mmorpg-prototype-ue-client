@@ -131,6 +131,10 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	UImage* ImgBase;
 
+	// Optional overlay shown when the item is currently equipped
+	UPROPERTY(meta = (BindWidgetOptional))
+	UImage* ImgEquipped;
+
 	// Slot data
 	UPROPERTY(BlueprintReadOnly, Category = "Inventory Slot")
 	FInventoryItemStruct CurrentItem;

@@ -8,6 +8,8 @@
 #include "Data/DataStructs.h"
 #include "UI/InventorySlotWidget.h"
 #include "UI/ItemTooltipWidget.h"
+#include "UI/ItemActionMenuWidget.h"
+#include "UI/DropQuantityPopupWidget.h"
 #include <Components/WrapBox.h>
 #include <Components/HorizontalBox.h>
 #include "Math/Color.h"
@@ -126,6 +128,25 @@ protected:
 	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
 	void HideTooltip();
 
+	// Open the right-click context menu for a slot
+	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
+	void OpenContextMenu(const FInventoryItemStruct& Item, FVector2D ScreenPosition);
+
+	// Close context menu if open
+	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
+	void CloseContextMenu();
+
+	// Unified context menu action handler (dispatches drop to quantity popup)
+	UFUNCTION()
+	void HandleContextAction(EItemContextAction Action, const FInventoryItemStruct& Item);
+
+	// Drop quantity popup handlers
+	UFUNCTION()
+	void HandleDropConfirmed(const FInventoryItemStruct& Item, int32 Quantity);
+
+	UFUNCTION()
+	void HandleDropCancelled();
+
 	// Calculate inventory statistics
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory UI")
 	float GetCurrentInventoryWeight() const;
@@ -166,12 +187,30 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	UTextBlock* SlotsText;
 
+	// Gold display
+	UPROPERTY(meta = (BindWidgetOptional))
+	UTextBlock* GoldText;
+
 	// Tooltip widget
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory UI")
 	TSubclassOf<UItemTooltipWidget> ItemTooltipWidgetClass;
 
 	UPROPERTY()
 	UItemTooltipWidget* ItemTooltipWidget;
+
+	// Context menu widget class
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory UI")
+	TSubclassOf<UItemActionMenuWidget> ItemContextMenuWidgetClass;
+
+	UPROPERTY()
+	UItemActionMenuWidget* ItemContextMenuWidget;
+
+	// Drop quantity popup widget class
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory UI")
+	TSubclassOf<UDropQuantityPopupWidget> DropQuantityPopupWidgetClass;
+
+	UPROPERTY()
+	UDropQuantityPopupWidget* DropQuantityPopupWidget;
 
 	// Inventory slot widget class
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory UI")

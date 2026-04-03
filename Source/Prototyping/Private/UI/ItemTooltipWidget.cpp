@@ -12,6 +12,7 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/CanvasPanelSlot.h"
 #include "MyGameInstance.h"
+#include "Services/LocalizationSubsystem.h"
 
 UItemTooltipWidget::UItemTooltipWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -38,6 +39,26 @@ void UItemTooltipWidget::NativeConstruct()
 void UItemTooltipWidget::SetItemData(const FInventoryItemStruct& Item)
 {
 	CurrentItem = Item;
+
+	// Resolve localised name and description from LocalizationSubsystem (keyed by slug)
+	const FString& LookupSlug = CurrentItem.slug.IsEmpty() ? CurrentItem.itemSlug : CurrentItem.slug;
+	if (!LookupSlug.IsEmpty())
+	{
+		if (UGameInstance* GI = GetGameInstance())
+		{
+			if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+			{
+				FText LocalName = Loc->GetItemDisplayName(LookupSlug);
+				if (!LocalName.IsEmpty())
+					CurrentItem.name = LocalName.ToString();
+
+				FText LocalDesc = Loc->GetItemDescription(LookupSlug);
+				if (!LocalDesc.IsEmpty())
+					CurrentItem.description = LocalDesc.ToString();
+			}
+		}
+	}
+
 	UpdateTooltipContent();
 	LoadItemIcon();
 }
@@ -253,8 +274,12 @@ void UItemTooltipWidget::UpdateTooltipContent()
 	UpdateItemHeader();
 	UpdateItemDescription();
 	UpdateItemTypeAndLevel();
+	UpdateEquipInfo();
+	UpdateItemDurability();
 	UpdateItemWeight();
 	UpdateItemAttributes();
+	UpdateUseEffects();
+	UpdateVendorPrices();
 }
 
 void UItemTooltipWidget::UpdateItemHeader()
@@ -269,14 +294,12 @@ void UItemTooltipWidget::UpdateItemHeader()
 	// Update rarity text
 	if (ItemRarityText)
 	{
-		FString RarityText = CurrentItem.rarity.IsEmpty() ? TEXT("Common") : CurrentItem.rarity;
-		// Capitalize first letter
-		if (!RarityText.IsEmpty())
-		{
-			RarityText = RarityText.Left(1).ToUpper() + RarityText.Mid(1).ToLower();
-		}
+		// Prefer raritySlug (from protocol); fall back to rarity display name
+		const FString& RarityKey = CurrentItem.raritySlug.IsEmpty() ? CurrentItem.rarity : CurrentItem.raritySlug;
+		FString RarityText = RarityKey.IsEmpty() ? TEXT("Common") : RarityKey;
+		RarityText = RarityText.Left(1).ToUpper() + RarityText.Mid(1).ToLower();
 		ItemRarityText->SetText(FText::FromString(RarityText));
-		ItemRarityText->SetColorAndOpacity(GetRarityColor(CurrentItem.rarity));
+		ItemRarityText->SetColorAndOpacity(GetRarityColor(RarityKey));
 	}
 
 	// Update item icon (placeholder)
@@ -291,13 +314,15 @@ void UItemTooltipWidget::UpdateItemDescription()
 {
 	if (ItemDescriptionText)
 	{
-		FString Description = CurrentItem.description;
-		if (Description.IsEmpty())
+		if (!CurrentItem.description.IsEmpty())
 		{
-			Description = TEXT("No description available.");
+			ItemDescriptionText->SetText(FText::FromString(CurrentItem.description));
+			ItemDescriptionText->SetVisibility(ESlateVisibility::Visible);
 		}
-		
-		ItemDescriptionText->SetText(FText::FromString(Description));
+		else
+		{
+			ItemDescriptionText->SetVisibility(ESlateVisibility::Collapsed);
+		}
 	}
 }
 
@@ -308,58 +333,71 @@ void UItemTooltipWidget::UpdateItemAttributes()
 		return;
 	}
 
-	// Clear existing attribute widgets
 	ClearDynamicAttributes();
 
-	// Add attributes
-	for (const auto& AttributePair : CurrentItem.attributes)
+	// Use typed itemAttributes if available (has apply_on); fall back to legacy TMap
+	if (CurrentItem.itemAttributes.Num() > 0)
 	{
-		if (!AttributePair.Key.IsEmpty() && !AttributePair.Value.IsEmpty())
+		for (const FItemAttributeStruct& Attr : CurrentItem.itemAttributes)
 		{
-			AddAttributeTextWidget(AttributePair.Key, AttributePair.Value);
+			const FString& DisplayName = Attr.name.IsEmpty() ? Attr.slug : Attr.name;
+			if (DisplayName.IsEmpty()) continue;
+
+			FString ValueStr;
+			if (FMath::IsNearlyEqual(Attr.value, FMath::RoundToFloat(Attr.value), 0.001f))
+				ValueStr = FString::Printf(TEXT("%d"), FMath::RoundToInt(Attr.value));
+			else
+				ValueStr = FString::Printf(TEXT("%.1f"), Attr.value);
+
+			UTextBlock* AttrWidget = AddAttributeTextWidget(DisplayName, ValueStr);
+			if (AttrWidget && Attr.apply_on == TEXT("equip"))
+			{
+				AttrWidget->SetColorAndOpacity(FLinearColor(0.4f, 0.9f, 1.0f, 1.0f));
+			}
+		}
+	}
+	else
+	{
+		for (const auto& AttributePair : CurrentItem.attributes)
+		{
+			if (!AttributePair.Key.IsEmpty() && !AttributePair.Value.IsEmpty())
+			{
+				AddAttributeTextWidget(AttributePair.Key, AttributePair.Value);
+			}
 		}
 	}
 
-	if(CurrentItem.attributes.Num() == 0)
+	const bool bHasAttribs = (CurrentItem.itemAttributes.Num() > 0 || CurrentItem.attributes.Num() > 0);
+	if (!bHasAttribs)
 	{
 		AttributesBox->SetVisibility(ESlateVisibility::Collapsed);
-		Separator3->SetVisibility(ESlateVisibility::Collapsed);
+		if (Separator3) Separator3->SetVisibility(ESlateVisibility::Collapsed);
 	}
-
-	// Show quantity if greater than 1
-	//if (QuantityText && CurrentItem.quantity > 1)
-	//{
-	//	QuantityText->SetText(FText::FromString(FString::Printf(TEXT("%d"), CurrentItem.quantity)));
-	//	QuantityText->SetVisibility(ESlateVisibility::Visible);
-	//}
-	//else if (QuantityText)
-	//{
-	//	QuantityText->SetVisibility(ESlateVisibility::Collapsed);
-	//	Separator4->SetVisibility(ESlateVisibility::Collapsed);
-	//}
+	else
+	{
+		AttributesBox->SetVisibility(ESlateVisibility::Visible);
+		if (Separator3) Separator3->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
 }
 
 void UItemTooltipWidget::UpdateItemTypeAndLevel()
 {
-	// Update item type
 	if (ItemTypeText)
 	{
-		FString TypeText = CurrentItem.type.IsEmpty() ? TEXT("Unknown") : CurrentItem.type;
-		// Capitalize first letter
-		if (!TypeText.IsEmpty())
-		{
-			TypeText = TypeText.Left(1).ToUpper() + TypeText.Mid(1).ToLower();
-		}
+		// Prefer itemTypeSlug (comes from protocol item.itemTypeSlug); fall back to legacy type
+		FString TypeText = CurrentItem.itemTypeSlug.IsEmpty() ? CurrentItem.type : CurrentItem.itemTypeSlug;
+		if (TypeText.IsEmpty()) TypeText = TEXT("Unknown");
+		TypeText = TypeText.Left(1).ToUpper() + TypeText.Mid(1).ToLower();
 		ItemTypeText->SetText(FText::FromString(TypeText));
-		ItemTypeText->SetColorAndOpacity(GetTypeColor(CurrentItem.type));
+		ItemTypeText->SetColorAndOpacity(GetTypeColor(CurrentItem.itemTypeSlug.IsEmpty() ? CurrentItem.type : CurrentItem.itemTypeSlug));
 	}
 
-	// Update item level
 	if (ItemLevelText)
 	{
-		if (CurrentItem.level_requirement >= 1)
+		const int32 LvlReq = CurrentItem.levelRequirement > 0 ? CurrentItem.levelRequirement : CurrentItem.level_requirement;
+		if (LvlReq >= 1)
 		{
-			ItemLevelText->SetText(FText::FromString(FString::Printf(TEXT("Required Level: %d"), CurrentItem.level_requirement)));
+			ItemLevelText->SetText(FText::FromString(FString::Printf(TEXT("Required Level: %d"), LvlReq)));
 			ItemLevelText->SetVisibility(ESlateVisibility::Visible);
 		}
 		else
@@ -391,6 +429,117 @@ void UItemTooltipWidget::UpdateItemWeight()
 			WeightText->SetVisibility(ESlateVisibility::Collapsed);
 		}
 	}
+}
+
+void UItemTooltipWidget::UpdateItemDurability()
+{
+	if (!DurabilityText) return;
+
+	if (CurrentItem.isDurable && CurrentItem.durabilityMax > 0)
+	{
+		const FLinearColor DurColor = CurrentItem.isDurabilityWarning
+			? FLinearColor(1.0f, 0.3f, 0.1f, 1.0f)
+			: FLinearColor(0.7f, 0.9f, 0.7f, 1.0f);
+
+		DurabilityText->SetText(FText::FromString(
+			FString::Printf(TEXT("Durability: %d / %d"), CurrentItem.durabilityCurrent, CurrentItem.durabilityMax)));
+		DurabilityText->SetColorAndOpacity(DurColor);
+		DurabilityText->SetVisibility(ESlateVisibility::Visible);
+	}
+	else
+	{
+		DurabilityText->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+void UItemTooltipWidget::UpdateEquipInfo()
+{
+	if (!EquipSlotText) return;
+
+	if (CurrentItem.isEquippable && !CurrentItem.equipSlotSlug.IsEmpty())
+	{
+		FString SlotText = CurrentItem.equipSlotSlug.Replace(TEXT("_"), TEXT(" "));
+		SlotText = SlotText.Left(1).ToUpper() + SlotText.Mid(1);
+		if (CurrentItem.isTwoHanded)
+			SlotText += TEXT(" (Two-Handed)");
+		EquipSlotText->SetText(FText::FromString(SlotText));
+		EquipSlotText->SetColorAndOpacity(FLinearColor(0.9f, 0.8f, 0.5f, 1.0f));
+		EquipSlotText->SetVisibility(ESlateVisibility::Visible);
+	}
+	else
+	{
+		EquipSlotText->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+void UItemTooltipWidget::UpdateVendorPrices()
+{
+	if (!VendorPriceText) return;
+
+	if (CurrentItem.priceSell > 0 || CurrentItem.priceBuy > 0)
+	{
+		FString PriceStr;
+		if (CurrentItem.priceBuy > 0 && CurrentItem.priceSell > 0)
+			PriceStr = FString::Printf(TEXT("Buy: %d  Sell: %d"), CurrentItem.priceBuy, CurrentItem.priceSell);
+		else if (CurrentItem.priceBuy > 0)
+			PriceStr = FString::Printf(TEXT("Buy: %d"), CurrentItem.priceBuy);
+		else
+			PriceStr = FString::Printf(TEXT("Sell: %d"), CurrentItem.priceSell);
+
+		VendorPriceText->SetText(FText::FromString(PriceStr));
+		VendorPriceText->SetColorAndOpacity(FLinearColor(1.0f, 0.85f, 0.3f, 1.0f));
+		VendorPriceText->SetVisibility(ESlateVisibility::Visible);
+	}
+	else
+	{
+		VendorPriceText->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+void UItemTooltipWidget::UpdateUseEffects()
+{
+	if (!UseEffectsBox) return;
+
+	UseEffectsBox->ClearChildren();
+
+	if (!CurrentItem.isUsable || CurrentItem.useEffects.Num() == 0)
+	{
+		UseEffectsBox->SetVisibility(ESlateVisibility::Collapsed);
+		if (Separator4) Separator4->SetVisibility(ESlateVisibility::Collapsed);
+		return;
+	}
+
+	for (const FItemUseEffectEntry& Effect : CurrentItem.useEffects)
+	{
+		FString EffectStr;
+		if (Effect.isInstant)
+		{
+			EffectStr = FString::Printf(TEXT("Restores %.0f %s"), Effect.value,
+				Effect.attributeSlug.IsEmpty() ? TEXT("HP") : *Effect.attributeSlug.ToUpper());
+		}
+		else
+		{
+			EffectStr = FString::Printf(TEXT("%s +%.0f over %ds"),
+				Effect.attributeSlug.IsEmpty() ? TEXT("Effect") : *Effect.attributeSlug.ToUpper(),
+				Effect.value, Effect.durationSeconds);
+		}
+		if (Effect.cooldownSeconds > 0)
+			EffectStr += FString::Printf(TEXT(" (CD: %ds)"), Effect.cooldownSeconds);
+
+		UTextBlock* EffectLabel = NewObject<UTextBlock>(this);
+		if (EffectLabel)
+		{
+			EffectLabel->SetText(FText::FromString(EffectStr));
+			EffectLabel->SetColorAndOpacity(FLinearColor(0.4f, 1.0f, 0.5f, 1.0f));
+			FSlateFontInfo FontInfo = EffectLabel->GetFont();
+			FontInfo.Size = 12;
+			EffectLabel->SetFont(FontInfo);
+			UseEffectsBox->AddChild(EffectLabel);
+		}
+	}
+
+	UseEffectsBox->SetVisibility(ESlateVisibility::Visible);
+	if (Separator4) Separator4->SetVisibility(ESlateVisibility::HitTestInvisible);
 }
 
 FLinearColor UItemTooltipWidget::GetRarityColor(const FString& Rarity) const
@@ -496,6 +645,7 @@ void UItemTooltipWidget::InitializeColors()
 	RarityColors.Add(TEXT("common"), FLinearColor::White);
 	RarityColors.Add(TEXT("uncommon"), FLinearColor::Green);
 	RarityColors.Add(TEXT("rare"), FLinearColor::Blue);
+	RarityColors.Add(TEXT("very_rare"), FLinearColor(0.3f, 0.3f, 1.0f, 1.0f));
 	RarityColors.Add(TEXT("epic"), FLinearColor(0.5f, 0.0f, 1.0f, 1.0f)); // Purple
 	RarityColors.Add(TEXT("legendary"), FLinearColor(1.0f, 0.5f, 0.0f, 1.0f)); // Orange
 	RarityColors.Add(TEXT("mythic"), FLinearColor::Red);

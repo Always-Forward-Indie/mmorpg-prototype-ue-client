@@ -1,7 +1,11 @@
 #include "UI/InventoryWidget.h"
 #include "UI/InventorySlotWidget.h"
 #include "UI/ItemTooltipWidget.h"
+#include "UI/ItemActionMenuWidget.h"
+#include "UI/DropQuantityPopupWidget.h"
 #include "Gameplay/Items/InventoryManager.h"
+#include "Gameplay/Equipment/EquipmentManager.h"
+#include "MyGameInstance.h"
 #include "Components/GridPanel.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
@@ -15,6 +19,8 @@ UInventoryWidget::UInventoryWidget(const FObjectInitializer& ObjectInitializer)
 {
 	InventoryManager = nullptr;
 	ItemTooltipWidget = nullptr;
+	ItemContextMenuWidget = nullptr;
+	DropQuantityPopupWidget = nullptr;
 	bIsInventoryVisible = false;
 	HoveredSlotIndex = -1;
 	CurrentInventory = FCharacterInventoryStruct();
@@ -73,6 +79,31 @@ void UInventoryWidget::NativeConstruct()
 		}
 	}
 
+	// Create context menu widget
+	if (ItemContextMenuWidgetClass)
+	{
+		ItemContextMenuWidget = CreateWidget<UItemActionMenuWidget>(this, ItemContextMenuWidgetClass);
+		if (ItemContextMenuWidget)
+		{
+			ItemContextMenuWidget->AddToViewport(1100);
+			ItemContextMenuWidget->SetVisibility(ESlateVisibility::Collapsed);
+			ItemContextMenuWidget->OnActionSelected.AddDynamic(this, &UInventoryWidget::HandleContextAction);
+		}
+	}
+
+	// Create drop quantity popup widget
+	if (DropQuantityPopupWidgetClass)
+	{
+		DropQuantityPopupWidget = CreateWidget<UDropQuantityPopupWidget>(this, DropQuantityPopupWidgetClass);
+		if (DropQuantityPopupWidget)
+		{
+			DropQuantityPopupWidget->AddToViewport(1200); // topmost
+			DropQuantityPopupWidget->SetVisibility(ESlateVisibility::Collapsed);
+			DropQuantityPopupWidget->OnDropQuantityConfirmed.AddDynamic(this, &UInventoryWidget::HandleDropConfirmed);
+			DropQuantityPopupWidget->OnDropQuantityCancelled.AddDynamic(this, &UInventoryWidget::HandleDropCancelled);
+		}
+	}
+
 	// Set initial visibility
 	SetInventoryVisible(bIsInventoryVisible);
 }
@@ -84,6 +115,20 @@ void UInventoryWidget::NativeDestruct()
 	{
 		ItemTooltipWidget->RemoveFromParent();
 		ItemTooltipWidget = nullptr;
+	}
+
+	// Clean up context menu
+	if (ItemContextMenuWidget)
+	{
+		ItemContextMenuWidget->RemoveFromParent();
+		ItemContextMenuWidget = nullptr;
+	}
+
+	// Clean up drop popup
+	if (DropQuantityPopupWidget)
+	{
+		DropQuantityPopupWidget->RemoveFromParent();
+		DropQuantityPopupWidget = nullptr;
 	}
 
 	// Unbind from inventory manager
@@ -160,16 +205,20 @@ void UInventoryWidget::UpdateInventoryDisplay(const FCharacterInventoryStruct& I
 {
 	CurrentInventory = Inventory;
 
-	// Clear all slots first
+	// Clear all slots first so dropped items don't leave stale visuals
 	for (int32 i = 0; i < InventorySlots.Num(); i++)
 	{
 		ClearSlot(i);
 	}
 
-	// Fill slots with items
+	// Fill slots with items; items with itemId == 0 are placeholders - skip them
 	for (int32 i = 0; i < Inventory.items.Num() && i < InventorySlots.Num(); i++)
 	{
-		UpdateSlot(i, Inventory.items[i]);
+		if (Inventory.items[i].itemId > 0)
+		{
+			UpdateSlot(i, Inventory.items[i]);
+		}
+		// else: slot already cleared above
 	}
 
 	// Update inventory statistics
@@ -196,8 +245,9 @@ void UInventoryWidget::SetInventoryVisible(bool bVisible)
 
 	if (!bVisible)
 	{
-		bDragging = false; // <-- сбрасываем drag
+		bDragging = false;
 		HideTooltip();
+		CloseContextMenu();
 	}
 
 	// Ќ≈ управл€ем курсором здесь - это делает UIManager
@@ -318,17 +368,27 @@ void UInventoryWidget::OnSlotClicked(int32 SlotIndex)
 
 void UInventoryWidget::OnSlotRightClicked(int32 SlotIndex)
 {
-	// Hide tooltip when slot is right-clicked
+	// Always hide the hover tooltip first
 	HideTooltip();
-	
-	UInventorySlotWidget* SlotWidget = GetSlotWidget(SlotIndex);
-	if (SlotWidget && SlotWidget->HasItem())
-	{
-		FInventoryItemStruct Item = SlotWidget->GetItemData();
-		OnInventorySlotRightClicked.Broadcast(SlotIndex, Item);
 
-		UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Slot %d right-clicked - Item: %s"), SlotIndex, *Item.name);
+	UInventorySlotWidget* SlotWidget = GetSlotWidget(SlotIndex);
+	if (!SlotWidget || !SlotWidget->HasItem()) return;
+
+	const FInventoryItemStruct& Item = SlotWidget->GetItemData();
+
+	// Get current cursor screen position
+	FVector2D MousePos = FVector2D::ZeroVector;
+	if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+	{
+		PC->GetMousePosition(MousePos.X, MousePos.Y);
 	}
+
+	OpenContextMenu(Item, MousePos);
+
+	// Also broadcast so external listeners can react if needed
+	OnInventorySlotRightClicked.Broadcast(SlotIndex, Item);
+
+	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Context menu opened for slot %d Ц %s"), SlotIndex, *Item.name);
 }
 
 void UInventoryWidget::OnSlotHovered(int32 SlotIndex, bool bIsHovered)
@@ -374,6 +434,68 @@ void UInventoryWidget::OnItemRemoved(const FInventoryItemStruct& Item, int32 Qua
 {
 	// Visual feedback for item removal could be added here
 	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Item removed - %s x%d"), *Item.name, Quantity);
+}
+
+void UInventoryWidget::OpenContextMenu(const FInventoryItemStruct& Item, FVector2D ScreenPosition)
+{
+	if (!ItemContextMenuWidget) return;
+
+	// Close drop popup if open
+	if (DropQuantityPopupWidget)
+		DropQuantityPopupWidget->HidePopup();
+
+	// Inject manager references so the menu can dispatch requests directly
+	UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
+	ItemContextMenuWidget->SetManagers(
+		InventoryManager,
+		GI ? GI->GetEquipmentManager() : nullptr);
+
+	ItemContextMenuWidget->ShowForItem(Item, ScreenPosition);
+}
+
+void UInventoryWidget::CloseContextMenu()
+{
+	if (ItemContextMenuWidget)
+		ItemContextMenuWidget->HideMenu();
+}
+
+void UInventoryWidget::HandleContextAction(EItemContextAction Action, const FInventoryItemStruct& Item)
+{
+	// Drop is the only action that needs a UI step (quantity picker).
+	// All other actions are already dispatched inside ItemActionMenuWidget::ExecuteAction.
+	if (Action != EItemContextAction::Drop) return;
+
+	if (Item.quantity <= 1)
+	{
+		// Single item Ц drop immediately without asking
+		HandleDropConfirmed(Item, 1);
+		return;
+	}
+
+	// Stacked item Ц show quantity picker
+	if (DropQuantityPopupWidget)
+	{
+		DropQuantityPopupWidget->ShowForItem(Item);
+	}
+	else
+	{
+		// No popup configured Ц drop everything
+		HandleDropConfirmed(Item, Item.quantity);
+	}
+}
+
+void UInventoryWidget::HandleDropConfirmed(const FInventoryItemStruct& Item, int32 Quantity)
+{
+	if (!InventoryManager) return;
+
+	InventoryManager->DropItem(Item.itemId, Quantity);
+
+	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Drop confirmed Ц itemId=%d qty=%d"), Item.itemId, Quantity);
+}
+
+void UInventoryWidget::HandleDropCancelled()
+{
+	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Drop cancelled by player."));
 }
 
 void UInventoryWidget::ShowTooltip(const FInventoryItemStruct& Item, FVector2D Position)
@@ -610,8 +732,14 @@ void UInventoryWidget::UpdateInventoryStats()
 		}
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Stats updated - Weight: %.1f/%.1f, Slots: %d/%d"), 
-		GetCurrentInventoryWeight(), MaxInventoryWeight, GetUsedSlots(), GetTotalSlots());
+	// Update gold display
+	if (GoldText)
+	{
+		GoldText->SetText(FText::FromString(FString::Printf(TEXT("%d"), CurrentInventory.gold)));
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Stats updated - Weight: %.1f/%.1f, Slots: %d/%d, Gold: %d"),
+		GetCurrentInventoryWeight(), MaxInventoryWeight, GetUsedSlots(), GetTotalSlots(), CurrentInventory.gold);
 }
 
 void UInventoryWidget::SetMaxInventoryWeight(float NewMaxWeight)

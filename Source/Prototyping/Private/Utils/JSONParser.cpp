@@ -563,15 +563,24 @@ FSpawnZoneStruct JSONParser::DeserializeSpawnZoneData(const TSharedPtr<FJsonObje
 	{
 		const TSharedPtr<FJsonObject> Bounds = SpawnZoneObject->GetObjectField(TEXT("bounds"));
 
-		SpawnZoneData.spawnStartPos = FVector(
-			Bounds->GetNumberField(TEXT("minX")),
-			Bounds->GetNumberField(TEXT("minY")),
-			Bounds->GetNumberField(TEXT("minZ")));
+		const float MinX = (float)Bounds->GetNumberField(TEXT("minX"));
+		const float MinY = (float)Bounds->GetNumberField(TEXT("minY"));
+		const float MinZ = (float)Bounds->GetNumberField(TEXT("minZ"));
+		const float MaxX = (float)Bounds->GetNumberField(TEXT("maxX"));
+		const float MaxY = (float)Bounds->GetNumberField(TEXT("maxY"));
+		const float MaxZ = (float)Bounds->GetNumberField(TEXT("maxZ"));
 
+		// spawnStartPos = world position of the bottom-center of the zone
+		SpawnZoneData.spawnStartPos = FVector(
+			(MinX + MaxX) * 0.5f,
+			(MinY + MaxY) * 0.5f,
+			MinZ);
+
+		// spawnSize = full extents of the zone (used as BoxExtent * 2 in ChangeSpawnZoneSize)
 		SpawnZoneData.spawnSize = FVector(
-			Bounds->GetNumberField(TEXT("maxX")),
-			Bounds->GetNumberField(TEXT("maxY")),
-			Bounds->GetNumberField(TEXT("maxZ")));
+			MaxX - MinX,
+			MaxY - MinY,
+			MaxZ - MinZ);
 	}
 
 	return SpawnZoneData;
@@ -778,7 +787,15 @@ FDroppedItemStruct JSONParser::DeserializeDroppedItem(const TSharedPtr<FJsonObje
 		DroppedItem.itemId = DroppedItemObj->GetIntegerField(TEXT("itemId"));
 	
 	if (DroppedItemObj->HasField(TEXT("droppedByMobUID")))
-		DroppedItem.droppedByMobUID = DroppedItemObj->GetStringField(TEXT("droppedByMobUID"));
+	{
+		// Field can be a string or a number depending on server format
+		FString StrVal;
+		double NumVal = 0.0;
+		if (DroppedItemObj->TryGetStringField(TEXT("droppedByMobUID"), StrVal))
+			DroppedItem.droppedByMobUID = StrVal;
+		else if (DroppedItemObj->TryGetNumberField(TEXT("droppedByMobUID"), NumVal))
+			DroppedItem.droppedByMobUID = FString::FromInt((int32)NumVal);
+	}
 	
 	if (DroppedItemObj->HasField(TEXT("quantity")))
 		DroppedItem.quantity = DroppedItemObj->GetIntegerField(TEXT("quantity"));
@@ -801,8 +818,12 @@ FItemDropResponseStruct JSONParser::DeserializeItemDropResponse(const TSharedPtr
 	FItemDropResponseStruct ItemDropResponse;
 	if (!Body.IsValid()) return ItemDropResponse;
 
-	const TArray<TSharedPtr<FJsonValue>>* DroppedItemsArray;
-	if (Body->TryGetArrayField(TEXT("droppedItems"), DroppedItemsArray))
+	// Server sends the array as "items" (itemDrop broadcast) or legacy "droppedItems"
+	const TArray<TSharedPtr<FJsonValue>>* DroppedItemsArray = nullptr;
+	if (!Body->TryGetArrayField(TEXT("items"), DroppedItemsArray))
+		Body->TryGetArrayField(TEXT("droppedItems"), DroppedItemsArray);
+
+	if (DroppedItemsArray)
 	{
 		for (const TSharedPtr<FJsonValue>& ItemValue : *DroppedItemsArray)
 		{
@@ -963,102 +984,129 @@ FMobTargetLostStruct JSONParser::DeserializeMobTargetLost(const FString& JsonStr
 }
 
 // Inventory parsing functions
-FInventoryItemStruct JSONParser::DeserializeInventoryItem(const TSharedPtr<FJsonObject>& ItemObj)
+// Helper: parse item fields from a JSON object into an FInventoryItemStruct.
+// Used both for the flat format and for the nested "item" sub-object.
+static void ParseItemFields(const TSharedPtr<FJsonObject>& Src, FInventoryItemStruct& Out)
 {
-	FInventoryItemStruct Item;
-	
-	if (!ItemObj.IsValid()) return Item;
+	if (!Src.IsValid()) return;
 
-	// ������� ��������/���������
-	if (ItemObj->HasField(TEXT("itemId")))
-		Item.itemId = ItemObj->GetIntegerField(TEXT("itemId"));
+	if (Src->HasField(TEXT("slug")))          Out.slug          = Src->GetStringField(TEXT("slug"));
+	if (Src->HasField(TEXT("name")))          Out.name          = Src->GetStringField(TEXT("name"));
+	if (Src->HasField(TEXT("description")))   Out.description   = Src->GetStringField(TEXT("description"));
+	if (Src->HasField(TEXT("itemTypeSlug")))  Out.itemTypeSlug  = Src->GetStringField(TEXT("itemTypeSlug"));
+	if (Src->HasField(TEXT("itemTypeName")))  { Out.type = Src->GetStringField(TEXT("itemTypeName")); Out.itemTypeName = Out.type; }
+	if (Src->HasField(TEXT("raritySlug")))    Out.raritySlug    = Src->GetStringField(TEXT("raritySlug"));
+	if (Src->HasField(TEXT("rarityName")))    Out.rarity        = Src->GetStringField(TEXT("rarityName"));
+	if (Src->HasField(TEXT("equipSlotSlug"))) Out.equipSlotSlug = Src->GetStringField(TEXT("equipSlotSlug"));
+	if (Src->HasField(TEXT("masterySlug")))   Out.masterySlug   = Src->GetStringField(TEXT("masterySlug"));
+	if (Src->HasField(TEXT("setSlug")))       Out.setSlug       = Src->GetStringField(TEXT("setSlug"));
 
-	if (ItemObj->HasField(TEXT("quantity")))
-		Item.quantity = ItemObj->GetIntegerField(TEXT("quantity"));
+	if (Src->HasField(TEXT("weight")))            Out.weight           = (float)Src->GetNumberField(TEXT("weight"));
+	if (Src->HasField(TEXT("stackMax")))          Out.stackSize        = Src->GetIntegerField(TEXT("stackMax"));
+	if (Src->HasField(TEXT("durabilityMax")))     Out.durabilityMax    = Src->GetIntegerField(TEXT("durabilityMax"));
+	if (Src->HasField(TEXT("levelRequirement")))  { Out.levelRequirement = Src->GetIntegerField(TEXT("levelRequirement")); Out.level_requirement = Out.levelRequirement; }
+	if (Src->HasField(TEXT("vendorPriceBuy")))    Out.priceBuy         = Src->GetIntegerField(TEXT("vendorPriceBuy"));
+	if (Src->HasField(TEXT("vendorPriceSell")))   Out.priceSell        = Src->GetIntegerField(TEXT("vendorPriceSell"));
 
-	if (ItemObj->HasField(TEXT("name")))
-		Item.name = ItemObj->GetStringField(TEXT("name"));
+	if (Src->HasField(TEXT("isDurable")))     Out.isDurable     = Src->GetBoolField(TEXT("isDurable"));
+	if (Src->HasField(TEXT("isTradable")))    Out.isTradable    = Src->GetBoolField(TEXT("isTradable"));
+	if (Src->HasField(TEXT("isEquippable")))  Out.isEquippable  = Src->GetBoolField(TEXT("isEquippable"));
+	if (Src->HasField(TEXT("isUsable")))      Out.isUsable      = Src->GetBoolField(TEXT("isUsable"));
+	if (Src->HasField(TEXT("isQuestItem")))   Out.isQuestItem   = Src->GetBoolField(TEXT("isQuestItem"));
+	if (Src->HasField(TEXT("isContainer")))   Out.isContainer   = Src->GetBoolField(TEXT("isContainer"));
+	if (Src->HasField(TEXT("isTwoHanded")))   Out.isTwoHanded   = Src->GetBoolField(TEXT("isTwoHanded"));
 
-	if (ItemObj->HasField(TEXT("slug")))
-		Item.slug = ItemObj->GetStringField(TEXT("slug"));
-
-	if (ItemObj->HasField(TEXT("description")))
-		Item.description = ItemObj->GetStringField(TEXT("description"));
-
-	if (ItemObj->HasField(TEXT("itemTypeName")))
-		Item.type = ItemObj->GetStringField(TEXT("itemTypeName"));
-
-	if (ItemObj->HasField(TEXT("rarityName")))
-		Item.rarity = ItemObj->GetStringField(TEXT("rarityName"));
-
-	if (ItemObj->HasField(TEXT("levelRequirement")))
-		Item.level_requirement = ItemObj->GetIntegerField(TEXT("levelRequirement"));
-
-	if (ItemObj->HasField(TEXT("weight")))
-		Item.weight = ItemObj->GetNumberField(TEXT("weight"));
-
-	if (ItemObj->HasField(TEXT("stackMax")))
-		Item.stackSize = ItemObj->GetIntegerField(TEXT("stackMax"));
-
-	if (ItemObj->HasField(TEXT("durabilityMax")))
-		Item.durabilityMax = ItemObj->GetIntegerField(TEXT("durabilityMax"));
-
-	// durabilityCurrent � ������ ���� ���, ��������� ������ = max
-	Item.durabilityCurrent = Item.durabilityMax;
-
-	// �����
-	if (ItemObj->HasField(TEXT("isDurable")))
-		Item.isDurable = ItemObj->GetBoolField(TEXT("isDurable"));
-
-	if (ItemObj->HasField(TEXT("isTradable")))
-		Item.isTradable = ItemObj->GetBoolField(TEXT("isTradable"));
-
-	if (ItemObj->HasField(TEXT("isContainer")))
-		Item.isContainer = ItemObj->GetBoolField(TEXT("isContainer"));
-
-	if (ItemObj->HasField(TEXT("isQuestItem")))
-		Item.isQuestItem = ItemObj->GetBoolField(TEXT("isQuestItem"));
-
-	// ����� � ������ ������ true ���� ���� ���� > 0
-	if (ItemObj->HasField(TEXT("equipSlot")))
+	// Legacy: derive isEquippable from numeric equipSlot field when explicit bool is absent
+	if (!Src->HasField(TEXT("isEquippable")) && Src->HasField(TEXT("equipSlot")))
 	{
-		int32 SlotId = ItemObj->GetIntegerField(TEXT("equipSlot"));
-		Item.isEquippable = (SlotId > 0);
+		int32 SlotId = Src->GetIntegerField(TEXT("equipSlot"));
+		Out.isEquippable = (SlotId > 0);
 	}
 
-	// ����
-	if (ItemObj->HasField(TEXT("vendorPriceBuy")))
-		Item.priceBuy = ItemObj->GetIntegerField(TEXT("vendorPriceBuy"));
-
-	if (ItemObj->HasField(TEXT("vendorPriceSell")))
-		Item.priceSell = ItemObj->GetIntegerField(TEXT("vendorPriceSell"));
-
-	// Attributes (������ �������� {name,value})
-	if (ItemObj->HasTypedField<EJson::Array>(TEXT("attributes")))
+	// Typed attribute array (supports apply_on field)
+	if (Src->HasTypedField<EJson::Array>(TEXT("attributes")))
 	{
-		const TArray<TSharedPtr<FJsonValue>> AttrArray = ItemObj->GetArrayField(TEXT("attributes"));
+		const TArray<TSharedPtr<FJsonValue>> AttrArray = Src->GetArrayField(TEXT("attributes"));
 		for (const TSharedPtr<FJsonValue>& AttrVal : AttrArray)
 		{
 			TSharedPtr<FJsonObject> AttrObj = AttrVal->AsObject();
 			if (!AttrObj.IsValid()) continue;
 
-			FString AttrName;
-			if (AttrObj->TryGetStringField(TEXT("name"), AttrName))
-			{
-				// value ����� ���� ������ ��� �������
-				FString StrVal;
-				double NumVal;
-				if (AttrObj->TryGetStringField(TEXT("value"), StrVal))
-				{
-					Item.attributes.Add(AttrName, StrVal);
-				}
-				else if (AttrObj->TryGetNumberField(TEXT("value"), NumVal))
-				{
-					Item.attributes.Add(AttrName, FString::SanitizeFloat(NumVal));
-				}
-			}
+			FItemAttributeStruct TypedAttr;
+			if (AttrObj->TryGetStringField(TEXT("slug"), TypedAttr.slug)) {}
+			if (AttrObj->TryGetStringField(TEXT("name"), TypedAttr.name)) {}
+			if (AttrObj->TryGetStringField(TEXT("apply_on"), TypedAttr.apply_on)) {}
+			double AttrVal2 = 0.0;
+			if (AttrObj->TryGetNumberField(TEXT("value"), AttrVal2))
+				TypedAttr.value = (float)AttrVal2;
+			Out.itemAttributes.Add(TypedAttr);
+
+			// Also populate legacy TMap for backward compat
+			const FString& DisplayName = TypedAttr.name.IsEmpty() ? TypedAttr.slug : TypedAttr.name;
+			if (!DisplayName.IsEmpty())
+				Out.attributes.Add(DisplayName, FString::SanitizeFloat(TypedAttr.value));
 		}
 	}
+
+	// Use effects (consumables)
+	if (Src->HasTypedField<EJson::Array>(TEXT("useEffects")))
+	{
+		const TArray<TSharedPtr<FJsonValue>> EffectArray = Src->GetArrayField(TEXT("useEffects"));
+		for (const TSharedPtr<FJsonValue>& EffVal : EffectArray)
+		{
+			TSharedPtr<FJsonObject> EffObj = EffVal->AsObject();
+			if (!EffObj.IsValid()) continue;
+
+			FItemUseEffectEntry Effect;
+			if (EffObj->HasField(TEXT("effectSlug")))       Effect.effectSlug       = EffObj->GetStringField(TEXT("effectSlug"));
+			if (EffObj->HasField(TEXT("attributeSlug")))    Effect.attributeSlug    = EffObj->GetStringField(TEXT("attributeSlug"));
+			if (EffObj->HasField(TEXT("value")))            Effect.value            = (float)EffObj->GetNumberField(TEXT("value"));
+			if (EffObj->HasField(TEXT("isInstant")))        Effect.isInstant        = EffObj->GetBoolField(TEXT("isInstant"));
+			if (EffObj->HasField(TEXT("durationSeconds")))  Effect.durationSeconds  = EffObj->GetIntegerField(TEXT("durationSeconds"));
+			if (EffObj->HasField(TEXT("tickMs")))           Effect.tickMs           = EffObj->GetIntegerField(TEXT("tickMs"));
+			if (EffObj->HasField(TEXT("cooldownSeconds")))  Effect.cooldownSeconds  = EffObj->GetIntegerField(TEXT("cooldownSeconds"));
+			Out.useEffects.Add(Effect);
+		}
+	}
+}
+
+FInventoryItemStruct JSONParser::DeserializeInventoryItem(const TSharedPtr<FJsonObject>& ItemObj)
+{
+	FInventoryItemStruct Item;
+	if (!ItemObj.IsValid()) return Item;
+
+	// Top-level inventory record fields
+	if (ItemObj->HasField(TEXT("id")))       Item.id       = ItemObj->GetIntegerField(TEXT("id"));   // player_inventory PK
+	if (ItemObj->HasField(TEXT("itemId")))   Item.itemId   = ItemObj->GetIntegerField(TEXT("itemId"));
+	if (ItemObj->HasField(TEXT("quantity"))) Item.quantity = ItemObj->GetIntegerField(TEXT("quantity"));
+
+	// Durability from top-level (overridden by nested "item" if present)
+	if (ItemObj->HasField(TEXT("durabilityCurrent"))) Item.durabilityCurrent = ItemObj->GetIntegerField(TEXT("durabilityCurrent"));
+	if (ItemObj->HasField(TEXT("durabilityMax")))     Item.durabilityMax     = ItemObj->GetIntegerField(TEXT("durabilityMax"));
+
+	// is_equipped flag lives at top-level in some server responses
+	if (ItemObj->HasField(TEXT("is_equipped"))) Item.is_equipped = ItemObj->GetBoolField(TEXT("is_equipped"));
+
+	// Flat fields (older format or already-flattened responses)
+	ParseItemFields(ItemObj, Item);
+
+	// Nested "item" sub-object from protocol (getPlayerInventory format):
+	// { "id": 101, "itemId": 5, "quantity": 1, "item": { ... } }
+	const TSharedPtr<FJsonObject>* NestedItemPtr = nullptr;
+	if (ItemObj->TryGetObjectField(TEXT("item"), NestedItemPtr) && NestedItemPtr && (*NestedItemPtr).IsValid())
+	{
+		const TSharedPtr<FJsonObject>& NestedItem = *NestedItemPtr;
+		ParseItemFields(NestedItem, Item);
+
+		// id inside nested item is the template id, not the inventory record id - do not overwrite Item.id
+		// but we do want itemId from nested if top-level was missing
+		if (Item.itemId == 0 && NestedItem->HasField(TEXT("id")))
+			Item.itemId = NestedItem->GetIntegerField(TEXT("id"));
+	}
+
+	// Ensure durabilityCurrent has a sane default
+	if (Item.durabilityCurrent == 0 && Item.durabilityMax > 0 && Item.isDurable)
+		Item.durabilityCurrent = Item.durabilityMax;
 
 	return Item;
 }
@@ -1088,6 +1136,12 @@ FCharacterInventoryStruct JSONParser::DeserializeCharacterInventory(const TShare
 	if (Body->TryGetNumberField(TEXT("characterId"), CharacterId))
 	{
 		Inventory.characterId = CharacterId;
+	}
+
+	int32 Gold = 0;
+	if (Body->TryGetNumberField(TEXT("gold"), Gold))
+	{
+		Inventory.gold = Gold;
 	}
 
 	// Items

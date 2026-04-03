@@ -200,9 +200,9 @@ struct FSpawnZoneStruct
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Zone Struct")
     bool bSpawningEnabled = true;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Zone Struct")
-    FVector spawnStartPos;
+    FVector spawnStartPos = FVector::ZeroVector;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Zone Struct")
-    FVector spawnSize;
+    FVector spawnSize = FVector::ZeroVector;
 };
 
 USTRUCT(BlueprintType)
@@ -682,6 +682,32 @@ struct FMobDefinition : public FTableRowBase
 };
 
 // ============================================================
+// Item Attribute Entry (stat modifier from item)
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct FItemAttributeStruct
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Attribute")
+    int32 id = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Attribute")
+    FString name = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Attribute")
+    FString slug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Attribute")
+    float value = 0.0f;
+
+    // "equip" = passive bonus while worn, "use" = applied when item is used
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Attribute")
+    FString apply_on = TEXT("equip");
+};
+
+// ============================================================
 // Item Use Effect Entry (consumable effect descriptor)
 // ============================================================
 
@@ -864,6 +890,10 @@ struct FInventoryItemStruct
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
 	TMap<FString, FString> attributes;
 
+	// Typed attribute array parsed from protocol (supports apply_on field)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Item")
+	TArray<FItemAttributeStruct> itemAttributes;
+
 	FInventoryItemStruct()
 	{
 		id = 0;
@@ -910,6 +940,7 @@ struct FInventoryItemStruct
 		addedToInventory = false;
 
 		attributes.Empty();
+		itemAttributes.Empty();
 	}
 };
 

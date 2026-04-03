@@ -86,12 +86,8 @@ void UInventorySlotWidget::InitializeSlot(int32 InSlotIndex)
 void UInventorySlotWidget::SetItemData(const FInventoryItemStruct& Item)
 {
 	CurrentItem = Item;
+	bIsOccupied = (CurrentItem.itemId > 0);
 
-	if (CurrentItem.itemId > 0)
-	{
-		bIsOccupied = true;
-	}
-	
 	// Update visual components
 	LoadItemIcon();
 	UpdateQuantityText();
@@ -103,20 +99,22 @@ void UInventorySlotWidget::SetItemData(const FInventoryItemStruct& Item)
 void UInventorySlotWidget::ClearSlot()
 {
 	CurrentItem = FInventoryItemStruct();
-	
+	bIsOccupied = false;
+	bIsSelected = false;
+
 	// Clear visual components
 	if (ItemIcon)
 	{
 		ItemIcon->SetBrushFromTexture(nullptr);
 		ItemIcon->SetVisibility(ESlateVisibility::Hidden);
 	}
-	
+
 	if (QuantityText)
 	{
 		QuantityText->SetText(FText::GetEmpty());
 		QuantityText->SetVisibility(ESlateVisibility::Hidden);
 	}
-	
+
 	UpdateSlotAppearance();
 }
 
@@ -147,9 +145,19 @@ void UInventorySlotWidget::UpdateSlotAppearance()
 		ImgOccupied->SetVisibility(ESlateVisibility::Visible);
 		ImgBase->SetVisibility(ESlateVisibility::Hidden);
 	}
-	else if (!bIsOccupied)
+	else
 	{
 		ImgOccupied->SetVisibility(ESlateVisibility::Hidden);
+		ImgBase->SetVisibility(ESlateVisibility::Visible);
+	}
+
+	// Show equipped overlay when the item is currently worn
+	if (ImgEquipped)
+	{
+		ImgEquipped->SetVisibility(
+			(bIsOccupied && CurrentItem.is_equipped)
+				? ESlateVisibility::HitTestInvisible
+				: ESlateVisibility::Collapsed);
 	}
 	
 	if (bIsSelected && bIsOccupied)

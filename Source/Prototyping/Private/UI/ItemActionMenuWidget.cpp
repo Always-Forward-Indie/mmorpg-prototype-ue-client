@@ -177,7 +177,12 @@ void UItemActionMenuWidget::ExecuteAction(EItemContextAction Action)
 
 		case EItemContextAction::Equip:
 			if (EquipmentManager)
-				EquipmentManager->RequestEquipItem(CharacterId, CurrentItem.id);
+			{
+				// CurrentItem.id = player_inventory PK (inventoryItemId per protocol)
+				// Fallback to itemId only if id was not parsed (older server format)
+				const int32 InvItemId = (CurrentItem.id > 0) ? CurrentItem.id : CurrentItem.itemId;
+				EquipmentManager->RequestEquipItem(CharacterId, InvItemId);
+			}
 			break;
 
 		case EItemContextAction::Unequip:

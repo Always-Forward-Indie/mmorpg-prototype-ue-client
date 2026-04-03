@@ -8,6 +8,7 @@
 #include "Components/VerticalBox.h"
 #include "Components/HorizontalBox.h"
 #include "Data/DataStructs.h"
+#include "Data/ItemStruct.h"
 #include "ItemTooltipWidget.generated.h"
 
 /**
@@ -55,6 +56,22 @@ protected:
 	// Update item attributes/stats
 	UFUNCTION(BlueprintCallable, Category = "Item Tooltip")
 	void UpdateItemAttributes();
+
+	// Update item durability
+	UFUNCTION(BlueprintCallable, Category = "Item Tooltip")
+	void UpdateItemDurability();
+
+	// Update equip slot info
+	UFUNCTION(BlueprintCallable, Category = "Item Tooltip")
+	void UpdateEquipInfo();
+
+	// Update vendor prices
+	UFUNCTION(BlueprintCallable, Category = "Item Tooltip")
+	void UpdateVendorPrices();
+
+	// Update use effects (consumables)
+	UFUNCTION(BlueprintCallable, Category = "Item Tooltip")
+	void UpdateUseEffects();
 
 	// Update item type and level
 	UFUNCTION(BlueprintCallable, Category = "Item Tooltip")
@@ -127,6 +144,19 @@ protected:
 
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* WeightText;
+
+	// Optional bindings — add these widgets in Blueprint to enable the section
+	UPROPERTY(meta = (BindWidgetOptional))
+	UTextBlock* DurabilityText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	UTextBlock* EquipSlotText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	UTextBlock* VendorPriceText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	UVerticalBox* UseEffectsBox;
 
 	// Current item data
 	UPROPERTY(BlueprintReadOnly, Category = "Item Tooltip")

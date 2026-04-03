@@ -164,8 +164,7 @@ private:
 	void ProcessInventoryData(const FString& JsonData);
 	void ProcessInventoryUpdate(const FString& JsonData);
 
-	// Local inventory management
-	void UpdateLocalInventory(const FCharacterInventoryStruct& NewInventory);
+	// Local inventory management (private helpers)
 	void AddItemToInventory(const FInventoryItemStruct& Item);
 	void RemoveItemFromInventory(int32 ItemId, int32 Quantity);
 
@@ -177,6 +176,9 @@ public:
 	// Send requests to server
 	void SendUseItemRequest(int32 ItemId, int32 Quantity);
 	void SendDropItemRequest(int32 ItemId, int32 Quantity);
+
+	// Apply a full inventory snapshot locally (used e.g. by EquipmentManager to sync is_equipped flags)
+	void UpdateLocalInventory(const FCharacterInventoryStruct& NewInventory);
 
 	// Set the character ID this manager owns.
 	// Called before SubscribeToNetworkManager so packets are filtered correctly.

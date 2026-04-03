@@ -1000,6 +1000,12 @@ Super::BeginPlay();
 			
 			// Set reference in game instance for easy access
 			MyGameInstance->SetInventoryManager(InventoryManager);
+
+			// Link EquipmentManager so it can sync is_equipped flags on EQUIPMENT_STATE / EQUIP_RESULT
+			if (UEquipmentManager* EquipMgr = MyGameInstance->GetEquipmentManager())
+			{
+				EquipMgr->SetInventoryManager(InventoryManager);
+			}
 		}
 
 		// Initialize harvest manager
@@ -1216,29 +1222,11 @@ void ABasicPlayer::HandleUIManagerInitialized()
 
 void ABasicPlayer::HandleWeightStatusChanged(const FWeightStatusData& WeightStatus)
 {
-    UCharacterMovementComponent* Movement = GetCharacterMovement();
-    if (!Movement) return;
-
-    // Capture the base speed the first time we receive a weight update
-    if (BaseWalkSpeed <= 0.f)
-    {
-        BaseWalkSpeed = Movement->MaxWalkSpeed;
-    }
-
-    const bool bNowOverweight = WeightStatus.isOverweight;
-    if (bNowOverweight && !bOverweightPenaltyActive)
-    {
-        Movement->MaxWalkSpeed = BaseWalkSpeed * 0.7f;
-        bOverweightPenaltyActive = true;
-        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Overweight penalty applied (%.0f -> %.0f)"),
-            BaseWalkSpeed, Movement->MaxWalkSpeed);
-    }
-    else if (!bNowOverweight && bOverweightPenaltyActive)
-    {
-        Movement->MaxWalkSpeed = BaseWalkSpeed;
-        bOverweightPenaltyActive = false;
-        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Overweight penalty removed, speed restored to %.0f"), BaseWalkSpeed);
-    }
+    // Weight status is informational only (used by UI weight bar).
+    // Movement speed is fully server-authoritative and arrives via move_speed in stats_update.
+    // No client-side speed penalty is applied here.
+    UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Weight status updated — current=%.1f limit=%.1f overweight=%d (speed unchanged)"),
+        WeightStatus.currentWeight, WeightStatus.weightLimit, (int)WeightStatus.isOverweight);
 }
 
 // update HUD
@@ -1527,7 +1515,15 @@ void ABasicPlayer::UpdateMeshRotation(float DeltaTime)
 
     const FRotator Current = GetActorRotation();
     const FRotator Target(Current.Pitch, DesiredMeshYaw, Current.Roll);
-    const FRotator Smoothed = FMath::RInterpTo(Current, Target, DeltaTime, MeshRotationSpeed / 90.0f);
+
+    // MeshRotationSpeed is in degrees/sec.
+    // Convert to RInterpTo speed: angular_speed_deg_per_sec / 90 gives a value
+    // that is way too low (180/90=2). Instead use a fixed responsive interp speed
+    // that covers any remaining angle in ~1-2 frames at normal frame rates.
+    // For keyboard A/D turning the delta is tiny each frame so this is instant;
+    // for RMB camera snap the delta can be up to 180° and we want ~100ms to close it.
+    const float InterpSpeed = 15.0f;
+    const FRotator Smoothed = FMath::RInterpTo(Current, Target, DeltaTime, InterpSpeed);
     SetActorRotation(Smoothed);
 
     // Stop interpolating once we are close enough
@@ -3035,6 +3031,17 @@ void ABasicPlayer::UpdatePlayerStats(const FPlayerStatsUpdateStruct& StatsUpdate
 		StatsUpdate.manaCurrent, StatsUpdate.manaMax);
 }
 
+void ABasicPlayer::ApplyServerMoveSpeed(float ServerMoveSpeed)
+{
+	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+	{
+		const float NewSpeed = ServerMoveSpeed * MoveSpeedScale;
+		CMC->MaxWalkSpeed = NewSpeed;
+		UE_LOG(LogTemp, Log, TEXT("BasicPlayer: MaxWalkSpeed set to %.1f (server move_speed=%.1f, scale=%.1f)"),
+			NewSpeed, ServerMoveSpeed, MoveSpeedScale);
+	}
+}
+
 void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdate)
 {
 	// Capture old level BEFORE UpdatePlayerStats overwrites characterData
@@ -3088,23 +3095,15 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 	}
 
 	// Apply move_speed attribute from the server to the CharacterMovementComponent.
-	// The server sends speed in its own units; MoveSpeedScale converts them to UU/s.
-    if (!playerData.isOtherClient)
-    {
+	// Server is authoritative: MaxWalkSpeed = move_speed * MoveSpeedScale, no client-side modifiers.
+	if (!playerData.isOtherClient)
+	{
 		const FStatAttributeEntry* SpeedAttr = StatsUpdate.attributes.FindByPredicate(
 			[](const FStatAttributeEntry& A){ return A.slug.Equals(TEXT("move_speed"), ESearchCase::IgnoreCase); });
 
 		if (SpeedAttr && SpeedAttr->effective > 0.f)
 		{
-			const float NewSpeed = SpeedAttr->effective * MoveSpeedScale;
-			if (UCharacterMovementComponent* CMC = GetCharacterMovement())
-			{
-				// Update the base speed and re-apply any active overweight penalty.
-				BaseWalkSpeed = NewSpeed;
-				CMC->MaxWalkSpeed = bOverweightPenaltyActive ? NewSpeed * 0.7f : NewSpeed;
-				UE_LOG(LogTemp, Log, TEXT("BasicPlayer: MaxWalkSpeed updated to %.1f (server move_speed=%.1f, scale=%.1f)"),
-					CMC->MaxWalkSpeed, static_cast<float>(SpeedAttr->effective), MoveSpeedScale);
-			}
+			ApplyServerMoveSpeed(SpeedAttr->effective);
 		}
 	}
 

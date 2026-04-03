@@ -98,6 +98,17 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 		FItemDropResponseStruct ItemDropResponse = JSONParser::DeserializeItemDropResponse(Body);
 		HandleItemDrop(ItemDropResponse);
 	}
+	else if (MessageData.eventType == "nearbyItems")
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ItemManager: Received nearbyItems event"));
+		// Body contains { "items": [ DroppedItemStruct... ] } - same shape as itemDrop
+		FItemDropResponseStruct NearbyResponse = JSONParser::DeserializeItemDropResponse(Body);
+		for (const FDroppedItemStruct& DroppedItem : NearbyResponse.droppedItems)
+		{
+			if (DroppedItem.uid > 0)
+				SpawnDroppedItem(DroppedItem);
+		}
+	}
 	else if (MessageData.eventType == "itemPickup" && MessageData.status == "success")
 	{
 		UE_LOG(LogTemp, Warning, TEXT("ItemManager: Received pickUpItem event"));
@@ -351,31 +362,36 @@ void UItemManager::LoadItemVisualsDataTable(UDataTable* InItemVisualsTable)
 
 FItemVisualData UItemManager::GetItemVisualDataBySlug(const FString& ItemSlug)
 {
-	// Check if we have the visual data cached
+	if (ItemSlug.IsEmpty()) return FItemVisualData();
+
+	// Check cache first
 	if (ItemVisualsCache.Contains(ItemSlug))
 	{
 		return ItemVisualsCache[ItemSlug];
 	}
 
-	// If not in cache but we have a data table, try to find it
 	if (ItemVisualsDataTable)
 	{
-		// Try to find by slug by iterating through rows
-		TArray<FName> RowNames = ItemVisualsDataTable->GetRowNames();
-		for (const FName& RowName : RowNames)
+		// Row name IS the slug — same convention as FItemLocaleDefinition
+		FItemVisualData* VisualData = ItemVisualsDataTable->FindRow<FItemVisualData>(FName(*ItemSlug), TEXT("GetItemVisualDataBySlug"), false);
+		if (VisualData)
 		{
-			FItemVisualData* VisualData = ItemVisualsDataTable->FindRow<FItemVisualData>(RowName, TEXT("Getting item visual data"));
+			ItemVisualsCache.Add(ItemSlug, *VisualData);
+			return *VisualData;
+		}
 
-			if (VisualData && VisualData->ItemSlug == ItemSlug)
+		// Fallback: legacy rows where ItemSlug field was used instead of row name
+		for (const FName& RowName : ItemVisualsDataTable->GetRowNames())
+		{
+			FItemVisualData* Row = ItemVisualsDataTable->FindRow<FItemVisualData>(RowName, TEXT("GetItemVisualDataBySlug"), false);
+			if (Row && Row->ItemSlug == ItemSlug)
 			{
-				// Cache for future use
-				ItemVisualsCache.Add(ItemSlug, *VisualData);
-				return *VisualData;
+				ItemVisualsCache.Add(ItemSlug, *Row);
+				return *Row;
 			}
 		}
 	}
 
-	// Return empty data if nothing found
-	UE_LOG(LogTemp, Warning, TEXT("No visual data found for item slug: %s"), *ItemSlug);
+	UE_LOG(LogTemp, Warning, TEXT("ItemManager: No visual data found for slug: %s"), *ItemSlug);
 	return FItemVisualData();
 }

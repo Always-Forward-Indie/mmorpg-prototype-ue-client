@@ -2,6 +2,9 @@
 
 
 #include "Services/LoadingSceenActor.h"
+#include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
+#include "Kismet/GameplayStatics.h"
 
 // Sets default values
 ALoadingSceenActor::ALoadingSceenActor()
@@ -22,7 +25,15 @@ ALoadingSceenActor::ALoadingSceenActor()
 void ALoadingSceenActor::BeginPlay()
 {
 	Super::BeginPlay();
-	
+
+	// Route loading screen audio through the Music SoundClass so volume sliders work
+	if (UMyGameInstance* GI = Cast<UMyGameInstance>(UGameplayStatics::GetGameInstance(this)))
+	{
+		if (AudioComponent && GI->AudioManager && GI->AudioManager->MusicClass)
+		{
+			AudioComponent->SoundClassOverride = GI->AudioManager->MusicClass;
+		}
+	}
 }
 
 // Called every frame

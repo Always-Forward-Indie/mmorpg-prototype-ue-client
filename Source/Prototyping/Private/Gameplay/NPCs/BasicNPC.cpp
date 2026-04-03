@@ -1,4 +1,5 @@
 #include "Gameplay/NPCs/BasicNPC.h"
+#include "Gameplay/NPCs/BasicNPC.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/AudioComponent.h"
 #include "Engine/Engine.h"
@@ -7,6 +8,8 @@
 #include "Engine/AssetManager.h"
 #include "Engine/StreamableManager.h"
 #include "Gameplay/UI/NPCNameplateComponent.h"
+#include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 
 // Sets default values
 ABasicNPC::ABasicNPC()
@@ -37,7 +40,17 @@ ABasicNPC::ABasicNPC()
 void ABasicNPC::BeginPlay()
 {
 	Super::BeginPlay();
-	
+
+	// Route NPC audio through the SFX SoundClass so the SFX volume slider works
+	if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+	{
+		if (GI->AudioManager && GI->AudioManager->SFXClass)
+		{
+			if (AudioComponentMain)  { AudioComponentMain->SoundClassOverride  = GI->AudioManager->SFXClass; }
+			if (AudioComponentSecond) { AudioComponentSecond->SoundClassOverride = GI->AudioManager->SFXClass; }
+		}
+	}
+
 	// Initialize UI with delay to ensure all data is loaded
 	if (GetWorld())
 	{
@@ -271,7 +284,7 @@ void ABasicNPC::PlayRandomIdleSound()
 		AudioComponentMain->SetSound(IdleSounds[Idx]);
 		AudioComponentMain->Play();
 	}
-	ScheduleNextIdleSound(); // перезапланировать
+	ScheduleNextIdleSound(); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 }
 
 void ABasicNPC::ScheduleNextIdleSound()

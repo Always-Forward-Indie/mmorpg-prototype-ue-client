@@ -4,6 +4,7 @@
 #include "Utils/JSONParser.h"
 #include "Engine/World.h"
 #include "UI/InventoryWidget.h"
+#include "Gameplay/Equipment/EquipmentManager.h"
 
 UInventoryManager::UInventoryManager()
 {
@@ -141,103 +142,45 @@ void UInventoryManager::ProcessInventoryData(const FString& JsonData)
 		return;
 	}
 
-	// Parse character ID � must do this first so we can filter early
-	int32 CharacterId = 0;
-	if (Body->TryGetNumberField(TEXT("characterId"), CharacterId))
+
+	// Use the shared parser that handles nested "item" sub-object per protocol
+	FCharacterInventoryStruct Parsed = JSONParser::DeserializeCharacterInventory(Body);
+
+	// Reject packets belonging to a different character
+	if (OwnerCharacterId > 0 && Parsed.characterId > 0 && Parsed.characterId != OwnerCharacterId)
 	{
-		// If OwnerCharacterId is set, reject packets that belong to another character.
-		// This prevents inventory cross-contamination when multiple players are on
-		// the same broadcast channel (PIE multi-player or multi-window sessions).
-		if (OwnerCharacterId > 0 && CharacterId > 0 && CharacterId != OwnerCharacterId)
-		{
-			UE_LOG(LogTemp, Verbose, TEXT("InventoryManager: Ignoring inventory data for CharID=%d (owner=%d)"),
-				CharacterId, OwnerCharacterId);
-			return;
-		}
-		CurrentInventory.characterId = CharacterId;
+		UE_LOG(LogTemp, Verbose, TEXT("InventoryManager: Ignoring inventory data for CharID=%d (owner=%d)"),
+			Parsed.characterId, OwnerCharacterId);
+		return;
 	}
 
-	// Parse items array
-	const TArray<TSharedPtr<FJsonValue>>* ItemsArray = nullptr;
-	if (Body->TryGetArrayField(TEXT("items"), ItemsArray))
+	CurrentInventory = Parsed;
+
+	// Apply is_equipped flags from EquipmentManager if it's already loaded
+	if (gameInstance)
 	{
-		CurrentInventory.items.Empty();
-
-		for (const TSharedPtr<FJsonValue>& ItemValue : *ItemsArray)
+		if (UEquipmentManager* EquipMgr = gameInstance->GetEquipmentManager())
 		{
-			TSharedPtr<FJsonObject> ItemObject = ItemValue->AsObject();
-			if (ItemObject.IsValid())
+			const FEquipmentStateData& EquipState = EquipMgr->GetEquipmentState();
+			for (const auto& SlotPair : EquipState.slots)
 			{
-				FInventoryItemStruct Item;
-				
-				ItemObject->TryGetNumberField(TEXT("itemId"), Item.itemId);
-				ItemObject->TryGetNumberField(TEXT("quantity"), Item.quantity);
-				ItemObject->TryGetStringField(TEXT("name"), Item.name);
-				ItemObject->TryGetStringField(TEXT("slug"), Item.slug);
-				ItemObject->TryGetStringField(TEXT("description"), Item.description);
-				ItemObject->TryGetStringField(TEXT("itemTypeName"), Item.type);
-				ItemObject->TryGetStringField(TEXT("rarityName"), Item.rarity);
-				ItemObject->TryGetNumberField(TEXT("weight"), Item.weight);
-				ItemObject->TryGetNumberField(TEXT("levelRequirement"), Item.level_requirement);
-				ItemObject->TryGetNumberField(TEXT("stackSize"), Item.stackSize);
-			ItemObject->TryGetNumberField(TEXT("durabilityMax"), Item.durabilityMax);
-			ItemObject->TryGetNumberField(TEXT("durabilityCurrent"), Item.durabilityCurrent);
-			ItemObject->TryGetNumberField(TEXT("vendorPriceBuy"), Item.priceBuy);
-			ItemObject->TryGetNumberField(TEXT("vendorPriceSell"), Item.priceSell);
-			// Parse boolean fields
-			ItemObject->TryGetBoolField(TEXT("isDurable"), Item.isDurable);
-			ItemObject->TryGetBoolField(TEXT("isTradable"), Item.isTradable);
-			ItemObject->TryGetBoolField(TEXT("isEquippable"), Item.isEquippable);
-			ItemObject->TryGetBoolField(TEXT("isContainer"), Item.isContainer);
-			ItemObject->TryGetBoolField(TEXT("isQuestItem"), Item.isQuestItem);
-
-
-
-				// Parse attributes object
-				const TArray<TSharedPtr<FJsonValue>>* AttributesArray = nullptr;
-				if (ItemObject->TryGetArrayField(TEXT("attributes"), AttributesArray) && AttributesArray)
+				const FEquipmentSlotData& Slot = SlotPair.Value;
+				if (!Slot.bIsOccupied || Slot.inventoryItemId <= 0) continue;
+				for (FInventoryItemStruct& Item : CurrentInventory.items)
 				{
-					for (const TSharedPtr<FJsonValue>& AttrVal : *AttributesArray)
+					if (Item.id == Slot.inventoryItemId)
 					{
-						TSharedPtr<FJsonObject> AttrObj = AttrVal->AsObject();
-						if (!AttrObj.IsValid()) continue;
-
-						FString AttrName;
-						// value ����� ���� ������ ��� �������
-						// ��������� � ������ (��� � ������ � Item.attributes: TMap<FString, FString>)
-						FString ValueAsString;
-
-						AttrObj->TryGetStringField(TEXT("name"), AttrName);
-
-						// ������� �����
-						double NumVal = 0.0;
-						if (AttrObj->TryGetNumberField(TEXT("value"), NumVal))
-						{
-							ValueAsString = FString::SanitizeFloat(NumVal);
-						}
-						else
-						{
-							// ����� ������
-							AttrObj->TryGetStringField(TEXT("value"), ValueAsString);
-						}
-
-						if (!AttrName.IsEmpty())
-						{
-							Item.attributes.Add(AttrName, ValueAsString);
-						}
+						Item.is_equipped = true;
+						break;
 					}
 				}
-
-				CurrentInventory.items.Add(Item);
-				UE_LOG(LogTemp, Log, TEXT("InventoryManager: Added item %s (ID: %d, Quantity: %d)"), 
-					*Item.name, Item.itemId, Item.quantity);
 			}
 		}
 	}
 
 	bInventoryLoaded = true;
-	UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Loaded %d items for character %d"), 
-		CurrentInventory.items.Num(), CurrentInventory.characterId);
+	UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Loaded %d items, gold=%d for character %d"),
+		CurrentInventory.items.Num(), CurrentInventory.gold, CurrentInventory.characterId);
 
 	// Broadcast events
 	OnInventoryUpdated.Broadcast(CurrentInventory);
@@ -747,10 +690,10 @@ void UInventoryManager::SetInventoryUIWidget(UInventoryWidget* InInventoryUIWidg
 	{
 		this->InventoryUIWidget = InInventoryUIWidget;
 		InInventoryUIWidget->InitializeInventory(this);
-		
+
 		// Bind UI events
 		InInventoryUIWidget->OnInventorySlotClicked.AddDynamic(this, &UInventoryManager::HandleSlotClicked);
-		InInventoryUIWidget->OnInventorySlotRightClicked.AddDynamic(this, &UInventoryManager::HandleSlotRightClicked);
+		// OnInventorySlotRightClicked is handled entirely by ItemActionMenuWidget - do NOT bind HandleSlotRightClicked here.
 		
 		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: UI Widget set and initialized"));
 	}
@@ -795,24 +738,14 @@ bool UInventoryManager::IsInventoryUIVisible() const
 
 void UInventoryManager::HandleSlotClicked(int32 SlotIndex, const FInventoryItemStruct& Item)
 {
-	UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Slot %d clicked - Item: %s (ID: %d)"), SlotIndex, *Item.name, Item.itemId);
-	
-	// Default behavior: Use the item (you can customize this)
-	if (Item.itemId > 0)
-	{
-		UseItem(Item.itemId, 1);
-	}
+	// All item actions are handled via the context menu (ItemActionMenuWidget). No action on plain LMB click.
+	UE_LOG(LogTemp, Verbose, TEXT("InventoryManager: Slot %d clicked - handled by context menu"), SlotIndex);
 }
 
 void UInventoryManager::HandleSlotRightClicked(int32 SlotIndex, const FInventoryItemStruct& Item)
 {
-	UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Slot %d right-clicked - Item: %s (ID: %d)"), SlotIndex, *Item.name, Item.itemId);
-	
-	// Default behavior: Drop the item (you can customize this)
-	if (Item.itemId > 0)
-	{
-		DropItem(Item.itemId, 1);
-	}
+	// Right-click is handled by the context menu (ItemActionMenuWidget). No action here.
+	UE_LOG(LogTemp, Verbose, TEXT("InventoryManager: Slot %d right-clicked - handled by context menu"), SlotIndex);
 }
 
 void UInventoryManager::AddItemToLocalInventory(const FInventoryItemStruct& Item)

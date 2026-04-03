@@ -12,6 +12,7 @@
 #include "UI/UIManager.h"
 #include "Services/TimeSyncService.h"
 #include "Audio/AudioManager.h"
+#include "Audio/AudioConfigDataAsset.h"
 #include "DevMode/DevModeDataProvider.h"
 
 #include <Kismet/GameplayStatics.h>
@@ -270,8 +271,13 @@ public:
 	class UNPCNetworkHandler* NPCNetworkHandler;
 
 	// Audio system
-	UPROPERTY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
 	UAudioManager* AudioManager;
+
+	/** Data Asset with all designer-facing audio settings.
+	 *  Create DA_AudioConfig in Content Browser and assign it here. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
+	UAudioConfigDataAsset* AudioConfig;
 
 	// Player stats manager
 	UPROPERTY()

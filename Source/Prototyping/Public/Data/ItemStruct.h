@@ -8,25 +8,6 @@
 #include "Engine/SkeletalMesh.h"
 #include "ItemStruct.generated.h"
 
-// Represents an item attribute (like damage, defense, etc.)
-USTRUCT(BlueprintType)
-struct FItemAttributeStruct
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Attribute")
-	int32 id = 0;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Attribute")
-	FString name = "";
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Attribute")
-	FString slug = "";
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Attribute")
-	float value = 0.0f;
-};
-
 // Different item types
 UENUM(BlueprintType)
 enum class EItemType : uint8

@@ -1,4 +1,5 @@
 #include "Gameplay/Equipment/EquipmentManager.h"
+#include "Gameplay/Items/InventoryManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
 #include "Dom/JsonObject.h"
@@ -15,6 +16,11 @@ void UEquipmentManager::Initialize(UNetworkManager* InNetworkManager, UMyGameIns
     NetworkManager = InNetworkManager;
     GameInstance   = InGameInstance;
     UE_LOG(LogTemp, Log, TEXT("EquipmentManager: Initialized"));
+}
+
+void UEquipmentManager::SetInventoryManager(UInventoryManager* InInventoryManager)
+{
+    InventoryManager = InInventoryManager;
 }
 
 // ---------------------------------------------------------------------------
@@ -128,6 +134,7 @@ void UEquipmentManager::OnEquipmentStateReceived(const FEquipmentStateData& Stat
     }
 
     EquipmentState = State;
+    SyncEquippedFlagsToInventory();
     OnEquipmentStateChangedDelegate.Broadcast(State);
 }
 
@@ -140,6 +147,10 @@ void UEquipmentManager::OnEquipResultReceived(const FEquipResultData& Result)
         return;
     }
     OnEquipResultReceivedDelegate.Broadcast(Result);
+
+    // Re-sync so InventoryManager immediately reflects the new equip/unequip state.
+    // EQUIPMENT_STATE usually follows shortly but re-syncing here avoids one-frame lag.
+    SyncEquippedFlagsToInventory();
 }
 
 void UEquipmentManager::OnWeightStatusReceived(const FWeightStatusData& Status)
@@ -173,6 +184,39 @@ void UEquipmentManager::OnRemoteEquipmentStateReceived(const FEquipmentStateData
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
+
+void UEquipmentManager::SyncEquippedFlagsToInventory()
+{
+    if (!InventoryManager) return;
+
+    // Build a set of currently-equipped inventoryItemIds from EquipmentState
+    TSet<int32> EquippedIds;
+    for (const auto& SlotPair : EquipmentState.slots)
+    {
+        const FEquipmentSlotData& Slot = SlotPair.Value;
+        if (Slot.bIsOccupied && Slot.inventoryItemId > 0)
+            EquippedIds.Add(Slot.inventoryItemId);
+    }
+
+    // Patch flags directly in CurrentInventory - no full rewrite so we never
+    // clobber a freshly-received inventory snapshot from the server.
+    bool bAnyChanged = false;
+    for (FInventoryItemStruct& Item : InventoryManager->CurrentInventory.items)
+    {
+        const bool bShouldBeEquipped = EquippedIds.Contains(Item.id);
+        if (Item.is_equipped != bShouldBeEquipped)
+        {
+            Item.is_equipped = bShouldBeEquipped;
+            bAnyChanged = true;
+        }
+    }
+
+    if (bAnyChanged)
+    {
+        // Notify UI that inventory display needs a refresh
+        InventoryManager->OnInventoryUpdated.Broadcast(InventoryManager->CurrentInventory);
+    }
+}
 
 void UEquipmentManager::SendPacket(const FString& JsonPayload)
 {

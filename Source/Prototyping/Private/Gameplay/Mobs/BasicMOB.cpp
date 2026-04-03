@@ -384,11 +384,11 @@ void ABasicMOB::UpdateWidgetScale(float DeltaTime)
 {
 	if (!(MobHeadInfo && HeadWidget)) return;
 
-	APlayerController* PC = GetWorld()->GetFirstPlayerController();
-	if (!(PC && PC->PlayerCameraManager)) return;
+	UWorld* World = GetWorld();
+	if (!World) return;
 
-	static float LastDisplayedScale = 0.0f;
-	static float LastDisplayedDistance = 0.0f;
+	APlayerController* PC = World->GetFirstPlayerController();
+	if (!(PC && PC->PlayerCameraManager)) return;
 
 	const FVector CameraLoc = PC->PlayerCameraManager->GetCameraLocation();
 	const float Distance = FVector::Dist(CameraLoc, GetActorLocation());
@@ -400,13 +400,13 @@ void ABasicMOB::UpdateWidgetScale(float DeltaTime)
 	CurrentWidgetScale = FMath::FInterpConstantTo(CurrentWidgetScale, TargetScale, DeltaTime, 1.f);
 	HeadWidget->SetWidgetScale(TargetScale);
 
-	if (FMath::Abs(LastDisplayedScale - CurrentWidgetScale) > 0.01f ||
-		FMath::Abs(LastDisplayedDistance - Distance) > 100.0f ||
-		GetWorld()->GetTimeSeconds() - LastUpdateTime > 2.0f)
+	if (FMath::Abs(LastDisplayedWidgetScale - CurrentWidgetScale) > 0.01f ||
+		FMath::Abs(LastDisplayedWidgetDistance - Distance) > 100.0f ||
+		World->GetTimeSeconds() - LastUpdateTime > 2.0f)
 	{
-		LastDisplayedScale = CurrentWidgetScale;
-		LastDisplayedDistance = Distance;
-		LastUpdateTime = GetWorld()->GetTimeSeconds();
+		LastDisplayedWidgetScale = CurrentWidgetScale;
+		LastDisplayedWidgetDistance = Distance;
+		LastUpdateTime = World->GetTimeSeconds();
 	}
 }
 
@@ -1503,12 +1503,14 @@ void ABasicMOB::ForceUpdateUI()
 
 void ABasicMOB::InitializeUIDelayed()
 {
+	if (!IsValid(this) || IsActorBeingDestroyed()) return;
+
 	if (MOBData.mobID != 0 && !bUIInitialized)
 	{
 		ForceUpdateUI();
 	}
-	
-	if (!HeadWidget)
+
+	if (!HeadWidget && IsValid(MobHeadInfo))
 	{
 		HeadWidget = Cast<UW_MOBHeadInfoWidget>(MobHeadInfo->GetUserWidgetObject());
 		if (HeadWidget)

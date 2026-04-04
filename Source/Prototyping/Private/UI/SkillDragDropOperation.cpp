@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillDragDropOperation.h"
 #include "UI/AvailableSkillsWidget.h"  // This contains USkillItemWidget definition
+#include "UI/SkillSlotWidget.h"
 #include "UI/SkillDragVisualWidget.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/Image.h"
@@ -10,12 +11,14 @@
 USkillDragDropOperation::USkillDragDropOperation()
 {
     SourceWidget = nullptr;
+    SourceSlotWidget = nullptr;
+    SourceSlotIndex = -1;
     Pivot = EDragPivot::MouseDown;
     Offset = FVector2D::ZeroVector;
-    
+
     // DragVisualWidgetClass будет установлен из USkillItemWidget
     DragVisualWidgetClass = nullptr;
-    
+
     UE_LOG(LogTemp, Warning, TEXT("SkillDragDropOperation: Constructor called"));
 }
 
@@ -65,15 +68,27 @@ UUserWidget* USkillDragDropOperation::CreateDragVisualWidget()
         UE_LOG(LogTemp, Warning, TEXT("SkillDragDropOperation: No DragVisualWidgetClass"));
         return nullptr;
     }
-    if (!SourceWidget)
+
+    // Determine the owning player from either source
+    APlayerController* OwningPlayer = nullptr;
+    if (SourceWidget)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillDragDropOperation: No SourceWidget"));
+        OwningPlayer = SourceWidget->GetOwningPlayer();
+    }
+    else if (SourceSlotWidget)
+    {
+        OwningPlayer = SourceSlotWidget->GetOwningPlayer();
+    }
+
+    if (!OwningPlayer)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("SkillDragDropOperation: No OwningPlayer available"));
         return nullptr;
     }
 
     // Создаём у того же OwningPlayer
     UUserWidget* DragVisual = CreateWidget<UUserWidget>(
-        SourceWidget->GetOwningPlayer(),
+        OwningPlayer,
         DragVisualWidgetClass
     );
     if (!DragVisual)

@@ -1,4 +1,5 @@
 #pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
@@ -19,6 +20,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FSkillSlotRightClicked, int32, Slot
 
 // New delegate for drag-and-drop (unique name to avoid conflicts)
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnSkillDroppedOnSlot, int32, SlotIndex, const FPlayerSkillData&, SkillData, const FKey&, Hotkey);
+
+// Delegate for when a skill is dragged out of a slot (dropped into empty space)
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSkillSlotDragCleared, int32, SlotIndex);
 
 /**
  * UI Widget for displaying a single skill slot
@@ -74,6 +78,10 @@ public:
     // New drag-and-drop event (unique name)
     UPROPERTY(BlueprintAssignable, Category = "Skill Slot Widget")
     FOnSkillDroppedOnSlot OnSkillDroppedOnSlot;
+
+    // Event fired when a skill is dragged out of this slot (dropped into empty space)
+    UPROPERTY(BlueprintAssignable, Category = "Skill Slot Widget")
+    FOnSkillSlotDragCleared OnSkillSlotDragCleared;
 
     // Properties
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Skill Slot Widget")
@@ -150,6 +158,7 @@ protected:
     virtual bool NativeOnDrop(const FGeometry&, const FDragDropEvent&, UDragDropOperation*) override;
     virtual void NativeOnDragLeave(const FDragDropEvent&, UDragDropOperation*) override;
     virtual void NativeOnDragCancelled(const FDragDropEvent&, UDragDropOperation*) override;
+    virtual void NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation) override;
 
 private:
     // Dependencies
@@ -168,6 +177,7 @@ private:
     bool bIsHighlighted = false;
     bool bIsDropHighlighted = false; // New state for drop highlighting
     bool bMousePressed = false; // Mouse interaction state
+    bool bIsDragging = false; // True when this slot initiated a drag
     float CooldownRemainingTime = 0.0f;
     float CooldownTotalTime = 0.0f;
 
@@ -195,6 +205,10 @@ private:
     // Color for drop-target highlighting — light cyan so it's clearly readable without being toxic
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot Widget", meta = (AllowPrivateAccess = "true"))
     FLinearColor DropHighlightColor = FLinearColor(0.2f, 0.85f, 1.0f, 1.0f);
+
+    // Drag visual widget class for dragging skills out of the slot
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot Widget", meta = (AllowPrivateAccess = "true"))
+    TSubclassOf<UUserWidget> DragVisualWidgetClass;
 
     // Internal methods
     void UpdateVisualState();

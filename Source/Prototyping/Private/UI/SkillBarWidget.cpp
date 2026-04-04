@@ -128,6 +128,7 @@ void USkillBarWidget::CreateSkillSlots(int32 NumSlots)
             OldSlot->OnSkillSlotClicked.RemoveDynamic(this, &USkillBarWidget::OnSkillSlotClicked);
             OldSlot->OnSkillSlotRightClicked.RemoveDynamic(this, &USkillBarWidget::OnSkillSlotRightClicked);
             OldSlot->OnSkillDroppedOnSlot.RemoveDynamic(this, &USkillBarWidget::OnSkillDroppedOnSlot);
+            OldSlot->OnSkillSlotDragCleared.RemoveDynamic(this, &USkillBarWidget::OnSkillSlotDragCleared);
         }
     }
 
@@ -322,6 +323,23 @@ void USkillBarWidget::OnSkillDroppedOnSlot(int32 SlotIndex, const FPlayerSkillDa
         *SkillData.networkData.skillSlug, SlotIndex);
 }
 
+void USkillBarWidget::OnSkillSlotDragCleared(int32 SlotIndex)
+{
+    if (!SkillManager)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("SkillBarWidget: Cannot clear slot - SkillManager not available"));
+        return;
+    }
+
+    // Preserve the hotkey binding when clearing the skill
+    FSkillSlotData SlotData = SkillManager->GetSkillSlot(SlotIndex);
+    FKey BoundKey = SlotData.boundKey;
+
+    SkillManager->SetSkillSlot(SlotIndex, "", BoundKey);
+
+    UE_LOG(LogTemp, Log, TEXT("SkillBarWidget: Cleared slot %d via drag-out"), SlotIndex);
+}
+
 void USkillBarWidget::OnPlayerSkillsInitialized(const TArray<FPlayerSkillData>& Skills)
 {
     UE_LOG(LogTemp, Log, TEXT("SkillBarWidget: Player skills initialized, refreshing slots"));
@@ -399,10 +417,11 @@ USkillSlotWidget* USkillBarWidget::CreateSkillSlotWidget(int32 SlotIndex)
     if (SlotWidget)
     {
         SlotWidget->SlotInitialize(SlotIndex, SkillManager);
-        
+
         SlotWidget->OnSkillSlotClicked.AddDynamic(this, &USkillBarWidget::OnSkillSlotClicked);
         SlotWidget->OnSkillSlotRightClicked.AddDynamic(this, &USkillBarWidget::OnSkillSlotRightClicked);
         SlotWidget->OnSkillDroppedOnSlot.AddDynamic(this, &USkillBarWidget::OnSkillDroppedOnSlot);
+        SlotWidget->OnSkillSlotDragCleared.AddDynamic(this, &USkillBarWidget::OnSkillSlotDragCleared);
     }
 
     return SlotWidget;

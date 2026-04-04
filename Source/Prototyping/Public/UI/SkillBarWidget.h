@@ -101,6 +101,9 @@ protected:
     void OnSkillDroppedOnSlot(int32 SlotIndex, const FPlayerSkillData& SkillData, const FKey& Hotkey);
 
     UFUNCTION()
+    void OnSkillSlotDragCleared(int32 SlotIndex);
+
+    UFUNCTION()
     void OnPlayerSkillsInitialized(const TArray<FPlayerSkillData>& Skills);
 
     UFUNCTION()

@@ -22,6 +22,7 @@ USkillSlotWidget::USkillSlotWidget(const FObjectInitializer& ObjectInitializer)
     bIsHighlighted = false;
     bIsDropHighlighted = false;
     bMousePressed = false;
+    bIsDragging = false;
     CooldownRemainingTime = 0.0f;
     CooldownTotalTime = 0.0f;
 }
@@ -128,8 +129,13 @@ FReply USkillSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
     {
         bMousePressed = true;
         OnSkillButtonPressed();
-        // Return Handled so UE knows this widget consumed the event.
-        // OnSkillButtonClicked fires on MouseUp (see NativeOnMouseButtonUp).
+
+        // If a skill is assigned, allow initiating a drag to remove it
+        if (!AssignedSkillSlug.IsEmpty())
+        {
+            return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
+        }
+
         return FReply::Handled();
     }
 
@@ -149,13 +155,18 @@ FReply USkillSlotWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, cons
         bMousePressed = false;
         OnSkillButtonReleased();
 
-        // Fire click only if cursor is still within the widget bounds
-        const FVector2D LocalPos = InGeometry.AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());
-        const FVector2D Size = InGeometry.GetLocalSize();
-        if (LocalPos.X >= 0.f && LocalPos.X <= Size.X && LocalPos.Y >= 0.f && LocalPos.Y <= Size.Y)
+        // Fire click only if we were not dragging and cursor is still within the widget bounds
+        if (!bIsDragging)
         {
-            OnSkillButtonClicked();
+            const FVector2D LocalPos = InGeometry.AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());
+            const FVector2D Size = InGeometry.GetLocalSize();
+            if (LocalPos.X >= 0.f && LocalPos.X <= Size.X && LocalPos.Y >= 0.f && LocalPos.Y <= Size.Y)
+            {
+                OnSkillButtonClicked();
+            }
         }
+
+        bIsDragging = false;
         return FReply::Handled();
     }
     return Super::NativeOnMouseButtonUp(InGeometry, InMouseEvent);
@@ -243,6 +254,14 @@ bool USkillSlotWidget::NativeOnDrop(const FGeometry& G, const FDragDropEvent& E,
         return false;
     }
 
+    // If the skill was dragged from another slot, clear the source slot
+    if (SkillOp->SourceSlotIndex >= 0 && SkillOp->SourceSlotWidget && SkillOp->SourceSlotIndex != SlotIndex)
+    {
+        SkillOp->SourceSlotWidget->OnSkillSlotDragCleared.Broadcast(SkillOp->SourceSlotIndex);
+        UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Clearing source slot %d after drop"),
+            SlotIndex, SkillOp->SourceSlotIndex);
+    }
+
     const FPlayerSkillData DroppedSkill = SkillOp->SkillData;
     const FKey Hotkey = GetSlotHotkey();
 
@@ -274,6 +293,64 @@ void USkillSlotWidget::NativeOnDragLeave(const FDragDropEvent& E, UDragDropOpera
 void USkillSlotWidget::NativeOnDragCancelled(const FDragDropEvent& E, UDragDropOperation* Op)
 {
     ResetDragVisualState();
+
+    // If this slot initiated the drag and it was cancelled (dropped into empty space), clear the slot
+    auto* SkillOp = Cast<USkillDragDropOperation>(Op);
+    if (SkillOp && SkillOp->SourceSlotIndex == SlotIndex && SkillOp->SourceSlotWidget == this)
+    {
+        UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Drag cancelled — clearing slot"), SlotIndex);
+        OnSkillSlotDragCleared.Broadcast(SlotIndex);
+    }
+
+    bIsDragging = false;
+}
+
+void USkillSlotWidget::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation)
+{
+    if (AssignedSkillSlug.IsEmpty())
+    {
+        OutOperation = nullptr;
+        return;
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Drag detected for skill '%s'"), SlotIndex, *AssignedSkillSlug);
+
+    USkillDragDropOperation* DragDropOp = NewObject<USkillDragDropOperation>(this, USkillDragDropOperation::StaticClass());
+    if (!DragDropOp)
+    {
+        OutOperation = nullptr;
+        return;
+    }
+
+    DragDropOp->SkillData = CurrentSkillData;
+    DragDropOp->SourceWidget = nullptr;
+    DragDropOp->SourceSlotWidget = this;
+    DragDropOp->SourceSlotIndex = SlotIndex;
+
+    // Try to create a drag visual
+    if (DragVisualWidgetClass)
+    {
+        DragDropOp->DragVisualWidgetClass = DragVisualWidgetClass;
+    }
+
+    UUserWidget* DragVisual = DragDropOp->CreateDragVisualWidget();
+    if (DragVisual)
+    {
+        DragDropOp->DefaultDragVisual = DragVisual;
+    }
+    else
+    {
+        // Fallback: use the slot itself as drag visual (not ideal but functional)
+        DragDropOp->DefaultDragVisual = this;
+    }
+
+    DragDropOp->Pivot = EDragPivot::MouseDown;
+    DragDropOp->Offset = FVector2D::ZeroVector;
+
+    OutOperation = DragDropOp;
+    bIsDragging = true;
+
+    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Started dragging skill '%s' from slot"), SlotIndex, *AssignedSkillSlug);
 }
 
 

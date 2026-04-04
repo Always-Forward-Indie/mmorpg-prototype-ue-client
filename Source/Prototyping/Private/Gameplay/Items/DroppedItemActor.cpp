@@ -16,8 +16,44 @@
 #include "Engine/World.h"
 #include "Engine/StaticMesh.h"
 #include "GameFramework/Character.h"
+#include "Audio/AudioManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogDropSnap, Log, All);
+
+// Spawn a one-shot SFX with SoundClassOverride set BEFORE Play() — same pattern
+// used across the whole codebase.  SpawnSoundAtLocation/PlaySoundAtLocation call
+// Play() internally so any class override set afterwards is silently ignored.
+static void PlayItemSFX(AActor* Owner, USoundBase* Sound)
+{
+	if (!Owner || !Sound) { return; }
+
+	USoundClass* SFXClass = nullptr;
+	if (UMyGameInstance* GI = Cast<UMyGameInstance>(Owner->GetGameInstance()))
+	{
+		if (GI->AudioManager) { SFXClass = GI->AudioManager->SFXClass; }
+	}
+
+	if (SFXClass)
+	{
+		UAudioComponent* AC = UGameplayStatics::SpawnSoundAttached(
+			Sound, Owner->GetRootComponent(), NAME_None,
+			Owner->GetActorLocation(), FRotator::ZeroRotator,
+			EAttachLocation::KeepWorldPosition,
+			/*bStopWhenAttachedToDestroyed=*/true,
+			1.0f, 1.0f, 0.0f, nullptr, nullptr,
+			/*bAutoActivate=*/false);
+		if (AC)
+		{
+			AC->SoundClassOverride = SFXClass;
+			AC->bAutoDestroy = true;
+			AC->Play();
+		}
+	}
+	else
+	{
+		UGameplayStatics::PlaySoundAtLocation(Owner, Sound, Owner->GetActorLocation());
+	}
+}
 
 // Sets default values
 ADroppedItemActor::ADroppedItemActor()
@@ -419,7 +455,7 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 		{
 			if (USoundCue* Cue = VisualData.DropSound.LoadSynchronous())
 			{
-				UGameplayStatics::PlaySoundAtLocation(this, Cue, GetActorLocation());
+				PlayItemSFX(this, Cue);
 			}
 			else
 			{
@@ -479,6 +515,15 @@ void ADroppedItemActor::PlayPickupEffect()
 	if (DropNiagaraComponent)
 	{
 		DropNiagaraComponent->Deactivate();
+	}
+
+	// Pickup SFX — routed through SFX SoundClass so the volume slider works
+	if (!VisualData.PickupSound.IsNull())
+	{
+		if (USoundCue* Cue = VisualData.PickupSound.LoadSynchronous())
+		{
+			PlayItemSFX(this, Cue);
+		}
 	}
 
 	// Spawn one-shot pickup Niagara at the item location

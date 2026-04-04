@@ -52,6 +52,7 @@
 #include "Engine/GameViewportClient.h"
 #include "Camera/CameraComponent.h"
 #include "UObject/UObjectGlobals.h"
+#include "Audio/MusicZoneActor.h"
 
 UMyGameInstance::UMyGameInstance(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -822,6 +823,11 @@ void UMyGameInstance::TransitionToGameWorld()
 		LoginLevelCamera->Destroy();
 		LoginLevelCamera = nullptr;
 	}
+	// Stop login music played through AudioManager (if LoginPlaylistId path was used).
+	if (AudioManager && !AudioManager->LoginPlaylistId.IsEmpty())
+	{
+		AudioManager->StopMusic(0.5f);
+	}
 
 	// Show the loading screen before the transition.
 	// AddLoadingScreen uses GameViewportClient::AddViewportWidgetContent,
@@ -919,8 +925,22 @@ void UMyGameInstance::OnLoginLevelLoaded()
 		{
 			if (GetWorld()->GetFirstPlayerController())
 			{
-			GetWorld()->GetFirstPlayerController()->SetViewTargetWithBlend(LoginLevelCamera, 0.0f);
-				LoginLevelCamera->PlaySound(LoginMusicSoundSource);
+				GetWorld()->GetFirstPlayerController()->SetViewTargetWithBlend(LoginLevelCamera, 0.0f);
+
+				// Login level is now active: push the SoundMix into the real world and
+				// re-apply cached volume overrides so all volume sliders work immediately.
+				if (AudioManager) { AudioManager->ReapplySoundMix(); }
+
+				// If a dedicated login playlist is configured, play it through AudioManager
+				// so volume sliders work. Otherwise fall back to the legacy MyCameraActor path.
+				if (AudioManager && !AudioManager->LoginPlaylistId.IsEmpty())
+				{
+					AudioManager->PlayPlaylist(AudioManager->LoginPlaylistId, /*bForceRestart=*/true);
+				}
+				else
+				{
+					LoginLevelCamera->PlaySound(LoginMusicSoundSource);
+				}
 			}
 		}
 
@@ -1149,6 +1169,17 @@ void UMyGameInstance::NotifyPlayerSpawned()
 	if (!bPendingSpawnDispatched) { return; }
 	ReadyFlags |= ReadyFlag_PlayerSpawned;
 	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] FLAG PlayerSpawned set (mask=0x%02X, bGameWorldReady=%d)"), ReadyFlags, bGameWorldReady);
+
+	// Pawn is now in the world — immediately trigger the initial overlap check on
+	// every MusicZoneActor so music starts without waiting for the 0.25 s poll tick.
+	if (UWorld* W = GetWorld())
+	{
+		for (TActorIterator<AMusicZoneActor> It(W); It; ++It)
+		{
+			It->OnPlayerSpawned();
+		}
+	}
+
 	CheckAllReadyFlags();
 }
 
@@ -1256,6 +1287,9 @@ void UMyGameInstance::InvalidateManagerWorldContexts(const FString& /*MapName*/)
 	if (CombatSystemManager) { CombatSystemManager->SetWorldContext(nullptr); }
 	if (NPCManager)          { NPCManager->SetWorldContext(nullptr); }
 	if (TimeSyncService)     { TimeSyncService->SetWorldContext(nullptr); }
+	// Release audio components that belong to the dying world so CrossfadeToTrack
+	// re-creates them in the new world instead of silently replaying on a dead device.
+	if (AudioManager)        { AudioManager->InvalidateAudioComponents(); }
 }
 
 void UMyGameInstance::RefreshManagerWorldContexts()

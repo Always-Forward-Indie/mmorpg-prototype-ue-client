@@ -6,6 +6,8 @@
 #include "Components/ActorComponent.h"
 #include "Data/ItemStruct.h"
 #include "Engine/DataTable.h"
+#include "Engine/StreamableManager.h"
+#include "Engine/AssetManager.h"
 #include "ItemManager.generated.h"
 
 // Forward declarations
@@ -107,6 +109,9 @@ private:
 		UFUNCTION(BlueprintCallable, Category = "Item Manager")
 		void LoadItemVisualsDataTable(UDataTable* InItemVisualsTable);
 
+		// Async-preload all Niagara VFX referenced in the visuals table to prevent first-spawn hitches
+		void PreloadNiagaraAssetsAsync();
+
 		// Get visual data for an item by slug
 		UFUNCTION(BlueprintCallable, Category = "Item Manager")
 		FItemVisualData GetItemVisualDataBySlug(const FString& ItemSlug);
@@ -127,6 +132,9 @@ private:
 		// Cache for quick lookup of visual data by slug
 		UPROPERTY()
 		TMap<FString, FItemVisualData> ItemVisualsCache;
+
+		// Keeps Niagara VFX resident in memory after async preload
+		TSharedPtr<FStreamableHandle> NiagaraPreloadHandle;
 
 		// UID of the dropped item that the server just confirmed as picked up.
 		// Stored here so OnPickupPointFired() knows which actor to destroy.

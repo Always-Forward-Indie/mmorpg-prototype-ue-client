@@ -52,6 +52,38 @@ static EDamageType SchoolToDamageType(ESkillSchool School)
     }
 }
 
+// Spawn a one-shot SFX with SoundClassOverride set BEFORE Play() is called.
+// SpawnSoundAtLocation calls Play() internally so any class override set afterwards
+// is ignored by the audio engine for that playback.
+static UAudioComponent* SpawnSFXAttached(AActor* Owner, USoundBase* Sound,
+    const FVector& WorldLocation, float VolumeMultiplier = 1.0f)
+{
+    if (!Owner || !Sound) { return nullptr; }
+    USoundClass* SFXClass = nullptr;
+    if (UMyGameInstance* GI = Cast<UMyGameInstance>(Owner->GetGameInstance()))
+    {
+        if (GI->AudioManager) { SFXClass = GI->AudioManager->SFXClass; }
+    }
+    if (!SFXClass)
+    {
+        return UGameplayStatics::SpawnSoundAtLocation(
+            Owner, Sound, WorldLocation, FRotator::ZeroRotator, VolumeMultiplier);
+    }
+    UAudioComponent* AC = UGameplayStatics::SpawnSoundAttached(
+        Sound, Owner->GetRootComponent(), NAME_None,
+        WorldLocation, FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition,
+        /*bStopWhenAttachedToDestroyed=*/true,
+        VolumeMultiplier, 1.0f, 0.0f, nullptr, nullptr,
+        /*bAutoActivate=*/false);
+    if (AC)
+    {
+        AC->SoundClassOverride = SFXClass;
+        AC->bAutoDestroy = true;
+        AC->Play();
+    }
+    return AC;
+}
+
 // Implementation of missing input methods
 void ABasicPlayer::OnAttackInput()
 {
@@ -2059,6 +2091,13 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
 // Play sound
 void ABasicPlayer::PlaySound(USoundBase* Sound)
 {
+    // Always re-stamp the SoundClass override so this component stays under
+    // AudioManager volume control even if it was constructed before the
+    // GameInstance had a valid SFXClass reference.
+    if (MyGameInstance && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
+    {
+        AudioComponent->SoundClassOverride = MyGameInstance->AudioManager->SFXClass;
+    }
     AudioComponent->SetSound(Sound);
     AudioComponent->Play();
 }
@@ -2072,13 +2111,38 @@ void ABasicPlayer::StopSound()
 void ABasicPlayer::PlayEventSound(const TSoftObjectPtr<USoundBase>& SoundRef)
 {
     if (SoundRef.IsNull()) return;
-    if (USoundBase* Sound = SoundRef.LoadSynchronous())
+    USoundBase* Sound = SoundRef.LoadSynchronous();
+    if (!Sound) return;
+
+    USoundClass* SFXClass = (MyGameInstance && MyGameInstance->AudioManager)
+        ? MyGameInstance->AudioManager->SFXClass : nullptr;
+
+    if (SFXClass)
     {
-        UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, Sound, GetActorLocation());
-        if (AC && MyGameInstance && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
+        UAudioComponent* AC = UGameplayStatics::SpawnSoundAttached(
+            Sound,
+            GetRootComponent(),
+            NAME_None,
+            GetActorLocation(),
+            FRotator::ZeroRotator,
+            EAttachLocation::KeepWorldPosition,
+            /*bStopWhenAttachedToDestroyed=*/true,
+            /*VolumeMultiplier=*/1.0f,
+            /*PitchMultiplier=*/1.0f,
+            /*StartTime=*/0.0f,
+            /*AttenuationSettings=*/nullptr,
+            /*ConcurrencySettings=*/nullptr,
+            /*bAutoActivate=*/false);
+        if (AC)
         {
-            AC->SoundClassOverride = MyGameInstance->AudioManager->SFXClass;
+            AC->SoundClassOverride = SFXClass;
+            AC->bAutoDestroy = true;
+            AC->Play();
         }
+    }
+    else
+    {
+        UGameplayStatics::PlaySoundAtLocation(this, Sound, GetActorLocation());
     }
 }
 
@@ -2731,11 +2795,7 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
                 {
                     if (USoundBase* Sound = Def.castSound.LoadSynchronous())
                     {
-                        UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, Sound, GetActorLocation());
-                        if (AC && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
-                        {
-                            AC->SoundClassOverride = MyGameInstance->AudioManager->SFXClass;
-                        }
+                        SpawnSFXAttached(this, Sound, GetActorLocation());
                     }
                 }
 
@@ -2778,11 +2838,7 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
                 {
                     if (USoundBase* Swing = Def.swingSound.LoadSynchronous())
                     {
-                        UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, Swing, GetActorLocation());
-                        if (AC && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
-                        {
-                            AC->SoundClassOverride = MyGameInstance->AudioManager->SFXClass;
-                        }
+                        SpawnSFXAttached(this, Swing, GetActorLocation());
                     }
                 }
 
@@ -2934,11 +2990,7 @@ void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritica
                             int32 Idx = FMath::RandRange(0, ImpactRow->ImpactSounds.Num() - 1);
                             if (USoundBase* ImpactSound = ImpactRow->ImpactSounds[Idx].LoadSynchronous())
                             {
-                                UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, ImpactSound, GetActorLocation());
-                                if (AC && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
-                                {
-                                    AC->SoundClassOverride = MyGameInstance->AudioManager->SFXClass;
-                                }
+                                SpawnSFXAttached(this, ImpactSound, GetActorLocation());
                                 bHitSoundPlayed = true;
                             }
                         }

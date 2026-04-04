@@ -54,21 +54,35 @@ void UAudioManager::Init(UObject* InWorldContext, UAudioConfigDataAsset* InConfi
 			"Assign DA_AudioConfig in BP_GameInstance → Class Defaults → Audio Config."));
 	}
 
-	if (MasterSoundMix)
-	{
-		UGameplayStatics::PushSoundMixModifier(WorldContextObject, MasterSoundMix);
-	}
-	else
+	// Only load saved volume values here — SoundMix push is deferred to ReapplySoundMix()
+	// because GetWorld() on GameInstance returns null during Init() (world not yet created).
+	ApplySavedSettings();
+
+	if (!MasterSoundMix)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("UAudioManager::Init: MasterSoundMix is not assigned in DA_AudioConfig."));
 	}
-
-	ApplySavedSettings();
 }
 
 void UAudioManager::ReapplySoundMix()
 {
-	if (MasterSoundMix && WorldContextObject)
+	// Refresh WorldContextObject from GameInstance in case it was set before a valid
+	// world existed. GetOuter() is the GameInstance (set via NewObject<>(this) in InitGameSystems).
+	if (UGameInstance* GI = Cast<UGameInstance>(GetOuter()))
+	{
+		if (UWorld* GIWorld = GI->GetWorld())
+		{
+			WorldContextObject = GI;
+		}
+	}
+
+	if (!GetWorldSafe(WorldContextObject))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UAudioManager::ReapplySoundMix: world not available yet, skipping."));
+		return;
+	}
+
+	if (MasterSoundMix)
 	{
 		UGameplayStatics::PushSoundMixModifier(WorldContextObject, MasterSoundMix);
 	}
@@ -79,6 +93,37 @@ void UAudioManager::ReapplySoundMix()
 	ApplyClassVolume(SFXClass,     CachedSFXVolume);
 	ApplyClassVolume(AmbientClass, CachedAmbientVolume);
 	ApplyClassVolume(UIClass ? UIClass : SFXClass, CachedUIVolume);
+
+	// If audio components were invalidated by a world transition and a playlist
+	// was active, restart it now in the new world so music resumes automatically.
+	if (!bComponentsValid && !ActivePlaylistId.IsEmpty())
+	{
+		const FString PlaylistToResume = ActivePlaylistId;
+		ActivePlaylistId.Empty(); // clear so PlayPlaylist does not early-out
+		UE_LOG(LogTemp, Log, TEXT("UAudioManager::ReapplySoundMix: respawning components and resuming playlist '%s'"), *PlaylistToResume);
+		PlayPlaylist(PlaylistToResume, /*bForceRestart=*/true);
+	}
+}
+
+void UAudioManager::InvalidateAudioComponents()
+{
+	// Stop playback and release component handles so CrossfadeToTrack
+	// re-creates them via SpawnSound2D in the new world.
+	auto SafeStop = [](UAudioComponent*& Comp)
+	{
+		if (IsValid(Comp))
+		{
+			Comp->Stop();
+		}
+		Comp = nullptr;
+	};
+	SafeStop(MusicComponentA);
+	SafeStop(MusicComponentB);
+	SafeStop(StingerComponent);
+	ActiveMusicComponent = nullptr;
+	bUseComponentB       = false;
+	bComponentsValid     = false;
+	UE_LOG(LogTemp, Log, TEXT("UAudioManager::InvalidateAudioComponents: components cleared (pending world transition)"));
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +229,14 @@ void UAudioManager::CrossfadeToTrack(USoundBase* Track, float FadeInTime, float 
 {
 	if (!Track || !WorldContextObject) { return; }
 
-	// Lazily spawn both components on first use.
+	UWorld* World = GetWorldSafe(WorldContextObject);
+	if (!World)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UAudioManager::CrossfadeToTrack: no valid world — cannot spawn audio components"));
+		return;
+	}
+
+	// Lazily spawn both components on first use, or after InvalidateAudioComponents().
 	auto EnsureComponent = [&](UAudioComponent*& Comp, USoundBase* Sound)
 	{
 		if (!IsValid(Comp))
@@ -195,11 +247,24 @@ void UAudioManager::CrossfadeToTrack(USoundBase* Track, float FadeInTime, float 
 				Comp->bAutoDestroy = false;
 				Comp->Stop();
 				if (MusicClass) { Comp->SoundClassOverride = MusicClass; }
+				UE_LOG(LogTemp, Log, TEXT("UAudioManager: spawned music component in world '%s'"), *World->GetName());
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("UAudioManager::CrossfadeToTrack: SpawnSound2D returned null!"));
 			}
 		}
 	};
 	EnsureComponent(MusicComponentA, Track);
 	EnsureComponent(MusicComponentB, Track);
+
+	if (!MusicComponentA || !MusicComponentB)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UAudioManager::CrossfadeToTrack: failed to obtain both music components, aborting"));
+		return;
+	}
+
+	bComponentsValid = true;
 
 	UAudioComponent* Incoming = bUseComponentB ? MusicComponentB : MusicComponentA;
 	UAudioComponent* Outgoing = bUseComponentB ? MusicComponentA : MusicComponentB;
@@ -212,6 +277,7 @@ void UAudioManager::CrossfadeToTrack(USoundBase* Track, float FadeInTime, float 
 	if (IsValid(Incoming))
 	{
 		Incoming->SetSound(Track);
+		UE_LOG(LogTemp, Log, TEXT("UAudioManager: playing track '%s' (FadeIn=%.1fs)"), *Track->GetName(), FadeInTime);
 		(FadeInTime > 0.0f) ? Incoming->FadeIn(FadeInTime) : Incoming->Play();
 	}
 
@@ -355,18 +421,37 @@ void UAudioManager::PlayStinger(USoundBase* StingerSound)
 {
 	if (!StingerSound || !WorldContextObject) { return; }
 
+	// Re-use the dedicated stinger component if valid, otherwise create a new one.
+	// Always set SoundClassOverride BEFORE Play() — overrides set after Play() are
+	// ignored by the audio engine for the current playback.
 	if (!IsValid(StingerComponent))
 	{
-		StingerComponent = UGameplayStatics::SpawnSound2D(WorldContextObject, StingerSound);
+		StingerComponent = UGameplayStatics::SpawnSoundAttached(
+			StingerSound,
+			Cast<AActor>(GetOuter()) ? Cast<AActor>(GetOuter())->GetRootComponent() : nullptr,
+			NAME_None, FVector::ZeroVector, FRotator::ZeroRotator,
+			EAttachLocation::KeepWorldPosition,
+			/*bStopWhenAttachedToDestroyed=*/false,
+			1.0f, 1.0f, 0.0f, nullptr, nullptr,
+			/*bAutoActivate=*/false);
+		if (!StingerComponent)
+		{
+			// Fallback: SpawnSound2D for contexts without a world actor (e.g. GameInstance).
+			StingerComponent = UGameplayStatics::SpawnSound2D(
+				WorldContextObject, StingerSound,
+				1.0f, 1.0f, 0.0f, nullptr,
+				/*bAutoDestroy=*/false, /*bAutoActivate=*/false);
+		}
 		if (StingerComponent)
 		{
 			StingerComponent->bAutoDestroy = false;
-			if (SFXClass) { StingerComponent->SoundClassOverride = SFXClass; }
 		}
 	}
-	else
+
+	if (IsValid(StingerComponent))
 	{
 		StingerComponent->SetSound(StingerSound);
+		if (SFXClass) { StingerComponent->SoundClassOverride = SFXClass; }
 		StingerComponent->Play();
 	}
 }
@@ -384,8 +469,18 @@ void UAudioManager::PlayUISound(EUISoundEvent InEvent)
 			USoundClass* TargetClass = UIClass ? UIClass : SFXClass;
 			if (TargetClass)
 			{
-				UAudioComponent* AC = UGameplayStatics::SpawnSound2D(WorldContextObject, Entry.Sound);
-				if (AC) { AC->SoundClassOverride = TargetClass; }
+				// SpawnSound2D with bAutoActivate=false so we can set the class
+				// override BEFORE Play() — post-play overrides are ignored by the
+				// audio engine.
+				UAudioComponent* AC = UGameplayStatics::SpawnSound2D(
+					WorldContextObject, Entry.Sound,
+					1.0f, 1.0f, 0.0f, nullptr,
+					/*bAutoDestroy=*/true, /*bAutoActivate=*/false);
+				if (AC)
+				{
+					AC->SoundClassOverride = TargetClass;
+					AC->Play();
+				}
 			}
 			else
 			{
@@ -412,17 +507,23 @@ void UAudioManager::ApplySavedSettings()
 		return Default;
 	};
 
+	// Always update the cached values from disk.
 	CachedMasterVolume  = ReadVolume(AudioSettingsKeys::MasterVolume,  1.0f);
 	CachedMusicVolume   = ReadVolume(AudioSettingsKeys::MusicVolume,   1.0f);
 	CachedSFXVolume     = ReadVolume(AudioSettingsKeys::SFXVolume,     1.0f);
 	CachedAmbientVolume = ReadVolume(AudioSettingsKeys::AmbientVolume, 1.0f);
 	CachedUIVolume      = ReadVolume(AudioSettingsKeys::UIVolume,      1.0f);
 
-	ApplyClassVolume(MasterClass,  CachedMasterVolume);
-	ApplyClassVolume(MusicClass,   CachedMusicVolume);
-	ApplyClassVolume(SFXClass,     CachedSFXVolume);
-	ApplyClassVolume(AmbientClass, CachedAmbientVolume);
-	ApplyClassVolume(UIClass ? UIClass : SFXClass, CachedUIVolume);
+	// Only apply overrides if a valid world exists. If called during GameInstance::Init()
+	// (world = null) the cached values will be picked up by ReapplySoundMix() later.
+	if (GetWorldSafe(WorldContextObject))
+	{
+		ApplyClassVolume(MasterClass,  CachedMasterVolume);
+		ApplyClassVolume(MusicClass,   CachedMusicVolume);
+		ApplyClassVolume(SFXClass,     CachedSFXVolume);
+		ApplyClassVolume(AmbientClass, CachedAmbientVolume);
+		ApplyClassVolume(UIClass ? UIClass : SFXClass, CachedUIVolume);
+	}
 }
 
 void UAudioManager::SaveSettings()

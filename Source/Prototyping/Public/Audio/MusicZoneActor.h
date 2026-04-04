@@ -21,6 +21,11 @@ class UBoxComponent;
  *   2. Scale the BoxComponent to cover the zone area.
  *   3. Set PlaylistId to a playlist defined in the GameInstance AudioManager.
  *   4. Optionally set FadeOutTimeOverride > 0 to customise exit fade.
+ *
+ * For the Login level (no player pawn):
+ *   - Set PlaylistId and bTriggerWithoutPawn = true.
+ *     Music starts as soon as BeginPlay fires (no overlap needed).
+ *   - The Login camera actor is typically inside this zone.
  */
 UCLASS(BlueprintType, Blueprintable)
 class PROTOTYPING_API AMusicZoneActor : public AActor
@@ -46,11 +51,26 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Music Zone")
 	bool bForceRestartOnEnter = false;
 
+	/** If true, start the playlist immediately at BeginPlay without waiting for a pawn overlap.
+	 *  Use this on the Login level where there is no player pawn. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Music Zone")
+	bool bTriggerWithoutPawn = false;
+
+	/** Called by GameInstance (NotifyPlayerSpawned path) after the local player pawn is
+	 *  present in the world so the initial overlap check can fire immediately instead of
+	 *  waiting for the next 0.25 s timer tick. */
+	void OnPlayerSpawned();
+
 protected:
 	virtual void BeginPlay() override;
 
 private:
 	FTimerHandle OverlapCheckTimerHandle;
+
+	// True while the local pawn is considered inside this zone.
+	// Guards against spurious EndOverlap events that UE generates during
+	// Actor spawn / Possess / capsule resize — these must not stop the music.
+	bool bIsPlayerInside = false;
 
 	void CheckInitialOverlap();
 

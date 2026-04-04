@@ -213,6 +213,17 @@ public:
 	 *  loses its SoundMix modifier stack on world teardown. */
 	void ReapplySoundMix();
 
+	/** Null out the cached audio components so they are re-created in the new
+	 *  world on the next PlayPlaylist call.  Must be called before world teardown
+	 *  (i.e. from InvalidateManagerWorldContexts). */
+	void InvalidateAudioComponents();
+
+	/** Optional playlist to start automatically on the Login level.
+	 *  Set this to the PlaylistId you want (e.g. "login") in the GameInstance
+	 *  Blueprint defaults.  Leave empty to keep the legacy MyCameraActor path. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Playlists")
+	FString LoginPlaylistId;
+
 	// -----------------------------------------------------------------------
 	// Volume control (0.0 – 1.0)
 	// -----------------------------------------------------------------------
@@ -335,6 +346,10 @@ private:
 	FString ActivePlaylistId;
 	int32   CurrentTrackIndex  = 0;
 	bool    bUseComponentB     = false;
+
+	// True while the audio components belong to a live world.
+	// Set to false by InvalidateAudioComponents(), back to true after respawn.
+	bool    bComponentsValid   = false;
 
 	FTimerHandle TrackEndTimerHandle;
 

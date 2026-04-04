@@ -25,7 +25,11 @@ public:
 
     void OnIconsPreloaded();
 
+    void PreloadNiagaraAssetsAsync();
+
     TSharedPtr<FStreamableHandle> PreloadHandle;
+
+    TSharedPtr<FStreamableHandle> NiagaraPreloadHandle;
 
     // Initialization
     UFUNCTION(BlueprintCallable, Category = "Skill Definition Repository")

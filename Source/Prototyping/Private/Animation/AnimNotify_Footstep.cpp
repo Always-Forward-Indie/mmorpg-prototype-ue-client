@@ -89,17 +89,47 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 
 	if (SoundToPlay)
 	{
-		UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(Owner, SoundToPlay, TraceStart,
-			FRotator::ZeroRotator, FinalVolume, 1.0f);
-		if (AC)
+		// Resolve the SFX SoundClass before the component starts playing.
+		// SpawnSoundAtLocation calls Play() internally, so any SoundClassOverride
+		// set on the returned component arrives too late and is ignored by the
+		// audio engine for the current playback.  We must use SpawnSoundAttached
+		// (bAutoActivate = false path) or create the component manually.
+		USoundClass* SFXClass = nullptr;
+		if (UMyGameInstance* GI = Cast<UMyGameInstance>(Owner->GetGameInstance()))
 		{
-			if (UMyGameInstance* GI = Cast<UMyGameInstance>(Owner->GetGameInstance()))
+			if (GI->AudioManager) { SFXClass = GI->AudioManager->SFXClass; }
+		}
+
+		if (SFXClass)
+		{
+			// Create the component with bAutoDestroy so we don't leak,
+			// set the override BEFORE Play() so the audio engine sees it.
+			UAudioComponent* AC = UGameplayStatics::SpawnSoundAttached(
+				SoundToPlay,
+				Owner->GetRootComponent(),
+				NAME_None,
+				TraceStart,
+				FRotator::ZeroRotator,
+				EAttachLocation::KeepWorldPosition,
+				/*bStopWhenAttachedToDestroyed=*/true,
+				FinalVolume,
+				/*PitchMultiplier=*/1.0f,
+				/*StartTime=*/0.0f,
+				/*AttenuationSettings=*/nullptr,
+				/*ConcurrencySettings=*/nullptr,
+				/*bAutoActivate=*/false);
+			if (AC)
 			{
-				if (GI->AudioManager && GI->AudioManager->SFXClass)
-				{
-					AC->SoundClassOverride = GI->AudioManager->SFXClass;
-				}
+				AC->SoundClassOverride = SFXClass;
+				AC->bAutoDestroy = true;
+				AC->Play();
 			}
+		}
+		else
+		{
+			// No AudioManager yet (e.g. during editor preview) — plain spawn.
+			UGameplayStatics::SpawnSoundAtLocation(Owner, SoundToPlay, TraceStart,
+				FRotator::ZeroRotator, FinalVolume, 1.0f);
 		}
 	}
 

@@ -9,6 +9,7 @@
 #include "MyGameInstance.h"
 #include "Networking/NetworkManager.h"
 #include "Kismet/GameplayStatics.h"
+#include "Engine/AssetManager.h"
 
 // Sets default values for this component's properties
 UItemManager::UItemManager()
@@ -399,6 +400,34 @@ void UItemManager::LoadItemVisualsDataTable(UDataTable* InItemVisualsTable)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("No item visuals data table provided"));
 	}
+
+	PreloadNiagaraAssetsAsync();
+}
+
+void UItemManager::PreloadNiagaraAssetsAsync()
+{
+	TArray<FSoftObjectPath> Paths;
+	Paths.Reserve(ItemVisualsCache.Num() * 4);
+
+	for (const auto& Pair : ItemVisualsCache)
+	{
+		const FItemVisualData& V = Pair.Value;
+		if (!V.DropNiagaraSystem.IsNull())    Paths.Add(V.DropNiagaraSystem.ToSoftObjectPath());
+		if (!V.PickupNiagaraSystem.IsNull())  Paths.Add(V.PickupNiagaraSystem.ToSoftObjectPath());
+		if (!V.EquippedSwingVFX.IsNull())     Paths.Add(V.EquippedSwingVFX.ToSoftObjectPath());
+		if (!V.EquippedIdleVFX.IsNull())      Paths.Add(V.EquippedIdleVFX.ToSoftObjectPath());
+	}
+
+	if (Paths.Num() == 0) return;
+
+	FStreamableManager& SM = UAssetManager::GetStreamableManager();
+	NiagaraPreloadHandle = SM.RequestAsyncLoad(
+		Paths,
+		FStreamableDelegate::CreateLambda([](){}),
+		FStreamableManager::AsyncLoadHighPriority
+	);
+
+	UE_LOG(LogTemp, Log, TEXT("ItemManager: Preloading %d Niagara VFX assets"), Paths.Num());
 }
 
 FItemVisualData UItemManager::GetItemVisualDataBySlug(const FString& ItemSlug)

@@ -22,12 +22,46 @@
 // Convert ESkillSchool to EDamageType for floating combat text
 static EDamageType MOBSchoolToDamageType(ESkillSchool School)
 {
-    switch (School)
-    {
-    case ESkillSchool::Fire:    return EDamageType::Fire;
-    case ESkillSchool::Ice:     return EDamageType::Ice;
-    default:                    return EDamageType::Physical;
-    }
+	switch (School)
+	{
+	case ESkillSchool::Fire:    return EDamageType::Fire;
+	case ESkillSchool::Ice:     return EDamageType::Ice;
+	default:                    return EDamageType::Physical;
+	}
+}
+
+// Spawn a one-shot SFX with the correct SoundClass set BEFORE Play() is called.
+// SpawnSoundAtLocation calls Play() internally so any override set afterwards is
+// ignored by the audio engine.  This wrapper uses SpawnSoundAttached with
+// bAutoActivate=false so we can stamp SoundClassOverride first.
+static UAudioComponent* SpawnSFXAttached(AActor* Owner, USoundBase* Sound,
+	const FVector& WorldLocation, float VolumeMultiplier = 1.0f)
+{
+	if (!Owner || !Sound) { return nullptr; }
+	USoundClass* SFXClass = nullptr;
+	if (UMyGameInstance* GI = Cast<UMyGameInstance>(Owner->GetGameInstance()))
+	{
+		if (GI->AudioManager) { SFXClass = GI->AudioManager->SFXClass; }
+	}
+	if (!SFXClass)
+	{
+		// No AudioManager — fall back to plain spawn so sound still plays.
+		return UGameplayStatics::SpawnSoundAtLocation(
+			Owner, Sound, WorldLocation, FRotator::ZeroRotator, VolumeMultiplier);
+	}
+	UAudioComponent* AC = UGameplayStatics::SpawnSoundAttached(
+		Sound, Owner->GetRootComponent(), NAME_None,
+		WorldLocation, FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition,
+		/*bStopWhenAttachedToDestroyed=*/true,
+		VolumeMultiplier, 1.0f, 0.0f, nullptr, nullptr,
+		/*bAutoActivate=*/false);
+	if (AC)
+	{
+		AC->SoundClassOverride = SFXClass;
+		AC->bAutoDestroy = true;
+		AC->Play();
+	}
+	return AC;
 }
 
 // Sets default values
@@ -587,18 +621,14 @@ void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, 
         {
             const FSkillDefinitionData& Def = Repo->GetDefinition(AnimationName);
 
-            if (!Def.castSound.IsNull())
-            {
-                if (USoundBase* Sound = Def.castSound.LoadSynchronous())
-                {
-                    UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, Sound, GetActorLocation());
-                    if (AC && GI->AudioManager && GI->AudioManager->SFXClass)
-                    {
-                        AC->SoundClassOverride = GI->AudioManager->SFXClass;
-                    }
-                    bCastSoundPlayed = true;
-                }
-            }
+			if (!Def.castSound.IsNull())
+			{
+				if (USoundBase* Sound = Def.castSound.LoadSynchronous())
+				{
+					SpawnSFXAttached(this, Sound, GetActorLocation());
+					bCastSoundPlayed = true;
+				}
+			}
 
             if (!Def.castEffect.IsNull())
             {
@@ -634,18 +664,14 @@ void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, 
                 }
             }
 
-            // Play swing sound if defined (melee woosh before impact)
-            if (!Def.swingSound.IsNull())
-            {
-                if (USoundBase* Swing = Def.swingSound.LoadSynchronous())
-                {
-                    UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, Swing, GetActorLocation());
-                    if (AC && GI->AudioManager && GI->AudioManager->SFXClass)
-                    {
-                        AC->SoundClassOverride = GI->AudioManager->SFXClass;
-                    }
-                }
-            }
+			// Play swing sound if defined (melee woosh before impact)
+			if (!Def.swingSound.IsNull())
+			{
+				if (USoundBase* Swing = Def.swingSound.LoadSynchronous())
+				{
+					SpawnSFXAttached(this, Swing, GetActorLocation());
+				}
+			}
         }
     }
 
@@ -764,14 +790,10 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
 								USoundBase* ImpactSound = ImpactRow->ImpactSounds[Idx].LoadSynchronous();
 								UE_LOG(LogTemp, Warning, TEXT("[MOB HitSFX] ImpactSound[%d]=%s"), Idx, ImpactSound ? TEXT("OK") : TEXT("NULL"));
 								if (ImpactSound)
-								{
-									UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, ImpactSound, GetActorLocation());
-									if (AC && GI->AudioManager && GI->AudioManager->SFXClass)
 									{
-										AC->SoundClassOverride = GI->AudioManager->SFXClass;
+										SpawnSFXAttached(this, ImpactSound, GetActorLocation());
+										bHitSoundPlayed = true;
 									}
-									bHitSoundPlayed = true;
-								}
 							}
 
 							// Spawn impact VFX if defined
@@ -799,11 +821,7 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
 				UE_LOG(LogTemp, Warning, TEXT("[MOB HitSFX] Fallback hitSound=%s"), Sound ? TEXT("OK") : TEXT("NULL (asset not loaded)"));
 				if (Sound)
 				{
-					UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, Sound, GetActorLocation());
-					if (AC && GI->AudioManager && GI->AudioManager->SFXClass)
-					{
-						AC->SoundClassOverride = GI->AudioManager->SFXClass;
-					}
+					SpawnSFXAttached(this, Sound, GetActorLocation());
 					bHitSoundPlayed = true;
 				}
 			}

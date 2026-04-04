@@ -124,6 +124,10 @@ struct FItemVisualData : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual")
 	TSoftObjectPtr<USoundCue> DropSound;
 
+	// Sound to play when the item is picked up
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual")
+	TSoftObjectPtr<USoundCue> PickupSound;
+
 	// Scale to apply to the mesh
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual")
 	FVector MeshScale = FVector(1.f, 1.f, 1.f);

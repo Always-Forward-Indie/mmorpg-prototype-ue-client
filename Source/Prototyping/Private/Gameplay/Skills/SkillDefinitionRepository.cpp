@@ -18,6 +18,7 @@ void USkillDefinitionRepository::Initialize(UDataTable* InSkillDefinitionsTable)
     SkillDefinitionsTable = InSkillDefinitionsTable;
     LoadDefinitionsFromTable();
     PreloadIconsAsync();
+    PreloadNiagaraAssetsAsync();
     bIsInitialized = true;
 
     UE_LOG(LogTemp, Log, TEXT("SkillDefinitionRepository: Initialized with %d skill definitions"), 
@@ -49,6 +50,33 @@ void USkillDefinitionRepository::PreloadIconsAsync()
 void USkillDefinitionRepository::OnIconsPreloaded()
 {
     UE_LOG(LogTemp, Log, TEXT("SkillDefinitionRepository: Icons preloaded"));
+}
+
+void USkillDefinitionRepository::PreloadNiagaraAssetsAsync()
+{
+    TArray<FSoftObjectPath> Paths;
+    Paths.Reserve(CachedDefinitions.Num() * 2);
+
+    for (const auto& Pair : CachedDefinitions)
+    {
+        const FSkillDefinitionData& Def = Pair.Value;
+        if (!Def.castEffectNiagara.IsNull())
+            Paths.Add(Def.castEffectNiagara.ToSoftObjectPath());
+        if (!Def.hitEffectNiagara.IsNull())
+            Paths.Add(Def.hitEffectNiagara.ToSoftObjectPath());
+    }
+
+    if (Paths.Num() == 0) return;
+
+    FStreamableManager& SM = UAssetManager::GetStreamableManager();
+    NiagaraPreloadHandle = SM.RequestAsyncLoad(
+        Paths,
+        FStreamableDelegate::CreateLambda([](){}
+        ),
+        FStreamableManager::AsyncLoadHighPriority
+    );
+
+    UE_LOG(LogTemp, Log, TEXT("SkillDefinitionRepository: Preloading %d Niagara VFX assets"), Paths.Num());
 }
 
 bool USkillDefinitionRepository::HasDefinition(const FString& SkillSlug) const

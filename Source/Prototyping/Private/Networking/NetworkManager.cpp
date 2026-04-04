@@ -11,10 +11,14 @@
 #include "Utils/JSONParser.h"
 #include "Prototyping.h"
 
+// File-scope counter — atomically incremented for each new UNetworkManager instance.
+// Kept here (not in the header) so UHT never sees it.
+static int32 GNetworkManagerNextInstanceId = 0;
 
 UNetworkManager::UNetworkManager(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	InstanceId = FPlatformAtomics::InterlockedIncrement(&GNetworkManagerNextInstanceId);
 	UE_LOG(LogConnection, Log, TEXT("Network Manager Constructor called"));
 
 	FString ConfigFilePath;
@@ -176,15 +180,17 @@ void UNetworkManager::ConnectLoginServer()
 				{
 					ReceiverLoginServerWorker->SetTimeSyncService(TimeSyncSvc);
 				}
-				ReceiverLoginServerThread = FRunnableThread::Create(ReceiverLoginServerWorker, TEXT("NetworkingLoginServerReceiverThread"));
-				
+				ReceiverLoginServerThread = FRunnableThread::Create(ReceiverLoginServerWorker,
+					*FString::Printf(TEXT("NetLoginRecv_%d"), InstanceId));
+
 				SenderLoginServerWorker = new NetworkSenderWorker(LoginServerSocket);
 				// Set TimeSyncService reference for precise timestamps
 				if (UTimeSyncService* TimeSyncSvc = GetTimeSyncService())
 				{
 					SenderLoginServerWorker->SetTimeSyncService(TimeSyncSvc);
 				}
-				SenderLoginServerThread = FRunnableThread::Create(SenderLoginServerWorker, TEXT("NetworkingLoginServerSenderThread"));
+				SenderLoginServerThread = FRunnableThread::Create(SenderLoginServerWorker,
+					*FString::Printf(TEXT("NetLoginSend_%d"), InstanceId));
 			
 				OnLoginServerSocketConnected.Broadcast();
 			}
@@ -243,15 +249,17 @@ void UNetworkManager::ConnectGameServer()
 				{
 					ReceiverGameServerWorker->SetTimeSyncService(TimeSyncSvc);
 				}
-				ReceiverGameServerThread = FRunnableThread::Create(ReceiverGameServerWorker, TEXT("NetworkingGameServerReceiverThread"));
-				
+				ReceiverGameServerThread = FRunnableThread::Create(ReceiverGameServerWorker,
+					*FString::Printf(TEXT("NetGameRecv_%d"), InstanceId));
+
 				SenderGameServerWorker = new NetworkSenderWorker(GameServerSocket);
 				// Set TimeSyncService reference for precise timestamps
 				if (UTimeSyncService* TimeSyncSvc = GetTimeSyncService())
 				{
 					SenderGameServerWorker->SetTimeSyncService(TimeSyncSvc);
 				}
-				SenderGameServerThread = FRunnableThread::Create(SenderGameServerWorker, TEXT("NetworkingGameServerSenderThread"));
+				SenderGameServerThread = FRunnableThread::Create(SenderGameServerWorker,
+					*FString::Printf(TEXT("NetGameSend_%d"), InstanceId));
 
 				OnGameServerSocketConnected.Broadcast();
 			}
@@ -308,15 +316,17 @@ void UNetworkManager::ConnectChunkServer()
 				{
 					ReceiverChunkServerWorker->SetTimeSyncService(TimeSyncSvc);
 				}
-				ReceiverChunkServerThread = FRunnableThread::Create(ReceiverChunkServerWorker, TEXT("NetworkingChunkServerReceiverThread"));
-				
+				ReceiverChunkServerThread = FRunnableThread::Create(ReceiverChunkServerWorker,
+					*FString::Printf(TEXT("NetChunkRecv_%d"), InstanceId));
+
 				SenderChunkServerWorker = new NetworkSenderWorker(ChunkServerSocket);
 				// Set TimeSyncService reference for precise timestamps
 				if (UTimeSyncService* TimeSyncSvc = GetTimeSyncService())
 				{
 					SenderChunkServerWorker->SetTimeSyncService(TimeSyncSvc);
 				}
-				SenderChunkServerThread = FRunnableThread::Create(SenderChunkServerWorker, TEXT("NetworkingChunkServerSenderThread"));
+				SenderChunkServerThread = FRunnableThread::Create(SenderChunkServerWorker,
+					*FString::Printf(TEXT("NetChunkSend_%d"), InstanceId));
 
 				OnChunkServerSocketConnected.Broadcast();
 			}

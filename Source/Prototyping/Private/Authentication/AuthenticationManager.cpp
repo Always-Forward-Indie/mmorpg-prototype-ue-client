@@ -284,7 +284,7 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 			TArray<FCharacterDataStruct> CharactersList = JSONParser::DeserializeLoginCharactersList(ReceivedData);
 		// Set the characters list to the login screen UI
 		if (gameInstance) {
-			gameInstance->OnLoginResponseReceived.Broadcast(gameInstance->GetCurrentClientID(), MessageData.message);
+			gameInstance->OnLoginResponseReceived.Broadcast(ClientData.clientId, MessageData.message);
 			// Set the character items
 			gameInstance->SetCharacterItems(CharactersList);
 			// Show the character selection screen

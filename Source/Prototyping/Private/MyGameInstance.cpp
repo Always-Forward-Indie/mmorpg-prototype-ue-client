@@ -548,6 +548,9 @@ void UMyGameInstance::StartPingLoginServer()
 // load LoginLevel
 void UMyGameInstance::LoadLoginLevel()
 {
+	// Reset join flow guard so the player can select a character again after returning to login
+	bJoinGameInProgress = false;
+
 	if (bDebug) {
 		LoadStreamingLevel(DebugLevelName);
 	}
@@ -1471,27 +1474,37 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 		PlayerData.characterData.characterPosition.positionZ);
 	FRotator SpawnRotation(0.0f, PlayerData.characterData.characterPosition.rotationZ, 0.0f);
 
-	// AlwaysSpawn: never let UE adjust the spawn position due to capsule overlap.
-	// Without this, when two players share the same spawn coordinates (common on
-	// a fresh server), UE slides the new actor next to the already-spawned local
-	// pawn — causing the "appears at local player location" visual artefact in PIE.
+	// Use SpawnActorDeferred so we can set isOtherClient BEFORE BeginPlay fires.
+	// This is critical for remote players: BeginPlay reads playerData.isOtherClient
+	// to initialize interpolation targets at the correct spawn location.
+	// With regular SpawnActor, isOtherClient is still false during BeginPlay,
+	// causing LastReceivedPosition to be initialised to (0,0,0) instead of SpawnLocation.
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-	ABasicPlayer* NewPlayer = GetWorld()->SpawnActor<ABasicPlayer>(MainPlayerClass, SpawnLocation, SpawnRotation, SpawnParams);
+	ABasicPlayer* NewPlayer = GetWorld()->SpawnActorDeferred<ABasicPlayer>(MainPlayerClass, FTransform(SpawnRotation, SpawnLocation), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	if (!NewPlayer)
 	{
 		UE_LOG(LogTemp, Error, TEXT("SpawnPlayerForClient: Failed to spawn ABasicPlayer for ClientID %d"), ClientID);
 		return;
 	}
 
+	// Set isOtherClient and IDs BEFORE FinishSpawning (which calls BeginPlay).
+	NewPlayer->SetIsOtherClient(!bIsLocal);
+	NewPlayer->SetClientID(PlayerData.clientId);
+	NewPlayer->SetCharacterID(PlayerData.characterData.characterId);
+
+	// FinishSpawning triggers BeginPlay — at this point isOtherClient is already correct,
+	// so BeginPlay initialises LastReceivedPosition = SpawnLocation (not local player pos).
+	UGameplayStatics::FinishSpawningActor(NewPlayer, FTransform(SpawnRotation, SpawnLocation));
+
 	UE_LOG(LogTemp, Warning, TEXT("SpawnPlayerForClient: Spawned ClientID=%d CharID=%d IsLocal=%d Pos=(%.0f,%.0f,%.0f)"),
 		ClientID, PlayerData.characterData.characterId, bIsLocal,
 		SpawnLocation.X, SpawnLocation.Y, SpawnLocation.Z);
 
-	NewPlayer->SetIsOtherClient(!bIsLocal);
-	NewPlayer->SetClientID(PlayerData.clientId);
-	NewPlayer->SetCharacterID(PlayerData.characterData.characterId);
+	// SetCoordinates is now a no-op for first-packet snap (bHasReceivedFirstPosition
+	// was set true inside BeginPlay when isOtherClient=true and position = SpawnLocation).
+	// We still call it to sync playerData fields and interpolation targets.
 	NewPlayer->SetCoordinates(
 		PlayerData.characterData.characterPosition.positionX,
 		PlayerData.characterData.characterPosition.positionY,
@@ -1645,33 +1658,42 @@ int32 UMyGameInstance::GetCurrentCharacterID()
 
 void UMyGameInstance::JoinSelectedCharacterToGame()
 {
-    UE_LOG(LogTemp, Warning, TEXT("JoinSelectedCharacterToGame called with CharacterID: %d"), CurrentCharacterID);
-    
-    if (CurrentCharacterID <= 0)
-    {
-        UE_LOG(LogTemp, Error, TEXT("Cannot join game: No character selected."));
-        return;
-    }
-    
-    if (CurrentClientID <= 0 || CurrentClientSecret.IsEmpty())
-    {
-        UE_LOG(LogTemp, Error, TEXT("Cannot join game: Client not authenticated."));
-        return;
-    }
-    
-    // PRE-PHASE: Send joinGameClient to Game Server first.
-    // The Game Server will respond with chunkServerData, and the response handler
-    // (ProcessGameServerData) will chain to Phase 1 (joinGameClient on Chunk Server),
-    // then Phase 1 continued (joinGameCharacter on Chunk Server).
-    if (PlayerManager)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("PRE-PHASE: Sending joinGameClient to Game Server for character %d"), CurrentCharacterID);
-        PlayerManager->SendJoinGameRequest(ClientData);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("Cannot join game: PlayerManager is null."));
-    }
+	UE_LOG(LogTemp, Warning, TEXT("JoinSelectedCharacterToGame called with CharacterID: %d"), CurrentCharacterID);
+
+	if (bJoinGameInProgress)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("JoinSelectedCharacterToGame: join already in progress, ignoring duplicate call (charId=%d)"), CurrentCharacterID);
+		return;
+	}
+
+	if (CurrentCharacterID <= 0)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Cannot join game: No character selected."));
+		return;
+	}
+
+	if (CurrentClientID <= 0 || CurrentClientSecret.IsEmpty())
+	{
+		UE_LOG(LogTemp, Error, TEXT("Cannot join game: Client not authenticated."));
+		return;
+	}
+
+	bJoinGameInProgress = true;
+
+	// PRE-PHASE: Send joinGameClient to Game Server first.
+	// The Game Server will respond with chunkServerData, and the response handler
+	// (ProcessGameServerData) will chain to Phase 1 (joinGameClient on Chunk Server),
+	// then Phase 1 continued (joinGameCharacter on Chunk Server).
+	if (PlayerManager)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PRE-PHASE: Sending joinGameClient to Game Server for character %d"), CurrentCharacterID);
+		PlayerManager->SendJoinGameRequest(ClientData);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("Cannot join game: PlayerManager is null."));
+		bJoinGameInProgress = false;
+	}
 }
 
 void UMyGameInstance::AddPlayerData(int32 ClientID, const FClientDataStruct clientData)

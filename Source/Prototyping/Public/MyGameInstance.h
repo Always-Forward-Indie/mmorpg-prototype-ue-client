@@ -82,6 +82,12 @@ FDateTime SendTimeLoginServer;
 FDateTime ReceiveTimeGameServer;
 FDateTime ReceiveTimeLoginServer;
 
+	// --- Join flow state ---
+	// True once JoinSelectedCharacterToGame has fired its joinGameClient request.
+	// Prevents a second click (or accidental double-call) from sending duplicate
+	// joinGameCharacter packets before the server flow completes.
+	bool bJoinGameInProgress = false;
+
 	// --- Level transition state ---
 	// True while we are in the process of transitioning from Login to GameWorld
 	bool bTransitioningToGameWorld = false;

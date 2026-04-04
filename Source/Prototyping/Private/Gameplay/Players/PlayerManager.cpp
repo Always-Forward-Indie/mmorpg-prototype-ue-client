@@ -7,6 +7,7 @@
 #include "Gameplay/Combat/CombatNetworkHandler.h"
 #include "Gameplay/Player/ExperienceManager.h"
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 
 
 UPlayerManager::UPlayerManager(const FObjectInitializer& ObjectInitializer)
@@ -19,13 +20,13 @@ void UPlayerManager::Initialize(UNetworkManager* NetworkManager, UPingManager* P
 {
 	if (!NetworkManager || !PingManager)
 	{
-		UE_LOG(LogTemp, Error, TEXT("PlayerManager: Cannot initialize with null NetworkManager or PingManager"));
+		UE_LOG(LogConnection, Error, TEXT("PlayerManager: Cannot initialize with null NetworkManager or PingManager"));
 		return;
 	}
 
 	networkManager = NetworkManager;
 	pingManager = PingManager;
-	
+
 	// Get the game instance safely
 	if (worldContext && IsValid(worldContext))
 	{
@@ -33,23 +34,20 @@ void UPlayerManager::Initialize(UNetworkManager* NetworkManager, UPingManager* P
 
 		if (gameInstance && IsValid(gameInstance))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("GameInstance found"));
-			
 			// Set up PingManager with TimeSyncService integration
 			if (pingManager)
 			{
 				pingManager->SetTimeSyncService(gameInstance->GetTimeSyncService());
-				UE_LOG(LogTemp, Warning, TEXT("PlayerManager: PingManager configured with TimeSyncService"));
 			}
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("GameInstance not found or invalid"));
+			UE_LOG(LogConnection, Error, TEXT("PlayerManager: GameInstance not found or invalid"));
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("PlayerManager: WorldContext is null or invalid"));
+		UE_LOG(LogConnection, Error, TEXT("PlayerManager: WorldContext is null or invalid"));
 	}
 }
 
@@ -66,30 +64,20 @@ bool UPlayerManager::IsCombatEvent(const FString& EventType) const
 // subscribe to the network manager's event
 void UPlayerManager::SubscribeToNetworkManager()
 {
-	if (networkManager != nullptr)
+	if (networkManager != nullptr && IsValid(networkManager))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Network Manager found and subscribed to GameServerResponse delegate"));
+		// Subscribe to the network manager's events for game server
+		networkManager->OnGameServerDataReceived.RemoveDynamic(this, &UPlayerManager::ProcessGameServerData);
+		networkManager->OnGameServerDataReceived.AddDynamic(this, &UPlayerManager::ProcessGameServerData);
 
-		if (IsValid(networkManager))
-		{
-			UE_LOG(LogTemp, Warning, TEXT("Network Manager is valid"));
-
-			// Subscribe to the network manager's events for game server
-			networkManager->OnGameServerDataReceived.RemoveDynamic(this, &UPlayerManager::ProcessGameServerData);
-			networkManager->OnGameServerDataReceived.AddDynamic(this, &UPlayerManager::ProcessGameServerData);
-
-			// Subscribe to the network manager's events for chunk server data
-			networkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UPlayerManager::ProcessChunkServerData);
-			networkManager->OnChunkServerDataReceived.AddDynamic(this, &UPlayerManager::ProcessChunkServerData);
-		}
-		else
-		{
-			UE_LOG(LogTemp, Error, TEXT("Network Manager is not valid"));
-		}
+		// Subscribe to the network manager's events for chunk server data
+		networkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UPlayerManager::ProcessChunkServerData);
+		networkManager->OnChunkServerDataReceived.AddDynamic(this, &UPlayerManager::ProcessChunkServerData);
+		UE_LOG(LogConnection, Log, TEXT("PlayerManager: Subscribed to NetworkManager delegates"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("Network manager not found"));
+		UE_LOG(LogConnection, Error, TEXT("PlayerManager: NetworkManager is null or invalid"));
 	}
 }
 
@@ -112,10 +100,16 @@ void UPlayerManager::ProcessGameServerData(const FString& ReceivedData)
 	// If the data is a response to a join game request on Game Server
 	if (MessageData.eventType == "joinGameClient" && MessageData.status == "success" && ClientData.clientId != 0 && ClientData.hash != "") {
 		if (gameInstance) {
-			UE_LOG(LogTemp, Warning, TEXT("Joined Client to Game Server with ID: %d"), ClientData.clientId);
-
-			// Phase 1: Register client session on Chunk Server
-			SendJoinClientChunkRequest(ClientData);
+			if (ClientData.clientId != gameInstance->GetCurrentClientID())
+			{
+				UE_LOG(LogConnection, Warning, TEXT("[PHASE PRE] joinGameClient OK for clientId=%d but our clientId=%d — ignoring"),
+					ClientData.clientId, gameInstance->GetCurrentClientID());
+			}
+			else
+			{
+				UE_LOG(LogConnection, Log, TEXT("[PHASE PRE] joinGameClient OK on GameServer, clientId=%d -> joining ChunkServer"), ClientData.clientId);
+				SendJoinClientChunkRequest(ClientData);
+			}
 		}
 	}
 
@@ -137,7 +131,7 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 	// Проверяем валидность данных перед парсингом
 	if (ReceivedData.IsEmpty())
 	{
-		UE_LOG(LogTemp, Error, TEXT("PlayerManager: Received empty data"));
+		UE_LOG(LogConnection, Error, TEXT("PlayerManager: Received empty data"));
 		return;
 	}
 
@@ -146,7 +140,7 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("PlayerManager: Failed to parse JSON data"));
+		UE_LOG(LogConnection, Error, TEXT("PlayerManager: Failed to parse JSON data"));
 		return;
 	}
 
@@ -157,18 +151,18 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 		Body = Root->GetObjectField(TEXT("body"));
 		if (!Body.IsValid())
 		{
-			UE_LOG(LogTemp, Error, TEXT("PlayerManager: Invalid body object"));
+			UE_LOG(LogConnection, Error, TEXT("PlayerManager: Invalid body object"));
 			return;
 		}
 	}
 
 	// Deserialize the received JSON string to get MessageData struct
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
-	
+
 	// Проверяем валидность MessageData
 	if (MessageData.eventType.IsEmpty())
 	{
-		UE_LOG(LogTemp, Error, TEXT("PlayerManager: Empty event type"));
+		UE_LOG(LogConnection, Error, TEXT("PlayerManager: Empty event type"));
 		return;
 	}
 
@@ -195,17 +189,29 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 	// Phase 1 response: joinGameClient on Chunk Server - now send joinGameCharacter (Phase 1 continued)
 	if (MessageData.eventType == "joinGameClient" && MessageData.status == "success" && ClientData.clientId != 0) {
 		if (gameInstance && IsValid(gameInstance)) {
-			UE_LOG(LogTemp, Warning, TEXT("Registered Client on Chunk Server with ID: %d, sending joinGameCharacter"), ClientData.clientId);
-			SendJoinCharacterChunkRequest(ClientData);
+			// Only react to the response that belongs to this GameInstance's own client session
+			if (ClientData.clientId != gameInstance->GetCurrentClientID())
+			{
+				UE_LOG(LogConnection, Warning, TEXT("[PHASE 1] joinGameClient OK for clientId=%d but our clientId=%d — ignoring"),
+					ClientData.clientId, gameInstance->GetCurrentClientID());
+			}
+			else
+			{
+				// Restore characterId from GameInstance — the ChunkServer joinGameClient response
+				// does not echo the characterId back, so ClientData.characterData.characterId is 0 here.
+				FClientDataStruct LocalClientData = ClientData;
+				LocalClientData.characterData.characterId = gameInstance->GetCurrentCharacterID();
+				UE_LOG(LogConnection, Log, TEXT("[PHASE 1] joinGameClient OK on ChunkServer, clientId=%d charId=%d -> sending joinGameCharacter"),
+					LocalClientData.clientId, LocalClientData.characterData.characterId);
+				SendJoinCharacterChunkRequest(LocalClientData);
+			}
 		}
 	}
 
 	// Phase 3: playerReady ACK from server
 	if (MessageData.eventType == "playerReady" && MessageData.status == "success") {
 		if (gameInstance && IsValid(gameInstance)) {
-			UE_LOG(LogTemp, Warning, TEXT("Server acknowledged playerReady - Phase 4 world-state will arrive automatically"));
-			// Server will now auto-send: spawnNPCs, spawnMobsInZone, nearbyItems, PLAYER_EQUIPMENT_UPDATE
-			// Signal the loading screen gate: Phase 4 has started, start the grace timer.
+			UE_LOG(LogConnection, Log, TEXT("[PHASE 3] playerReady ACK received - Phase 4 world-state incoming"));
 			gameInstance->NotifyPlayerReadyAck();
 		}
 	}
@@ -220,8 +226,9 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 					double CorrY = PosObj->GetNumberField(TEXT("y"));
 					double CorrZ = PosObj->GetNumberField(TEXT("z"));
 					double CorrRotZ = PosObj->GetNumberField(TEXT("rotationZ"));
-					UE_LOG(LogTemp, Warning, TEXT("Position correction received: (%.1f, %.1f, %.1f) rot=%.2f"), CorrX, CorrY, CorrZ, CorrRotZ);
-					gameInstance->UpdatePlayerCoordinates(gameInstance->GetCurrentClientID(), CorrX, CorrY, CorrZ, CorrRotZ);
+					UE_LOG(LogConnection, Log, TEXT("positionCorrection: clientId=%d (%.1f, %.1f, %.1f) rot=%.2f"),
+						ClientData.clientId, CorrX, CorrY, CorrZ, CorrRotZ);
+					gameInstance->UpdatePlayerCoordinates(ClientData.clientId, CorrX, CorrY, CorrZ, CorrRotZ);
 				}
 			}
 		}
@@ -230,7 +237,11 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 	// Phase 1 continued: joinGameCharacter response
 	if (MessageData.eventType == "joinGameCharacter" && MessageData.status == "success" && ClientData.clientId != 0) {
 		if (gameInstance && IsValid(gameInstance)) {
-			UE_LOG(LogTemp, Warning, TEXT("Joined Character to Chunk Server with ID: %d, Character ID: %d"), ClientData.clientId, ClientData.characterData.characterId);
+			UE_LOG(LogConnection, Log, TEXT("[PHASE 2] joinGameCharacter OK: clientId=%d charId=%d pos=(%.1f,%.1f,%.1f)"),
+				ClientData.clientId, ClientData.characterData.characterId,
+				ClientData.characterData.characterPosition.positionX,
+				ClientData.characterData.characterPosition.positionY,
+				ClientData.characterData.characterPosition.positionZ);
 
 			// If the client ID is the same as the current client ID
 			if (gameInstance->GetCurrentClientID() == ClientData.clientId) {
@@ -242,9 +253,13 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 				gameInstance->TransitionToGameWorld();
 			}
 			else {
-				UE_LOG(LogTemp, Warning, TEXT("Init Position of other Player: X: %f, Y: %f, Z: %f"), ClientData.characterData.characterPosition.positionX, ClientData.characterData.characterPosition.positionY, ClientData.characterData.characterPosition.positionZ);
-				// If the game world is ready, spawn immediately; otherwise queue for later
-				if (gameInstance->IsGameWorldReady())
+				// Remote player: only queue/spawn if we have valid position data
+				const bool bHasPosition = (ClientData.characterData.characterId != 0);
+				if (!bHasPosition)
+				{
+					UE_LOG(LogConnection, Warning, TEXT("[PHASE 2] joinGameCharacter: skipping remote spawn for clientId=%d — no character data"), ClientData.clientId);
+				}
+				else if (gameInstance->IsGameWorldReady())
 				{
 					gameInstance->AddPlayerData(ClientData.clientId, ClientData);
 					gameInstance->SpawnPlayerForClient(ClientData.clientId);
@@ -252,13 +267,13 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 				else
 				{
 					gameInstance->PendingRemotePlayerSpawns.Add(ClientData);
-					UE_LOG(LogTemp, Warning, TEXT("PlayerManager: Queued remote player spawn (world not ready yet)"));
+					UE_LOG(LogConnection, Log, TEXT("[PHASE 2] Queued remote spawn for clientId=%d (world not ready)"), ClientData.clientId);
 				}
 			}
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("PlayerManager: GameInstance is null or invalid in joinGameCharacter"));
+			UE_LOG(LogConnection, Error, TEXT("PlayerManager: GameInstance is null or invalid in joinGameCharacter"));
 		}
 	}
 
@@ -269,7 +284,11 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 
 			for (const FClientDataStruct& ConnectedPlayer : ConnectedPlayers) {
 				if (gameInstance->GetCurrentClientID() != ConnectedPlayer.clientId) {
-					UE_LOG(LogTemp, Warning, TEXT("Connected Player Client ID: %d, Current Client ID: %d"), ConnectedPlayer.clientId, gameInstance->GetCurrentClientID());
+					UE_LOG(LogConnection, Log, TEXT("[getConnectedCharacters] remote clientId=%d charId=%d pos=(%.1f,%.1f,%.1f)"),
+						ConnectedPlayer.clientId, ConnectedPlayer.characterData.characterId,
+						ConnectedPlayer.characterData.characterPosition.positionX,
+						ConnectedPlayer.characterData.characterPosition.positionY,
+						ConnectedPlayer.characterData.characterPosition.positionZ);
 
 					if (gameInstance->IsGameWorldReady())
 					{
@@ -285,7 +304,7 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("PlayerManager: GameInstance is null or invalid in getConnectedCharacters"));
+			UE_LOG(LogConnection, Error, TEXT("PlayerManager: GameInstance is null or invalid in getConnectedCharacters"));
 		}
 	}
 
@@ -313,14 +332,13 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 		}
 		else if (!gameInstance || !IsValid(gameInstance))
 		{
-			UE_LOG(LogTemp, Error, TEXT("PlayerManager: GameInstance is null or invalid in disconnectClient"));
+			UE_LOG(LogConnection, Error, TEXT("PlayerManager: GameInstance is null or invalid in disconnectClient"));
 		}
 	}
 
 	// Handle experience_update (XP gain, level up)
 	if (MessageData.eventType == "experience_update" && MessageData.status == "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("PlayerManager: Received experience_update"));
 		FExperienceUpdateStruct ExpUpdate = JSONParser::DeserializeExperienceUpdate(ReceivedData);
 
 		if (gameInstance && IsValid(gameInstance) && ExpUpdate.characterId > 0)
@@ -329,14 +347,14 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 			if (ExpMgr && IsValid(ExpMgr))
 			{
 				ExpMgr->ProcessExperienceUpdate(ExpUpdate);
-				UE_LOG(LogTemp, Log, TEXT("PlayerManager: Processed experience_update for character %d (+%d XP, Level %d->%d, LevelUp=%s)"),
+				UE_LOG(LogConnection, Log, TEXT("experience_update: charId=%d +%d XP Level %d->%d LevelUp=%s"),
 					ExpUpdate.characterId, ExpUpdate.experienceChange,
 					ExpUpdate.oldLevel, ExpUpdate.newLevel,
 					ExpUpdate.levelUp ? TEXT("true") : TEXT("false"));
 			}
 			else
 			{
-				UE_LOG(LogTemp, Warning, TEXT("PlayerManager: ExperienceManager not available for experience_update"));
+				UE_LOG(LogConnection, Warning, TEXT("PlayerManager: ExperienceManager not available for experience_update"));
 			}
 		}
 	}
@@ -344,52 +362,52 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 	// Handle player stats update
 	if (MessageData.eventType == "stats_update" && MessageData.status == "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("PlayerManager: Received stats_update"));
 		FPlayerStatsUpdateStruct StatsUpdate = JSONParser::DeserializePlayerStatsUpdate(ReceivedData);
-		
+
 		if (gameInstance && IsValid(gameInstance))
 		{
-			// Get the player for this character ID
-			int32 CharacterId = StatsUpdate.characterId;
+			const int32 CharacterId = StatsUpdate.characterId;
 			if (CharacterId > 0)
 			{
-				// Find and update the player
 				ABasicPlayer* Player = gameInstance->GetPlayerByCharacterId(CharacterId);
 				if (Player && IsValid(Player))
 				{
 					Player->ProcessStatsUpdate(StatsUpdate);
-					UE_LOG(LogTemp, Log, TEXT("PlayerManager: Updated stats for character %d"), CharacterId);
+					UE_LOG(LogConnection, Log, TEXT("stats_update: charId=%d applied"), CharacterId);
 				}
 				else
 				{
-					UE_LOG(LogTemp, Warning, TEXT("PlayerManager: Player not found for character ID %d"), CharacterId);
+					UE_LOG(LogConnection, Warning, TEXT("stats_update: player not found for charId=%d"), CharacterId);
 				}
 			}
 			else
 			{
-				UE_LOG(LogTemp, Error, TEXT("PlayerManager: Invalid character ID in stats update: %d"), CharacterId);
+				UE_LOG(LogConnection, Error, TEXT("stats_update: invalid charId=%d"), CharacterId);
 			}
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("PlayerManager: GameInstance is null or invalid in stats_update"));
+			UE_LOG(LogConnection, Error, TEXT("PlayerManager: GameInstance is null in stats_update"));
 		}
 	}
 
 	// Handle respawnResult - server response to respawnRequest
 	if (MessageData.eventType == "respawnResult" && MessageData.status == "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("PlayerManager: Received respawnResult"));
 
 		if (gameInstance && IsValid(gameInstance) && Body.IsValid())
 		{
 			int32 RespawnCharId = 0;
 			Body->TryGetNumberField(TEXT("characterId"), RespawnCharId);
 
-			if (RespawnCharId <= 0)
+			if (RespawnCharId <= 0 && ClientData.clientId > 0)
 			{
-				// Fallback: use local character ID (server may omit it for the requesting client)
-				RespawnCharId = gameInstance->GetCurrentCharacterID();
+				// Server omitted characterId — resolve it from the connected player map
+				// using the clientId that was deserialized from this packet.
+				if (const FClientDataStruct* Stored = gameInstance->ConnectedPlayers.Find(ClientData.clientId))
+				{
+					RespawnCharId = Stored->characterData.characterId;
+				}
 			}
 
 			ABasicPlayer* RespawnPlayer = gameInstance->GetPlayerByCharacterId(RespawnCharId);
@@ -419,12 +437,11 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 				// plays revive sound, notifies AnimBP. Must happen AFTER teleport so
 				// CMC re-enables walking at the correct world position.
 				RespawnPlayer->SetDead_Implementation(false);
-
-				UE_LOG(LogTemp, Warning, TEXT("PlayerManager: Character %d respawned successfully"), RespawnCharId);
+				UE_LOG(LogConnection, Log, TEXT("respawnResult: charId=%d respawned"), RespawnCharId);
 			}
 			else
 			{
-				UE_LOG(LogTemp, Error, TEXT("PlayerManager: Could not find player for respawnResult (charId=%d)"), RespawnCharId);
+				UE_LOG(LogConnection, Error, TEXT("respawnResult: player not found for charId=%d"), RespawnCharId);
 			}
 		}
 	}
@@ -439,12 +456,11 @@ void UPlayerManager::StartPing()
 		
 		// Start the new TimeSyncService-based ping updates
 		pingManager->StartPingUpdates();
-		
-		UE_LOG(LogTemp, Warning, TEXT("PlayerManager: Started TimeSyncService-based ping updates"));
+		UE_LOG(LogPing, Log, TEXT("PlayerManager: Started ping updates"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("PlayerManager: Cannot start ping - missing worldContext or pingManager"));
+		UE_LOG(LogConnection, Warning, TEXT("PlayerManager: Cannot start ping - missing worldContext or pingManager"));
 	}
 }
 
@@ -461,11 +477,8 @@ void UPlayerManager::SendJoinGameRequest(const FClientDataStruct& ClientData)
 	HeaderData.Add("clientId", ClientIDValue);
 	HeaderData.Add("hash", HashValue);
 
-	// Add the Character ID to the body data (required per protocol §1.0)
-	int32 CharId = ClientData.characterData.characterId;
-	if (gameInstance && gameInstance->GetCurrentCharacterID() != 0) {
-		CharId = gameInstance->GetCurrentCharacterID();
-	}
+	// Add the Character ID to the body data (required per protocol §1.0) — use ClientData exclusively
+	const int32 CharId = ClientData.characterData.characterId;
 	BodyData.Add("characterId", MakeShareable(new FJsonValueNumber(CharId)));
 
 	// Use TimeSyncService for automatic clientSendMs with correct server type
@@ -475,10 +488,10 @@ void UPlayerManager::SendJoinGameRequest(const FClientDataStruct& ClientData)
 	{
 		// Send the JSON string to the game server
 		networkManager->SendDataToGameServer(JsonString);
-		UE_LOG(LogTemp, Warning, TEXT("PRE-PHASE: joinGameClient sent to Game Server for CharID=%d"), CharId);
+		UE_LOG(LogConnection, Log, TEXT("[PHASE PRE] joinGameClient -> GameServer, charId=%d"), CharId);
 	}
 	else {
-		UE_LOG(LogTemp, Error, TEXT("Network manager not found"));
+		UE_LOG(LogConnection, Error, TEXT("PlayerManager: NetworkManager is null in SendJoinGameRequest"));
 	}
 }
 
@@ -497,10 +510,10 @@ void UPlayerManager::SendJoinClientChunkRequest(const FClientDataStruct& ClientD
 	if (networkManager != nullptr)
 	{
 		networkManager->SendDataToChunkServer(JsonString);
-		UE_LOG(LogTemp, Warning, TEXT("Phase 1: joinGameClient sent to Chunk Server"));
+		UE_LOG(LogConnection, Log, TEXT("[PHASE 1] joinGameClient -> ChunkServer"));
 	}
 	else {
-		UE_LOG(LogTemp, Error, TEXT("Network manager not found"));
+		UE_LOG(LogConnection, Error, TEXT("PlayerManager: NetworkManager is null in SendJoinClientChunkRequest"));
 	}
 }
 
@@ -514,11 +527,8 @@ void UPlayerManager::SendPlayerReadyRequest(const FClientDataStruct& ClientData)
 	HeaderData.Add("clientId", MakeShareable(new FJsonValueNumber(ClientData.clientId)));
 	HeaderData.Add("hash", MakeShareable(new FJsonValueString(ClientData.hash)));
 
-	// Per protocol: body has characterId
-	int32 CharId = ClientData.characterData.characterId;
-	if (gameInstance && gameInstance->GetCurrentCharacterID() != 0) {
-		CharId = gameInstance->GetCurrentCharacterID();
-	}
+	// Per protocol: body has characterId — use ClientData exclusively
+	const int32 CharId = ClientData.characterData.characterId;
 	BodyData.Add("characterId", MakeShareable(new FJsonValueNumber(CharId)));
 
 	FString JsonString = JSONParser::SerializeJsonWithTimeSync("playerReady", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::ChunkServer);
@@ -526,10 +536,10 @@ void UPlayerManager::SendPlayerReadyRequest(const FClientDataStruct& ClientData)
 	if (networkManager != nullptr)
 	{
 		networkManager->SendDataToChunkServer(JsonString);
-		UE_LOG(LogTemp, Warning, TEXT("Phase 3: playerReady sent to Chunk Server for CharID=%d"), CharId);
+		UE_LOG(LogConnection, Log, TEXT("[PHASE 3] playerReady -> ChunkServer, charId=%d"), CharId);
 	}
 	else {
-		UE_LOG(LogTemp, Error, TEXT("Network manager not found"));
+		UE_LOG(LogConnection, Error, TEXT("PlayerManager: NetworkManager is null in SendPlayerReadyRequest"));
 	}
 }
 
@@ -546,11 +556,11 @@ void UPlayerManager::SendJoinCharacterChunkRequest(const FClientDataStruct& Clie
 	HeaderData.Add("clientId", ClientIDValue);
 	HeaderData.Add("hash", HashValue);
 
-	// Add the Character ID to the body data
-	TSharedPtr<FJsonValueNumber> CharacterIDValue = MakeShareable(new FJsonValueNumber(ClientData.characterData.characterId));
-	
-	CharacterIDValue = gameInstance->GetCurrentCharacterID() != 0 ? MakeShareable(new FJsonValueNumber(gameInstance->GetCurrentCharacterID())) : CharacterIDValue;
-	BodyData.Add("id", CharacterIDValue);
+	// Add the Character ID to the body data — use ClientData exclusively.
+	// The caller (ProcessChunkServerData) is responsible for populating characterId
+	// from GameInstance before invoking this function.
+	const int32 CharId = ClientData.characterData.characterId;
+	BodyData.Add("id", MakeShareable(new FJsonValueNumber(CharId)));
 
 	// Use TimeSyncService for automatic clientSendMs with correct server type
 	FString JsonString = JSONParser::SerializeJsonWithTimeSync("joinGameCharacter", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::ChunkServer);
@@ -559,9 +569,11 @@ void UPlayerManager::SendJoinCharacterChunkRequest(const FClientDataStruct& Clie
 	{
 		// Send the JSON string to the Chunk server
 		networkManager->SendDataToChunkServer(JsonString);
+		UE_LOG(LogConnection, Log, TEXT("[PHASE 2] joinGameCharacter -> ChunkServer, clientId=%d charId=%d"),
+			ClientData.clientId, CharId);
 	}
 	else {
-		UE_LOG(LogTemp, Error, TEXT("Network manager not found"));
+		UE_LOG(LogConnection, Error, TEXT("PlayerManager: NetworkManager is null in SendJoinCharacterChunkRequest"));
 	}
 }
 
@@ -569,7 +581,7 @@ void UPlayerManager::SendGetConnectedPlayersRequest(FClientDataStruct& ClientDat
 {
 	if (!networkManager || !IsValid(networkManager))
 	{
-		UE_LOG(LogTemp, Error, TEXT("PlayerManager: NetworkManager is null or invalid"));
+		UE_LOG(LogConnection, Error, TEXT("PlayerManager: NetworkManager is null in SendGetConnectedPlayersRequest"));
 		return;
 	}
 
@@ -598,7 +610,7 @@ void UPlayerManager::SendGetConnectedPlayersRequest(FClientDataStruct& ClientDat
 	// Validate JSON strings before sending
 	if (getConnectedCharacters.IsEmpty() || getSpawnZones.IsEmpty())
 	{
-		UE_LOG(LogTemp, Error, TEXT("PlayerManager: Failed to serialize JSON data"));
+		UE_LOG(LogConnection, Error, TEXT("PlayerManager: Failed to serialize JSON data in SendGetConnectedPlayersRequest"));
 		return;
 	}
 
@@ -631,7 +643,7 @@ void UPlayerManager::SendMovePlayerRequest(FClientDataStruct& ClientData)
 		networkManager->SendDataToChunkServer(JsonString);
 	}
 	else {
-		UE_LOG(LogTemp, Error, TEXT("Network manager not found"));
+		UE_LOG(LogConnection, Error, TEXT("PlayerManager: NetworkManager is null in SendMovePlayerRequest"));
 	}
 }
 
@@ -665,7 +677,7 @@ void UPlayerManager::SendLeaveGameRequest(FClientDataStruct& ClientData)
 		networkManager->SendDataToChunkServer(JsonString);
 	}
 	else {
-		UE_LOG(LogTemp, Error, TEXT("Network manager not found"));
+		UE_LOG(LogConnection, Error, TEXT("PlayerManager: NetworkManager is null in SendLeaveGameRequest"));
 	}
 }
 
@@ -698,11 +710,10 @@ void UPlayerManager::SendPlayerAttackRequest(const FClientDataStruct& ClientData
 	{
 		// Send the attack request to the Chunk server
 		networkManager->SendDataToChunkServer(JsonString);
-		UE_LOG(LogTemp, Warning, TEXT("Attack request sent: %s"), *JsonString);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("NetworkManager is null, cannot send attack request"));
+		UE_LOG(LogConnection, Error, TEXT("PlayerManager: NetworkManager is null in SendPlayerAttackRequest"));
 	}
 }
 
@@ -724,10 +735,10 @@ void UPlayerManager::SendRespawnRequest(const FClientDataStruct& ClientData)
 	if (networkManager != nullptr)
 	{
 		networkManager->SendDataToChunkServer(JsonString);
-		UE_LOG(LogTemp, Warning, TEXT("Respawn request sent: %s"), *JsonString);
+		UE_LOG(LogConnection, Log, TEXT("respawnRequest sent, charId=%d"), ClientData.characterData.characterId);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("NetworkManager is null, cannot send respawn request"));
+		UE_LOG(LogConnection, Error, TEXT("PlayerManager: NetworkManager is null in SendRespawnRequest"));
 	}
 }

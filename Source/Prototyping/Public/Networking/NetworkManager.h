@@ -44,6 +44,10 @@ private:
 	UPROPERTY()
 	UWorld* WorldContext = nullptr;
 
+	// Unique ID for this manager instance — used to make thread names unique
+	// across multiple PIE instances so FRunnableThread::Kill targets the right thread.
+	int32 InstanceId = 0;
+
 	// Login server details
 	FString LoginServerIP;
 	int32 LoginServerPort;

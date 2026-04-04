@@ -788,15 +788,25 @@ FDroppedItemStruct JSONParser::DeserializeDroppedItem(const TSharedPtr<FJsonObje
 	
 	if (DroppedItemObj->HasField(TEXT("droppedByMobUID")))
 	{
-		// Field can be a string or a number depending on server format
+		// Field can be a string or a number depending on server format.
+		// Server sends 0 / "0" / "" when the item was NOT dropped by a mob —
+		// treat all of those as "no mob" so IsEmpty() works correctly downstream.
 		FString StrVal;
 		double NumVal = 0.0;
 		if (DroppedItemObj->TryGetStringField(TEXT("droppedByMobUID"), StrVal))
-			DroppedItem.droppedByMobUID = StrVal;
+		{
+			DroppedItem.droppedByMobUID = (StrVal == TEXT("0")) ? TEXT("") : StrVal;
+		}
 		else if (DroppedItemObj->TryGetNumberField(TEXT("droppedByMobUID"), NumVal))
-			DroppedItem.droppedByMobUID = FString::FromInt((int32)NumVal);
+		{
+			const int32 IntVal = (int32)NumVal;
+			DroppedItem.droppedByMobUID = (IntVal == 0) ? TEXT("") : FString::FromInt(IntVal);
+		}
 	}
 	
+	if (DroppedItemObj->HasField(TEXT("droppedByCharacterId")))
+		DroppedItem.droppedByCharacterId = DroppedItemObj->GetIntegerField(TEXT("droppedByCharacterId"));
+
 	if (DroppedItemObj->HasField(TEXT("quantity")))
 		DroppedItem.quantity = DroppedItemObj->GetIntegerField(TEXT("quantity"));
 	
@@ -1547,7 +1557,8 @@ ESkillEffectType JSONParser::ParseSkillEffectType(const FString& EffectTypeStrin
 {
 	if (EffectTypeString.Equals(TEXT("damage"), ESearchCase::IgnoreCase))
 		return ESkillEffectType::Damage;
-	else if (EffectTypeString.Equals(TEXT("healing"), ESearchCase::IgnoreCase))
+	else if (EffectTypeString.Equals(TEXT("heal"), ESearchCase::IgnoreCase)
+		  || EffectTypeString.Equals(TEXT("healing"), ESearchCase::IgnoreCase))
 		return ESkillEffectType::Healing;
 	else if (EffectTypeString.Equals(TEXT("buff"), ESearchCase::IgnoreCase))
 		return ESkillEffectType::Buff;
@@ -1573,9 +1584,10 @@ ESkillSchool JSONParser::ParseSkillSchool(const FString& SchoolString)
 		return ESkillSchool::Arcane;
 	else if (SchoolString.Equals(TEXT("shadow"), ESearchCase::IgnoreCase))
 		return ESkillSchool::Shadow;
-	else if (SchoolString.Equals(TEXT("holy"), ESearchCase::IgnoreCase))
+	else if (SchoolString.Equals(TEXT("holy"), ESearchCase::IgnoreCase)
+		  || SchoolString.Equals(TEXT("healing"), ESearchCase::IgnoreCase))
 		return ESkillSchool::Holy;
-	
+
 	return ESkillSchool::None;
 }
 ECasterType JSONParser::ParseCasterType(const FString& CasterTypeString)

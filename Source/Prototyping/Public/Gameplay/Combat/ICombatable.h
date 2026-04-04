@@ -96,8 +96,8 @@ public:
     virtual void PlaySkillAnimation_Implementation(const FString& AnimationName, float Duration = 0.0f) {}
 
     UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Combatable|Effects")
-    void ShowDamageEffect(int32 Damage, bool bIsCritical, ESkillSchool School);
-    virtual void ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, ESkillSchool School) {}
+    void ShowDamageEffect(int32 Damage, bool bIsCritical, ESkillSchool School, bool bIsMissed, bool bIsBlocked, const FString& SkillSlug);
+    virtual void ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, ESkillSchool School, bool bIsMissed, bool bIsBlocked, const FString& SkillSlug) {}
 
     UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Combatable|Effects")
     void ShowHealingEffect(int32 Healing);

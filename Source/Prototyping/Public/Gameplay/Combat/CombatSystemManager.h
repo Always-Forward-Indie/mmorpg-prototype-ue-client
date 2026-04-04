@@ -1,4 +1,5 @@
 #pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
@@ -130,6 +131,11 @@ private:
         ISkillEffectHandler*    Interface = nullptr;
     };
     TArray<FEffectHandlerEntry> EffectHandlers;
+
+    // Strong references to effect handler UObjects so they are not garbage-collected.
+    // The EffectHandlers array above only holds TWeakObjectPtr which does NOT prevent GC.
+    UPROPERTY()
+    TArray<TObjectPtr<UObject>> EffectHandlerStrongRefs;
 
     // --- Deferred Hit-Point Result Queue ---
     // When combatResult arrives, we store it here keyed by casterId.

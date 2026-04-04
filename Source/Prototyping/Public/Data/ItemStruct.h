@@ -74,6 +74,9 @@ struct FDroppedItemStruct
 	FString droppedByMobUID = "";
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dropped Item")
+	int32 droppedByCharacterId = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dropped Item")
 	FPositionDataStruct position;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dropped Item")
@@ -109,9 +112,13 @@ struct FItemVisualData : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual")
 	TSoftObjectPtr<UStaticMesh> ItemMesh;
 
-	// Reference to the particle system for this item
+	// Niagara effect that loops while the item is lying on the ground
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual")
-	TSoftObjectPtr<UParticleSystem> ItemParticleSystem;
+	TSoftObjectPtr<UNiagaraSystem> DropNiagaraSystem;
+
+	// Niagara effect played in the moment of pickup (one-shot, before actor is destroyed)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual")
+	TSoftObjectPtr<UNiagaraSystem> PickupNiagaraSystem;
 
 	// Sound to play when the item is dropped
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual")

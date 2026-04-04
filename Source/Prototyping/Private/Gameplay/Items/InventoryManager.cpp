@@ -5,6 +5,7 @@
 #include "Engine/World.h"
 #include "UI/InventoryWidget.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
+#include "Gameplay/Players/BasicPlayer.h"
 
 UInventoryManager::UInventoryManager()
 {
@@ -578,12 +579,27 @@ void UInventoryManager::PickupNearbyItem()
 		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Attempting to pickup item %s at distance %.2f"),
 			*ClosestItem->GetItemName(), ClosestDistance);
 
+		// Lock player movement before sending the request so the player stands
+		// still while waiting for the server confirmation + animation.
+		if (ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn()))
+		{
+			Player->LockMovementForPickup();
+		}
+
 		bool bPickupSuccess = ClosestItem->AttemptPickup();
 
 		if (bPickupSuccess)
 		{
 			// Broadcast pickup attempt event
 			OnItemPickupAttempted.Broadcast(ClosestItem->GetItemBaseData());
+		}
+		else
+		{
+			// Request failed locally (e.g. canBePickedUp == false) — unlock immediately
+			if (ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn()))
+			{
+				Player->UnlockMovementAfterPickup();
+			}
 		}
 	}
 	else

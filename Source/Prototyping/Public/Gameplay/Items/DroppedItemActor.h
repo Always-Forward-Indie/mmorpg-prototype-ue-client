@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Data/ItemStruct.h"
+#include "NiagaraSystem.h"
 #include "DroppedItemActor.generated.h"
 
 UCLASS()
@@ -66,14 +67,24 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Dropped Item")
 	void OnVisualsSetup();
 
+	// Play the one-shot pickup Niagara effect then destroy the actor
+	UFUNCTION(BlueprintCallable, Category = "Dropped Item")
+	void PlayPickupEffect();
+
 	// Try to start a trajectory animation from the mob that dropped this item
 	void TryStartTrajectoryFromMob();
 
 	// Set up trajectory animation from a source location to the target position
 	void SetupTrajectoryAnimation(const FVector& SourceLocation);
 
-	// Find the ground level at a specific world location
+	// Find the ground (or surface) Z level at the given XY location.
+	// Traces against WorldStatic + WorldDynamic; ignores Characters, Mobs, NPCs
+	// and other DroppedItemActors so items never snap on top of pawns.
 	float FindGroundLevelAt(const FVector& Location);
+
+	// Immediately snap the actor to the surface beneath it.
+	// Applies a small mesh-half-height offset so the mesh sits on, not in, the surface.
+	void SnapToGround();
 
 	FItemVisualData VisualData;
 
@@ -93,9 +104,9 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	class USphereComponent* InteractionSphere;
 
-	// The particle system component for the dropped item
+	// Niagara component for the idle drop effect (loops while item is on the ground)
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	class UParticleSystemComponent* ItemParticles;
+	class UNiagaraComponent* DropNiagaraComponent;
 
 	// The radius within which the item can be picked up
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dropped Item")

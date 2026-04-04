@@ -2455,7 +2455,7 @@ void ABasicPlayer::AttackTarget(int32 TargetID, const FString& SkillSlug, int32 
         return;
     }
 
-    // Convert TargetTypeId to ECasterType
+    // Convert TargetTypeId to ECasterType using real server protocol: PLAYER=2, MOB=3
     ECasterType TargetType = ECasterType::Mob; // Default
     switch (TargetTypeId)
     {
@@ -2862,29 +2862,37 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
     }
 }
 
-void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, ESkillSchool School)
+void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, ESkillSchool School, bool bIsMissed, bool bIsBlocked, const FString& SkillSlug)
 {
-    UE_LOG(LogTemp, Log, TEXT("Player %d taking %d damage (Critical: %s, School: %s)"),
+    UE_LOG(LogTemp, Log, TEXT("Player %d taking %d damage (Critical: %s, School: %s, Missed: %s, Blocked: %s, Skill: %s)"),
         GetActorId_Implementation(), Damage,
-        bIsCritical ? TEXT("true") : TEXT("false"), *UEnum::GetValueAsString(School));
+        bIsCritical ? TEXT("true") : TEXT("false"), *UEnum::GetValueAsString(School),
+        bIsMissed ? TEXT("true") : TEXT("false"),
+        bIsBlocked ? TEXT("true") : TEXT("false"),
+        *SkillSlug);
 
-    // Trigger hit-react animation
-    if (UPlayerAnimInstance* AnimInst = GetPlayerAnimInstance())
+    // Trigger hit-react animation — only on actual hit, not miss
+    if (!bIsMissed)
     {
-        AnimInst->NotifyHit();
+        if (UPlayerAnimInstance* AnimInst = GetPlayerAnimInstance())
+        {
+            AnimInst->NotifyHit();
+        }
     }
 
     // Play hit received sound (generic player grunt / armor clank)
-    PlayEventSound(HitReceivedSound);
+    if (!bIsMissed)
+    {
+        PlayEventSound(HitReceivedSound);
+    }
 
     // --- Hit sound + hit particle from the skill that caused the damage ---
-    // CurrentSkillName is set by the server via combatInitiation before combatResult.
     bool bHitSoundPlayed = false;
     if (MyGameInstance)
     {
         if (USkillDefinitionRepository* Repo = MyGameInstance->GetSkillDefinitionRepository())
         {
-            const FSkillDefinitionData& Def = Repo->GetDefinition(CurrentSkillName);
+            const FSkillDefinitionData& Def = Repo->GetDefinition(SkillSlug);
 
             // --- Impact sound: WeaponImpactType ? ArmorMaterialType lookup ---
             // ArmorMaterialType is read from the chest slot item in DT_ItemVisuals.
@@ -3001,7 +3009,8 @@ void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritica
     }
 
     // --- Local player only: Camera Shake + Screen Flash + Hit Stop on self ---
-    if (!playerData.isOtherClient)
+    // Only when the attack actually connected (not a miss).
+    if (!playerData.isOtherClient && !bIsMissed)
     {
         // Camera shake
         if (UIManager)
@@ -3013,18 +3022,22 @@ void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritica
     }
 
     // --- Hit Stop: freeze this actor briefly so the impact feels weighty ---
-    if (UWorld* W = GetWorld())
+    // Not on miss — missing doesn't interrupt the actor's flow.
+    if (!bIsMissed)
     {
-        CustomTimeDilation = 0.0f;
-        FTimerHandle HitStopTimer;
-        TWeakObjectPtr<ABasicPlayer> WeakSelf(this);
-        W->GetTimerManager().SetTimer(HitStopTimer, [WeakSelf]()
+        if (UWorld* W = GetWorld())
         {
-            if (WeakSelf.IsValid())
+            CustomTimeDilation = 0.0f;
+            FTimerHandle HitStopTimer;
+            TWeakObjectPtr<ABasicPlayer> WeakSelf(this);
+            W->GetTimerManager().SetTimer(HitStopTimer, [WeakSelf]()
             {
-                WeakSelf->CustomTimeDilation = 1.0f;
-            }
-        }, 0.06f, false);
+                if (WeakSelf.IsValid())
+                {
+                    WeakSelf->CustomTimeDilation = 1.0f;
+                }
+            }, 0.06f, false);
+        }
     }
 }
 

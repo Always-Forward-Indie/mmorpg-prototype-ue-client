@@ -5,9 +5,11 @@
 #include "Data/DataStructs.h"
 #include "InputActionValue.h"
 #include "UI/InventoryWidget.h"
+#include "Camera/CameraShakeBase.h"
 #include "UIManager.generated.h"
 
 // Forward declarations
+class UCombatScreenFlashWidget;
 class UInventoryManager;
 class UHarvestManager;
 class UExperienceManager;
@@ -490,6 +492,14 @@ public:
 protected:
 
 public:
+	/** Camera shake class used for hit feedback. Assign in the Blueprint default. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Combat Effects")
+	TSubclassOf<UCameraShakeBase> CombatCameraShakeClass;
+
+	/** Widget class used for the full-screen damage/heal flash overlay. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Combat Effects")
+	TSubclassOf<UCombatScreenFlashWidget> CombatScreenFlashWidgetClass;
+
 	/** Trigger a camera shake effect for combat feedback. Intensity in [0..1]. */
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void PlayCombatCameraShake(float Intensity = 1.0f);
@@ -501,4 +511,12 @@ public:
 	/** Hide the mob target frame. */
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void HideMobTargetFrame();
+
+private:
+	/** Ensures the flash widget is created and in the viewport. */
+	void EnsureFlashWidget();
+
+	/** Live flash widget instance (created lazily). */
+	UPROPERTY()
+	UCombatScreenFlashWidget* CombatScreenFlashWidget = nullptr;
 };

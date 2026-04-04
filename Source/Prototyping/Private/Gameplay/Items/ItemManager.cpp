@@ -3,6 +3,8 @@
 
 #include "Gameplay/Items/ItemManager.h"
 #include "Gameplay/Items/DroppedItemActor.h"
+#include "Gameplay/Players/BasicPlayer.h"
+#include "Gameplay/Players/PlayerAnimInstance.h"
 #include "Utils/JSONParser.h"
 #include "MyGameInstance.h"
 #include "Networking/NetworkManager.h"
@@ -112,34 +114,73 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 	else if (MessageData.eventType == "itemPickup" && MessageData.status == "success")
 	{
 		UE_LOG(LogTemp, Warning, TEXT("ItemManager: Received pickUpItem event"));
-		
-		// Process item pickup if available in the response
+
+		// Cache item data from server confirmation
 		if (Body->HasField(TEXT("item")))
 		{
-			FItemBaseStruct PickedUpItem = JSONParser::DeserializeItemData(Body->GetObjectField(TEXT("item")));
-			ProcessItemPickup(PickedUpItem);
+			PendingPickupItem = JSONParser::DeserializeItemData(Body->GetObjectField(TEXT("item")));
 		}
-		
-		// Handle removing item from the world
-		int32 ItemUID = -1;
-		if (Body->TryGetNumberField(TEXT("droppedItemUID"), ItemUID) && ItemUID > 0)
+
+		// Cache the dropped item UID so OnPickupPointFired knows which actor to destroy
+		PendingPickupItemUID = -1;
+		Body->TryGetNumberField(TEXT("droppedItemUID"), PendingPickupItemUID);
+
+		// Bind the pickup-point delegate once (lazy, first successful pickup)
+		BindPickupPointDelegate();
+
+		// Try to get the local player and play the pickup montage.
+		// Movement was already locked in InventoryManager::PickupNearbyItem.
+		bool bMontageStarted = false;
+		if (worldContext)
 		{
-			// Find and remove the item actor from the world
-			if (DroppedItemsMap.Contains(ItemUID))
+			if (APlayerController* PC = worldContext->GetFirstPlayerController())
 			{
-				if (DroppedItemsMap[ItemUID] != nullptr)
+				if (ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn()))
 				{
-					DroppedItemsMap[ItemUID]->Destroy();
+					if (UPlayerAnimInstance* AnimInst = Cast<UPlayerAnimInstance>(
+						Player->GetMesh()->GetAnimInstance()))
+					{
+						const float MontageDuration = AnimInst->NotifyPickup();
+						bMontageStarted = MontageDuration > 0.0f;
+						UE_LOG(LogTemp, Warning,
+							TEXT("ItemManager: pickup montage started, duration=%.3fs"),
+							MontageDuration);
+					}
 				}
-				DroppedItemsMap.Remove(ItemUID);
 			}
 		}
 
-		// Notify inventory manager to update inventory
-		if (gameInstance && gameInstance->GetInventoryManager())
+		// Fallback: no player / no montage assigned — fire immediately
+		if (!bMontageStarted)
 		{
-			gameInstance->GetInventoryManager()->RequestInventoryData(gameInstance->GetCurrentCharacterID());
+			UE_LOG(LogTemp, Warning,
+				TEXT("ItemManager: no pickup montage, resolving pickup immediately"));
+			OnPickupPointFired();
 		}
+	}
+	else if (MessageData.eventType == "itemPickup" && MessageData.status != "success")
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ItemManager: itemPickup failed — unlocking player movement"));
+
+		// Server rejected the pickup — cancel any pending pickup-point timer and unlock
+		if (worldContext)
+		{
+			if (APlayerController* PC = worldContext->GetFirstPlayerController())
+			{
+				if (ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn()))
+				{
+					if (UPlayerAnimInstance* AnimInst = Cast<UPlayerAnimInstance>(
+						Player->GetMesh()->GetAnimInstance()))
+					{
+						AnimInst->CancelPickupTimer();
+					}
+					Player->UnlockMovementAfterPickup();
+				}
+			}
+		}
+
+		PendingPickupItemUID = -1;
+		PendingPickupItem    = FItemBaseStruct();
 	}
 }
 
@@ -394,4 +435,83 @@ FItemVisualData UItemManager::GetItemVisualDataBySlug(const FString& ItemSlug)
 
 	UE_LOG(LogTemp, Warning, TEXT("ItemManager: No visual data found for slug: %s"), *ItemSlug);
 	return FItemVisualData();
+}
+
+// ---------------------------------------------------------------------------
+// BindPickupPointDelegate
+//   Lazily binds to the local player's PlayerAnimInstance::OnPickupPoint so
+//   OnPickupPointFired() is called at the exact animation frame.
+//   Safe to call multiple times — binds only once per session.
+// ---------------------------------------------------------------------------
+void UItemManager::BindPickupPointDelegate()
+{
+	if (bPickupDelegateBound || !worldContext) return;
+
+	APlayerController* PC = worldContext->GetFirstPlayerController();
+	if (!PC) return;
+
+	ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn());
+	if (!Player) return;
+
+	UPlayerAnimInstance* AnimInst = Cast<UPlayerAnimInstance>(
+		Player->GetMesh()->GetAnimInstance());
+	if (!AnimInst) return;
+
+	AnimInst->OnPickupPoint.AddUObject(this, &UItemManager::OnPickupPointFired);
+	bPickupDelegateBound = true;
+
+	UE_LOG(LogTemp, Log, TEXT("ItemManager: bound OnPickupPoint delegate"));
+}
+
+// ---------------------------------------------------------------------------
+// OnPickupPointFired
+//   Called by AnimNotify_PickupPoint (or the fallback timer inside
+//   PlayerAnimInstance::NotifyPickup) at the visual moment of pickup.
+//   1. Plays the Niagara pickup VFX and destroys the DroppedItemActor.
+//   2. Broadcasts ProcessItemPickup so inventory / UI refresh happens here.
+//   3. Unlocks player movement.
+//   4. Triggers inventory refresh from server.
+// ---------------------------------------------------------------------------
+void UItemManager::OnPickupPointFired()
+{
+	UE_LOG(LogTemp, Warning, TEXT("ItemManager: OnPickupPointFired uid=%d"), PendingPickupItemUID);
+
+	// Destroy the world item and play pickup VFX
+	if (PendingPickupItemUID > 0 && DroppedItemsMap.Contains(PendingPickupItemUID))
+	{
+		ADroppedItemActor* DroppedActor = DroppedItemsMap[PendingPickupItemUID];
+		if (IsValid(DroppedActor))
+		{
+			DroppedActor->PlayPickupEffect();
+		}
+		DroppedItemsMap.Remove(PendingPickupItemUID);
+	}
+
+	// Broadcast item to inventory/UI systems
+	if (!PendingPickupItem.name.IsEmpty())
+	{
+		ProcessItemPickup(PendingPickupItem);
+	}
+
+	// Unlock player movement
+	if (worldContext)
+	{
+		if (APlayerController* PC = worldContext->GetFirstPlayerController())
+		{
+			if (ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn()))
+			{
+				Player->UnlockMovementAfterPickup();
+			}
+		}
+	}
+
+	// Refresh inventory from server
+	if (gameInstance && gameInstance->GetInventoryManager())
+	{
+		gameInstance->GetInventoryManager()->RequestInventoryData(gameInstance->GetCurrentCharacterID());
+	}
+
+	// Reset pending state
+	PendingPickupItemUID = -1;
+	PendingPickupItem    = FItemBaseStruct();
 }

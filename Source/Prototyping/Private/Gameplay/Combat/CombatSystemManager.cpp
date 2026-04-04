@@ -149,6 +149,10 @@ void UCombatSystemManager::RegisterEffectHandler(const TScriptInterface<ISkillEf
     NewEntry.WeakObject = HandlerObject;
     NewEntry.Interface  = Handler.GetInterface();
     EffectHandlers.Insert(NewEntry, InsertIndex);
+
+    // Keep a strong UPROPERTY reference so the handler is not garbage-collected.
+    EffectHandlerStrongRefs.AddUnique(HandlerObject);
+
     UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Registered effect handler '%s' with priority %d at index %d"),
         *HandlerObject->GetClass()->GetName(), HandlerPriority, InsertIndex);
 }
@@ -168,6 +172,7 @@ void UCombatSystemManager::UnregisterEffectHandler(const TScriptInterface<ISkill
     });
     if (RemovedCount > 0)
     {
+        EffectHandlerStrongRefs.Remove(HandlerObject);
         UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Unregistered effect handler (removed %d instances)"), RemovedCount);
     }
     else
@@ -184,6 +189,11 @@ void UCombatSystemManager::CleanupInvalidHandlers()
     });
     if (RemovedHandlers > 0)
     {
+        // Sync strong-ref array: remove entries whose UObject is no longer valid
+        EffectHandlerStrongRefs.RemoveAll([](const TObjectPtr<UObject>& Obj)
+        {
+            return !IsValid(Obj);
+        });
         UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Removed %d stale effect handlers (remaining: %d)"),
             RemovedHandlers, EffectHandlers.Num());
     }
@@ -242,13 +252,13 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
         // Play animation on caster (animationDuration drives PlayRate)
         ICombatable::Execute_PlaySkillAnimation(CasterObject, SkillData.animationName, SkillData.animationDuration);
 
-        // Set target if specified
-        if (SkillData.targetId > 0)
-        {
-            ECasterType TargetType = static_cast<ECasterType>(SkillData.targetType);
-            ICombatable::Execute_SetTarget(CasterObject, SkillData.targetId, TargetType);
+		// Set target if specified
+		if (SkillData.targetId > 0)
+		{
+			ECasterType TargetType = MapNetCasterType(SkillData.targetType, SkillData.targetTypeString);
+			ICombatable::Execute_SetTarget(CasterObject, SkillData.targetId, TargetType);
 			ICombatable::Execute_SetIsAggressiveState(CasterObject, SkillData.targetId, TargetType, SkillData.skillEffectType == ESkillEffectType::Damage);
-        }
+		}
     }
     else
     {
@@ -264,12 +274,15 @@ ECasterType UCombatSystemManager::MapNetCasterType(int32 Net, const FString& Str
 {
     // String-based mapping takes priority (always present in server packets)
     if (Str.Equals(TEXT("PLAYER"), ESearchCase::IgnoreCase)) return ECasterType::Player;
-    if (Str.Equals(TEXT("MOB"), ESearchCase::IgnoreCase)) return ECasterType::Mob;
-    if (Str.Equals(TEXT("NPC"), ESearchCase::IgnoreCase)) return ECasterType::NPC;
-    if (Str.Equals(TEXT("SELF"), ESearchCase::IgnoreCase)) return ECasterType::Self;
+    if (Str.Equals(TEXT("MOB"),    ESearchCase::IgnoreCase)) return ECasterType::Mob;
+    if (Str.Equals(TEXT("NPC"),    ESearchCase::IgnoreCase)) return ECasterType::NPC;
+    if (Str.Equals(TEXT("SELF"),   ESearchCase::IgnoreCase)) return ECasterType::Self;
+    if (Str.Equals(TEXT("AREA"),   ESearchCase::IgnoreCase)) return ECasterType::Area;
 
-    // Fallback by server protocol integer: SELF=0, PLAYER=1, MOB=2, AREA=3, NONE=4
-    switch (Net) { case 0: return ECasterType::Self; case 1: return ECasterType::Player; case 2: return ECasterType::Mob; case 3: return ECasterType::Area; case 4: return ECasterType::None; }
+    // Fallback: enum values now match the server protocol directly (SELF=1..NPC=6)
+    if (Net >= 1 && Net <= 6)
+        return static_cast<ECasterType>(Net);
+
     return ECasterType::None;
 }
 
@@ -315,33 +328,59 @@ TScriptInterface<ICombatable> UCombatSystemManager::FindCombatableById(int32 Act
         return TScriptInterface<ICombatable>();
     }
 
-    FString Key = CreateCombatableKey(ActorId, ActorType);
-
-    if (FCombatableEntry* Found = RegisteredCombatables.Find(Key))
+    // Helper lambda that looks up a single key and returns a valid interface or empty.
+    auto TryFindByKey = [this, ActorId](const FString& Key) -> TScriptInterface<ICombatable>
     {
-        // Safe validity check through TWeakObjectPtr — never touches a raw FObjectHandle
-        if (!Found->WeakObject.IsValid())
+        if (FCombatableEntry* Found = RegisteredCombatables.Find(Key))
         {
-            UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Stale combatable for ID %d, removing"), ActorId);
-            RegisteredCombatables.Remove(Key);
-            return TScriptInterface<ICombatable>();
+            if (!Found->WeakObject.IsValid())
+            {
+                UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Stale combatable for ID %d, removing"), ActorId);
+                RegisteredCombatables.Remove(Key);
+                return TScriptInterface<ICombatable>();
+            }
+
+            UObject* CombatableObject = Found->WeakObject.Get();
+
+            if (ICombatable::Execute_GetActorId(CombatableObject) != ActorId)
+            {
+                UE_LOG(LogTemp, Error, TEXT("CombatSystemManager: Actor ID mismatch - expected %d, got %d"),
+                    ActorId, ICombatable::Execute_GetActorId(CombatableObject));
+                RegisteredCombatables.Remove(Key);
+                return TScriptInterface<ICombatable>();
+            }
+
+            TScriptInterface<ICombatable> Result;
+            Result.SetObject(CombatableObject);
+            Result.SetInterface(Found->Interface);
+            return Result;
         }
+        return TScriptInterface<ICombatable>();
+    };
 
-        UObject* CombatableObject = Found->WeakObject.Get();
-
-        // Verify the stored ID still matches (defensive sanity check)
-        if (ICombatable::Execute_GetActorId(CombatableObject) != ActorId)
-        {
-            UE_LOG(LogTemp, Error, TEXT("CombatSystemManager: Actor ID mismatch - expected %d, got %d"),
-                ActorId, ICombatable::Execute_GetActorId(CombatableObject));
-            RegisteredCombatables.Remove(Key);
-            return TScriptInterface<ICombatable>();
-        }
-
-        TScriptInterface<ICombatable> Result;
-        Result.SetObject(CombatableObject);
-        Result.SetInterface(Found->Interface);
+    // Primary lookup
+    FString Key = CreateCombatableKey(ActorId, ActorType);
+    TScriptInterface<ICombatable> Result = TryFindByKey(Key);
+    if (Result.GetInterface())
+    {
         return Result;
+    }
+
+    // Fallback: the server sometimes sends a mismatched targetTypeString (e.g.
+    // "PLAYER" for a MOB target). Try the other common registration types so
+    // combat still works even when the string field is wrong.
+    static const ECasterType FallbackTypes[] = { ECasterType::Mob, ECasterType::Player, ECasterType::Self };
+    for (ECasterType Fallback : FallbackTypes)
+    {
+        if (Fallback == ActorType) continue; // already tried
+        FString FallbackKey = CreateCombatableKey(ActorId, Fallback);
+        Result = TryFindByKey(FallbackKey);
+        if (Result.GetInterface())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Found actor %d via fallback type %d (requested %d)"),
+                ActorId, (int32)Fallback, (int32)ActorType);
+            return Result;
+        }
     }
 
     return TScriptInterface<ICombatable>();

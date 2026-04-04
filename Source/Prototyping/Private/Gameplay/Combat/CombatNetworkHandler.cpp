@@ -67,7 +67,8 @@ void UCombatNetworkHandler::ProcessChunkServerData(const FString& ReceivedData)
         || MessageData.eventType == TEXT("healingResult")
         || MessageData.eventType == TEXT("buffResult")
         || MessageData.eventType == TEXT("debuffResult")
-        || MessageData.eventType == TEXT("skillResult"))
+        || MessageData.eventType == TEXT("skillResult")
+        || MessageData.eventType == TEXT("combatAoeResult"))
     {
         HandleSkillResult(ReceivedData);
     }

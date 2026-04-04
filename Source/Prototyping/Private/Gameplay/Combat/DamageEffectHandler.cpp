@@ -78,7 +78,7 @@ void UDamageEffectHandler::ShowNormalDamageEffect(const FSkillResultData& SkillR
     UObject* TargetObject = Target.GetObject();
 
     // Показать урон через ICombatable интерфейс (для анимаций, звуков и т.д.)
-    ICombatable::Execute_ShowDamageEffect(TargetObject, SkillResult.damage, SkillResult.isCritical, SkillResult.skillSchool);
+    ICombatable::Execute_ShowDamageEffect(TargetObject, SkillResult.damage, SkillResult.isCritical, SkillResult.skillSchool, false, false, SkillResult.skillSlug);
 
     // Показать floating combat text
     ShowFloatingDamageText(SkillResult, Target);
@@ -96,7 +96,7 @@ void UDamageEffectHandler::ShowBlockedDamageEffect(const FSkillResultData& Skill
     UObject* TargetObject = Target.GetObject();
 
     // Показать эффекты блокировки через ICombatable
-    ICombatable::Execute_ShowDamageEffect(TargetObject, SkillResult.damage, SkillResult.isCritical, SkillResult.skillSchool);
+    ICombatable::Execute_ShowDamageEffect(TargetObject, SkillResult.damage, SkillResult.isCritical, SkillResult.skillSchool, false, true, SkillResult.skillSlug);
 
     // Показать "BLOCKED" текст через FloatingCombatTextManager
     if (UFloatingCombatTextManager* FCTManager = GetFCTManager(TargetObject))

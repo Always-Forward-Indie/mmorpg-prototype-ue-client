@@ -46,6 +46,8 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Engine/World.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Combat/CombatCameraShake.h"
+#include "Gameplay/UI/CombatScreenFlashWidget.h"
 
 UUIManager::UUIManager()
 {
@@ -950,15 +952,15 @@ bool UUIManager::ShouldShowCursor() const
 void UUIManager::PlayCombatCameraShake(float Intensity)
 {
 	if (!GetWorld()) return;
-	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
-	{
-		if (PC->PlayerCameraManager)
-		{
-			PC->PlayerCameraManager->StartCameraShake(
-				TSubclassOf<UCameraShakeBase>(),
-				Intensity);
-		}
-	}
+	APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	if (!PC || !PC->PlayerCameraManager) return;
+
+	// Prefer the Blueprint-assigned class; fall back to the C++ default.
+	TSubclassOf<UCameraShakeBase> ShakeClass = CombatCameraShakeClass
+		? CombatCameraShakeClass
+		: TSubclassOf<UCameraShakeBase>(UCombatCameraShake::StaticClass());
+
+	PC->PlayerCameraManager->StartCameraShake(ShakeClass, Intensity);
 }
 
 void UUIManager::ShowMobTargetFrame(const FString& MobSlug, const FString& MobName, int32 MobLevel, int32 CurrentHP, int32 MaxHP, bool bIsAggro, UTexture2D* MobIcon)
@@ -1547,11 +1549,39 @@ void UUIManager::UpdateMobTargetFrameHP(int32 CurrentHP, int32 MaxHP)
 void UUIManager::ShowHealScreenFlash()
 {
 	UE_LOG(LogTemp, Verbose, TEXT("UIManager::ShowHealScreenFlash"));
-	// TODO: implement heal screen flash when widget is connected
+	EnsureFlashWidget();
+	if (CombatScreenFlashWidget)
+	{
+		CombatScreenFlashWidget->PlayHealFlash();
+	}
 }
 
 void UUIManager::ShowDamageScreenFlash()
 {
 	UE_LOG(LogTemp, Verbose, TEXT("UIManager::ShowDamageScreenFlash"));
-	// TODO: implement damage screen flash when widget is connected
+	EnsureFlashWidget();
+	if (CombatScreenFlashWidget)
+	{
+		CombatScreenFlashWidget->PlayDamageFlash();
+	}
+}
+
+void UUIManager::EnsureFlashWidget()
+{
+	if (CombatScreenFlashWidget && CombatScreenFlashWidget->IsInViewport()) return;
+
+	TSubclassOf<UCombatScreenFlashWidget> WidgetClass = CombatScreenFlashWidgetClass
+		? CombatScreenFlashWidgetClass
+		: TSubclassOf<UCombatScreenFlashWidget>(UCombatScreenFlashWidget::StaticClass());
+
+	if (!GetWorld()) return;
+	APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	if (!PC) return;
+
+	CombatScreenFlashWidget = CreateWidget<UCombatScreenFlashWidget>(PC, WidgetClass);
+	if (CombatScreenFlashWidget)
+	{
+		// ZOrder 200 keeps it above HUD but below modal popups (death screen etc.)
+		CombatScreenFlashWidget->AddToViewport(200);
+	}
 }

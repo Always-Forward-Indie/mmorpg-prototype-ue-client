@@ -111,6 +111,13 @@ private:
 		UFUNCTION(BlueprintCallable, Category = "Item Manager")
 		FItemVisualData GetItemVisualDataBySlug(const FString& ItemSlug);
 
+		// Bind to the local player's AnimInstance::OnPickupPoint so that
+		// PlayPickupEffect fires at the correct animation frame.
+		void BindPickupPointDelegate();
+
+		// Called by OnPickupPoint delegate: plays the pickup VFX/SFX and destroys the actor.
+		void OnPickupPointFired();
+
 		// Add this to the private section
 	private:
 		// The data table containing item visual information
@@ -120,4 +127,14 @@ private:
 		// Cache for quick lookup of visual data by slug
 		UPROPERTY()
 		TMap<FString, FItemVisualData> ItemVisualsCache;
+
+		// UID of the dropped item that the server just confirmed as picked up.
+		// Stored here so OnPickupPointFired() knows which actor to destroy.
+		int32 PendingPickupItemUID = -1;
+
+		// Item data from the server confirmation, forwarded to inventory after VFX.
+		FItemBaseStruct PendingPickupItem;
+
+		// Whether OnPickupPoint is already bound for the current session.
+		bool bPickupDelegateBound = false;
 };

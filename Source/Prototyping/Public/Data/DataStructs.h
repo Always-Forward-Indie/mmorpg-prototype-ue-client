@@ -323,17 +323,19 @@ enum class ESkillSchool : uint8
     Holy        UMETA(DisplayName = "Holy")
 };
 
-// Protocol integer mapping: SELF=0, PLAYER=1, MOB=2, AREA=3, NONE=4
-// NPC is a string-only type ("NPC"), mapped to 5 to avoid collision.
+// Integer values match the server protocol exactly.
+// Protocol: INVALID=0 (unused), SELF=1, PLAYER=2, MOB=3, AREA=4, NONE=5
+// NPC is a string-only type ("NPC"), mapped to 6 to avoid collision.
 UENUM(BlueprintType)
 enum class ECasterType : uint8
 {
-    Self   = 0 UMETA(DisplayName = "Self"),
-    Player = 1 UMETA(DisplayName = "Player"),
-    Mob    = 2 UMETA(DisplayName = "Mob"),
-    Area   = 3 UMETA(DisplayName = "Area"),
-    None   = 4 UMETA(DisplayName = "None"),
-    NPC    = 5 UMETA(DisplayName = "NPC")
+    Invalid = 0 UMETA(DisplayName = "Invalid", Hidden),
+    Self    = 1 UMETA(DisplayName = "Self"),
+    Player  = 2 UMETA(DisplayName = "Player"),
+    Mob     = 3 UMETA(DisplayName = "Mob"),
+    Area    = 4 UMETA(DisplayName = "Area"),
+    None    = 5 UMETA(DisplayName = "None"),
+    NPC     = 6 UMETA(DisplayName = "NPC")
 };
 
 // Applied Effect Data - for buffs/debuffs

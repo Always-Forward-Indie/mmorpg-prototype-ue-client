@@ -3,14 +3,21 @@
 
 #include "Gameplay/Items/DroppedItemActor.h"
 #include "Gameplay/Items/ItemManager.h"
+#include "Gameplay/Mobs/BasicMOB.h"
+#include "Gameplay/NPCs/BasicNPC.h"
+#include "Gameplay/Players/BasicPlayer.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SphereComponent.h"
-#include "Particles/ParticleSystemComponent.h"
+#include "NiagaraComponent.h"
+#include "NiagaraFunctionLibrary.h"
 #include "MyGameInstance.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Engine/World.h"
 #include "Engine/StaticMesh.h"
+#include "GameFramework/Character.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogDropSnap, Log, All);
 
 // Sets default values
 ADroppedItemActor::ADroppedItemActor()
@@ -36,10 +43,10 @@ ADroppedItemActor::ADroppedItemActor()
 	InteractionSphere->SetCollisionProfileName(TEXT("Trigger"));
 	InteractionSphere->SetGenerateOverlapEvents(true);
 
-	// Create and attach particle system
-	ItemParticles = CreateDefaultSubobject<UParticleSystemComponent>(TEXT("ItemParticles"));
-	ItemParticles->SetupAttachment(RootSceneComponent);
-	ItemParticles->SetAutoActivate(true);
+	// Create and attach Niagara drop effect component (idle loop while on ground)
+	DropNiagaraComponent = CreateDefaultSubobject<UNiagaraComponent>(TEXT("DropNiagaraComponent"));
+	DropNiagaraComponent->SetupAttachment(RootSceneComponent);
+	DropNiagaraComponent->SetAutoActivate(false);
 
 	bVisualsSetupComplete = false;
 }
@@ -51,24 +58,46 @@ void ADroppedItemActor::BeginPlay()
 
 	InitialPosition = GetActorLocation();
 
+	UE_LOG(LogDropSnap, Log,
+		TEXT("[DropSnap] BeginPlay '%s' (uid=%d, itemId=%d, slug='%s') | spawnLoc=%s | serverPos=(%.1f, %.1f, %.1f) | mobUID='%s' | charId=%d"),
+		*ItemData.item.name, ItemData.uid, ItemData.item.id, *ItemData.item.slug,
+		*InitialPosition.ToString(),
+		ItemData.position.positionX, ItemData.position.positionY, ItemData.position.positionZ,
+		*ItemData.droppedByMobUID, ItemData.droppedByCharacterId);
+
 	// Setup visuals based on the item data
 	if (!bVisualsSetupComplete)
 	{
 		SetupItemVisuals_Implementation();
 	}
 
-	// Only start the standard drop animation if we don't have a mob source
-	// This prevents double-animating when TryStartTrajectoryFromMob is called
-	if (ItemData.droppedByMobUID.IsEmpty())
+	// Determine drop source and choose the correct animation path:
+	//   1. Mob drop   — fly arc from mob location to ground
+	//   2. Player drop — small toss arc from player's current position
+	//   3. World/nearby — item already on the ground, just snap
+	const bool bFromMob    = !ItemData.droppedByMobUID.IsEmpty();
+	const bool bFromPlayer = !bFromMob && (ItemData.droppedByCharacterId > 0);
+
+	UE_LOG(LogDropSnap, Log,
+		TEXT("[DropSnap] BeginPlay source: %s"),
+		bFromMob ? TEXT("MOB") : (bFromPlayer ? TEXT("PLAYER") : TEXT("WORLD/NEARBY")));
+
+	if (bFromMob)
 	{
-		// Find ground level at the initial position
-		float GroundZ = FindGroundLevelAt(InitialPosition);
+		TryStartTrajectoryFromMob();
+	}
+	else
+	{
+		// Player drop or nearbyItems — run standard drop-from-above animation
+		// (for nearbyItems the server Z is already ground-level so DropHeight stays small)
+		const float GroundZ = FindGroundLevelAt(InitialPosition);
 
 		// Update the target position with proper ground level
 		TargetPosition = FVector(InitialPosition.X, InitialPosition.Y, GroundZ);
 
-		UE_LOG(LogTemp, Log, TEXT("Standard drop: adjusted target position to ground level: %s"),
-			*TargetPosition.ToString());
+		UE_LOG(LogDropSnap, Log,
+			TEXT("[DropSnap] Standard drop '%s' | InitialZ=%.1f -> GroundZ=%.1f | TargetPos=%s"),
+			*ItemData.item.name, InitialPosition.Z, GroundZ, *TargetPosition.ToString());
 
 		// Start the standard drop animation
 		DropStartTime = GetGameTimeSinceCreation();
@@ -108,11 +137,6 @@ void ADroppedItemActor::BeginPlay()
 					*ItemData.item.name, *DefaultRotation.ToString());
 			}
 		}
-	}
-	// If we have a mob UID, try to start trajectory animation
-	else if (!ItemData.droppedByMobUID.IsEmpty())
-	{
-		TryStartTrajectoryFromMob();
 	}
 }
 
@@ -172,9 +196,9 @@ void ADroppedItemActor::Tick(float DeltaTime)
 		}
 		else
 		{
-			// Animation finished, set final position and rotation
+			// Animation finished — snap precisely to the surface using the loaded mesh bounds
 			bIsDropAnimationActive = false;
-			SetActorLocation(TargetPosition);
+			SnapToGround();
 
 			if (ItemMesh)
 			{
@@ -226,16 +250,21 @@ void ADroppedItemActor::SetItemData(const FDroppedItemStruct& InItemData)
 {
 	ItemData = InItemData;
 
-	// If already in the world, update visuals
-	if (IsValid(this) && !bVisualsSetupComplete)
+	// Visuals and trajectory are initialised in BeginPlay once the actor is
+	// fully spawned. SetItemData is called via SpawnActorDeferred BEFORE
+	// BeginPlay, so we must not start the animation here — BeginPlay will do it.
+	// If SetItemData is called AFTER BeginPlay (live update), handle it then.
+	if (HasActorBegunPlay())
 	{
-		SetupItemVisuals_Implementation();
-	}
+		if (!bVisualsSetupComplete)
+		{
+			SetupItemVisuals_Implementation();
+		}
 
-	// If we have a mob UID, try to start trajectory animation
-	if (!ItemData.droppedByMobUID.IsEmpty())
-	{
-		TryStartTrajectoryFromMob();
+		if (!ItemData.droppedByMobUID.IsEmpty())
+		{
+			TryStartTrajectoryFromMob();
+		}
 	}
 }
 
@@ -361,31 +390,23 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 		}
 	}
 
-	// ---------- Particles ----------
-	if (ItemParticles)
+	// ---------- Drop Niagara (idle loop on ground) ----------
+	if (DropNiagaraComponent)
 	{
-		const FSoftObjectPath FXPath = VisualData.ItemParticleSystem.ToSoftObjectPath();
-		UE_LOG(LogTemp, Log, TEXT("Loot ParticleSystem path: %s"), *FXPath.ToString());
+		const FSoftObjectPath FXPath = VisualData.DropNiagaraSystem.ToSoftObjectPath();
+		UE_LOG(LogTemp, Log, TEXT("Loot DropNiagara path: %s"), *FXPath.ToString());
 
 		if (FXPath.IsValid())
 		{
-			if (UParticleSystem* PS = VisualData.ItemParticleSystem.LoadSynchronous())
+			if (UNiagaraSystem* NS = VisualData.DropNiagaraSystem.LoadSynchronous())
 			{
-				ItemParticles->SetTemplate(PS);
-				ItemParticles->SetVisibility(true);
-				ItemParticles->Activate(true);
+				DropNiagaraComponent->SetAsset(NS);
+				DropNiagaraComponent->Activate(true);
 			}
 			else
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Failed to LoadSynchronous particle system: %s"), *FXPath.ToString());
+				UE_LOG(LogTemp, Warning, TEXT("Failed to LoadSynchronous DropNiagaraSystem: %s"), *FXPath.ToString());
 			}
-		}
-		else
-		{
-			const int32 Rarity = GetItemRarity();
-			ItemParticles->SetVisibility(Rarity > 1);
-			const float ParticleScale = 0.5f + (Rarity * 0.1f);
-			ItemParticles->SetRelativeScale3D(FVector(ParticleScale));
 		}
 	}
 
@@ -450,6 +471,40 @@ void ADroppedItemActor::Interact()
 void ADroppedItemActor::OnVisualsSetup()
 {
 	bVisualsSetupComplete = true;
+}
+
+void ADroppedItemActor::PlayPickupEffect()
+{
+	// Stop and hide the idle drop effect
+	if (DropNiagaraComponent)
+	{
+		DropNiagaraComponent->Deactivate();
+	}
+
+	// Spawn one-shot pickup Niagara at the item location
+	const FSoftObjectPath FXPath = VisualData.PickupNiagaraSystem.ToSoftObjectPath();
+	if (FXPath.IsValid())
+	{
+		if (UNiagaraSystem* NS = VisualData.PickupNiagaraSystem.LoadSynchronous())
+		{
+			UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+				GetWorld(),
+				NS,
+				GetActorLocation(),
+				GetActorRotation(),
+				FVector(1.f),
+				/*bAutoDestroy=*/true,
+				/*bAutoActivate=*/true,
+				ENCPoolMethod::AutoRelease
+			);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("PlayPickupEffect: Failed to load PickupNiagaraSystem: %s"), *FXPath.ToString());
+		}
+	}
+
+	Destroy();
 }
 
 void ADroppedItemActor::SetupTrajectoryAnimation(const FVector& SourceLocation)
@@ -519,6 +574,7 @@ void ADroppedItemActor::TryStartTrajectoryFromMob()
 {
 	if (ItemData.droppedByMobUID.IsEmpty())
 	{
+		UE_LOG(LogDropSnap, Log, TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' — no mobUID, skipping"), *ItemData.item.name);
 		return;
 	}
 
@@ -526,115 +582,138 @@ void ADroppedItemActor::TryStartTrajectoryFromMob()
 	TArray<AActor*> FoundActors;
 	UGameplayStatics::GetAllActorsWithTag(GetWorld(), FName(*ItemData.droppedByMobUID), FoundActors);
 
+	UE_LOG(LogDropSnap, Log,
+		TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | mobUID='%s' | foundActors=%d"),
+		*ItemData.item.name, *ItemData.droppedByMobUID, FoundActors.Num());
+
 	if (FoundActors.Num() > 0)
 	{
 		ABasicMOB* SourceMob = Cast<ABasicMOB>(FoundActors[0]);
 		if (SourceMob)
 		{
-			// Get the mob's location as the source
 			FVector MobLocation = SourceMob->GetActorLocation();
-
-			// Set up the trajectory animation from the mob's position to the final drop position
+			UE_LOG(LogDropSnap, Log,
+				TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | mob found at %s"),
+				*ItemData.item.name, *MobLocation.ToString());
 			SetupTrajectoryAnimation(MobLocation);
 		}
+		else
+		{
+			UE_LOG(LogDropSnap, Warning,
+				TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | actor found but Cast<ABasicMOB> failed — falling back to SnapToGround"),
+				*ItemData.item.name);
+			SnapToGround();
+		}
+	}
+	else
+	{
+		UE_LOG(LogDropSnap, Warning,
+			TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | mob '%s' NOT found in world — falling back to SnapToGround"),
+			*ItemData.item.name, *ItemData.droppedByMobUID);
+		SnapToGround();
 	}
 }
 
 float ADroppedItemActor::FindGroundLevelAt(const FVector& Location)
 {
-	// Start position for the trace (high above the target point)
-	FVector StartPos = FVector(Location.X, Location.Y, Location.Z + 1000.0f);
+	UWorld* World = GetWorld();
+	if (!World) return Location.Z;
 
-	// End position for the trace (deep below the target point)
-	FVector EndPos = FVector(Location.X, Location.Y, Location.Z - 1000.0f);
+	// Trace from a fixed high altitude so we reliably hit the ground
+	// even when Location.Z is already at or below the surface.
+	const FVector StartPos = FVector(Location.X, Location.Y, Location.Z + 5000.0f);
+	const FVector EndPos   = FVector(Location.X, Location.Y, Location.Z - 5000.0f);
 
-	// Setup trace parameters
 	FHitResult HitResult;
 	FCollisionQueryParams QueryParams;
-	QueryParams.bTraceComplex = false;
+	QueryParams.bTraceComplex = true;
+	QueryParams.bIgnoreTouches = true;
 
-	// Ignore this actor and all other dropped items by their class
+	// Always ignore self
 	QueryParams.AddIgnoredActor(this);
 
-	// Set up object types to query - only include static world geometry (landscape, static meshes)
-	// This automatically ignores dynamic actors like DroppedItemActors and Mobs
-	FCollisionObjectQueryParams ObjectParams;
-	ObjectParams.AddObjectTypesToQuery(ECC_WorldStatic); // Only hit static world geometry
-
-	// Debug visualization
-	bool bDebugTrace = false; // Set to true to visualize the trace in-game
-
-	// Perform the line trace
-	bool bHit = false;
-
-	if (bDebugTrace)
+	// Explicitly ignore the local player pawn — it may be standing exactly
+	// at the drop point and its CapsuleComponent would be hit first.
+	if (APlayerController* PC = World->GetFirstPlayerController())
 	{
-		// Draw a debug line to visualize the trace
-		FColor TraceColor = FColor::Red;
-		FColor HitColor = FColor::Green;
-		float DebugLifetime = 5.0f;
-
-		bHit = GetWorld()->LineTraceSingleByObjectType(
-			HitResult,
-			StartPos,
-			EndPos,
-			ObjectParams,
-			QueryParams
-		);
-
-		DrawDebugLine(
-			GetWorld(),
-			StartPos,
-			bHit ? HitResult.ImpactPoint : EndPos,
-			bHit ? HitColor : TraceColor,
-			false,
-			DebugLifetime,
-			0,
-			1.0f
-		);
-
-		if (bHit)
+		if (APawn* LocalPawn = PC->GetPawn())
 		{
-			DrawDebugPoint(
-				GetWorld(),
-				HitResult.ImpactPoint,
-				10.0f,
-				HitColor,
-				false,
-				DebugLifetime,
-				0
-			);
+			QueryParams.AddIgnoredActor(LocalPawn);
 		}
+	}
+
+	// Ignore all pawns (remote players, mobs, NPCs) and other dropped items
+	TArray<AActor*> PawnsToIgnore;
+	UGameplayStatics::GetAllActorsOfClass(World, ABasicPlayer::StaticClass(), PawnsToIgnore);
+	UGameplayStatics::GetAllActorsOfClass(World, ABasicMOB::StaticClass(),    PawnsToIgnore);
+	UGameplayStatics::GetAllActorsOfClass(World, ABasicNPC::StaticClass(),    PawnsToIgnore);
+	UGameplayStatics::GetAllActorsOfClass(World, ADroppedItemActor::StaticClass(), PawnsToIgnore);
+	QueryParams.AddIgnoredActors(PawnsToIgnore);
+
+	// ECC_Visibility ignores trigger volumes and pawn capsules responding Overlap/Ignore,
+	// while hitting real walkable geometry (landscape heightfield, static meshes, BSP).
+	UE_LOG(LogDropSnap, Verbose,
+		TEXT("[DropSnap] Trace '%s' | Start=%s End=%s"),
+		*ItemData.item.name, *StartPos.ToString(), *EndPos.ToString());
+
+	const bool bHit = World->LineTraceSingleByChannel(
+		HitResult, StartPos, EndPos, ECC_Visibility, QueryParams);
+
+	if (bHit && HitResult.bBlockingHit)
+	{
+		const float ResultZ = HitResult.ImpactPoint.Z + 1.0f;
+		UE_LOG(LogDropSnap, Log,
+			TEXT("[DropSnap] Trace HIT '%s' | ImpactZ=%.1f -> ResultZ=%.1f | Component='%s'"),
+			*ItemData.item.name, HitResult.ImpactPoint.Z, ResultZ,
+			HitResult.GetComponent() ? *HitResult.GetComponent()->GetName() : TEXT("null"));
+		return ResultZ;
+	}
+
+	UE_LOG(LogDropSnap, Warning,
+		TEXT("[DropSnap] Trace MISS '%s' | Location=%s — keeping server Z=%.1f"),
+		*ItemData.item.name, *Location.ToString(), Location.Z);
+	return Location.Z;
+}
+
+void ADroppedItemActor::SnapToGround()
+{
+	const FVector CurrentLoc = GetActorLocation();
+	// FindGroundLevelAt internally adds ±5000 to the given Z for the trace range,
+	// so pass CurrentLoc directly — no extra offset here.
+	const float GroundZ = FindGroundLevelAt(CurrentLoc);
+
+	// Work out how far the mesh pivot sits above its own bottom edge
+	// so the lowest point of the mesh lands exactly on the surface.
+	// We use the world-space bounding box of the mesh component directly —
+	// this already accounts for RelativeScale3D, MeshScale and actor scale.
+	float PivotToBottom = 0.0f;
+	if (ItemMesh && ItemMesh->GetStaticMesh())
+	{
+		// Force recalculation so Bounds reflect the current world transform
+		ItemMesh->UpdateBounds();
+		const FBox WorldBox = ItemMesh->Bounds.GetBox();
+		// Distance from the actor origin (pivot) to the bottom of the mesh in world Z
+		PivotToBottom = CurrentLoc.Z - WorldBox.Min.Z;
+		// Clamp: never go negative (pivot already below its own bottom is a degenerate case)
+		PivotToBottom = FMath::Max(PivotToBottom, 0.0f);
+
+		UE_LOG(LogDropSnap, Log,
+			TEXT("[DropSnap] Bounds '%s' | BoxMin=%.1f BoxMax=%.1f BoxCenter=%.1f | PivotToBottom=%.1f"),
+			*ItemData.item.name,
+			WorldBox.Min.Z, WorldBox.Max.Z, WorldBox.GetCenter().Z,
+			PivotToBottom);
 	}
 	else
 	{
-		// Standard trace without debug drawing
-		bHit = GetWorld()->LineTraceSingleByObjectType(
-			HitResult,
-			StartPos,
-			EndPos,
-			ObjectParams,
-			QueryParams
-		);
+		UE_LOG(LogDropSnap, Warning,
+			TEXT("[DropSnap] SnapToGround '%s' — no mesh/static mesh, PivotToBottom=0"),
+			*ItemData.item.name);
 	}
 
-	// If we hit something, return the Z coordinate of the hit location
-	if (bHit && HitResult.bBlockingHit)
-	{
-		// Add a small offset to prevent Z-fighting/clipping
-		const float SurfaceOffset = 1.0f;
+	const FVector SnappedLoc = FVector(CurrentLoc.X, CurrentLoc.Y, GroundZ + PivotToBottom);
+	SetActorLocation(SnappedLoc, false, nullptr, ETeleportType::TeleportPhysics);
 
-		if (bDebugTrace && HitResult.GetActor())
-		{
-			UE_LOG(LogTemp, Log, TEXT("Ground detection for item %s: Hit %s at Z=%.2f"),
-				*ItemData.item.name, *HitResult.GetActor()->GetName(), HitResult.ImpactPoint.Z);
-		}
-
-		return HitResult.ImpactPoint.Z + SurfaceOffset;
-	}
-
-	// If nothing was hit, fall back to the original Z position
-	UE_LOG(LogTemp, Warning, TEXT("Ground detection failed for item %s at location %s. Using original Z value."),
-		*ItemData.item.name, *Location.ToString());
-	return Location.Z;
+	UE_LOG(LogDropSnap, Log,
+		TEXT("[DropSnap] Snapped '%s' | CurrentZ=%.1f GroundZ=%.1f PivotToBottom=%.1f -> FinalZ=%.1f"),
+		*ItemData.item.name, CurrentLoc.Z, GroundZ, PivotToBottom, SnappedLoc.Z);
 }

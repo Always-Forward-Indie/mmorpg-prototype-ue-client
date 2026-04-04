@@ -142,6 +142,14 @@ FDateTime ReceiveTimeLoginServer;
 	// world-dependent pointers before the old world is torn down.
 	FDelegateHandle PreLoadMapDelegateHandle;
 
+	// Timer used to retry OpenLevel if another PIE instance is already in the
+	// middle of World Partition GenerateStreaming (prevents WorldDataLayers ensure).
+	FTimerHandle OpenLevelRetryTimerHandle;
+
+	// Performs the actual UGameplayStatics::OpenLevel call and arms the ready-ticker.
+	// Called directly by TransitionToGameWorld, or deferred by the retry timer.
+	void DoOpenLevel();
+
 	// Begin counting rendered frames; removes loading screen after MinRenderedFramesBeforeHide.
 	void StartFrameCountdown();
 

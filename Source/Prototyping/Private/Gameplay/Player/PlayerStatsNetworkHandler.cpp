@@ -17,6 +17,9 @@ void UPlayerStatsNetworkHandler::Initialize(UPlayerStatsManager* InStatsManager,
     StatsManager   = InStatsManager;
     NetworkManager = InNetworkManager;
     GameInstance   = InGameInstance;
+
+    // Cache the local character ID once so callbacks never read ambient GameInstance state.
+    LocalCharacterId = InGameInstance ? InGameInstance->GetCurrentCharacterID() : 0;
 }
 
 void UPlayerStatsNetworkHandler::SubscribeToNetworkEvents()
@@ -42,7 +45,7 @@ void UPlayerStatsNetworkHandler::HandleChunkServerData(const FString& ReceivedDa
     if (Msg.eventType == TEXT("stats_update"))
     {
         UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: stats_update received (bFirstStatsDelivered=%d, localCharId=%d)"),
-            bFirstStatsDelivered, GameInstance ? GameInstance->GetCurrentCharacterID() : -1);
+            bFirstStatsDelivered, LocalCharacterId);
 
         TSharedPtr<FJsonObject> Root;
         TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
@@ -57,12 +60,11 @@ void UPlayerStatsNetworkHandler::HandleChunkServerData(const FString& ReceivedDa
             Stats.characterId, Stats.healthCurrent, Stats.healthMax);
 
         // Only apply stats that belong to our local character.
-        // This is critical when multiple clients share the same network broadcast
-        // (PIE multi-player or multiple game windows on the same server).
-        if (GameInstance && Stats.characterId > 0 &&
-            Stats.characterId != GameInstance->GetCurrentCharacterID())
+        if (LocalCharacterId > 0 && Stats.characterId > 0 &&
+            Stats.characterId != LocalCharacterId)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: charId mismatch, skipping"));
+            UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: charId mismatch (got %d, expected %d), skipping"),
+                Stats.characterId, LocalCharacterId);
             return;
         }
 
@@ -88,8 +90,7 @@ void UPlayerStatsNetworkHandler::HandleChunkServerData(const FString& ReceivedDa
         OnEffectTick.Broadcast(TickData);
 
         // Update the local player's cached HP/Mana immediately for our own character only.
-        const int32 LocalCharId = GameInstance ? GameInstance->GetCurrentCharacterID() : 0;
-        if (StatsManager && LocalCharId > 0 && TickData.characterId == LocalCharId)
+        if (StatsManager && LocalCharacterId > 0 && TickData.characterId == LocalCharacterId)
         {
             FPlayerStatsUpdateStruct Updated = StatsManager->GetCachedStats();
             Updated.healthCurrent = TickData.newHealth;

@@ -31,8 +31,16 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Player Stats Network")
     void UnsubscribeFromNetworkEvents();
 
-    /** Reset so the next stats_update re-triggers NotifyStatsReceived (call on level transition). */
-    void ResetFirstStatsFlag() { bFirstStatsDelivered = false; }
+    /** Reset so the next stats_update re-triggers NotifyStatsReceived (call on level transition).
+     *  Pass the new local character ID so the filter uses the correct value for the new session. */
+    void ResetFirstStatsFlag(int32 NewLocalCharacterId = 0)
+    {
+        bFirstStatsDelivered = false;
+        if (NewLocalCharacterId > 0)
+        {
+            LocalCharacterId = NewLocalCharacterId;
+        }
+    }
 
     // Fired for every effectTick packet (DoT/HoT tick on any character)
     UPROPERTY(BlueprintAssignable, Category = "Player Stats Network|Events")
@@ -59,4 +67,8 @@ void HandleSetPlayerActiveEffects(const FString& ReceivedData) const;
     // True after the first stats_update for our local character has been delivered.
     // Used to signal the loading screen gate exactly once per session.
     bool bFirstStatsDelivered = false;
+
+    // Character ID of the local player — cached at Initialize() time.
+    // Avoids reading GameInstance ambient state on every packet callback.
+    int32 LocalCharacterId = 0;
 };

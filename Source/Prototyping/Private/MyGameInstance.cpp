@@ -559,12 +559,27 @@ void UMyGameInstance::LoadLoginLevel()
 	}
 }
 
+// Process-level counter: tracks how many PIE instances are currently inside
+// World Partition GenerateStreaming (i.e. between OpenLevel and OnGameWorldReady).
+// When > 0 a second OpenLevel call would corrupt WorldDataLayers (UE5 WP bug).
+// Both PIE instances run in the same process so a file-scope static is safe here.
+static volatile int32 GActiveWorldPartitionTransitions = 0;
+
 void UMyGameInstance::Shutdown()
 {
 	if (PreLoadMapDelegateHandle.IsValid())
 	{
 		FCoreUObjectDelegates::PreLoadMap.Remove(PreLoadMapDelegateHandle);
 		PreLoadMapDelegateHandle.Reset();
+	}
+
+	// If this instance held the World Partition transition slot and is shutting
+	// down before OnGameWorldReady fires, release it so other PIE instances
+	// are not left waiting forever on their retry timer.
+	if (bTransitioningToGameWorld)
+	{
+		FPlatformAtomics::InterlockedExchange(&GActiveWorldPartitionTransitions, 0);
+		UE_LOG(LogTemp, Warning, TEXT("Shutdown: released WP transition slot (shutdown during transition)"));
 	}
 
 	// Only send disconnect packets when this PIE instance was actually authenticated.
@@ -762,13 +777,13 @@ void UMyGameInstance::TransitionToGameWorld()
 	// E.g., "/Game/Maps/WorldMapV1.WorldMapV1" -> "WorldMapV1"
 	FString MapAssetPath = GameWorldMap.ToSoftObjectPath().GetAssetPath().ToString();
 	FString MapName = FPackageName::GetShortName(MapAssetPath);
-	
+
 	// If the asset path ends with .MapName (e.g., WorldMapV1.WorldMapV1), strip the extension
 	if (MapName.Contains(TEXT(".")))
 	{
 		MapName = MapName.Left(MapName.Find(TEXT(".")));
 	}
-	
+
 	UE_LOG(LogTemp, Warning, TEXT("TransitionToGameWorld: Starting transition to map '%s' (from path '%s')"), 
 		*MapName, *MapAssetPath);
 
@@ -793,9 +808,10 @@ void UMyGameInstance::TransitionToGameWorld()
 
 	// Reset the "first stats delivered" flag so the next session's first
 	// stats_update will re-trigger the loading screen gate.
+	// Also refreshes the cached local character ID for the incoming session.
 	if (PlayerStatsNetworkHandler)
 	{
-		PlayerStatsNetworkHandler->ResetFirstStatsFlag();
+		PlayerStatsNetworkHandler->ResetFirstStatsFlag(CurrentCharacterID);
 	}
 
 	// Clean up Login level UI and actors before the level switch
@@ -819,60 +835,67 @@ void UMyGameInstance::TransitionToGameWorld()
 		MonitorStatsWidget = nullptr;
 	}
 
-	// Clear spawned actor references � the old world (and its actors) will be destroyed.
+	// Clear spawned actor references — the old world (and its actors) will be destroyed.
 	// ConnectedPlayers / PendingSpawnClientId / PendingRemotePlayerSpawns intentionally
 	// survive the transition: they carry the data needed to spawn players once the new
 	// game world is ready (ProcessPendingSpawns reads them in OnGameWorldReady).
 	SpawnedPlayers.Empty();
 	Player = nullptr;
 
-	// Travel to the game world map using OpenLevel (local-only transition).
-	// ServerTravel is NOT used because it propagates the travel to all connected
-	// net clients in PIE listen-server mode.  When PIE runs with Number of Players > 1,
-	// Player 1 acts as a listen server and Player 2 is a net client.  ServerTravel
-	// on Player 1 would forcefully travel Player 2 as well — even if Player 2 is
-	// still on the login screen — breaking its networking, UI and spawn flow.
-	// OpenLevel only affects THIS world instance, so each PIE client transitions
-	// independently when its own player finishes authentication.
+	DoOpenLevel();
+}
+
+void UMyGameInstance::DoOpenLevel()
+{
 	UWorld* CurrentWorld = GetWorld();
-	if (CurrentWorld)
+	if (!CurrentWorld)
 	{
-		// Build the travel URL from the full asset path (e.g. "/Game/Maps/WorldMapV1")
-		// stripping the object sub-path suffix if present.
-		FString TravelPath = GameWorldMap.ToSoftObjectPath().GetAssetPath().ToString();
-		// Remove trailing ".MapName" object suffix that FTopLevelAssetPath may carry
-		int32 DotIdx = INDEX_NONE;
-		if (TravelPath.FindLastChar(TEXT('.'), DotIdx))
-		{
-			TravelPath = TravelPath.Left(DotIdx);
-		}
-
-		UGameplayStatics::OpenLevel(CurrentWorld, FName(*TravelPath), true);
-
-		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 1. OpenLevel('%s') called — ticker polling every 200ms"), *MapName);
-
-		// The loading screen was added via AddViewportWidgetContent — it lives
-		// at the Slate/GameViewportClient level, NOT inside any UWorld viewport.
-		// It survives level transitions and will be removed only by RemoveLoadingScreen.
-
-		// After OpenLevel the current world will be replaced and a new one created.
-		// Poll for the new world to become ready. We use a core ticker so the delegate
-		// survives the world's own timer manager being torn down.
-		FTSTicker::GetCoreTicker().AddTicker(
-			FTickerDelegate::CreateLambda([this](float DeltaTime) -> bool
-			{
-				CheckGameWorldReady();
-				// Return false to remove the ticker once the world is ready
-				return !bGameWorldReady;
-			}),
-			0.2f // Poll every 200ms
-		);
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("TransitionToGameWorld: GetWorld() returned nullptr"));
+		UE_LOG(LogTemp, Error, TEXT("DoOpenLevel: GetWorld() returned nullptr"));
 		bTransitioningToGameWorld = false;
+		return;
 	}
+
+	// Guard against concurrent World Partition GenerateStreaming across PIE instances.
+	// If another instance is already transitioning, retry after a short delay.
+	const int32 ActiveNow = FPlatformAtomics::InterlockedCompareExchange(
+		&GActiveWorldPartitionTransitions, 1, 0);
+
+	if (ActiveNow != 0)
+	{
+		// Another PIE is inside OpenLevel/GenerateStreaming — wait and retry.
+		UE_LOG(LogTemp, Warning,
+			TEXT("[LOADSEQ] DoOpenLevel: another PIE transition in progress, retrying in 3s"));
+		CurrentWorld->GetTimerManager().SetTimer(
+			OpenLevelRetryTimerHandle,
+			this,
+			&UMyGameInstance::DoOpenLevel,
+			3.0f,
+			false);
+		return;
+	}
+
+	// Build the travel URL from the full asset path (e.g. "/Game/Maps/WorldMapV1")
+	// stripping the object sub-path suffix if present.
+	FString TravelPath = GameWorldMap.ToSoftObjectPath().GetAssetPath().ToString();
+	int32 DotIdx = INDEX_NONE;
+	if (TravelPath.FindLastChar(TEXT('.'), DotIdx))
+	{
+		TravelPath = TravelPath.Left(DotIdx);
+	}
+
+	UGameplayStatics::OpenLevel(CurrentWorld, FName(*TravelPath), true);
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 1. OpenLevel('%s') called — ticker polling every 200ms"), *TravelPath);
+
+	// Poll for the new world to become ready via a core ticker that survives
+	// the current world's TimerManager being torn down by OpenLevel.
+	FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateLambda([this](float DeltaTime) -> bool
+		{
+			CheckGameWorldReady();
+			return !bGameWorldReady;
+		}),
+		0.2f
+	);
 }
 
 // This function is called when a streaming sub-level finishes loading (Login or Debug)
@@ -1057,6 +1080,11 @@ void UMyGameInstance::OnGameWorldReady()
 
 	bGameWorldReady = true;
 	bTransitioningToGameWorld = false;
+
+	// Release the process-level World Partition transition slot so the next
+	// PIE instance (if it was waiting) can now proceed with its own OpenLevel.
+	FPlatformAtomics::InterlockedExchange(&GActiveWorldPartitionTransitions, 0);
+	UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] OnGameWorldReady: released WP transition slot"));
 
 	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 6. OnGameWorldReady: bGameWorldReady=true, ReadyFlags=0x%02X � calling CheckAllReadyFlags"), ReadyFlags);
 

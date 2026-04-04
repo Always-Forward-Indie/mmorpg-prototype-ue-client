@@ -139,6 +139,7 @@ protected:
     virtual void NativeConstruct() override;
     virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
     virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+    virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
     virtual void BeginDestroy() override;
 
     // Drag and Drop support
@@ -175,12 +176,6 @@ private:
     mutable bool bCachedCanAccept = false;
     mutable bool bCacheValid = false;
 
-    // Drag & Drop debouncing to stabilize rapid enter/leave events
-    float LastDragEnterTime = 0.0f;
-    float LastDragLeaveTime = 0.0f;
-    float LastHighlightChangeTime = 0.0f;
-    const float DragEventDebounceTime = 0.1f;
-
     // Visual settings
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot Widget", meta = (AllowPrivateAccess = "true"))
     UTexture2D* DefaultSkillIcon;
@@ -197,9 +192,9 @@ private:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot Widget", meta = (AllowPrivateAccess = "true"))
     FLinearColor HighlightColor = FLinearColor::Yellow;
 
-    // New color setting for drop highlighting
+    // Color for drop-target highlighting — light cyan so it's clearly readable without being toxic
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot Widget", meta = (AllowPrivateAccess = "true"))
-    FLinearColor DropHighlightColor = FLinearColor::Green;
+    FLinearColor DropHighlightColor = FLinearColor(0.2f, 0.85f, 1.0f, 1.0f);
 
     // Internal methods
     void UpdateVisualState();

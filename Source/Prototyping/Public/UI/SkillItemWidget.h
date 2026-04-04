@@ -16,6 +16,8 @@ class UDragDropOperation;
 // Delegate declarations for skill item widget
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSkillItemClicked, const FPlayerSkillData&, SkillData);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSkillItemHovered, const FPlayerSkillData&, SkillData, bool, bIsHovered);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSkillItemDragStarted, const FPlayerSkillData&, SkillData);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSkillItemDragEnded, const FPlayerSkillData&, SkillData);
 
 /**
  * Widget for displaying individual skill items in the available skills list
@@ -47,6 +49,14 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Skill Item Widget")
     FOnSkillItemHovered OnSkillItemHovered;
 
+    // Fired when a drag operation begins / ends — used by the parent
+    // AvailableSkillsWidget to toggle its own hit-test visibility.
+    UPROPERTY(BlueprintAssignable, Category = "Skill Item Widget")
+    FOnSkillItemDragStarted OnSkillItemDragStarted;
+
+    UPROPERTY(BlueprintAssignable, Category = "Skill Item Widget")
+    FOnSkillItemDragEnded OnSkillItemDragEnded;
+
     // Properties
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Skill Item Widget")
     FPlayerSkillData GetSkillData() const { return CurrentSkillData; }
@@ -60,6 +70,7 @@ protected:
     virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
     virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
     virtual void NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation) override;
+    virtual void NativeOnDragCancelled(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
     virtual void NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
     virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
 

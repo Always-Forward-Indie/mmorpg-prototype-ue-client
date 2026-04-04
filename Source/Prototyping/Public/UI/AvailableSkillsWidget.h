@@ -77,10 +77,16 @@ protected:
     virtual void NativeDestruct() override;
     virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
-    // Drag functionality
+    // Drag functionality (window dragging)
     virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
     virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
     virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+
+    // Called by child SkillItemWidgets when a skill drag begins/ends so this
+    // panel can make itself hit-test-invisible, letting drag events reach the
+    // SkillBar below.
+    void OnChildSkillDragStarted();
+    void OnChildSkillDragEnded();
 
     // Handle window dragging
     void UpdateWindowDragPosition(const FVector2D& ScreenCursorPos);
@@ -103,6 +109,13 @@ protected:
     // Handler for hover events
     UFUNCTION()
     void OnSkillItemHovered(const FPlayerSkillData& SkillData, bool bIsHovered);
+
+    // Handlers wired to child SkillItemWidget drag delegates.
+    UFUNCTION()
+    void OnChildSkillDragStarted_Handler(const FPlayerSkillData& SkillData);
+
+    UFUNCTION()
+    void OnChildSkillDragEnded_Handler(const FPlayerSkillData& SkillData);
 
 protected:
     // UI Components (bind these in Blueprint)
@@ -174,6 +187,11 @@ private:
 
     // Widget visibility state
     bool bIsVisible;
+
+    // True while a child SkillItemWidget is being dragged. During this time the
+    // whole panel is made HitTestInvisible so drag events pass through to the
+    // SkillBar widgets underneath.
+    bool bIsSkillDragInProgress = false;
 
     // Dragging state
     bool bDragging = false;

@@ -1,5 +1,4 @@
 ﻿#include "UI/SkillBarWidget.h"
-#include "UI/SkillBarWidget.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Components/HorizontalBox.h"
@@ -42,6 +41,24 @@ void USkillBarWidget::NativeConstruct()
     if (SkillManager && !bEventsSubscribed)
     {
         SubscribeToSkillManagerEvents();
+    }
+
+    // Container widgets must be SelfHitTestInvisible so they do NOT intercept
+    // drag-and-drop events. Slate routes DragOver/Drop to the deepest hit-testable
+    // widget under the cursor. If the Overlay or HorizontalBox is Visible it
+    // captures the hit before child SkillSlotWidgets, and NativeOnDrop never fires
+    // on the slots.
+    if (SkillBarContainerOverlay)
+    {
+        SkillBarContainerOverlay->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+    }
+    if (SkillSlotsContainer)
+    {
+        SkillSlotsContainer->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+    }
+    if (SkillGridContainer)
+    {
+        SkillGridContainer->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
     }
 }
 

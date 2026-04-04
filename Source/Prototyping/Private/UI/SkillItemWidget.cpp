@@ -117,7 +117,14 @@ FReply USkillItemWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, cons
                 }
             }
         }
-        
+        else
+        {
+            // Drag ended via mouse release (successful drop or aborted).
+            // NativeOnDragCancelled covers the cancelled case; here we handle the
+            // "mouse released after drag" path that UE routes differently.
+            OnSkillItemDragEnded.Broadcast(CurrentSkillData);
+        }
+
         bIsDragging = false;
         return FReply::Handled();
     }
@@ -184,9 +191,24 @@ void USkillItemWidget::NativeOnDragDetected(const FGeometry& InGeometry, const F
     
     OutOperation = DragDropOp;
     bIsDragging = true;
-    
-    UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: ? Started dragging skill %s"), *CurrentSkillData.networkData.skillSlug);
+
+    // Notify parent AvailableSkillsWidget so it can make itself HitTestInvisible,
+    // allowing drag events to reach the SkillBar below it.
+    OnSkillItemDragStarted.Broadcast(CurrentSkillData);
+
+    UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: Started dragging skill %s"), *CurrentSkillData.networkData.skillSlug);
     UE_LOG(LogTemp, Warning, TEXT("=== SKILL DRAG DETECTED DEBUG END (SUCCESS) ==="));
+}
+
+void USkillItemWidget::NativeOnDragCancelled(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
+{
+    Super::NativeOnDragCancelled(InDragDropEvent, InOperation);
+
+    // Always broadcast drag-ended and reset state. The bIsDragging guard was
+    // previously unreliable because NativeOnMouseLeave could clear it early.
+    bIsDragging = false;
+    OnSkillItemDragEnded.Broadcast(CurrentSkillData);
+    UE_LOG(LogTemp, Log, TEXT("SkillItemWidget: Drag cancelled for skill %s"), *CurrentSkillData.networkData.skillSlug);
 }
 
 void USkillItemWidget::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
@@ -205,15 +227,19 @@ void USkillItemWidget::NativeOnMouseEnter(const FGeometry& InGeometry, const FPo
 void USkillItemWidget::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
 {
     Super::NativeOnMouseLeave(InMouseEvent);
-    
+
     bIsHovered = false;
-    bIsDragging = false;
+    // Do NOT reset bIsDragging here. During an active UE drag-drop operation the
+    // cursor leaves the source widget, which fires NativeOnMouseLeave. Clearing
+    // bIsDragging would break NativeOnDragCancelled and NativeOnMouseButtonUp,
+    // preventing OnSkillItemDragEnded from ever being broadcast.
     UpdateHoverState();
-    
+
     // Broadcast hover event
     OnSkillItemHovered.Broadcast(CurrentSkillData, false);
-    
-    UE_LOG(LogTemp, Log, TEXT("SkillItemWidget: Mouse left skill %s"), *CurrentSkillData.networkData.skillSlug);
+
+    UE_LOG(LogTemp, Log, TEXT("SkillItemWidget: Mouse left skill %s (dragging: %s)"),
+        *CurrentSkillData.networkData.skillSlug, bIsDragging ? TEXT("true") : TEXT("false"));
 }
 
 void USkillItemWidget::UpdateVisualDisplay()

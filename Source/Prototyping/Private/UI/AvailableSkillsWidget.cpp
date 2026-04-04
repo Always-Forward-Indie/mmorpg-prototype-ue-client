@@ -1,5 +1,7 @@
 ﻿#include "UI/AvailableSkillsWidget.h"
+#include "UI/AvailableSkillsWidget.h"
 #include "MyGameInstance.h"
+#include "Framework/Application/SlateApplication.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Components/ScrollBox.h"
 #include "Components/WrapBox.h"
@@ -94,6 +96,14 @@ void UAvailableSkillsWidget::NativeTick(const FGeometry& MyGeometry, float InDel
     if (bIsShowingTooltip)
     {
         UpdateTooltipPosition();
+    }
+
+    // Safety net: if Slate has no active drag-drop but we still think a skill
+    // drag is in progress (source widget's MouseUp / DragCancelled was missed),
+    // restore normal visibility so the panel doesn't stay stuck invisible.
+    if (bIsSkillDragInProgress && !FSlateApplication::Get().IsDragDropping())
+    {
+        OnChildSkillDragEnded();
     }
 }
 
@@ -303,7 +313,10 @@ void UAvailableSkillsWidget::ShowWidget()
     if (!bIsVisible)
     {
         bIsVisible = true;
-        SetVisibility(ESlateVisibility::Visible);
+        // SelfHitTestInvisible: the panel and its children are visible and
+        // interactive, but the panel's own background doesn't block drag events
+        // that should reach lower-Z widgets (the skill bar).
+        SetVisibility(ESlateVisibility::SelfHitTestInvisible);
         
         // НЕ управляем курсором здесь - это делает UIManager
         // Уведомляем UIManager об изменении видимости
@@ -320,7 +333,8 @@ void UAvailableSkillsWidget::HideWidget()
 {
     bIsVisible = false;
     bDragging = false;
-    SetVisibility(ESlateVisibility::Hidden);
+    bIsSkillDragInProgress = false;
+    SetVisibility(ESlateVisibility::Collapsed);
     
     // Hide tooltip when widget is hidden
     HideSkillTooltip();
@@ -543,6 +557,8 @@ USkillItemWidget* UAvailableSkillsWidget::CreateSkillItemWidget(const FPlayerSki
         
         ItemWidget->OnSkillItemClicked.AddDynamic(this, &UAvailableSkillsWidget::OnSkillItemClicked);
         ItemWidget->OnSkillItemHovered.AddDynamic(this, &UAvailableSkillsWidget::OnSkillItemHovered);
+        ItemWidget->OnSkillItemDragStarted.AddDynamic(this, &UAvailableSkillsWidget::OnChildSkillDragStarted_Handler);
+        ItemWidget->OnSkillItemDragEnded.AddDynamic(this, &UAvailableSkillsWidget::OnChildSkillDragEnded_Handler);
         
         UE_LOG(LogTemp, Log, TEXT("AvailableSkillsWidget: Created skill item widget for %s"), *SkillData.networkData.skillSlug);
     }
@@ -637,4 +653,48 @@ void UAvailableSkillsWidget::UpdateTooltipPosition()
             SkillTooltipWidget->UpdateTooltipPosition(MousePosition);
         }
     }
+}
+
+void UAvailableSkillsWidget::OnChildSkillDragStarted_Handler(const FPlayerSkillData& SkillData)
+{
+    OnChildSkillDragStarted();
+}
+
+void UAvailableSkillsWidget::OnChildSkillDragEnded_Handler(const FPlayerSkillData& SkillData)
+{
+    OnChildSkillDragEnded();
+}
+
+void UAvailableSkillsWidget::OnChildSkillDragStarted()
+{
+    if (bIsSkillDragInProgress || !bIsVisible)
+    {
+        return;
+    }
+    bIsSkillDragInProgress = true;
+
+    HideSkillTooltip();
+
+    // Make the entire panel hit-test-invisible so Slate routes drag events
+    // (DragOver / Drop) to the SkillBar widgets below us (Z = 10) instead
+    // of stopping at our Z = 50 panel.
+    SetVisibility(ESlateVisibility::HitTestInvisible);
+
+    UE_LOG(LogTemp, Log, TEXT("AvailableSkillsWidget: Skill drag started — panel is now HitTestInvisible"));
+}
+
+void UAvailableSkillsWidget::OnChildSkillDragEnded()
+{
+    if (!bIsSkillDragInProgress)
+    {
+        return;
+    }
+    bIsSkillDragInProgress = false;
+
+    if (bIsVisible)
+    {
+        SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("AvailableSkillsWidget: Skill drag ended — panel restored"));
 }

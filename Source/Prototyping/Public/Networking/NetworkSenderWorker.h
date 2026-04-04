@@ -32,6 +32,10 @@ class PROTOTYPING_API NetworkSenderWorker : public FRunnable
 
 		void EnqueueDataForSending(const FString& Data);
 
+		// Atomically clear the socket pointer so Run() stops calling Send()
+		// on the socket object. Must be called BEFORE ISocketSubsystem::DestroySocket().
+		void DetachSocket();
+
 		// Set TimeSyncService reference for precise timestamp updates
 		void SetTimeSyncService(UTimeSyncService* InTimeSyncService);
 

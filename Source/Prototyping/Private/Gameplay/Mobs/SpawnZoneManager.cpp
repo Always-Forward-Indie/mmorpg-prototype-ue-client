@@ -64,6 +64,11 @@ void USpawnZoneManager::SetWorldContext(UWorld* World)
 	worldContext = World;
 }
 
+void USpawnZoneManager::ClearWorldState()
+{
+	SpawnZones.Empty();
+}
+
 void USpawnZoneManager::ProcessGameServerData(const FString& ReceivedData)
 {
 	//UE_LOG(LogTemp, Warning, TEXT("SpawnZoneManager received data: %s"), *ReceivedData);

@@ -38,7 +38,7 @@ void UPlayerAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
     // For the local player CMC velocity is authoritative — use it directly.
     if (Player->GetIsOtherClient())
     {
-        Speed     = Player->GetRemoteSpeed();
+        Speed     = Player->GetRemoteSpeed();      // already EMA-smoothed in BasicPlayer
         bIsMoving = Speed > 1.0f;
 
         // Mirror CMC MaxWalkSpeed so the blend space normalisation works the same
@@ -46,8 +46,10 @@ void UPlayerAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
         const UCharacterMovementComponent* MoveComp = Player->GetCharacterMovement();
         MaxSpeed = (MoveComp && MoveComp->MaxWalkSpeed > 0.0f) ? MoveComp->MaxWalkSpeed : MaxSpeed;
 
-        // Direction is derived from consecutive server position deltas (computed in SetCoordinates).
-        Direction = bIsMoving ? Player->GetRemoteDirection() : 0.0f;
+        // Direction is EMA-smoothed in BasicPlayer::UpdateRemotePlayerMovement.
+        // We read it unconditionally — it keeps its last value during the speed
+        // fade-out so the blend-space doesn't snap to 0 while slowing down.
+        Direction = Player->GetRemoteDirection();
     }
     else
     {

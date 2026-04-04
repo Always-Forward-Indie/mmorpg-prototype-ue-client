@@ -51,6 +51,7 @@
 #include "WorldPartition/WorldPartitionSubsystem.h"
 #include "Engine/GameViewportClient.h"
 #include "Camera/CameraComponent.h"
+#include "UObject/UObjectGlobals.h"
 
 UMyGameInstance::UMyGameInstance(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -178,6 +179,11 @@ void UMyGameInstance::Init()
 	NetworkManager->OnGameServerSocketConnected.AddDynamic(this, &UMyGameInstance::StartPingGameServer);
 	NetworkManager->OnLoginServerSocketConnected.AddDynamic(this, &UMyGameInstance::StartPingLoginServer);
 
+	// Null out worldContext on all managers before the old world is torn down.
+	// This prevents stale TObjectPtr<UWorld> handle crashes (0xFFFFFFFFFFFFFFFF)
+	// when in-flight network packets arrive during level transition.
+	PreLoadMapDelegateHandle = FCoreUObjectDelegates::PreLoadMap.AddUObject(
+		this, &UMyGameInstance::InvalidateManagerWorldContexts);
 	InitGameSystems();
 }
 
@@ -552,28 +558,48 @@ void UMyGameInstance::LoadLoginLevel()
 
 void UMyGameInstance::Shutdown()
 {
-    Super::Shutdown();
-
-	// send leave game request to Login Server
-	if (AuthenticationManager)
+	if (PreLoadMapDelegateHandle.IsValid())
 	{
-		// send leave game request
-		AuthenticationManager->SendLeaveGameRequest(ClientData);
+		FCoreUObjectDelegates::PreLoadMap.Remove(PreLoadMapDelegateHandle);
+		PreLoadMapDelegateHandle.Reset();
 	}
 
-	// send leave game request to Game Server
-	if (PlayerManager)
+	// Only send disconnect packets when this PIE instance was actually authenticated.
+	// Guards against: (a) PIE stopped before login, (b) crash before auth completes.
+	// Each PIE instance owns its own UMyGameInstance so ClientData is per-instance.
+	const bool bIsAuthenticated = (ClientData.clientId > 0 && !ClientData.hash.IsEmpty());
+
+	if (bIsAuthenticated)
 	{
-		// send leave game request
-		PlayerManager->SendLeaveGameRequest(ClientData);
+		UE_LOG(LogTemp, Warning, TEXT("Shutdown: Sending disconnect for ClientID=%d CharID=%d"),
+			ClientData.clientId, ClientData.characterData.characterId);
+
+		// Notify Login Server
+		if (AuthenticationManager)
+		{
+			AuthenticationManager->SendLeaveGameRequest(ClientData);
+		}
+
+		// Notify Chunk Server (and optionally Game Server)
+		if (PlayerManager)
+		{
+			PlayerManager->SendLeaveGameRequest(ClientData);
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Shutdown: Skipping disconnect — ClientID=%d (not authenticated)"),
+			ClientData.clientId);
 	}
 
-
-	// Shutdown the network manager
+	// Shutdown the network manager last so the sender threads can drain
+	// the disconnect packets enqueued above before sockets are closed.
 	if (NetworkManager)
 	{
 		NetworkManager->Shutdown();
 	}
+
+	Super::Shutdown();
 }
 
 // get the network manager
@@ -780,7 +806,7 @@ void UMyGameInstance::TransitionToGameWorld()
 
 	// Show the loading screen before the transition.
 	// AddLoadingScreen uses GameViewportClient::AddViewportWidgetContent,
-	// which is world-independent and survives ServerTravel.
+	// which is world-independent and survives level transitions (OpenLevel).
 	AddLoadingScreen();
 
 	// Also clear the monitor stats widget as it will be recreated later
@@ -797,22 +823,36 @@ void UMyGameInstance::TransitionToGameWorld()
 	SpawnedPlayers.Empty();
 	Player = nullptr;
 
-	// Travel to the game world map.
-	// In PIE, UGameplayStatics::OpenLevel triggers a PKG_PlayInEditor assertion on World
-	// Partition external actor packages. ServerTravel is the PIE-safe alternative and
-	// works identically in packaged builds.
+	// Travel to the game world map using OpenLevel (local-only transition).
+	// ServerTravel is NOT used because it propagates the travel to all connected
+	// net clients in PIE listen-server mode.  When PIE runs with Number of Players > 1,
+	// Player 1 acts as a listen server and Player 2 is a net client.  ServerTravel
+	// on Player 1 would forcefully travel Player 2 as well — even if Player 2 is
+	// still on the login screen — breaking its networking, UI and spawn flow.
+	// OpenLevel only affects THIS world instance, so each PIE client transitions
+	// independently when its own player finishes authentication.
 	UWorld* CurrentWorld = GetWorld();
 	if (CurrentWorld)
 	{
-		CurrentWorld->ServerTravel(MapName, true);
+		// Build the travel URL from the full asset path (e.g. "/Game/Maps/WorldMapV1")
+		// stripping the object sub-path suffix if present.
+		FString TravelPath = GameWorldMap.ToSoftObjectPath().GetAssetPath().ToString();
+		// Remove trailing ".MapName" object suffix that FTopLevelAssetPath may carry
+		int32 DotIdx = INDEX_NONE;
+		if (TravelPath.FindLastChar(TEXT('.'), DotIdx))
+		{
+			TravelPath = TravelPath.Left(DotIdx);
+		}
 
-		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 1. ServerTravel('%s') called � ticker polling every 200ms"), *MapName);
+		UGameplayStatics::OpenLevel(CurrentWorld, FName(*TravelPath), true);
+
+		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 1. OpenLevel('%s') called — ticker polling every 200ms"), *MapName);
 
 		// The loading screen was added via AddViewportWidgetContent — it lives
 		// at the Slate/GameViewportClient level, NOT inside any UWorld viewport.
-		// It survives ServerTravel and will be removed only by RemoveLoadingScreen.
+		// It survives level transitions and will be removed only by RemoveLoadingScreen.
 
-		// After ServerTravel the current world will be replaced and a new one created.
+		// After OpenLevel the current world will be replaced and a new one created.
 		// Poll for the new world to become ready. We use a core ticker so the delegate
 		// survives the world's own timer manager being torn down.
 		FTSTicker::GetCoreTicker().AddTicker(
@@ -1027,6 +1067,21 @@ void UMyGameInstance::OnGameWorldReady()
 	APlayerController* PC = GameWorld->GetFirstPlayerController();
 	if (PC) { PC->bShowMouseCursor = false; }
 
+	// Phase 4 data (getConnectedCharacters, joinGameCharacter broadcasts) can arrive
+	// after ProcessPendingSpawns was called at Gate 1 but before bGameWorldReady=true.
+	// Any remote players queued during that window are still in PendingRemotePlayerSpawns
+	// - spawn them now that the world is confirmed ready.
+	if (PendingRemotePlayerSpawns.Num() > 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] OnGameWorldReady: spawning %d deferred remote player(s)"), PendingRemotePlayerSpawns.Num());
+		for (const FClientDataStruct& RemoteData : PendingRemotePlayerSpawns)
+		{
+			AddPlayerData(RemoteData.clientId, RemoteData);
+			SpawnPlayerForClient(RemoteData.clientId);
+		}
+		PendingRemotePlayerSpawns.Empty();
+	}
+
 	// All Notify* flags may already be accumulated while streaming was running.
 	// Attempt the frame countdown now in case we were the last gate to clear.
 	CheckAllReadyFlags();
@@ -1131,6 +1186,45 @@ void UMyGameInstance::StartFrameCountdown()
 			return false;   // unregister ticker
 		}),
 		0.0f);
+}
+
+void UMyGameInstance::InvalidateManagerWorldContexts(const FString& /*MapName*/)
+{
+	// FCoreUObjectDelegates::PreLoadMap is a GLOBAL (static) delegate — it fires
+	// for every level transition (OpenLevel / ServerTravel) in the entire process.
+	// In PIE with multiple players, each client has its own GameInstance + World,
+	// but they all share this delegate.  Without filtering, Player 1's transition
+	// would invalidate Player 2's manager world contexts (and vice-versa),
+	// breaking networking, poll timers, and actor spawning for the other client.
+	//
+	// Guard: only proceed if THIS GameInstance is the one currently transitioning.
+	// bTransitioningToGameWorld is set to true in TransitionToGameWorld() and
+	// reset in OnGameWorldReady(), so it is true exactly during our own
+	// level transition.  The login-level load uses LoadStreamLevel (streaming
+	// sub-level) which does NOT fire PreLoadMap, so no false positives there.
+	if (!bTransitioningToGameWorld)
+	{
+		UE_LOG(LogTemp, Log, TEXT("InvalidateManagerWorldContexts: SKIPPED (not transitioning - PreLoadMap from another PIE instance)"));
+		return;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("InvalidateManagerWorldContexts: Nulling world context on all managers before map load"));
+
+	// Set worldContext to nullptr on every manager that holds one.
+	// This prevents stale TObjectPtr<UWorld> handle assertions (0xFFFFFFFFFFFFFFFF)
+	// when network packets arrive while the old world is being destroyed.
+	if (NetworkManager)      { NetworkManager->SetWorldContext(nullptr); }
+	if (PingManager)         { PingManager->SetWorldContext(nullptr); }
+	if (AuthenticationManager) { AuthenticationManager->SetWorldContext(nullptr); }
+	if (PlayerManager)       { PlayerManager->SetWorldContext(nullptr); }
+	if (MOBManager)          { MOBManager->SetWorldContext(nullptr); MOBManager->ClearWorldState(); }
+	if (SpawnZoneManager)    { SpawnZoneManager->SetWorldContext(nullptr); SpawnZoneManager->ClearWorldState(); }
+	if (ItemManager)         { ItemManager->SetWorldContext(nullptr); }
+	if (InventoryManager)    { InventoryManager->SetWorldContext(nullptr); }
+	if (HarvestManager)      { HarvestManager->SetWorldContext(nullptr); }
+	if (CombatSystemManager) { CombatSystemManager->SetWorldContext(nullptr); }
+	if (NPCManager)          { NPCManager->SetWorldContext(nullptr); }
+	if (TimeSyncService)     { TimeSyncService->SetWorldContext(nullptr); }
 }
 
 void UMyGameInstance::RefreshManagerWorldContexts()
@@ -1246,7 +1340,7 @@ void UMyGameInstance::StartLoadingScreenMusic()
 
 	// bPersistAcrossLevelTransition=true binds the component to the raw AudioDevice
 	// instead of a world actor, and sets bIgnoreForFlushing internally — so the
-	// sound is NOT flushed when ServerTravel tears down the old world.
+	// sound is NOT flushed when OpenLevel tears down the old world.
 	// bAutoDestroy=false: we control the lifetime; StopLoadingScreenMusic() cleans up.
 	LoadingScreenAudioComponent = UGameplayStatics::SpawnSound2D(
 		GetWorld(),
@@ -1298,7 +1392,7 @@ void UMyGameInstance::AddLoadingScreen()
 	if (!LoadingScreenWidget) { return; }
 
 	// Take its Slate representation and add directly to the viewport overlay.
-	// This is world-independent — it survives ServerTravel.
+	// This is world-independent — it survives level transitions (OpenLevel).
 	LoadingScreenSlateWidget = LoadingScreenWidget->TakeWidget();
 	GVC->AddViewportWidgetContent(LoadingScreenSlateWidget.ToSharedRef(), MAX_int32);
 
@@ -1377,7 +1471,14 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 		PlayerData.characterData.characterPosition.positionZ);
 	FRotator SpawnRotation(0.0f, PlayerData.characterData.characterPosition.rotationZ, 0.0f);
 
-	ABasicPlayer* NewPlayer = GetWorld()->SpawnActor<ABasicPlayer>(MainPlayerClass, SpawnLocation, SpawnRotation);
+	// AlwaysSpawn: never let UE adjust the spawn position due to capsule overlap.
+	// Without this, when two players share the same spawn coordinates (common on
+	// a fresh server), UE slides the new actor next to the already-spawned local
+	// pawn — causing the "appears at local player location" visual artefact in PIE.
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	ABasicPlayer* NewPlayer = GetWorld()->SpawnActor<ABasicPlayer>(MainPlayerClass, SpawnLocation, SpawnRotation, SpawnParams);
 	if (!NewPlayer)
 	{
 		UE_LOG(LogTemp, Error, TEXT("SpawnPlayerForClient: Failed to spawn ABasicPlayer for ClientID %d"), ClientID);

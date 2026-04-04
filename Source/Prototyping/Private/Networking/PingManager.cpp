@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Networking/PingManager.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
@@ -29,7 +30,7 @@ void UPingManager::Initialize(UNetworkManager* NetworkManager, UMonitorStatsWidg
 		TimeSyncService = networkManager->GetTimeSyncService();
 	}
 	
-	UE_LOG(LogTemp, Warning, TEXT("PingManager: Initialized with TimeSyncService integration"));
+	UE_LOG(LogPing, Log, TEXT("PingManager: Initialized with TimeSyncService integration"));
 }
 
 void UPingManager::SetWorldContext(UWorld* World)
@@ -40,20 +41,20 @@ void UPingManager::SetWorldContext(UWorld* World)
 void UPingManager::SetTimeSyncService(UTimeSyncService* InTimeSyncService)
 {
 	TimeSyncService = InTimeSyncService;
-	UE_LOG(LogTemp, Warning, TEXT("PingManager: TimeSyncService reference set"));
+	UE_LOG(LogPing, Log, TEXT("PingManager: TimeSyncService reference set"));
 }
 
 void UPingManager::StartPingUpdates()
 {
 	if (!worldContext)
 	{
-		UE_LOG(LogTemp, Error, TEXT("PingManager: Cannot start ping updates - no world context"));
+		UE_LOG(LogPing, Error, TEXT("PingManager: Cannot start ping updates - no world context"));
 		return;
 	}
 	
 	if (!TimeSyncService)
 	{
-		UE_LOG(LogTemp, Error, TEXT("PingManager: Cannot start ping updates - no TimeSyncService"));
+		UE_LOG(LogPing, Error, TEXT("PingManager: Cannot start ping updates - no TimeSyncService"));
 		return;
 	}
 	
@@ -68,7 +69,7 @@ void UPingManager::StartPingUpdates()
 	// Update immediately
 	UpdatePingDisplay();
 	
-	UE_LOG(LogTemp, Warning, TEXT("PingManager: Started ping updates with %.1f second interval and ping requests with %.1f second interval"), 
+	UE_LOG(LogPing, Log, TEXT("PingManager: Started ping updates with %.1f second interval and ping requests with %.1f second interval"), 
 		UpdateInterval, PingRequestInterval);
 }
 
@@ -78,7 +79,7 @@ void UPingManager::StopPingUpdates()
 	{
 		worldContext->GetTimerManager().ClearTimer(PingUpdateTimerHandle);
 		worldContext->GetTimerManager().ClearTimer(PingRequestTimerHandle);
-		UE_LOG(LogTemp, Warning, TEXT("PingManager: Stopped ping updates and ping requests"));
+		UE_LOG(LogPing, Log, TEXT("PingManager: Stopped ping updates and ping requests"));
 	}
 }
 
@@ -86,7 +87,7 @@ void UPingManager::RestartPingUpdates()
 {
 	if (!worldContext)
 	{
-		UE_LOG(LogTemp, Error, TEXT("PingManager::RestartPingUpdates - WorldContext is null"));
+		UE_LOG(LogPing, Error, TEXT("PingManager::RestartPingUpdates - WorldContext is null"));
 		return;
 	}
 
@@ -95,7 +96,7 @@ void UPingManager::RestartPingUpdates()
 	PingRequestTimerHandle.Invalidate();
 
 	StartPingUpdates();
-	UE_LOG(LogTemp, Warning, TEXT("PingManager: Ping timers restarted in new world"));
+	UE_LOG(LogPing, Log, TEXT("PingManager: Ping timers restarted in new world"));
 }
 
 float UPingManager::GetServerPing(EServerType ServerType) const
@@ -112,7 +113,7 @@ void UPingManager::SendPingRequestToAllServers()
 {
 	if (!networkManager || !TimeSyncService)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("PingManager: Cannot send ping requests - missing NetworkManager or TimeSyncService"));
+		UE_LOG(LogPing, Log, TEXT("PingManager: Cannot send ping requests - missing NetworkManager or TimeSyncService"));
 		return;
 	}
 
@@ -192,7 +193,7 @@ void UPingManager::SendPingRequestToServer(EServerType ServerType)
 			break;
 			
 		default:
-			UE_LOG(LogTemp, Warning, TEXT("PingManager: Unknown server type for ping request"));
+			UE_LOG(LogPing, Log, TEXT("PingManager: Unknown server type for ping request"));
 			break;
 	}
 }
@@ -219,12 +220,12 @@ void UPingManager::UpdatePingDisplay()
 	{
 		FString LoginPingText = FString::Printf(TEXT("%.1f ms"), LoginServerPing);
 		MonitorStatsWidget->SetLoginServerPingValue(LoginPingText);
-		UE_LOG(LogTemp, VeryVerbose, TEXT("PingManager: Updated Login Server ping: %s"), *LoginPingText);
+		UE_LOG(LogPing, VeryVerbose, TEXT("PingManager: Updated Login Server ping: %s"), *LoginPingText);
 	}
 	else
 	{
 		MonitorStatsWidget->SetLoginServerPingValue(TEXT("-- ms"));
-		UE_LOG(LogTemp, VeryVerbose, TEXT("PingManager: Login Server ping not available (valid: %s, ping: %.1f)"), 
+		UE_LOG(LogPing, VeryVerbose, TEXT("PingManager: Login Server ping not available (valid: %s, ping: %.1f)"), 
 			bLoginValid ? TEXT("true") : TEXT("false"), LoginServerPing);
 	}
 	
@@ -233,12 +234,12 @@ void UPingManager::UpdatePingDisplay()
 	{
 		FString GamePingText = FString::Printf(TEXT("%.1f ms"), GameServerPing);
 		MonitorStatsWidget->SetGameServerPingValue(GamePingText);
-		UE_LOG(LogTemp, VeryVerbose, TEXT("PingManager: Updated Game Server ping: %s"), *GamePingText);
+		UE_LOG(LogPing, VeryVerbose, TEXT("PingManager: Updated Game Server ping: %s"), *GamePingText);
 	}
 	else
 	{
 		MonitorStatsWidget->SetGameServerPingValue(TEXT("-- ms"));
-		UE_LOG(LogTemp, VeryVerbose, TEXT("PingManager: Game Server ping not available (valid: %s, ping: %.1f)"), 
+		UE_LOG(LogPing, VeryVerbose, TEXT("PingManager: Game Server ping not available (valid: %s, ping: %.1f)"), 
 			bGameValid ? TEXT("true") : TEXT("false"), GameServerPing);
 	}
 	
@@ -247,12 +248,12 @@ void UPingManager::UpdatePingDisplay()
 	{
 		FString ChunkPingText = FString::Printf(TEXT("%.1f ms"), ChunkServerPing);
 		MonitorStatsWidget->SetChunkServerPingValue(ChunkPingText);
-		UE_LOG(LogTemp, VeryVerbose, TEXT("PingManager: Updated Chunk Server ping: %s"), *ChunkPingText);
+		UE_LOG(LogPing, VeryVerbose, TEXT("PingManager: Updated Chunk Server ping: %s"), *ChunkPingText);
 	}
 	else
 	{
 		MonitorStatsWidget->SetChunkServerPingValue(TEXT("-- ms"));
-		UE_LOG(LogTemp, VeryVerbose, TEXT("PingManager: Chunk Server ping not available (valid: %s, ping: %.1f)"), 
+		UE_LOG(LogPing, VeryVerbose, TEXT("PingManager: Chunk Server ping not available (valid: %s, ping: %.1f)"), 
 			bChunkValid ? TEXT("true") : TEXT("false"), ChunkServerPing);
 	}
 }
@@ -270,7 +271,7 @@ void UPingManager::OnPingRequestTimer()
 // Legacy method - now deprecated but kept for compatibility
 void UPingManager::CalculatePingTime(const TArray<FDateTime>& SendTimes, const TArray<FDateTime>& ReceiveTimes, const FString& serverName)
 {
-	UE_LOG(LogTemp, Warning, TEXT("PingManager: CalculatePingTime is deprecated. Use TimeSyncService instead for server: %s"), *serverName);
+	UE_LOG(LogPing, Log, TEXT("PingManager: CalculatePingTime is deprecated. Use TimeSyncService instead for server: %s"), *serverName);
 	
 	// For backwards compatibility, we still update the display using TimeSyncService
 	UpdatePingDisplay();

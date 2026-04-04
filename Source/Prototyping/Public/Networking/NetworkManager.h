@@ -97,7 +97,10 @@ private:
 	int32 LoginConnectionRetryCount = 0;
 	int32 GameConnectionRetryCount = 0;
 	const int32 MaxLoginRetries = 3; 
-	const int32 MaxGameRetries = 3; 
+	const int32 MaxGameRetries = 3;
+
+	// Guard against double Shutdown() calls (GameInstance::Shutdown + destructor)
+	bool bIsShutDown = false;
 
 	// Класс виджета для месседж-бокса
 	UPROPERTY()

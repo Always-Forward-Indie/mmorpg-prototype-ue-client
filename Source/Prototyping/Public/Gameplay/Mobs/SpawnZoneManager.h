@@ -49,4 +49,7 @@ class PROTOTYPING_API USpawnZoneManager : public UObject
 		void CreateSpawnZone(const FSpawnZoneStruct& SpawnZoneData);
 		UFUNCTION(BlueprintCallable, Category = "SpawnZoneManager")
 		bool SpawnZoneExists(UWorld* World, const FName& Tag);
+
+		/** Clear all world-bound actor references. Call before the owning world is torn down. */
+		void ClearWorldState();
 };

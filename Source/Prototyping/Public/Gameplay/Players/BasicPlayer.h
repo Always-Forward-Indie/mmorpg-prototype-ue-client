@@ -82,6 +82,15 @@ private:
 	float RemoteSpeed = 0.0f;
 	float RemoteDirection = 0.0f;
 
+	// EMA-smoothed versions fed to AnimInstance so transitions are gradual.
+	float SmoothedRemoteSpeed = 0.0f;
+	float SmoothedRemoteDirection = 0.0f;
+
+	// True while the server is actively sending position updates for this remote player.
+	bool bRemoteIsMoving = false;
+	// Accumulates time since the last packet that contained actual displacement.
+	float RemoteIdleTime = 0.0f;
+
 	// Server move_speed -> Unreal units conversion scale
 	// Server validates: maxAllowedDist = move_speed * 40.0 * dt * 1.3 (30% buffer)
 	// Must match exactly so the client speed == server expectation.
@@ -486,8 +495,13 @@ public:
 	FVector TargetReceivedPosition;
 	FRotator LastReceivedRotation;
 	FRotator TargetReceivedRotation;
-	float TimeSinceLastPositionUpdate;
-	float ServerPositionUpdateInterval = 0.1f; // Примерный интервал обновлений (100 мс)
+	float TimeSinceLastPositionUpdate = 0.0f;
+	float ServerPositionUpdateInterval = 0.1f; // server update interval (100 ms)
+
+	// True after the first real server position packet has been applied.
+	// Until then, UpdateRemotePlayerMovement does a hard snap instead of lerp
+	// so the actor never slides from world-origin (0,0,0) to the spawn point.
+	bool bHasReceivedFirstPosition = false;
 
 
 	public:
@@ -664,10 +678,10 @@ public:
 	void OnRevive();
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Data")
-	float GetRemoteSpeed() const { return RemoteSpeed; }
+	float GetRemoteSpeed() const { return SmoothedRemoteSpeed; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Data")
-	float GetRemoteDirection() const { return RemoteDirection; }
+	float GetRemoteDirection() const { return SmoothedRemoteDirection; }
 
 	UFUNCTION()
 	void OnRespawnClicked();

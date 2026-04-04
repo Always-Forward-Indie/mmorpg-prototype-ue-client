@@ -5,6 +5,7 @@
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 #include "Services/TimeSyncService.h"
+#include "Prototyping.h"
 
 NetworkSenderWorker::NetworkSenderWorker(FSocket* InSocket)
     : Socket(InSocket), bRunThread(true)
@@ -94,15 +95,24 @@ uint32 NetworkSenderWorker::Run()
 {
     while (bRunThread && Socket && Socket->GetConnectionState() != ESocketConnectionState::SCS_Connected)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Waiting for Sender socket connection..."));
+        UE_LOG(LogConnection, Verbose, TEXT("Waiting for Sender socket connection..."));
         FPlatformProcess::Sleep(0.1f);
     }
 
     while (bRunThread)
     {
-        if (!Socket || Socket->GetConnectionState() == ESocketConnectionState::SCS_NotConnected)
+        // Guard: DetachSocket() may have been called concurrently by Shutdown().
+        FSocket* CurrentSocket = Socket;
+        if (!CurrentSocket)
         {
-            UE_LOG(LogTemp, Warning, TEXT("Socket is not connected."));
+            break;
+        }
+
+        // Socket may be nulled or closed by NetworkManager::Shutdown().
+        // Check both flag and socket state before every send attempt.
+        if (CurrentSocket->GetConnectionState() == ESocketConnectionState::SCS_NotConnected)
+        {
+            UE_LOG(LogConnection, Warning, TEXT("SenderWorker: socket lost, exiting."));
             break;
         }
 
@@ -118,19 +128,21 @@ uint32 NetworkSenderWorker::Run()
                 UpdatedData.AppendChar(TEXT('\n'));
             }
 
-            // 3) кодируем и отправл€ем (убери дублирующее объ€вление!)
+            // 3) Guard: re-check bRunThread and socket before the blocking Send()
+            if (!bRunThread || !Socket)
+            {
+                break;
+            }
+
             FTCHARToUTF8 ConvertedData(*UpdatedData);
             TArray<uint8> SendBuffer(reinterpret_cast<const uint8*>(ConvertedData.Get()), ConvertedData.Length());
 
             int32 BytesSent = 0;
-            bool bSuccessful = Socket->Send(SendBuffer.GetData(), SendBuffer.Num(), BytesSent);
-
-            UE_LOG(LogTemp, Warning, TEXT("Sent to server %d bytes of data."), BytesSent);
-            UE_LOG(LogTemp, Warning, TEXT("Data sent: %s"), *UpdatedData);
+            bool bSuccessful = CurrentSocket->Send(SendBuffer.GetData(), SendBuffer.Num(), BytesSent);
 
             if (!bSuccessful || BytesSent == 0)
             {
-                UE_LOG(LogTemp, Warning, TEXT("Failed to send data."));
+                UE_LOG(LogNetPacket, Warning, TEXT("Failed to send data."));
             }
         }
         else
@@ -144,6 +156,14 @@ uint32 NetworkSenderWorker::Run()
 void NetworkSenderWorker::Stop()
 {
     bRunThread = false;
+}
+
+void NetworkSenderWorker::DetachSocket()
+{
+    // Atomically null the socket pointer. Must be called BEFORE
+    // ISocketSubsystem::DestroySocket() so Run() never calls Send()
+    // on a destroyed FSocket object.
+    Socket = nullptr;
 }
 
 void NetworkSenderWorker::Exit()

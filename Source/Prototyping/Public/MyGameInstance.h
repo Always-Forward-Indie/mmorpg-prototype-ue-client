@@ -132,6 +132,10 @@ FDateTime ReceiveTimeLoginServer;
 	// and calls RemoveLoadingScreen when the render thread has seen enough frames.
 	FTSTicker::FDelegateHandle GTRemoveTicker;
 
+	// Handle for the FCoreUObjectDelegates::PreLoadMap callback that nulls out
+	// world-dependent pointers before the old world is torn down.
+	FDelegateHandle PreLoadMapDelegateHandle;
+
 	// Begin counting rendered frames; removes loading screen after MinRenderedFramesBeforeHide.
 	void StartFrameCountdown();
 
@@ -155,6 +159,11 @@ public:
 
 	// Refresh WorldContext on all managers after a level transition
 	void RefreshManagerWorldContexts();
+
+	// Null out worldContext on all managers BEFORE the old world is destroyed.
+	// Called from the FCoreUObjectDelegates::PreLoadMap callback so in-flight
+	// network packets cannot dereference a stale TObjectPtr<UWorld> handle.
+	void InvalidateManagerWorldContexts(const FString& MapName);
 
 	// Called when the game world is fully loaded and ready for gameplay
 	void OnGameWorldReady();
@@ -643,7 +652,7 @@ public:
 
 	// Slate handle used to keep the loading-screen widget in the viewport
 	// overlay via UGameViewportClient::AddViewportWidgetContent().
-	// This survives ServerTravel (world-independent).
+	// This survives level transitions (OpenLevel) since it is world-independent.
 	TSharedPtr<SWidget> LoadingScreenSlateWidget;
 
 	// Audio component for loading screen music.

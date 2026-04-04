@@ -7,7 +7,11 @@ public class Prototyping : ModuleRules
 	public Prototyping(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-	
+
+		PrivateIncludePaths.AddRange(new string[] { "Prototyping" });
+
+
+
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "Networking", "Sockets", "Json", "JsonUtilities", "UMG", "Slate", "SlateCore", "Niagara" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

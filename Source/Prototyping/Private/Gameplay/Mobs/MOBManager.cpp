@@ -528,3 +528,9 @@ void UMOBManager::UnregisterPlayer(int32 PlayerId)
 {
 	PlayerRegistry.Remove(PlayerId);
 }
+
+void UMOBManager::ClearWorldState()
+{
+	MobActorRegistry.Empty();
+	PlayerRegistry.Empty();
+}

@@ -424,7 +424,10 @@ void ABasicMOB::UpdateWidgetPosition()
 	const float BaseOffset = 40.f;
 
 	// Доп. смещение в зависимости от расстояния
-	APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	APlayerController* PC = World->GetFirstPlayerController();
 	float DistanceOffset = 0.f;
 
 	if (PC && PC->PlayerCameraManager)

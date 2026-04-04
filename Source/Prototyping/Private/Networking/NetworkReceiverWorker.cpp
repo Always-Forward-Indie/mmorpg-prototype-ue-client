@@ -6,6 +6,7 @@
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 #include "Services/TimeSyncService.h"
+#include "Prototyping.h"
 
 NetworkReceiverWorker::NetworkReceiverWorker(FSocket* InSocket)
     : Socket(InSocket)
@@ -143,7 +144,7 @@ uint32 NetworkReceiverWorker::Run()
     // ∆дем, пока соединение не установитс€
     while (bRunThread && Socket && Socket->GetConnectionState() != ESocketConnectionState::SCS_Connected)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Waiting for Receiver socket connection..."));
+        UE_LOG(LogConnection, Verbose, TEXT("Waiting for Receiver socket connection..."));
         FPlatformProcess::Sleep(0.1f); // ∆дем 100 мс
     }
 
@@ -154,12 +155,27 @@ uint32 NetworkReceiverWorker::Run()
 
     TArray<uint8> AccumulatedBuffer; // Ѕуфер дл€ накоплени€ данных
 
-    UE_LOG(LogTemp, Warning, TEXT("NetworkReceiverWorker Thread Started"));
+    UE_LOG(LogConnection, Log, TEXT("NetworkReceiverWorker Thread Started"));
 
     while (bRunThread)
     {
+        // Guard: DetachSocket() may have been called by NetworkManager::Shutdown()
+        // concurrently. If Socket is null we must not call Recv() Ч exit cleanly.
+        FSocket* CurrentSocket = Socket;
+        if (!CurrentSocket)
+        {
+            break;
+        }
+
         int32 BytesRead = 0;
-        bool bHasData = Socket->Recv(ReceiveBuffer.GetData(), ReceiveBufferSize, BytesRead);
+        bool bHasData = CurrentSocket->Recv(ReceiveBuffer.GetData(), ReceiveBufferSize, BytesRead);
+
+        // Re-check both bRunThread and Socket after Recv() unblocks Ч the socket
+        // may have been closed and destroyed by Shutdown() to wake us up.
+        if (!bRunThread || !Socket)
+        {
+            break;
+        }
 
         if (bHasData && BytesRead > 0)
         {
@@ -189,8 +205,6 @@ uint32 NetworkReceiverWorker::Run()
                 // Add clientRecvMs timestamp if this is a server response
                 FString TimestampedString = AddClientReceiveTimestamp(ReceivedString, PerPacketT3);
 
-                UE_LOG(LogTemp, Warning, TEXT("Received packet: %s"), *TimestampedString);
-
                 // ƒобавл€ем строку в очередь
                 DataQueue.Enqueue(TimestampedString);
             }
@@ -199,7 +213,7 @@ uint32 NetworkReceiverWorker::Run()
         FPlatformProcess::Sleep(0.0001f);
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("NetworkReceiverWorker Thread Exiting"));
+    UE_LOG(LogConnection, Log, TEXT("NetworkReceiverWorker Thread Exiting"));
     return 0;
 }
 
@@ -215,6 +229,15 @@ FString NetworkReceiverWorker::StringFromBinaryArray(const uint8* BinaryArray, c
 void NetworkReceiverWorker::Stop()
 {
     bRunThread = false;
+}
+
+void NetworkReceiverWorker::DetachSocket()
+{
+    // Atomically null the socket pointer under the same volatile semantics
+    // that the compiler gives to plain pointer stores on x86/x64.
+    // This must be called BEFORE ISocketSubsystem::DestroySocket() so that
+    // the Run() loop never calls Recv() on a destroyed FSocket object.
+    Socket = nullptr;
 }
 
 void NetworkReceiverWorker::Exit()

@@ -32,6 +32,11 @@ public:
     // Set TimeSyncService reference for precise timestamp updates
     void SetTimeSyncService(UTimeSyncService* InTimeSyncService);
 
+    // Atomically clear the socket pointer so Run() stops calling Recv()
+    // on the socket object. Must be called BEFORE ISocketSubsystem::DestroySocket()
+    // to prevent a vtable-read crash on the receiver thread.
+    void DetachSocket();
+
     // FRunnable interface implementation
     virtual bool Init() override;
     virtual uint32 Run() override;

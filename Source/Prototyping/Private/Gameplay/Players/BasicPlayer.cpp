@@ -933,6 +933,17 @@ void ABasicPlayer::BeginPlay()
 {
 Super::BeginPlay();
 
+   // Initialize interpolation targets to the actual spawn location so that
+   // UpdateRemotePlayerMovement never sees uninitialized (0,0,0) values before
+   // the first SetCoordinates call arrives from the network.
+   {
+       const FVector SpawnLoc = GetActorLocation();
+       LastReceivedPosition   = SpawnLoc;
+       TargetReceivedPosition = SpawnLoc;
+       LastReceivedRotation   = GetActorRotation();
+       TargetReceivedRotation = GetActorRotation();
+   }
+
    MyGameInstance = Cast<UMyGameInstance>(UGameplayStatics::GetGameInstance(this));
    if (MyGameInstance)
    {
@@ -1615,39 +1626,101 @@ void ABasicPlayer::UpdateCurrentPlayerMovement(float DeltaTime)
 
 void ABasicPlayer::UpdateRemotePlayerMovement()
 {
-    TimeSinceLastPositionUpdate += GetWorld()->GetDeltaSeconds();
+    const float DeltaTime = GetWorld()->GetDeltaSeconds();
+    TimeSinceLastPositionUpdate += DeltaTime;
 
-    float LerpFactor = FMath::Clamp(TimeSinceLastPositionUpdate / ServerPositionUpdateInterval, 0.f, 1.f);
+    // -----------------------------------------------------------------------
+    // 1. Position interpolation
+    //    Lerp from the position we were at when the packet arrived toward the
+    //    server-authoritative target over exactly one server tick window.
+    // -----------------------------------------------------------------------
+    const float LerpWindow  = FMath::Max(ServerPositionUpdateInterval, 0.05f);
+    const float LerpFactor  = FMath::Clamp(TimeSinceLastPositionUpdate / LerpWindow, 0.f, 1.f);
+    const FVector NewPosition = FMath::Lerp(LastReceivedPosition, TargetReceivedPosition, LerpFactor);
 
-    FVector NewPosition = FMath::Lerp(LastReceivedPosition, TargetReceivedPosition, LerpFactor);
+    const float DistToTarget = FVector::Dist(GetActorLocation(), TargetReceivedPosition);
 
-    float RotationInterpSpeed = 15.0f;
-
-    FRotator NewRotation = FMath::RInterpTo(GetActorRotation(), TargetReceivedRotation, GetWorld()->GetDeltaSeconds(), RotationInterpSpeed);
- 
-
-
-    float distanceToTarget = FVector::Dist(GetActorLocation(), TargetReceivedPosition);
-
-    if (distanceToTarget > 300.f) {
-        SetActorLocation(TargetReceivedPosition);
+    if (DistToTarget > 1000.f)
+    {
+        // Hard-snap on large gaps (teleport / zone change).
+        SetActorLocation(TargetReceivedPosition, false, nullptr, ETeleportType::TeleportPhysics);
     }
-    else {
+    else
+    {
         SetActorLocation(NewPosition);
     }
 
+    // -----------------------------------------------------------------------
+    // 2. Rotation interpolation
+    // -----------------------------------------------------------------------
+    const FRotator NewRotation = FMath::RInterpTo(
+        GetActorRotation(), TargetReceivedRotation, DeltaTime, 15.0f);
     SetActorRotation(NewRotation);
 
-    // Once we've consumed the full interpolation window without a new packet,
-    // the remote player has stopped � decay RemoteSpeed to zero so the anim
-    // transitions back to idle.
-    if (TimeSinceLastPositionUpdate >= ServerPositionUpdateInterval * 2.0f)
+    // -----------------------------------------------------------------------
+    // 3. Animation speed / direction — EMA smoothing + graceful stop fade-out
+    //
+    //    Problems solved:
+    //      a) Raw RemoteSpeed jumps instantly from 0 → full on first packet
+    //         and stays at full until the 3x timeout → causes abrupt start/stop.
+    //      b) RemoteDirection flips instantly between packets → blend-space pops.
+    //
+    //    Solution:
+    //      • Track idle time so we know when the server has stopped sending
+    //        meaningful displacement packets.
+    //      • EMA-smooth speed toward the raw target value each tick.
+    //      • When idle, fade SmoothedRemoteSpeed to 0 with a short decay so the
+    //        walk→idle transition in the anim graph is driven by a curve, not
+    //        a hard zero.
+    //      • Direction is smoothed similarly so the blend-space never pops.
+    // -----------------------------------------------------------------------
+
+    // Grace period: one full server interval beyond the lerp window before we
+    // consider the player idle.  This absorbs normal delivery jitter (~10-20 ms)
+    // without introducing visible lag.
+    const float GracePeriod = LerpWindow * 1.5f;
+
+    if (bRemoteIsMoving)
     {
-        RemoteSpeed = 0.0f;
+        RemoteIdleTime += DeltaTime;
+        if (RemoteIdleTime >= GracePeriod)
+        {
+            // No displacement in the last packet — begin fade-out.
+            bRemoteIsMoving = false;
+        }
     }
+
+    // Target values for this tick.
+    const float TargetSpeed = bRemoteIsMoving ? RemoteSpeed : 0.0f;
+
+    // EMA speeds: fast blend-in (0.2 weight on new) for startup,
+    // slow blend-out (0.05 weight on new target=0) for graceful stop.
+    // At 60 fps the fast path reaches ~98% of full speed in ~3 packets (~300 ms).
+    // The slow path decays to near-zero in ~20 frames (~330 ms) — smooth fade.
+    const float BlendIn  = FMath::Clamp(DeltaTime / 0.08f, 0.0f, 1.0f);  // ~80 ms rise
+    const float BlendOut = FMath::Clamp(DeltaTime / 0.22f, 0.0f, 1.0f);  // ~220 ms fall
+    const float SpeedAlpha = (TargetSpeed > SmoothedRemoteSpeed) ? BlendIn : BlendOut;
+
+    SmoothedRemoteSpeed = FMath::Lerp(SmoothedRemoteSpeed, TargetSpeed, SpeedAlpha);
+
+    // Snap to exactly zero to prevent the blend-space from hovering near 0
+    // and flickering between idle and walk at very low smoothed values.
+    if (SmoothedRemoteSpeed < 2.0f)
+    {
+        SmoothedRemoteSpeed = 0.0f;
+    }
+
+    // Direction: only blend when actually moving so we don't rotate the
+    // blend-space axis while standing still (causes foot-sliding pop on restart).
+    if (SmoothedRemoteSpeed > 2.0f)
+    {
+        const float DirAlpha = FMath::Clamp(DeltaTime / 0.10f, 0.0f, 1.0f);  // ~100 ms turn
+        SmoothedRemoteDirection = FMath::Lerp(SmoothedRemoteDirection, RemoteDirection, DirAlpha);
+    }
+    // else: keep last known direction so the blend-space doesn't pop to 0 on stop.
 }
 
-float ABasicPlayer::CalculateRotationInterpSpeed()
+    float ABasicPlayer::CalculateRotationInterpSpeed()
 {
     float AngleDifference = FMath::Abs(LastReceivedRotation.Yaw - TargetReceivedRotation.Yaw);
     AngleDifference = FMath::Min(AngleDifference, 360.f - AngleDifference);
@@ -1917,18 +1990,45 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
 
     const FVector NewTarget(x, y, z);
 
-    // Estimate 2D speed from the XY displacement between consecutive server positions.
-    // This feeds PlayerAnimInstance::Speed for remote (other-client) players whose
-    // CharacterMovementComponent velocity is always 0 (we drive them via SetActorLocation).
+    // First packet ever received: hard-snap the actor to the authoritative position
+    // so it never interpolates from the uninitialized (0,0,0) origin.
+    if (playerData.isOtherClient && !bHasReceivedFirstPosition)
+    {
+        bHasReceivedFirstPosition = true;
+        SetActorLocation(NewTarget, false, nullptr, ETeleportType::TeleportPhysics);
+        SetActorRotation(FRotator(0.0, rotZ, 0.0));
+        LastReceivedPosition      = NewTarget;
+        TargetReceivedPosition    = NewTarget;
+        LastReceivedRotation      = FRotator(0.0, rotZ, 0.0);
+        TargetReceivedRotation    = FRotator(0.0, rotZ, 0.0);
+        TimeSinceLastPositionUpdate = 0.0f;
+        return;
+    }
+
+    // Measure actual inter-packet delivery time and use it as the lerp window.
+    // This makes interpolation robust to variable server tick rates and network jitter.
+    if (playerData.isOtherClient && TimeSinceLastPositionUpdate > 0.01f)
+    {
+        // Clamp to a sane range (50ms – 500ms) to ignore the very first packet
+        // and any massive gaps caused by the player standing still.
+        const float MeasuredInterval = FMath::Clamp(TimeSinceLastPositionUpdate, 0.05f, 0.5f);
+        // Exponential moving average: 80% old value, 20% new measurement
+        ServerPositionUpdateInterval = ServerPositionUpdateInterval * 0.8f + MeasuredInterval * 0.2f;
+    }
+
+    // Estimate 2D speed and direction from the XY displacement between consecutive positions.
+    // RemoteSpeed / RemoteDirection are the raw instantaneous values.
+    // Smoothing is applied every Tick inside UpdateRemotePlayerMovement.
     if (playerData.isOtherClient && ServerPositionUpdateInterval > 0.0f)
     {
         const float Dist2D = FVector::Dist2D(TargetReceivedPosition, NewTarget);
         RemoteSpeed = Dist2D / ServerPositionUpdateInterval;
 
-        // Compute direction angle relative to the actor's current facing.
-        // This mirrors what PlayerAnimInstance does for the local player via CMC velocity.
         if (Dist2D > 1.0f)
         {
+            bRemoteIsMoving = true;
+            RemoteIdleTime  = 0.0f;
+
             const FVector Delta2D = FVector(NewTarget.X - TargetReceivedPosition.X,
                                             NewTarget.Y - TargetReceivedPosition.Y, 0.0f).GetSafeNormal();
             const FVector ActorForward = GetActorForwardVector();
@@ -1939,6 +2039,8 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
         }
         else
         {
+            // Packet arrived but player hasn't moved — treat as idle.
+            RemoteSpeed     = 0.0f;
             RemoteDirection = 0.0f;
         }
     }

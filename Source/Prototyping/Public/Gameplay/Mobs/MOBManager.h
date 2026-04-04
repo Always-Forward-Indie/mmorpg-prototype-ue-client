@@ -68,6 +68,9 @@ class PROTOTYPING_API UMOBManager : public UObject
 		/** Unregister a player actor. */
 		void UnregisterPlayer(int32 PlayerId);
 
+		/** Clear all world-bound actor references. Call before the owning world is torn down. */
+		void ClearWorldState();
+
 	private:
 		/** Fast UID ? actor lookup map populated by RegisterMob. */
 		TMap<int32, TWeakObjectPtr<class ABasicMOB>> MobActorRegistry;

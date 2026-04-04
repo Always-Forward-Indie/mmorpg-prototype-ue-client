@@ -102,7 +102,6 @@ void UPlayerManager::SetWorldContext(UWorld* World)
 // Process game server data
 void UPlayerManager::ProcessGameServerData(const FString& ReceivedData)
 {
-	UE_LOG(LogTemp, Warning, TEXT("Init by delegate Game Server: %s"), *ReceivedData);
 
 	// Deserialize the received JSON string to get MessageData struct
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
@@ -134,16 +133,15 @@ void UPlayerManager::ProcessGameServerData(const FString& ReceivedData)
 // Process chunk server data
 void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 {
-	UE_LOG(LogTemp, Warning, TEXT("Init by delegate Chunk Server: %s"), *ReceivedData);
 
-	// Проверяем валидность данных перед парсингом
+	// РџСЂРѕРІРµСЂСЏРµРј РІР°Р»РёРґРЅРѕСЃС‚СЊ РґР°РЅРЅС‹С… РїРµСЂРµРґ РїР°СЂСЃРёРЅРіРѕРј
 	if (ReceivedData.IsEmpty())
 	{
 		UE_LOG(LogTemp, Error, TEXT("PlayerManager: Received empty data"));
 		return;
 	}
 
-	// Парсим JSON данные с проверкой валидности
+	// РџР°СЂСЃРёРј JSON РґР°РЅРЅС‹Рµ СЃ РїСЂРѕРІРµСЂРєРѕР№ РІР°Р»РёРґРЅРѕСЃС‚Рё
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
@@ -152,7 +150,7 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 		return;
 	}
 
-	// Безопасно получаем body
+	// Р‘РµР·РѕРїР°СЃРЅРѕ РїРѕР»СѓС‡Р°РµРј body
 	TSharedPtr<FJsonObject> Body;
 	if (Root->HasField(TEXT("body")))
 	{
@@ -167,7 +165,7 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 	// Deserialize the received JSON string to get MessageData struct
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
 	
-	// Проверяем валидность MessageData
+	// РџСЂРѕРІРµСЂСЏРµРј РІР°Р»РёРґРЅРѕСЃС‚СЊ MessageData
 	if (MessageData.eventType.IsEmpty())
 	{
 		UE_LOG(LogTemp, Error, TEXT("PlayerManager: Empty event type"));
@@ -463,7 +461,7 @@ void UPlayerManager::SendJoinGameRequest(const FClientDataStruct& ClientData)
 	HeaderData.Add("clientId", ClientIDValue);
 	HeaderData.Add("hash", HashValue);
 
-	// Add the Character ID to the body data (required per protocol §1.0)
+	// Add the Character ID to the body data (required per protocol В§1.0)
 	int32 CharId = ClientData.characterData.characterId;
 	if (gameInstance && gameInstance->GetCurrentCharacterID() != 0) {
 		CharId = gameInstance->GetCurrentCharacterID();
@@ -591,10 +589,10 @@ void UPlayerManager::SendGetConnectedPlayersRequest(FClientDataStruct& ClientDat
 
 	BodyData.Add("characterId", CharacterIDValue);
 
-	// Get Connected Characters - это ChunkServer
+	// Get Connected Characters - СЌС‚Рѕ ChunkServer
 	FString getConnectedCharacters = JSONParser::SerializeJsonWithTimeSync("getConnectedCharacters", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::ChunkServer);
 
-	// Get spawn zones and spawn mobs - это тоже ChunkServer
+	// Get spawn zones and spawn mobs - СЌС‚Рѕ С‚РѕР¶Рµ ChunkServer
 	FString getSpawnZones = JSONParser::SerializeJsonWithTimeSync("getSpawnZones", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::ChunkServer);
 
 	// Validate JSON strings before sending

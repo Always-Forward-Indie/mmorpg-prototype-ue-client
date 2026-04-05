@@ -14,9 +14,8 @@ UMOBMovementComponent::UMOBMovementComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
 
-    PrevServerPos = TargetServerPos = FVector::ZeroVector;
-    PrevServerRot = TargetServerRot = FRotator::ZeroRotator;
-    ServerVelocity = FVector::ZeroVector;
+    LatestServerPos = FVector::ZeroVector;
+    LatestServerDir = FVector::ZeroVector;
     Waypoint = FVector::ZeroVector;
     LastMovePacketTime = 0.f;
     bHasReceivedPacket = false;
@@ -29,8 +28,11 @@ void UMOBMovementComponent::BeginPlay()
 
     if (GetOwner())
     {
-        PrevServerPos = TargetServerPos = GetOwner()->GetActorLocation();
-        PrevServerRot = TargetServerRot = GetOwner()->GetActorRotation();
+        const FVector StartPos = GetOwner()->GetActorLocation();
+        LatestServerPos = StartPos;
+        PrevFramePos = StartPos;
+        SmoothedFacingDir = GetOwner()->GetActorForwardVector();
+        DeadReckonDir = SmoothedFacingDir;
         SnapToGround();
     }
 }
@@ -42,6 +44,7 @@ void UMOBMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 
     if (bHasReceivedPacket)
     {
+        TimeSinceLastPacket += DeltaTime;
         ProcessMovement(DeltaTime);
     }
     else if (GetOwner())
@@ -60,9 +63,35 @@ void UMOBMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
         }
     }
 
-    if (bEnableTargetTracking && CurrentTargetId != 0)
+    // Attack states (2-4): mob is stationary — rotate toward target actor.
+    if (bEnableTargetTracking && CurrentTargetId != 0 &&
+        CombatState >= 2 && CombatState <= 4)
     {
         UpdateTargetTracking(DeltaTime);
+    }
+}
+
+// ---------------------------------------------------------------------------
+void UMOBMovementComponent::InitializeFromSpawnData(const FVector& SpawnPos,
+                                                     const FVector& VelocityDir,
+                                                     float Speed,
+                                                     int32 InCombatState)
+{
+    LatestServerPos   = SpawnPos;
+    LatestServerDir   = VelocityDir.GetSafeNormal2D();
+    LatestServerSpeed = Speed;
+    PatrolSpeed       = Speed;
+    CombatState       = InCombatState;
+    PrevCombatState   = InCombatState;
+    PrevFramePos      = SpawnPos;
+    bHasReceivedPacket = true;
+    bBlendActive       = false;
+    TimeSinceLastPacket = 0.f;
+
+    if (!LatestServerDir.IsNearlyZero())
+    {
+        SmoothedFacingDir = LatestServerDir;
+        DeadReckonDir = LatestServerDir;
     }
 }
 
@@ -70,7 +99,7 @@ void UMOBMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 void UMOBMovementComponent::OnReceiveServerPacket(const FPositionDataStruct& MOBPosition)
 {
     UWorld* World = GetWorld();
-    if (!World) return;
+    if (!World || !GetOwner()) return;
 
     if (bDebugGroundAdjustment)
     {
@@ -82,50 +111,63 @@ void UMOBMovementComponent::OnReceiveServerPacket(const FPositionDataStruct& MOB
 
     FVector NewPos(MOBPosition.positionX,
         MOBPosition.positionY,
-        GetOwner() ? GetOwner()->GetActorLocation().Z : MOBPosition.positionZ);
+        GetOwner()->GetActorLocation().Z);
 
     if (!bHasReceivedPacket)
     {
-        PrevServerPos = GetOwner() ? GetOwner()->GetActorLocation() : NewPos;
-        TargetServerPos = NewPos;
-        ServerVelocity = FVector::ZeroVector;
-        ServerSpeed = 0.f;
+        LatestServerPos    = NewPos;
+        LatestServerDir    = FVector::ZeroVector;
+        LatestServerSpeed  = 0.f;
+        PatrolSpeed        = 0.f;
         LastMovePacketTime = Now;
+        TimeSinceLastPacket = 0.f;
         bHasReceivedPacket = true;
+        bBlendActive       = false;
+        PrevFramePos       = NewPos;
         SnapToGround();
     }
     else
     {
-        const float DeltaT = FMath::Max(Now - LastMovePacketTime, 0.016f);
-        LastMovePacketTime = Now;
-        PrevServerPos = TargetServerPos;
-        TargetServerPos = NewPos;
+        LastMovePacketTime  = Now;
+        TimeSinceLastPacket = 0.f;
+        LatestServerPos     = NewPos;
 
-        const FVector DerivedVel = (TargetServerPos - PrevServerPos) / DeltaT;
-        ServerVelocity = FMath::VInterpTo(ServerVelocity, DerivedVel, DeltaT, 3.0f);
-        ServerSpeed = ServerVelocity.Size2D();
+        if (CombatState != 0)
+        {
+            BlendFromPos  = GetOwner()->GetActorLocation();
+            BlendToPos    = NewPos;
+            BlendElapsed  = 0.f;
+            BlendDuration = BlendToServerTime;
+            bBlendActive  = true;
+        }
     }
 }
 
 // ---------------------------------------------------------------------------
 void UMOBMovementComponent::OnReceiveMovePacket(const FMobMoveEntryStruct& MoveEntry, int64 ServerSendMs, int64 ClientRecvMs)
 {
-    CombatState = MoveEntry.combatState;
+    PrevCombatState = CombatState;
+    CombatState     = MoveEntry.combatState;
 
     UWorld* World = GetWorld();
     if (!World || !GetOwner()) return;
 
     const float Now = World->GetTimeSeconds();
 
-    FVector NewPos(MoveEntry.position.positionX,
-                   MoveEntry.position.positionY,
-                   GetOwner()->GetActorLocation().Z);
+    const FVector NewPos(MoveEntry.position.positionX,
+                         MoveEntry.position.positionY,
+                         GetOwner()->GetActorLocation().Z);
 
-    const bool bHasServerVel = (MoveEntry.speed > 0.f);
-    FVector PacketVelocity = FVector::ZeroVector;
-    if (bHasServerVel)
+    // Direction + speed directly from packet
+    if (MoveEntry.speed > 0.f)
     {
-        PacketVelocity = FVector(MoveEntry.velocityX, MoveEntry.velocityY, 0.f) * MoveEntry.speed;
+        LatestServerDir   = FVector(MoveEntry.velocityX, MoveEntry.velocityY, 0.f).GetSafeNormal2D();
+        LatestServerSpeed = MoveEntry.speed;
+    }
+    else
+    {
+        LatestServerDir   = FVector::ZeroVector;
+        LatestServerSpeed = 0.f;
     }
 
     bHasWaypoint = MoveEntry.bHasWaypoint;
@@ -134,76 +176,297 @@ void UMOBMovementComponent::OnReceiveMovePacket(const FMobMoveEntryStruct& MoveE
         Waypoint = FVector(MoveEntry.waypointX, MoveEntry.waypointY, 0.f);
     }
 
-    LastStepTimestampMs = MoveEntry.stepTimestampMs;
+    LastStepTimestampMs    = MoveEntry.stepTimestampMs;
     LastPacketClientRecvMs = ClientRecvMs;
+    LastMovePacketTime     = Now;
+    TimeSinceLastPacket    = 0.f;
 
+    // --- Teleport check -------------------------------------------------------
     const float DistToNew = FVector::Dist2D(GetOwner()->GetActorLocation(), NewPos);
     if (DistToNew > TeleportThreshold)
     {
-        GetOwner()->SetActorLocation(FVector(NewPos.X, NewPos.Y, GetOwner()->GetActorLocation().Z));
-        PrevServerPos = TargetServerPos = NewPos;
-        ServerVelocity = PacketVelocity;
-        ServerSpeed = MoveEntry.speed;
-        LastMovePacketTime = Now;
-        bHasReceivedPacket = true;
+        GetOwner()->SetActorLocation(NewPos);
+        LatestServerPos        = NewPos;
+        PatrolSpeed            = LatestServerSpeed;
+        bPatrolReachedWaypoint = false;
+        bBlendActive           = false;
+        bHasReceivedPacket     = true;
+        PrevFramePos           = NewPos;
+        SmoothedFacingDir      = LatestServerDir.IsNearlyZero() ? GetOwner()->GetActorForwardVector() : LatestServerDir;
+        DeadReckonDir          = SmoothedFacingDir;
         SnapToGround();
         return;
     }
 
+    // --- First packet ever ---------------------------------------------------
     if (!bHasReceivedPacket)
     {
-        PrevServerPos = GetOwner()->GetActorLocation();
-        TargetServerPos = NewPos;
-        ServerVelocity = PacketVelocity;
-        ServerSpeed = MoveEntry.speed;
-        LastMovePacketTime = Now;
+        GetOwner()->SetActorLocation(NewPos);
+        LatestServerPos    = NewPos;
+        PatrolSpeed        = LatestServerSpeed;
+        bBlendActive       = false;
         bHasReceivedPacket = true;
+        PrevFramePos       = NewPos;
+        if (!LatestServerDir.IsNearlyZero())
+        {
+            SmoothedFacingDir = LatestServerDir;
+            DeadReckonDir = LatestServerDir;
+        }
         SnapToGround();
+        return;
     }
-    else
+
+    // --- PATROLLING (state 0) ------------------------------------------------
+    if (CombatState == 0)
     {
-        const float DeltaT = FMath::Max(Now - LastMovePacketTime, 0.016f);
-        LastMovePacketTime = Now;
+        LatestServerPos        = NewPos;
+        PatrolSpeed            = LatestServerSpeed;
+        bPatrolReachedWaypoint = false;
 
-        PrevServerPos = TargetServerPos;
-        TargetServerPos = NewPos;
+        if (PrevCombatState != 0)
+        {
+            // Combat → patrol: blend for smooth visual transition.
+            const FVector ClientPos = GetOwner()->GetActorLocation();
+            BlendFromPos  = ClientPos;
+            BlendToPos    = NewPos;
+            BlendElapsed  = 0.f;
+            BlendDuration = StateTransitionBlendTime;
+            bBlendActive  = true;
+        }
+        // Normal patrol packets: ProcessPatrolMovement smoothly moves
+        // the mob toward LatestServerPos. No blend needed.
+        return;
+    }
 
-        if (bHasServerVel)
-        {
-            ServerVelocity = FMath::VInterpTo(ServerVelocity, PacketVelocity, DeltaT, 4.0f);
-            ServerSpeed = FMath::FInterpTo(ServerSpeed, MoveEntry.speed, DeltaT, 4.0f);
-        }
-        else
-        {
-            const FVector DerivedVel = (TargetServerPos - PrevServerPos) / DeltaT;
-            ServerVelocity = FMath::VInterpTo(ServerVelocity, DerivedVel, DeltaT, 3.0f);
-            ServerSpeed = ServerVelocity.Size2D();
-        }
+    // --- Combat / non-patrol states ------------------------------------------
+    LatestServerPos = NewPos;
+
+    const bool bStateChanged = (PrevCombatState != CombatState);
+    if (bStateChanged && !LatestServerDir.IsNearlyZero())
+    {
+        // Snap dead-reckoning direction on state change for immediate response
+        DeadReckonDir     = LatestServerDir;
+        SmoothedFacingDir = LatestServerDir;
+    }
+    // Dead-reckoning + correction in ProcessCombatMovement handles
+    // all positional smoothing. No blend system needed for combat.
+}
+
+// ---------------------------------------------------------------------------
+// COMBAT: dead reckoning with proportional server-position correction.
+//
+// Strategy:
+// 1. Smooth the server's movement direction to dampen deflection-avoidance
+//    jitter (mobs steering ±30-90° to avoid each other).
+// 2. Dead-reckon forward in the smoothed direction at server speed.
+// 3. Correct toward the estimated server position proportionally to gap size.
+// 4. Derive rotation from actual frame-to-frame delta (not server direction).
+// 5. No freeze on missed packets — dead reckoning continues naturally.
+void UMOBMovementComponent::ProcessCombatMovement(float DeltaTime)
+{
+    if (!GetOwner()) return;
+
+    const FVector CurrentLocation = GetOwner()->GetActorLocation();
+
+    // Attack states (2-4): mob is stationary
+    if (CombatState >= 2 && CombatState <= 4)
+    {
+        FVector GroundLoc = AdjustToGround(CurrentLocation, DeltaTime, 1.0f);
+        GetOwner()->SetActorLocation(GroundLoc);
+        PrevFramePos   = GroundLoc;
+        CurrentInterpSpeed = FMath::FInterpTo(CurrentInterpSpeed, 0.f, DeltaTime, 8.f);
+        UpdateMovingState(false);
+        bBlendActive = false;
+        return;
+    }
+
+    const bool bStopped = (LatestServerSpeed < StoppedSpeedThreshold);
+
+    if (bStopped)
+    {
+        // Server says mob is stopped — settle toward last known server pos
+        FVector SettleLoc = FMath::VInterpTo(CurrentLocation,
+            FVector(LatestServerPos.X, LatestServerPos.Y, CurrentLocation.Z),
+            DeltaTime, 8.f);
+        SettleLoc = AdjustToGround(SettleLoc, DeltaTime);
+        GetOwner()->SetActorLocation(SettleLoc);
+        PrevFramePos   = SettleLoc;
+        CurrentInterpSpeed = FMath::FInterpTo(CurrentInterpSpeed, 0.f, DeltaTime, 8.f);
+        UpdateMovingState(false);
+        return;
+    }
+
+    // --- Dead Reckoning + Proportional Correction -----------------------------
+    // Instead of the old blend-from/blend-to system that restarted every packet
+    // (causing micro-stutters), we continuously dead-reckon forward and gently
+    // correct toward the estimated server position.
+
+    // 1. Smooth movement direction to dampen server-side deflection avoidance.
+    //    720°/s is fast enough to track genuine turns but prevents the ±30-90°
+    //    single-packet deflections from visually flipping the mob sideways.
+    if (!LatestServerDir.IsNearlyZero())
+    {
+        DeadReckonDir = FMath::VInterpNormalRotationTo(
+            DeadReckonDir, LatestServerDir, DeltaTime, 720.f);
+    }
+
+    // 2. Dead reckon: move in smoothed direction at server speed.
+    //    This is the primary movement driver — continuous, no restarts.
+    const FVector DeadReckonStep(
+        DeadReckonDir.X * LatestServerSpeed * DeltaTime,
+        DeadReckonDir.Y * LatestServerSpeed * DeltaTime,
+        0.f);
+    FVector NewLocation(
+        CurrentLocation.X + DeadReckonStep.X,
+        CurrentLocation.Y + DeadReckonStep.Y,
+        CurrentLocation.Z);
+
+    // 3. Estimated server position via extrapolation (for correction target).
+    //    Use raw LatestServerDir (not smoothed) for accurate server estimate.
+    //    Cap at 0.5s — generous enough that normal 100ms jitter never freezes,
+    //    but prevents runaway drift if packets genuinely stop.
+    const float ExtrapTime = FMath::Min(TimeSinceLastPacket, 0.5f);
+    const FVector EstimatedServerPos(
+        LatestServerPos.X + LatestServerDir.X * LatestServerSpeed * ExtrapTime,
+        LatestServerPos.Y + LatestServerDir.Y * LatestServerSpeed * ExtrapTime,
+        CurrentLocation.Z);
+
+    // 4. Proportional correction toward estimated server position.
+    //    This closes any gap from direction smoothing or cumulative drift
+    //    without the jarring blend restarts of the old system.
+    const float Gap = FVector::Dist2D(NewLocation, EstimatedServerPos);
+    if (Gap > 1.f)
+    {
+        const FVector CorrDir = (EstimatedServerPos - NewLocation).GetSafeNormal2D();
+        const float CorrRate = FMath::Clamp(Gap * 3.f, 0.f, LatestServerSpeed * 0.5f);
+        const float CorrStep = FMath::Min(CorrRate * DeltaTime, Gap);
+        NewLocation.X += CorrDir.X * CorrStep;
+        NewLocation.Y += CorrDir.Y * CorrStep;
+    }
+
+    // 5. Smooth speed for animation
+    CurrentInterpSpeed = FMath::FInterpTo(CurrentInterpSpeed, LatestServerSpeed, DeltaTime, 10.f);
+
+    NewLocation = AdjustToGround(NewLocation, DeltaTime, 1.0f);
+    GetOwner()->SetActorLocation(NewLocation);
+
+    // 6. Rotation: derive from actual frame-to-frame movement delta.
+    //    This avoids jitter from server deflection avoidance — the mob's visual
+    //    facing follows its actual screen-space path, not the raw server direction.
+    const FVector MoveDelta = FVector(NewLocation.X - PrevFramePos.X,
+                                       NewLocation.Y - PrevFramePos.Y, 0.f);
+    const float MoveDist = MoveDelta.Size();
+    PrevFramePos = NewLocation;
+
+    if (MoveDist > 1.f)
+    {
+        const FVector ActualDir = MoveDelta / MoveDist;
+        SmoothedFacingDir = FMath::VInterpNormalRotationTo(
+            SmoothedFacingDir, ActualDir, DeltaTime, 540.f);
+        HandleRotation(SmoothedFacingDir, DeltaTime);
+    }
+
+    // 7. Moving state
+    if (!bIsMoving && CurrentInterpSpeed > MovingStartThreshold)
+    {
+        UpdateMovingState(true);
+    }
+    else if (bIsMoving && CurrentInterpSpeed < MovingStopThreshold)
+    {
+        UpdateMovingState(false);
     }
 }
 
 // ---------------------------------------------------------------------------
-FVector UMOBMovementComponent::ComputeDeadReckonedTarget(float DeltaTime) const
+// PATROL: smooth interpolation toward server-authoritative position.
+//
+// The server moves patrol mobs in discrete jumps (every 2-6 seconds) and
+// reports the new position + waypoint + speed. The client smoothly moves
+// toward the latest server position at PatrolSpeed. Between server jumps
+// (when no packets arrive), the mob gently drifts toward the waypoint to
+// maintain visual continuity. This eliminates the old extrapolation-based
+// bouncing where the client predicted a phantom server position that diverged
+// from reality.
+void UMOBMovementComponent::ProcessPatrolMovement(float DeltaTime)
 {
-    if (ServerSpeed < 1.0f)
-    {
-        return TargetServerPos;
-    }
+    if (!GetOwner()) return;
 
-    FVector Predicted = TargetServerPos + ServerVelocity * DeltaTime;
+    const FVector CurrentLocation = GetOwner()->GetActorLocation();
 
-    if (bHasWaypoint)
+    // --- Active blend from state transition (e.g. combat -> patrol) -----------
+    if (bBlendActive)
     {
-        const float DistToWP = FVector::Dist2D(TargetServerPos, Waypoint);
-        const float DistPredicted = FVector::Dist2D(TargetServerPos, Predicted);
-        if (DistPredicted > DistToWP && DistToWP > 1.0f)
+        BlendElapsed += DeltaTime;
+        const float Alpha = FMath::Clamp(BlendElapsed / FMath::Max(BlendDuration, 0.001f), 0.f, 1.f);
+        FVector BlendedPos = FMath::Lerp(
+            FVector(BlendFromPos.X, BlendFromPos.Y, CurrentLocation.Z),
+            FVector(LatestServerPos.X, LatestServerPos.Y, CurrentLocation.Z),
+            Alpha);
+        BlendedPos = AdjustToGround(BlendedPos, DeltaTime, 1.0f);
+        GetOwner()->SetActorLocation(BlendedPos);
+        PrevFramePos = BlendedPos;
+
+        if (Alpha >= 1.f)
         {
-            Predicted.X = Waypoint.X;
-            Predicted.Y = Waypoint.Y;
+            bBlendActive = false;
         }
+
+        CurrentInterpSpeed = FMath::FInterpTo(CurrentInterpSpeed, PatrolSpeed, DeltaTime, 5.f);
+        UpdateMovingState(CurrentInterpSpeed > MovingStartThreshold);
+        return;
     }
 
-    return Predicted;
+    // Server target in client space (keep Z from actor — server sends flat Z)
+    const FVector TargetXY(LatestServerPos.X, LatestServerPos.Y, CurrentLocation.Z);
+    const float GapToServer = FVector::Dist2D(CurrentLocation, TargetXY);
+
+    // --- Stop condition (also covers idle / no waypoint) ---------------------
+    // 5-unit hysteresis: once inside, stay until next packet resets state.
+    // No waypoint drift — server moves in discrete steps; drifting toward
+    // the next waypoint during the 2-6s quiet period causes the mob to
+    // diverge from server position, then visually snap back on next packet.
+    if (!bHasWaypoint || PatrolSpeed < 1.f || GapToServer < 5.f)
+    {
+        FVector SettleLoc = (GapToServer > 2.f)
+            ? FMath::VInterpTo(CurrentLocation, TargetXY, DeltaTime, 8.f)
+            : CurrentLocation;
+        SettleLoc = AdjustToGround(SettleLoc, DeltaTime, 1.0f);
+        GetOwner()->SetActorLocation(SettleLoc);
+        PrevFramePos = SettleLoc;
+        CurrentInterpSpeed = FMath::FInterpTo(CurrentInterpSpeed, 0.f, DeltaTime, 6.f);
+        UpdateMovingState(false);
+        return;
+    }
+
+    // --- Move straight toward server-authoritative position ------------------
+    // Step capped so we stop cleanly at the target (4u margin = hysteresis - 1u).
+    const FVector DirToServer = (TargetXY - CurrentLocation).GetSafeNormal2D();
+    CurrentInterpSpeed = FMath::FInterpTo(CurrentInterpSpeed, PatrolSpeed, DeltaTime, 5.f);
+    const float StepDist = FMath::Min(CurrentInterpSpeed * DeltaTime, GapToServer - 4.f);
+    FVector NewLocation = CurrentLocation + DirToServer * FMath::Max(StepDist, 0.f);
+
+    NewLocation = AdjustToGround(NewLocation, DeltaTime, 1.0f);
+    GetOwner()->SetActorLocation(NewLocation);
+
+    // Rotation from actual movement
+    const FVector MoveDelta = FVector(NewLocation.X - PrevFramePos.X,
+                                       NewLocation.Y - PrevFramePos.Y, 0.f);
+    const float MoveDist = MoveDelta.Size();
+    PrevFramePos = NewLocation;
+
+    if (MoveDist > 0.5f && CurrentInterpSpeed > StoppedSpeedThreshold)
+    {
+        HandleRotation(MoveDelta / MoveDist, DeltaTime);
+    }
+
+    if (!bIsMoving && CurrentInterpSpeed > MovingStartThreshold)
+    {
+        UpdateMovingState(true);
+    }
+    else if (bIsMoving && CurrentInterpSpeed < MovingStopThreshold)
+    {
+        UpdateMovingState(false);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -348,90 +611,42 @@ void UMOBMovementComponent::ProcessMovement(float DeltaTime)
 {
     if (!GetOwner()) return;
 
-    const FVector CurrentLocation = GetOwner()->GetActorLocation();
-    const FVector DeadReckoned = ComputeDeadReckonedTarget(DeltaTime);
-
-    const FVector TargetXY(DeadReckoned.X, DeadReckoned.Y, 0.f);
-    const FVector CurrentXY(CurrentLocation.X, CurrentLocation.Y, 0.f);
-    const float HorizontalDist = FVector::Dist(CurrentXY, TargetXY);
-
-    if (HorizontalDist <= SnapDistance)
+    // Dispatch: patrol uses waypoint dead-reckoning with server correction,
+    // combat states use server-position interpolation with extrapolation.
+    if (CombatState == 0)
     {
-        HandleCloseRangeMovement(CurrentLocation, DeltaTime);
-        return;
-    }
-
-    FVector NewLocation = CalculateMovementPosition(CurrentLocation, TargetXY, CurrentXY, HorizontalDist, DeltaTime);
-
-    NewLocation = AdjustToGround(NewLocation, DeltaTime, 1.0f);
-    GetOwner()->SetActorLocation(NewLocation);
-
-    const bool bInCombat = IsInCombatState() && CurrentTargetId != 0;
-    if (!bInCombat)
-    {
-        HandleRotation(TargetXY - CurrentXY, DeltaTime);
-    }
-
-    UpdateMovingState(true);
-}
-
-// ---------------------------------------------------------------------------
-void UMOBMovementComponent::HandleCloseRangeMovement(const FVector& CurrentLocation, float DeltaTime)
-{
-    FVector NewLoc = FMath::VInterpTo(CurrentLocation, TargetServerPos, DeltaTime, 20.0f);
-    NewLoc = AdjustToGround(NewLoc, DeltaTime);
-    GetOwner()->SetActorLocation(NewLoc);
-
-    const float Remaining = FVector::Dist2D(CurrentLocation, TargetServerPos);
-    if (Remaining < 1.f && ServerSpeed < 1.f)
-    {
-        UpdateMovingState(false);
-        CurrentInterpSpeed = FMath::FInterpTo(CurrentInterpSpeed, 0.f, DeltaTime, 6.0f);
+        ProcessPatrolMovement(DeltaTime);
     }
     else
     {
-        UpdateMovingState(Remaining > 1.f);
+        ProcessCombatMovement(DeltaTime);
     }
 }
 
 // ---------------------------------------------------------------------------
-FVector UMOBMovementComponent::CalculateMovementPosition(
-    const FVector& CurrentLocation,
-    const FVector& TargetXY,
-    const FVector& CurrentXY,
-    float HorizontalDist,
-    float DeltaTime)
+void UMOBMovementComponent::HandleRotation(const FVector& MoveDir, float DeltaTime)
 {
-    const float DesiredSpeed = FMath::Max(ServerSpeed, MinMoveSpeed);
-    CurrentInterpSpeed = FMath::FInterpTo(CurrentInterpSpeed, DesiredSpeed, DeltaTime, 4.0f);
-
-    FVector MoveDir = (TargetXY - CurrentXY).GetSafeNormal();
-    FVector NewLocation = CurrentLocation + MoveDir * CurrentInterpSpeed * DeltaTime;
-
-    const FVector NewXY(NewLocation.X, NewLocation.Y, 0.f);
-    if (FVector::Dist(NewXY, TargetXY) > HorizontalDist)
-    {
-        NewLocation.X = TargetXY.X;
-        NewLocation.Y = TargetXY.Y;
-    }
-
-    return NewLocation;
-}
-
-// ---------------------------------------------------------------------------
-void UMOBMovementComponent::HandleRotation(const FVector& MoveVector, float DeltaTime)
-{
-    if (MoveVector.IsNearlyZero()) return;
+    if (MoveDir.IsNearlyZero()) return;
 
     ACharacter* Character = Cast<ACharacter>(GetOwner());
     if (!Character) return;
 
-    FRotator DesiredRot = MoveVector.Rotation();
+    FRotator DesiredRot = MoveDir.Rotation();
     DesiredRot.Pitch = 0;
     DesiredRot.Roll = 0;
 
+    const FRotator CurrentRot = Character->GetActorRotation();
+    const float AngleDelta = FMath::Abs(FMath::FindDeltaAngleDegrees(CurrentRot.Yaw, DesiredRot.Yaw));
+
+    // Speed up for large turns, keep normal speed for everything else.
+    // Do NOT slow down for small angles — that prevented the mob from
+    // ever finishing the turn to the correct heading.
+    const float AdaptiveSpeed = (AngleDelta > 90.f)
+        ? MoveRotationSpeed * 2.f
+        : MoveRotationSpeed;
+
     Character->SetActorRotation(
-        FMath::RInterpTo(Character->GetActorRotation(), DesiredRot, DeltaTime, MoveRotationSpeed));
+        FMath::RInterpTo(CurrentRot, DesiredRot, DeltaTime, AdaptiveSpeed));
 }
 
 // ---------------------------------------------------------------------------
@@ -532,21 +747,20 @@ void UMOBMovementComponent::RotateTowardsTarget(AActor* TargetActor, float Delta
 {
     if (!GetOwner() || !TargetActor) return;
 
-    FVector DirectionToTarget = (TargetActor->GetActorLocation() - GetOwner()->GetActorLocation()).GetSafeNormal();
-    if (DirectionToTarget.IsNearlyZero()) return;
+    FVector DirectionToTarget = (TargetActor->GetActorLocation() - GetOwner()->GetActorLocation());
+    DirectionToTarget.Z = 0.f;
+    if (DirectionToTarget.SizeSquared() < 1.f) return;
+    DirectionToTarget.Normalize();
 
     FRotator TargetRotation = DirectionToTarget.Rotation();
     TargetRotation.Pitch = 0.0f;
     TargetRotation.Roll = 0.0f;
 
-    FRotator CurrentRotation = GetOwner()->GetActorRotation();
-
-    float AngleDiff = FMath::Abs(FMath::FindDeltaAngleDegrees(CurrentRotation.Yaw, TargetRotation.Yaw));
+    const FRotator CurrentRotation = GetOwner()->GetActorRotation();
+    const float AngleDiff = FMath::Abs(FMath::FindDeltaAngleDegrees(CurrentRotation.Yaw, TargetRotation.Yaw));
     if (AngleDiff <= MinAngleThreshold)
         return;
 
-    const float Speed = IsInCombatState() ? AttackRotationSpeed : (TargetTrackingSpeed / 45.0f);
-
-    FRotator NewRotation = FMath::RInterpTo(CurrentRotation, TargetRotation, DeltaTime, Speed);
-    GetOwner()->SetActorRotation(NewRotation);
+    GetOwner()->SetActorRotation(
+        FMath::RInterpTo(CurrentRotation, TargetRotation, DeltaTime, AttackRotationSpeed));
 }

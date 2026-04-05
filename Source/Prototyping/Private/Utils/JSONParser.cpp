@@ -691,6 +691,22 @@ FMOBStruct JSONParser::DeserializeMobData(const TSharedPtr<FJsonObject>& MobObje
 		Mob.mobAttributes.attributesData = JSONParser::DeserializeAttributesArray(MobObject->GetArrayField(TEXT("attributes")));
 	}
 
+	// Parse velocity from spawn data (server sends current velocity for mobs
+	// that are already moving when the client joins)
+	const TSharedPtr<FJsonObject>* VelObjPtr = nullptr;
+	if (MobObject->TryGetObjectField(TEXT("velocity"), VelObjPtr) && VelObjPtr)
+	{
+		Mob.mobVelocity.dirX  = static_cast<float>((*VelObjPtr)->GetNumberField(TEXT("dirX")));
+		Mob.mobVelocity.dirY  = static_cast<float>((*VelObjPtr)->GetNumberField(TEXT("dirY")));
+		Mob.mobVelocity.speed = static_cast<float>((*VelObjPtr)->GetNumberField(TEXT("speed")));
+	}
+
+	// Parse combatState from spawn data
+	if (MobObject->HasField(TEXT("combatState")))
+	{
+		Mob.mobCombatState = MobObject->GetIntegerField(TEXT("combatState"));
+	}
+
 	return Mob;
 }
 

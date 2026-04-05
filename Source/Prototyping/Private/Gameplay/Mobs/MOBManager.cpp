@@ -488,6 +488,19 @@ void UMOBManager::SpawnMOB(const FMOBStruct& MOBData)
 		// set the MOB tag
 		MOB->SetMOBTag(MOBData.mobUniqueID);
 		MOB->SetMOBTag("Mob");
+
+		// Seed the movement component with spawn-time velocity so the mob
+		// starts moving immediately rather than standing still until the
+		// first mobMoveUpdate packet arrives.
+		if (MOB->MOBMovementComponent && MOBData.mobVelocity.speed > 0.f)
+		{
+			const FVector VelDir(MOBData.mobVelocity.dirX, MOBData.mobVelocity.dirY, 0.f);
+			const FVector SpawnPos(MOBData.mobPosition.positionX,
+								   MOBData.mobPosition.positionY,
+								   MOB->GetActorLocation().Z);
+			MOB->MOBMovementComponent->InitializeFromSpawnData(
+				SpawnPos, VelDir, MOBData.mobVelocity.speed, MOBData.mobCombatState);
+		}
 	}
 }
 

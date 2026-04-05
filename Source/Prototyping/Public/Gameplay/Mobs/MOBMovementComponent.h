@@ -26,15 +26,6 @@ public:
 	// ---- Configuration -------------------------------------------------------
 
 	UPROPERTY(EditAnywhere, Category = "Movement")
-	float MaxAcceleration = 800.f;
-
-	UPROPERTY(EditAnywhere, Category = "Movement")
-	float MinMoveSpeed = 580.f;
-
-	UPROPERTY(EditAnywhere, Category = "Movement")
-	float SnapDistance = 10.f;
-
-	UPROPERTY(EditAnywhere, Category = "Movement")
 	float TeleportThreshold = 2000.f;
 
 	UPROPERTY(EditAnywhere, Category = "Movement")
@@ -50,13 +41,40 @@ public:
 	float GroundInterpSpeedUp = 8.f;
 
 	UPROPERTY(EditAnywhere, Category = "Movement|Rotation")
-	float MoveRotationSpeed = 10.f;
+	float MoveRotationSpeed = 12.f;
 
 	UPROPERTY(EditAnywhere, Category = "Movement|Rotation")
 	float AttackRotationSpeed = 8.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Movement|Debug")
 	bool bDebugGroundAdjustment = false;
+
+	// ---- Movement tuning -----------------------------------------------------
+
+	// Duration (sec) of the blend from client position toward the server-authoritative
+	// position when a new combat packet arrives. Controls how quickly the client
+	// corrects positional drift. Shorter = snappier, longer = smoother.
+	UPROPERTY(EditAnywhere, Category = "Movement|Correction")
+	float BlendToServerTime = 0.1f;
+
+	// Duration (sec) of the positional blend on combat-state transitions
+	// (e.g. patrol->chase). Per protocol: 100-150 ms.
+	UPROPERTY(EditAnywhere, Category = "Movement|Correction")
+	float StateTransitionBlendTime = 0.12f;
+
+	// Max time (sec) to extrapolate beyond the last packet before freezing.
+	// Protocol: cap at 200ms for combat states.
+	UPROPERTY(EditAnywhere, Category = "Movement|Correction")
+	float ExtrapolationMaxTime = 0.2f;
+
+	// Distance (units) above which a patrol-to-patrol packet triggers a blend
+	// instead of relying on continuous correction alone.  Covers the case where
+	// the server steps 200-450 units between packets (patrol step timing).
+	UPROPERTY(EditAnywhere, Category = "Movement|Correction")
+	float PatrolSnapThreshold = 40.f;
+
+	UPROPERTY(EditAnywhere, Category = "Movement|Blend")
+	float StoppedSpeedThreshold = 5.f;
 
 	// ---- Public API ----------------------------------------------------------
 
@@ -66,16 +84,8 @@ public:
 	void SnapToGround();
 
 	void ProcessMovement(float DeltaTime);
-	void HandleCloseRangeMovement(const FVector& CurrentLocation, float DeltaTime);
 
-	FVector CalculateMovementPosition(
-		const FVector& CurrentLocation,
-		const FVector& TargetXY,
-		const FVector& CurrentXY,
-		float HorizontalDist,
-		float DeltaTime);
-
-	void HandleRotation(const FVector& MoveVector, float DeltaTime);
+	void HandleRotation(const FVector& MoveDir, float DeltaTime);
 
 	bool IsMoving() const { return bIsMoving; }
 	float GetCurrentSpeed() const { return CurrentInterpSpeed; }
@@ -107,45 +117,67 @@ public:
 
 	void OnReceiveMovePacket(const FMobMoveEntryStruct& MoveEntry, int64 ServerSendMs, int64 ClientRecvMs);
 
+	// Called from spawn to seed the initial movement state from spawn-data velocity
+	void InitializeFromSpawnData(const FVector& SpawnPos, const FVector& VelocityDir, float Speed, int32 InCombatState);
+
 private:
-	// ---- Dead-reckoning / interpolation state --------------------------------
+	// ---- Server state (latest authoritative packet) --------------------------
+	FVector  LatestServerPos   = FVector::ZeroVector;  // XY from server, Z from actor
+	FVector  LatestServerDir   = FVector::ZeroVector;  // normalised XY direction
+	float    LatestServerSpeed = 0.f;                  // units/sec
 
-	FVector  PrevServerPos;
-	FVector  TargetServerPos;
-	FVector  ServerVelocity;
-	FVector  Waypoint;
-	bool     bHasWaypoint = false;
-	FRotator PrevServerRot;
-	FRotator TargetServerRot;
+	// ---- Patrol state --------------------------------------------------------
+	FVector  Waypoint              = FVector::ZeroVector;
+	bool     bHasWaypoint          = false;
+	float    PatrolSpeed           = 0.f;
+	bool     bPatrolReachedWaypoint = false;
 
-	float    ServerSpeed = 0.f;
+	// ---- Server-position blend -----------------------------------------------
+	// Instead of correction offsets, we track the visual position as a blend
+	// between where the client currently is and where the server says the mob is.
+	FVector  BlendFromPos      = FVector::ZeroVector;  // client pos at packet arrival
+	FVector  BlendToPos        = FVector::ZeroVector;  // server pos from packet
+	float    BlendElapsed      = 0.f;
+	float    BlendDuration     = 0.1f;
+	bool     bBlendActive      = false;
 
-	int64    LastStepTimestampMs = 0;
+	// ---- Packet timing -------------------------------------------------------
+	int64    LastStepTimestampMs    = 0;
 	int64    LastPacketClientRecvMs = 0;
-	float    LastMovePacketTime = 0.f;
-	bool     bHasReceivedPacket = false;
-
-	float    CurrentInterpSpeed = 0.f;
-	bool     bIsMoving = false;
-
+	float    LastMovePacketTime     = 0.f;
+	bool     bHasReceivedPacket     = false;
+	float    TimeSinceLastPacket    = 0.f;
 	float    TimeSinceLastGroundCheck = 0.0f;
 
-	FVector  SmoothedGroundZ;
-	float    CachedGroundZ = 0.f;
-	bool     bHasCachedGroundZ = false;
+	// ---- Animation / display state -------------------------------------------
+	float    CurrentInterpSpeed  = 0.f;
+	bool     bIsMoving           = false;
+
+	// Smoothed facing direction to avoid per-tick jitter
+	FVector  SmoothedFacingDir   = FVector::ForwardVector;
+
+	// Smoothed movement direction for combat dead-reckoning.
+	// Dampens deflection-avoidance angle changes across packets.
+	FVector  DeadReckonDir       = FVector::ForwardVector;
+
+	// Previous frame XY position — used to derive actual movement direction for rotation
+	FVector  PrevFramePos        = FVector::ZeroVector;
+
+	// Hysteresis thresholds for bIsMoving
+	float    MovingStartThreshold = 20.f;
+	float    MovingStopThreshold  = 8.f;
 
 	int32    CombatState = 0;
+	int32    PrevCombatState = 0;
 
 	TWeakObjectPtr<class UTimeSyncService> TimeSyncServiceRef;
 
-	void UpdateMovingState(bool bNewIsMoving);
-
-	FVector ComputeDeadReckonedTarget(float DeltaTime) const;
-
+	void    UpdateMovingState(bool bNewIsMoving);
+	void    ProcessPatrolMovement(float DeltaTime);
+	void    ProcessCombatMovement(float DeltaTime);
 	FVector TraceGround(const FVector& Location) const;
 
 	// ---- Target tracking state -----------------------------------------------
-
 	int32   CurrentTargetId = 0;
 	FString CurrentTargetType;
 	float   TimeSinceLastTargetUpdate = 0.0f;

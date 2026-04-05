@@ -8,7 +8,10 @@
 
 ## 3.1. spawnMobsInZone — Данные мобов зоны
 
-Отправляется автоматически при `joinGameCharacter` для каждой зоны спавна.
+Отправляется в следующих случаях:
+- **При `joinGameCharacter`** — unicast новому клиенту, все зоны с их мобами
+- **Respawn-задача (каждые 30 сек)** — всем подключённым клиентам, когда в зоне появились новые мобы
+- **Safety spawn-задача (каждые 5 мин)** — всем подключённым клиентам, защита от нехватки мобов
 
 ### Сервер → Unicast
 
@@ -114,7 +117,14 @@
 
 ## 3.2. mobMoveUpdate — Обновление позиции мобов
 
-Отправляется раз в ~100мс для всех активных мобов. Пакетируется — один пакет содержит обновления всех мобов.
+Пакетируется — один пакет содержит обновления всех мобов, у которых сработал rate limit в данном тике.
+
+**Частота отправки (server-side rate limiting per mob):**
+- Планировщик тикает каждые **50 мс**
+- `PATROLLING` → не чаще **200 мс** между пакетами (клиент использует waypoint dead reckoning)
+- Боевые состояния (CHASING, PREPARING_ATTACK, ATTACKING, ATTACK_COOLDOWN, RETURNING, FLEEING) → не чаще **100 мс**
+- При смене состояния (`forceNextUpdate = true`) — **немедленно**, rate limit обходится
+- Дополнительный фильтр: если моб сдвинулся менее чем на `minimumMoveDistance` (10 ед.) — пакет не отправляется
 
 ### Сервер → Unicast
 
@@ -125,7 +135,10 @@
     "hash": "",
     "clientId": 42,
     "eventType": "mobMoveUpdate",
-    "serverSendMs": 1711709400500
+    "serverSendMs": 1711709400500,
+    "status": "success",
+    "timestamp": "2026-03-21 15:07:43.790",
+    "version": "1.0"
   },
   "body": {
     "mobs": [
@@ -167,16 +180,49 @@
 | `velocity.speed` | float | Скорость (ед./сек) для dead reckoning на клиенте |
 | `combatState` | int | Текущее AI-состояние |
 | `stepTimestampMs` | int64 | Unix ms момента вычисления шага |
-| `waypoint` | object | Целевая точка патрулирования (опционально) |
+| `waypoint` | object | Целевая точка патрулирования (только при `combatState = 0`) |
 
 ### Интерполяция на клиенте
 
+Поведение клиента зависит от значения `combatState` в пакете.
+
+#### PATROLLING (combatState = 0) — waypoint dead reckoning
+
+Если поле `waypoint` присутствует, клиент двигает моба **к точке waypoint** со скоростью `velocity.speed` ед./сек:
+
 ```
+direction = normalize(waypoint - currentLocalPos)
+currentLocalPos += direction × velocity.speed × deltaTime
+```
+
+Когда моб достигает `waypoint` до прихода следующего пакета — остановить его на месте (не перелетать точку). Следующий пакет придёт через ≤ 200 мс и задаст новую цель патруля.
+
+Если поле `waypoint` отсутствует — использовать linear extrapolation через `dirX`/`dirY` (аналогично боевым состояниям).
+
+#### CHASING / RETURNING / FLEEING (combatState = 1, 5, 7) — linear extrapolation
+
+```
+deltaTime  = (currentClientMs - stepTimestampMs) / 1000.0
 predictedX = position.x + velocity.dirX × velocity.speed × deltaTime
 predictedY = position.y + velocity.dirY × velocity.speed × deltaTime
 ```
 
-Где `deltaTime = (currentMs - stepTimestampMs) / 1000.0`
+Сервер присылает обновление каждые **100 мс**. Ограничить экстраполяцию максимум **200 мс** от `stepTimestampMs` — если за это время не пришёл новый пакет, остановить моба и ждать.
+
+При получении нового пакета: резкий сдвиг позиции **недопустим** — применить blend (lerp / Hermite) от текущей предсказанной позиции к серверной за **100–150 мс**.
+
+#### PREPARING_ATTACK / ATTACKING / ATTACK_COOLDOWN (combatState = 2, 3, 4) — нет движения
+
+Сервер обнуляет `velocity.speed = 0`, `dirX = 0`, `dirY = 0` при входе в `PREPARING_ATTACK`. Клиент **не двигает моба** в этих состояниях — только воспроизводит анимацию каста/удара.
+
+#### Смена состояния — немедленный snap + blend
+
+При изменении `combatState` сервер отправляет пакет немедленно, минуя rate limit. Клиент должен:
+1. Принять `position` из пакета как авторитетную серверную позицию
+2. Сразу сменить анимацию в соответствии с новым `combatState`
+3. Применить позицию через blend за **100–150 мс**, чтобы избежать телепортации
+
+> `rotationZ` в пакете — значение в **градусах**, вычисленное на сервере как `atan2(dirY, dirX) × (180/π)`. При входе в `PREPARING_ATTACK` повёрнут к цели.
 
 ---
 
@@ -281,14 +327,16 @@ predictedY = position.y + velocity.dirY × velocity.speed × deltaTime
 
 ```
 PATROLLING → [игрок в aggroRange] → CHASING
-CHASING → [в attackRange] → PREPARING_ATTACK
-PREPARING_ATTACK → [время вышло] → ATTACKING
-ATTACKING → [анимация завершена] → ATTACK_COOLDOWN
-ATTACK_COOLDOWN → [кулдаун вышел] → CHASING / ATTACKING
-CHASING → [цель далеко / потеряна] → RETURNING
-RETURNING → [достиг спавна] → PATROLLING
-CHASING → [HP < fleeHpThreshold] → FLEEING (если порог > 0)
+CHASING → [в attackRange, слот свободен] → PREPARING_ATTACK  ← урон рассчитывается и применяется здесь
+PREPARING_ATTACK → [castTime вышло] → ATTACKING             (фаза визуальной анимации каста)
+ATTACKING → [swingTime вышло] → ATTACK_COOLDOWN             (фаза визуальной анимации удара)
+ATTACK_COOLDOWN → [cooldownTime вышло] → CHASING
+CHASING → [цель далеко / потеряна / таймаут chaseDuration] → RETURNING
+RETURNING → [достиг спавна] → EVADING → PATROLLING
+CHASING / PREPARING_ATTACK / ATTACKING → [HP < fleeHpThreshold] → FLEEING (если порог > 0)
 ```
+
+> **Важно:** урон применяется в момент перехода `CHASING → PREPARING_ATTACK`, одновременно с отправкой `combatInitiation` и `combatResult` клиенту. Состояния `PREPARING_ATTACK` и `ATTACKING` — чисто визуальные фазы (cast-анимация и swing-анимация соответственно).
 
 ### Рендерер на клиенте
 
@@ -314,21 +362,66 @@ CHASING → [HP < fleeHpThreshold] → FLEEING (если порог > 0)
 | 2 | `RANGED` | Держит дистанцию, использует дальнобойные атаки |
 | 3 | `SUPPORT` | Хилит/баффит союзников |
 
+### Caster — особое поведение (backpedal)
+
+Если архетип моба `CASTER` и расстояние до цели **меньше `attackRange × 0.5`**, включается режим отступления: моб движется прочь от игрока до расстояния `attackRange × 1.8`, затем возобновляет атаку. На клиенте это выглядит как `combatState = 1` (CHASING), но в противоположном направлении — отдельная анимация не нужна, достаточно alert-стойки.
+
+### Условия прекращения преследования
+
+Сервер прекращает преследование при выполнении **любого** из трёх условий. При каждом из них отправляется `mobTargetLost` и моб переходит в `RETURNING`:
+
+| Условие | Порог (по умолчанию) |
+|---------|---------------------|
+| Расстояние до цели > `aggroRange × chaseMultiplier` | ≈ 800 ед. ||
+| Дистанция выхода за край спавн-зоны > `maxChaseFromZoneEdge` | 1500 ед. |
+| Время преследования > `chaseDuration` (per-mob) | 30 сек |
+
+### Melee slot queuing (crowding prevention)
+
+Чтобы предотвратить скучивание мобов на одном игроке, сервер ограничивает число атакующих физической ёмкостью кольца вокруг цели:
+
+```
+maxSlots = floor(2π × attackRange / mobDiameter)
+// пример при дефолтах: 2π × 150 / 140 ≈ 6 слотов
+```
+
+Лишние мобы паркуются на расстоянии `attackRange + 20` с флагом `waitingForMeleeSlot` и остаются в `CHASING` (combatState = 1), но с `velocity.speed = 0`. Отдельного пакета о переходе не приходит — это нормально. Для клиента: `combatState = 1` при `speed = 0` означает alert-стойку стоя (не idle, не движение).
+
 ---
 
 ## Параметры AI мобов (MobAIConfig)
 
 | Параметр | По умолчанию | Описание |
 |----------|-------------|----------|
-| `aggroRange` | 400.0 | Радиус обнаружения цели |
-| `maxChaseDistance` | 800.0 | Максимальная дистанция преследования |
-| `returnToSpawnZoneDistance` | 1000.0 | Дистанция для возврата к зоне |
-| `attackRange` | 150.0 | Дистанция атаки |
+| `aggroRange` | 400.0 | Радиус обнаружения цели (ед.) |
+| `maxChaseDistance` | 800.0 | = `aggroRange × chaseDistanceMultiplier` |
+| `returnToSpawnZoneDistance` | 1000.0 | Дистанция от границы зоны для возврата |
+| `newTargetZoneDistance` | 150.0 | Зона сужения поиска новых целей у края зоны |
+| `maxChaseFromZoneEdge` | 1500.0 | Макс. дистанция выхода за край зоны при преследовании |
+| `attackRange` | 150.0 | Дистанция начала атаки (ед.) |
 | `attackCooldown` | 2.0 | Кулдаун атаки (сек) |
-| `chaseDistanceMultiplier` | 2.0 | Множитель дистанции преследования |
-| `chaseSpeedUnitsPerSec` | 450.0 | Скорость преследования (ед./сек) |
-| `returnSpeedUnitsPerSec` | 200.0 | Скорость возврата (ед./сек) |
-| `minimumMoveDistance` | 10.0 | Минимальная дистанция для отправки обновления |
+| `chaseDistanceMultiplier` | 2.0 | Множитель: `maxChaseDistance = aggroRange × mult` |
+| `chaseMovementInterval` | 0.1 (100 мс) | Интервал шага при CHASING / FLEEING |
+| `returnMovementInterval` | 0.15 (150 мс) | Интервал шага при RETURNING |
+| `chaseSpeedUnitsPerSec` | 450.0 | Скорость преследования по умолчанию (ед./сек) |
+| `returnSpeedUnitsPerSec` | 200.0 | Скорость возврата к спавну (ед./сек) |
+| `minimumMoveDistance` | 10.0 | Мин. дистанция сдвига для отправки пакета (ед.) |
+
+**Скорость моба при преследовании** берётся из атрибута `move_speed` шаблона моба:
+
+```
+chaseSpeed = move_speed_attribute_value × 40.0
+```
+
+Если атрибут не задан — используется `chaseSpeedUnitsPerSec` (дефолт 450 ед./сек). Это значение передаётся клиенту как `velocity.speed` в каждом `mobMoveUpdate` и используется для dead reckoning.
+
+**Размер одного шага за тик** (вычисляется на сервере, не передаётся клиенту напрямую):
+
+```
+stepSize = chaseSpeed × chaseMovementInterval    // 450 × 0.1 = 45 ед./тик
+stepSize = min(stepSize, 450.0)                  // абсолютный cap
+stepSize = min(stepSize, distance − attackRange) // без перелёта в цель
+```
 
 ---
 
@@ -381,13 +474,28 @@ CHASING → [HP < fleeHpThreshold] → FLEEING (если порог > 0)
 
 Мобы используют таблицу угрозы для выбора цели:
 
-| Событие | Угроза |
-|---------|--------|
-| Урон | +damage dealt |
-| Хил | +healing / 2 |
-| Время без атаки | -decay (периодически) |
+| Событие | Изменение угрозы |
+|---------|------------------|
+| Урон | `+ damage dealt` |
+| Хил союзника | `+ healing / 2` |
+| Decay (игрок вне `aggroRange`) | `× 0.95` каждые 100 мс (≈ −50% в сек) |
 
-Моб атакует игрока с наивысшей угрозой. При социальных мобах (`isSocial: true`) — агро распространяется на ближайших мобов того же типа.
+Моб атакует игрока с **наивысшей угрозой** в таблице. Фолбэк — ближайший игрок в `aggroRange`. Таблица угрозы сбрасывается при переходе в `RETURNING`.
+
+### Выбор цели при обнаружении
+
+При поиске новой цели (`PATROLLING` → `CHASING`) сервер:
+1. Получает всех игроков в радиусе `aggroRange`
+2. Выбирает игрока с **наибольшей угрозой** в таблице (если есть)
+3. Фолбэк — **ближайший** живой игрок
+
+Дополнительное условие: моб не ищет новые цели, если он находится у края своей спавн-зоны (в пределах `newTargetZoneDistance = 150 ед.` от границы).
+
+### Социальное агро (`isSocial: true`)
+
+При получении урона мобом с `isSocial = true`, сервер мгновенно оповещает всех соседей в радиусе `aggroRange` с **тем же `raceName`**, которые находятся в состоянии `PATROLLING`. Они переходят в `CHASING` с тем же целевым игроком. Распространение **не каскадируется** (соседи получают уведомление без дальнейшей цепочки).
+
+Для клиента: возможна одновременная смена `combatState = 1` у группы мобов одного типа. Каждый получит отдельный `mobMoveUpdate` пакет с `forceNextUpdate` (пакет вне rate limit).
 
 ---
 

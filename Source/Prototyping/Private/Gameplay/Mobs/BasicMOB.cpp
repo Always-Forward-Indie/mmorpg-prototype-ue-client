@@ -13,6 +13,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Engine/Engine.h"
 #include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Particles/ParticleSystem.h"
@@ -67,16 +68,38 @@ static UAudioComponent* SpawnSFXAttached(AActor* Owner, USoundBase* Sound,
 // Sets default values
 ABasicMOB::ABasicMOB()
 {
- 	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
+	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 
 	MOBMovementComponent = CreateDefaultSubobject<UMOBMovementComponent>(TEXT("MOBMovementComponent"));
 
-	PrevServerPos = TargetServerPos = GetActorLocation();
-	PrevServerRot = TargetServerRot = GetActorRotation();
-	ServerVelocity = FVector::ZeroVector;
-	LastMovePacketTime = 0.f;
-	bHasVelocity = false;
+	// Rotation is driven entirely by MOBMovementComponent::HandleRotation.
+	// Disable all UCharacterMovementComponent rotation behaviour so it never
+	// overwrites the yaw we set via SetActorRotation each tick.
+	bUseControllerRotationPitch = false;
+	bUseControllerRotationYaw   = false;
+	bUseControllerRotationRoll  = false;
+	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+	{
+		CMC->bOrientRotationToMovement = false;
+		CMC->bUseControllerDesiredRotation = false;
+		CMC->RotationRate = FRotator(0.f, 0.f, 0.f);
+		// Disable pawn-vs-pawn physics pushing entirely.
+		// Server is authoritative — client-side push forces only cause jitter.
+		CMC->bEnablePhysicsInteraction = false;
+	}
+
+	// Mobs must not physically push or block each other.
+	// The server is authoritative over all positions, so client-side pawn-vs-pawn
+	// physics would only produce jitter and visual overlap fights.
+	// Keep WorldStatic/WorldDynamic blocking so ground traces and line-of-sight
+	// checks still work correctly.
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	}
+
+
 
 	// Добавляем компонент для отображения шкалы здоровья
 	MobHeadInfo = CreateDefaultSubobject<UMOBHeadInfo>(TEXT("MobHeadInfo"));
@@ -301,12 +324,6 @@ void ABasicMOB::OnReceiveMovePacket(const FMobMoveEntryStruct& MoveEntry, int64 
 	// Update stored position.
 	MOBData.mobPosition = MoveEntry.position;
 
-	// Forward combatState to movement component so it can freeze/unfreeze.
-	if (MOBMovementComponent)
-	{
-		MOBMovementComponent->SetCombatState(MoveEntry.combatState);
-	}
-
 	// Only states 1 (CHASING) and 2/3/4 (attack cycle) mean the mob is
 	// actively targeting a player and should display as aggressive.
 	// States 5 (RETURNING), 6 (EVADING), 7 (FLEEING) mean the mob already
@@ -323,6 +340,8 @@ void ABasicMOB::OnReceiveMovePacket(const FMobMoveEntryStruct& MoveEntry, int64 
 		MOBData.bIsAggressive = true;
 	}
 
+	// OnReceiveMovePacket handles CombatState internally (including PrevCombatState
+	// tracking for transition detection), so do NOT call SetCombatState separately.
 	if (MOBMovementComponent)
 	{
 		MOBMovementComponent->OnReceiveMovePacket(MoveEntry, ServerSendMs, ClientRecvMs);
@@ -948,10 +967,14 @@ void ABasicMOB::SetupMobVisual(FName MobSlug)
 					Capsule->SetCapsuleHalfHeight(CapsuleHalfHeight);
 
 					// Смещение меша вниз
-					float MeshBottom = MeshOrigin.Z - BoxExtent.Z;
-					float CapsuleBottom = -Capsule->GetUnscaledCapsuleHalfHeight();
-					float MeshOffset = CapsuleBottom - MeshBottom;
-					Self->GetMesh()->SetRelativeLocation(FVector(0, 0, MeshOffset));
+						float MeshBottom = MeshOrigin.Z - BoxExtent.Z;
+						float CapsuleBottom = -Capsule->GetUnscaledCapsuleHalfHeight();
+						float MeshOffset = CapsuleBottom - MeshBottom;
+						Self->GetMesh()->SetRelativeLocation(FVector(0, 0, MeshOffset));
+						// Align mesh forward (+X of actor == face direction).
+						// UE skeletal meshes are exported facing +Y, so we rotate -90° Yaw
+						// to make the mesh face +X (the actor's forward axis).
+						Self->GetMesh()->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
 				}
 
 				//setup MobHeadInfo position

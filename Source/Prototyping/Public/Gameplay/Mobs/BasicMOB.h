@@ -54,26 +54,7 @@ private:
 	int32 CurrentTargetId = 0;
 	ECasterType CurrentTargetType = ECasterType::None;
 	
-	FVector LastReceivedPosition = FVector::ZeroVector;
-	FVector TargetReceivedPosition = FVector::ZeroVector;
 
-	float TimeSinceLastPositionUpdate = 0.0f;
-	float LastServerTimestamp = 0.f;
-	float TargetServerTimestamp = 0.f;
-	float TimeOffset = 0.f; // offset = ServerTimestamp - GetWorld()->GetTimeSeconds()
-
-	bool bInitialSyncDone = false;
-
-	FVector PrevServerPos;
-	FVector TargetServerPos;
-	FVector ServerVelocity;
-	FRotator PrevServerRot;
-	FRotator TargetServerRot;
-	float   LastMovePacketTime;
-	bool    bHasVelocity;
-	float ExpectedNextPacketTime = 0.0f;
-
-	float CurrentInterpSpeed = 0.f;
 
 	// Per-instance tracking for UpdateWidgetScale throttle
 	float LastDisplayedWidgetScale = 0.0f;

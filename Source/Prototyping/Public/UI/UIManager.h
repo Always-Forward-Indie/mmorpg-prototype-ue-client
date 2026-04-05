@@ -44,6 +44,11 @@ class UGameMenuWidget;
 class UGameMenuBarWidget;
 class UAudioSettingsWidget;
 class UAudioManager;
+class UNotificationToastWidget;
+class UNotificationZoneBannerWidget;
+class UNotificationScreenCenterWidget;
+class UNotificationAtmosphereWidget;
+class UWorldNotificationManager;
 
 // Delegate for UI Manager initialization completion
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnUIManagerInitialized);
@@ -194,6 +199,12 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UAudioSettingsWidget* GetAudioSettingsWidget() const { return AudioSettingsWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UWorldNotificationManager* GetWorldNotificationManager() const { return WorldNotificationManager; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UNotificationToastWidget* GetNotificationToastWidget() const { return NotificationToastWidget; }
 
 	// Check if UIManager is fully initialized
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
@@ -355,7 +366,18 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UAudioSettingsWidget> AudioSettingsWidgetClass;
 
+	// Notification widget classes (world_notification visual layer)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Notification Widgets")
+	TSubclassOf<UNotificationToastWidget> NotificationToastWidgetClass;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Notification Widgets")
+	TSubclassOf<UNotificationZoneBannerWidget> NotificationZoneBannerWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Notification Widgets")
+	TSubclassOf<UNotificationScreenCenterWidget> NotificationScreenCenterWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Notification Widgets")
+	TSubclassOf<UNotificationAtmosphereWidget> NotificationAtmosphereWidgetClass;
 
 	// Configuration properties
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Configuration")
@@ -427,6 +449,22 @@ protected:
 
 	UPROPERTY()
 	UAudioSettingsWidget* AudioSettingsWidget;
+
+	// Notification widget instances
+	UPROPERTY()
+	UNotificationToastWidget* NotificationToastWidget = nullptr;
+
+	UPROPERTY()
+	UNotificationZoneBannerWidget* NotificationZoneBannerWidget = nullptr;
+
+	UPROPERTY()
+	UNotificationScreenCenterWidget* NotificationScreenCenterWidget = nullptr;
+
+	UPROPERTY()
+	UNotificationAtmosphereWidget* NotificationAtmosphereWidget = nullptr;
+
+	UPROPERTY()
+	UWorldNotificationManager* WorldNotificationManager = nullptr;
 
 	// Manager references
 	UPROPERTY()

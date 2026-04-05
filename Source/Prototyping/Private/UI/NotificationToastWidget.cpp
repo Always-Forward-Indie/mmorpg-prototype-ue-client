@@ -9,11 +9,40 @@ void UNotificationToastWidget::NativeConstruct()
 {
     Super::NativeConstruct();
     SetVisibility(ESlateVisibility::Collapsed);
+    bIsShowing = false;
 }
 
 void UNotificationToastWidget::ShowNotification(const FWorldNotificationStruct& Notification)
 {
-    // Clear previous auto-hide timer
+    if (bIsShowing)
+    {
+        // Queue the notification; drop oldest if queue is full
+        if (PendingQueue.Num() >= MaxQueueSize)
+        {
+            PendingQueue.RemoveAt(0);
+        }
+        PendingQueue.Add(Notification);
+        return;
+    }
+
+    DisplayNotificationImmediate(Notification);
+}
+
+void UNotificationToastWidget::EnqueueActionToast(const FString& NotificationType, const TMap<FString, FString>& DataFields)
+{
+    FWorldNotificationStruct Notif;
+    Notif.notificationType = NotificationType;
+    Notif.channel          = TEXT("toast");
+    Notif.priority         = TEXT("medium");
+    Notif.dataFields       = DataFields;
+    ShowNotification(Notif);
+}
+
+void UNotificationToastWidget::DisplayNotificationImmediate(const FWorldNotificationStruct& Notification)
+{
+    bIsShowing = true;
+
+    // Clear any previous auto-hide timer
     if (UWorld* World = GetWorld())
         World->GetTimerManager().ClearTimer(AutoHideTimer);
 
@@ -38,6 +67,10 @@ void UNotificationToastWidget::ShowNotification(const FWorldNotificationStruct& 
                     if (UTexture2D* Tex = Def.Icon.LoadSynchronous())
                         Toast_Icon->SetBrushFromTexture(Tex);
                 }
+                else
+                {
+                    Toast_Icon->SetBrushFromTexture(nullptr);
+                }
             }
         }
     }
@@ -52,7 +85,30 @@ void UNotificationToastWidget::ShowNotification(const FWorldNotificationStruct& 
             [this]()
             {
                 PlayHideAnimation();
+                // After hide animation starts, schedule showing next queued toast
+                // Give a small delay for the hide animation to play
+                if (UWorld* W = GetWorld())
+                {
+                    FTimerHandle NextTimer;
+                    W->GetTimerManager().SetTimer(NextTimer, FTimerDelegate::CreateWeakLambda(this,
+                        [this]()
+                        {
+                            ShowNextInQueue();
+                        }), 0.3f, false);
+                }
             }), DisplayDuration, false);
+    }
+}
+
+void UNotificationToastWidget::ShowNextInQueue()
+{
+    bIsShowing = false;
+
+    if (PendingQueue.Num() > 0)
+    {
+        FWorldNotificationStruct Next = PendingQueue[0];
+        PendingQueue.RemoveAt(0);
+        DisplayNotificationImmediate(Next);
     }
 }
 
@@ -107,6 +163,82 @@ void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& 
     {
         OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Champion defeated!"));
         OutBody  = FText::GetEmpty();
+    }
+    // ====================================================================
+    // Dialogue action notification types
+    // ====================================================================
+    else if (Type == TEXT("quest_offered"))
+    {
+        const FString QuestKey = Notification.dataFields.FindRef(TEXT("clientQuestKey"));
+        FText QuestName = Loc ? Loc->GetNotificationTextTemplate(QuestKey) : FText::GetEmpty();
+        if (QuestName.IsEmpty()) QuestName = FText::FromString(QuestKey);
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("New Quest"));
+        OutBody  = QuestName;
+    }
+    else if (Type == TEXT("quest_turned_in"))
+    {
+        const FString QuestKey = Notification.dataFields.FindRef(TEXT("clientQuestKey"));
+        FText QuestName = Loc ? Loc->GetNotificationTextTemplate(QuestKey) : FText::GetEmpty();
+        if (QuestName.IsEmpty()) QuestName = FText::FromString(QuestKey);
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Quest Complete"));
+        OutBody  = QuestName;
+    }
+    else if (Type == TEXT("quest_failed"))
+    {
+        const FString QuestKey = Notification.dataFields.FindRef(TEXT("clientQuestKey"));
+        FText QuestName = Loc ? Loc->GetNotificationTextTemplate(QuestKey) : FText::GetEmpty();
+        if (QuestName.IsEmpty()) QuestName = FText::FromString(QuestKey);
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Quest Failed"));
+        OutBody  = QuestName;
+    }
+    else if (Type == TEXT("item_received"))
+    {
+        const FString ItemId   = Notification.dataFields.FindRef(TEXT("itemId"));
+        const FString Quantity = Notification.dataFields.FindRef(TEXT("quantity"));
+        const FString ItemSlug = Notification.dataFields.FindRef(TEXT("itemSlug"));
+        FText ItemName = FText::GetEmpty();
+        if (Loc && !ItemSlug.IsEmpty())
+            ItemName = Loc->GetItemDisplayName(ItemSlug);
+        if (ItemName.IsEmpty())
+            ItemName = FText::FromString(ItemSlug.IsEmpty() ? FString::Printf(TEXT("Item #%s"), *ItemId) : ItemSlug);
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Item Received"));
+        OutBody  = FText::FromString(FString::Printf(TEXT("%s x%s"),
+            *ItemName.ToString(), *Quantity));
+    }
+    else if (Type == TEXT("exp_received"))
+    {
+        const FString Amount = Notification.dataFields.FindRef(TEXT("amount"));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Experience"));
+        OutBody  = FText::FromString(FString::Printf(TEXT("+%s XP"), *Amount));
+    }
+    else if (Type == TEXT("gold_received"))
+    {
+        const FString Amount = Notification.dataFields.FindRef(TEXT("amount"));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Gold"));
+        OutBody  = FText::FromString(FString::Printf(TEXT("+%s Gold"), *Amount));
+    }
+    else if (Type == TEXT("skill_learned"))
+    {
+        const FString SkillSlug = Notification.dataFields.FindRef(TEXT("skillSlug"));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Skill Learned"));
+        OutBody  = FText::FromString(SkillSlug);
+    }
+    else if (Type == TEXT("learn_skill_failed"))
+    {
+        const FString Reason    = Notification.dataFields.FindRef(TEXT("reason"));
+        const FString SkillSlug = Notification.dataFields.FindRef(TEXT("skillSlug"));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Cannot Learn Skill"));
+        OutBody  = FText::FromString(FString::Printf(TEXT("%s (%s)"), *SkillSlug, *Reason));
+    }
+    else if (Type == TEXT("reputationChanged"))
+    {
+        const FString Faction = Notification.dataFields.FindRef(TEXT("faction"));
+        const FString Delta   = Notification.dataFields.FindRef(TEXT("delta"));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Reputation"));
+        // Show +/- prefix based on sign
+        FString Prefix = TEXT("+");
+        if (Delta.StartsWith(TEXT("-"))) Prefix = TEXT("");
+        OutBody  = FText::FromString(FString::Printf(TEXT("%s: %s%s"), *Faction, *Prefix, *Delta));
     }
     else
     {

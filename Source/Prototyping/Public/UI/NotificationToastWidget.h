@@ -1,4 +1,5 @@
 #pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
@@ -7,6 +8,7 @@
 
 class UTextBlock;
 class UImage;
+class UVerticalBox;
 
 /**
  * NotificationToastWidget
@@ -32,14 +34,27 @@ class PROTOTYPING_API UNotificationToastWidget : public UUserWidget
 public:
     /**
      * Show the toast for the given notification.
-     * Automatically hides after DisplayDuration (default 4 s).
+     * If a toast is already visible, the new one is queued and will
+     * be shown automatically after the current one hides.
      */
     UFUNCTION(BlueprintCallable, Category = "Notification|Toast")
     void ShowNotification(const FWorldNotificationStruct& Notification);
 
+    /**
+     * Queue a lightweight "action" toast from game systems.
+     * Builds an FWorldNotificationStruct internally so callers don't
+     * need to construct one.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Notification|Toast")
+    void EnqueueActionToast(const FString& NotificationType, const TMap<FString, FString>& DataFields);
+
     /** How many seconds the toast stays visible before auto-hiding. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Notification|Toast|Config")
     float DisplayDuration = 4.0f;
+
+    /** Maximum number of toasts that can be queued. Oldest are dropped. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Notification|Toast|Config")
+    int32 MaxQueueSize = 8;
 
 protected:
     virtual void NativeConstruct() override;
@@ -67,5 +82,17 @@ private:
     void BuildDisplayText(const FWorldNotificationStruct& Notification,
                           FText& OutTitle, FText& OutBody) const;
 
+    /** Display the notification immediately (no queue check). */
+    void DisplayNotificationImmediate(const FWorldNotificationStruct& Notification);
+
+    /** Show the next queued notification, or mark as idle if empty. */
+    void ShowNextInQueue();
+
     FTimerHandle AutoHideTimer;
+
+    /** Queue of pending notifications waiting to be displayed. */
+    TArray<FWorldNotificationStruct> PendingQueue;
+
+    /** True while a toast is visible (between show and hide). */
+    bool bIsShowing = false;
 };

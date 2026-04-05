@@ -76,6 +76,7 @@ private:
     void HandleChunkServerData(const FString& ReceivedData);
 
     void ProcessWorldNotification(const FString& JsonData);
+    void ProcessDialogueActionNotification(const FString& JsonData, const FString& EventType);
     void DispatchNotification(const FWorldNotificationStruct& Notification);
 
     UPROPERTY()

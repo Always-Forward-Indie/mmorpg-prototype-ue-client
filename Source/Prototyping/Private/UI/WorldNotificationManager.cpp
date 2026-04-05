@@ -44,11 +44,23 @@ void UWorldNotificationManager::Initialize(
     {
         UE_LOG(LogTemp, Log, TEXT("WorldNotificationManager: Flushing %d pending notification(s)"),
             PendingRawNotifications.Num());
-        for (const FString& Raw : PendingRawNotifications)
-        {
-            ProcessWorldNotification(Raw);
-        }
+
+        // Copy and clear before processing to avoid re-entrant additions
+        TArray<FString> Pending = MoveTemp(PendingRawNotifications);
         PendingRawNotifications.Empty();
+
+        for (const FString& Raw : Pending)
+        {
+            FMessageDataStruct Msg = JSONParser::DeserializeMessageData(Raw);
+            if (Msg.eventType == TEXT("world_notification"))
+            {
+                ProcessWorldNotification(Raw);
+            }
+            else
+            {
+                ProcessDialogueActionNotification(Raw, Msg.eventType);
+            }
+        }
     }
 }
 
@@ -114,6 +126,7 @@ void UWorldNotificationManager::HandleChunkServerData(const FString& ReceivedDat
     if (ReceivedData.IsEmpty()) return;
 
     FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
+
     if (MessageData.eventType == TEXT("world_notification"))
     {
         if (!bIsInitialized)
@@ -123,6 +136,31 @@ void UWorldNotificationManager::HandleChunkServerData(const FString& ReceivedDat
             return;
         }
         ProcessWorldNotification(ReceivedData);
+        return;
+    }
+
+    // Dialogue action notifications arrive with their own eventType.
+    // Route them to the toast widget as visual feedback.
+    static const TSet<FString> DialogueActionTypes = {
+        TEXT("quest_offered"),
+        TEXT("quest_turned_in"),
+        TEXT("quest_failed"),
+        TEXT("item_received"),
+        TEXT("exp_received"),
+        TEXT("gold_received"),
+        TEXT("skill_learned"),
+        TEXT("learn_skill_failed"),
+        TEXT("reputationChanged")
+    };
+
+    if (DialogueActionTypes.Contains(MessageData.eventType))
+    {
+        if (!bIsInitialized)
+        {
+            PendingRawNotifications.Add(ReceivedData);
+            return;
+        }
+        ProcessDialogueActionNotification(ReceivedData, MessageData.eventType);
     }
 }
 
@@ -175,6 +213,51 @@ void UWorldNotificationManager::ProcessWorldNotification(const FString& JsonData
     DispatchNotification(Notif);
 }
 
+void UWorldNotificationManager::ProcessDialogueActionNotification(const FString& JsonData, const FString& EventType)
+{
+    TSharedPtr<FJsonObject> Root;
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonData);
+    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
+
+    const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+    if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !(*BodyPtr).IsValid()) return;
+
+    // Build a lightweight FWorldNotificationStruct from the dialogue action body
+    FWorldNotificationStruct Notif;
+    Notif.notificationType = EventType;
+    Notif.channel          = TEXT("toast");
+    Notif.priority         = TEXT("medium");
+
+    // Extract all body fields into dataFields (flat key-value)
+    for (const auto& Pair : (*BodyPtr)->Values)
+    {
+        FString Val;
+        if (Pair.Value->Type == EJson::String)
+            Val = Pair.Value->AsString();
+        else if (Pair.Value->Type == EJson::Number)
+        {
+            double N = 0.0;
+            Pair.Value->TryGetNumber(N);
+            Val = FString::Printf(TEXT("%g"), N);
+        }
+        else if (Pair.Value->Type == EJson::Boolean)
+        {
+            Val = Pair.Value->AsBool() ? TEXT("true") : TEXT("false");
+        }
+        else
+        {
+            continue; // skip arrays/objects (e.g. items array in openVendorShop)
+        }
+        Notif.dataFields.Add(Pair.Key, Val);
+    }
+
+    // Route to toast widget
+    if (ToastWidget)
+    {
+        ToastWidget->ShowNotification(Notif);
+    }
+}
+
 void UWorldNotificationManager::DispatchNotification(const FWorldNotificationStruct& Notification)
 {
     const FString& Channel = Notification.channel;
@@ -210,7 +293,7 @@ void UWorldNotificationManager::DispatchNotification(const FWorldNotificationStr
         if (ToastWidget)
             ToastWidget->ShowNotification(Notification);
     }
-    else if (Channel == TEXT("zone_banner"))
+    else if (Channel == TEXT("zone_banner") || Channel == TEXT("banner"))
     {
         if (ZoneBannerWidget)
             ZoneBannerWidget->ShowZoneBanner(Notification);
@@ -229,9 +312,16 @@ void UWorldNotificationManager::DispatchNotification(const FWorldNotificationStr
     {
         UE_LOG(LogTemp, Log, TEXT("WorldNotification [chat_log] %s"), *Type);
     }
+    else if (Channel == TEXT("silent"))
+    {
+        // Silent notifications update data only — no visual widget
+        UE_LOG(LogTemp, Verbose, TEXT("WorldNotification [silent] %s"), *Type);
+    }
     else
     {
-        // Unknown channel — graceful no-op with log
-        UE_LOG(LogTemp, Verbose, TEXT("WorldNotificationManager: Unknown channel '%s' for type '%s'"), *Channel, *Type);
+        // Unknown channel — graceful fallback to toast if widget available
+        UE_LOG(LogTemp, Verbose, TEXT("WorldNotificationManager: Unknown channel '%s' for type '%s', fallback to toast"), *Channel, *Type);
+        if (ToastWidget)
+            ToastWidget->ShowNotification(Notification);
     }
 }

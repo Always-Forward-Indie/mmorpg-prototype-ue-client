@@ -26,6 +26,9 @@ ABasicNPC::ABasicNPC()
 	AudioComponentSecond->SetupAttachment(RootComponent);
 	AudioComponentSecond->bAutoActivate = false;
 
+	// Create nameplate component - registers with central NameplateManager
+	NPCNameplateComponent = CreateDefaultSubobject<UNPCNameplateComponent>(TEXT("NPCNameplate"));
+
 	// Set default values
 	MinDistance = 500.0f;
 	MaxDistance = 2000.0f;
@@ -122,6 +125,12 @@ void ABasicNPC::SetNPCData(const FNPCStruct& Data)
 		bUIInitialized = false;
 		LastHealth = NPCData.stats.health.current;
 		LastMana = NPCData.stats.mana.current;
+
+		// Initialize nameplate component with NPC data
+		if (NPCNameplateComponent)
+		{
+			NPCNameplateComponent->InitialiseFromNPCData(NPCData, false);
+		}
 
 		// Setup visual and audio based on NPC slug
 		if (!NPCData.slug.IsEmpty())

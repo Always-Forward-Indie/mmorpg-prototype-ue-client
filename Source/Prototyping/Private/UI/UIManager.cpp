@@ -48,6 +48,9 @@
 #include "MyGameInstance.h"
 #include "Gameplay/Combat/CombatCameraShake.h"
 #include "Gameplay/UI/CombatScreenFlashWidget.h"
+#include "Gameplay/UI/MobTargetFrameWidget.h"
+#include "Gameplay/UI/NameplateManager.h"
+#include "Gameplay/UI/NameplateCanvasWidget.h"
 
 UUIManager::UUIManager()
 {
@@ -810,6 +813,26 @@ void UUIManager::HandlePlayerInterfaceReady()
 		PlayerInterfaceWidget->OnPlayerInterfaceReady.RemoveDynamic(this, &UUIManager::HandlePlayerInterfaceReady);
 	}
 
+	// Create NameplateManager and bind to the canvas widget from PlayerInterfaceWidget
+	if (!NameplateManager && PlayerInterfaceWidget)
+	{
+		NameplateManager = NewObject<UNameplateManager>(this);
+		if (NameplateManager)
+		{
+			NameplateManager->RegisterComponent();
+			UNameplateCanvasWidget* Canvas = PlayerInterfaceWidget->GetNameplateCanvasWidget();
+			if (Canvas)
+			{
+				NameplateManager->SetCanvasWidget(Canvas);
+				UE_LOG(LogTemp, Warning, TEXT("UIManager: NameplateManager created and bound to canvas widget"));
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("UIManager: NameplateManager created but NameplateCanvasWidget not found in PlayerInterfaceWidget. Add it to the WBP_PlayerInterface Blueprint."));
+			}
+		}
+	}
+
 	OnUIManagerInitialized.Broadcast();
 	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] HandlePlayerInterfaceReady: OnUIManagerInitialized broadcast"));
 }
@@ -965,19 +988,26 @@ void UUIManager::PlayCombatCameraShake(float Intensity)
 
 void UUIManager::ShowMobTargetFrame(const FString& MobSlug, const FString& MobName, int32 MobLevel, int32 CurrentHP, int32 MaxHP, bool bIsAggro, UTexture2D* MobIcon)
 {
-	// Forward to PlayerInterfaceWidget if available
 	if (PlayerInterfaceWidget)
 	{
-		// TODO: implement UI forwarding when MobTargetFrameWidget is connected
-		UE_LOG(LogTemp, Verbose, TEXT("UIManager::ShowMobTargetFrame: %s Lv%d HP=%d/%d Aggro=%s"),
-			*MobName, MobLevel, CurrentHP, MaxHP, bIsAggro ? TEXT("true") : TEXT("false"));
+		UMobTargetFrameWidget* TargetFrame = PlayerInterfaceWidget->GetMobTargetFrameWidget();
+		if (TargetFrame)
+		{
+			TargetFrame->SetMobInfo(MobSlug, MobName, MobLevel, CurrentHP, MaxHP, bIsAggro, MobIcon);
+		}
 	}
 }
 
 void UUIManager::HideMobTargetFrame()
 {
-	// TODO: implement UI forwarding when MobTargetFrameWidget is connected
-	UE_LOG(LogTemp, Verbose, TEXT("UIManager::HideMobTargetFrame"));
+	if (PlayerInterfaceWidget)
+	{
+		UMobTargetFrameWidget* TargetFrame = PlayerInterfaceWidget->GetMobTargetFrameWidget();
+		if (TargetFrame)
+		{
+			TargetFrame->ClearTarget();
+		}
+	}
 }
 
 void UUIManager::ToggleGameMenu()
@@ -1539,10 +1569,13 @@ void UUIManager::HideDeathScreen()
 
 void UUIManager::UpdateMobTargetFrameHP(int32 CurrentHP, int32 MaxHP)
 {
-	// Forward to PlayerInterfaceWidget if available
 	if (PlayerInterfaceWidget)
 	{
-		// TODO: implement HP update when MobTargetFrameWidget is connected
+		UMobTargetFrameWidget* TargetFrame = PlayerInterfaceWidget->GetMobTargetFrameWidget();
+		if (TargetFrame)
+		{
+			TargetFrame->UpdateHP(CurrentHP, MaxHP);
+		}
 	}
 }
 

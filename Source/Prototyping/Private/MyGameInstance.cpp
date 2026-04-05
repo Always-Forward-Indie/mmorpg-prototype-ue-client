@@ -1609,6 +1609,9 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 
 	SpawnedPlayers.Add(ClientID, NewPlayer);
 
+	// Initialize nameplate for both local and remote players
+	NewPlayer->InitialiseNameplate(bIsLocal);
+
 	// Apply cached move_speed immediately so the player has the correct MaxWalkSpeed
 	// from frame 1. stats_update packets arrive before the actor is spawned (world travel),
 	// so the authoritative speed sits in PlayerStatsManager cache — apply it now.

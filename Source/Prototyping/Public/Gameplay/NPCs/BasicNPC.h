@@ -13,6 +13,7 @@
 class UNPCHeadInfo;
 class UW_NPCHeadInfoWidget;
 class USoundBase;
+class UNPCNameplateComponent;
 
 // Delegate for NPC data updates
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnNPCDataUpdated);
@@ -178,12 +179,9 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "NPC Data")
 	FNPCStruct NPCData;
 
-	// UI Components (placeholder - will be implemented when UI components are created)
-	// UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NPC UI")
-	// class UNPCHeadInfo* NPCHeadInfo;
-
-	// UPROPERTY()
-	// class UW_NPCHeadInfoWidget* HeadWidget;
+	// Nameplate component - registers with central NameplateManager for screen-space rendering
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NPC UI")
+	UNPCNameplateComponent* NPCNameplateComponent;
 
 	// Audio Components
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NPC Audio")

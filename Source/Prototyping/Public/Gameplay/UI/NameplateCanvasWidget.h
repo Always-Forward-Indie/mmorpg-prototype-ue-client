@@ -64,17 +64,19 @@ public:
      * Register a remote player actor.
      * The widget is created from PlayerNameplateWidgetClass and added to the canvas.
      * Safe to call multiple times – duplicate registrations are silently ignored.
+     * Pass HeadOffsetZ = 0 to fall back to DefaultPlayerHeadOffsetZ.
      */
     void RegisterPlayer(AActor*          Actor,
                         const FString&   Name,
                         const FString&   Class,
                         int32            Level,
                         bool             bIsDead,
-                        float            HeadOffsetZ = 200.0f);
+                        float            HeadOffsetZ = 0.0f);
 
     /**
      * Register an NPC actor.
      * The widget is created from NPCNameplateWidgetClass and added to the canvas.
+     * Pass HeadOffsetZ = 0 to fall back to DefaultNPCHeadOffsetZ.
      */
     void RegisterNPC(AActor*                Actor,
                      const FString&         Name,
@@ -82,7 +84,7 @@ public:
                      int32                  Level,
                      ENPCInteractionState   InteractionState,
                      float                  InteractRadius,
-                     float                  HeadOffsetZ = 100.0f);
+                     float                  HeadOffsetZ = 0.0f);
 
     /** Remove nameplate for this actor (call on despawn / out-of-range). */
     void Unregister(AActor* Actor);
@@ -109,6 +111,26 @@ public:
     /** Widget class used for NPC nameplates. Assign in BP. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Classes")
     TSubclassOf<UW_NPCNameplateWidget> NPCNameplateWidgetClass;
+
+    /**
+     * Extra Z margin (cm) above the top of the capsule where the nameplate anchors
+     * for remote players.  0 = nameplate sits exactly at the crown of the capsule.
+     * Used when the caller passes HeadOffsetZ = 0, or as the global fallback.
+     * Can be overridden per-actor via UPlayerNameplateComponent::HeadOffsetZ.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Head Offset",
+              meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "200.0"))
+    float DefaultPlayerHeadOffsetZ = 20.0f;
+
+    /**
+     * Extra Z margin (cm) above the top of the capsule where the nameplate anchors
+     * for NPCs.  0 = nameplate sits exactly at the crown of the capsule.
+     * Used when the caller passes HeadOffsetZ = 0, or as the global fallback.
+     * Can be overridden per-actor via UNPCNameplateComponent::HeadOffsetZ.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Head Offset",
+              meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "200.0"))
+    float DefaultNPCHeadOffsetZ = 20.0f;
 
     /** Distance at which a nameplate is fully opaque (cm). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Visibility")

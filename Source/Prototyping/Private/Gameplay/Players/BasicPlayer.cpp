@@ -2430,6 +2430,16 @@ void ABasicPlayer::CheckForMOB()
         ClearLockedTarget();
     }
 
+    // Auto-clear locked target when mob enters RETURNING state (deaggro / returning to spawn zone)
+    if (LockedTarget && LockedTarget->MOBMovementComponent)
+    {
+        const int32 MobCombatState = LockedTarget->MOBMovementComponent->GetCombatState();
+        if (MobCombatState == 5) // RETURNING
+        {
+            ClearLockedTarget();
+        }
+    }
+
     // Auto-clear locked target when player runs too far away (leash)
     const float MaxLeashDistance = 3000.0f;
     if (LockedTarget && !bIsAutoAttacking && !bIsApproachingTarget)

@@ -284,19 +284,38 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 			if (FoundActors.Num() > 0)
 			{
 				ABasicMOB* MOB = Cast<ABasicMOB>(FoundActors[0]);
-				if (MOB)
-				{
-					// —брасываем цель моба
-					MOB->SetMobTargetId(0);
-					MOB->SetMobTargetType("");
-					MOB->SetMOBIsAggressive(false);
+					if (MOB)
+					{
+						// —брасываем цель моба
+						MOB->SetMobTargetId(0);
+						MOB->SetMobTargetType("");
+						MOB->SetMOBIsAggressive(false);
 
-					// ќбновл€ем позицию моба
-					MOB->OnReceiveServerPacket(TargetLostData.position);
+						// ќбновл€ем позицию моба
+						MOB->OnReceiveServerPacket(TargetLostData.position);
 
-					UE_LOG(LogTemp, Warning, TEXT("MOB %s (UID: %d) target cleared and position updated"),
-						*MOB->GetMobName(), TargetLostData.mobUID);
-				}
+						// Notify the mob (animation transition, delegate broadcast)
+						MOB->OnReceiveTargetLost();
+
+						// If the local player had this mob locked, clear the lock target
+						if (worldContext)
+						{
+							APlayerController* PC = worldContext->GetFirstPlayerController();
+							if (PC)
+							{
+								ABasicPlayer* LocalPlayer = Cast<ABasicPlayer>(PC->GetPawn());
+								if (LocalPlayer && LocalPlayer->GetLockedTarget() == MOB)
+								{
+									LocalPlayer->ClearLockedTarget();
+									UE_LOG(LogTemp, Log, TEXT("MOBManager: Cleared player lock target Ч mob %d returned to zone"),
+										TargetLostData.mobUID);
+								}
+							}
+						}
+
+						UE_LOG(LogTemp, Warning, TEXT("MOB %s (UID: %d) target cleared and position updated"),
+							*MOB->GetMobName(), TargetLostData.mobUID);
+					}
 			}
 		}
 		else

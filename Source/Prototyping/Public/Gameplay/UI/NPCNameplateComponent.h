@@ -42,9 +42,14 @@ public:
     //  Per-actor configuration                                            //
     // ------------------------------------------------------------------ //
 
-    /** Z-offset above actor root to the nameplate attach point (cm). */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Nameplate")
-    float HeadOffsetZ = 200.0f;
+    /**
+     * Extra Z margin (cm) above the top of the capsule where the nameplate anchors.
+     * 0 = nameplate sits exactly at the crown of the capsule.
+     * Leave at 0 to use the global default from NameplateCanvasWidget.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Nameplate",
+              meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "200.0"))
+    float HeadOffsetZ = 0.0f;
 
     /**
      * Interact hint radius (cm).

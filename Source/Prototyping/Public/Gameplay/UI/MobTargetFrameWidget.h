@@ -76,5 +76,16 @@ protected:
     // Default icon shown when no texture is assigned in the data table
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Target Frame")
     UTexture2D* DefaultIcon = nullptr;
+
+private:
+    /** Apply a resolved texture to PortraitImage. */
+    void ApplyPortraitTexture(UTexture2D* Texture);
+
+    /**
+     * Look up the mob's icon in MobDefinitionTable by slug and apply it.
+     * Uses the synchronous hot-path if the texture is already resident;
+     * falls back to async streaming otherwise (non-blocking).
+     */
+    void LoadPortraitFromTable(const FString& MobSlug);
 };
 

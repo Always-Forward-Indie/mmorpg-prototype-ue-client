@@ -127,6 +127,17 @@ void UPlayerStatsWidget::RefreshVitals(const FPlayerStatsUpdateStruct& Stats)
     if (Level_Text)
         Level_Text->SetText(FText::FromString(FString::Printf(TEXT("Level %d"), Stats.level)));
 
+    // Free skill points
+    if (SP_Text)
+    {
+        SP_Text->SetText(FText::FromString(FString::Printf(TEXT("Skill Points: %d"), Stats.freeSkillPoints)));
+        // Highlight in gold when there are unspent points, grey when zero
+        SP_Text->SetColorAndOpacity(
+            Stats.freeSkillPoints > 0
+                ? FSlateColor(FLinearColor(1.0f, 0.85f, 0.1f))
+                : FSlateColor(FLinearColor(0.6f, 0.6f, 0.6f)));
+    }
+
     // HP
     if (HP_Bar)
     {

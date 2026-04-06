@@ -14,11 +14,15 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnQuestUpdated,      const FQuestPr
 // Fired when a quest is freshly offered
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnQuestOffered,      const FQuestOfferedData&,  OfferedData);
 // Fired when a quest is turned in
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnQuestTurnedIn,     const FQuestTurnedInData&, TurnedInData);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnQuestTurnedIn,     const FQuestTurnedInData&,      TurnedInData);
+// Fired when a quest is failed
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnQuestFailed,       const FQuestFailedData&,        FailedData);
 // Reward notifications
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnExpReceived,       const FExpReceivedData&,   ExpData);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnItemReceived,      const FItemReceivedData&,  ItemData);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGoldReceived,      const FGoldReceivedData&,  GoldData);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnExpReceived,       const FExpReceivedData&,        ExpData);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnItemReceived,      const FItemReceivedData&,       ItemData);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGoldReceived,      const FGoldReceivedData&,       GoldData);
+// Fired when reputation changes via dialogue action
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnReputationChanged, const FReputationChangedData&,  RepData);
 
 /**
  * QuestManager
@@ -42,9 +46,11 @@ public:
     void OnQuestUpdated(const FQuestProgressData& Data);
     void OnQuestOffered(const FQuestOfferedData& Data);
     void OnQuestTurnedIn(const FQuestTurnedInData& Data);
+    void OnQuestFailed(const FQuestFailedData& Data);
     void OnExpReceived(const FExpReceivedData& Data);
     void OnItemReceived(const FItemReceivedData& Data);
     void OnGoldReceived(const FGoldReceivedData& Data);
+    void OnReputationChanged(const FReputationChangedData& Data);
 
     // Update NPC quest icons based on quest state change
     void UpdateNPCQuestIcons(const FString& QuestSlug, const FString& NewState);
@@ -78,6 +84,9 @@ public:
     FOnQuestTurnedIn OnQuestTurnedInDelegate;
 
     UPROPERTY(BlueprintAssignable, Category = "Quest Events")
+    FOnQuestFailed   OnQuestFailedDelegate;
+
+    UPROPERTY(BlueprintAssignable, Category = "Quest Events")
     FOnExpReceived   OnExpReceivedDelegate;
 
     UPROPERTY(BlueprintAssignable, Category = "Quest Events")
@@ -85,6 +94,9 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category = "Quest Events")
     FOnGoldReceived  OnGoldReceivedDelegate;
+
+    UPROPERTY(BlueprintAssignable, Category = "Quest Events")
+    FOnReputationChanged OnReputationChangedDelegate;
 
 private:
     // questId ? latest progress snapshot

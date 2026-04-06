@@ -10,6 +10,8 @@
 #include "Gameplay/UI/ActiveEffectsWidget.h"
 #include "Gameplay/UI/MobTargetFrameWidget.h"
 #include "Gameplay/UI/NameplateCanvasWidget.h"
+#include "Gameplay/UI/CastBarWidget.h"
+#include "Gameplay/UI/CastBarWidget.h"
 #include "PlayerInterfaceWidget.generated.h"
 
 // Forward declarations
@@ -80,6 +82,9 @@ protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Player Interface")
     UNameplateCanvasWidget* NameplateCanvasWidget = nullptr;
 
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Player Interface")
+    UCastBarWidget* CastBarWidget = nullptr;
+
     // Widget classes for dynamic creation
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Interface")
     TSubclassOf<USkillBarWidget> SkillBarWidgetClass;
@@ -144,6 +149,10 @@ public:
     /** Returns the nameplate canvas widget, if available (may be nullptr). */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Interface")
     UNameplateCanvasWidget* GetNameplateCanvasWidget() const { return NameplateCanvasWidget; }
+
+    /** Returns the cast bar widget, if available (may be nullptr). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Interface")
+    UCastBarWidget* GetCastBarWidget() const { return CastBarWidget; }
 
 private:
 };

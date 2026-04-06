@@ -191,7 +191,7 @@ void UPlayerSkillManager::StartSkillCooldown(const FString& SkillSlug)
         const double dur = static_cast<double>(S->networkData.cooldownMs) / 1000.0;
         if (dur <= 0.0) { UE_LOG(LogTemp, Error, TEXT("Invalid cooldown")); return; }
 
-        S->bCooldownUsesServerClock = true;              // единая таймбаза
+        S->bCooldownUsesServerClock = true;              // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         const double now = GetServerSeconds();
         S->cooldownEndTime = now + dur;                  // double + server seconds
         S->bIsOnCooldown = true;
@@ -375,6 +375,47 @@ bool UPlayerSkillManager::ValidateSkillSlot(int32 SlotIndex) const
     return SlotIndex >= 0 && SlotIndex < MaxSkillSlots;
 }
 
+void UPlayerSkillManager::AddLearnedSkill(const FPlayerSkillNetworkData& NetworkData)
+{
+    if (NetworkData.skillSlug.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager::AddLearnedSkill: empty skillSlug, ignoring"));
+        return;
+    }
+
+    if (PlayerSkills.Contains(NetworkData.skillSlug))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager::AddLearnedSkill: skill '%s' already known, skipping"), *NetworkData.skillSlug);
+        return;
+    }
+
+    FPlayerSkillData NewSkill = CreatePlayerSkillData(NetworkData);
+    PlayerSkills.Add(NetworkData.skillSlug, NewSkill);
+
+    // Register with legacy skill system so hotbar / combat work immediately
+    if (SkillSystemManager)
+    {
+        FSkillData LegacySkillData;
+        LegacySkillData.skillSlug = NetworkData.skillSlug;
+        LegacySkillData.skillName = NewSkill.definitionData.displayName.ToString();
+        LegacySkillData.animationName = NewSkill.definitionData.animationName;
+        LegacySkillData.castTime = NetworkData.castMs / 1000.0f;
+        LegacySkillData.cooldown = NetworkData.cooldownMs / 1000.0f;
+        LegacySkillData.manaCost = NetworkData.costMp;
+        LegacySkillData.effectType = NewSkill.definitionData.effectType;
+        LegacySkillData.school = NewSkill.definitionData.school;
+        LegacySkillData.range = NetworkData.maxRange;
+        SkillSystemManager->RegisterSkill(NetworkData.skillSlug, LegacySkillData);
+    }
+
+    // Broadcast so AvailableSkillsWidget / hotbar refresh
+    TArray<FPlayerSkillData> AllSkills;
+    PlayerSkills.GenerateValueArray(AllSkills);
+    OnSkillsInitialized.Broadcast(AllSkills);
+
+    UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager::AddLearnedSkill: skill '%s' added successfully"), *NetworkData.skillSlug);
+}
+
 void UPlayerSkillManager::HandleSkillInitiation(const FString& SkillSlug, int32 CasterId,
     int32 CooldownMs, int32 GcdMs)
 {
@@ -436,7 +477,7 @@ double UPlayerSkillManager::GetServerSeconds() const {
     if (TimeSyncService && TimeSyncService->IsTimeSyncValid()) {
         return static_cast<double>(TimeSyncService->GetEstimatedServerTimeMs()) / 1000.0;
     }
-    // фолбек: переводим world->time в "серверные" через постоянный offset, если есть
+    // пїЅпїЅпїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ world->time пїЅ "пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ" пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ offset, пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
     if (UWorld* W = GetWorld()) return static_cast<double>(W->GetTimeSeconds());
     return 0.0;
 }

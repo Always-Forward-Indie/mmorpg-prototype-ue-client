@@ -13,6 +13,7 @@
 #include <Kismet/GameplayStatics.h>
 #include "Gameplay/UI/PlayerInterfaceWidget.h"
 #include "Gameplay/Combat/ICombatable.h"
+#include "Animation/AnimNotify_PlayerCombatEvent.h"
 #include "BasicPlayer.generated.h"
 
 class UMyGameInstance;
@@ -122,20 +123,19 @@ public:
 	UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 
 private:
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (AllowPrivateAccess = "true"))
-	TSoftObjectPtr<USoundBase> LevelUpSound;
+	/**
+	 * Row key in DT_EntityAudioProfiles used to drive all audio for this player character.
+	 * Assign a row name (e.g. "warrior_m", "mage_f", "archer_m") in the player Blueprint.
+	 * All individual sound slots (death, revive, hit, heal, voice, etc.) are read from
+	 * the matching FEntityAudioProfile row at runtime.  Leave as NAME_None to play silence
+	 * on all generic events (skill-specific sounds still work via SkillDefinition table).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Audio", meta = (AllowPrivateAccess = "true"))
+	FName AudioProfileId = FName("warrior_m");
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (AllowPrivateAccess = "true"))
-	TSoftObjectPtr<USoundBase> HealReceivedSound;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (AllowPrivateAccess = "true"))
-	TSoftObjectPtr<USoundBase> ReviveSound;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (AllowPrivateAccess = "true"))
-	TSoftObjectPtr<USoundBase> DeathSound;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (AllowPrivateAccess = "true"))
-	TSoftObjectPtr<USoundBase> HitReceivedSound;
+	/** Returns the audio profile for this player from the GameInstance repository. 
+	 *  Returns nullptr when AudioProfileId is not set or when the repository is not ready. */
+	const FEntityAudioProfile* GetAudioProfile() const;
 
 	// Nameplate component
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI", meta = (AllowPrivateAccess = "true"))
@@ -224,11 +224,11 @@ private:
 	bool bSimulateMovement;
 
 
-	/** Класс HUD, который будет создаваться */
+	/** пїЅпїЅпїЅпїЅпїЅ HUD, пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ */
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> HUDWidgetClass;
 
-	/** Ссылка на созданный HUD */
+	/** пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ HUD */
 	UPROPERTY()
 	UPlayerHUD* PlayerHUD;
 
@@ -259,6 +259,15 @@ public:
 
 	void UpdateHUD();
 
+	/**
+	 * Called by AnimNotify_PlayerCombatEvent to fire audio and VFX timed to the montage.
+	 * SwingSound  вЂ“ weapon whoosh: equipped-weapon swing в†’ SkillDefinition.swingSound.
+	 * VoiceAttack вЂ“ random grunt from the EntityAudioProfile VoiceAttack pool (local player only).
+	 * CastRelease вЂ“ release sound + Niagara VFX from castEndSound / castEndEffectNiagara.
+	 */
+	UFUNCTION()
+	void PlayCombatSoundEvent(ECombatSoundSlot Slot);
+
 	// ICombatable interface implementation
 	virtual int32 GetActorId_Implementation() const override 
 	{ 
@@ -285,10 +294,12 @@ public:
 	virtual void SetTarget_Implementation(int32 TargetId, ECasterType TargetType) override;
 	virtual void ClearTarget_Implementation() override;
 	
-	virtual void PlaySkillAnimation_Implementation(const FString& AnimationName, float Duration = 0.0f) override;
+	virtual void PlaySkillAnimation_Implementation(const FString& AnimationName, const FString& SkillSlug, float Duration = 0.0f) override;
 	virtual void ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, ESkillSchool School, bool bIsMissed, bool bIsBlocked, const FString& SkillSlug) override;
-	virtual void ShowHealingEffect_Implementation(int32 Healing) override;
+	virtual void ShowHealingEffect_Implementation(int32 Healing, const FString& SkillSlug) override;
 	virtual void ShowBuffEffect_Implementation(const FAppliedEffectData& Effect) override;
+	virtual void ShowCastBar_Implementation(float CastTime, const FString& SkillName) override;
+	virtual void HideCastBar_Implementation() override;
 
 	// Event variable
 	UPROPERTY(BlueprintAssignable, Category = "Events")
@@ -390,7 +401,7 @@ public:
 
 	// Apply server-authoritative move_speed to CharacterMovementComponent.
 	// ServerMoveSpeed is the raw server value; it is multiplied by MoveSpeedScale internally.
-	// This is the single source of truth for MaxWalkSpeed — no client-side modifiers.
+	// This is the single source of truth for MaxWalkSpeed пїЅ no client-side modifiers.
 	void ApplyServerMoveSpeed(float ServerMoveSpeed);
 
 	// Set message data

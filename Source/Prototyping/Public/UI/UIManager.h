@@ -32,6 +32,7 @@ class UQuestTrackerWidget;
 class UVendorShopWidget;
 class UDeathScreenWidget;
 class URepairShopWidget;
+class USkillShopWidget;
 class UTradeWidget;
 class UEquipmentWidget;
 class UPlayerStatsWidget;
@@ -109,6 +110,7 @@ public:
 	// Initialize item system widgets (equipment, vendor, repair, trade)
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void InitializeItemSystemWidgets(class UEquipmentManager* InEquipmentManager, class UVendorManager* InVendorManager, class URepairManager* InRepairManager, class UTradeManager* InTradeManager);
+	void InitializeSkillShopWidget(class USkillShopManager* InSkillShopManager);
 
 	// Initialize stats widget
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
@@ -175,6 +177,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	URepairShopWidget* GetRepairShopWidget() const { return RepairShopWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	USkillShopWidget* GetSkillShopWidget() const { return SkillShopWidget; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UTradeWidget* GetTradeWidget() const { return TradeWidget; }
@@ -270,7 +275,7 @@ protected:
 	UFUNCTION()
 	void OnAvailableSkillsVisibilityChanged(bool bIsVisible);
 
-	// Called by PlayerInterfaceWidget on its first valid tick — relays OnUIManagerInitialized
+	// Called by PlayerInterfaceWidget on its first valid tick ï¿½ relays OnUIManagerInitialized
 	UFUNCTION()
 	void HandlePlayerInterfaceReady();
 
@@ -291,6 +296,9 @@ protected:
 
 	UFUNCTION()
 	void OnRepairShopVisibilityChanged(bool bIsVisible);
+
+	UFUNCTION()
+	void OnSkillShopVisibilityChanged(bool bIsVisible);
 
 	UFUNCTION()
 	void OnTradeVisibilityChanged(bool bIsVisible);
@@ -338,6 +346,9 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<URepairShopWidget> RepairShopWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<USkillShopWidget> SkillShopWidgetClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UTradeWidget> TradeWidgetClass;
@@ -424,6 +435,9 @@ protected:
 	URepairShopWidget* RepairShopWidget;
 
 	UPROPERTY()
+	USkillShopWidget* SkillShopWidget;
+
+	UPROPERTY()
 	UTradeWidget* TradeWidget;
 
 	UPROPERTY()
@@ -505,6 +519,7 @@ protected:
 	bool bQuestJournalVisible;
 	bool bVendorShopVisible;
 	bool bRepairShopVisible;
+	bool bSkillShopVisible;
 	bool bTradeVisible;
 	bool bEquipmentVisible;
 	bool bPlayerStatsVisible;

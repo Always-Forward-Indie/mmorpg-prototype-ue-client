@@ -7,7 +7,7 @@ void UDamageTextWidget::NativeConstruct()
 	Super::NativeConstruct();
 	bIsConstructed = true;
 
-	UE_LOG(LogTemp, Warning, TEXT("DamageTextWidget::NativeConstruct – DamageText=%s, ShowAnim=%s, HasPendingInit=%s"), 
+	UE_LOG(LogTemp, Warning, TEXT("DamageTextWidget::NativeConstruct ï¿½ DamageText=%s, ShowAnim=%s, HasPendingInit=%s"), 
 		*GetNameSafe(DamageText), *GetNameSafe(ShowAnim), bPendingInit ? TEXT("true") : TEXT("false"));
 
 	// CRITICAL: Force widget to be visible IMMEDIATELY after construction
@@ -117,6 +117,11 @@ void UDamageTextWidget::Init(float Damage, bool bCrit, EDamageType Type)
 	}
 	DamageText->SetColorAndOpacity(Color);
 
+	// Scale-up crit numbers for visual impact
+	FWidgetTransform CritTransform;
+	CritTransform.Scale = bCrit ? FVector2D(1.5f, 1.5f) : FVector2D(1.0f, 1.0f);
+	DamageText->SetRenderTransform(CritTransform);
+
 	// Force text visibility
 	DamageText->SetVisibility(ESlateVisibility::Visible);
 	DamageText->SetRenderOpacity(1.0f);
@@ -211,7 +216,7 @@ void UDamageTextWidget::PlayDamageAnimation()
 	
 	// Get actual animation duration
 	float AnimDuration = ShowAnim ? ShowAnim->GetEndTime() : 1.0f;
-	UE_LOG(LogTemp, Warning, TEXT("PlayDamageAnimation – animation started, duration: %f"), AnimDuration);
+	UE_LOG(LogTemp, Warning, TEXT("PlayDamageAnimation ï¿½ animation started, duration: %f"), AnimDuration);
 
 	// Set fallback timer with extra safety margin
 	if (GetWorld())

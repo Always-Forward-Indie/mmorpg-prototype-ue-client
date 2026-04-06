@@ -92,18 +92,27 @@ public:
     
     // Animation/visual feedback
     UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Combatable|Animation")
-    void PlaySkillAnimation(const FString& AnimationName, float Duration = 0.0f);
-    virtual void PlaySkillAnimation_Implementation(const FString& AnimationName, float Duration = 0.0f) {}
+    void PlaySkillAnimation(const FString& AnimationName, const FString& SkillSlug, float Duration = 0.0f);
+    virtual void PlaySkillAnimation_Implementation(const FString& AnimationName, const FString& SkillSlug, float Duration = 0.0f) {}
 
     UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Combatable|Effects")
     void ShowDamageEffect(int32 Damage, bool bIsCritical, ESkillSchool School, bool bIsMissed, bool bIsBlocked, const FString& SkillSlug);
     virtual void ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, ESkillSchool School, bool bIsMissed, bool bIsBlocked, const FString& SkillSlug) {}
 
     UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Combatable|Effects")
-    void ShowHealingEffect(int32 Healing);
-    virtual void ShowHealingEffect_Implementation(int32 Healing) {}
+    void ShowHealingEffect(int32 Healing, const FString& SkillSlug);
+    virtual void ShowHealingEffect_Implementation(int32 Healing, const FString& SkillSlug) {}  
 
     UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Combatable|Effects")
     void ShowBuffEffect(const FAppliedEffectData& Effect);
     virtual void ShowBuffEffect_Implementation(const FAppliedEffectData& Effect) {}
+
+    // Cast bar — local player shows fill bar; other actors ignore.
+    UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Combatable|CastBar")
+    void ShowCastBar(float CastTime, const FString& SkillName);
+    virtual void ShowCastBar_Implementation(float CastTime, const FString& SkillName) {}
+
+    UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Combatable|CastBar")
+    void HideCastBar();
+    virtual void HideCastBar_Implementation() {}
 };

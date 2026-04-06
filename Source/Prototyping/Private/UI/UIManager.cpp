@@ -9,6 +9,7 @@
 #include "UI/QuestTrackerWidget.h"
 #include "UI/VendorShopWidget.h"
 #include "UI/RepairShopWidget.h"
+#include "UI/SkillShopWidget.h"
 #include "UI/TradeWidget.h"
 #include "UI/EquipmentWidget.h"
 #include "Gameplay/UI/PlayerExperienceWidget.h"
@@ -27,6 +28,7 @@
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Gameplay/Repair/RepairManager.h"
+#include "Gameplay/SkillShop/SkillShopManager.h"
 #include "Gameplay/Trade/TradeManager.h"
 #include "UI/PlayerStatsWidget.h"
 #include "UI/BestiaryWidget.h"
@@ -71,6 +73,7 @@ UUIManager::UUIManager()
 	QuestTrackerWidget = nullptr;
 	VendorShopWidget = nullptr;
 	RepairShopWidget = nullptr;
+	SkillShopWidget = nullptr;
 	TradeWidget = nullptr;
 	EquipmentWidget = nullptr;
 	PlayerStatsWidget = nullptr;
@@ -96,6 +99,7 @@ UUIManager::UUIManager()
 	bQuestJournalVisible = false;
 	bVendorShopVisible = false;
 	bRepairShopVisible = false;
+	bSkillShopVisible = false;
 	bTradeVisible = false;
 	bEquipmentVisible = false;
 	bPlayerStatsVisible = false;
@@ -896,6 +900,15 @@ void UUIManager::OnRepairShopVisibilityChanged(bool bIsVisible)
 		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
+void UUIManager::OnSkillShopVisibilityChanged(bool bIsVisible)
+{
+	bSkillShopVisible = bIsVisible;
+	UpdateCursorAndInputMode();
+
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Skill shop visibility synced: %s"),
+		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
+}
+
 void UUIManager::OnTradeVisibilityChanged(bool bIsVisible)
 {
 	bTradeVisible = bIsVisible;
@@ -968,7 +981,7 @@ bool UUIManager::ShouldShowCursor() const
 	// Show cursor if any UI element is open or alt-cursor is active
 	bool bAnyWidgetVisible = bInventoryVisible || bSkillsPanelVisible || bHarvestLootVisible 
 		|| bDialogueVisible || bQuestJournalVisible
-		|| bVendorShopVisible || bRepairShopVisible || bTradeVisible || bEquipmentVisible
+		|| bVendorShopVisible || bRepairShopVisible || bSkillShopVisible || bTradeVisible || bEquipmentVisible
 		|| bPlayerStatsVisible || bBestiaryVisible || bAltCursorActive || bGameMenuVisible;
 	
 	UE_LOG(LogTemp, Verbose, TEXT("UIManager: Cursor check -> Show: %s"),
@@ -1074,6 +1087,12 @@ void UUIManager::ToggleGameMenu()
 	{
 		RepairShopWidget->SetVisibility(ESlateVisibility::Collapsed);
 		bRepairShopVisible = false;
+		bClosedSomething = true;
+	}
+	if (bSkillShopVisible && SkillShopWidget)
+	{
+		SkillShopWidget->CloseShop();
+		bSkillShopVisible = false;
 		bClosedSomething = true;
 	}
 	if (bTradeVisible && TradeWidget)
@@ -1274,6 +1293,42 @@ void UUIManager::InitializeItemSystemWidgets(UEquipmentManager* InEquipmentManag
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeItemSystemWidgets - Completed"));
+}
+
+void UUIManager::InitializeSkillShopWidget(USkillShopManager* InSkillShopManager)
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeSkillShopWidget"));
+
+	if (!SkillShopWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: SkillShopWidgetClass is not set in Blueprint"));
+		return;
+	}
+
+	if (SkillShopWidget)
+	{
+		SkillShopWidget->OnSkillShopVisibilityChanged.RemoveDynamic(this, &UUIManager::OnSkillShopVisibilityChanged);
+		SkillShopWidget->RemoveFromParent();
+		SkillShopWidget = nullptr;
+	}
+
+	SkillShopWidget = CreateWidget<USkillShopWidget>(GetWorld(), SkillShopWidgetClass);
+	if (!SkillShopWidget)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create SkillShopWidget"));
+		return;
+	}
+
+	SkillShopWidget->AddToViewport(95);
+	SkillShopWidget->SetVisibility(ESlateVisibility::Collapsed);
+
+	if (InSkillShopManager)
+	{
+		SkillShopWidget->BindToSkillShopManager(InSkillShopManager);
+	}
+
+	SkillShopWidget->OnSkillShopVisibilityChanged.AddDynamic(this, &UUIManager::OnSkillShopVisibilityChanged);
+	UE_LOG(LogTemp, Log, TEXT("UIManager: SkillShopWidget created and bound"));
 }
 
 void UUIManager::InitializeStatsWidget(UPlayerStatsManager* InStatsManager)

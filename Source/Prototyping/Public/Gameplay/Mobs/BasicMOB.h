@@ -95,9 +95,9 @@ public:
 	virtual void SetIsAggressiveState_Implementation(int32 TargetId, ECasterType TargetType, bool bIsAggressive) override;
 	virtual void ClearTarget_Implementation() override;
 	
-	virtual void PlaySkillAnimation_Implementation(const FString& AnimationName, float Duration = 0.0f) override;
+	virtual void PlaySkillAnimation_Implementation(const FString& AnimationName, const FString& SkillSlug, float Duration = 0.0f) override;
 	virtual void ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, ESkillSchool School, bool bIsMissed, bool bIsBlocked, const FString& SkillSlug) override;
-	virtual void ShowHealingEffect_Implementation(int32 Healing) override;
+	virtual void ShowHealingEffect_Implementation(int32 Healing, const FString& SkillSlug) override;
 	virtual void ShowBuffEffect_Implementation(const FAppliedEffectData& Effect) override;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement")
@@ -377,6 +377,15 @@ public:
 
 		UPROPERTY()
 		TArray<USoundBase*> RunSounds;
+
+		UPROPERTY()
+		TArray<USoundBase*> AttackVoiceSounds;
+
+		UPROPERTY()
+		TArray<USoundBase*> CastVoiceSounds;
+
+		UPROPERTY()
+		TArray<USoundBase*> ReleaseVoiceSounds;
 
 		FTimerHandle IdleSoundTimer;
 

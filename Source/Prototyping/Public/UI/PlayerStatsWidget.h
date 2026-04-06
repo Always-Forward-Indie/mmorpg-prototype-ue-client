@@ -20,29 +20,29 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPlayerStatsVisibilityChangedDelegate);
  * Draggable character-stats window.
  *
  * Blueprint binds:
- *  Close_Button        – UButton
- *  DragHandle          – UWidget (optional; whole widget is draggable when absent)
+ *  Close_Button        ï¿½ UButton
+ *  DragHandle          ï¿½ UWidget (optional; whole widget is draggable when absent)
  *
  * Level / vitals row (all optional):
- *  Level_Text          – UTextBlock  ("Lv. 7")
- *  HP_Bar              – UProgressBar
- *  HP_Text             – UTextBlock  ("85 / 150")
- *  MP_Bar              – UProgressBar
- *  MP_Text             – UTextBlock  ("40 / 80")
- *  XP_Bar              – UProgressBar
- *  XP_Text             – UTextBlock  ("3400 / 5000")
- *  Weight_Bar          – UProgressBar
- *  Weight_Text         – UTextBlock  ("18.5 / 74.0 kg")
+ *  Level_Text          ï¿½ UTextBlock  ("Lv. 7")
+ *  HP_Bar              ï¿½ UProgressBar
+ *  HP_Text             ï¿½ UTextBlock  ("85 / 150")
+ *  MP_Bar              ï¿½ UProgressBar
+ *  MP_Text             ï¿½ UTextBlock  ("40 / 80")
+ *  XP_Bar              ï¿½ UProgressBar
+ *  XP_Text             ï¿½ UTextBlock  ("3400 / 5000")
+ *  Weight_Bar          ï¿½ UProgressBar
+ *  Weight_Text         ï¿½ UTextBlock  ("18.5 / 74.0 kg")
  *
  * Attributes container (all optional):
- *  Attributes_Box      – UVerticalBox  (row widgets added dynamically)
+ *  Attributes_Box      ï¿½ UVerticalBox  (row widgets added dynamically)
  *
  * Active effects container (all optional):
- *  Effects_Box         – UVerticalBox  (row widgets added dynamically)
+ *  Effects_Box         ï¿½ UVerticalBox  (row widgets added dynamically)
  *
  * The designer must also expose:
- *  AttributeRowClass   – TSubclassOf<UUserWidget>  (one text block per attribute row)
- *  EffectRowClass      – TSubclassOf<UUserWidget>  (one text block per effect row)
+ *  AttributeRowClass   ï¿½ TSubclassOf<UUserWidget>  (one text block per attribute row)
+ *  EffectRowClass      ï¿½ TSubclassOf<UUserWidget>  (one text block per effect row)
  */
 UCLASS(BlueprintType, Blueprintable)
 class PROTOTYPING_API UPlayerStatsWidget : public UFocusableWindowWidget
@@ -84,6 +84,10 @@ protected:
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UTextBlock* Level_Text = nullptr;
+
+    // "SP: 2"  â€” free unspent skill points (optional)
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* SP_Text = nullptr;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UProgressBar* HP_Bar = nullptr;
@@ -152,7 +156,7 @@ private:
     UPROPERTY()
     UPlayerStatsManager* StatsManager = nullptr;
 
-    // Last received stats — always kept fresh regardless of window visibility
+    // Last received stats ï¿½ always kept fresh regardless of window visibility
     FPlayerStatsUpdateStruct CachedStats;
 
     // Repeating 1-second timer that keeps effect countdown text live

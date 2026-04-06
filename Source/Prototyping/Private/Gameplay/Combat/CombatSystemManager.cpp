@@ -1,5 +1,4 @@
 #include "Gameplay/Combat/CombatSystemManager.h"
-#include "Gameplay/Combat/CombatSystemManager.h"
 #include "Gameplay/Combat/ISkillEffectHandler.h"
 #include "Gameplay/Combat/ICombatable.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
@@ -250,7 +249,13 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
         UObject* CasterObject = Caster.GetObject();
 
         // Play animation on caster (animationDuration drives PlayRate)
-        ICombatable::Execute_PlaySkillAnimation(CasterObject, SkillData.animationName, SkillData.animationDuration);
+        ICombatable::Execute_PlaySkillAnimation(CasterObject, SkillData.animationName, SkillData.skillSlug, SkillData.animationDuration);
+
+        // Show cast bar if the skill has a cast time (castTime > 0 means a channeled / cast-time spell)
+        if (SkillData.castTime > 0.0f)
+        {
+            ICombatable::Execute_ShowCastBar(CasterObject, SkillData.castTime, SkillData.skillName);
+        }
 
 		// Set target if specified
 		if (SkillData.targetId > 0)
@@ -455,13 +460,13 @@ void UCombatSystemManager::ApplySkillEffects(const FSkillResultData& SkillResult
         return;
     }
 
-    // Найти и вызвать соответствующий хендлер
+    // пїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     TScriptInterface<ISkillEffectHandler> Handler = FindEffectHandler(SkillResult.skillEffectType);
     if (Handler.GetInterface() && Handler.GetObject() && IsValid(Handler.GetObject()))
     {
         UObject* HandlerObject = Handler.GetObject();
 
-        // Хендлер полностью отвечает за применение эффектов
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         ISkillEffectHandler::Execute_ProcessSkillResult(HandlerObject, SkillResult, Target);
 
         UE_LOG(LogTemp, Verbose, TEXT("CombatSystemManager: Successfully processed skill effect %s via handler"),
@@ -511,7 +516,7 @@ void UCombatSystemManager::FlushPendingResults(int32 CasterId)
     {
         const FSkillResultData& SkillResult = Pending.ResultData;
 
-        // Find target — use MapNetCasterType for robust string-first mapping
+        // Find target пїЅ use MapNetCasterType for robust string-first mapping
         ECasterType TargetType = MapNetCasterType(SkillResult.targetType, SkillResult.targetTypeString);
         TScriptInterface<ICombatable> Target = FindCombatableById(SkillResult.targetId, TargetType);
 

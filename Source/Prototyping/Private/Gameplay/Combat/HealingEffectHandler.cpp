@@ -45,7 +45,7 @@ void UHealingEffectHandler::ProcessSkillResult_Implementation(const FSkillResult
     }
 
     // Show healing effect
-    ICombatable::Execute_ShowHealingEffect(TargetObject, ActualHealing);
+    ICombatable::Execute_ShowHealingEffect(TargetObject, ActualHealing, SkillResult.skillSlug);
 
     // Handle overheal if any
     if (FinalHealing > ActualHealing)

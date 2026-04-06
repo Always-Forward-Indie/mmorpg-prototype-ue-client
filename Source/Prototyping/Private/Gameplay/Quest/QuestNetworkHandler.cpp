@@ -27,7 +27,7 @@ void UQuestNetworkHandler::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("QuestNetworkHandler: Cannot subscribe – NetworkManager is null"));
+        UE_LOG(LogTemp, Error, TEXT("QuestNetworkHandler: Cannot subscribe ï¿½ NetworkManager is null"));
         return;
     }
     if (bIsSubscribed)
@@ -60,7 +60,8 @@ void UQuestNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
 
     static const TArray<FString> HandledEvents = {
         TEXT("QUEST_UPDATE"), TEXT("quest_offered"), TEXT("quest_turned_in"),
-        TEXT("exp_received"), TEXT("item_received"), TEXT("gold_received")
+        TEXT("quest_failed"), TEXT("exp_received"), TEXT("item_received"),
+        TEXT("gold_received"), TEXT("reputationChanged")
     };
 
     if (!HandledEvents.Contains(EventType))
@@ -116,6 +117,20 @@ void UQuestNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
         FGoldReceivedData Data;
         Body->TryGetNumberField(TEXT("amount"), Data.amount);
         QuestManager->OnGoldReceived(Data);
+    }
+    else if (EventType == TEXT("quest_failed"))
+    {
+        FQuestFailedData Data;
+        Body->TryGetNumberField(TEXT("questId"),      Data.questId);
+        Body->TryGetStringField(TEXT("clientQuestKey"), Data.clientQuestKey);
+        QuestManager->OnQuestFailed(Data);
+    }
+    else if (EventType == TEXT("reputationChanged"))
+    {
+        FReputationChangedData Data;
+        Body->TryGetStringField(TEXT("faction"), Data.faction);
+        Body->TryGetNumberField(TEXT("delta"),   Data.delta);
+        QuestManager->OnReputationChanged(Data);
     }
 }
 

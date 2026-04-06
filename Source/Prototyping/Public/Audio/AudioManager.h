@@ -28,7 +28,7 @@ enum class EMusicPlaybackMode : uint8
 };
 
 // ---------------------------------------------------------------------------
-// UI sound event types — bind a sound asset to each in DT_UISounds or directly
+// UI sound event types ï¿½ bind a sound asset to each in DT_UISounds or directly
 // on the AudioManager in the GameInstance Blueprint defaults.
 // ---------------------------------------------------------------------------
 UENUM(BlueprintType)
@@ -47,6 +47,8 @@ enum class EUISoundEvent : uint8
 	ErrorSound       UMETA(DisplayName = "Error"),
 	ChatMessage      UMETA(DisplayName = "Chat Message"),
 	Notification     UMETA(DisplayName = "Notification"),
+	SkillReady       UMETA(DisplayName = "Skill Ready"),
+	SkillCooldownStart UMETA(DisplayName = "Skill Cooldown Start"),
 };
 
 // ---------------------------------------------------------------------------
@@ -105,7 +107,7 @@ struct PROTOTYPING_API FZoneMusicEntry
 };
 
 // ---------------------------------------------------------------------------
-// UI sound map entry — assign a sound asset to each EUISoundEvent.
+// UI sound map entry ï¿½ assign a sound asset to each EUISoundEvent.
 // ---------------------------------------------------------------------------
 USTRUCT(BlueprintType)
 struct PROTOTYPING_API FUISoundEntry
@@ -128,7 +130,7 @@ struct PROTOTYPING_API FUISoundEntry
 //   Audio | Playlists  - define every music context
 //   Audio | Zone Music - map server zone names to playlist ids
 //   Audio | UI Sounds  - map EUISoundEvent to sound assets
-//   Audio | Stingers   - short one-shot sounds (LevelUp, RareDrop, …)
+//   Audio | Stingers   - short one-shot sounds (LevelUp, RareDrop, ï¿½)
 // ---------------------------------------------------------------------------
 UCLASS(BlueprintType)
 class PROTOTYPING_API UAudioManager : public UObject
@@ -138,7 +140,7 @@ class PROTOTYPING_API UAudioManager : public UObject
 public:
 
 	// -----------------------------------------------------------------------
-	// Sound routing setup — assign in the GameInstance Blueprint defaults.
+	// Sound routing setup ï¿½ assign in the GameInstance Blueprint defaults.
 	// -----------------------------------------------------------------------
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Setup")
 	USoundMix* MasterSoundMix = nullptr;
@@ -161,7 +163,7 @@ public:
 	USoundClass* UIClass = nullptr;
 
 	// -----------------------------------------------------------------------
-	// Playlists — fill in the GameInstance Blueprint defaults.
+	// Playlists ï¿½ fill in the GameInstance Blueprint defaults.
 	// -----------------------------------------------------------------------
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Playlists")
 	TArray<FMusicPlaylist> Playlists;
@@ -173,13 +175,13 @@ public:
 	TArray<FZoneMusicEntry> ZoneMusicMap;
 
 	// -----------------------------------------------------------------------
-	// UI Sounds — map each EUISoundEvent to a sound asset.
+	// UI Sounds ï¿½ map each EUISoundEvent to a sound asset.
 	// -----------------------------------------------------------------------
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|UI Sounds")
 	TArray<FUISoundEntry> UISounds;
 
 	// -----------------------------------------------------------------------
-	// Stingers — short non-looping sounds played on top of the music.
+	// Stingers ï¿½ short non-looping sounds played on top of the music.
 	// Can also be triggered via PlayStinger().
 	// -----------------------------------------------------------------------
 
@@ -225,7 +227,7 @@ public:
 	FString LoginPlaylistId;
 
 	// -----------------------------------------------------------------------
-	// Volume control (0.0 – 1.0)
+	// Volume control (0.0 ï¿½ 1.0)
 	// -----------------------------------------------------------------------
 	UFUNCTION(BlueprintCallable, Category = "Audio|Volume")
 	void SetMasterVolume(float Volume);

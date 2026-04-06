@@ -4,6 +4,9 @@
 #include "Engine/DataTable.h"
 #include "EffectDefinitionTable.generated.h"
 
+class UNiagaraSystem;
+class USoundBase;
+
 /**
  * Row in the EffectDefinition data table.
  *
@@ -31,7 +34,7 @@ struct FEffectDefinitionRow : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect Definition")
     TSoftObjectPtr<UTexture2D> Icon;
 
-    // "buff", "debuff", "dot", "hot" — drives tint colour in the slot
+    // "buff", "debuff", "dot", "hot" ï¿½ drives tint colour in the slot
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect Definition")
     FString EffectCategory = TEXT("buff");
 
@@ -42,6 +45,14 @@ struct FEffectDefinitionRow : public FTableRowBase
     // Mark rows that represent passive skills so the slot displays "?" instead of a countdown
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect Definition")
     bool bIsPassive = false;
+
+    // Sound played on the target when this effect is applied
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect Definition|Audio")
+    TSoftObjectPtr<USoundBase> ApplySound;
+
+    // Niagara VFX spawned on the target when this effect is applied
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect Definition|VFX")
+    TSoftObjectPtr<UNiagaraSystem> ApplyVFX;
 
     FEffectDefinitionRow()
     {

@@ -16,9 +16,11 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
+#include "Data/EntityAudioRepository.h"
 #include "Particles/ParticleSystem.h"
 #include "NiagaraSystem.h"
 #include "NiagaraFunctionLibrary.h"
+#include "Data/EffectDefinitionTable.h"
 
 // Convert ESkillSchool to EDamageType for floating combat text
 static EDamageType MOBSchoolToDamageType(ESkillSchool School)
@@ -199,7 +201,7 @@ void ABasicMOB::OnReceiveSkillInitiation(const FSkillInitiationData& SkillData)
 
 	// This method is only called by CombatSystemManager when this mob IS the caster,
 	// so we unconditionally drive the animation and hit-point notify binding.
-	PlaySkillAnimation_Implementation(SkillData.animationName, SkillData.animationDuration);
+	PlaySkillAnimation_Implementation(SkillData.animationName, SkillData.skillSlug, SkillData.animationDuration);
 
 	if (UMOBAnimInstance* AnimInst = Cast<UMOBAnimInstance>(GetMesh()->GetAnimInstance()))
 	{
@@ -624,13 +626,13 @@ void ABasicMOB::SetIsAggressiveState_Implementation(int32 TargetId, ECasterType 
 		GetActorId_Implementation(), bIsAggressive ? TEXT("Aggressive") : TEXT("Passive"));
 }
 
-void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, float Duration)
+void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, const FString& SkillSlug, float Duration)
 {
-    UE_LOG(LogTemp, Log, TEXT("MOB %d playing skill animation: %s (Duration: %.1f)"), 
-        GetActorId_Implementation(), *AnimationName, Duration);
+    UE_LOG(LogTemp, Log, TEXT("MOB %d playing skill animation: %s (slug: %s, Duration: %.1f)"), 
+        GetActorId_Implementation(), *AnimationName, *SkillSlug, Duration);
 
     // Remember which skill is being cast so ShowDamageEffect can look up hitSound/hitEffect
-    CurrentSkillName = AnimationName;
+    CurrentSkillName = SkillSlug.IsEmpty() ? AnimationName : SkillSlug;
 
     // --- Cast sound + cast particle from SkillDefinitionRepository ---
     bool bCastSoundPlayed = false;
@@ -638,7 +640,8 @@ void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, 
     {
         if (USkillDefinitionRepository* Repo = GI->GetSkillDefinitionRepository())
         {
-            const FSkillDefinitionData& Def = Repo->GetDefinition(AnimationName);
+            const FString LookupKey = SkillSlug.IsEmpty() ? AnimationName : SkillSlug;
+            const FSkillDefinitionData& Def = Repo->GetDefinition(LookupKey);
 
 			if (!Def.castSound.IsNull())
 			{
@@ -649,24 +652,25 @@ void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, 
 				}
 			}
 
-            if (!Def.castEffect.IsNull())
-            {
-                if (UParticleSystem* Effect = Def.castEffect.LoadSynchronous())
-                {
-                    // Use socket-based position if CastSocketName is set
-                    FVector CastLoc = GetActorLocation();
-                    FRotator CastRot = GetActorRotation();
-                    if (Def.CastSocketName != NAME_None && GetMesh() && GetMesh()->DoesSocketExist(Def.CastSocketName))
-                    {
-                        CastLoc = GetMesh()->GetSocketLocation(Def.CastSocketName);
-                        CastRot = GetMesh()->GetSocketRotation(Def.CastSocketName);
-                    }
-                    UGameplayStatics::SpawnEmitterAtLocation(
-                        GetWorld(), Effect, CastLoc, CastRot);
-                }
-            }
+			// Cast start voice: Priority 1 — skill-specific (same for any entity casting this skill)
+			//                   Priority 2 — mob's own voice pool (CastVoiceSounds)
+			{
+				USoundBase* VoiceToPlay = nullptr;
+				if (!Def.castStartVoice.IsNull())
+				{
+					VoiceToPlay = Def.castStartVoice.LoadSynchronous();
+				}
+				else if (CastVoiceSounds.Num() > 0)
+				{
+					VoiceToPlay = CastVoiceSounds[FMath::RandRange(0, CastVoiceSounds.Num() - 1)];
+				}
+				if (VoiceToPlay)
+				{
+					SpawnSFXAttached(this, VoiceToPlay, GetActorLocation());
+				}
+			}
 
-            // Niagara cast effect (preferred over Cascade)
+            // Niagara cast effect
             if (!Def.castEffectNiagara.IsNull())
             {
                 if (UNiagaraSystem* NiagaraEffect = Def.castEffectNiagara.LoadSynchronous())
@@ -683,13 +687,21 @@ void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, 
                 }
             }
 
-			// Play swing sound if defined (melee woosh before impact)
-			if (!Def.swingSound.IsNull())
+			// Swing sound: Priority 1 — mob-specific (FMobAudioData::SwingSound via SoundMap["Swing"])
+			// Priority 2 — skill-level generic fallback (FSkillDefinitionData::swingSound)
+			// This mirrors the player: Weapon.EquippedSwingSound → SkillData.swingSound
+			USoundBase* SwingToPlay = nullptr;
+			if (USoundBase** MobSwing = SoundMap.Find(FName("Swing")))
 			{
-				if (USoundBase* Swing = Def.swingSound.LoadSynchronous())
-				{
-					SpawnSFXAttached(this, Swing, GetActorLocation());
-				}
+				SwingToPlay = *MobSwing;
+			}
+			else if (!Def.swingSound.IsNull())
+			{
+				SwingToPlay = Def.swingSound.LoadSynchronous();
+			}
+			if (SwingToPlay)
+			{
+				SpawnSFXAttached(this, SwingToPlay, GetActorLocation());
 			}
         }
     }
@@ -845,23 +857,6 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
 				}
 			}
 
-            if (!Def.hitEffect.IsNull())
-            {
-                if (UParticleSystem* Effect = Def.hitEffect.LoadSynchronous())
-                {
-                    // Use socket-based position if HitSocketName is set on the target
-                    FVector HitLoc = GetCombatPosition_Implementation();
-                    FRotator HitRot = FRotator::ZeroRotator;
-                    if (Def.HitSocketName != NAME_None && GetMesh() && GetMesh()->DoesSocketExist(Def.HitSocketName))
-                    {
-                        HitLoc = GetMesh()->GetSocketLocation(Def.HitSocketName);
-                        HitRot = GetMesh()->GetSocketRotation(Def.HitSocketName);
-                    }
-                    UGameplayStatics::SpawnEmitterAtLocation(
-                        GetWorld(), Effect, HitLoc, HitRot);
-                }
-            }
-
             // Niagara hit effect (preferred over Cascade)
             if (!Def.hitEffectNiagara.IsNull())
             {
@@ -876,6 +871,15 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
                     }
                     UNiagaraFunctionLibrary::SpawnSystemAtLocation(
                         GetWorld(), NiagaraEffect, HitLoc, HitRot);
+                }
+            }
+
+            // Critical hit sound (layered on top of regular hit sound)
+            if (bIsCritical && !bIsMissed && !Def.critSound.IsNull())
+            {
+                if (USoundBase* CritSnd = Def.critSound.LoadSynchronous())
+                {
+                    SpawnSFXAttached(this, CritSnd, GetActorLocation());
                 }
             }
         }
@@ -910,16 +914,77 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
 	}
 }
 
-void ABasicMOB::ShowHealingEffect_Implementation(int32 Healing)
+void ABasicMOB::ShowHealingEffect_Implementation(int32 Healing, const FString& SkillSlug)
 {
-    UE_LOG(LogTemp, Log, TEXT("MOB %d healed for %d"), GetActorId_Implementation(), Healing);
-    
+    UE_LOG(LogTemp, Log, TEXT("MOB %d healed for %d (skill: %s)"), GetActorId_Implementation(), Healing, *SkillSlug);
+
+    UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
+    if (!GI) return;
+
+    if (USkillDefinitionRepository* Repo = GI->GetSkillDefinitionRepository())
+    {
+        const FSkillDefinitionData& Def = Repo->GetDefinition(SkillSlug);
+
+        if (!Def.healSound.IsNull())
+        {
+            if (USoundBase* Snd = Def.healSound.LoadSynchronous())
+            {
+                SpawnSFXAttached(this, Snd, GetActorLocation());
+            }
+        }
+
+        if (!Def.healEffectNiagara.IsNull())
+        {
+            if (UNiagaraSystem* HealVFX = Def.healEffectNiagara.LoadSynchronous())
+            {
+                FVector HealLoc = GetCombatPosition_Implementation();
+                FRotator HealRot = FRotator::ZeroRotator;
+                if (Def.HitSocketName != NAME_None && GetMesh() && GetMesh()->DoesSocketExist(Def.HitSocketName))
+                {
+                    HealLoc = GetMesh()->GetSocketLocation(Def.HitSocketName);
+                    HealRot = GetMesh()->GetSocketRotation(Def.HitSocketName);
+                }
+                UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), HealVFX, HealLoc, HealRot);
+            }
+        }
+    }
 }
 
 void ABasicMOB::ShowBuffEffect_Implementation(const FAppliedEffectData& Effect)
 {
     UE_LOG(LogTemp, Log, TEXT("MOB %d received %s effect: %s (Value: %d, Duration: %.1f)"), 
         GetActorId_Implementation(), *Effect.effectType, *Effect.effectName, Effect.value, Effect.duration);
+
+    UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
+    if (!GI) return;
+
+    UDataTable* EffectTable = GI->GetEffectDefinitionTable();
+    if (!EffectTable) return;
+
+    FName RowKey = FName(*Effect.effectName);
+    const FEffectDefinitionRow* Row = EffectTable->FindRow<FEffectDefinitionRow>(RowKey, TEXT(""));
+    if (!Row) return;
+
+    // Play apply sound
+    if (!Row->ApplySound.IsNull())
+    {
+        if (USoundBase* Snd = Row->ApplySound.LoadSynchronous())
+        {
+            SpawnSFXAttached(this, Snd, GetActorLocation());
+        }
+    }
+
+    // Spawn apply VFX
+    if (!Row->ApplyVFX.IsNull())
+    {
+        if (UNiagaraSystem* VFX = Row->ApplyVFX.LoadSynchronous())
+        {
+            UNiagaraFunctionLibrary::SpawnSystemAttached(
+                VFX, GetMesh(), NAME_None,
+                FVector::ZeroVector, FRotator::ZeroRotator,
+                EAttachLocation::SnapToTarget, true);
+        }
+    }
 }
 
 void ABasicMOB::SetupMobVisual(FName MobSlug)
@@ -1009,18 +1074,97 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 	const FMobDefinition* Definition = MobDefinitionTable->FindRow<FMobDefinition>(MobSlug, TEXT("Load MOB Audio"));
 	if (!Definition) return;
 
-	const FMobAudioData& AudioData = Definition->Audio;
 	FStreamableManager& Streamable = UAssetManager::GetStreamableManager();
+	TWeakObjectPtr<ABasicMOB> WeakThis(this);
+
+	// ---------------------------------------------------------------
+	// Priority 1 — Entity Audio Profile (Data-Driven, shareable rows)
+	// Set AudioProfileId on the FMobDefinition row in the DataTable.
+	// ---------------------------------------------------------------
+	if (!Definition->AudioProfileId.IsNone())
+	{
+		UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
+		const FEntityAudioProfile* Profile = nullptr;
+		if (GI)
+		{
+			if (UEntityAudioRepository* Repo = GI->GetEntityAudioRepository())
+			{
+				Profile = Repo->FindProfile(Definition->AudioProfileId);
+			}
+		}
+
+		if (Profile)
+		{
+			// Single sounds → SoundMap
+			TArray<TPair<FName, TSoftObjectPtr<USoundBase>>> SoundsToLoad = {
+				{ "Attack", Profile->AttackGeneric },
+				{ "Aggro",  Profile->Aggro },
+				{ "Hit",    Profile->HitReceived },
+				{ "Death",  Profile->Death },
+				{ "Swing",  Profile->SwingSound }
+			};
+			for (const auto& Pair : SoundsToLoad)
+			{
+				Streamable.RequestAsyncLoad(Pair.Value.ToSoftObjectPath(), [WeakThis, Pair]()
+					{
+						if (!WeakThis.IsValid()) return;
+						if (USoundBase* Loaded = Pair.Value.Get())
+						{
+							WeakThis->SoundMap.Add(Pair.Key, Loaded);
+						}
+					});
+			}
+
+			// Array sounds — loaded into respective mob arrays
+			auto LoadArray = [&](const TArray<TSoftObjectPtr<USoundBase>>& Source, TArray<USoundBase*>& Target)
+			{
+				for (const auto& SoundSoft : Source)
+				{
+					Streamable.RequestAsyncLoad(SoundSoft.ToSoftObjectPath(), [WeakThis, SoundSoft, &Target]()
+						{
+							if (!WeakThis.IsValid()) return;
+							if (USoundBase* Loaded = SoundSoft.Get())
+							{
+								Target.Add(Loaded);
+							}
+						});
+				}
+			};
+
+			LoadArray(Profile->IdleAmbient,       IdleSounds);
+			LoadArray(Profile->FootstepsRun,       RunSounds);
+			LoadArray(Profile->FootstepsWalk,      WalkSounds);
+			LoadArray(Profile->VoiceAttack,        AttackVoiceSounds);
+			LoadArray(Profile->VoiceCastStart,     CastVoiceSounds);
+			LoadArray(Profile->VoiceCastRelease,   ReleaseVoiceSounds);
+
+			// Idle ambient timer
+			GetWorld()->GetTimerManager().SetTimer(IdleSoundTimer, this, &ABasicMOB::PlayRandomIdleSound, FMath::RandRange(5.f, 15.f), false);
+			return;  // Profile fully loaded — skip legacy FMobAudioData below
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("ABasicMOB::SetupMobAudio: AudioProfileId '%s' not found in EntityAudioProfilesTable for mob '%s'. Falling back to legacy FMobAudioData."),
+				*Definition->AudioProfileId.ToString(), *MobSlug.ToString());
+		}
+	}
+
+	// ---------------------------------------------------------------
+	// Priority 2 — Legacy inline FMobAudioData (backward-compatible)
+	// Migrate rows to AudioProfileId over time; do not add new sounds here.
+	// ---------------------------------------------------------------
+	const FMobAudioData& AudioData = Definition->Audio;
 
 	// Основные звуки
 	TArray<TPair<FName, TSoftObjectPtr<USoundBase>>> SoundsToLoad = {
 		{ "Attack", AudioData.AttackSound },
 		{ "Aggro",  AudioData.AggroSound },
 		{ "Hit",    AudioData.HitSound },
-		{ "Death",  AudioData.DeathSound }
+		{ "Death",  AudioData.DeathSound },
+		{ "Swing",  AudioData.SwingSound }
 	};
 
-	TWeakObjectPtr<ABasicMOB> WeakThis(this);
 	for (const auto& Pair : SoundsToLoad)
 	{
 		Streamable.RequestAsyncLoad(Pair.Value.ToSoftObjectPath(), [WeakThis, Pair]()
@@ -1068,6 +1212,45 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 				if (USoundBase* Loaded = SoundSoft.Get())
 				{
 					WeakThis->WalkSounds.Add(Loaded);
+				}
+			});
+	}
+
+	// AttackVoice звуки (рык/крик при атаке)
+	for (const auto& SoundSoft : AudioData.AttackVoiceSounds)
+	{
+		Streamable.RequestAsyncLoad(SoundSoft.ToSoftObjectPath(), [WeakThis, SoundSoft]()
+			{
+				if (!WeakThis.IsValid()) { return; }
+				if (USoundBase* Loaded = SoundSoft.Get())
+				{
+					WeakThis->AttackVoiceSounds.Add(Loaded);
+				}
+			});
+	}
+
+	// CastVoice звуки (голос при начале каста)
+	for (const auto& SoundSoft : AudioData.CastVoiceSounds)
+	{
+		Streamable.RequestAsyncLoad(SoundSoft.ToSoftObjectPath(), [WeakThis, SoundSoft]()
+			{
+				if (!WeakThis.IsValid()) { return; }
+				if (USoundBase* Loaded = SoundSoft.Get())
+				{
+					WeakThis->CastVoiceSounds.Add(Loaded);
+				}
+			});
+	}
+
+	// ReleaseVoice звуки (голос при выпуске скилла)
+	for (const auto& SoundSoft : AudioData.ReleaseVoiceSounds)
+	{
+		Streamable.RequestAsyncLoad(SoundSoft.ToSoftObjectPath(), [WeakThis, SoundSoft]()
+			{
+				if (!WeakThis.IsValid()) { return; }
+				if (USoundBase* Loaded = SoundSoft.Get())
+				{
+					WeakThis->ReleaseVoiceSounds.Add(Loaded);
 				}
 			});
 	}
@@ -1598,6 +1781,22 @@ void ABasicMOB::InitializeUIDelayed()
 void ABasicMOB::Die()
 {
 	PlaySoundByName("Death");
+
+	// Spawn death VFX if defined in MobDefinitionTable
+	if (MobDefinitionTable)
+	{
+		FName SlugKey = FName(*MOBData.mobSlug);
+		if (const FMobDefinition* Def = MobDefinitionTable->FindRow<FMobDefinition>(SlugKey, TEXT("")))
+		{
+			if (!Def->Visual.DeathVFX.IsNull())
+			{
+				if (UNiagaraSystem* VFX = Def->Visual.DeathVFX.LoadSynchronous())
+				{
+					UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), VFX, GetActorLocation());
+				}
+			}
+		}
+	}
 
 	// set target id to 0
 	SetMobTargetId(0);

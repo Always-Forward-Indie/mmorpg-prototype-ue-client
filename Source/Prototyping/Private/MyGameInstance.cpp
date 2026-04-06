@@ -19,6 +19,7 @@
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
+#include "Data/EntityAudioRepository.h"
 #include "Gameplay/Skills/PlayerSkillNetworkHandler.h"
 #include "Gameplay/Skills/PlayerSkillSystemFactory.h"
 #include "Gameplay/UI/PlayerInterfaceWidget.h"
@@ -41,6 +42,8 @@
 #include "Gameplay/Vendor/VendorNetworkHandler.h"
 #include "Gameplay/Repair/RepairManager.h"
 #include "Gameplay/Repair/RepairNetworkHandler.h"
+#include "Gameplay/SkillShop/SkillShopManager.h"
+#include "Gameplay/SkillShop/SkillShopNetworkHandler.h"
 
 #include "Gameplay/Bestiary/BestiaryNetworkHandler.h"
 #include "Gameplay/Chat/ChatManager.h"
@@ -129,6 +132,10 @@ void UMyGameInstance::Init()
 	// Initialize Repair System
 	RepairManager = NewObject<URepairManager>(this);
 	RepairNetworkHandler = NewObject<URepairNetworkHandler>(this);
+
+	// Initialize Skill Shop System (NPC trainer)
+	SkillShopManager = NewObject<USkillShopManager>(this);
+	SkillShopNetworkHandler = NewObject<USkillShopNetworkHandler>(this);
 
 	// Initialize player stats manager
 	PlayerStatsManager = NewObject<UPlayerStatsManager>(this);
@@ -368,6 +375,14 @@ void UMyGameInstance::InitNetworkingSetup()
 		UE_LOG(LogTemp, Warning, TEXT("Cannot create player skill system - missing dependencies or SkillDefinitionsDataTable not configured"));
 	}
 
+	// Initialize EntityAudioRepository
+	EntityAudioRepositoryRef = NewObject<UEntityAudioRepository>(this);
+	if (EntityAudioRepositoryRef)
+	{
+	EntityAudioRepositoryRef->Initialize(EntityAudioProfilesTable);
+		EntityAudioRepositoryRef->InitializeSkillVoiceOverrides(EntitySkillVoiceOverridesTable);
+	}
+
 	// Initialize CombatNetworkHandler centrally AFTER CombatSystemManager
 	if (CombatNetworkHandler != nullptr && CombatSystemManager != nullptr) {
 		// Initialize the combat network handler
@@ -472,6 +487,21 @@ void UMyGameInstance::InitNetworkingSetup()
 		RepairNetworkHandler->Initialize(RepairManager, GetNetworkManager());
 		RepairNetworkHandler->SubscribeToNetworkEvents();
 		UE_LOG(LogTemp, Warning, TEXT("RepairNetworkHandler initialized and subscribed"));
+	}
+
+	// Initialize Skill Shop System (NPC trainer)
+	// Must be after PlayerSkillManager is created by PlayerSkillSystemFactory
+	if (SkillShopManager)
+	{
+		SkillShopManager->Initialize(GetNetworkManager(), this);
+		UE_LOG(LogTemp, Warning, TEXT("SkillShopManager initialized"));
+	}
+
+	if (SkillShopNetworkHandler && SkillShopManager)
+	{
+		SkillShopNetworkHandler->Initialize(SkillShopManager, GetNetworkManager(), PlayerSkillManager);
+		SkillShopNetworkHandler->SubscribeToNetworkEvents();
+		UE_LOG(LogTemp, Warning, TEXT("SkillShopNetworkHandler initialized and subscribed"));
 	}
 
 	// Initialize Trade System
@@ -719,6 +749,11 @@ UPlayerSkillManager* UMyGameInstance::GetPlayerSkillManager()
 USkillDefinitionRepository* UMyGameInstance::GetSkillDefinitionRepository()
 {
 	return SkillDefinitionRepository;
+}
+
+UEntityAudioRepository* UMyGameInstance::GetEntityAudioRepository()
+{
+	return EntityAudioRepositoryRef;
 }
 
 UPlayerSkillNetworkHandler* UMyGameInstance::GetPlayerSkillNetworkHandler()
@@ -2185,6 +2220,11 @@ UVendorManager* UMyGameInstance::GetVendorManager() const
 URepairManager* UMyGameInstance::GetRepairManager() const
 {
 	return RepairManager;
+}
+
+USkillShopManager* UMyGameInstance::GetSkillShopManager() const
+{
+	return SkillShopManager;
 }
 
 UTradeManager* UMyGameInstance::GetTradeManager() const

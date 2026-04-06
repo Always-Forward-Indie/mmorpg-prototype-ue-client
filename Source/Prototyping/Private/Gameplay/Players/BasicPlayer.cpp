@@ -21,6 +21,8 @@
 #include "Gameplay/Quest/QuestManager.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "Gameplay/Equipment/EquipmentVisualComponent.h"
+#include "Gameplay/Items/ItemManager.h"
+#include "Data/ItemStruct.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Gameplay/Repair/RepairManager.h"
 #include "Gameplay/Trade/TradeManager.h"
@@ -32,14 +34,19 @@
 #include "Camera/CameraComponent.h"
 #include "Gameplay/UI/ActiveEffectsWidget.h"
 #include "Gameplay/UI/PlayerInterfaceWidget.h"
+#include "Gameplay/UI/PlayerHUD.h"
+#include "Gameplay/UI/CastBarWidget.h"
+#include "Gameplay/Combat/BaseMMOProjectile.h"
 #include "Gameplay/Players/PlayerAnimInstance.h"
 #include "Gameplay/UI/PlayerNameplateComponent.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
+#include "Data/EntityAudioRepository.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 #include "Particles/ParticleSystem.h"
 #include "NiagaraSystem.h"
 #include "NiagaraFunctionLibrary.h"
+#include "Data/EffectDefinitionTable.h"
 
 // Convert ESkillSchool to EDamageType for FloatingCombatTextManager
 static EDamageType SchoolToDamageType(ESkillSchool School)
@@ -1162,12 +1169,16 @@ Super::BeginPlay();
 						MyGameInstance ? MyGameInstance->GetRepairManager()    : nullptr,
 						MyGameInstance ? MyGameInstance->GetTradeManager()     : nullptr);
 
-				// Bind character stats widget to the stats manager
-					UIManager->InitializeStatsWidget(
-						MyGameInstance ? MyGameInstance->GetPlayerStatsManager() : nullptr);
+			// Bind skill shop widget to the skill shop manager
+				UIManager->InitializeSkillShopWidget(
+					MyGameInstance ? MyGameInstance->GetSkillShopManager() : nullptr);
 
-					// Initialize world notification system (bestiary + toast/zone/etc.)
-					if (MyGameInstance && MyGameInstance->GetBestiaryNetworkHandler())
+			// Bind character stats widget to the stats manager
+				UIManager->InitializeStatsWidget(
+					MyGameInstance ? MyGameInstance->GetPlayerStatsManager() : nullptr);
+
+				// Initialize world notification system (bestiary + toast/zone/etc.)
+				if (MyGameInstance && MyGameInstance->GetBestiaryNetworkHandler())
 					{
 						UIManager->InitializeNotificationSystem(MyGameInstance->GetBestiaryNetworkHandler());
 						UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: WorldNotificationManager initialized"));
@@ -1238,7 +1249,10 @@ void ABasicPlayer::HandleLevelUp(int32 OldLevel, int32 NewLevel, int32 NewTotalE
     if (playerData.isOtherClient) return;
 
     UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Level up! %d -> %d"), OldLevel, NewLevel);
-    PlayEventSound(LevelUpSound);
+    if (const FEntityAudioProfile* Profile = GetAudioProfile())
+    {
+        PlayEventSound(Profile->LevelUp);
+    }
 }
 
 void ABasicPlayer::HandleUIManagerInitialized()
@@ -2108,6 +2122,17 @@ void ABasicPlayer::StopSound()
     AudioComponent->Stop();
 }
 
+const FEntityAudioProfile* ABasicPlayer::GetAudioProfile() const
+{
+    if (AudioProfileId.IsNone()) return nullptr;
+    if (!MyGameInstance) return nullptr;
+    if (UEntityAudioRepository* Repo = MyGameInstance->GetEntityAudioRepository())
+    {
+        return Repo->FindProfile(AudioProfileId);
+    }
+    return nullptr;
+}
+
 void ABasicPlayer::PlayEventSound(const TSoftObjectPtr<USoundBase>& SoundRef)
 {
     if (SoundRef.IsNull()) return;
@@ -2677,7 +2702,10 @@ void ABasicPlayer::SetDead_Implementation(bool bNewDead)
         }
         HideDeathScreen();
         // Play revive sound
-        PlayEventSound(ReviveSound);
+        if (const FEntityAudioProfile* Profile = GetAudioProfile())
+        {
+            PlayEventSound(Profile->Revive);
+        }
         // Notify Blueprint AnimBP so it can exit the death state
         OnRevive();
         UE_LOG(LogTemp, Warning, TEXT("Player %d has been revived"), GetActorId_Implementation());
@@ -2697,7 +2725,10 @@ void ABasicPlayer::OnDeath_Implementation()
     bIsPickingUp = false;
 
     // Play death sound
-    PlayEventSound(DeathSound);
+    if (const FEntityAudioProfile* Profile = GetAudioProfile())
+    {
+        PlayEventSound(Profile->Death);
+    }
 
     // Disable movement so the player can't walk while dead
     if (UCharacterMovementComponent* Movement = GetCharacterMovement())
@@ -2743,14 +2774,17 @@ void ABasicPlayer::ClearTarget_Implementation()
     UE_LOG(LogTemp, Log, TEXT("Player %d cleared target"), GetActorId_Implementation());
 }
 
-void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationName, float Duration)
+void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationName, const FString& SkillSlug, float Duration)
 {
-    UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] PlaySkillAnimation: player=%d anim='%s' duration=%.3fs"),
-        GetActorId_Implementation(), *AnimationName, Duration);
+    UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] PlaySkillAnimation: player=%d anim='%s' slug='%s' duration=%.3fs"),
+        GetActorId_Implementation(), *AnimationName, *SkillSlug, Duration);
 
     if (!MyGameInstance) return;
     UCombatSystemManager* CombatMgr = MyGameInstance->GetCombatSystemManager();
     if (!CombatMgr) return;
+
+    // Store current skill slug so AnimNotify_PlayerCombatEvent can look up the right definition.
+    CurrentSkillName = SkillSlug.IsEmpty() ? AnimationName : SkillSlug;
 
     const int32 CasterId = GetActorId_Implementation();
 
@@ -2798,7 +2832,10 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
         {
             if (USkillDefinitionRepository* Repo = MyGameInstance->GetSkillDefinitionRepository())
             {
-                const FSkillDefinitionData& Def = Repo->GetDefinition(AnimationName);
+                // Use SkillSlug for definition lookup; fall back to AnimationName so older
+                // DataTable rows that still use animationName as their key still work.
+                const FString LookupKey = SkillSlug.IsEmpty() ? AnimationName : SkillSlug;
+                const FSkillDefinitionData& Def = Repo->GetDefinition(LookupKey);
 
                 // Play cast sound at player location
                 if (!Def.castSound.IsNull())
@@ -2809,24 +2846,7 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
                     }
                 }
 
-                // Spawn cast particle effect at socket or player location
-                if (!Def.castEffect.IsNull())
-                {
-                    if (UParticleSystem* Effect = Def.castEffect.LoadSynchronous())
-                    {
-                        FVector CastLoc = GetActorLocation();
-                        FRotator CastRot = GetActorRotation();
-                        if (Def.CastSocketName != NAME_None && GetMesh() && GetMesh()->DoesSocketExist(Def.CastSocketName))
-                        {
-                            CastLoc = GetMesh()->GetSocketLocation(Def.CastSocketName);
-                            CastRot = GetMesh()->GetSocketRotation(Def.CastSocketName);
-                        }
-                        UGameplayStatics::SpawnEmitterAtLocation(
-                            GetWorld(), Effect, CastLoc, CastRot);
-                    }
-                }
-
-                // Niagara cast effect (preferred over Cascade)
+                // Niagara cast effect
                 if (!Def.castEffectNiagara.IsNull())
                 {
                     if (UNiagaraSystem* NiagaraEffect = Def.castEffectNiagara.LoadSynchronous())
@@ -2843,54 +2863,9 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
                     }
                 }
 
-                // Play swing sound if defined (melee woosh before impact)
-                if (!Def.swingSound.IsNull())
-                {
-                    if (USoundBase* Swing = Def.swingSound.LoadSynchronous())
-                    {
-                        SpawnSFXAttached(this, Swing, GetActorLocation());
-                    }
-                }
-
-                // Spawn projectile if defined
-                if (!Def.projectileClass.IsNull())
-                {
-                    UClass* ProjClass = Def.projectileClass.LoadSynchronous();
-                    if (ProjClass && GetWorld())
-                    {
-                        // Spawn at CastSocketName if defined for this skill,
-                        // fallback to "ProjectileSpawn" socket, then actor location + eye height.
-                        FName ProjSocket = (Def.CastSocketName != NAME_None) ? Def.CastSocketName : FName(TEXT("ProjectileSpawn"));
-                        FVector SpawnLoc = GetMesh() && GetMesh()->DoesSocketExist(ProjSocket)
-                            ? GetMesh()->GetSocketLocation(ProjSocket)
-                            : GetActorLocation() + FVector(0, 0, BaseEyeHeight);
-
-                        // Face the current combat target if one is set.
-                        FRotator SpawnRot = GetActorRotation();
-                        if (CurrentTargetId > 0 && CombatMgr)
-                        {
-                            TScriptInterface<ICombatable> TargetCombatable =
-                                CombatMgr->FindCombatableById(CurrentTargetId, CurrentTargetType);
-                            if (TargetCombatable.GetObject() && IsValid(TargetCombatable.GetObject()))
-                            {
-                                AActor* TargetActor = Cast<AActor>(TargetCombatable.GetObject());
-                                if (TargetActor)
-                                {
-                                    SpawnRot = (TargetActor->GetActorLocation() - SpawnLoc).Rotation();
-                                }
-                            }
-                        }
-
-                        FActorSpawnParameters Params;
-                        Params.SpawnCollisionHandlingOverride =
-                            ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-                        Params.Instigator = this;
-
-                        GetWorld()->SpawnActor<AActor>(ProjClass, SpawnLoc, SpawnRot, Params);
-                        UE_LOG(LogTemp, Log, TEXT("[PlayerAnim] Spawned projectile '%s' for skill '%s'"),
-                            *ProjClass->GetName(), *AnimationName);
-                    }
-                }
+                // swingSound and VoiceAttack are now fired via AnimNotify_PlayerCombatEvent
+                // placed on the montage at the correct timing frame.
+                // Projectile is now spawned at AnimNotify CastRelease via PlayCombatSoundEvent.
             }
         }
     }
@@ -2949,7 +2924,10 @@ void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritica
     // Play hit received sound (generic player grunt / armor clank)
     if (!bIsMissed)
     {
-        PlayEventSound(HitReceivedSound);
+        if (const FEntityAudioProfile* Profile = GetAudioProfile())
+        {
+            PlayEventSound(Profile->HitReceived);
+        }
     }
 
     // --- Hit sound + hit particle from the skill that caused the damage ---
@@ -3035,23 +3013,7 @@ void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritica
                 }
             }
 
-            if (!Def.hitEffect.IsNull())
-            {
-                if (UParticleSystem* Effect = Def.hitEffect.LoadSynchronous())
-                {
-                    FVector HitLoc = GetCombatPosition_Implementation();
-                    FRotator HitRot = FRotator::ZeroRotator;
-                    if (Def.HitSocketName != NAME_None && GetMesh() && GetMesh()->DoesSocketExist(Def.HitSocketName))
-                    {
-                        HitLoc = GetMesh()->GetSocketLocation(Def.HitSocketName);
-                        HitRot = GetMesh()->GetSocketRotation(Def.HitSocketName);
-                    }
-                    UGameplayStatics::SpawnEmitterAtLocation(
-                        GetWorld(), Effect, HitLoc, HitRot);
-                }
-            }
-
-            // Niagara hit effect (preferred over Cascade)
+            // Niagara hit effect
             if (!Def.hitEffectNiagara.IsNull())
             {
                 if (UNiagaraSystem* NiagaraEffect = Def.hitEffectNiagara.LoadSynchronous())
@@ -3065,6 +3027,19 @@ void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritica
                     }
                     UNiagaraFunctionLibrary::SpawnSystemAtLocation(
                         GetWorld(), NiagaraEffect, HitLoc, HitRot);
+                }
+            }
+
+            // Critical hit sound (layered on top of regular hit sound)
+            if (bIsCritical && !bIsMissed && !Def.critSound.IsNull())
+            {
+                if (USoundBase* CritSnd = Def.critSound.LoadSynchronous())
+                {
+                    UAudioComponent* CritAC = UGameplayStatics::SpawnSoundAtLocation(this, CritSnd, GetActorLocation());
+                    if (CritAC && MyGameInstance && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
+                    {
+                        CritAC->SoundClassOverride = MyGameInstance->AudioManager->SFXClass;
+                    }
                 }
             }
         }
@@ -3103,12 +3078,62 @@ void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritica
     }
 }
 
-void ABasicPlayer::ShowHealingEffect_Implementation(int32 Healing)
+void ABasicPlayer::ShowHealingEffect_Implementation(int32 Healing, const FString& SkillSlug)
 {
-    UE_LOG(LogTemp, Log, TEXT("Player %d healed for %d"), GetActorId_Implementation(), Healing);
+    UE_LOG(LogTemp, Log, TEXT("Player %d healed for %d (skill: %s)"), GetActorId_Implementation(), Healing, *SkillSlug);
 
-    // Play heal received sound
-    PlayEventSound(HealReceivedSound);
+    // Look up skill definition for sound and VFX
+    if (MyGameInstance)
+    {
+        if (USkillDefinitionRepository* Repo = MyGameInstance->GetSkillDefinitionRepository())
+        {
+            const FSkillDefinitionData& Def = Repo->GetDefinition(SkillSlug);
+
+            // Heal sound from DataTable (overrides profile HealReceived if set)
+            if (!Def.healSound.IsNull())
+            {
+                PlayEventSound(Def.healSound);
+            }
+            else
+            {
+                // Generic fallback sound from entity audio profile
+                if (const FEntityAudioProfile* Profile = GetAudioProfile())
+                {
+                    PlayEventSound(Profile->HealReceived);
+                }
+            }
+
+            // Heal Niagara VFX at HitSocket (green sparkles on target)
+            if (!Def.healEffectNiagara.IsNull())
+            {
+                if (UNiagaraSystem* HealVFX = Def.healEffectNiagara.LoadSynchronous())
+                {
+                    FVector HealLoc = GetCombatPosition_Implementation();
+                    FRotator HealRot = FRotator::ZeroRotator;
+                    if (Def.HitSocketName != NAME_None && GetMesh() && GetMesh()->DoesSocketExist(Def.HitSocketName))
+                    {
+                        HealLoc = GetMesh()->GetSocketLocation(Def.HitSocketName);
+                        HealRot = GetMesh()->GetSocketRotation(Def.HitSocketName);
+                    }
+                    UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), HealVFX, HealLoc, HealRot);
+                }
+            }
+        }
+        else
+        {
+            if (const FEntityAudioProfile* Profile = GetAudioProfile())
+            {
+                PlayEventSound(Profile->HealReceived);
+            }
+        }
+    }
+    else
+    {
+        if (const FEntityAudioProfile* Profile = GetAudioProfile())
+        {
+            PlayEventSound(Profile->HealReceived);
+        }
+    }
 
     // Floating green heal number
     if (UIManager)
@@ -3130,9 +3155,40 @@ void ABasicPlayer::ShowBuffEffect_Implementation(const FAppliedEffectData& Effec
 {
     UE_LOG(LogTemp, Log, TEXT("Player %d received %s effect: %s (Value: %d, Duration: %.1f)"), 
         GetActorId_Implementation(), *Effect.effectType, *Effect.effectName, Effect.value, Effect.duration);
-    
-    // Handle buff/debuff visual effects here
-    // You might want to show icons, particle effects, etc.
+
+    if (!MyGameInstance) return;
+
+    UDataTable* EffectTable = MyGameInstance->GetEffectDefinitionTable();
+    if (!EffectTable) return;
+
+    FName RowKey = FName(*Effect.effectName);
+    const FEffectDefinitionRow* Row = EffectTable->FindRow<FEffectDefinitionRow>(RowKey, TEXT(""));
+    if (!Row) return;
+
+    // Play apply sound
+    if (!Row->ApplySound.IsNull())
+    {
+        if (USoundBase* Snd = Row->ApplySound.LoadSynchronous())
+        {
+            UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, Snd, GetActorLocation());
+            if (AC && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
+            {
+                AC->SoundClassOverride = MyGameInstance->AudioManager->SFXClass;
+            }
+        }
+    }
+
+    // Spawn apply VFX
+    if (!Row->ApplyVFX.IsNull())
+    {
+        if (UNiagaraSystem* VFX = Row->ApplyVFX.LoadSynchronous())
+        {
+            UNiagaraFunctionLibrary::SpawnSystemAttached(
+                VFX, GetMesh(), NAME_None,
+                FVector::ZeroVector, FRotator::ZeroRotator,
+                EAttachLocation::SnapToTarget, true);
+        }
+    }
 }
 
 void ABasicPlayer::ShowDeathScreen()
@@ -3371,6 +3427,256 @@ void ABasicPlayer::RefreshHUD()
 	{
 		PlayerHUD->SetMana(static_cast<float>(playerData.characterData.characterCurrentMana), MaxMP);
 	}
+}
+
+void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
+{
+    // Only play sounds for the local player — spectated or other-client characters are silent.
+    if (playerData.isOtherClient) return;
+
+    switch (Slot)
+    {
+    case ECombatSoundSlot::VoiceAttack:
+    {
+        // Generic melee voice pool — entity-specific, not skill-specific.
+        // For skill-specific voices use AnimNotify_PlayerCombatEvent(CastVoice) instead.
+        if (const FEntityAudioProfile* Profile = GetAudioProfile())
+        {
+            if (Profile->VoiceAttack.Num() > 0)
+            {
+                const int32 Idx = FMath::RandRange(0, Profile->VoiceAttack.Num() - 1);
+                PlayEventSound(Profile->VoiceAttack[Idx]);
+            }
+        }
+        break;
+    }
+
+    case ECombatSoundSlot::CastVoice:
+    {
+        // Cast-start voice: Priority 1 — skill-specific sound (same for any caster)
+        //                   Priority 2 — this player's entity audio profile (VoiceCastStart pool)
+        if (!MyGameInstance) break;
+        if (USkillDefinitionRepository* Repo = MyGameInstance->GetSkillDefinitionRepository())
+        {
+            const FSkillDefinitionData& Def = Repo->GetDefinition(CurrentSkillName);
+            if (!Def.castStartVoice.IsNull())
+            {
+                PlayEventSound(Def.castStartVoice);
+                break;
+            }
+        }
+        if (const FEntityAudioProfile* Profile = GetAudioProfile())
+        {
+            bool bVoicePlayed = false;
+
+            // Priority 2: per-entity per-skill override (DT_EntitySkillVoiceOverrides, key "warrior_m|fireball")
+            if (UEntityAudioRepository* Repo = MyGameInstance->GetEntityAudioRepository())
+            {
+                if (const FEntitySkillVoiceOverride* Override =
+                        Repo->FindSkillVoiceOverride(AudioProfileId, FName(*CurrentSkillName)))
+                {
+                    if (Override->CastStartVoice.Num() > 0)
+                    {
+                        PlayEventSound(Override->CastStartVoice[
+                            FMath::RandRange(0, Override->CastStartVoice.Num() - 1)]);
+                        bVoicePlayed = true;
+                    }
+                }
+            }
+
+            // Priority 3: generic entity cast-start voice pool
+            if (!bVoicePlayed && Profile->VoiceCastStart.Num() > 0)
+            {
+                PlayEventSound(Profile->VoiceCastStart[
+                    FMath::RandRange(0, Profile->VoiceCastStart.Num() - 1)]);
+            }
+        }
+        break;
+    }
+
+    case ECombatSoundSlot::SwingSound:
+    {
+        if (!MyGameInstance) break;
+
+        // Priority 1: equipped main-hand weapon's swing sound (sword woosh ≠ staff swish ≠ unarmed)
+        if (UEquipmentManager* EquipMgr = MyGameInstance->GetEquipmentManager())
+        {
+            const FEquipmentSlotData& MainHand = EquipMgr->GetSlot(TEXT("main_hand"));
+            if (MainHand.bIsOccupied && !MainHand.itemSlug.IsEmpty())
+            {
+                if (UItemManager* ItemMgr = MyGameInstance->GetItemManager())
+                {
+                    const FItemVisualData VisData = ItemMgr->GetItemVisualDataBySlug(MainHand.itemSlug);
+                    if (!VisData.EquippedSwingSound.IsNull())
+                    {
+                        PlayEventSound(VisData.EquippedSwingSound);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Priority 2: skill-level swing sound (generic fallback)
+        if (USkillDefinitionRepository* Repo = MyGameInstance->GetSkillDefinitionRepository())
+        {
+            const FSkillDefinitionData& Def = Repo->GetDefinition(CurrentSkillName);
+            if (!Def.swingSound.IsNull())
+            {
+                PlayEventSound(Def.swingSound);
+            }
+        }
+        break;
+    }
+
+    case ECombatSoundSlot::CastRelease:
+    {
+        if (!MyGameInstance) break;
+        USkillDefinitionRepository* Repo = MyGameInstance->GetSkillDefinitionRepository();
+        if (!Repo) break;
+
+        const FSkillDefinitionData& Def = Repo->GetDefinition(CurrentSkillName);
+
+        // Release sound (e.g. fireball launch, arrow release)
+        if (!Def.castEndSound.IsNull())
+        {
+            PlayEventSound(Def.castEndSound);
+        }
+
+        // Release Niagara VFX at CastSocket (e.g. muzzle flash on hands, departing glow)
+        if (!Def.castEndEffectNiagara.IsNull())
+        {
+            if (UNiagaraSystem* VFX = Def.castEndEffectNiagara.LoadSynchronous())
+            {
+                FVector SpawnLoc = GetActorLocation();
+                FRotator SpawnRot = GetActorRotation();
+                if (Def.CastSocketName != NAME_None && GetMesh() && GetMesh()->DoesSocketExist(Def.CastSocketName))
+                {
+                    SpawnLoc = GetMesh()->GetSocketLocation(Def.CastSocketName);
+                    SpawnRot = GetMesh()->GetSocketRotation(Def.CastSocketName);
+                }
+                UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), VFX, SpawnLoc, SpawnRot);
+            }
+        }
+        // Release voice: Priority 1 — skill-specific (castReleaseVoice), Priority 2 — player pool
+        {
+            TSoftObjectPtr<USoundBase> ReleaseVoice = Def.castReleaseVoice;
+            if (!ReleaseVoice.IsNull())
+            {
+                PlayEventSound(ReleaseVoice);
+            }
+            else
+            {
+                // Fallback to entity audio profile:
+                if (const FEntityAudioProfile* Profile = GetAudioProfile())
+                {
+                    bool bVoicePlayed = false;
+
+                    // Priority 2: per-entity per-skill override (DT_EntitySkillVoiceOverrides)
+                    if (UEntityAudioRepository* RepoAudio = MyGameInstance->GetEntityAudioRepository())
+                    {
+                        if (const FEntitySkillVoiceOverride* Override =
+                            RepoAudio->FindSkillVoiceOverride(AudioProfileId, FName(*CurrentSkillName)))
+                        {
+                            if (Override->CastReleaseVoice.Num() > 0)
+                            {
+                                PlayEventSound(Override->CastReleaseVoice[
+                                    FMath::RandRange(0, Override->CastReleaseVoice.Num() - 1)]);
+                                bVoicePlayed = true;
+                            }
+                        }
+                    }
+
+                    // Priority 3: generic entity release voice pool
+                    if (!bVoicePlayed && Profile->VoiceCastRelease.Num() > 0)
+                    {
+                        PlayEventSound(Profile->VoiceCastRelease[
+                            FMath::RandRange(0, Profile->VoiceCastRelease.Num() - 1)]);
+                    }
+                }
+            }
+        }
+
+        // Spawn projectile if defined (preferred over frame-0 spawn — fires at correct cast-release timing)
+        if (!Def.projectileClass.IsNull())
+        {
+            UClass* ProjClass = Def.projectileClass.LoadSynchronous();
+            if (ProjClass && GetWorld())
+            {
+                FName ProjSocket = (Def.CastSocketName != NAME_None) ? Def.CastSocketName : FName(TEXT("ProjectileSpawn"));
+                FVector SpawnLoc = GetMesh() && GetMesh()->DoesSocketExist(ProjSocket)
+                    ? GetMesh()->GetSocketLocation(ProjSocket)
+                    : GetActorLocation() + FVector(0, 0, BaseEyeHeight);
+
+                FRotator SpawnRot = GetActorRotation();
+                AActor* TargetActor = nullptr;
+                UCombatSystemManager* CombatMgr = MyGameInstance->GetCombatSystemManager();
+                if (CurrentTargetId > 0 && CombatMgr)
+                {
+                    TScriptInterface<ICombatable> TargetCombatable =
+                        CombatMgr->FindCombatableById(CurrentTargetId, CurrentTargetType);
+                    if (TargetCombatable.GetObject() && IsValid(TargetCombatable.GetObject()))
+                    {
+                        TargetActor = Cast<AActor>(TargetCombatable.GetObject());
+                        if (TargetActor)
+                        {
+                            SpawnRot = (TargetActor->GetActorLocation() - SpawnLoc).Rotation();
+                        }
+                    }
+                }
+
+                FActorSpawnParameters Params;
+                Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+                Params.Instigator = this;
+                AActor* Spawned = GetWorld()->SpawnActor<AActor>(ProjClass, SpawnLoc, SpawnRot, Params);
+
+                // If it is a BaseMMOProjectile, configure it now
+                if (ABaseMMOProjectile* Proj = Cast<ABaseMMOProjectile>(Spawned))
+                {
+                    Proj->SetupProjectile(CurrentSkillName, GetActorId_Implementation(), TargetActor, 0.0f);
+                }
+
+                UE_LOG(LogTemp, Log, TEXT("[PlayerAnim] CastRelease: spawned projectile '%s' for skill '%s'"),
+                    *ProjClass->GetName(), *CurrentSkillName);
+            }
+        }
+        break;
+    }
+
+    default:
+        break;
+    }
+}
+
+void ABasicPlayer::ShowCastBar_Implementation(float CastTime, const FString& SkillName)
+{
+    if (playerData.isOtherClient) return;
+
+    if (UIManager)
+    {
+        if (UPlayerInterfaceWidget* PIW = UIManager->GetPlayerInterfaceWidget())
+        {
+            if (UCastBarWidget* CastBar = PIW->GetCastBarWidget())
+            {
+                CastBar->ShowCastBar(CastTime, SkillName);
+            }
+        }
+    }
+}
+
+void ABasicPlayer::HideCastBar_Implementation()
+{
+    if (playerData.isOtherClient) return;
+
+    if (UIManager)
+    {
+        if (UPlayerInterfaceWidget* PIW = UIManager->GetPlayerInterfaceWidget())
+        {
+            if (UCastBarWidget* CastBar = PIW->GetCastBarWidget())
+            {
+                CastBar->HideCastBar();
+            }
+        }
+    }
 }
 
 

@@ -356,6 +356,10 @@ void USkillBarWidget::OnSkillCooldownStarted(const FString& SkillSlug)
             RefreshSlot(i);
         }
     }
+    if (GameInstance && GameInstance->AudioManager)
+    {
+        GameInstance->AudioManager->PlayUISound(EUISoundEvent::SkillCooldownStart);
+    }
 }
 
 void USkillBarWidget::OnSkillReady(const FString& SkillSlug)
@@ -367,6 +371,10 @@ void USkillBarWidget::OnSkillReady(const FString& SkillSlug)
         {
             RefreshSlot(i);
         }
+    }
+    if (GameInstance && GameInstance->AudioManager)
+    {
+        GameInstance->AudioManager->PlayUISound(EUISoundEvent::SkillReady);
     }
 }
 

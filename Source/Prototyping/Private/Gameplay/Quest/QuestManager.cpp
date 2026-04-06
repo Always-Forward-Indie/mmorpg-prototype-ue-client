@@ -35,7 +35,7 @@ void UQuestManager::OnQuestUpdated(const FQuestProgressData& Data)
 
     QuestJournal.Add(Data.questId, Merged);
 
-    UE_LOG(LogTemp, Log, TEXT("QuestManager: Quest %d updated — state=%s step=%d"),
+    UE_LOG(LogTemp, Log, TEXT("QuestManager: Quest %d updated ï¿½ state=%s step=%d"),
         Data.questId, *Data.state, Data.stepIndex);
 
     OnQuestUpdatedDelegate.Broadcast(Merged);
@@ -58,7 +58,7 @@ void UQuestManager::OnQuestUpdated(const FQuestProgressData& Data)
 
 void UQuestManager::OnQuestOffered(const FQuestOfferedData& Data)
 {
-    UE_LOG(LogTemp, Log, TEXT("QuestManager: Quest offered — id=%d key=%s"),
+    UE_LOG(LogTemp, Log, TEXT("QuestManager: Quest offered ï¿½ id=%d key=%s"),
         Data.questId, *Data.clientQuestKey);
 
     OnQuestOfferedDelegate.Broadcast(Data);
@@ -66,28 +66,49 @@ void UQuestManager::OnQuestOffered(const FQuestOfferedData& Data)
 
 void UQuestManager::OnQuestTurnedIn(const FQuestTurnedInData& Data)
 {
-    UE_LOG(LogTemp, Log, TEXT("QuestManager: Quest turned in — id=%d"), Data.questId);
+    UE_LOG(LogTemp, Log, TEXT("QuestManager: Quest turned in ï¿½ id=%d"), Data.questId);
     OnQuestTurnedInDelegate.Broadcast(Data);
 }
 
 void UQuestManager::OnExpReceived(const FExpReceivedData& Data)
 {
-    UE_LOG(LogTemp, Log, TEXT("QuestManager: EXP received — amount=%d"), Data.amount);
+    UE_LOG(LogTemp, Log, TEXT("QuestManager: EXP received ï¿½ amount=%d"), Data.amount);
     OnExpReceivedDelegate.Broadcast(Data);
 }
 
 void UQuestManager::OnItemReceived(const FItemReceivedData& Data)
 {
-    UE_LOG(LogTemp, Log, TEXT("QuestManager: Item received — id=%d qty=%d"), Data.itemId, Data.quantity);
+    UE_LOG(LogTemp, Log, TEXT("QuestManager: Item received ï¿½ id=%d qty=%d"), Data.itemId, Data.quantity);
     OnItemReceivedDelegate.Broadcast(Data);
 }
 
 void UQuestManager::OnGoldReceived(const FGoldReceivedData& Data)
 {
-    UE_LOG(LogTemp, Log, TEXT("QuestManager: Gold received — amount=%d"), Data.amount);
+    UE_LOG(LogTemp, Log, TEXT("QuestManager: Gold received ï¿½ amount=%d"), Data.amount);
     OnGoldReceivedDelegate.Broadcast(Data);
 }
+void UQuestManager::OnQuestFailed(const FQuestFailedData& Data)
+{
+    // Update journal entry state to failed
+    if (FQuestProgressData* Existing = QuestJournal.Find(Data.questId))
+    {
+        Existing->state = TEXT("failed");
+    }
 
+    UE_LOG(LogTemp, Log, TEXT("QuestManager: Quest failed â€“ id=%d key=%s"), Data.questId, *Data.clientQuestKey);
+    OnQuestFailedDelegate.Broadcast(Data);
+
+    if (!Data.clientQuestKey.IsEmpty())
+    {
+        UpdateNPCQuestIcons(Data.clientQuestKey, TEXT("failed"));
+    }
+}
+
+void UQuestManager::OnReputationChanged(const FReputationChangedData& Data)
+{
+    UE_LOG(LogTemp, Log, TEXT("QuestManager: Reputation changed â€“ faction=%s delta=%d"), *Data.faction, Data.delta);
+    OnReputationChangedDelegate.Broadcast(Data);
+}
 // ??? Queries ??????????????????????????????????????????????????????????????????
 
 FQuestProgressData UQuestManager::GetQuestData(int32 QuestId) const

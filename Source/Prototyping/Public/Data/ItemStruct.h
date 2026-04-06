@@ -166,6 +166,14 @@ struct FItemVisualData : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual|Equipped")
 	TSoftObjectPtr<UNiagaraSystem> EquippedSwingVFX;
 
+	/**
+	 * Swing whoosh sound specific to this weapon type.
+	 * Overrides FSkillDefinitionData::swingSound when this item is in the main_hand slot.
+	 * Examples: sword = blade whoosh, staff = wooden swish, unarmed = fist whoosh (leave empty).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual|Equipped")
+	TSoftObjectPtr<USoundBase> EquippedSwingSound;
+
 	/** Niagara VFX that loops while the item is idle-equipped (e.g. flame on a torch) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual|Equipped")
 	TSoftObjectPtr<UNiagaraSystem> EquippedIdleVFX;

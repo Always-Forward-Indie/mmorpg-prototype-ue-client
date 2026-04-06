@@ -277,6 +277,9 @@ public:
 	class USkillDefinitionRepository* SkillDefinitionRepository;
 
 	UPROPERTY()
+	class UEntityAudioRepository* EntityAudioRepositoryRef;
+
+	UPROPERTY()
 	class UPlayerSkillNetworkHandler* PlayerSkillNetworkHandler;
 
 	UPROPERTY()
@@ -349,6 +352,14 @@ public:
 	// Repair network handler
 	UPROPERTY()
 	class URepairNetworkHandler* RepairNetworkHandler;
+
+	// Skill shop manager (NPC trainer)
+	UPROPERTY()
+	class USkillShopManager* SkillShopManager;
+
+	// Skill shop network handler
+	UPROPERTY()
+	class USkillShopNetworkHandler* SkillShopNetworkHandler;
 
 	// Trade manager
 	UPROPERTY()
@@ -620,6 +631,24 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Audio")
 	UDataTable* ImpactSoundsTable;
 
+	/** Entity audio profiles data table (row struct = FEntityAudioProfile).
+	 *  Create a DataTable with this row struct and assign it here in the GameInstance Blueprint.
+	 *  Row keys: "warrior_m", "wolf", "goblin_shaman", etc. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Audio")
+	UDataTable* EntityAudioProfilesTable;
+
+	/** Per-entity per-skill voice override table (row struct = FEntitySkillVoiceOverride).
+	 *  Optional. Row key format: "{audioProfileId}|{skillSlug}", e.g. "warrior_m|fireball".
+	 *  When a row is found it is used as Priority 2 between skill-global voice (P1)
+	 *  and the entity\'s generic voice pool (P3).
+	 *  Leave unassigned to skip per-skill overrides entirely. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Audio")
+	UDataTable* EntitySkillVoiceOverridesTable;
+
+	// Effect definition data table (row struct = FEffectDefinitionRow)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gameplay")
+	UDataTable* EffectDefinitionTable;
+
 	/** Returns the FootstepSoundsTable for use by anim notifies. */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Audio")
 	UDataTable* GetFootstepSoundsTable() const { return FootstepSoundsTable; }
@@ -627,6 +656,14 @@ public:
 	/** Returns the ImpactSoundsTable for weapon impact sound lookup. */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Audio")
 	UDataTable* GetImpactSoundsTable() const { return ImpactSoundsTable; }
+
+	/** Returns the EntityAudioRepository for profile lookup by FName. */
+	UFUNCTION(BlueprintCallable, Category = "Audio")
+	class UEntityAudioRepository* GetEntityAudioRepository();
+
+	/** Returns the EffectDefinitionTable for buff/debuff VFX and sound lookup. */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Gameplay")
+	UDataTable* GetEffectDefinitionTable() const { return EffectDefinitionTable; }
 
 	/** Returns the ItemVisualsDataTable for item visual data lookup. */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Items")
@@ -748,6 +785,10 @@ public:
 		// Repair manager
 		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
 		class URepairManager* GetRepairManager() const;
+
+		// Skill shop manager
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
+		class USkillShopManager* GetSkillShopManager() const;
 
 		// Trade manager
 		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")

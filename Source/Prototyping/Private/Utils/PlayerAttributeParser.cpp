@@ -49,7 +49,13 @@ FPlayerStatsUpdateStruct PlayerAttributeParser::DeserializePlayerStatsUpdate(con
     {
         StatsUpdate.level = Body->GetIntegerField(TEXT("level"));
     }
-    
+
+    // Parse free skill points
+    if (Body->HasField(TEXT("freeSkillPoints")))
+    {
+        StatsUpdate.freeSkillPoints = Body->GetIntegerField(TEXT("freeSkillPoints"));
+    }
+
     // Parse health data
     if (Body->HasField(TEXT("health")))
     {

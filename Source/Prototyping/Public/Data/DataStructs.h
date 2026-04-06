@@ -635,6 +635,107 @@ struct FMobVisualData
     // Height offset for combat hit effects (socket-based)
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     float CombatHitHeight = 120.0f;
+
+    // Niagara VFX spawned at death (optional)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TSoftObjectPtr<UNiagaraSystem> DeathVFX;
+};
+
+// ============================================================
+// Per-entity per-skill voice sound override.
+// Row key format: "{audioProfileId}|{skillSlug}"
+//   Examples: "warrior_m|fireball", "goblin_shaman|frostbolt", "warrior_m|basic_attack"
+//
+// Priority chain for cast-start voice:
+//   P1: FSkillDefinitionData.castStartVoice  â€” same sound for ALL casters of this skill
+//   P2: DT_EntitySkillVoiceOverrides["warrior_m|fireball"].CastStartVoice  â€” per-entity per-skill pool
+//   P3: FEntityAudioProfile.VoiceCastStart[]  â€” per-entity generic fallback pool
+// ============================================================
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FEntitySkillVoiceOverride : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    /** Random pool played at cast START (AnimNotify CastVoice). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voice Override")
+    TArray<TSoftObjectPtr<USoundBase>> CastStartVoice;
+
+    /** Random pool played at cast RELEASE (AnimNotify CastRelease). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voice Override")
+    TArray<TSoftObjectPtr<USoundBase>> CastReleaseVoice;
+};
+
+// ============================================================
+// Entity Audio Profile â€” shared between players and mobs
+// Row key examples:
+//   Players: "warrior_m", "warrior_f", "mage_m", "archer_f"
+//   Mobs:    "wolf", "goblin_grunt", "goblin_shaman", "skeleton_warrior"
+//   Shared:  "giant_humanoid" â€” multiple mob types, one sound set
+// ============================================================
+USTRUCT(BlueprintType)
+struct FEntityAudioProfile : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    // ---- Voice ------------------------------------------------
+    /** Random pool: melee swing cry ("hiya!", "ha!"). Nofity: VoiceAttack / Voice */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voice")
+    TArray<TSoftObjectPtr<USoundBase>> VoiceAttack;
+
+    /** Random pool: incantation / battle cry at cast START. Notify: CastVoice */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voice")
+    TArray<TSoftObjectPtr<USoundBase>> VoiceCastStart;
+
+    /** Random pool: shout / exhale at cast RELEASE. Notify: CastRelease (fallback) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voice")
+    TArray<TSoftObjectPtr<USoundBase>> VoiceCastRelease;
+
+    // ---- Combat -----------------------------------------------
+    /** Weapon / limb whoosh during swing. Priority over SkillData.swingSound. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+    TSoftObjectPtr<USoundBase> SwingSound;
+
+    /** Sound when this entity receives a hit. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+    TSoftObjectPtr<USoundBase> HitReceived;
+
+    /** Death sound. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+    TSoftObjectPtr<USoundBase> Death;
+
+    /** Revive / resurrection sound (players only; ignored on mobs). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+    TSoftObjectPtr<USoundBase> Revive;
+
+    /** Aggro shout when mob detects a player target. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+    TSoftObjectPtr<USoundBase> Aggro;
+
+    /** Generic attack sound (mob "Attack" slot; players typically leave this empty). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+    TSoftObjectPtr<USoundBase> AttackGeneric;
+
+    // ---- Heal / Progression -----------------------------------
+    /** Generic heal-received fallback (used when SkillData.healSound is empty). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Healing")
+    TSoftObjectPtr<USoundBase> HealReceived;
+
+    /** Level-up chime (players only). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Progression")
+    TSoftObjectPtr<USoundBase> LevelUp;
+
+    // ---- Movement / Ambient ----------------------------------
+    /** Random pool: footstep sounds at walk speed. Notify: Walk */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+    TArray<TSoftObjectPtr<USoundBase>> FootstepsWalk;
+
+    /** Random pool: footstep sounds at run speed. Notify: Run */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+    TArray<TSoftObjectPtr<USoundBase>> FootstepsRun;
+
+    /** Random pool: ambient idle sounds (muttering, growls). Notify: Idle */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambient")
+    TArray<TSoftObjectPtr<USoundBase>> IdleAmbient;
 };
 
 USTRUCT(BlueprintType)
@@ -662,6 +763,41 @@ struct FMobAudioData
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
     TArray<TSoftObjectPtr<USoundBase>> RunSounds;
+
+    /**
+     * Pool of effort/grunt/roar/howl sounds played via AnimNotify_PlaySoundFromTable("Voice")
+     * at the moment of the attack swing (e.g. wolf howl, goblin battle cry, skeleton rattle).
+     * Place the notify on the attack montage at 20-40% of the animation.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<TSoftObjectPtr<USoundBase>> AttackVoiceSounds;
+
+    /**
+     * Weapon/limb swing whoosh specific to THIS mob type.
+     * Played via AnimNotify_PlaySoundFromTable("Swing") or automatically during melee skill.
+     * Priority 1 over FSkillDefinitionData::swingSound (which is the generic skill-level fallback).
+     * Examples: wolf claw swipe, skeleton sword swish, goblin club whoosh, unarmed fist rush.
+     * Leave empty to use the skill-defined swingSound instead.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TSoftObjectPtr<USoundBase> SwingSound;
+
+    /**
+     * Pool of voice sounds played at cast START for this mob type.
+     * Used as fallback when the skill has no castStartVoice defined.
+     * Played via AnimNotify_PlaySoundFromTable("CastVoice") or automatically at PlaySkillAnimation.
+     * Examples: goblin chanting, skeleton jaw-rattle, wolf howl before breath attack.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<TSoftObjectPtr<USoundBase>> CastVoiceSounds;
+
+    /**
+     * Pool of voice sounds played at cast RELEASE (CastRelease notify) for this mob type.
+     * Used as fallback when the skill has no castReleaseVoice defined.
+     * Examples: goblin's final screech as fireball fires, golem stomp-release roar.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<TSoftObjectPtr<USoundBase>> ReleaseVoiceSounds;
 };
 
 USTRUCT(BlueprintType)
@@ -675,7 +811,22 @@ struct FMobDefinition : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FMobVisualData Visual;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    /**
+     * Preferred: reference to a row in DT_EntityAudioProfiles.
+     * When set, all audio for this mob is driven from that table row.
+     * Multiple mob variants (e.g. wolf_pup, wolf_adult, alpha_wolf) can share
+     * one profile row, so updating one row updates all of them.
+     * Leave empty to fall back to the legacy inline Audio struct below.
+     * Examples: "wolf", "goblin_shaman", "skeleton_warrior"
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
+    FName AudioProfileId = NAME_None;
+
+    /**
+     * Legacy inline audio data. Used automatically when AudioProfileId is empty.
+     * Migrate rows to AudioProfileId over time; do not add new fields here.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Legacy (prefer AudioProfileId)")
     FMobAudioData Audio;
 
     // Armor material type used for impact sound lookup (e.g. "leather", "plate")
@@ -1038,7 +1189,7 @@ struct FMobHealthUpdateStruct
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Health Update")
     int32 mobId = 0;
 
-    // Unique instance ID (mobUID from server) — use this to look up the actor
+    // Unique instance ID (mobUID from server) ï¿½ use this to look up the actor
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Health Update")
     int32 mobUID = 0;
 
@@ -1599,6 +1750,10 @@ struct FPlayerStatsUpdateStruct
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
     float weightMax = 0.0f;
 
+    // Free skill points
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
+    int32 freeSkillPoints = 0;
+
     // Experience fields
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
     int32 experienceCurrent = 0;
@@ -1620,6 +1775,7 @@ struct FPlayerStatsUpdateStruct
         healthMax = 0;
         manaCurrent = 0;
         manaMax = 0;
+        freeSkillPoints = 0;
         experienceCurrent = 0;
         experienceLevelStart = 0;
         experienceNextLevel = 0;
@@ -1740,22 +1896,19 @@ struct FSkillDefinitionData : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
     bool bRequiresLineOfSight = true;
 
-    // Visual effects
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
-    TSoftObjectPtr<UParticleSystem> castEffect;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
-    TSoftObjectPtr<UParticleSystem> hitEffect;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
-    TSoftObjectPtr<UParticleSystem> projectileEffect;
-
-    // Niagara visual effects (preferred over Cascade)
+    // Niagara visual effects
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition|Niagara")
     TSoftObjectPtr<UNiagaraSystem> castEffectNiagara;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition|Niagara")
     TSoftObjectPtr<UNiagaraSystem> hitEffectNiagara;
+
+    // VFX and sound spawned on the target when a heal or HoT tick lands.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition|Niagara")
+    TSoftObjectPtr<UNiagaraSystem> healEffectNiagara;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    TSoftObjectPtr<USoundBase> healSound;
 
     // Socket names for effect attachment
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition|Sockets")
@@ -1772,9 +1925,40 @@ struct FSkillDefinitionData : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
     FName WeaponImpactType = NAME_None;
 
+    // Sound played on a critical hit (layered on top of hitSound)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    TSoftObjectPtr<USoundBase> critSound;
+
+    // Sound played at the moment the spell/ability is released (use AnimNotify_PlayerCombatEvent with CastRelease slot).
+    // Examples: fireball launch whoosh, arrow release twang, spell incantation finale.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition|Cast Release")
+    TSoftObjectPtr<USoundBase> castEndSound;
+
+    // Niagara VFX spawned at CastSocketName at the moment the spell is released.
+    // Examples: muzzle flash on hands, departing glow orb, beam origin burst.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition|Cast Release")
+    TSoftObjectPtr<UNiagaraSystem> castEndEffectNiagara;
+
     // Projectile actor class to spawn when the skill fires
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
     TSoftClassPtr<AActor> projectileClass;
+
+    // ---------------------------------------------------------------
+    // Voice sounds (who says what and when)
+    // ---------------------------------------------------------------
+    // Skill-specific battle cry / incantation played at cast START.
+    // This is the SAME sound for any entity (player or mob) casting this skill.
+    // Examples: "shimabalam!" for a fireball, "EGEY!" for a power strike.
+    // Priority 1: this field. Priority 2: entity's own VoiceCastStart pool.
+    // Leave empty to let each entity use their own voice pool instead.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition|Voice")
+    TSoftObjectPtr<USoundBase> castStartVoice;
+
+    // Skill-specific shout / incantation played at cast RELEASE moment.
+    // Examples: "FIRE!" as the fireball launches, "TAKE THIS!" on a charge release.
+    // Priority 1: this field. Priority 2: entity's own VoiceCastRelease pool.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition|Voice")
+    TSoftObjectPtr<USoundBase> castReleaseVoice;
 
     FSkillDefinitionData()
     {
@@ -1976,7 +2160,7 @@ struct PROTOTYPING_API FNPCSpawnDataStruct
 };
 
 //////////////////////////////////////////////////////////////////////////
-// NPC Definition Structures (äëÿ DataTable)
+// NPC Definition Structures (ï¿½ï¿½ï¿½ DataTable)
 //////////////////////////////////////////////////////////////////////////
 
 USTRUCT(BlueprintType)
@@ -2885,6 +3069,127 @@ struct PROTOTYPING_API FRepairAllResultData
 };
 
 // ============================================================
+// Skill Shop (NPC Trainer)
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FSkillShopSkillData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    int32 skillId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    FString skillSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    FString skillName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    FString description = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    bool isPassive = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    int32 requiredLevel = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    int32 spCost = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    int32 goldCost = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    bool requiresBook = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    int32 bookItemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    FString prerequisiteSkillSlug = "";
+
+    // Server-evaluated affordability flags
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    bool isLearned = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    bool canLearn = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    bool prereqMet = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    bool levelMet = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    bool spMet = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    bool goldMet = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    bool bookMet = true;
+
+    FSkillShopSkillData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FSkillShopData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    int32 npcId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    FString npcSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    int32 freeSkillPoints = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    int32 goldBalance = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Shop")
+    TArray<FSkillShopSkillData> skills;
+
+    FSkillShopData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FLearnSkillResultData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Learn Skill Result")
+    bool bSuccess = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Learn Skill Result")
+    FString skillSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Learn Skill Result")
+    FString skillName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Learn Skill Result")
+    bool isPassive = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Learn Skill Result")
+    int32 newFreeSkillPoints = 0;
+
+    // On success: full skill data to register in PlayerSkillManager
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Learn Skill Result")
+    FPlayerSkillNetworkData skillData;
+
+    // On failure: reason code
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Learn Skill Result")
+    FString failReason = "";
+
+    FLearnSkillResultData() {}
+};
+
+// ============================================================
 // Quest
 // ============================================================
 
@@ -2991,6 +3296,34 @@ struct PROTOTYPING_API FQuestTurnedInData
     FString clientQuestKey = "";
 
     FQuestTurnedInData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FQuestFailedData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Failed")
+    int32 questId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Failed")
+    FString clientQuestKey = "";
+
+    FQuestFailedData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FReputationChangedData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reputation")
+    FString faction = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reputation")
+    int32 delta = 0;
+
+    FReputationChangedData() {}
 };
 
 USTRUCT(BlueprintType)

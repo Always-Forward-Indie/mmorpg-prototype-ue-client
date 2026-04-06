@@ -12,7 +12,7 @@ class USkillSystemManager;
 class UTimeSyncService;
 class USkillDefinitionRepository;
 
-// === Delegates (динамические мультикасты для блюпринтов) ===
+// === Delegates (пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ) ===
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSkillsInitialized, const TArray<FPlayerSkillData>&, Skills);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSkillCooldownStarted, const FString&, SkillSlug);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSkillReady, const FString&, SkillSlug);
@@ -86,6 +86,11 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Player Skill Manager") 
     void HandleSkillInitiation(const FString& SkillSlug, int32 CasterId,
         int32 CooldownMs = 0, int32 GcdMs = 0);
+
+    // Called by SkillShopNetworkHandler when a skill is successfully learned at runtime.
+    // Adds the skill to the manager so it immediately becomes available for the hotbar.
+    UFUNCTION(BlueprintCallable, Category = "Player Skill Manager")
+    void AddLearnedSkill(const FPlayerSkillNetworkData& NetworkData);
 
     // Called when the attack animation finishes to release the cast lock
     void NotifyAnimationEnded();

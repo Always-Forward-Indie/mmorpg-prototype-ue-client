@@ -46,6 +46,15 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Movement|Rotation")
 	float AttackRotationSpeed = 8.f;
 
+	// Constant rotation rate (deg/s) used during patrol movement.
+	// Lower than combat rotation to avoid jarring snaps when patrol direction changes.
+	UPROPERTY(EditAnywhere, Category = "Movement|Rotation")
+	float PatrolRotationRate = 270.f;
+
+	// Angle (degrees) below which the mob stops rotating in place and begins walking.
+	UPROPERTY(EditAnywhere, Category = "Movement|Rotation")
+	float PatrolTurnStartAngle = 30.f;
+
 	UPROPERTY(EditDefaultsOnly, Category = "Movement|Debug")
 	bool bDebugGroundAdjustment = false;
 
@@ -120,6 +129,10 @@ public:
 	// Called from spawn to seed the initial movement state from spawn-data velocity
 	void InitializeFromSpawnData(const FVector& SpawnPos, const FVector& VelocityDir, float Speed, int32 InCombatState);
 
+	// Permanently stops all movement processing (called on mob death).
+	// After this call the component will not move the actor even if packets arrive.
+	void FreezeMob();
+
 private:
 	// ---- Server state (latest authoritative packet) --------------------------
 	FVector  LatestServerPos   = FVector::ZeroVector;  // XY from server, Z from actor
@@ -140,6 +153,9 @@ private:
 	float    BlendElapsed      = 0.f;
 	float    BlendDuration     = 0.1f;
 	bool     bBlendActive      = false;
+
+	// Set to true by FreezeMob() — disables all tick processing after mob death.
+	bool     bFrozen                = false;
 
 	// ---- Packet timing -------------------------------------------------------
 	int64    LastStepTimestampMs    = 0;

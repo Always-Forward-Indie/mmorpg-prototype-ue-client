@@ -42,6 +42,9 @@ void UMOBMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
+    // Mob is dead — do not move the corpse.
+    if (bFrozen) return;
+
     if (bHasReceivedPacket)
     {
         TimeSinceLastPacket += DeltaTime;
@@ -296,6 +299,24 @@ void UMOBMovementComponent::ProcessCombatMovement(float DeltaTime)
         return;
     }
 
+    // Extrapolation cap: if no movement packet arrived within ExtrapolationMaxTime,
+    // stop dead-reckoning and gently settle toward the last known server position.
+    // Root cause of "mob runs away forever": when the server stops broadcasting
+    // (e.g. mob is waitingForMeleeSlot / blocked), TimeSinceLastPacket grows
+    // unboundedly and dead reckoning runs indefinitely at LatestServerSpeed.
+    if (TimeSinceLastPacket >= ExtrapolationMaxTime)
+    {
+        FVector SettleLoc = FMath::VInterpTo(CurrentLocation,
+            FVector(LatestServerPos.X, LatestServerPos.Y, CurrentLocation.Z),
+            DeltaTime, 4.f);
+        SettleLoc = AdjustToGround(SettleLoc, DeltaTime);
+        GetOwner()->SetActorLocation(SettleLoc);
+        PrevFramePos       = SettleLoc;
+        CurrentInterpSpeed = FMath::FInterpTo(CurrentInterpSpeed, 0.f, DeltaTime, 8.f);
+        UpdateMovingState(false);
+        return;
+    }
+
     // --- Dead Reckoning + Proportional Correction -----------------------------
     // Instead of the old blend-from/blend-to system that restarted every packet
     // (causing micro-stutters), we continuously dead-reckon forward and gently
@@ -422,9 +443,6 @@ void UMOBMovementComponent::ProcessPatrolMovement(float DeltaTime)
 
     // --- Stop condition (also covers idle / no waypoint) ---------------------
     // 5-unit hysteresis: once inside, stay until next packet resets state.
-    // No waypoint drift — server moves in discrete steps; drifting toward
-    // the next waypoint during the 2-6s quiet period causes the mob to
-    // diverge from server position, then visually snap back on next packet.
     if (!bHasWaypoint || PatrolSpeed < 1.f || GapToServer < 5.f)
     {
         FVector SettleLoc = (GapToServer > 2.f)
@@ -433,14 +451,57 @@ void UMOBMovementComponent::ProcessPatrolMovement(float DeltaTime)
         SettleLoc = AdjustToGround(SettleLoc, DeltaTime, 1.0f);
         GetOwner()->SetActorLocation(SettleLoc);
         PrevFramePos = SettleLoc;
-        CurrentInterpSpeed = FMath::FInterpTo(CurrentInterpSpeed, 0.f, DeltaTime, 6.f);
-        UpdateMovingState(false);
+        // Aggressive speed decay in stop zone so the walk animation ends
+        // promptly once the mob reaches its destination.  Old rate (6.0) let
+        // CurrentInterpSpeed linger above MovingStopThreshold for ~0.5 s.
+        CurrentInterpSpeed = FMath::FInterpTo(CurrentInterpSpeed, 0.f, DeltaTime, 15.f);
+        if (CurrentInterpSpeed < MovingStopThreshold)
+        {
+            UpdateMovingState(false);
+        }
         return;
     }
 
-    // --- Move straight toward server-authoritative position ------------------
-    // Step capped so we stop cleanly at the target (4u margin = hysteresis - 1u).
+    // --- Direction to server-authoritative position --------------------------
     const FVector DirToServer = (TargetXY - CurrentLocation).GetSafeNormal2D();
+
+    // --- Rotate-in-place before walking --------------------------------------
+    // When starting from idle and facing is far from the target direction,
+    // turn first so the mob doesn't visually slide sideways.
+    if (CurrentInterpSpeed < MovingStartThreshold && !DirToServer.IsNearlyZero())
+    {
+        const float DotToTarget = FVector::DotProduct(
+            SmoothedFacingDir.GetSafeNormal2D(), DirToServer);
+        const float AngleDeg = FMath::RadiansToDegrees(
+            FMath::Acos(FMath::Clamp(DotToTarget, -1.f, 1.f)));
+
+        if (AngleDeg > PatrolTurnStartAngle)
+        {
+            // Rotate SmoothedFacingDir toward target at a controlled rate.
+            SmoothedFacingDir = FMath::VInterpNormalRotationTo(
+                SmoothedFacingDir, DirToServer, DeltaTime, PatrolRotationRate);
+
+            ACharacter* Character = Cast<ACharacter>(GetOwner());
+            if (Character)
+            {
+                FRotator DesiredRot = SmoothedFacingDir.Rotation();
+                DesiredRot.Pitch = 0.f;
+                DesiredRot.Roll  = 0.f;
+                Character->SetActorRotation(
+                    FMath::RInterpConstantTo(
+                        Character->GetActorRotation(), DesiredRot,
+                        DeltaTime, PatrolRotationRate));
+            }
+
+            FVector GroundLoc = AdjustToGround(CurrentLocation, DeltaTime, 1.0f);
+            GetOwner()->SetActorLocation(GroundLoc);
+            PrevFramePos = GroundLoc;
+            UpdateMovingState(false);
+            return;
+        }
+    }
+
+    // --- Move straight toward server-authoritative position ------------------
     CurrentInterpSpeed = FMath::FInterpTo(CurrentInterpSpeed, PatrolSpeed, DeltaTime, 5.f);
     const float StepDist = FMath::Min(CurrentInterpSpeed * DeltaTime, GapToServer - 4.f);
     FVector NewLocation = CurrentLocation + DirToServer * FMath::Max(StepDist, 0.f);
@@ -448,7 +509,9 @@ void UMOBMovementComponent::ProcessPatrolMovement(float DeltaTime)
     NewLocation = AdjustToGround(NewLocation, DeltaTime, 1.0f);
     GetOwner()->SetActorLocation(NewLocation);
 
-    // Rotation from actual movement
+    // Rotation: smooth constant-rate turn driven by actual movement delta.
+    // Uses PatrolRotationRate instead of the combat HandleRotation (which
+    // has a 2x multiplier for large angles, causing jarring snaps on patrol).
     const FVector MoveDelta = FVector(NewLocation.X - PrevFramePos.X,
                                        NewLocation.Y - PrevFramePos.Y, 0.f);
     const float MoveDist = MoveDelta.Size();
@@ -456,10 +519,25 @@ void UMOBMovementComponent::ProcessPatrolMovement(float DeltaTime)
 
     if (MoveDist > 0.5f && CurrentInterpSpeed > StoppedSpeedThreshold)
     {
-        HandleRotation(MoveDelta / MoveDist, DeltaTime);
+        const FVector MoveDirection = MoveDelta / MoveDist;
+        SmoothedFacingDir = FMath::VInterpNormalRotationTo(
+            SmoothedFacingDir, MoveDirection, DeltaTime, PatrolRotationRate);
+
+        ACharacter* Character = Cast<ACharacter>(GetOwner());
+        if (Character)
+        {
+            FRotator DesiredRot = SmoothedFacingDir.Rotation();
+            DesiredRot.Pitch = 0.f;
+            DesiredRot.Roll  = 0.f;
+            Character->SetActorRotation(
+                FMath::RInterpConstantTo(
+                    Character->GetActorRotation(), DesiredRot,
+                    DeltaTime, PatrolRotationRate));
+        }
     }
 
-    if (!bIsMoving && CurrentInterpSpeed > MovingStartThreshold)
+    // Walk animation: start when the mob has a meaningful target.
+    if (!bIsMoving && GapToServer > MovingStartThreshold)
     {
         UpdateMovingState(true);
     }
@@ -467,6 +545,17 @@ void UMOBMovementComponent::ProcessPatrolMovement(float DeltaTime)
     {
         UpdateMovingState(false);
     }
+}
+
+// ---------------------------------------------------------------------------
+void UMOBMovementComponent::FreezeMob()
+{
+    // Zero out all locomotion state so the corpse does not slide.
+    LatestServerSpeed   = 0.f;
+    LatestServerDir     = FVector::ZeroVector;
+    DeadReckonDir       = FVector::ZeroVector;
+    bFrozen             = true;
+    UpdateMovingState(false);
 }
 
 // ---------------------------------------------------------------------------

@@ -1819,4 +1819,12 @@ void ABasicMOB::Die()
 
 	// Отключаем взаимодействие
 	SetActorEnableCollision(false);
+
+	// Freeze movement component so the corpse does not slide in the last
+	// dead-reckoned direction.  Must be called AFTER SetActorEnableCollision
+	// so no further positional updates overwrite the final resting location.
+	if (MOBMovementComponent)
+	{
+		MOBMovementComponent->FreezeMob();
+	}
 }

@@ -286,12 +286,12 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 				ABasicMOB* MOB = Cast<ABasicMOB>(FoundActors[0]);
 					if (MOB)
 					{
-						// Сбрасываем цель моба
+						// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
 						MOB->SetMobTargetId(0);
 						MOB->SetMobTargetType("");
 						MOB->SetMOBIsAggressive(false);
 
-						// Обновляем позицию моба
+						// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
 						MOB->OnReceiveServerPacket(TargetLostData.position);
 
 						// Notify the mob (animation transition, delegate broadcast)
@@ -307,7 +307,7 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 								if (LocalPlayer && LocalPlayer->GetLockedTarget() == MOB)
 								{
 									LocalPlayer->ClearLockedTarget();
-									UE_LOG(LogTemp, Log, TEXT("MOBManager: Cleared player lock target — mob %d returned to zone"),
+									UE_LOG(LogTemp, Log, TEXT("MOBManager: Cleared player lock target пїЅ mob %d returned to zone"),
 										TargetLostData.mobUID);
 								}
 							}
@@ -489,10 +489,11 @@ void UMOBManager::SpawnMOB(const FMOBStruct& MOBData)
 		MOB->SetMOBTag(MOBData.mobUniqueID);
 		MOB->SetMOBTag("Mob");
 
-		// Seed the movement component with spawn-time velocity so the mob
-		// starts moving immediately rather than standing still until the
-		// first mobMoveUpdate packet arrives.
-		if (MOB->MOBMovementComponent && MOBData.mobVelocity.speed > 0.f)
+		// Always seed the movement component so bHasReceivedPacket is true
+		// before the first mobMoveUpdate arrives.  Without this, the first
+		// packet hits the "first packet ever" branch and hard-teleports the
+		// mob instead of smoothly interpolating.
+		if (MOB->MOBMovementComponent)
 		{
 			const FVector VelDir(MOBData.mobVelocity.dirX, MOBData.mobVelocity.dirY, 0.f);
 			const FVector SpawnPos(MOBData.mobPosition.positionX,

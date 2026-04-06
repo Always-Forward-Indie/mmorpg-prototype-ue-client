@@ -226,6 +226,16 @@ void UMOBMovementComponent::OnReceiveMovePacket(const FMobMoveEntryStruct& MoveE
         PatrolSpeed            = LatestServerSpeed;
         bPatrolReachedWaypoint = false;
 
+        // Pre-seed facing direction from the packet so the rotate-in-place
+        // phase in ProcessPatrolMovement is short or absent.  Without this
+        // the mob can face a stale direction (e.g. ForwardVector at spawn)
+        // and stall for half a second turning before it starts walking.
+        if (!LatestServerDir.IsNearlyZero())
+        {
+            SmoothedFacingDir = FMath::VInterpNormalRotationTo(
+                SmoothedFacingDir, LatestServerDir, 1.f, 360.f);
+        }
+
         if (PrevCombatState != 0)
         {
             // Combat → patrol: blend for smooth visual transition.
@@ -445,20 +455,27 @@ void UMOBMovementComponent::ProcessPatrolMovement(float DeltaTime)
     // 5-unit hysteresis: once inside, stay until next packet resets state.
     if (!bHasWaypoint || PatrolSpeed < 1.f || GapToServer < 5.f)
     {
-        FVector SettleLoc = (GapToServer > 2.f)
-            ? FMath::VInterpTo(CurrentLocation, TargetXY, DeltaTime, 8.f)
-            : CurrentLocation;
+        // Only settle toward server pos for small corrections (< PatrolSnapThreshold).
+        // Larger gaps mean LatestServerPos jumped far (e.g. first packet after spawn
+        // or waypoint-reached packet) — sliding hundreds of units without walk
+        // animation looks like a teleport.  Stay put and wait for a proper
+        // movement packet instead.
+        FVector SettleLoc;
+        if (GapToServer > 2.f && GapToServer <= PatrolSnapThreshold)
+        {
+            SettleLoc = FMath::VInterpTo(CurrentLocation, TargetXY, DeltaTime, 8.f);
+        }
+        else
+        {
+            SettleLoc = CurrentLocation;
+        }
         SettleLoc = AdjustToGround(SettleLoc, DeltaTime, 1.0f);
         GetOwner()->SetActorLocation(SettleLoc);
         PrevFramePos = SettleLoc;
-        // Aggressive speed decay in stop zone so the walk animation ends
-        // promptly once the mob reaches its destination.  Old rate (6.0) let
-        // CurrentInterpSpeed linger above MovingStopThreshold for ~0.5 s.
-        CurrentInterpSpeed = FMath::FInterpTo(CurrentInterpSpeed, 0.f, DeltaTime, 15.f);
-        if (CurrentInterpSpeed < MovingStopThreshold)
-        {
-            UpdateMovingState(false);
-        }
+        // Mob has reached its destination — kill speed and animation immediately.
+        // Lerping here only delays the idle transition visually.
+        CurrentInterpSpeed = 0.f;
+        UpdateMovingState(false);
         return;
     }
 

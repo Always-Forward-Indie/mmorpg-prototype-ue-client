@@ -39,9 +39,17 @@ void UPlayerStatsManager::ApplyStatsUpdate(const FPlayerStatsUpdateStruct& InSta
     }
 
     if (bHasAttributes)
-        CachedStats.attributes = InStats.attributes;
+    {
+        CachedStats.attributes      = InStats.attributes;
+        // freeSkillPoints is only included in full stat packets (same conditions as attributes)
+        CachedStats.freeSkillPoints = InStats.freeSkillPoints;
+    }
 
-    if (bHasEffects)
+    // Replace effects when a full packet arrives (bHasAttributes) OR when a focused
+    // effects-only packet arrives.  Using "bHasAttributes || bHasEffects" ensures that
+    // an explicit empty activeEffects array (e.g. after removing the last title/buff)
+    // correctly clears the cached list on the next full stats_update.
+    if (bHasAttributes || bHasEffects)
         CachedStats.activeEffects = InStats.activeEffects;
 
     if (bHasWeight)
@@ -50,13 +58,16 @@ void UPlayerStatsManager::ApplyStatsUpdate(const FPlayerStatsUpdateStruct& InSta
         CachedStats.weightMax     = InStats.weightMax;
     }
 
+    UE_LOG(LogTemp, Warning, TEXT("[EFFECTS] PlayerStatsManager::ApplyStatsUpdate: broadcasting charId=%d effects=%d boundListeners=%d"),
+        CachedStats.characterId, CachedStats.activeEffects.Num(), OnStatsUpdated.IsBound() ? 1 : 0);
     OnStatsUpdated.Broadcast(CachedStats);
 
-    UE_LOG(LogTemp, Log, TEXT("PlayerStatsManager: Stats applied - CharId=%d Lv=%d HP=%d/%d MP=%d/%d XP=%d[%d-%d] Attrs=%d Effects=%d"),
+    UE_LOG(LogTemp, Log, TEXT("PlayerStatsManager: Stats applied - CharId=%d Lv=%d HP=%d/%d MP=%d/%d XP=%d[%d-%d] SP=%d Attrs=%d Effects=%d"),
         CachedStats.characterId, CachedStats.level,
         CachedStats.healthCurrent, CachedStats.healthMax,
         CachedStats.manaCurrent,   CachedStats.manaMax,
         CachedStats.experienceCurrent, CachedStats.experienceLevelStart, CachedStats.experienceNextLevel,
+        CachedStats.freeSkillPoints,
         CachedStats.attributes.Num(), CachedStats.activeEffects.Num());
 }
 
@@ -67,7 +78,7 @@ void UPlayerStatsManager::ApplyActiveEffects(const TArray<FActiveEffectEntry>& I
     CachedStats.activeEffects = InEffects;
     OnActiveEffectsReceived.Broadcast(CachedStats.activeEffects);
 
-    UE_LOG(LogTemp, Log, TEXT("PlayerStatsManager: ActiveEffects applied — %d effects"), InEffects.Num());
+    UE_LOG(LogTemp, Log, TEXT("PlayerStatsManager: ActiveEffects applied ï¿½ %d effects"), InEffects.Num());
 }
 
 

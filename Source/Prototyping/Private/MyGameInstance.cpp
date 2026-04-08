@@ -17,6 +17,12 @@
 #include "Gameplay/Player/ExperienceManager.h"
 #include "Gameplay/Player/ExperienceNetworkHandler.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
+#include "Gameplay/Player/MasteryManager.h"
+#include "Gameplay/Player/MasteryNetworkHandler.h"
+#include "Gameplay/Player/ReputationManager.h"
+#include "Gameplay/Player/ReputationNetworkHandler.h"
+#include "Gameplay/Player/TitleManager.h"
+#include "Gameplay/Player/TitleNetworkHandler.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Data/EntityAudioRepository.h"
@@ -140,6 +146,18 @@ void UMyGameInstance::Init()
 	// Initialize player stats manager
 	PlayerStatsManager = NewObject<UPlayerStatsManager>(this);
 	PlayerStatsNetworkHandler = NewObject<UPlayerStatsNetworkHandler>(this);
+
+	// Initialize Mastery system
+	MasteryManager = NewObject<UMasteryManager>(this);
+	MasteryNetworkHandler = NewObject<UMasteryNetworkHandler>(this);
+
+	// Initialize Reputation system
+	ReputationManager = NewObject<UReputationManager>(this);
+	ReputationNetworkHandler = NewObject<UReputationNetworkHandler>(this);
+
+	// Initialize Titles system
+	TitleManager = NewObject<UTitleManager>(this);
+	TitleNetworkHandler = NewObject<UTitleNetworkHandler>(this);
 
 	// Initialize Bestiary system
 	BestiaryNetworkHandler = NewObject<UBestiaryNetworkHandler>(this);
@@ -532,6 +550,30 @@ void UMyGameInstance::InitNetworkingSetup()
 		PlayerStatsNetworkHandler->Initialize(PlayerStatsManager, GetNetworkManager(), this);
 		PlayerStatsNetworkHandler->SubscribeToNetworkEvents();
 		UE_LOG(LogTemp, Warning, TEXT("PlayerStatsNetworkHandler initialized and subscribed"));
+	}
+
+	// Initialize Mastery system
+	if (MasteryManager && MasteryNetworkHandler)
+	{
+		MasteryNetworkHandler->Initialize(MasteryManager, GetNetworkManager(), this);
+		MasteryNetworkHandler->SubscribeToNetworkEvents();
+		UE_LOG(LogTemp, Warning, TEXT("MasteryNetworkHandler initialized and subscribed"));
+	}
+
+	// Initialize Reputation system
+	if (ReputationManager && ReputationNetworkHandler)
+	{
+		ReputationNetworkHandler->Initialize(ReputationManager, GetNetworkManager(), this);
+		ReputationNetworkHandler->SubscribeToNetworkEvents();
+		UE_LOG(LogTemp, Warning, TEXT("ReputationNetworkHandler initialized and subscribed"));
+	}
+
+	// Initialize Titles system
+	if (TitleManager && TitleNetworkHandler)
+	{
+		TitleNetworkHandler->Initialize(TitleManager, GetNetworkManager(), this);
+		TitleNetworkHandler->SubscribeToNetworkEvents();
+		UE_LOG(LogTemp, Warning, TEXT("TitleNetworkHandler initialized and subscribed"));
 	}
 
 	// Initialize Chat System
@@ -1349,6 +1391,15 @@ void UMyGameInstance::RefreshManagerWorldContexts()
 	if (PingManager)
 	{
 		PingManager->SetWorldContext(World);
+
+		// MonitorStatsWidget was destroyed before the level transition (TransitionToGameWorld
+		// nulls it out). Re-create it here so the ping display is visible in the game world.
+		if (!IsValid(MonitorStatsWidget))
+		{
+			AddMonitorStatsWidgetToViewport();
+		}
+		PingManager->Initialize(NetworkManager, MonitorStatsWidget);
+
 		// Re-register ping timers in the new world's TimerManager
 		PingManager->RestartPingUpdates();
 	}

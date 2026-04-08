@@ -29,6 +29,8 @@ void UActiveEffectsWidget::NativeDestruct()
 
 void UActiveEffectsWidget::RefreshEffects(const TArray<FActiveEffectEntry>& Effects)
 {
+    UE_LOG(LogTemp, Warning, TEXT("[EFFECTS] UActiveEffectsWidget::RefreshEffects called with %d effects, Effects_Container=%s"),
+        Effects.Num(), Effects_Container ? TEXT("valid") : TEXT("NULL"));
     CachedEffects = Effects;
     RebuildSlots();
 }
@@ -44,13 +46,13 @@ void UActiveEffectsWidget::ClearEffects()
 
 void UActiveEffectsWidget::OnSecondTick()
 {
-    // Only update timer labels — no full rebuild needed.
+    // Only update timer labels ï¿½ no full rebuild needed.
     if (!Effects_Container) return;
 
     const int64 NowSec = FDateTime::UtcNow().ToUnixTimestamp();
 
     // Check if any unique effect slug has expired; remove all entries for it.
-    // Effects with expiresAt == 0 are permanent / passive — never expire client-side.
+    // Effects with expiresAt == 0 are permanent / passive ï¿½ never expire client-side.
     TSet<FString> ExpiredSlugs;
     for (const FActiveEffectEntry& Effect : CachedEffects)
     {
@@ -98,6 +100,11 @@ void UActiveEffectsWidget::GroupEffects(const TArray<FActiveEffectEntry>& InEffe
 
 void UActiveEffectsWidget::RebuildSlots()
 {
+    UE_LOG(LogTemp, Warning, TEXT("[EFFECTS] UActiveEffectsWidget::RebuildSlots: Effects_Container=%s CachedEffects=%d EffectSlotClass=%s"),
+        Effects_Container ? TEXT("valid") : TEXT("NULL"),
+        CachedEffects.Num(),
+        EffectSlotClass ? TEXT("valid") : TEXT("NULL"));
+
     if (!Effects_Container) return;
     Effects_Container->ClearChildren();
 

@@ -123,6 +123,10 @@ private:
 		// Called by OnPickupPoint delegate: plays the pickup VFX/SFX and destroys the actor.
 		void OnPickupPointFired();
 
+		// Called from BasicMOB::Die() — spawns any drops that were deferred
+		// because the mob was still alive when itemDrop packet arrived.
+		void FlushDropsForMob(int32 MobUID);
+
 		// Add this to the private section
 	private:
 		// The data table containing item visual information
@@ -145,4 +149,8 @@ private:
 
 		// Whether OnPickupPoint is already bound for the current session.
 		bool bPickupDelegateBound = false;
+
+		// Drops deferred because their mob was still alive when itemDrop arrived.
+		// Key = mobUID (int32). Flushed in BasicMOB::Die() via FlushDropsForMob().
+		TMap<int32, TArray<FDroppedItemStruct>> PendingMobDrops;
 };

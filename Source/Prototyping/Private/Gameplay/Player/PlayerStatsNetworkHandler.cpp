@@ -38,7 +38,13 @@ void UPlayerStatsNetworkHandler::UnsubscribeFromNetworkEvents()
 
 void UPlayerStatsNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
 {
-    if (ReceivedData.IsEmpty() || !StatsManager) return;
+    if (ReceivedData.IsEmpty()) return;
+
+    if (!StatsManager)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[EFFECTS] PlayerStatsNetworkHandler::HandleChunkServerData: StatsManager is NULL — handler is broken, check initialization"));
+        return;
+    }
 
     FMessageDataStruct Msg = JSONParser::DeserializeMessageData(ReceivedData);
 
@@ -116,8 +122,9 @@ FPlayerStatsUpdateStruct UPlayerStatsNetworkHandler::ParseStatsUpdate(const TSha
 {
     FPlayerStatsUpdateStruct S;
 
-    Body->TryGetNumberField(TEXT("characterId"), S.characterId);
-    Body->TryGetNumberField(TEXT("level"),       S.level);
+    Body->TryGetNumberField(TEXT("characterId"),    S.characterId);
+    Body->TryGetNumberField(TEXT("level"),            S.level);
+    Body->TryGetNumberField(TEXT("freeSkillPoints"),  S.freeSkillPoints);
 
     // health
     const TSharedPtr<FJsonObject>* HealthObj = nullptr;
@@ -165,6 +172,7 @@ FPlayerStatsUpdateStruct UPlayerStatsNetworkHandler::ParseStatsUpdate(const TSha
 
             FStatAttributeEntry Entry;
             (*ObjPtr)->TryGetStringField(TEXT("slug"),      Entry.slug);
+            (*ObjPtr)->TryGetStringField(TEXT("name"),      Entry.name);
             (*ObjPtr)->TryGetNumberField(TEXT("base"),      Entry.base);
             (*ObjPtr)->TryGetNumberField(TEXT("effective"), Entry.effective);
             S.attributes.Add(Entry);

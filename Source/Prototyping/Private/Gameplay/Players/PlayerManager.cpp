@@ -6,6 +6,7 @@
 #include "Gameplay/Combat/CombatSystemManager.h"
 #include "Gameplay/Combat/CombatNetworkHandler.h"
 #include "Gameplay/Player/ExperienceManager.h"
+#include "Gameplay/Player/PlayerStatsManager.h"
 #include "MyGameInstance.h"
 #include "Prototyping.h"
 
@@ -377,7 +378,15 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 				}
 				else
 				{
-					UE_LOG(LogConnection, Warning, TEXT("stats_update: player not found for charId=%d"), CharacterId);
+					UE_LOG(LogConnection, Warning, TEXT("stats_update: с for charId=%d — pushing to PlayerStatsManager"), CharacterId);
+					// Player actor not yet registered (early login packet). Push data into
+					// PlayerStatsManager so OnStatsUpdated fires and all subscribed widgets
+					// (PlayerStatsWidget, ActiveEffectsWidget via HandleStatsManagerUpdate)
+					// receive the full stats including activeEffects.
+					if (UPlayerStatsManager* StatsMgr = gameInstance->GetPlayerStatsManager())
+					{
+						StatsMgr->ApplyStatsUpdate(StatsUpdate);
+					}
 				}
 			}
 			else

@@ -89,8 +89,13 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Combat System|Events")
     FOnActorDied OnActorDied;
 
-    /** Called by the hit-point anim notify delegate when the animation reaches the impact frame. */
+    /** Called by the hit-point anim notify delegate when the animation reaches the impact frame.
+     *  Does NOT flush results that are waiting on a projectile impact. */
     void NotifyHitPoint(int32 CasterId);
+
+    /** Called exclusively by ABaseMMOProjectile on impact.
+     *  Flushes all pending results for the caster, including projectile-waiting ones. */
+    void NotifyProjectileImpact(int32 CasterId);
 
 protected:
     // Find the appropriate effect handler for the skill type
@@ -144,16 +149,32 @@ private:
     {
         FSkillResultData ResultData;
         double           StoredAtWorldTime = 0.0;
+        // True when the skill spawns a projectile.  These results must only be
+        // flushed by the projectile on impact — animation hit-point notifies must
+        // not touch them, otherwise a melee auto-attack fired while the projectile
+        // is still in flight would prematurely apply the projectile's damage.
+        bool             bWaitsForProjectile = false;
     };
     TMap<int32, TArray<FPendingResult>> PendingSkillResults;
 
     // Safety timeout (seconds): if the hit-point notify never fires (no montage,
-    // broken anim), we apply the result after this delay so combat still works.
-    static constexpr double PendingResultTimeoutSeconds = 3.0;
+    // broken anim, or projectile that never hits), we apply the result after this
+    // delay. Must be > projectile MaxLifetime (8.0s) so projectiles always hit first.
+    static constexpr double PendingResultTimeoutSeconds = 12.0;
 
-    // Flush any pending results for a caster.  Called from NotifyHitPoint
-    // and also from a safety-timeout timer.
-    void FlushPendingResults(int32 CasterId);
+    // When a projectile lands but combatResult has not arrived yet (server slower than
+    // projectile flight), we record the WorldTime of impact here.  ProcessSkillResult
+    // checks this map on arrival: if the entry is fresh it applies the result
+    // immediately instead of waiting for another physical impact that will never come.
+    TMap<int32, double> EarlyProjectileImpacts; // CasterId -> WorldTime of impact
+    static constexpr double EarlyImpactWindowSeconds = 3.0; // > 2x max expected RTT
+
+    // Flush pending results for a caster.
+    // bSkipProjectileWaiters = true  -> skip results that need a projectile hit
+    //                                   (called from animation hit-point notifies).
+    // bSkipProjectileWaiters = false -> flush everything, including projectile results
+    //                                   (called from projectile impact or safety timeout).
+    void FlushPendingResults(int32 CasterId, bool bSkipProjectileWaiters = false);
 
     // Start a safety-timeout timer for a pending result
     void StartPendingResultTimeout(int32 CasterId);

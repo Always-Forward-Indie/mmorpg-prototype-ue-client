@@ -1,6 +1,9 @@
 #include "UI/PlayerStatsWidget.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
+#include "Gameplay/Player/TitleManager.h"
+#include "Gameplay/Player/MasteryManager.h"
 #include "Components/VerticalBox.h"
+#include "Components/ScrollBox.h"
 #include "Components/TextBlock.h"
 #include "Components/ProgressBar.h"
 #include "Components/Button.h"
@@ -17,6 +20,16 @@ void UPlayerStatsWidget::NativeConstruct()
 
     if (Close_Button)
         Close_Button->OnClicked.AddDynamic(this, &UPlayerStatsWidget::HandleCloseButtonClicked);
+
+    // Diagnostic: log which optional bindings are resolved (helps catch missing Blueprint widgets)
+    UE_LOG(LogTemp, Log, TEXT("PlayerStatsWidget bindings: SP_Text=%s  Effects_Box=%s  Attributes_Box=%s  Mastery_ScrollBox=%s  CharacterName_Text=%s  EquippedTitle_Text=%s"),
+        SP_Text             ? TEXT("OK") : TEXT("NULL"),
+        Effects_Box         ? TEXT("OK") : TEXT("NULL"),
+        Attributes_Box      ? TEXT("OK") : TEXT("NULL"),
+        Mastery_ScrollBox   ? TEXT("OK") : TEXT("NULL"),
+        CharacterName_Text  ? TEXT("OK") : TEXT("NULL"),
+        EquippedTitle_Text  ? TEXT("OK") : TEXT("NULL")
+    );
 
     // Center on screen
     if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
@@ -36,6 +49,13 @@ void UPlayerStatsWidget::NativeDestruct()
 {
     if (StatsManager)
         StatsManager->OnStatsUpdated.RemoveDynamic(this, &UPlayerStatsWidget::HandleStatsUpdated);
+    if (TitleManager)
+        TitleManager->OnTitlesUpdated.RemoveDynamic(this, &UPlayerStatsWidget::HandleTitlesUpdated);
+    if (MasteryManager)
+    {
+        MasteryManager->OnMasteriesLoaded.RemoveDynamic(this, &UPlayerStatsWidget::HandleMasteriesLoaded);
+        MasteryManager->OnMasteryUpdated.RemoveDynamic(this, &UPlayerStatsWidget::HandleMasteryUpdated);
+    }
 
     Super::NativeDestruct();
 }
@@ -59,6 +79,43 @@ void UPlayerStatsWidget::BindToStatsManager(UPlayerStatsManager* InStatsManager)
         if (Cached.characterId > 0)
             RefreshAll(Cached);
     }
+}
+
+void UPlayerStatsWidget::BindToProgressionManagers(UTitleManager* InTitleManager, UMasteryManager* InMasteryManager)
+{
+    // Unbind old
+    if (TitleManager)
+        TitleManager->OnTitlesUpdated.RemoveDynamic(this, &UPlayerStatsWidget::HandleTitlesUpdated);
+    if (MasteryManager)
+    {
+        MasteryManager->OnMasteriesLoaded.RemoveDynamic(this, &UPlayerStatsWidget::HandleMasteriesLoaded);
+        MasteryManager->OnMasteryUpdated.RemoveDynamic(this, &UPlayerStatsWidget::HandleMasteryUpdated);
+    }
+
+    TitleManager   = InTitleManager;
+    MasteryManager = InMasteryManager;
+
+    if (TitleManager)
+    {
+        TitleManager->OnTitlesUpdated.AddDynamic(this, &UPlayerStatsWidget::HandleTitlesUpdated);
+        const FPlayerTitlesState& Cached = TitleManager->GetCachedState();
+        if (Cached.characterId > 0)
+            RefreshEquippedTitle();
+    }
+
+    if (MasteryManager)
+    {
+        MasteryManager->OnMasteriesLoaded.AddDynamic(this, &UPlayerStatsWidget::HandleMasteriesLoaded);
+        MasteryManager->OnMasteryUpdated.AddDynamic(this, &UPlayerStatsWidget::HandleMasteryUpdated);
+        if (MasteryManager->GetAllMasteries().Num() > 0)
+            RefreshMasteries();
+    }
+}
+
+void UPlayerStatsWidget::SetCharacterName(const FString& InName)
+{
+    if (CharacterName_Text)
+        CharacterName_Text->SetText(FText::FromString(InName));
 }
 
 void UPlayerStatsWidget::OpenStats()
@@ -116,9 +173,15 @@ void UPlayerStatsWidget::HandleStatsUpdated(const FPlayerStatsUpdateStruct& NewS
 
 void UPlayerStatsWidget::RefreshAll(const FPlayerStatsUpdateStruct& Stats)
 {
+    UE_LOG(LogTemp, Log, TEXT("PlayerStatsWidget::RefreshAll - charId=%d lv=%d SP=%d effects=%d attrs=%d"),
+        Stats.characterId, Stats.level, Stats.freeSkillPoints,
+        Stats.activeEffects.Num(), Stats.attributes.Num());
+
     RefreshVitals(Stats);
     RefreshAttributes(Stats);
     RefreshEffects(Stats);
+    RefreshEquippedTitle();
+    RefreshMasteries();
 }
 
 void UPlayerStatsWidget::RefreshVitals(const FPlayerStatsUpdateStruct& Stats)
@@ -128,6 +191,8 @@ void UPlayerStatsWidget::RefreshVitals(const FPlayerStatsUpdateStruct& Stats)
         Level_Text->SetText(FText::FromString(FString::Printf(TEXT("Level %d"), Stats.level)));
 
     // Free skill points
+    if (!SP_Text)
+        UE_LOG(LogTemp, Warning, TEXT("PlayerStatsWidget::RefreshVitals - SP_Text is NULL (add UTextBlock named 'SP_Text' to WBP_PlayerStats), SP value would be %d"), Stats.freeSkillPoints);
     if (SP_Text)
     {
         SP_Text->SetText(FText::FromString(FString::Printf(TEXT("Skill Points: %d"), Stats.freeSkillPoints)));
@@ -201,13 +266,16 @@ void UPlayerStatsWidget::RefreshAttributes(const FPlayerStatsUpdateStruct& Stats
         const int32 EffInt = static_cast<int32>(Attr.effective);
         const int32 Bonus = EffInt - static_cast<int32>(Attr.base);
 
+        // Prefer server-provided display name; fall back to slug if absent
+        const FString Label = Attr.name.IsEmpty() ? Attr.slug : Attr.name;
+
         FString Line;
         if (Bonus > 0)
-            Line = FString::Printf(TEXT("%s:  %d  (+%d)"), *Attr.slug, EffInt, Bonus);
+            Line = FString::Printf(TEXT("%s:  %d  (+%d)"), *Label, EffInt, Bonus);
         else if (Bonus < 0)
-            Line = FString::Printf(TEXT("%s:  %d  (%d)"), *Attr.slug, EffInt, Bonus);
+            Line = FString::Printf(TEXT("%s:  %d  (%d)"), *Label, EffInt, Bonus);
         else
-            Line = FString::Printf(TEXT("%s:  %d"), *Attr.slug, EffInt);
+            Line = FString::Printf(TEXT("%s:  %d"), *Label, EffInt);
 
         // Use a custom row widget if supplied; otherwise a plain TextBlock
         if (AttributeRowClass)
@@ -233,7 +301,11 @@ void UPlayerStatsWidget::RefreshAttributes(const FPlayerStatsUpdateStruct& Stats
 
 void UPlayerStatsWidget::RefreshEffects(const FPlayerStatsUpdateStruct& Stats)
 {
-    if (!Effects_Box) return;
+    if (!Effects_Box)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PlayerStatsWidget::RefreshEffects - Effects_Box is NULL (add UVerticalBox named 'Effects_Box' to WBP_PlayerStats)"));
+        return;
+    }
     Effects_Box->ClearChildren();
 
     const int64 NowSec = FDateTime::UtcNow().ToUnixTimestamp();
@@ -301,6 +373,77 @@ void UPlayerStatsWidget::RefreshEffects(const FPlayerStatsUpdateStruct& Stats)
 
 // ---------------------------------------------------------------------------
 // Effect countdown tick
+// ---------------------------------------------------------------------------
+
+void UPlayerStatsWidget::HandleTitlesUpdated(const FPlayerTitlesState& /*State*/)
+{
+    if (GetVisibility() == ESlateVisibility::Visible)
+        RefreshEquippedTitle();
+}
+
+void UPlayerStatsWidget::HandleMasteriesLoaded(const FPlayerMasteriesState& /*State*/)
+{
+    if (GetVisibility() == ESlateVisibility::Visible)
+        RefreshMasteries();
+}
+
+void UPlayerStatsWidget::HandleMasteryUpdated(const FMasteryUpdateData& /*Update*/)
+{
+    if (GetVisibility() == ESlateVisibility::Visible)
+        RefreshMasteries();
+}
+
+void UPlayerStatsWidget::RefreshEquippedTitle()
+{
+    if (!EquippedTitle_Text) return;
+
+    if (TitleManager)
+    {
+        const FPlayerTitlesState& State = TitleManager->GetCachedState();
+        if (State.equippedTitleSlug.IsEmpty())
+            EquippedTitle_Text->SetText(FText::FromString(TEXT("Title: (none)")));
+        else
+            EquippedTitle_Text->SetText(FText::FromString(
+                FString::Printf(TEXT("Title: %s"), *State.equippedTitle.displayName)));
+    }
+    else
+    {
+        EquippedTitle_Text->SetText(FText::FromString(TEXT("Title: (none)")));
+    }
+}
+
+void UPlayerStatsWidget::RefreshMasteries()
+{
+    if (!Mastery_ScrollBox) return;
+    Mastery_ScrollBox->ClearChildren();
+
+    if (!MasteryManager) return;
+
+    const TArray<FMasteryEntry> Masteries = MasteryManager->GetAllMasteries();
+    for (const FMasteryEntry& M : Masteries)
+    {
+        const FString Line = FString::Printf(TEXT("%s: %.1f"), *M.masterySlug, M.value);
+
+        if (MasteryRowClass)
+        {
+            UUserWidget* Row = CreateWidget<UUserWidget>(GetOwningPlayer(), MasteryRowClass);
+            if (Row)
+            {
+                if (UTextBlock* TB = Cast<UTextBlock>(Row->GetWidgetFromName(TEXT("Row_Text"))))
+                    TB->SetText(FText::FromString(Line));
+                Mastery_ScrollBox->AddChild(Row);
+                continue;
+            }
+        }
+
+        UTextBlock* TB = NewObject<UTextBlock>(this);
+        TB->SetText(FText::FromString(Line));
+        Mastery_ScrollBox->AddChild(TB);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Effect countdown tick (original)
 // ---------------------------------------------------------------------------
 
 void UPlayerStatsWidget::TickEffectCountdowns()

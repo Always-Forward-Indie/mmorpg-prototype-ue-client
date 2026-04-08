@@ -5,6 +5,7 @@
 #include "Gameplay/Items/DroppedItemActor.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Players/PlayerAnimInstance.h"
+#include "Gameplay/Mobs/BasicMOB.h"
 #include "Utils/JSONParser.h"
 #include "MyGameInstance.h"
 #include "Networking/NetworkManager.h"
@@ -151,7 +152,7 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 			}
 		}
 
-		// Fallback: no player / no montage assigned — fire immediately
+		// Fallback: no player / no montage assigned ï¿½ fire immediately
 		if (!bMontageStarted)
 		{
 			UE_LOG(LogTemp, Warning,
@@ -161,9 +162,9 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 	}
 	else if (MessageData.eventType == "itemPickup" && MessageData.status != "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ItemManager: itemPickup failed — unlocking player movement"));
+		UE_LOG(LogTemp, Warning, TEXT("ItemManager: itemPickup failed ï¿½ unlocking player movement"));
 
-		// Server rejected the pickup — cancel any pending pickup-point timer and unlock
+		// Server rejected the pickup ï¿½ cancel any pending pickup-point timer and unlock
 		if (worldContext)
 		{
 			if (APlayerController* PC = worldContext->GetFirstPlayerController())
@@ -214,6 +215,31 @@ ADroppedItemActor* UItemManager::SpawnDroppedItem(const FDroppedItemStruct& Drop
 	{
 		UE_LOG(LogTemp, Error, TEXT("GameInstance or WorldContext not found in ItemManager"));
 		return nullptr;
+	}
+
+	// If the item was dropped by a mob that is still alive, defer the spawn.
+	// The drop will appear on the ground only after the mob dies (FlushDropsForMob).
+	if (!DroppedItem.droppedByMobUID.IsEmpty())
+	{
+		const int32 MobUID = FCString::Atoi(*DroppedItem.droppedByMobUID);
+		if (MobUID > 0)
+		{
+			TArray<AActor*> MobActors;
+			UGameplayStatics::GetAllActorsWithTag(worldContext, FName(*DroppedItem.droppedByMobUID), MobActors);
+			if (MobActors.Num() > 0)
+			{
+				if (ABasicMOB* Mob = Cast<ABasicMOB>(MobActors[0]))
+				{
+					if (!Mob->GetMOBIsDead())
+					{
+						UE_LOG(LogTemp, Log, TEXT("ItemManager: deferring item uid=%d \u2014 mob %d still alive"),
+							DroppedItem.uid, MobUID);
+						PendingMobDrops.FindOrAdd(MobUID).Add(DroppedItem);
+						return nullptr;
+					}
+				}
+			}
+		}
 	}
 
 	// Get the DroppedItemActor class from game instance
@@ -442,7 +468,7 @@ FItemVisualData UItemManager::GetItemVisualDataBySlug(const FString& ItemSlug)
 
 	if (ItemVisualsDataTable)
 	{
-		// Row name IS the slug — same convention as FItemLocaleDefinition
+		// Row name IS the slug ï¿½ same convention as FItemLocaleDefinition
 		FItemVisualData* VisualData = ItemVisualsDataTable->FindRow<FItemVisualData>(FName(*ItemSlug), TEXT("GetItemVisualDataBySlug"), false);
 		if (VisualData)
 		{
@@ -470,7 +496,7 @@ FItemVisualData UItemManager::GetItemVisualDataBySlug(const FString& ItemSlug)
 // BindPickupPointDelegate
 //   Lazily binds to the local player's PlayerAnimInstance::OnPickupPoint so
 //   OnPickupPointFired() is called at the exact animation frame.
-//   Safe to call multiple times — binds only once per session.
+//   Safe to call multiple times ï¿½ binds only once per session.
 // ---------------------------------------------------------------------------
 void UItemManager::BindPickupPointDelegate()
 {
@@ -543,4 +569,26 @@ void UItemManager::OnPickupPointFired()
 	// Reset pending state
 	PendingPickupItemUID = -1;
 	PendingPickupItem    = FItemBaseStruct();
+}
+
+// ---------------------------------------------------------------------------
+// FlushDropsForMob
+//   Called by BasicMOB::Die() once the mob is confirmed dead.
+//   Spawns every item that was deferred while the mob was still alive.
+// ---------------------------------------------------------------------------
+void UItemManager::FlushDropsForMob(int32 MobUID)
+{
+	TArray<FDroppedItemStruct>* Pending = PendingMobDrops.Find(MobUID);
+	if (!Pending || Pending->Num() == 0) return;
+
+	TArray<FDroppedItemStruct> ToSpawn = MoveTemp(*Pending);
+	PendingMobDrops.Remove(MobUID);
+
+	UE_LOG(LogTemp, Log, TEXT("ItemManager: FlushDropsForMob uid=%d â€” spawning %d deferred item(s)"),
+		MobUID, ToSpawn.Num());
+
+	for (const FDroppedItemStruct& Drop : ToSpawn)
+	{
+		SpawnDroppedItem(Drop);
+	}
 }

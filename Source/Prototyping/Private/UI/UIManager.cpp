@@ -41,9 +41,14 @@
 #include "UI/NotificationScreenCenterWidget.h"
 #include "UI/NotificationAtmosphereWidget.h"
 #include "UI/WorldNotificationManager.h"
+#include "UI/TitlesWidget.h"
+#include "UI/ReputationWidget.h"
 #include "Gameplay/Bestiary/BestiaryNetworkHandler.h"
 #include "Gameplay/Chat/ChatManager.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
+#include "Gameplay/Player/TitleManager.h"
+#include "Gameplay/Player/TitleNetworkHandler.h"
+#include "Gameplay/Player/ReputationManager.h"
 #include "Audio/AudioManager.h"
 #include "Blueprint/UserWidget.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -82,6 +87,8 @@ UUIManager::UUIManager()
 	GameMenuBarWidget = nullptr;
 	GameMenuWidget = nullptr;
 	AudioSettingsWidget = nullptr;
+	TitlesWidget = nullptr;
+	ReputationWidget = nullptr;
 	InventoryManager = nullptr;
 	HarvestManager = nullptr;
 	ExperienceManager = nullptr;
@@ -573,6 +580,8 @@ void UUIManager::CreateGameMenuBarWidget()
 	GameMenuBarWidget->OnSkillsClicked.AddDynamic(this,       &UUIManager::OnMenuBarSkillsClicked);
 	GameMenuBarWidget->OnStatsClicked.AddDynamic(this,        &UUIManager::OnMenuBarStatsClicked);
 	GameMenuBarWidget->OnBestiaryClicked.AddDynamic(this,     &UUIManager::OnMenuBarBestiaryClicked);
+	GameMenuBarWidget->OnTitlesClicked.AddDynamic(this,       &UUIManager::OnMenuBarTitlesClicked);
+	GameMenuBarWidget->OnReputationClicked.AddDynamic(this,   &UUIManager::OnMenuBarReputationClicked);
 	GameMenuBarWidget->OnMenuClicked.AddDynamic(this,         &UUIManager::OnMenuBarMenuClicked);
 
 	UE_LOG(LogTemp, Log, TEXT("UIManager: GameMenuBarWidget created and wired"));
@@ -936,6 +945,20 @@ void UUIManager::OnPlayerStatsVisibilityChanged()
 		bPlayerStatsVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
+void UUIManager::OnTitlesVisibilityChanged()
+{
+	bTitlesVisible = TitlesWidget && TitlesWidget->GetVisibility() == ESlateVisibility::Visible;
+	UpdateCursorAndInputMode();
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Titles visibility synced: %s"), bTitlesVisible ? TEXT("Visible") : TEXT("Hidden"));
+}
+
+void UUIManager::OnReputationVisibilityChanged()
+{
+	bReputationVisible = ReputationWidget && ReputationWidget->GetVisibility() == ESlateVisibility::Visible;
+	UpdateCursorAndInputMode();
+	UE_LOG(LogTemp, Warning, TEXT("UIManager: Reputation visibility synced: %s"), bReputationVisible ? TEXT("Visible") : TEXT("Hidden"));
+}
+
 void UUIManager::OnBestiaryVisibilityChanged(bool bIsVisible)
 {
 	bBestiaryVisible = bIsVisible;
@@ -982,7 +1005,8 @@ bool UUIManager::ShouldShowCursor() const
 	bool bAnyWidgetVisible = bInventoryVisible || bSkillsPanelVisible || bHarvestLootVisible 
 		|| bDialogueVisible || bQuestJournalVisible
 		|| bVendorShopVisible || bRepairShopVisible || bSkillShopVisible || bTradeVisible || bEquipmentVisible
-		|| bPlayerStatsVisible || bBestiaryVisible || bAltCursorActive || bGameMenuVisible;
+		|| bPlayerStatsVisible || bBestiaryVisible || bTitlesVisible || bReputationVisible
+		|| bAltCursorActive || bGameMenuVisible;
 	
 	UE_LOG(LogTemp, Verbose, TEXT("UIManager: Cursor check -> Show: %s"),
 		bAnyWidgetVisible ? TEXT("YES") : TEXT("NO"));
@@ -1075,6 +1099,16 @@ void UUIManager::ToggleGameMenu()
 	if (bBestiaryVisible && BestiaryWidget)
 	{
 		BestiaryWidget->CloseBestiary();
+		bClosedSomething = true;
+	}
+	if (bTitlesVisible && TitlesWidget)
+	{
+		TitlesWidget->CloseTitles();
+		bClosedSomething = true;
+	}
+	if (bReputationVisible && ReputationWidget)
+	{
+		ReputationWidget->CloseReputation();
 		bClosedSomething = true;
 	}
 	if (bVendorShopVisible && VendorShopWidget)
@@ -1376,6 +1410,71 @@ void UUIManager::InitializeStatsWidget(UPlayerStatsManager* InStatsManager)
 }
 
 
+void UUIManager::InitializeTitlesWidget(UTitleManager* InTitleManager, UTitleNetworkHandler* InTitleHandler, int32 InCharacterId)
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeTitlesWidget"));
+
+	if (!InTitleManager)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::InitializeTitlesWidget - TitleManager is null"));
+		return;
+	}
+
+	if (TitlesWidgetClass && !TitlesWidget)
+	{
+		TitlesWidget = CreateWidget<UTitlesWidget>(GetWorld(), TitlesWidgetClass);
+		if (TitlesWidget)
+		{
+			TitlesWidget->AddToViewport(90);
+			TitlesWidget->SetVisibility(ESlateVisibility::Collapsed);
+			TitlesWidget->BindToManagers(InTitleManager, InTitleHandler, InCharacterId);
+			TitlesWidget->OnTitlesVisibilityChanged.AddDynamic(this, &UUIManager::OnTitlesVisibilityChanged);
+			UE_LOG(LogTemp, Log, TEXT("UIManager: TitlesWidget created and bound"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create TitlesWidget"));
+		}
+	}
+	else if (!TitlesWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: TitlesWidgetClass is not set in Blueprint"));
+	}
+}
+
+void UUIManager::InitializeReputationWidget(UReputationManager* InReputationManager)
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeReputationWidget"));
+
+	if (!InReputationManager)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::InitializeReputationWidget - ReputationManager is null"));
+		return;
+	}
+
+	if (ReputationWidgetClass && !ReputationWidget)
+	{
+		ReputationWidget = CreateWidget<UReputationWidget>(GetWorld(), ReputationWidgetClass);
+		if (ReputationWidget)
+		{
+			ReputationWidget->AddToViewport(90);
+			ReputationWidget->SetVisibility(ESlateVisibility::Collapsed);
+			ReputationWidget->BindToManager(InReputationManager);
+			ReputationWidget->OnReputationVisibilityChanged.AddDynamic(this, &UUIManager::OnReputationVisibilityChanged);
+			UE_LOG(LogTemp, Log, TEXT("UIManager: ReputationWidget created and bound"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create ReputationWidget"));
+		}
+	}
+	else if (!ReputationWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: ReputationWidgetClass is not set in Blueprint"));
+	}
+}
+
+
 void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiaryHandler)
 {
 	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeNotificationSystem"));
@@ -1560,6 +1659,16 @@ void UUIManager::OnMenuBarBestiaryClicked()
 	ToggleBestiary();
 }
 
+void UUIManager::OnMenuBarTitlesClicked()
+{
+	ToggleTitles();
+}
+
+void UUIManager::OnMenuBarReputationClicked()
+{
+	ToggleReputation();
+}
+
 void UUIManager::HandleGameMenuResumeClicked()
 {
 	if (GameMenuWidget) { GameMenuWidget->CloseMenu(); }
@@ -1666,6 +1775,30 @@ void UUIManager::ToggleBestiary()
 
 	BestiaryWidget->ToggleBestiary();
 	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleBestiary - Toggled"));
+}
+
+void UUIManager::ToggleTitles()
+{
+	if (!TitlesWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::ToggleTitles - TitlesWidget not initialized (assign TitlesWidgetClass in Blueprint)"));
+		return;
+	}
+
+	TitlesWidget->ToggleTitles();
+	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleTitles - Toggled"));
+}
+
+void UUIManager::ToggleReputation()
+{
+	if (!ReputationWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::ToggleReputation - ReputationWidget not initialized (assign ReputationWidgetClass in Blueprint)"));
+		return;
+	}
+
+	ReputationWidget->ToggleReputation();
+	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleReputation - Toggled"));
 }
 
 void UUIManager::ToggleQuestJournal()

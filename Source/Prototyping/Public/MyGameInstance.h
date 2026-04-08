@@ -313,6 +313,30 @@ public:
 	UPROPERTY()
 	class UPlayerStatsNetworkHandler* PlayerStatsNetworkHandler;
 
+	// Mastery manager
+	UPROPERTY()
+	class UMasteryManager* MasteryManager;
+
+	// Mastery network handler
+	UPROPERTY()
+	class UMasteryNetworkHandler* MasteryNetworkHandler;
+
+	// Reputation manager
+	UPROPERTY()
+	class UReputationManager* ReputationManager;
+
+	// Reputation network handler
+	UPROPERTY()
+	class UReputationNetworkHandler* ReputationNetworkHandler;
+
+	// Titles manager
+	UPROPERTY()
+	class UTitleManager* TitleManager;
+
+	// Titles network handler
+	UPROPERTY()
+	class UTitleNetworkHandler* TitleNetworkHandler;
+
 	// Dialogue manager
 	UPROPERTY()
 	class UDialogueManager* DialogueManager;
@@ -451,6 +475,30 @@ public:
 	// get experience network handler
 	UFUNCTION(BlueprintCallable, Category = "Player Progression")
 	class UExperienceNetworkHandler* GetExperienceNetworkHandler();
+
+	// get mastery manager
+	UFUNCTION(BlueprintCallable, Category = "Player Progression")
+	class UMasteryManager* GetMasteryManager() { return MasteryManager; }
+
+	// get mastery network handler
+	UFUNCTION(BlueprintCallable, Category = "Player Progression")
+	class UMasteryNetworkHandler* GetMasteryNetworkHandler() { return MasteryNetworkHandler; }
+
+	// get reputation manager
+	UFUNCTION(BlueprintCallable, Category = "Player Progression")
+	class UReputationManager* GetReputationManager() { return ReputationManager; }
+
+	// get reputation network handler
+	UFUNCTION(BlueprintCallable, Category = "Player Progression")
+	class UReputationNetworkHandler* GetReputationNetworkHandler() { return ReputationNetworkHandler; }
+
+	// get title manager
+	UFUNCTION(BlueprintCallable, Category = "Player Progression")
+	class UTitleManager* GetTitleManager() { return TitleManager; }
+
+	// get title network handler
+	UFUNCTION(BlueprintCallable, Category = "Player Progression")
+	class UTitleNetworkHandler* GetTitleNetworkHandler() { return TitleNetworkHandler; }
 
 	// get combat system manager
 	UFUNCTION(BlueprintCallable, Category = "Combat")

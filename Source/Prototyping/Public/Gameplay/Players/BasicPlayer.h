@@ -106,6 +106,8 @@ private:
 	FDelegateHandle AnimEndDelegateHandle;
 	FTimerHandle HitPointTimerHandle;
 
+	// Gameplay-side cast lock timer: fires HideCastBar_Implementation after cast finishes
+	FTimerHandle CastBarTimerHandle;
 
 	// Timer for deferred UI initialization in BeginPlay
 	FTimerHandle UIInitTimerHandle;
@@ -148,6 +150,9 @@ private:
 	// Pickup lock
 	bool bIsPickingUp = false;
 
+	// Cast lock: true while a skill with cast time is in progress
+	bool bIsCasting = false;
+
 	// Auto-attack animation delegate handle
 	FDelegateHandle AutoAttackAnimEndDelegateHandle;
 
@@ -179,6 +184,14 @@ private:
 	// Approach movement state
 	bool bIsApproachingTarget = false;
 	FString PendingSkillSlug;
+
+	// Cached from the most recent combatInitiation packet.
+	// Used at CastRelease to compute distance-proportional projectile speed.
+	float CurrentAnimationDuration = 0.0f; // animationDuration from server
+	float CurrentCastTime          = 0.0f; // castTime from server (cast bar duration)
+	// Pre-computed at PlaySkillAnimation time so HideCastBar reset of CurrentCastTime
+	// cannot corrupt the projectile speed calculation at CastRelease notify time.
+	float CurrentSwingSeconds      = 0.0f; // = animDuration - castTime (or animDuration for instant)
 	FTimerHandle AutoAttackRetryTimerHandle;
 
 	// Mesh rotation desire
@@ -641,6 +654,13 @@ public:
 	void LockMovementForPickup();
 	void UnlockMovementAfterPickup();
 
+	// Set the desired mesh yaw for smooth rotation (used e.g. when facing a pickup target)
+	void SetDesiredFaceYaw(float Yaw)
+	{
+		DesiredMeshYaw    = Yaw;
+		bHasDesiredMeshYaw = true;
+	}
+
 	// Right/Left mouse button handlers
 	void OnRightMousePressed();
 	void OnRightMouseReleased();
@@ -674,6 +694,10 @@ public:
 	void OnStatsToggle();
 	UFUNCTION()
 	void OnBestiaryToggle();
+	UFUNCTION()
+	void OnTitlesToggle();
+	UFUNCTION()
+	void OnReputationToggle();
 	UFUNCTION()
 	void OnGameMenuToggle();
 	UFUNCTION()
@@ -737,6 +761,12 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* BestiaryAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* TitlesAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* ReputationAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* GameMenuAction;

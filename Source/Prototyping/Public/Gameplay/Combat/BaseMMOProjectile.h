@@ -96,6 +96,9 @@ protected:
 private:
     TWeakObjectPtr<AActor> TargetActor;
 
+    // Guard against double-impact (overlap events can queue up in the same frame).
+    bool bHasHit = false;
+
     UFUNCTION()
     void OnSphereBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
         UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);

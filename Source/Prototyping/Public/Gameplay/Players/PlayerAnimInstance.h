@@ -56,7 +56,7 @@ public:
     float SpeedNormalized = 0.0f;
 
     // Movement direction angle in degrees relative to the actor's forward vector.
-    // Range: -180..180. 0 = forward, -90 = left, +90 = right, ±180 = backward.
+    // Range: -180..180. 0 = forward, -90 = left, +90 = right, ï¿½180 = backward.
     // Use as the horizontal axis of a Blend Space 2D alongside SpeedNormalized.
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Player|Movement")
     float Direction = 0.0f;
@@ -76,7 +76,7 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Player|Combat")
     bool bIsAggressive = false;
 
-    // Latched true on death — never reset
+    // Latched true on death ï¿½ never reset
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Player|Combat")
     bool bIsDead = false;
 
@@ -93,7 +93,7 @@ public:
     float CurrentAttackPlayRate = 1.0f;
 
     //////////////////////////////////////////////////////////////////////////
-    // Montage map — assign in Blueprint defaults or via code
+    // Montage map ï¿½ assign in Blueprint defaults or via code
     // Key   = animationName string from server (e.g. "attack_slash")
     // Value = UAnimMontage asset to play
     //////////////////////////////////////////////////////////////////////////
@@ -175,6 +175,13 @@ private:
     // Timer handle for the pickup-point notify (fallback when no AN_PickupPoint in montage)
     FTimerHandle PickupPointTimerHandle;
 
+    // Timer handle for programmatic JumpToSection("CastRelease") at T=castTime.
+    // Used when castTime > 0 AND the montage has a "CastRelease" section.
+    FTimerHandle CastReleaseTimerHandle;
+
+    // Pointer to the active cast montage, kept for Montage_SetPlayRate after the jump
+    TWeakObjectPtr<UAnimMontage> ActiveCastMontage;
+
     // Ratio of animationDuration at which the hit frame occurs (0..1).
     // Driven by the AN_HitPoint Animation Notify position in the montage.
     // If no notify is present we fall back to this default ratio.
@@ -191,6 +198,14 @@ private:
     // the montage timeline and converts it using the clamped PlayRate.
     // Falls back to DefaultHitRatio * ActualDuration when no such notify exists.
     static float CalcHitDelay(const UAnimMontage* Montage, float PlayRate, float ActualDuration);
+
+    // Returns true if the montage contains a section named "CastRelease".
+    static bool HasCastReleaseSection(const UAnimMontage* Montage);
+
+    // Called by CastReleaseTimerHandle: jumps the active montage to "CastRelease"
+    // section and switches to natural (1.0x) playback rate so the release animation
+    // plays at the speed the animator intended.
+    void OnCastReleaseTimer();
 
     UFUNCTION()
     void OnAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted);

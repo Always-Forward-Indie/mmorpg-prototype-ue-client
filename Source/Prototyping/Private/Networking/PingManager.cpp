@@ -152,12 +152,14 @@ void UPingManager::SendPingRequestToServer(EServerType ServerType)
 		}
 	}
 	
-	// Per protocol: timestamps sub-object with clientSendMsEcho and requestId
-	TSharedPtr<FJsonObject> TimestampsObject = MakeShareable(new FJsonObject);
+	// NTP-style: place clientSendMs (T1) and requestId directly in header root
+	// so that the server's extractClientTimestamp() and parseRequestId() can find them.
+	// The nested "timestamps" sub-object was wrong: server parses header.clientSendMs, not
+	// header.timestamps.clientSendMsEcho. Without these fields at the root, the server echoes
+	// clientSendMsEcho=0 and requestId="", which breaks the entire RTT / clock-offset pipeline.
 	int64 ClientSendMs = TimeSyncService->GetCurrentClientTimeMs();
-	TimestampsObject->SetNumberField("clientSendMsEcho", ClientSendMs);
-	TimestampsObject->SetStringField("requestId", RequestId);
-	HeaderObject->SetObjectField("timestamps", TimestampsObject);
+	HeaderObject->SetNumberField("clientSendMs", ClientSendMs);
+	HeaderObject->SetStringField("requestId", RequestId);
 
 	// Create the main JSON object
 	TSharedPtr<FJsonObject> MainJsonObject = MakeShareable(new FJsonObject);

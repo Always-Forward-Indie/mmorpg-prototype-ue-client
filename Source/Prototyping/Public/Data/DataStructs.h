@@ -3789,3 +3789,180 @@ struct PROTOTYPING_API FImpactSoundData : public FTableRowBase
 
     FImpactSoundData() {}
 };
+
+// ============================================================
+// Mastery System Structures
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FMasteryEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mastery")
+    FString masterySlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mastery")
+    float value = 0.0f;
+
+    FMasteryEntry() {}
+};
+
+/** Full mastery snapshot received on character login (player_masteries). */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FPlayerMasteriesState
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mastery")
+    int32 characterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mastery")
+    TArray<FMasteryEntry> entries;
+
+    FPlayerMasteriesState() {}
+};
+
+/** Delta update for a single mastery slot (mastery_update). */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FMasteryUpdateData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mastery")
+    int32 characterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mastery")
+    FString masterySlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mastery")
+    float value = 0.0f;
+
+    FMasteryUpdateData() {}
+};
+
+// ============================================================
+// Reputation System Structures
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FReputationEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reputation")
+    FString factionSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reputation")
+    int32 value = 0;
+
+    /** Tier string: "enemy", "stranger", "neutral", "friendly", "ally" */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reputation")
+    FString tier = "";
+
+    FReputationEntry() {}
+};
+
+/** Full reputation snapshot received on character login (player_reputations). */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FPlayerReputationsState
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reputation")
+    int32 characterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reputation")
+    TArray<FReputationEntry> entries;
+
+    FPlayerReputationsState() {}
+};
+
+/** Delta update for a single faction (reputation_update). */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FReputationUpdateData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reputation")
+    int32 characterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reputation")
+    FString factionSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reputation")
+    int32 value = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reputation")
+    FString tier = "";
+
+    FReputationUpdateData() {}
+};
+
+// ============================================================
+// Title System Structures
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FTitleBonusEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Title Bonus")
+    FString attributeSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Title Bonus")
+    float value = 0.0f;
+
+    FTitleBonusEntry() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FTitleEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Title")
+    FString slug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Title")
+    FString displayName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Title")
+    FString description = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Title")
+    FString earnCondition = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Title")
+    TArray<FTitleBonusEntry> bonuses;
+
+    FTitleEntry() {}
+};
+
+/**
+ * Full title state sent by the server (player_titles_update).
+ * Doubles as response to getTitles and as result of equipTitle.
+ */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FPlayerTitlesState
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Titles")
+    int32 characterId = 0;
+
+    /** Slug of the currently equipped title, empty string if none. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Titles")
+    FString equippedTitleSlug = "";
+
+    /** Full data for the equipped title (null/default if none equipped). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Titles")
+    FTitleEntry equippedTitle;
+
+    /** All titles earned by the character. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Titles")
+    TArray<FTitleEntry> earnedTitles;
+
+    FPlayerTitlesState() {}
+};

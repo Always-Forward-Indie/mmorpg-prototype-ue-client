@@ -50,6 +50,11 @@ class UNotificationZoneBannerWidget;
 class UNotificationScreenCenterWidget;
 class UNotificationAtmosphereWidget;
 class UWorldNotificationManager;
+class UTitlesWidget;
+class UReputationWidget;
+class UTitleManager;
+class UTitleNetworkHandler;
+class UReputationManager;
 
 // Delegate for UI Manager initialization completion
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnUIManagerInitialized);
@@ -115,6 +120,14 @@ public:
 	// Initialize stats widget
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void InitializeStatsWidget(class UPlayerStatsManager* InStatsManager);
+
+	// Initialize titles window
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void InitializeTitlesWidget(class UTitleManager* InTitleManager, class UTitleNetworkHandler* InTitleHandler, int32 InCharacterId);
+
+	// Initialize reputation window
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void InitializeReputationWidget(class UReputationManager* InReputationManager);
 
 	// Initialize notification system
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
@@ -191,6 +204,12 @@ public:
 	UPlayerStatsWidget* GetPlayerStatsWidget() const { return PlayerStatsWidget; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UTitlesWidget* GetTitlesWidget() const { return TitlesWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UReputationWidget* GetReputationWidget() const { return ReputationWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UBestiaryWidget* GetBestiaryWidget() const { return BestiaryWidget; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
@@ -234,6 +253,12 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void ToggleBestiary();
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ToggleTitles();
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ToggleReputation();
 
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void ToggleQuestJournal();
@@ -310,6 +335,12 @@ protected:
 	void OnPlayerStatsVisibilityChanged();
 
 	UFUNCTION()
+	void OnTitlesVisibilityChanged();
+
+	UFUNCTION()
+	void OnReputationVisibilityChanged();
+
+	UFUNCTION()
 	void OnBestiaryVisibilityChanged(bool bIsVisible);
 
 protected:
@@ -361,6 +392,12 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UPlayerStatsWidget> PlayerStatsWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UTitlesWidget> TitlesWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UReputationWidget> ReputationWidgetClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UBestiaryWidget> BestiaryWidgetClass;
@@ -450,6 +487,12 @@ protected:
 	UPlayerStatsWidget* PlayerStatsWidget;
 
 	UPROPERTY()
+	UTitlesWidget* TitlesWidget = nullptr;
+
+	UPROPERTY()
+	UReputationWidget* ReputationWidget = nullptr;
+
+	UPROPERTY()
 	UBestiaryWidget* BestiaryWidget;
 
 	UPROPERTY()
@@ -524,12 +567,16 @@ protected:
 	bool bEquipmentVisible;
 	bool bPlayerStatsVisible;
 	bool bBestiaryVisible;
+	bool bTitlesVisible = false;
+	bool bReputationVisible = false;
 	bool bAltCursorActive;
 	bool bGameMenuVisible;
 
 public:
 	// Internal delegate handlers (must be public for AddDynamic)
 	UFUNCTION() void OnMenuBarBestiaryClicked();
+	UFUNCTION() void OnMenuBarTitlesClicked();
+	UFUNCTION() void OnMenuBarReputationClicked();
 	UFUNCTION() void HandleGameMenuResumeClicked();
 	UFUNCTION() void HandleAudioSettingsClicked();
 	UFUNCTION() void HandleAudioSettingsClosed();

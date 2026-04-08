@@ -35,7 +35,7 @@ void UPlayerAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
     // For remote (other-client) players the CharacterMovementComponent velocity is always
     // zero because movement is driven by SetActorLocation() not CMC.
     // Use RemoteSpeed, which is derived from consecutive server position deltas.
-    // For the local player CMC velocity is authoritative — use it directly.
+    // For the local player CMC velocity is authoritative ï¿½ use it directly.
     if (Player->GetIsOtherClient())
     {
         Speed     = Player->GetRemoteSpeed();      // already EMA-smoothed in BasicPlayer
@@ -47,7 +47,7 @@ void UPlayerAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
         MaxSpeed = (MoveComp && MoveComp->MaxWalkSpeed > 0.0f) ? MoveComp->MaxWalkSpeed : MaxSpeed;
 
         // Direction is EMA-smoothed in BasicPlayer::UpdateRemotePlayerMovement.
-        // We read it unconditionally — it keeps its last value during the speed
+        // We read it unconditionally ï¿½ it keeps its last value during the speed
         // fade-out so the blend-space doesn't snap to 0 while slowing down.
         Direction = Player->GetRemoteDirection();
     }
@@ -59,7 +59,7 @@ void UPlayerAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
         MaxSpeed  = (MoveComp && MoveComp->MaxWalkSpeed > 0.0f) ? MoveComp->MaxWalkSpeed : MaxSpeed;
 
         // Compute direction angle between actor forward and velocity vector.
-        // 0 = forward, -90 = left, +90 = right, ±180 = backward.
+        // 0 = forward, -90 = left, +90 = right, ï¿½180 = backward.
         if (bIsMoving && MoveComp)
         {
             const FVector VelDir      = MoveComp->Velocity.GetSafeNormal2D();
@@ -80,7 +80,7 @@ void UPlayerAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
     // stays in sync regardless of the server-assigned move_speed value.
     SpeedNormalized = (MaxSpeed > 0.0f) ? FMath::Clamp(Speed / MaxSpeed, 0.0f, 1.0f) : 0.0f;
 
-    // Fallback sync — event handlers are the primary source for these
+    // Fallback sync ï¿½ event handlers are the primary source for these
     bIsDead = Player->GetIsDead();
 }
 
@@ -104,7 +104,7 @@ void UPlayerAnimInstance::StartAttack(const FSkillInitiationData& SkillData)
     if (bIsAttacking)
     {
         UE_LOG(LogTemp, Warning,
-            TEXT("[PlayerAnim] StartAttack ignored – already attacking (slot='%s')"),
+            TEXT("[PlayerAnim] StartAttack ignored ï¿½ already attacking (slot='%s')"),
             *CurrentAttackSlot.ToString());
         return;
     }
@@ -128,29 +128,86 @@ void UPlayerAnimInstance::StartAttack(const FSkillInitiationData& SkillData)
 
     if (Montage)
     {
-        const float PlayRate = CalcPlayRate(Montage, SkillData.animationDuration);
-        CurrentAttackPlayRate = PlayRate;
+        const float CastTime = SkillData.castTime; // 0 for instant skills
 
-        const float MontageLength  = Montage->GetPlayLength();
-        const float ActualDuration = (PlayRate > 0.0f) ? MontageLength / PlayRate : SkillData.animationDuration;
-        const float HitDelay       = CalcHitDelay(Montage, PlayRate, ActualDuration);
-
-        UE_LOG(LogTemp, Warning,
-            TEXT("[PlayerAnim] Montage: length=%.3fs playRate=%.3f actualDuration=%.3fs hitDelay=%.3fs"),
-            MontageLength, PlayRate, ActualDuration, HitDelay);
-
-        Montage_Play(Montage, PlayRate);
-        Montage_SetEndDelegate(MontageEndedDelegate, Montage);
-
-        if (UWorld* World = GetWorld())
+        // ---------------------------------------------------------------------------
+        // Phase-based path: cast-time skills whose montage has a "CastRelease" section.
+        //
+        // The montage is divided into two phases at runtime:
+        //   Phase 1 (CastLoop):    plays at CastLoopRate, loops until T=CastTime.
+        //   Phase 2 (CastRelease): plays at 1.0x, jumped-to at T=CastTime.
+        //
+        // The CastRelease anim-notify fires immediately after the jump, which is at
+        // exactly T=CastTime â€” matching the server's combatResult delivery window.
+        // The EarlyProjectileImpact mechanism handles the remaining Â±100ms tolerance.
+        // ---------------------------------------------------------------------------
+        if (CastTime > 0.0f && HasCastReleaseSection(Montage))
         {
-            World->GetTimerManager().SetTimer(HitPointTimerHandle, this,
-                &UPlayerAnimInstance::FireHitPoint, HitDelay, false);
+            // Auto-calculate the CastLoop playback rate so the Default section
+            // completes exactly once in CastTime seconds (no looping needed).
+            // Rate = (length of Default portion) / castTime.
+            // Example: Default portion = 1.5s, castTime = 4.0s â†’ rate = 0.375x
+            // The animation plays once at reduced speed â€” a natural slow charge-up.
+            const int32 ReleaseIdx = Montage->GetSectionIndex(FName("CastRelease"));
+            float ReleaseSectionStart = 0.0f, ReleaseSectionEnd = 0.0f;
+            Montage->GetSectionStartAndEndTime(ReleaseIdx, ReleaseSectionStart, ReleaseSectionEnd);
+            const float CastLoopLength = ReleaseSectionStart; // Default section spans [0, ReleaseSectionStart)
+
+            const float AutoRate = (CastLoopLength > 0.001f && CastTime > 0.001f)
+                ? FMath::Clamp(CastLoopLength / CastTime, 0.05f, 1.0f)
+                : 1.0f;
+
+            CurrentAttackPlayRate = AutoRate;
+            ActiveCastMontage    = Montage;
+
+            UE_LOG(LogTemp, Warning,
+                TEXT("[PlayerAnim] CastRelease section found â€” castTime=%.3fs loopLen=%.3fs autoRate=%.3f"),
+                CastTime, CastLoopLength, AutoRate);
+
+            Montage_Play(Montage, AutoRate);
+            Montage_SetEndDelegate(MontageEndedDelegate, Montage);
+
+            // Timer fires at T=castTime to ensure we enter CastRelease at 1.0x.
+            // Normally the montage transitions naturally (Defaultâ†’CastRelease) at the
+            // same moment since AutoRate was calculated to fill exactly castTime.
+            // The timer is a safety net for float imprecision and also switches rate.
+            if (UWorld* World = GetWorld())
+            {
+                World->GetTimerManager().ClearTimer(CastReleaseTimerHandle);
+                World->GetTimerManager().SetTimer(CastReleaseTimerHandle, this,
+                    &UPlayerAnimInstance::OnCastReleaseTimer, CastTime, false);
+            }
+        }
+        // ---------------------------------------------------------------------------
+        // Classic path: instant skills (castTime == 0) or montages without a
+        // "CastRelease" section.  Stretches the whole montage to animationDuration.
+        // ---------------------------------------------------------------------------
+        else
+        {
+            const float PlayRate = CalcPlayRate(Montage, SkillData.animationDuration);
+            CurrentAttackPlayRate = PlayRate;
+
+            const float MontageLength  = Montage->GetPlayLength();
+            const float ActualDuration = (PlayRate > 0.0f) ? MontageLength / PlayRate : SkillData.animationDuration;
+            const float HitDelay       = CalcHitDelay(Montage, PlayRate, ActualDuration);
+
+            UE_LOG(LogTemp, Warning,
+                TEXT("[PlayerAnim] Montage: length=%.3fs playRate=%.3f actualDuration=%.3fs hitDelay=%.3fs"),
+                MontageLength, PlayRate, ActualDuration, HitDelay);
+
+            Montage_Play(Montage, PlayRate);
+            Montage_SetEndDelegate(MontageEndedDelegate, Montage);
+
+            if (UWorld* World = GetWorld())
+            {
+                World->GetTimerManager().SetTimer(HitPointTimerHandle, this,
+                    &UPlayerAnimInstance::FireHitPoint, HitDelay, false);
+            }
         }
     }
     else
     {
-        // No montage assigned yet — fall back to a timer so bIsAttacking is still cleared
+        // No montage assigned yet ï¿½ fall back to a timer so bIsAttacking is still cleared
         CurrentAttackPlayRate = 1.0f;
         const float Duration = FMath::Max(SkillData.animationDuration, 0.1f);
         const float HitDelay = Duration * DefaultHitRatio;
@@ -180,13 +237,13 @@ void UPlayerAnimInstance::StartAttack(const FSkillInitiationData& SkillData)
 }
 
 // ---------------------------------------------------------------------------
-// FireHitPoint — broadcasts OnHitPoint at the visual moment of impact.
+// FireHitPoint ï¿½ broadcasts OnHitPoint at the visual moment of impact.
 // Called either by UAnimNotify_HitPoint (montage timeline) or the fallback timer.
 // Clears the fallback timer so only one call goes through per attack.
 // ---------------------------------------------------------------------------
 void UPlayerAnimInstance::FireHitPoint()
 {
-    // Cancel the fallback timer — in case the Notify fired first
+    // Cancel the fallback timer ï¿½ in case the Notify fired first
     if (UWorld* World = GetWorld())
     {
         World->GetTimerManager().ClearTimer(HitPointTimerHandle);
@@ -200,7 +257,43 @@ void UPlayerAnimInstance::FireHitPoint()
         OnHitPoint.Broadcast(CurrentCasterId);
     }
 }
+// ---------------------------------------------------------------------------
+// OnCastReleaseTimer
+//   Fired at T=castTime by CastReleaseTimerHandle.
+//   Jumps the active montage to the "CastRelease" section and switches to
+//   natural (1.0x) playback so the release animation plays at editor speed.
+//   The CastRelease anim-notify inside that section fires on the same tick,
+//   triggering PlayCombatSoundEvent(CastRelease) which spawns the projectile.
+// ---------------------------------------------------------------------------
+void UPlayerAnimInstance::OnCastReleaseTimer()
+{
+    UAnimMontage* Montage = ActiveCastMontage.Get();
+    if (!Montage)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] OnCastReleaseTimer: active montage is gone, skipping"));
+        return;
+    }
 
+    // The montage should have naturally transitioned Defaultâ†’CastRelease by now
+    // (AutoRate was calculated to finish the Default section at exactly T=castTime).
+    // Only force-jump if float imprecision left us still in Default.
+    const FName CurrentSection = Montage_GetCurrentSection(Montage);
+    if (CurrentSection != FName("CastRelease"))
+    {
+        UE_LOG(LogTemp, Warning,
+            TEXT("[PlayerAnim] OnCastReleaseTimer: still in section '%s', forcing JumpToSection"),
+            *CurrentSection.ToString());
+        Montage_JumpToSection(FName("CastRelease"), Montage);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] OnCastReleaseTimer: in CastRelease, setting rate=1.0"));
+    }
+
+    // Ensure CastRelease always plays at the animator's intended 1.0x speed.
+    Montage_SetPlayRate(Montage, 1.0f);
+    CurrentAttackPlayRate = 1.0f;
+}
 // ---------------------------------------------------------------------------
 // NotifyDeath
 //   Latch bIsDead, stop any active montage, let the State Machine take over.
@@ -243,13 +336,16 @@ void UPlayerAnimInstance::NotifyTargetLost()
 }
 
 // ---------------------------------------------------------------------------
-// NotifyHit  (combatResult — this player is the TARGET)
+// NotifyHit  (combatResult ï¿½ this player is the TARGET)
 //   Plays a hit-react montage over the current locomotion/combat-idle.
 //   Clears bIsHit automatically when the montage ends.
 // ---------------------------------------------------------------------------
 void UPlayerAnimInstance::NotifyHit()
 {
     if (bIsDead) return;
+    // Never interrupt an active cast or attack animation with a hit-react.
+    // The hit will be visible via HP bar / floating text.
+    if (bIsAttacking) return;
 
     bIsHit = true;
 
@@ -267,7 +363,7 @@ void UPlayerAnimInstance::NotifyHit()
     }
     else
     {
-        // No montage — clear after a fixed window
+        // No montage ï¿½ clear after a fixed window
         if (UWorld* World = GetWorld())
         {
             FTimerHandle Handle;
@@ -280,7 +376,7 @@ void UPlayerAnimInstance::NotifyHit()
 }
 
 // ---------------------------------------------------------------------------
-// NotifyPickup — plays the pickup montage and returns its duration.
+// NotifyPickup ï¿½ plays the pickup montage and returns its duration.
 // A fallback timer fires FirePickupPoint() at ~50 % of the montage so that
 // the DroppedItemActor is removed even when no AnimNotify_PickupPoint is
 // placed on the timeline.
@@ -309,7 +405,7 @@ float UPlayerAnimInstance::NotifyPickup()
 
     Montage_Play(PickupMontage, PlayRate);
 
-    // Set fallback timer — AnimNotify_PickupPoint will cancel it if present
+    // Set fallback timer ï¿½ AnimNotify_PickupPoint will cancel it if present
     if (UWorld* World = GetWorld())
     {
         World->GetTimerManager().SetTimer(PickupPointTimerHandle, this,
@@ -320,7 +416,7 @@ float UPlayerAnimInstance::NotifyPickup()
 }
 
 // ---------------------------------------------------------------------------
-// CancelPickupTimer — cancels the fallback pickup-point timer without
+// CancelPickupTimer ï¿½ cancels the fallback pickup-point timer without
 // broadcasting. Used by ItemManager::ResetPickupState() to prevent a stale
 // timer from a previous attempt from firing into a new pickup.
 // ---------------------------------------------------------------------------
@@ -333,7 +429,7 @@ void UPlayerAnimInstance::CancelPickupTimer()
 }
 
 // ---------------------------------------------------------------------------
-// FirePickupPoint — broadcasts OnPickupPoint at the visual moment the hand
+// FirePickupPoint ï¿½ broadcasts OnPickupPoint at the visual moment the hand
 // reaches the item. Called by AnimNotify_PickupPoint or the fallback timer.
 // ---------------------------------------------------------------------------
 void UPlayerAnimInstance::FirePickupPoint()
@@ -351,6 +447,17 @@ void UPlayerAnimInstance::FirePickupPoint()
 }
 
 
+
+// ---------------------------------------------------------------------------
+// HasCastReleaseSection
+//   Returns true when the montage exposes a section named "CastRelease".
+//   Used to decide between phase-based playback and the classic single-rate path.
+// ---------------------------------------------------------------------------
+bool UPlayerAnimInstance::HasCastReleaseSection(const UAnimMontage* Montage)
+{
+    if (!Montage) return false;
+    return Montage->GetSectionIndex(FName("CastRelease")) != INDEX_NONE;
+}
 
 // ---------------------------------------------------------------------------
 // Private helpers
@@ -407,11 +514,13 @@ void UPlayerAnimInstance::OnAttackMontageEnded(UAnimMontage* /*Montage*/, bool /
     bIsAttacking      = false;
     CurrentAttackSlot = NAME_None;
     CurrentCasterId   = 0;
+    ActiveCastMontage = nullptr;
 
-    // Ensure the hit-point timer is cleared if it somehow didn't fire
+    // Ensure pending timers are cleared if they somehow didn't fire
     if (UWorld* World = GetWorld())
     {
         World->GetTimerManager().ClearTimer(HitPointTimerHandle);
+        World->GetTimerManager().ClearTimer(CastReleaseTimerHandle);
     }
 
     // Notify listeners (e.g. PlayerSkillManager) that the animation is done

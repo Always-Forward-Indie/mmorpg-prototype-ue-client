@@ -146,47 +146,35 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 	}
 	else if (MessageData.eventType == "mobDeath" && MessageData.status == "success")
 	{
-		if (!worldContext || !worldContext->IsValidLowLevel())
+		int32 MobUID = 0;
+		if (!Body.IsValid() || !Body->TryGetNumberField(TEXT("mobUID"), MobUID) || MobUID <= 0)
 		{
-			UE_LOG(LogTemp, Error, TEXT("MOBManager: Cannot process mobDeath - no valid world context"));
+			UE_LOG(LogTemp, Error, TEXT("MOBManager: mobDeath - missing or invalid mobUID"));
 			return;
 		}
 
-		// Extract the mobUID from the response body
-		FString MobUID;
-		if (Body->TryGetStringField(TEXT("mobUID"), MobUID))
+		TWeakObjectPtr<ABasicMOB>* FoundWeak = MobActorRegistry.Find(MobUID);
+		if (!FoundWeak || !FoundWeak->IsValid())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Received death event for mob: %s"), *MobUID);
-
-			// Find and destroy the mob
-			if (MOBExists(worldContext, FName(MobUID)))
-			{
-				TArray<AActor*> FoundActors;
-				UGameplayStatics::GetAllActorsWithTag(worldContext, FName(MobUID), FoundActors);
-
-				if (FoundActors.Num() > 0)
-				{
-					ABasicMOB* MOB = Cast<ABasicMOB>(FoundActors[0]);
-					if (MOB)
-					{
-						UE_LOG(LogTemp, Warning, TEXT("Destroying mob: %s (%s)"),
-							*MOB->GetMobName(), *MobUID);
-
-						// Destroy the actor
-						MOB->Destroy();
-					}
-				}
-			}
-			else
-			{
-				UE_LOG(LogTemp, Warning, TEXT("Received death event for mob %s but it doesn't exist in the world"),
-					*MobUID);
-			}
+			UE_LOG(LogTemp, Warning, TEXT("MOBManager: mobDeath for UID %d - actor not found (already cleaned up?)"), MobUID);
+			return;
 		}
-		else
+
+		ABasicMOB* MOB = FoundWeak->Get();
+		if (!IsValid(MOB))
 		{
-			UE_LOG(LogTemp, Error, TEXT("Failed to extract mobUID from death event"));
+			UE_LOG(LogTemp, Warning, TEXT("MOBManager: mobDeath for UID %d - actor is pending kill"), MobUID);
+			return;
 		}
+
+		UE_LOG(LogTemp, Warning, TEXT("MOBManager: mobDeath for UID %d (%s)"), MobUID, *MOB->GetMobName());
+
+		if (!MOB->GetMOBIsDead())
+		{
+			MOB->Die();
+		}
+
+		MOB->Destroy();
 	}
 	else if (MessageData.eventType == "mobMoveUpdate" && MessageData.status == "success")
 	{
@@ -339,6 +327,54 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 				FoundWeak->Get()->OnReceiveEffectTick(TickData);
 			}
 		}
+	}
+	else if (MessageData.eventType == "corpseRemoved")
+	{
+		if (!worldContext || !worldContext->IsValidLowLevel())
+		{
+			UE_LOG(LogTemp, Error, TEXT("MOBManager: Cannot process corpseRemoved - no valid world context"));
+			return;
+		}
+
+		if (!Body.IsValid())
+		{
+			UE_LOG(LogTemp, Error, TEXT("MOBManager: corpseRemoved packet has no body"));
+			return;
+		}
+
+		int32 CorpseUID = 0;
+		if (!Body->TryGetNumberField(TEXT("corpseUID"), CorpseUID) || CorpseUID <= 0)
+		{
+			UE_LOG(LogTemp, Error, TEXT("MOBManager: corpseRemoved - missing or invalid corpseUID"));
+			return;
+		}
+
+		TWeakObjectPtr<ABasicMOB>* FoundWeak = MobActorRegistry.Find(CorpseUID);
+		if (!FoundWeak || !FoundWeak->IsValid())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("MOBManager: corpseRemoved for UID %d - actor not found (already cleaned up?)"), CorpseUID);
+			return;
+		}
+
+		ABasicMOB* MOB = FoundWeak->Get();
+		if (!IsValid(MOB))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("MOBManager: corpseRemoved for UID %d - actor is pending kill"), CorpseUID);
+			return;
+		}
+
+		if (!MOB->GetMOBIsDead())
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("MOBManager: corpseRemoved for UID %d (%s) - mob is NOT marked dead on client. Server-authoritative removal applied."),
+				CorpseUID, *MOB->GetMobName());
+		}
+		else
+		{
+			UE_LOG(LogTemp, Log, TEXT("MOBManager: Removing corpse UID %d (%s)"), CorpseUID, *MOB->GetMobName());
+		}
+
+		MOB->Destroy();
 	}
 }
 

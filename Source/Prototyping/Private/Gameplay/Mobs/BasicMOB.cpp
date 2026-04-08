@@ -5,6 +5,7 @@
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Mobs/MOBAnimInstance.h"
 #include "Gameplay/Combat/CombatSystemManager.h"
+#include "Gameplay/Items/ItemManager.h"
 #include "MyGameInstance.h"
 #include "Services/LocalizationSubsystem.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
@@ -98,7 +99,14 @@ ABasicMOB::ABasicMOB()
 	// checks still work correctly.
 	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
 	{
+		// Mobs must not physically push or block each other (server-authoritative positions).
 		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+
+		// Projectiles use ObjectType=WorldDynamic + OverlapAllDynamic profile.
+		// The default Pawn profile responds to WorldDynamic with Block, which means
+		// the overlap event never fires on the projectile's CollisionSphere.
+		// Setting Overlap here ensures OnSphereBeginOverlap triggers correctly.
+		Capsule->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
 	}
 
 
@@ -1817,8 +1825,16 @@ void ABasicMOB::Die()
 
 	UE_LOG(LogTemp, Warning, TEXT("MOB %s (ID:%d) has died."), *MOBData.mobName, MOBData.mobID);
 
-	// Отключаем взаимодействие
+	// Disable broad collision so the corpse no longer blocks navigation/camera,
+	// but re-enable only the Capsule WorldDynamic overlap channel so any already
+	// in-flight projectiles can still register their impact and flush pending damage.
 	SetActorEnableCollision(false);
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		Capsule->SetCollisionResponseToAllChannels(ECR_Ignore);
+		Capsule->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
+	}
 
 	// Freeze movement component so the corpse does not slide in the last
 	// dead-reckoned direction.  Must be called AFTER SetActorEnableCollision
@@ -1826,5 +1842,15 @@ void ABasicMOB::Die()
 	if (MOBMovementComponent)
 	{
 		MOBMovementComponent->FreezeMob();
+	}
+
+	// Flush any item drops that were deferred because the mob was still alive
+	// when the itemDrop packet arrived from the server.
+	if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+	{
+		if (UItemManager* ItemMgr = GI->GetItemManager())
+		{
+			ItemMgr->FlushDropsForMob(FCString::Atoi(*MOBData.mobUniqueID));
+		}
 	}
 }

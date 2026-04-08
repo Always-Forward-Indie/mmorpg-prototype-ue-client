@@ -7,20 +7,22 @@
 // Forward declarations
 class UButton;
 
-// Delegates — each button notifies UIManager (or whoever is listening)
+// Delegates ï¿½ each button notifies UIManager (or whoever is listening)
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMenuBarInventoryClicked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMenuBarEquipmentClicked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMenuBarQuestJournalClicked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMenuBarSkillsClicked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMenuBarStatsClicked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMenuBarBestiaryClicked);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMenuBarTitlesClicked);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMenuBarReputationClicked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMenuBarMenuClicked);
 
 /**
  * Bottom action-bar with shortcut icons for the main game windows:
  *   Inventory | Equipment | Quest Journal | Skills
  *
- * Purely a presenter — business logic lives in UIManager.
+ * Purely a presenter ï¿½ business logic lives in UIManager.
  * Bind the On*Clicked delegates in UIManager after creation.
  */
 UCLASS(BlueprintType, Blueprintable)
@@ -51,6 +53,12 @@ public:
     FOnMenuBarBestiaryClicked OnBestiaryClicked;
 
     UPROPERTY(BlueprintAssignable, Category = "Game Menu Bar|Events")
+    FOnMenuBarTitlesClicked OnTitlesClicked;
+
+    UPROPERTY(BlueprintAssignable, Category = "Game Menu Bar|Events")
+    FOnMenuBarReputationClicked OnReputationClicked;
+
+    UPROPERTY(BlueprintAssignable, Category = "Game Menu Bar|Events")
     FOnMenuBarMenuClicked OnMenuClicked;
 
 protected:
@@ -78,6 +86,12 @@ protected:
     UButton* Btn_Bestiary;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Game Menu Bar")
+    UButton* Btn_Titles;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Game Menu Bar")
+    UButton* Btn_Reputation;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Game Menu Bar")
     UButton* Btn_Menu;
 
 private:
@@ -98,6 +112,12 @@ private:
 
     UFUNCTION()
     void HandleBestiaryClicked();
+
+    UFUNCTION()
+    void HandleTitlesClicked();
+
+    UFUNCTION()
+    void HandleReputationClicked();
 
     UFUNCTION()
     void HandleMenuClicked();

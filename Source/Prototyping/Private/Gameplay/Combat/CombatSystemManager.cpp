@@ -2,6 +2,7 @@
 #include "Gameplay/Combat/ISkillEffectHandler.h"
 #include "Gameplay/Combat/ICombatable.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
+#include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "UI/UIManager.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
@@ -248,14 +249,15 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
     {
         UObject* CasterObject = Caster.GetObject();
 
-        // Play animation on caster (animationDuration drives PlayRate)
-        ICombatable::Execute_PlaySkillAnimation(CasterObject, SkillData.animationName, SkillData.skillSlug, SkillData.animationDuration);
-
-        // Show cast bar if the skill has a cast time (castTime > 0 means a channeled / cast-time spell)
+        // ShowCastBar must run BEFORE PlaySkillAnimation so that BasicPlayer::CurrentCastTime
+        // is set when StartAttack() reads it to choose the phase-based or classic anim path.
         if (SkillData.castTime > 0.0f)
         {
             ICombatable::Execute_ShowCastBar(CasterObject, SkillData.castTime, SkillData.skillName);
         }
+
+        // Play animation on caster (animationDuration drives PlayRate)
+        ICombatable::Execute_PlaySkillAnimation(CasterObject, SkillData.animationName, SkillData.skillSlug, SkillData.animationDuration);
 
 		// Set target if specified
 		if (SkillData.targetId > 0)
@@ -312,14 +314,59 @@ void UCombatSystemManager::ProcessSkillResult(const FSkillResultData& SkillResul
 
     // --- Store the result for deferred application at the animation hit-point ---
     FPendingResult Pending;
-    Pending.ResultData = SkillResult;
-    Pending.StoredAtWorldTime = WorldContext ? WorldContext->GetTimeSeconds() : 0.0;
+    Pending.ResultData         = SkillResult;
+    Pending.StoredAtWorldTime  = WorldContext ? WorldContext->GetTimeSeconds() : 0.0;
+
+    // Mark results for projectile skills so that ordinary animation hit-point notifies
+    // (e.g. from a parallel auto-attack) cannot flush them prematurely.
+    // Only the projectile actor itself (via NotifyProjectileImpact) may flush these.
+    if (GameInstance)
+    {
+        if (USkillDefinitionRepository* Repo = GameInstance->GetSkillDefinitionRepository())
+        {
+            const FString& LookupKey = SkillResult.skillSlug.IsEmpty() ? SkillResult.skillName : SkillResult.skillSlug;
+            Pending.bWaitsForProjectile = !Repo->GetDefinition(LookupKey).projectileClass.IsNull();
+            if (Pending.bWaitsForProjectile)
+            {
+                UE_LOG(LogTemp, Warning,
+                    TEXT("CombatSystemManager: Marking result for caster %d skill '%s' as bWaitsForProjectile"),
+                    SkillResult.casterId, *LookupKey);
+            }
+        }
+    }
 
     TArray<FPendingResult>& Queue = PendingSkillResults.FindOrAdd(SkillResult.casterId);
     Queue.Add(MoveTemp(Pending));
 
     UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Queued pending result for caster %d (%d in queue)"),
         SkillResult.casterId, Queue.Num());
+
+    // Check if the projectile already landed before this result arrived (server was slow).
+    // In that case apply immediately and clear the early-impact marker.
+    if (Pending.bWaitsForProjectile)
+    {
+        if (const double* ImpactTime = EarlyProjectileImpacts.Find(SkillResult.casterId))
+        {
+            const double NowTime = WorldContext ? WorldContext->GetTimeSeconds() : 0.0;
+            if ((NowTime - *ImpactTime) < EarlyImpactWindowSeconds)
+            {
+                UE_LOG(LogTemp, Warning,
+                    TEXT("CombatSystemManager: Early-impact marker found for caster %d (%.3fs ago) - flushing immediately"),
+                    SkillResult.casterId, NowTime - *ImpactTime);
+                EarlyProjectileImpacts.Remove(SkillResult.casterId);
+                FlushPendingResults(SkillResult.casterId, /*bSkipProjectileWaiters=*/false);
+                return;
+            }
+            else
+            {
+                // Stale marker (shouldn't happen in practice), clean it up
+                UE_LOG(LogTemp, Warning,
+                    TEXT("CombatSystemManager: Stale early-impact marker for caster %d (%.3fs ago) - ignoring"),
+                    SkillResult.casterId, NowTime - *ImpactTime);
+                EarlyProjectileImpacts.Remove(SkillResult.casterId);
+            }
+        }
+    }
 
     // Start a safety-timeout so results are applied even if the anim notify never fires
     StartPendingResultTimeout(SkillResult.casterId);
@@ -492,11 +539,51 @@ FString UCombatSystemManager::CreateCombatableKey(int32 ActorId, ECasterType Act
 
 void UCombatSystemManager::NotifyHitPoint(int32 CasterId)
 {
-    UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: HitPoint notify from caster %d"), CasterId);
-    FlushPendingResults(CasterId);
+    UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: HitPoint notify from caster %d (animation path - skipping projectile waiters)"), CasterId);
+    // bSkipProjectileWaiters = true: do not flush results that are waiting for a
+    // projectile to physically land.  Prevents a parallel auto-attack's hit-point
+    // from consuming the pending projectile result early.
+    FlushPendingResults(CasterId, /*bSkipProjectileWaiters=*/true);
 }
 
-void UCombatSystemManager::FlushPendingResults(int32 CasterId)
+void UCombatSystemManager::NotifyProjectileImpact(int32 CasterId)
+{
+    UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Projectile impact for caster %d - flushing all pending results"), CasterId);
+
+    // Check BEFORE flushing whether a projectile-waiter result is already queued.
+    // We need this to decide whether to store an early-impact marker after the flush.
+    // We cannot check AFTER the flush because FlushPendingResults empties the queue
+    // even when it successfully applies results — causing a spurious marker.
+    bool bHadProjectileWaiter = false;
+    if (TArray<FPendingResult>* Queue = PendingSkillResults.Find(CasterId))
+    {
+        for (const FPendingResult& R : *Queue)
+        {
+            if (R.bWaitsForProjectile)
+            {
+                bHadProjectileWaiter = true;
+                break;
+            }
+        }
+    }
+
+    // bSkipProjectileWaiters = false: the projectile has arrived, apply everything.
+    FlushPendingResults(CasterId, /*bSkipProjectileWaiters=*/false);
+
+    // If no projectile-waiter was queued, combatResult hasn't arrived yet.
+    // Record the impact time so ProcessSkillResult can apply it immediately
+    // when it arrives, instead of waiting 12 seconds for the safety timeout.
+    if (!bHadProjectileWaiter)
+    {
+        double ImpactTime = WorldContext ? WorldContext->GetTimeSeconds() : 0.0;
+        EarlyProjectileImpacts.Add(CasterId, ImpactTime);
+        UE_LOG(LogTemp, Warning,
+            TEXT("CombatSystemManager: Projectile hit but no pending result yet for caster %d - stored early-impact marker (t=%.3f)"),
+            CasterId, ImpactTime);
+    }
+}
+
+void UCombatSystemManager::FlushPendingResults(int32 CasterId, bool bSkipProjectileWaiters)
 {
     TArray<FPendingResult>* Queue = PendingSkillResults.Find(CasterId);
     if (!Queue || Queue->Num() == 0)
@@ -505,12 +592,38 @@ void UCombatSystemManager::FlushPendingResults(int32 CasterId)
         return;
     }
 
-    // Take a copy and clear the queue before processing to avoid re-entrancy issues
-    TArray<FPendingResult> ResultsToApply = MoveTemp(*Queue);
-    PendingSkillResults.Remove(CasterId);
+    // Separate results that should be applied now from those that must wait for the projectile.
+    TArray<FPendingResult> ResultsToApply;
+    TArray<FPendingResult> ResultsToRequeue;
 
-    UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Flushing %d pending result(s) for caster %d"),
-        ResultsToApply.Num(), CasterId);
+    for (FPendingResult& Pending : *Queue)
+    {
+        if (bSkipProjectileWaiters && Pending.bWaitsForProjectile)
+        {
+            ResultsToRequeue.Add(Pending);
+        }
+        else
+        {
+            ResultsToApply.Add(Pending);
+        }
+    }
+
+    // Replace (or remove) the queue before processing to prevent re-entrancy issues.
+    PendingSkillResults.Remove(CasterId);
+    if (ResultsToRequeue.Num() > 0)
+    {
+        PendingSkillResults.Add(CasterId, ResultsToRequeue);
+    }
+
+    if (ResultsToApply.Num() == 0)
+    {
+        UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: All %d pending result(s) for caster %d are waiting for projectile impact - not flushing"),
+            ResultsToRequeue.Num(), CasterId);
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Flushing %d pending result(s) for caster %d (%d requeued as projectile-waiters)"),
+        ResultsToApply.Num(), CasterId, ResultsToRequeue.Num());
 
     for (const FPendingResult& Pending : ResultsToApply)
     {
@@ -576,7 +689,8 @@ void UCombatSystemManager::StartPendingResultTimeout(int32 CasterId)
                 UE_LOG(LogTemp, Warning,
                     TEXT("CombatSystemManager: Safety timeout - flushing stale pending results for caster %d"),
                     CasterId);
-                WeakSelf->FlushPendingResults(CasterId);
+                // bSkipProjectileWaiters = false: the timeout is the last resort, flush everything.
+                WeakSelf->FlushPendingResults(CasterId, /*bSkipProjectileWaiters=*/false);
             }
         }
     }, static_cast<float>(PendingResultTimeoutSeconds), false);

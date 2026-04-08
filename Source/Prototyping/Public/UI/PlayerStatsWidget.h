@@ -7,12 +7,15 @@
 #include "Components/TextBlock.h"
 #include "Components/ProgressBar.h"
 #include "Components/VerticalBox.h"
+#include "Components/ScrollBox.h"
 #include "Components/Button.h"
 #include "Components/Border.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "PlayerStatsWidget.generated.h"
 
 class UPlayerStatsManager;
+class UTitleManager;
+class UMasteryManager;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPlayerStatsVisibilityChangedDelegate);
 
@@ -54,6 +57,14 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Player Stats Widget")
     void BindToStatsManager(UPlayerStatsManager* InStatsManager);
 
+    // Bind to progression managers (TitleManager + MasteryManager); call after BindToStatsManager
+    UFUNCTION(BlueprintCallable, Category = "Player Stats Widget")
+    void BindToProgressionManagers(UTitleManager* InTitleManager, UMasteryManager* InMasteryManager);
+
+    // Set the character nickname shown at the top of the window
+    UFUNCTION(BlueprintCallable, Category = "Player Stats Widget")
+    void SetCharacterName(const FString& InName);
+
     // Open/close the window
     UFUNCTION(BlueprintCallable, Category = "Player Stats Widget")
     void OpenStats();
@@ -81,6 +92,14 @@ protected:
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UWidget* DragHandle = nullptr;
+
+    // Character nickname ("Aragorn")
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* CharacterName_Text = nullptr;
+
+    // Currently equipped title ("Wolf Slayer")  — empty string if none
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* EquippedTitle_Text = nullptr;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UTextBlock* Level_Text = nullptr;
@@ -123,12 +142,19 @@ protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UVerticalBox* Effects_Box = nullptr;
 
+    // Mastery list — one row per mastery slug (weapon/skill type)
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UScrollBox* Mastery_ScrollBox = nullptr;
+
     // Optional per-row widget classes
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Widget|Classes")
     TSubclassOf<UUserWidget> AttributeRowClass;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Widget|Classes")
     TSubclassOf<UUserWidget> EffectRowClass;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Widget|Classes")
+    TSubclassOf<UUserWidget> MasteryRowClass;
 
 private:
     // ---- Event handlers ----
@@ -138,11 +164,22 @@ private:
     UFUNCTION()
     void HandleStatsUpdated(const FPlayerStatsUpdateStruct& NewStats);
 
+    UFUNCTION()
+    void HandleTitlesUpdated(const FPlayerTitlesState& State);
+
+    UFUNCTION()
+    void HandleMasteriesLoaded(const FPlayerMasteriesState& State);
+
+    UFUNCTION()
+    void HandleMasteryUpdated(const FMasteryUpdateData& Update);
+
     // ---- Refresh helpers ----
     void RefreshAll(const FPlayerStatsUpdateStruct& Stats);
     void RefreshVitals(const FPlayerStatsUpdateStruct& Stats);
     void RefreshAttributes(const FPlayerStatsUpdateStruct& Stats);
     void RefreshEffects(const FPlayerStatsUpdateStruct& Stats);
+    void RefreshMasteries();
+    void RefreshEquippedTitle();
 
     // Ticks effect countdown text every second while the window is open
     void TickEffectCountdowns();
@@ -155,7 +192,11 @@ private:
 
     UPROPERTY()
     UPlayerStatsManager* StatsManager = nullptr;
+    UPROPERTY()
+    UTitleManager* TitleManager = nullptr;
 
+    UPROPERTY()
+    UMasteryManager* MasteryManager = nullptr;
     // Last received stats � always kept fresh regardless of window visibility
     FPlayerStatsUpdateStruct CachedStats;
 

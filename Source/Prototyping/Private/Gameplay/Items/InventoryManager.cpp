@@ -579,10 +579,15 @@ void UInventoryManager::PickupNearbyItem()
 		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Attempting to pickup item %s at distance %.2f"),
 			*ClosestItem->GetItemName(), ClosestDistance);
 
-		// Lock player movement before sending the request so the player stands
-		// still while waiting for the server confirmation + animation.
+		// Rotate the player to face the item, then lock movement.
 		if (ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn()))
 		{
+			FVector ToItem = ClosestItem->GetActorLocation() - PlayerLocation;
+			ToItem.Z = 0.f;
+			if (!ToItem.IsNearlyZero())
+			{
+				Player->SetDesiredFaceYaw(ToItem.Rotation().Yaw);
+			}
 			Player->LockMovementForPickup();
 		}
 

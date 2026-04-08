@@ -41,7 +41,7 @@ void UMOBAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		bIsFleeing = false;
 	}
 
-	// Fallback sync — event handlers are the primary source for these
+	// Fallback sync ï¿½ event handlers are the primary source for these
 	bIsAggressive = MOB->GetMOBIsAggressive();
 	bIsDead       = MOB->GetMOBIsDead();
 }
@@ -94,7 +94,7 @@ void UMOBAnimInstance::StartAttack(const FSkillInitiationData& SkillData)
 	}
 	else
 	{
-		// No montage assigned yet — fall back to a timer so bIsAttacking is still cleared
+		// No montage assigned yet ï¿½ fall back to a timer so bIsAttacking is still cleared
 		CurrentAttackPlayRate = 1.0f;
 		const float Duration = FMath::Max(SkillData.animationDuration, 0.1f);
 
@@ -117,13 +117,13 @@ void UMOBAnimInstance::StartAttack(const FSkillInitiationData& SkillData)
 }
 
 // ---------------------------------------------------------------------------
-// FireHitPoint — broadcasts OnHitPoint at the visual moment of impact.
+// FireHitPoint ï¿½ broadcasts OnHitPoint at the visual moment of impact.
 // Called either by UAnimNotify_HitPoint (montage timeline) or the fallback timer.
 // Clears the fallback timer so only one call goes through per attack.
 // ---------------------------------------------------------------------------
 void UMOBAnimInstance::FireHitPoint()
 {
-	// Cancel the fallback timer — in case the Notify fired first
+	// Cancel the fallback timer ï¿½ in case the Notify fired first
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(HitPointTimerHandle);
@@ -168,13 +168,15 @@ void UMOBAnimInstance::NotifyTargetLost()
 }
 
 // ---------------------------------------------------------------------------
-// NotifyHit  (combatResult — this mob is the TARGET)
+// NotifyHit  (combatResult ï¿½ this mob is the TARGET)
 //   Plays a hit-react montage over the current locomotion/combat-idle.
 //   Clears bIsHit automatically when the montage ends.
 // ---------------------------------------------------------------------------
 void UMOBAnimInstance::NotifyHit()
 {
 	if (bIsDead) return;
+	// Never interrupt an active attack animation with a hit-react.
+	if (bIsAttacking) return;
 
 	bIsHit = true;
 
@@ -192,7 +194,7 @@ void UMOBAnimInstance::NotifyHit()
 	}
 	else
 	{
-		// No montage — clear after a fixed window
+		// No montage ï¿½ clear after a fixed window
 		if (UWorld* World = GetWorld())
 		{
 			FTimerHandle Handle;

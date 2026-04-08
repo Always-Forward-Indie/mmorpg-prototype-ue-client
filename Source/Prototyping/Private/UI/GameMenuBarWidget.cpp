@@ -23,6 +23,12 @@ void UGameMenuBarWidget::NativeConstruct()
     if (Btn_Bestiary)
         Btn_Bestiary->OnClicked.AddDynamic(this, &UGameMenuBarWidget::HandleBestiaryClicked);
 
+    if (Btn_Titles)
+        Btn_Titles->OnClicked.AddDynamic(this, &UGameMenuBarWidget::HandleTitlesClicked);
+
+    if (Btn_Reputation)
+        Btn_Reputation->OnClicked.AddDynamic(this, &UGameMenuBarWidget::HandleReputationClicked);
+
     if (Btn_Menu)
         Btn_Menu->OnClicked.AddDynamic(this, &UGameMenuBarWidget::HandleMenuClicked);
 }
@@ -55,6 +61,16 @@ void UGameMenuBarWidget::HandleStatsClicked()
 void UGameMenuBarWidget::HandleBestiaryClicked()
 {
     OnBestiaryClicked.Broadcast();
+}
+
+void UGameMenuBarWidget::HandleTitlesClicked()
+{
+    OnTitlesClicked.Broadcast();
+}
+
+void UGameMenuBarWidget::HandleReputationClicked()
+{
+    OnReputationClicked.Broadcast();
 }
 
 void UGameMenuBarWidget::HandleMenuClicked()

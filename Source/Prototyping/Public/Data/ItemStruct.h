@@ -6,6 +6,7 @@
 #include "DataStructs.h"
 #include "NiagaraSystem.h"
 #include "Engine/SkeletalMesh.h"
+#include "Sound/SoundCue.h"
 #include "ItemStruct.generated.h"
 
 // Different item types

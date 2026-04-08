@@ -27,6 +27,7 @@
 #include "Gameplay/Repair/RepairManager.h"
 #include "Gameplay/Trade/TradeManager.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
+#include "UI/PlayerStatsWidget.h"
 #include "Gameplay/Bestiary/BestiaryNetworkHandler.h"
 #include "Utils/PlayerAttributeParser.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -904,6 +905,18 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
             EnhancedInputComponent->BindAction(BestiaryAction, ETriggerEvent::Started, this, &ABasicPlayer::OnBestiaryToggle);
         }
 
+        // Titles window toggle
+        if (TitlesAction)
+        {
+            EnhancedInputComponent->BindAction(TitlesAction, ETriggerEvent::Started, this, &ABasicPlayer::OnTitlesToggle);
+        }
+
+        // Reputation window toggle
+        if (ReputationAction)
+        {
+            EnhancedInputComponent->BindAction(ReputationAction, ETriggerEvent::Started, this, &ABasicPlayer::OnReputationToggle);
+        }
+
         // Main game menu toggle (Escape)
         if (GameMenuAction)
         {
@@ -1129,6 +1142,14 @@ Super::BeginPlay();
 						if (UPlayerStatsManager* StatsMgr = MyGameInstance ? MyGameInstance->GetPlayerStatsManager() : nullptr)
 						{
 							StatsMgr->OnStatsUpdated.AddDynamic(this, &ABasicPlayer::HandleStatsManagerUpdate);
+
+							// stats_update packets arrive before UIManager is ready (boundListeners=0 at
+							// broadcast time). Replay the cached stats now so AEW shows effects immediately.
+							const FPlayerStatsUpdateStruct& Cached = StatsMgr->GetCachedStats();
+							if (Cached.characterId > 0)
+							{
+								HandleStatsManagerUpdate(Cached);
+							}
 						}
 					}
 					else
@@ -1176,6 +1197,25 @@ Super::BeginPlay();
 			// Bind character stats widget to the stats manager
 				UIManager->InitializeStatsWidget(
 					MyGameInstance ? MyGameInstance->GetPlayerStatsManager() : nullptr);
+
+				// Bind progression managers (title + mastery) and character name to stats widget
+				if (UPlayerStatsWidget* SW = UIManager->GetPlayerStatsWidget())
+				{
+					SW->BindToProgressionManagers(
+						MyGameInstance ? MyGameInstance->GetTitleManager()   : nullptr,
+						MyGameInstance ? MyGameInstance->GetMasteryManager() : nullptr);
+					SW->SetCharacterName(playerData.characterData.characterName);
+				}
+
+				// Bind titles window
+				UIManager->InitializeTitlesWidget(
+					MyGameInstance ? MyGameInstance->GetTitleManager()          : nullptr,
+					MyGameInstance ? MyGameInstance->GetTitleNetworkHandler()   : nullptr,
+					playerData.characterData.characterId);
+
+				// Bind reputation window
+				UIManager->InitializeReputationWidget(
+					MyGameInstance ? MyGameInstance->GetReputationManager() : nullptr);
 
 				// Initialize world notification system (bestiary + toast/zone/etc.)
 				if (MyGameInstance && MyGameInstance->GetBestiaryNetworkHandler())
@@ -1420,6 +1460,7 @@ void ABasicPlayer::Tick(float DeltaTime)
 void ABasicPlayer::Move(const FInputActionValue& Value)
 {
     if (Controller == nullptr) return;
+    if (bIsCasting) return;
 
     // Manual WASD input interrupts the auto-attack cycle and any approach walk,
     // but keeps the target lock so the player can reposition during combat.
@@ -1595,7 +1636,7 @@ void ABasicPlayer::HandleMouseButtonsMoveForward()
 {
     if (!bEnableMouseButtonsMoveForward) return;
     if (!bIsLeftMouseDown || !bIsRightMouseDown) return;
-    if (playerData.characterData.bIsDead || bIsPickingUp) return;
+    if (playerData.characterData.bIsDead || bIsPickingUp || bIsCasting) return;
     if (UIManager && UIManager->ShouldShowCursor()) return;
     if (!Controller) return;
 
@@ -2263,6 +2304,18 @@ void ABasicPlayer::OnBestiaryToggle()
     if (UIManager) UIManager->ToggleBestiary();
 }
 
+void ABasicPlayer::OnTitlesToggle()
+{
+    if (playerData.isOtherClient) return;
+    if (UIManager) UIManager->ToggleTitles();
+}
+
+void ABasicPlayer::OnReputationToggle()
+{
+    if (playerData.isOtherClient) return;
+    if (UIManager) UIManager->ToggleReputation();
+}
+
 void ABasicPlayer::CheckForNPC()
 {
     if (playerData.isOtherClient)
@@ -2590,6 +2643,7 @@ void ABasicPlayer::EndPlay(const EEndPlayReason::Type EndPlayReason)
         GetWorld()->GetTimerManager().ClearTimer(UIInitTimerHandle);
         GetWorld()->GetTimerManager().ClearTimer(AutoAttackRetryTimerHandle);
         GetWorld()->GetTimerManager().ClearTimer(HitPointTimerHandle);
+        GetWorld()->GetTimerManager().ClearTimer(CastBarTimerHandle);
     }
 
     // For remote players: remove the equipment visual delegate binding.
@@ -2689,6 +2743,7 @@ void ABasicPlayer::SetDead_Implementation(bool bNewDead)
     {
         // Revive: clear any lingering combat / interaction state (#6)
         bIsPickingUp = false;
+        bIsCasting   = false;
         bIsApproachingTarget = false;
         if (GetWorld())
         {
@@ -2721,8 +2776,9 @@ void ABasicPlayer::OnDeath_Implementation()
     ClearLockedTarget();
     ClearTarget_Implementation();
 
-    // Release pickup lock so it cannot block input after respawn (#6)
+    // Release pickup/cast locks so they cannot block input after respawn
     bIsPickingUp = false;
+    bIsCasting   = false;
 
     // Play death sound
     if (const FEntityAudioProfile* Profile = GetAudioProfile())
@@ -2785,6 +2841,7 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
 
     // Store current skill slug so AnimNotify_PlayerCombatEvent can look up the right definition.
     CurrentSkillName = SkillSlug.IsEmpty() ? AnimationName : SkillSlug;
+    CurrentAnimationDuration = Duration;
 
     const int32 CasterId = GetActorId_Implementation();
 
@@ -2796,17 +2853,32 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
         // Remove any previous OnHitPoint binding so we never fire twice
         if (HitPointDelegateHandle.IsValid())
         {
-            AnimInst->OnAttackEnded.Remove(HitPointDelegateHandle);
+            AnimInst->OnHitPoint.Remove(HitPointDelegateHandle);
             HitPointDelegateHandle.Reset();
         }
 
-        HitPointDelegateHandle = AnimInst->OnHitPoint.AddLambda([CombatMgr](int32 InCasterId)
+        // For projectile skills the hit-point is notified by the projectile on impact,
+        // NOT by the animation notify. Only bind the anim-notify path for melee/instant skills.
+        const FString LookupKeyEarly = SkillSlug.IsEmpty() ? AnimationName : SkillSlug;
+        bool bSkillHasProjectile = false;
+        if (MyGameInstance)
         {
-            if (IsValid(CombatMgr))
+            if (USkillDefinitionRepository* Repo = MyGameInstance->GetSkillDefinitionRepository())
             {
-                CombatMgr->NotifyHitPoint(InCasterId);
+                bSkillHasProjectile = !Repo->GetDefinition(LookupKeyEarly).projectileClass.IsNull();
             }
-        });
+        }
+
+        if (!bSkillHasProjectile)
+        {
+            HitPointDelegateHandle = AnimInst->OnHitPoint.AddLambda([CombatMgr](int32 InCasterId)
+            {
+                if (IsValid(CombatMgr))
+                {
+                    CombatMgr->NotifyHitPoint(InCasterId);
+                }
+            });
+        }
 
         // Bind OnAttackEnded > PlayerSkillManager::NotifyAnimationEnded so the cast
         // lock is released only after the montage fully completes, preventing spam.
@@ -2825,6 +2897,15 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
         SkillData.animationName      = AnimationName;
         SkillData.animationDuration  = Duration;
         SkillData.casterId           = CasterId;
+        SkillData.castTime           = CurrentCastTime; // set by ShowCastBar_Implementation before this call
+
+        // Pre-compute swing time now, while CurrentCastTime is still valid.
+        // HideCastBar resets CurrentCastTime at T=castTime; the CastRelease notify
+        // fires one frame later, so reading CurrentCastTime there gives 0 (wrong speed).
+        CurrentSwingSeconds = (CurrentCastTime > 0.001f)
+            ? FMath::Max(Duration - CurrentCastTime, 0.05f)
+            : Duration;
+
         AnimInst->StartAttack(SkillData);
 
         // --- Cast sound & projectile from SkillDefinitionRepository ---
@@ -3373,6 +3454,10 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 
 void ABasicPlayer::HandleStatsManagerUpdate(const FPlayerStatsUpdateStruct& NewStats)
 {
+	// Log BEFORE any early return so we can see if the function is ever called at all.
+	UE_LOG(LogTemp, Warning, TEXT("[EFFECTS] HandleStatsManagerUpdate: ENTER charId=%d myCharId=%d isOtherClient=%d effects=%d"),
+		NewStats.characterId, playerData.characterData.characterId, (int)playerData.isOtherClient, NewStats.activeEffects.Num());
+
 	// Only handle updates for the local player and for our own character.
 	if (playerData.isOtherClient) return;
 	if (NewStats.characterId != playerData.characterData.characterId) return;
@@ -3384,6 +3469,30 @@ void ABasicPlayer::HandleStatsManagerUpdate(const FPlayerStatsUpdateStruct& NewS
 	PlayerAttributeParser::UpdateCharacterDataFromStatsUpdate(playerData.characterData, NewStats);
 
 	RefreshHUD();
+
+	// Forward activeEffects to the HUD buff bar. This mirrors ProcessStatsUpdate's
+	// behaviour and ensures effects are visible even when stats arrive before the
+	// player actor is registered (when ProcessStatsUpdate cannot be called).
+	UE_LOG(LogTemp, Warning, TEXT("[EFFECTS] HandleStatsManagerUpdate: PASS UIManager=%s effects=%d"),
+		UIManager ? TEXT("valid") : TEXT("NULL"), NewStats.activeEffects.Num());
+
+	if (UIManager)
+	{
+		if (UPlayerInterfaceWidget* PIW = UIManager->GetPlayerInterfaceWidget())
+		{
+			UActiveEffectsWidget* AEW = PIW->GetActiveEffectsWidget();
+			UE_LOG(LogTemp, Warning, TEXT("[EFFECTS] HandleStatsManagerUpdate: PIW=valid AEW=%s effects=%d"),
+				AEW ? TEXT("valid") : TEXT("NULL"), NewStats.activeEffects.Num());
+			if (AEW)
+			{
+				AEW->RefreshEffects(NewStats.activeEffects);
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[EFFECTS] HandleStatsManagerUpdate: PIW is NULL"));
+		}
+	}
 }
 
 
@@ -3542,8 +3651,11 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
             PlayEventSound(Def.castEndSound);
         }
 
-        // Release Niagara VFX at CastSocket (e.g. muzzle flash on hands, departing glow)
-        if (!Def.castEndEffectNiagara.IsNull())
+        // Release Niagara VFX at CastSocket (e.g. muzzle flash on hands, departing glow).
+        // Skip when a projectile class is set: castEndEffectNiagara is used as the projectile
+        // trail (attached TrailVFX component) — spawning it here as well would leave a static
+        // copy frozen at the cast socket.
+        if (!Def.castEndEffectNiagara.IsNull() && Def.projectileClass.IsNull())
         {
             if (UNiagaraSystem* VFX = Def.castEndEffectNiagara.LoadSynchronous())
             {
@@ -3632,7 +3744,18 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
                 // If it is a BaseMMOProjectile, configure it now
                 if (ABaseMMOProjectile* Proj = Cast<ABaseMMOProjectile>(Spawned))
                 {
-                    Proj->SetupProjectile(CurrentSkillName, GetActorId_Implementation(), TargetActor, 0.0f);
+                    // Use the pre-computed swing time so HideCastBar's CurrentCastTime reset
+                    // (which fires at the same T=castTime) cannot corrupt the speed calculation.
+                    float CalcSpeed = 0.0f;
+                    const float SwingSeconds = CurrentSwingSeconds;
+                    if (IsValid(TargetActor) && SwingSeconds > 0.001f)
+                    {
+                        const float Dist = FVector::Dist(SpawnLoc, TargetActor->GetActorLocation());
+                        CalcSpeed = Dist / SwingSeconds;
+                        UE_LOG(LogTemp, Log, TEXT("[PlayerAnim] CastRelease: dist=%.0f swing=%.3fs → projectile speed=%.0f"),
+                            Dist, SwingSeconds, CalcSpeed);
+                    }
+                    Proj->SetupProjectile(CurrentSkillName, GetActorId_Implementation(), TargetActor, CalcSpeed);
                 }
 
                 UE_LOG(LogTemp, Log, TEXT("[PlayerAnim] CastRelease: spawned projectile '%s' for skill '%s'"),
@@ -3651,6 +3774,28 @@ void ABasicPlayer::ShowCastBar_Implementation(float CastTime, const FString& Ski
 {
     if (playerData.isOtherClient) return;
 
+    CurrentCastTime = CastTime;
+
+    bIsCasting = true;
+
+    // Stop any ongoing approach / auto-attack and freeze the character
+    StopAutoAttack();
+    if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+    {
+        MoveComp->DisableMovement();
+    }
+
+    // Gameplay timer — unlocks movement after CastTime regardless of UI state.
+    // This is the authoritative unlock path; HideCastBar_Implementation (called
+    // by the server on interrupt/cancel) cancels this timer.
+    if (CastTime > 0.0f && GetWorld())
+    {
+        GetWorld()->GetTimerManager().SetTimer(
+            CastBarTimerHandle,
+            this, &ABasicPlayer::HideCastBar_Implementation,
+            CastTime, false);
+    }
+
     if (UIManager)
     {
         if (UPlayerInterfaceWidget* PIW = UIManager->GetPlayerInterfaceWidget())
@@ -3666,6 +3811,23 @@ void ABasicPlayer::ShowCastBar_Implementation(float CastTime, const FString& Ski
 void ABasicPlayer::HideCastBar_Implementation()
 {
     if (playerData.isOtherClient) return;
+
+    CurrentCastTime = 0.0f;
+
+    // Cancel the gameplay timer in case this was called early (interrupt/cancel from server).
+    if (GetWorld())
+    {
+        GetWorld()->GetTimerManager().ClearTimer(CastBarTimerHandle);
+    }
+
+    if (bIsCasting)
+    {
+        bIsCasting = false;
+        if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+        {
+            MoveComp->SetMovementMode(MOVE_Walking);
+        }
+    }
 
     if (UIManager)
     {

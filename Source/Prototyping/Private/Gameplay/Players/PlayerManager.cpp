@@ -378,14 +378,22 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 				}
 				else
 				{
-					UE_LOG(LogConnection, Warning, TEXT("stats_update: с for charId=%d — pushing to PlayerStatsManager"), CharacterId);
-					// Player actor not yet registered (early login packet). Push data into
-					// PlayerStatsManager so OnStatsUpdated fires and all subscribed widgets
-					// (PlayerStatsWidget, ActiveEffectsWidget via HandleStatsManagerUpdate)
-					// receive the full stats including activeEffects.
-					if (UPlayerStatsManager* StatsMgr = gameInstance->GetPlayerStatsManager())
+					// Player actor not yet registered (early login packet).
+					// Only push to PlayerStatsManager for OUR OWN character — if the server
+					// broadcasts another player's stats_update and that actor isn't spawned
+					// yet, we must not let foreign stats overwrite the local player's HUD.
+					if (CharacterId == gameInstance->GetCurrentCharacterID())
 					{
-						StatsMgr->ApplyStatsUpdate(StatsUpdate);
+						UE_LOG(LogConnection, Warning, TEXT("stats_update: charId=%d actor missing — pushing to PlayerStatsManager (own char)"), CharacterId);
+						if (UPlayerStatsManager* StatsMgr = gameInstance->GetPlayerStatsManager())
+						{
+							StatsMgr->ApplyStatsUpdate(StatsUpdate);
+						}
+					}
+					else
+					{
+						UE_LOG(LogConnection, Warning, TEXT("stats_update: charId=%d actor missing and is NOT local char (%d) — discarding"),
+							CharacterId, gameInstance->GetCurrentCharacterID());
 					}
 				}
 			}

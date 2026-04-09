@@ -70,6 +70,10 @@ public:
     // Called when the server sends a PLAYER_EQUIPMENT_UPDATE for a remote character.
     void OnRemoteEquipmentStateReceived(const FEquipmentStateData& State);
 
+    // Returns the last PLAYER_EQUIPMENT_UPDATE received for the given character, or nullptr.
+    // Used by SpawnPlayerForClient to replay equipment that arrived before the actor was spawned.
+    const FEquipmentStateData* GetCachedRemoteEquipmentState(int32 CharacterId) const;
+
     // --- Events ---
 
     UPROPERTY(BlueprintAssignable, Category = "Equipment Events")
@@ -91,6 +95,11 @@ public:
 private:
     FEquipmentStateData EquipmentState;
     FWeightStatusData   WeightStatus;
+
+    // Cache of the last PLAYER_EQUIPMENT_UPDATE per remote character ID.
+    // Populated in OnRemoteEquipmentStateReceived; consumed in SpawnPlayerForClient
+    // to handle the race where the packet arrives before the remote actor is spawned.
+    TMap<int32, FEquipmentStateData> RemoteEquipmentStateCache;
 
     UPROPERTY()
     UNetworkManager* NetworkManager = nullptr;

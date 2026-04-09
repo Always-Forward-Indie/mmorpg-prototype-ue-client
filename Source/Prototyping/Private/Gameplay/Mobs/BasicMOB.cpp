@@ -420,7 +420,7 @@ void ABasicMOB::Tick(float DeltaTime)
 		// 1. Изменились параметры
 		// 2. UI еще не была инициализирована
 		// 3. Есть данные для отображения (mobID != 0)
-		if ((LastHealth != MOBData.mobCurrentHealth || LastMana != MOBData.mobCurrentMana || !bUIInitialized) && MOBData.mobID != 0)
+		if ((LastHealth != MOBData.mobCurrentHealth || LastMana != MOBData.mobCurrentMana || MOBData.bIsAggressive != LastAggressive || !bUIInitialized) && MOBData.mobID != 0)
 		{
 			MobHeadInfo->UpdateInfo(
 				MOBData.mobCurrentHealth,
@@ -435,6 +435,7 @@ void ABasicMOB::Tick(float DeltaTime)
 			// ВАЖНО: Обновляем последние значения после обновления UI
 			LastHealth = MOBData.mobCurrentHealth;
 			LastMana = MOBData.mobCurrentMana;
+			LastAggressive = MOBData.bIsAggressive;
 			bUIInitialized = true;
 		}
 	}
@@ -593,7 +594,12 @@ void ABasicMOB::SetIsAggressiveState_Implementation(int32 TargetId, ECasterType 
 		MobHeadInfo->UpdateMobAggressive(bIsAggressive);
 	}
 
-	// Auto-lock: if mob just aggroed the local player and player has no lock
+	// Auto-lock: if mob just aggroed a player, set their target lock — but ONLY if
+	// the mob is actually targeting this client's local player.
+	// Bug 9 fix: previously GetFirstPlayerController() was used unconditionally, which
+	// caused the local player on Client 2 to auto-lock a mob that was attacking Client 1.
+	// This produced "target lock of player 1 also appears on player 2's client".
+	// Also fixes Bug 7: ensures ClearLockedTarget() is not triggered on the wrong client.
 	if (bIsAggressive && TargetType == ECasterType::Player)
 	{
 		if (UWorld* W = GetWorld())
@@ -603,26 +609,30 @@ void ABasicMOB::SetIsAggressiveState_Implementation(int32 TargetId, ECasterType 
 			{
 				if (ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn()))
 				{
-					if (!Player->GetLockedTarget())
+					// Only auto-lock if this mob is targeting THIS specific local player.
+					if (TargetId == Player->GetActorId_Implementation())
 					{
-						Player->SetLockedTarget(this);
-					}
-					else if (Player->GetLockedTarget() == this)
-					{
-						// This mob is already locked — refresh the target frame name color
-						if (UUIManager* UIMgr = Player->GetUIManager())
+						if (!Player->GetLockedTarget())
 						{
-							const int32 MaxHP = MOBData.mobAttributes.attributesData.Contains(TEXT("max_health"))
-								? MOBData.mobAttributes.attributesData[TEXT("max_health")].attributeValue
-								: 100;
-							UIMgr->ShowMobTargetFrame(
-								MOBData.mobSlug,
-								MOBData.mobName,
-								MOBData.mobLevel,
-								MOBData.mobCurrentHealth,
-								MaxHP,
-								bIsAggressive,
-								CachedIcon);
+							Player->SetLockedTarget(this);
+						}
+						else if (Player->GetLockedTarget() == this)
+						{
+							// This mob is already locked — refresh the target frame name color
+							if (UUIManager* UIMgr = Player->GetUIManager())
+							{
+								const int32 MaxHP = MOBData.mobAttributes.attributesData.Contains(TEXT("max_health"))
+									? MOBData.mobAttributes.attributesData[TEXT("max_health")].attributeValue
+									: 100;
+								UIMgr->ShowMobTargetFrame(
+									MOBData.mobSlug,
+									MOBData.mobName,
+									MOBData.mobLevel,
+									MOBData.mobCurrentHealth,
+									MaxHP,
+									bIsAggressive,
+									CachedIcon);
+							}
 						}
 					}
 				}
@@ -1755,6 +1765,7 @@ void ABasicMOB::ForceUpdateUI()
 		// Обновляем последние значения и помечаем UI как инициализированный
 		LastHealth = MOBData.mobCurrentHealth;
 		LastMana = MOBData.mobCurrentMana;
+		LastAggressive = MOBData.bIsAggressive;
 		bUIInitialized = true;
 		
 		if (HeadWidget)

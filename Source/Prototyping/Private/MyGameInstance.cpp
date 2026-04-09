@@ -1763,6 +1763,27 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 			EquipmentManager->OnRemoteEquipmentStateReceivedDelegate.AddDynamic(
 				VisComp, &UEquipmentVisualComponent::HandleRemoteEquipmentState);
 			UE_LOG(LogTemp, Log, TEXT("SpawnPlayerForClient: Equipment visuals bound for remote CharID=%d"), RemoteCharId);
+
+			// Replay any PLAYER_EQUIPMENT_UPDATE that arrived before this actor was spawned.
+			// This resolves the race where the server broadcasts equipment immediately after
+			// playerReady but the client is still deferred in PendingRemotePlayerSpawns.
+			if (const FEquipmentStateData* Cached = EquipmentManager->GetCachedRemoteEquipmentState(RemoteCharId))
+			{
+				if (Cached->slots.Num() > 0)
+				{
+					VisComp->HandleRemoteEquipmentState(*Cached);
+					UE_LOG(LogTemp, Log, TEXT("SpawnPlayerForClient: Replayed cached equipment for remote CharID=%d (%d slot(s))"),
+						RemoteCharId, Cached->slots.Num());
+				}
+			}
+
+			// NOTE: Do NOT call RequestGetEquipment(RemoteCharId) here — the server
+			// resolves getEquipment requests by session character ID (i.e. the LOCAL
+			// player's character), so the request would return OUR OWN equipment, not
+			// the remote player's.  The server now broadcasts the new player's equipment
+			// to all existing clients via broadcastEquipmentUpdate inside
+			// handlePlayerReadyEvent, so the PLAYER_EQUIPMENT_UPDATE will arrive
+			// automatically and be routed here through OnRemoteEquipmentStateReceivedDelegate.
 		}
 	}
 }
@@ -1929,6 +1950,24 @@ void UMyGameInstance::MovePlayerForClient(const int32 ClientID, const FClientDat
 				clientData.characterData.characterPosition.positionY,
 				clientData.characterData.characterPosition.positionZ,
 				clientData.characterData.characterPosition.rotationZ);
+
+			// Bug 10 fix: if the remote player is still marked dead but is now sending
+			// movement updates, they must have respawned on the server side.
+			// Auto-revive them so their dead animation and disabled movement are cleared.
+			// (respawnResult is sent only to the respawning player's client; other clients
+			// detect the respawn here when position packets resume after death.)
+			if (PlayerToMove->GetIsDead())
+			{
+				PlayerToMove->SetDead_Implementation(false);
+				// stats_update after respawn is unicast to the respawning player only,
+				// so other clients cannot know the exact new HP.  Restore to max as a
+				// best-effort approximation — the nameplate will be corrected if a
+				// subsequent charAttributesUpdate or stats broadcast arrives.
+				const int32 MaxHP = PlayerToMove->GetMaxHealth_Implementation();
+				PlayerToMove->SetPlayerCurrentHPPoints(MaxHP);
+				UE_LOG(LogTemp, Log, TEXT("MovePlayerForClient: Auto-revived remote player CharID=%d HP set to %d"),
+					clientData.characterData.characterId, MaxHP);
+			}
 		}
 	}
 }

@@ -663,6 +663,10 @@ struct PROTOTYPING_API FEntitySkillVoiceOverride : public FTableRowBase
     /** Random pool played at cast RELEASE (AnimNotify CastRelease). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voice Override")
     TArray<TSoftObjectPtr<USoundBase>> CastReleaseVoice;
+
+    /** Random pool: melee swing cry override per skill (AnimNotify VoiceAttack). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voice Override")
+    TArray<TSoftObjectPtr<USoundBase>> VoiceAttack;
 };
 
 // ============================================================

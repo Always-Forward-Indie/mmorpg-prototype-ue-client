@@ -107,7 +107,7 @@ void UEquipmentManager::RequestGetEquipment(int32 CharacterId)
 }
 
 // ---------------------------------------------------------------------------
-// Incoming — called by EquipmentNetworkHandler
+// Incoming ï¿½ called by EquipmentNetworkHandler
 // ---------------------------------------------------------------------------
 
 FEquipmentSlotData UEquipmentManager::GetSlot(const FString& SlotSlug) const
@@ -178,7 +178,18 @@ void UEquipmentManager::OnAttributesUpdated(int32 CharacterId, const TArray<FAtt
 
 void UEquipmentManager::OnRemoteEquipmentStateReceived(const FEquipmentStateData& State)
 {
+    // Cache by character ID so SpawnPlayerForClient can replay it if the actor
+    // was not yet spawned when this packet arrived (race-condition on join/world load).
+    if (State.characterId > 0)
+    {
+        RemoteEquipmentStateCache.Add(State.characterId, State);
+    }
     OnRemoteEquipmentStateReceivedDelegate.Broadcast(State);
+}
+
+const FEquipmentStateData* UEquipmentManager::GetCachedRemoteEquipmentState(int32 CharacterId) const
+{
+    return RemoteEquipmentStateCache.Find(CharacterId);
 }
 
 // ---------------------------------------------------------------------------

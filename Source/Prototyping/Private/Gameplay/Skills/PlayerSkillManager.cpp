@@ -180,7 +180,15 @@ float UPlayerSkillManager::GetSkillCooldownRemaining(const FString& SkillSlug) c
     if (const FPlayerSkillData* S = PlayerSkills.Find(SkillSlug)) {
         const double now = NowFor(S);
         const double rem = S->cooldownEndTime - now;
-        return rem > 0.0 ? static_cast<float>(rem) : 0.0f;
+        if (rem <= 0.0) return 0.0f;
+        // Bug 8 fix: clamp to the skill's maximum cooldown duration so that a loss
+        // of TimeSyncService sync (which causes a massive time-base mismatch between
+        // the stored server-absolute cooldownEndTime and the world-time fallback) never
+        // results in absurdly large "remaining" values on the skill bar.
+        const float MaxCooldownSec = S->networkData.cooldownMs > 0
+            ? S->networkData.cooldownMs / 1000.0f
+            : 300.0f; // hard cap: no skill cooldown should ever display > 5 minutes
+        return FMath::Min(static_cast<float>(rem), MaxCooldownSec);
     }
     return 0.0f;
 }
@@ -502,5 +510,7 @@ float UPlayerSkillManager::GetGCDRemaining() const
 {
     const double Now = bGCDUsesServerClock ? GetServerSeconds() : GetWorldSeconds();
     const double Rem = GCDEndTime - Now;
-    return Rem > 0.0 ? static_cast<float>(Rem) : 0.0f;
+    if (Rem <= 0.0) return 0.0f;
+    // Bug 8 fix: clamp GCD remaining to a sane maximum (no GCD should exceed 10 s).
+    return FMath::Min(static_cast<float>(Rem), 10.0f);
 }

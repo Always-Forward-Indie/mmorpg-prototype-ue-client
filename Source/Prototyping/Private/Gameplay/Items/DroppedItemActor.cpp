@@ -20,7 +20,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogDropSnap, Log, All);
 
-// Spawn a one-shot SFX with SoundClassOverride set BEFORE Play() — same pattern
+// Spawn a one-shot SFX with SoundClassOverride set BEFORE Play() пїЅ same pattern
 // used across the whole codebase.  SpawnSoundAtLocation/PlaySoundAtLocation call
 // Play() internally so any class override set afterwards is silently ignored.
 static void PlayItemSFX(AActor* Owner, USoundBase* Sound)
@@ -108,9 +108,9 @@ void ADroppedItemActor::BeginPlay()
 	}
 
 	// Determine drop source and choose the correct animation path:
-	//   1. Mob drop   — fly arc from mob location to ground
-	//   2. Player drop — small toss arc from player's current position
-	//   3. World/nearby — item already on the ground, just snap
+	//   1. Mob drop   пїЅ fly arc from mob location to ground
+	//   2. Player drop пїЅ small toss arc from player's current position
+	//   3. World/nearby пїЅ item already on the ground, just snap
 	const bool bFromMob    = !ItemData.droppedByMobUID.IsEmpty();
 	const bool bFromPlayer = !bFromMob && (ItemData.droppedByCharacterId > 0);
 
@@ -124,16 +124,47 @@ void ADroppedItemActor::BeginPlay()
 	}
 	else
 	{
-		// Player drop or nearbyItems — run standard drop-from-above animation
-		// (for nearbyItems the server Z is already ground-level so DropHeight stays small)
-		const float GroundZ = FindGroundLevelAt(InitialPosition);
+		// Player drop or nearbyItems вЂ” run standard drop-from-above animation.
+		//
+		// The server stores capsule-center Z (GetActorLocation().Z) for character positions
+		// and may add a further internal offset, so the broadcast Z can be well above the
+		// actual terrain level.  When FindGroundLevelAt fails (ECC_Visibility trace miss)
+		// it returns Location.Z as a fallback, which means TargetPosition.Z would be the
+		// elevated server Z and the item would stay permanently in the air.
+		//
+		// For player drops we first try to anchor to the dropper's live actor position,
+		// which is already standing on the ground on this client.  That gives a reliable
+		// XY reference whose ground level is always correct.
+
+		FVector ReferencePos = InitialPosition;
+
+		if (bFromPlayer)
+		{
+			UMyGameInstance* GI = Cast<UMyGameInstance>(UGameplayStatics::GetGameInstance(GetWorld()));
+			if (GI)
+			{
+				if (ABasicPlayer* Dropper = GI->GetPlayerByCharacterId(ItemData.droppedByCharacterId))
+				{
+					// Use the dropper's current world XY for the ground trace.
+					// Keep the server XY for the final position (authoritative world placement),
+					// but base the Z search on the actor that is visually on the ground.
+					const FVector DropperLoc = Dropper->GetActorLocation();
+					ReferencePos = FVector(InitialPosition.X, InitialPosition.Y, DropperLoc.Z);
+					UE_LOG(LogDropSnap, Log,
+						TEXT("[DropSnap] Player drop '%s' вЂ” using dropper actor Z=%.1f as reference (server Z=%.1f)"),
+						*ItemData.item.name, DropperLoc.Z, InitialPosition.Z);
+				}
+			}
+		}
+
+		const float GroundZ = FindGroundLevelAt(ReferencePos);
 
 		// Update the target position with proper ground level
 		TargetPosition = FVector(InitialPosition.X, InitialPosition.Y, GroundZ);
 
 		UE_LOG(LogDropSnap, Log,
-			TEXT("[DropSnap] Standard drop '%s' | InitialZ=%.1f -> GroundZ=%.1f | TargetPos=%s"),
-			*ItemData.item.name, InitialPosition.Z, GroundZ, *TargetPosition.ToString());
+			TEXT("[DropSnap] Standard drop '%s' | ReferenceZ=%.1f -> GroundZ=%.1f | TargetPos=%s"),
+			*ItemData.item.name, ReferencePos.Z, GroundZ, *TargetPosition.ToString());
 
 		// Start the standard drop animation
 		DropStartTime = GetGameTimeSinceCreation();
@@ -232,7 +263,7 @@ void ADroppedItemActor::Tick(float DeltaTime)
 		}
 		else
 		{
-			// Animation finished — snap precisely to the surface using the loaded mesh bounds
+			// Animation finished пїЅ snap precisely to the surface using the loaded mesh bounds
 			bIsDropAnimationActive = false;
 			SnapToGround();
 
@@ -288,7 +319,7 @@ void ADroppedItemActor::SetItemData(const FDroppedItemStruct& InItemData)
 
 	// Visuals and trajectory are initialised in BeginPlay once the actor is
 	// fully spawned. SetItemData is called via SpawnActorDeferred BEFORE
-	// BeginPlay, so we must not start the animation here — BeginPlay will do it.
+	// BeginPlay, so we must not start the animation here пїЅ BeginPlay will do it.
 	// If SetItemData is called AFTER BeginPlay (live update), handle it then.
 	if (HasActorBegunPlay())
 	{
@@ -344,7 +375,7 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 	UE_LOG(LogTemp, Log, TEXT("Setting up visuals for item %s (Slug: %s)"),
 		*ItemData.item.name, *ItemData.item.slug);
 
-	// данные визуала из твоего менеджера
+	// пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	VisualData = ItemManager->GetItemVisualDataBySlug(ItemData.item.slug);
 
 	// ---------- Mesh ----------
@@ -369,7 +400,7 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 
 		if (!bAppliedMesh)
 		{
-			// Fallback по типу
+			// Fallback пїЅпїЅ пїЅпїЅпїЅпїЅ
 			FString FallbackPath;
 			switch (ItemData.item.itemType)
 			{
@@ -408,7 +439,7 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 		}
 		else
 		{
-			// оттенок по редкости
+			// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 			const int32 Rarity = GetItemRarity();
 			if (UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(ItemMesh->GetMaterial(0), this))
 			{
@@ -517,7 +548,7 @@ void ADroppedItemActor::PlayPickupEffect()
 		DropNiagaraComponent->Deactivate();
 	}
 
-	// Pickup SFX — routed through SFX SoundClass so the volume slider works
+	// Pickup SFX пїЅ routed through SFX SoundClass so the volume slider works
 	if (!VisualData.PickupSound.IsNull())
 	{
 		if (USoundCue* Cue = VisualData.PickupSound.LoadSynchronous())
@@ -619,7 +650,7 @@ void ADroppedItemActor::TryStartTrajectoryFromMob()
 {
 	if (ItemData.droppedByMobUID.IsEmpty())
 	{
-		UE_LOG(LogDropSnap, Log, TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' — no mobUID, skipping"), *ItemData.item.name);
+		UE_LOG(LogDropSnap, Log, TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' пїЅ no mobUID, skipping"), *ItemData.item.name);
 		return;
 	}
 
@@ -645,7 +676,7 @@ void ADroppedItemActor::TryStartTrajectoryFromMob()
 		else
 		{
 			UE_LOG(LogDropSnap, Warning,
-				TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | actor found but Cast<ABasicMOB> failed — falling back to SnapToGround"),
+				TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | actor found but Cast<ABasicMOB> failed пїЅ falling back to SnapToGround"),
 				*ItemData.item.name);
 			SnapToGround();
 		}
@@ -653,7 +684,7 @@ void ADroppedItemActor::TryStartTrajectoryFromMob()
 	else
 	{
 		UE_LOG(LogDropSnap, Warning,
-			TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | mob '%s' NOT found in world — falling back to SnapToGround"),
+			TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | mob '%s' NOT found in world пїЅ falling back to SnapToGround"),
 			*ItemData.item.name, *ItemData.droppedByMobUID);
 		SnapToGround();
 	}
@@ -677,7 +708,7 @@ float ADroppedItemActor::FindGroundLevelAt(const FVector& Location)
 	// Always ignore self
 	QueryParams.AddIgnoredActor(this);
 
-	// Explicitly ignore the local player pawn — it may be standing exactly
+	// Explicitly ignore the local player pawn пїЅ it may be standing exactly
 	// at the drop point and its CapsuleComponent would be hit first.
 	if (APlayerController* PC = World->GetFirstPlayerController())
 	{
@@ -701,8 +732,14 @@ float ADroppedItemActor::FindGroundLevelAt(const FVector& Location)
 		TEXT("[DropSnap] Trace '%s' | Start=%s End=%s"),
 		*ItemData.item.name, *StartPos.ToString(), *EndPos.ToString());
 
-	const bool bHit = World->LineTraceSingleByChannel(
-		HitResult, StartPos, EndPos, ECC_Visibility, QueryParams);
+	// Query WorldStatic and WorldDynamic object types вЂ” Landscape is always WorldStatic,
+	// and any floor mesh is either WorldStatic or WorldDynamic regardless of visibility
+	// settings. Dropped-item meshes are OverlapAllDynamic so they will never block.
+	FCollisionObjectQueryParams ObjectQueryParams;
+	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
+	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+	const bool bHit = World->LineTraceSingleByObjectType(
+		HitResult, StartPos, EndPos, ObjectQueryParams, QueryParams);
 
 	if (bHit && HitResult.bBlockingHit)
 	{
@@ -715,7 +752,7 @@ float ADroppedItemActor::FindGroundLevelAt(const FVector& Location)
 	}
 
 	UE_LOG(LogDropSnap, Warning,
-		TEXT("[DropSnap] Trace MISS '%s' | Location=%s — keeping server Z=%.1f"),
+		TEXT("[DropSnap] Trace MISS '%s' | Location=%s пїЅ keeping server Z=%.1f"),
 		*ItemData.item.name, *Location.ToString(), Location.Z);
 	return Location.Z;
 }
@@ -723,13 +760,13 @@ float ADroppedItemActor::FindGroundLevelAt(const FVector& Location)
 void ADroppedItemActor::SnapToGround()
 {
 	const FVector CurrentLoc = GetActorLocation();
-	// FindGroundLevelAt internally adds ±5000 to the given Z for the trace range,
-	// so pass CurrentLoc directly — no extra offset here.
+	// FindGroundLevelAt internally adds пїЅ5000 to the given Z for the trace range,
+	// so pass CurrentLoc directly пїЅ no extra offset here.
 	const float GroundZ = FindGroundLevelAt(CurrentLoc);
 
 	// Work out how far the mesh pivot sits above its own bottom edge
 	// so the lowest point of the mesh lands exactly on the surface.
-	// We use the world-space bounding box of the mesh component directly —
+	// We use the world-space bounding box of the mesh component directly пїЅ
 	// this already accounts for RelativeScale3D, MeshScale and actor scale.
 	float PivotToBottom = 0.0f;
 	if (ItemMesh && ItemMesh->GetStaticMesh())
@@ -751,7 +788,7 @@ void ADroppedItemActor::SnapToGround()
 	else
 	{
 		UE_LOG(LogDropSnap, Warning,
-			TEXT("[DropSnap] SnapToGround '%s' — no mesh/static mesh, PivotToBottom=0"),
+			TEXT("[DropSnap] SnapToGround '%s' пїЅ no mesh/static mesh, PivotToBottom=0"),
 			*ItemData.item.name);
 	}
 

@@ -1141,7 +1141,8 @@ void UUIManager::ToggleGameMenu()
 	if (bClosedSomething)
 	{
 		UpdateCursorAndInputMode();
-		return;
+		// Bug 6 fix: do NOT return here — fall through to open the game menu.
+		// WoW-style behaviour: Escape closes open panels AND opens the menu in one press.
 	}
 
 	// Nothing was open - open the game menu

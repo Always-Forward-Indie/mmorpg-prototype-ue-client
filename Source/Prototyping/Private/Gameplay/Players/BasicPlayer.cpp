@@ -491,10 +491,15 @@ void ABasicPlayer::DoAutoAttack()
                 GetWorld()->GetTimerManager().SetTimer(AutoAttackRetryTimerHandle,
                     this, &ABasicPlayer::DoAutoAttack, AutoAttackSwingDelay, false);
             }
-            else
+            else if (!IsValid(LockedTarget) || LockedTarget->GetMOBIsDead())
             {
+                // Target is gone or dead — release the lock so the player can re-target.
                 ClearLockedTarget();
             }
+            // else: bIsAutoAttacking=false but target still alive (e.g. a manual skill was cast
+            // while auto-attack was mid-swing) — keep the lock so the player can resume.
+            // Bug 7 fix: previously the else branch always called ClearLockedTarget(), which
+            // dropped the lock whenever a server-confirmed skill animation ended mid-combo.
         });
     }
     else
@@ -947,6 +952,9 @@ ABasicPlayer::ABasicPlayer()
     CameraBoom->bEnableCameraLag       = true;
     CameraBoom->CameraLagSpeed         = 8.0f;
     CameraBoom->bEnableCameraRotationLag = false;
+    // Only collide with world geometry (walls, terrain) — ignore pawns (mobs, NPCs, players)
+    // so the spring arm does not compress when another character stands between the camera and the player.
+    CameraBoom->ProbeChannel           = ECC_Visibility;
 
     // Create the follow camera
     FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
@@ -1680,11 +1688,13 @@ void ABasicPlayer::UpdateCurrentPlayerMovement(float DeltaTime)
 
     // Compare current position and rotation to the last sent values
     bool hasPositionChanged = !currentLocation.Equals(LastSentPosition, PositionThreshold);
-    //bool hasRotationChanged = !FMath::IsNearlyEqual(currentRotation.Yaw, LastSentRotation.Yaw, RotationThreshold);
+    // Bug 4 fix: also detect rotation-only changes (e.g. player turns to face a mob while
+    // standing still) so remote clients see the correct facing direction in combat.
+    bool hasRotationChanged = !FMath::IsNearlyEqual(currentRotation.Yaw, LastSentRotation.Yaw, 5.0f);
 
     TimeSinceLastUpdate = FMath::Min(TimeSinceLastUpdate + DeltaTime, UpdateInterval * 2.0f);
 
-    if (hasPositionChanged && TimeSinceLastUpdate >= UpdateInterval)
+    if ((hasPositionChanged || hasRotationChanged) && TimeSinceLastUpdate >= UpdateInterval)
     {
         // Do not send movement packets while the player is dead
         if (playerData.characterData.bIsDead)
@@ -1792,9 +1802,12 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
 
     // Snap to exactly zero to prevent the blend-space from hovering near 0
     // and flickering between idle and walk at very low smoothed values.
+    // Also reset direction to 0 so the blend-space doesn't play a "slow backward"
+    // idle when the player just stopped moving backward (Bug 2 fix).
     if (SmoothedRemoteSpeed < 2.0f)
     {
         SmoothedRemoteSpeed = 0.0f;
+        SmoothedRemoteDirection = 0.0f;
     }
 
     // Direction: only blend when actually moving so we don't rotate the
@@ -2109,6 +2122,29 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
     if (playerData.isOtherClient && ServerPositionUpdateInterval > 0.0f)
     {
         const float Dist2D = FVector::Dist2D(TargetReceivedPosition, NewTarget);
+
+        // Large displacement (> 500 cm) almost certainly means a server-side teleport
+        // (e.g. respawn, warp).  Hard-snap the actor and zero out all animation-speed
+        // state so the character never plays a running animation in the new position
+        // before the first real movement packet arrives.
+        static constexpr float TeleportThreshold = 500.0f;
+        if (Dist2D > TeleportThreshold)
+        {
+            SetActorLocation(NewTarget, false, nullptr, ETeleportType::TeleportPhysics);
+            SetActorRotation(FRotator(0.0, rotZ, 0.0));
+            LastReceivedPosition       = NewTarget;
+            TargetReceivedPosition     = NewTarget;
+            LastReceivedRotation       = FRotator(0.0, rotZ, 0.0);
+            TargetReceivedRotation     = FRotator(0.0, rotZ, 0.0);
+            RemoteSpeed                = 0.0f;
+            SmoothedRemoteSpeed        = 0.0f;
+            RemoteDirection            = 0.0f;
+            bRemoteIsMoving            = false;
+            RemoteIdleTime             = 0.0f;
+            TimeSinceLastPositionUpdate = 0.0f;
+            return;
+        }
+
         RemoteSpeed = Dist2D / ServerPositionUpdateInterval;
 
         if (Dist2D > 1.0f)
@@ -2882,6 +2918,14 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
 
         // Bind OnAttackEnded > PlayerSkillManager::NotifyAnimationEnded so the cast
         // lock is released only after the montage fully completes, preventing spam.
+        // Bug 7 fix: also remove any stale AutoAttackAnimEndDelegateHandle so that a
+        // lingering auto-attack end binding cannot trigger ClearLockedTarget() when
+        // a server-confirmed skill animation ends while bIsAutoAttacking=false.
+        if (AutoAttackAnimEndDelegateHandle.IsValid())
+        {
+            AnimInst->OnAttackEnded.Remove(AutoAttackAnimEndDelegateHandle);
+            AutoAttackAnimEndDelegateHandle.Reset();
+        }
         if (AnimEndDelegateHandle.IsValid())
         {
             AnimInst->OnAttackEnded.Remove(AnimEndDelegateHandle);
@@ -3540,15 +3584,37 @@ void ABasicPlayer::RefreshHUD()
 
 void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
 {
-    // Only play sounds for the local player — spectated or other-client characters are silent.
-    if (playerData.isOtherClient) return;
+    // Sounds are intentionally suppressed for remote (other-client) players.
+    // However, the CastRelease projectile spawn must happen for ALL players so
+    // that skills cast by other players are visually visible on this client (Bug 3 fix).
+    // Non-CastRelease events are skipped entirely for remote players.
+    if (playerData.isOtherClient && Slot != ECombatSoundSlot::CastRelease)
+    {
+        return;
+    }
 
     switch (Slot)
     {
     case ECombatSoundSlot::VoiceAttack:
     {
-        // Generic melee voice pool — entity-specific, not skill-specific.
-        // For skill-specific voices use AnimNotify_PlayerCombatEvent(CastVoice) instead.
+        // Priority 1: per-entity per-skill override (DT_EntitySkillVoiceOverrides, key "warrior_m|basic_attack")
+        if (MyGameInstance)
+        {
+            if (UEntityAudioRepository* Repo = MyGameInstance->GetEntityAudioRepository())
+            {
+                if (const FEntitySkillVoiceOverride* Override =
+                        Repo->FindSkillVoiceOverride(AudioProfileId, FName(*CurrentSkillName)))
+                {
+                    if (Override->VoiceAttack.Num() > 0)
+                    {
+                        PlayEventSound(Override->VoiceAttack[
+                            FMath::RandRange(0, Override->VoiceAttack.Num() - 1)]);
+                        break;
+                    }
+                }
+            }
+        }
+        // Priority 2: generic entity melee voice pool from the audio profile
         if (const FEntityAudioProfile* Profile = GetAudioProfile())
         {
             if (Profile->VoiceAttack.Num() > 0)
@@ -3645,6 +3711,9 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
 
         const FSkillDefinitionData& Def = Repo->GetDefinition(CurrentSkillName);
 
+        // Sounds and VFX are only played for the local player.
+        if (!playerData.isOtherClient)
+        {
         // Release sound (e.g. fireball launch, arrow release)
         if (!Def.castEndSound.IsNull())
         {
@@ -3707,8 +3776,10 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
                 }
             }
         }
+        } // end if (!playerData.isOtherClient) — sounds/VFX section
 
         // Spawn projectile if defined (preferred over frame-0 spawn — fires at correct cast-release timing)
+        // This runs for both local and remote players so skills from other characters are visible (Bug 3 fix).
         if (!Def.projectileClass.IsNull())
         {
             UClass* ProjClass = Def.projectileClass.LoadSynchronous();
@@ -3772,9 +3843,13 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
 
 void ABasicPlayer::ShowCastBar_Implementation(float CastTime, const FString& SkillName)
 {
-    if (playerData.isOtherClient) return;
-
+    // Store cast time for ALL players (including remote).
+    // CurrentSwingSeconds = Duration - CastTime is pre-computed in PlaySkillAnimation
+    // and drives the projectile speed calculation.  If we skip this for remote players
+    // the swing time defaults to full Duration, making the projectile 2-3x too slow.
     CurrentCastTime = CastTime;
+
+    if (playerData.isOtherClient) return;
 
     bIsCasting = true;
 

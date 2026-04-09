@@ -521,7 +521,24 @@ void UInventoryManager::SendDropItemRequest(int32 ItemId, int32 Quantity)
 	
 	TSharedPtr<FJsonValueNumber> QuantityValue = MakeShareable(new FJsonValueNumber(Quantity));
 	BodyData.Add(TEXT("quantity"), QuantityValue);
-	
+
+	// Include current player position so the server can use an accurate drop location
+	// and broadcast the correct ground-level Z to other clients.
+	// Without this the server falls back to the last moveCharacter snapshot which may
+	// be stale and/or at capsule-center height, causing the item to spawn in the air
+	// on observer clients.
+	if (ABasicPlayer* CurrentPlayer = gameInstance->Player)
+	{
+		FClientDataStruct PlayerData = CurrentPlayer->GetPlayerData();
+		const FPositionDataStruct& Pos = PlayerData.characterData.characterPosition;
+		BodyData.Add(TEXT("posX"),  MakeShareable(new FJsonValueNumber(Pos.positionX)));
+		BodyData.Add(TEXT("posY"),  MakeShareable(new FJsonValueNumber(Pos.positionY)));
+		BodyData.Add(TEXT("posZ"),  MakeShareable(new FJsonValueNumber(Pos.positionZ)));
+		BodyData.Add(TEXT("rotZ"),  MakeShareable(new FJsonValueNumber(Pos.rotationZ)));
+		UE_LOG(LogTemp, Log, TEXT("InventoryManager: drop request pos X=%.2f Y=%.2f Z=%.2f"),
+			Pos.positionX, Pos.positionY, Pos.positionZ);
+	}
+
 	// Use TimeSyncService for automatic clientSendMs with correct server type
 	FString JsonString = JSONParser::SerializeJsonWithTimeSync(TEXT("dropItem"), HeaderData, BodyData, gameInstance->GetTimeSyncService(), EServerType::ChunkServer);
 	

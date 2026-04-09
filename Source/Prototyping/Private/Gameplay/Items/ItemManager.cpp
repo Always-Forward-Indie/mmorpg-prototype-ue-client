@@ -117,6 +117,50 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("ItemManager: Received pickUpItem event"));
 
+		// If the server broadcasts itemPickup to all clients, only the picker should update
+		// inventory / play the LOCAL animation.  However every observer client must still
+		// (a) play the pickup animation on the remote player's actor and
+		// (b) destroy the DroppedItemActor from the world.
+		if (gameInstance)
+		{
+			int32 ResponseCharId = 0;
+			Body->TryGetNumberField(TEXT("characterId"), ResponseCharId);
+			if (ResponseCharId > 0 && ResponseCharId != gameInstance->GetCurrentCharacterID())
+			{
+				UE_LOG(LogTemp, Warning, TEXT("ItemManager: itemPickup by other player charId=%d — playing remote animation and destroying item"),
+					ResponseCharId);
+
+				// Read the UID of the picked-up item.
+				int32 OtherPickupUID = -1;
+				Body->TryGetNumberField(TEXT("droppedItemUID"), OtherPickupUID);
+
+				if (OtherPickupUID > 0)
+				{
+					// Play pickup animation on the remote player's actor.
+					if (ABasicPlayer* OtherPlayer = gameInstance->GetPlayerByCharacterId(ResponseCharId))
+					{
+						if (UPlayerAnimInstance* OtherAnimInst = Cast<UPlayerAnimInstance>(
+							OtherPlayer->GetMesh()->GetAnimInstance()))
+						{
+							OtherAnimInst->NotifyPickup();
+						}
+					}
+
+					// Destroy the DroppedItemActor on this client (play VFX then remove).
+					if (DroppedItemsMap.Contains(OtherPickupUID))
+					{
+						ADroppedItemActor* DroppedActor = DroppedItemsMap[OtherPickupUID];
+						if (IsValid(DroppedActor))
+						{
+							DroppedActor->PlayPickupEffect();
+						}
+						DroppedItemsMap.Remove(OtherPickupUID);
+					}
+				}
+				return;
+			}
+		}
+
 		// Cache item data from server confirmation
 		if (Body->HasField(TEXT("item")))
 		{

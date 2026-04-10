@@ -8,6 +8,7 @@
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SphereComponent.h"
+#include "Components/ShapeComponent.h"
 #include "NiagaraComponent.h"
 #include "NiagaraFunctionLibrary.h"
 #include "MyGameInstance.h"
@@ -700,7 +701,6 @@ float ADroppedItemActor::FindGroundLevelAt(const FVector& Location)
 	const FVector StartPos = FVector(Location.X, Location.Y, Location.Z + 5000.0f);
 	const FVector EndPos   = FVector(Location.X, Location.Y, Location.Z - 5000.0f);
 
-	FHitResult HitResult;
 	FCollisionQueryParams QueryParams;
 	QueryParams.bTraceComplex = true;
 	QueryParams.bIgnoreTouches = true;
@@ -708,8 +708,7 @@ float ADroppedItemActor::FindGroundLevelAt(const FVector& Location)
 	// Always ignore self
 	QueryParams.AddIgnoredActor(this);
 
-	// Explicitly ignore the local player pawn � it may be standing exactly
-	// at the drop point and its CapsuleComponent would be hit first.
+	// Explicitly ignore the local player pawn
 	if (APlayerController* PC = World->GetFirstPlayerController())
 	{
 		if (APawn* LocalPawn = PC->GetPawn())
@@ -726,33 +725,70 @@ float ADroppedItemActor::FindGroundLevelAt(const FVector& Location)
 	UGameplayStatics::GetAllActorsOfClass(World, ADroppedItemActor::StaticClass(), PawnsToIgnore);
 	QueryParams.AddIgnoredActors(PawnsToIgnore);
 
-	// ECC_Visibility ignores trigger volumes and pawn capsules responding Overlap/Ignore,
-	// while hitting real walkable geometry (landscape heightfield, static meshes, BSP).
 	UE_LOG(LogDropSnap, Verbose,
 		TEXT("[DropSnap] Trace '%s' | Start=%s End=%s"),
 		*ItemData.item.name, *StartPos.ToString(), *EndPos.ToString());
 
-	// Query WorldStatic and WorldDynamic object types — Landscape is always WorldStatic,
-	// and any floor mesh is either WorldStatic or WorldDynamic regardless of visibility
-	// settings. Dropped-item meshes are OverlapAllDynamic so they will never block.
+	// Use a MULTI-hit trace so we can skip invisible collision volumes
+	// (BlockingVolumes, trigger boxes, Box/Sphere/Capsule shape components)
+	// and land on actual walkable geometry (landscape, static meshes, BSP).
 	FCollisionObjectQueryParams ObjectQueryParams;
 	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
 	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
-	const bool bHit = World->LineTraceSingleByObjectType(
-		HitResult, StartPos, EndPos, ObjectQueryParams, QueryParams);
 
-	if (bHit && HitResult.bBlockingHit)
+	TArray<FHitResult> Hits;
+	const bool bHit = World->LineTraceMultiByObjectType(
+		Hits, StartPos, EndPos, ObjectQueryParams, QueryParams);
+
+	if (bHit)
 	{
-		const float ResultZ = HitResult.ImpactPoint.Z + 1.0f;
-		UE_LOG(LogDropSnap, Log,
-			TEXT("[DropSnap] Trace HIT '%s' | ImpactZ=%.1f -> ResultZ=%.1f | Component='%s'"),
-			*ItemData.item.name, HitResult.ImpactPoint.Z, ResultZ,
-			HitResult.GetComponent() ? *HitResult.GetComponent()->GetName() : TEXT("null"));
-		return ResultZ;
+		// Collect the first shape-component hit as a fallback in case no real
+		// geometry (landscape, static mesh) is found in this pass.
+		float FirstShapeHitZ = TNumericLimits<float>::Lowest();
+
+		for (const FHitResult& Hit : Hits)
+		{
+			if (!Hit.bBlockingHit) continue;
+
+			// Skip invisible collision shapes (BoxComponent, SphereComponent,
+			// CapsuleComponent, etc.) so drops land on real walkable geometry
+			// instead of floating on invisible blocking volumes.
+			const UPrimitiveComponent* HitComp = Hit.GetComponent();
+			if (HitComp && HitComp->IsA<UShapeComponent>())
+			{
+				UE_LOG(LogDropSnap, Log,
+					TEXT("[DropSnap] Trace SKIP '%s' | ShapeComponent='%s' at Z=%.1f"),
+					*ItemData.item.name,
+					*HitComp->GetName(), Hit.ImpactPoint.Z);
+				// Remember highest shape hit as fallback; this covers areas where only
+				// BlockingVolumes are present (no landscape complex collision loaded yet).
+				if (Hit.ImpactPoint.Z > FirstShapeHitZ)
+					FirstShapeHitZ = Hit.ImpactPoint.Z;
+				continue;
+			}
+
+			const float ResultZ = Hit.ImpactPoint.Z + 1.0f;
+			UE_LOG(LogDropSnap, Log,
+				TEXT("[DropSnap] Trace HIT '%s' | ImpactZ=%.1f -> ResultZ=%.1f | Component='%s'"),
+				*ItemData.item.name, Hit.ImpactPoint.Z, ResultZ,
+				HitComp ? *HitComp->GetName() : TEXT("null"));
+			return ResultZ;
+		}
+
+		// No real geometry hit — fall back to the highest shape component if available.
+		// This handles areas where only BlockingVolumes provide ground collision
+		// (landscape complex collision not yet streamed in, or deliberately absent).
+		if (FirstShapeHitZ > TNumericLimits<float>::Lowest())
+		{
+			UE_LOG(LogDropSnap, Warning,
+				TEXT("[DropSnap] Trace SHAPE-FALLBACK '%s' | no geometry hit, using ShapeZ=%.1f"),
+				*ItemData.item.name, FirstShapeHitZ);
+			return FirstShapeHitZ + 1.0f;
+		}
 	}
 
 	UE_LOG(LogDropSnap, Warning,
-		TEXT("[DropSnap] Trace MISS '%s' | Location=%s � keeping server Z=%.1f"),
+		TEXT("[DropSnap] Trace MISS '%s' | Location=%s | keeping server Z=%.1f"),
 		*ItemData.item.name, *Location.ToString(), Location.Z);
 	return Location.Z;
 }

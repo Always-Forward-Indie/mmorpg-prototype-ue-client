@@ -239,11 +239,18 @@ void UMOBMovementComponent::OnReceiveMovePacket(const FMobMoveEntryStruct& MoveE
         if (PrevCombatState != 0)
         {
             // Combat → patrol: blend for smooth visual transition.
+            // BlendDuration scales with positional gap so the mob visually moves
+            // at roughly patrol/return speed → prevents fast-blend "teleports" when
+            // dead-reckoning drifted during RETURNING (state 5) or long chases.
             const FVector ClientPos = GetOwner()->GetActorLocation();
+            const float TransitionGap = FVector::Dist2D(ClientPos, NewPos);
+            const float SafeSpeed = FMath::Max(
+                LatestServerSpeed > 0.f ? LatestServerSpeed : PatrolSpeed, 100.f);
             BlendFromPos  = ClientPos;
             BlendToPos    = NewPos;
             BlendElapsed  = 0.f;
-            BlendDuration = StateTransitionBlendTime;
+            BlendDuration = FMath::Clamp(TransitionGap / SafeSpeed,
+                                         StateTransitionBlendTime, 1.5f);
             bBlendActive  = true;
         }
         // Normal patrol packets: ProcessPatrolMovement smoothly moves
@@ -429,12 +436,39 @@ void UMOBMovementComponent::ProcessPatrolMovement(float DeltaTime)
     {
         BlendElapsed += DeltaTime;
         const float Alpha = FMath::Clamp(BlendElapsed / FMath::Max(BlendDuration, 0.001f), 0.f, 1.f);
+        // Use BlendToPos (captured at blend-start), NOT LatestServerPos.
+        // New patrol packets must not change the blend target mid-animation;
+        // ProcessPatrolMovement takes over from LatestServerPos after the blend.
         FVector BlendedPos = FMath::Lerp(
             FVector(BlendFromPos.X, BlendFromPos.Y, CurrentLocation.Z),
-            FVector(LatestServerPos.X, LatestServerPos.Y, CurrentLocation.Z),
+            FVector(BlendToPos.X, BlendToPos.Y, CurrentLocation.Z),
             Alpha);
         BlendedPos = AdjustToGround(BlendedPos, DeltaTime, 1.0f);
         GetOwner()->SetActorLocation(BlendedPos);
+
+        // Rotate toward actual movement direction during the blend.
+        const FVector BlendMoveDelta(BlendedPos.X - PrevFramePos.X,
+                                     BlendedPos.Y - PrevFramePos.Y, 0.f);
+        const float BlendMoveDist = BlendMoveDelta.Size();
+        if (BlendMoveDist > 0.5f)
+        {
+            const FVector BlendMoveDir = BlendMoveDelta / BlendMoveDist;
+            SmoothedFacingDir = FMath::VInterpNormalRotationTo(
+                SmoothedFacingDir, BlendMoveDir, DeltaTime, PatrolRotationRate);
+
+            ACharacter* BlendChar = Cast<ACharacter>(GetOwner());
+            if (BlendChar)
+            {
+                FRotator DesiredRot = SmoothedFacingDir.Rotation();
+                DesiredRot.Pitch = 0.f;
+                DesiredRot.Roll  = 0.f;
+                BlendChar->SetActorRotation(
+                    FMath::RInterpConstantTo(
+                        BlendChar->GetActorRotation(), DesiredRot,
+                        DeltaTime, PatrolRotationRate));
+            }
+        }
+
         PrevFramePos = BlendedPos;
 
         if (Alpha >= 1.f)

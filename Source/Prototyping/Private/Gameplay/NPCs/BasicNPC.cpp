@@ -2,6 +2,7 @@
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/AudioComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/Engine.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
@@ -16,6 +17,24 @@ ABasicNPC::ABasicNPC()
 {
 	// Set this character to call Tick() every frame
 	PrimaryActorTick.bCanEverTick = true;
+
+	// Prevent NPC capsules from compressing the player camera spring arm.
+	// The camera ProbeChannel is ECC_Camera; NPCs must not block it.
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+		// NPCs must not physically block the player — server is authoritative over NPC positions.
+		// Targeting still works via dot-product + LOS fallback in BasicPlayer::CheckForNPC.
+		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+		// Projectiles use ObjectType=WorldDynamic + OverlapAllDynamic — keep Overlap so hits register.
+		Capsule->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
+	}
+
+	// NPCs are server-driven; disable physics push to prevent client-side jitter.
+	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+	{
+		CMC->bEnablePhysicsInteraction = false;
+	}
 
 	// Initialize audio components
 	AudioComponentMain = CreateDefaultSubobject<UAudioComponent>(TEXT("NPCMainAudio"));

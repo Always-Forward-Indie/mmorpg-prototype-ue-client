@@ -30,6 +30,7 @@
 #include "UI/PlayerStatsWidget.h"
 #include "Gameplay/Bestiary/BestiaryNetworkHandler.h"
 #include "Utils/PlayerAttributeParser.h"
+#include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
@@ -954,7 +955,16 @@ ABasicPlayer::ABasicPlayer()
     CameraBoom->bEnableCameraRotationLag = false;
     // Only collide with world geometry (walls, terrain) — ignore pawns (mobs, NPCs, players)
     // so the spring arm does not compress when another character stands between the camera and the player.
-    CameraBoom->ProbeChannel           = ECC_Visibility;
+    // Use ECC_Camera (not ECC_Visibility) because ECC_Visibility is also used for line-of-sight
+    // checks — mobs/NPCs must still block Visibility for targeting, but must NOT block Camera.
+    CameraBoom->ProbeChannel           = ECC_Camera;
+
+    // Prevent other players' capsules from compressing the spring arm.
+    // The owning pawn is already auto-ignored by the spring arm probe.
+    if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+    {
+        Capsule->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+    }
 
     // Create the follow camera
     FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
@@ -1023,6 +1033,22 @@ Super::BeginPlay();
         if (MyGameInstance->MOBManager && ActorId > 0)
         {
             MyGameInstance->MOBManager->RegisterPlayer(ActorId, this);
+        }
+
+        // Remote players: disable physics push — positions are server-authoritative.
+        // Prevents remote capsules from physically blocking the local player's movement.
+        // Projectile hits still work because ECC_WorldDynamic is set to Overlap.
+        if (playerData.isOtherClient)
+        {
+            if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+            {
+                CMC->bEnablePhysicsInteraction = false;
+            }
+            if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+            {
+                Capsule->SetCollisionResponseToChannel(ECC_Pawn,         ECR_Ignore);
+                Capsule->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
+            }
         }
 
         // Register with combat system if this is the local player
@@ -1516,6 +1542,9 @@ void ABasicPlayer::Look(const FInputActionValue& Value)
 {
     // Only process mouse look when at least one mouse button is held (WoW-style)
     if (!bIsRightMouseDown && !bIsLeftMouseDown) return;
+
+    // Dead players cannot rotate — the corpse must stay still.
+    if (playerData.characterData.bIsDead) return;
 
     if (Controller != nullptr)
     {
@@ -2827,6 +2856,13 @@ void ABasicPlayer::OnDeath_Implementation()
     {
         Movement->DisableMovement();
     }
+
+    // Release any held mouse buttons so the corpse cannot be rotated.
+    // The input events fire while the death screen is fading in and bIsDead
+    // is already true, so Look() guards against any stray events as well.
+    bIsRightMouseDown = false;
+    bIsLeftMouseDown  = false;
+    RestoreCursorToUIManager();
 
     // Drive the AnimBP death state
     if (UPlayerAnimInstance* AnimInst = GetPlayerAnimInstance())

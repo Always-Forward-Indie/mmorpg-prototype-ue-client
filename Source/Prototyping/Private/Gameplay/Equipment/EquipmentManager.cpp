@@ -1,4 +1,6 @@
 #include "Gameplay/Equipment/EquipmentManager.h"
+#include "Gameplay/Equipment/EquipmentVisualComponent.h"
+#include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
@@ -185,6 +187,25 @@ void UEquipmentManager::OnRemoteEquipmentStateReceived(const FEquipmentStateData
         RemoteEquipmentStateCache.Add(State.characterId, State);
     }
     OnRemoteEquipmentStateReceivedDelegate.Broadcast(State);
+
+    // Belt-and-suspenders: directly apply to the already-spawned actor if one exists.
+    // This guarantees the visuals update even in edge cases where the delegate
+    // binding was lost (actor re-spawn, timing during world init, etc.).
+    if (State.characterId > 0 && GameInstance)
+    {
+        ABasicPlayer* RemotePlayer = GameInstance->GetPlayerByCharacterId(State.characterId);
+        if (RemotePlayer && IsValid(RemotePlayer) && RemotePlayer->GetIsOtherClient())
+        {
+            UEquipmentVisualComponent* VisComp = RemotePlayer->GetEquipmentVisualComponent();
+            if (VisComp && VisComp->GetOwnerCharacterId() == State.characterId)
+            {
+                UE_LOG(LogTemp, Log,
+                    TEXT("EquipmentManager: Direct equipment apply for remote CharID=%d (%d slot(s))"),
+                    State.characterId, State.slots.Num());
+                VisComp->HandleRemoteEquipmentState(State);
+            }
+        }
+    }
 }
 
 const FEquipmentStateData* UEquipmentManager::GetCachedRemoteEquipmentState(int32 CharacterId) const

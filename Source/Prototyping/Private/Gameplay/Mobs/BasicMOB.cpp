@@ -107,6 +107,19 @@ ABasicMOB::ABasicMOB()
 		// the overlap event never fires on the projectile's CollisionSphere.
 		// Setting Overlap here ensures OnSphereBeginOverlap triggers correctly.
 		Capsule->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
+
+		// Prevent mob capsules from compressing the player camera spring arm.
+		// The camera ProbeChannel is ECC_Camera; mobs must not block it.
+		Capsule->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+	}
+
+	// The skeletal mesh component has its own collision settings separate from the capsule.
+	// If the project's CharacterMesh profile blocks ECC_Camera, the spring arm probe will
+	// collapse to near-zero when a mob overlaps with the player (which can happen now that
+	// ECC_Pawn is Ignore). Explicitly silence the mesh on the camera channel.
+	if (USkeletalMeshComponent* MeshComp = GetMesh())
+	{
+		MeshComp->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
 	}
 
 
@@ -1035,6 +1048,11 @@ void ABasicMOB::SetupMobVisual(FName MobSlug)
 			if (USkeletalMesh* LoadedMesh = SoftMesh.Get())
 			{
 				Self->GetMesh()->SetSkeletalMesh(LoadedMesh);
+
+				// SetSkeletalMesh may reapply the mesh asset's default collision profile,
+				// overriding any component-level channel overrides set in the constructor.
+				// Re-apply the camera ignore so the spring arm probe never hits this mesh.
+				Self->GetMesh()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
 
 				const FBoxSphereBounds MeshBounds = LoadedMesh->GetBounds();
 				const FVector BoxExtent = MeshBounds.BoxExtent;

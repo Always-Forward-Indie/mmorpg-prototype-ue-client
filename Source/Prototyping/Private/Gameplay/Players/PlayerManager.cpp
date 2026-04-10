@@ -262,13 +262,16 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 				}
 				else if (gameInstance->IsGameWorldReady())
 				{
+					UE_LOG(LogConnection, Warning, TEXT("[PHASE 2] joinGameCharacter REMOTE: clientId=%d charId=%d — world ready, spawning"),
+						ClientData.clientId, ClientData.characterData.characterId);
 					gameInstance->AddPlayerData(ClientData.clientId, ClientData);
 					gameInstance->SpawnPlayerForClient(ClientData.clientId);
 				}
 				else
 				{
 					gameInstance->PendingRemotePlayerSpawns.Add(ClientData);
-					UE_LOG(LogConnection, Log, TEXT("[PHASE 2] Queued remote spawn for clientId=%d (world not ready)"), ClientData.clientId);
+					UE_LOG(LogConnection, Warning, TEXT("[PHASE 2] joinGameCharacter REMOTE: clientId=%d charId=%d — world NOT ready, queued"),
+						ClientData.clientId, ClientData.characterData.characterId);
 				}
 			}
 		}

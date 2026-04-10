@@ -76,8 +76,15 @@ void UEquipmentVisualComponent::HandleRemoteEquipmentState(const FEquipmentState
     // Filter: only process state for our specific remote character
     if (OwnerCharacterId <= 0 || State.characterId != OwnerCharacterId)
     {
+        UE_LOG(LogTemp, Log,
+            TEXT("EquipmentVisualComponent: HandleRemoteEquipmentState skipped â€” OwnerCharID=%d vs State.charID=%d"),
+            OwnerCharacterId, State.characterId);
         return;
     }
+    UE_LOG(LogTemp, Warning,
+        TEXT("EquipmentVisualComponent: HandleRemoteEquipmentState applying for CharID=%d (%d slot(s)) owner=%s"),
+        State.characterId, State.slots.Num(),
+        GetOwner() ? *GetOwner()->GetName() : TEXT("null"));
     RefreshAllSlots(State);
 }
 
@@ -86,7 +93,7 @@ void UEquipmentVisualComponent::HandleRemoteEquipmentState(const FEquipmentState
 void UEquipmentVisualComponent::RefreshAllSlots(const FEquipmentStateData& State)
 {
     UE_LOG(LogTemp, Log,
-           TEXT("EquipmentVisualComponent: RefreshAllSlots called – %d slot(s) in state, owner=%s"),
+           TEXT("EquipmentVisualComponent: RefreshAllSlots called ï¿½ %d slot(s) in state, owner=%s"),
            State.slots.Num(), GetOwner() ? *GetOwner()->GetName() : TEXT("null"));
 
     // 1. Collect slugs that are currently occupied on the server
@@ -149,7 +156,20 @@ void UEquipmentVisualComponent::ClearAllMeshes()
 USceneComponent* UEquipmentVisualComponent::AttachEquippedMesh(const FString& SlotSlug,
                                                                 const FString& ItemSlug)
 {
-    if (!ItemManager || !GetOwner()) return nullptr;
+    if (!ItemManager)
+    {
+        UE_LOG(LogTemp, Warning,
+            TEXT("EquipmentVisualComponent: AttachEquippedMesh â€” ItemManager is null for slot '%s' item '%s'"),
+            *SlotSlug, *ItemSlug);
+        return nullptr;
+    }
+    if (!GetOwner())
+    {
+        UE_LOG(LogTemp, Warning,
+            TEXT("EquipmentVisualComponent: AttachEquippedMesh â€” GetOwner() is null for slot '%s' item '%s'"),
+            *SlotSlug, *ItemSlug);
+        return nullptr;
+    }
 
     FItemVisualData VisualData = ItemManager->GetItemVisualDataBySlug(ItemSlug);
 
@@ -157,7 +177,7 @@ USceneComponent* UEquipmentVisualComponent::AttachEquippedMesh(const FString& Sl
     if (VisualData.EquipSocketName == NAME_None)
     {
         UE_LOG(LogTemp, Warning,
-               TEXT("EquipmentVisualComponent: '%s' has no EquipSocketName in ItemVisualsDataTable – skipping visual for slot '%s'. Check that ItemVisualsDataTable is assigned in GameInstance BP and the row for this slug exists."),
+               TEXT("EquipmentVisualComponent: '%s' has no EquipSocketName in ItemVisualsDataTable ï¿½ skipping visual for slot '%s'. Check that ItemVisualsDataTable is assigned in GameInstance BP and the row for this slug exists."),
                *ItemSlug, *SlotSlug);
         // Still remove old component in case item was swapped with one that has no visual
         DestroySlotComponent(SlotSlug);
@@ -185,7 +205,7 @@ USceneComponent* UEquipmentVisualComponent::AttachEquippedMesh(const FString& Sl
     if (!bHasStaticMesh && !bHasSkelMesh)
     {
         UE_LOG(LogTemp, Warning,
-               TEXT("EquipmentVisualComponent: '%s' found in DataTable but both EquippedStaticMesh and EquippedSkeletalMesh are null – assign at least one mesh in the DataTable row for slot '%s' to see the item on the character."),
+               TEXT("EquipmentVisualComponent: '%s' found in DataTable but both EquippedStaticMesh and EquippedSkeletalMesh are null ï¿½ assign at least one mesh in the DataTable row for slot '%s' to see the item on the character."),
                *ItemSlug, *SlotSlug);
         DestroySlotComponent(SlotSlug);
         return nullptr;

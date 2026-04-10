@@ -148,4 +148,8 @@ private:
 	FVector LastAnimatedPosition;
 	FRotator LastAnimatedRotation;
 	FRotator TargetRotation;
+
+	// Delayed re-snap: fires 0.5s after spawn to handle landscape collision
+	// not yet streamed in at BeginPlay time.
+	FTimerHandle DelayedSnapTimerHandle;
 };

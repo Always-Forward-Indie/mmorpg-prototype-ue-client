@@ -123,87 +123,60 @@ void ADroppedItemActor::BeginPlay()
 	{
 		TryStartTrajectoryFromMob();
 	}
-	else
+	else if (bFromPlayer)
 	{
-		// Player drop or nearbyItems — run standard drop-from-above animation.
-		//
-		// The server stores capsule-center Z (GetActorLocation().Z) for character positions
-		// and may add a further internal offset, so the broadcast Z can be well above the
-		// actual terrain level.  When FindGroundLevelAt fails (ECC_Visibility trace miss)
-		// it returns Location.Z as a fallback, which means TargetPosition.Z would be the
-		// elevated server Z and the item would stay permanently in the air.
-		//
-		// For player drops we first try to anchor to the dropper's live actor position,
-		// which is already standing on the ground on this client.  That gives a reliable
-		// XY reference whose ground level is always correct.
-
-		FVector ReferencePos = InitialPosition;
-
-		if (bFromPlayer)
+		// Player drop — arc from the player's mesh center to the ground,
+		// same trajectory system as mob drops.
+		UMyGameInstance* GI = Cast<UMyGameInstance>(UGameplayStatics::GetGameInstance(GetWorld()));
+		if (GI)
 		{
-			UMyGameInstance* GI = Cast<UMyGameInstance>(UGameplayStatics::GetGameInstance(GetWorld()));
-			if (GI)
+			if (ABasicPlayer* Dropper = GI->GetPlayerByCharacterId(ItemData.droppedByCharacterId))
 			{
-				if (ABasicPlayer* Dropper = GI->GetPlayerByCharacterId(ItemData.droppedByCharacterId))
+				// Start from the center of the player's skeletal mesh bounding box.
+				FVector LaunchOrigin = Dropper->GetActorLocation();
+				if (USkeletalMeshComponent* PlayerMesh = Dropper->GetMesh())
 				{
-					// Use the dropper's current world XY for the ground trace.
-					// Keep the server XY for the final position (authoritative world placement),
-					// but base the Z search on the actor that is visually on the ground.
-					const FVector DropperLoc = Dropper->GetActorLocation();
-					ReferencePos = FVector(InitialPosition.X, InitialPosition.Y, DropperLoc.Z);
-					UE_LOG(LogDropSnap, Log,
-						TEXT("[DropSnap] Player drop '%s' — using dropper actor Z=%.1f as reference (server Z=%.1f)"),
-						*ItemData.item.name, DropperLoc.Z, InitialPosition.Z);
+					PlayerMesh->UpdateBounds();
+					LaunchOrigin.Z = PlayerMesh->Bounds.GetBox().GetCenter().Z;
 				}
+				UE_LOG(LogDropSnap, Log,
+					TEXT("[DropSnap] Player drop '%s' — launch origin Z=%.1f (server Z=%.1f)"),
+					*ItemData.item.name, LaunchOrigin.Z, InitialPosition.Z);
+				SetupTrajectoryAnimation(LaunchOrigin);
+				return;
 			}
 		}
-
-		const float GroundZ = FindGroundLevelAt(ReferencePos);
-
-		// Update the target position with proper ground level
-		TargetPosition = FVector(InitialPosition.X, InitialPosition.Y, GroundZ);
-
+		// Dropper not found — fallback: snap directly to ground
+		UE_LOG(LogDropSnap, Warning,
+			TEXT("[DropSnap] Player drop '%s' — dropper not found, snapping to ground"),
+			*ItemData.item.name);
+		SnapToGround();
+		GetWorldTimerManager().SetTimer(
+			DelayedSnapTimerHandle, this, &ADroppedItemActor::SnapToGround, 0.5f, false);
+	}
+	else
+	{
+		// nearbyItems / world items — already on the ground.
+		// Skip the drop animation and snap directly so items don't pop in mid-air.
 		UE_LOG(LogDropSnap, Log,
-			TEXT("[DropSnap] Standard drop '%s' | ReferenceZ=%.1f -> GroundZ=%.1f | TargetPos=%s"),
-			*ItemData.item.name, ReferencePos.Z, GroundZ, *TargetPosition.ToString());
+			TEXT("[DropSnap] nearbyItem '%s' — snapping to landscape, ignoring server Z=%.1f"),
+			*ItemData.item.name, InitialPosition.Z);
+		SnapToGround();
 
-		// Start the standard drop animation
-		DropStartTime = GetGameTimeSinceCreation();
-		bIsDropAnimationActive = true;
+		// Schedule a second snap 0.5s later: landscape collision may be still
+		// streaming in at BeginPlay time, causing the first trace to miss.
+		GetWorldTimerManager().SetTimer(
+			DelayedSnapTimerHandle, this, &ADroppedItemActor::SnapToGround, 0.5f, false);
 
-		// Calculate a random offset for drop direction
-		FVector RandomDir = FVector(FMath::RandRange(-1.0f, 1.0f), FMath::RandRange(-1.0f, 1.0f), 0.0f);
-		RandomDir.Normalize();
-		DropHorizontalOffset = RandomDir * FMath::RandRange(30.0f, 50.0f);
-
-		// Set initial Z offset for drop animation
-		DropHeight = FMath::RandRange(80.0f, 120.0f);
-
-		// Set the initial position to be above the target
-		SetActorLocation(FVector(TargetPosition.X, TargetPosition.Y, TargetPosition.Z + DropHeight));
-
-		// Set initial rotation based on VisualData settings
 		if (ItemMesh)
 		{
 			if (VisualData.bUseCustomGroundRotation)
-			{
-				// Use custom ground rotation immediately
 				ItemMesh->SetRelativeRotation(VisualData.GroundRotation);
-				UE_LOG(LogTemp, Log, TEXT("Using custom ground rotation for item %s: %s"),
-					*ItemData.item.name, *VisualData.GroundRotation.ToString());
-			}
 			else
-			{
-				// Apply default rotation with small variations
-				FRotator DefaultRotation = FRotator(
-					FMath::RandRange(-5.0f, 5.0f),   // Small pitch variation
-					FMath::RandRange(0.0f, 360.0f),  // Random yaw
-					FMath::RandRange(-5.0f, 5.0f)    // Small roll variation
-				);
-				ItemMesh->SetRelativeRotation(DefaultRotation);
-				UE_LOG(LogTemp, Log, TEXT("Using default rotation for item %s: %s"),
-					*ItemData.item.name, *DefaultRotation.ToString());
-			}
+				ItemMesh->SetRelativeRotation(FRotator(
+					0.0f,
+					FMath::RandRange(0.0f, 360.0f),
+					0.0f));
 		}
 	}
 }
@@ -668,10 +641,17 @@ void ADroppedItemActor::TryStartTrajectoryFromMob()
 		ABasicMOB* SourceMob = Cast<ABasicMOB>(FoundActors[0]);
 		if (SourceMob)
 		{
+			// Use the center of the mob's skeletal mesh bounding box as the throw origin.
+			// GetActorLocation() returns the capsule center which may differ from the mesh center.
 			FVector MobLocation = SourceMob->GetActorLocation();
+			if (USkeletalMeshComponent* MobMesh = SourceMob->GetMesh())
+			{
+				MobMesh->UpdateBounds();
+				MobLocation.Z = MobMesh->Bounds.GetBox().GetCenter().Z;
+			}
 			UE_LOG(LogDropSnap, Log,
-				TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | mob found at %s"),
-				*ItemData.item.name, *MobLocation.ToString());
+				TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | mob found, launch origin Z=%.1f"),
+				*ItemData.item.name, MobLocation.Z);
 			SetupTrajectoryAnimation(MobLocation);
 		}
 		else
@@ -696,10 +676,12 @@ float ADroppedItemActor::FindGroundLevelAt(const FVector& Location)
 	UWorld* World = GetWorld();
 	if (!World) return Location.Z;
 
-	// Trace from a fixed high altitude so we reliably hit the ground
-	// even when Location.Z is already at or below the surface.
-	const FVector StartPos = FVector(Location.X, Location.Y, Location.Z + 5000.0f);
-	const FVector EndPos   = FVector(Location.X, Location.Y, Location.Z - 5000.0f);
+	// Trace from an absolute world-top altitude so the trace always hits the
+	// landscape regardless of what Z the server sent.  Server Z is intentionally
+	// ignored here — it reflects capsule-center offsets and is not suitable for
+	// ground placement.  The trace covers the full typical UE world height range.
+	const FVector StartPos = FVector(Location.X, Location.Y,  50000.0f);
+	const FVector EndPos   = FVector(Location.X, Location.Y, -10000.0f);
 
 	FCollisionQueryParams QueryParams;
 	QueryParams.bTraceComplex = true;

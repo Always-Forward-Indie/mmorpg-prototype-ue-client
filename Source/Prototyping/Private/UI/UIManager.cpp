@@ -1733,7 +1733,24 @@ void UUIManager::OnMenuBarEquipmentClicked()    { ToggleEquipment(); }
 void UUIManager::OnMenuBarQuestJournalClicked() { ToggleQuestJournal(); }
 void UUIManager::OnMenuBarSkillsClicked()       { ToggleSkillsPanel(); }
 void UUIManager::OnMenuBarStatsClicked()        { TogglePlayerStats(); }
-void UUIManager::OnMenuBarMenuClicked()         { ToggleGameMenu(); }
+void UUIManager::OnMenuBarMenuClicked()
+{
+    // Menu bar button: just toggle the game menu, do NOT close other open windows.
+    // (Escape key calls ToggleGameMenu() which has the WoW-style "close panels first" behaviour.)
+    if (!GameMenuWidget) return;
+
+    if (GameMenuWidget->IsMenuOpen())
+    {
+        GameMenuWidget->CloseMenu();
+        bGameMenuVisible = false;
+    }
+    else
+    {
+        GameMenuWidget->OpenMenu();
+        bGameMenuVisible = true;
+    }
+    UpdateCursorAndInputMode();
+}
 
 void UUIManager::ToggleEquipment()
 {

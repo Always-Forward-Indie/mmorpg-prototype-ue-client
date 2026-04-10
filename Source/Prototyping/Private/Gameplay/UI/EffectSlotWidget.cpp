@@ -62,24 +62,26 @@ void UEffectSlotWidget::RefreshTimer()
 {
     if (Timer_Text)
     {
-        Timer_Text->SetText(FText::FromString(BuildTimerString()));
+        const FString TimerStr = BuildTimerString();
+        if (TimerStr.IsEmpty())
+        {
+            Timer_Text->SetVisibility(ESlateVisibility::Collapsed);
+        }
+        else
+        {
+            Timer_Text->SetVisibility(ESlateVisibility::HitTestInvisible);
+            Timer_Text->SetText(FText::FromString(TimerStr));
+        }
     }
 }
 
 // ?????????????????????????????????????????????????????????????????????????????
 FString UEffectSlotWidget::BuildTimerString() const
 {
-    // Passive effects (expiresAt == 0 from skill_passive) show an infinity symbol
+    // Permanent effects (expiresAt == 0): no duration label shown.
     if (CachedEffect.expiresAt == 0)
     {
-        // Distinguish true permanent passives from effects whose expiry is unknown
-        if (CachedEffect.IsPassive() ||
-            (bHasDefinition && CachedDefinition.bIsPassive) ||
-            CachedEffect.effectTypeSlug.Equals(TEXT("passive"), ESearchCase::IgnoreCase))
-        {
-            return TEXT("\u221E"); // ?
-        }
-        return TEXT("?");
+        return FString();
     }
 
     const int64 NowSec = FDateTime::UtcNow().ToUnixTimestamp();
@@ -125,7 +127,7 @@ void UEffectSlotWidget::ApplyIcon()
 
     if (bHasDefinition && !CachedDefinition.Icon.IsNull())
     {
-        // Synchronous load — icon assets are expected to be small and already loaded
+        // Synchronous load ï¿½ icon assets are expected to be small and already loaded
         UTexture2D* IconTexture = CachedDefinition.Icon.LoadSynchronous();
         if (IconTexture)
         {
@@ -135,7 +137,7 @@ void UEffectSlotWidget::ApplyIcon()
         }
     }
 
-    // No icon found — hide the image so the slot still renders cleanly
+    // No icon found ï¿½ hide the image so the slot still renders cleanly
     Effect_Icon->SetVisibility(ESlateVisibility::Hidden);
 }
 

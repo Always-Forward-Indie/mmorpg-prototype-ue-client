@@ -1,5 +1,6 @@
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "Gameplay/NPCs/BasicNPC.h"
+#include "Gameplay/NPCs/NPCAnimInstance.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/AudioComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -89,6 +90,7 @@ void ABasicNPC::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (GetWorld())
 	{
 		GetWorld()->GetTimerManager().ClearTimer(IdleSoundTimerHandle);
+		GetWorld()->GetTimerManager().ClearTimer(IdleAnimTimerHandle);
 	}
 
 	Super::EndPlay(EndPlayReason);
@@ -135,6 +137,7 @@ void ABasicNPC::SetNPCData(const FNPCStruct& Data)
 		// Set actor location from NPC position data
 		FVector NewLocation(NPCData.position.positionX, NPCData.position.positionY, NPCData.position.positionZ);
 		SetActorLocation(NewLocation);
+		SnapToGround();
 		
 		// Set actor rotation
 		FRotator NewRotation(0.0f, NPCData.position.rotationZ, 0.0f);
@@ -242,6 +245,7 @@ void ABasicNPC::SetNPCPosition(const FPositionDataStruct& Position)
 	// Update actor location
 	FVector NewLocation(Position.positionX, Position.positionY, Position.positionZ);
 	SetActorLocation(NewLocation);
+	SnapToGround();
 	
 	// Update actor rotation
 	FRotator NewRotation(0.0f, Position.rotationZ, 0.0f);
@@ -325,11 +329,53 @@ void ABasicNPC::ScheduleNextIdleSound()
 void ABasicNPC::PlayGreetingSound()
 {
 	PlaySoundByName("Greeting");
+	if (UNPCAnimInstance* Anim = GetNPCAnimInstance())
+	{
+		Anim->SetTalking(true);
+		Anim->NotifyGreet();
+	}
 }
 
 void ABasicNPC::PlayFarewellSound()
 {
 	PlaySoundByName("Farewell");
+	if (UNPCAnimInstance* Anim = GetNPCAnimInstance())
+	{
+		Anim->NotifyFarewell();
+		Anim->SetTalking(false);
+	}
+}
+
+UNPCAnimInstance* ABasicNPC::GetNPCAnimInstance() const
+{
+	if (USkeletalMeshComponent* NPCMesh = GetMesh())
+	{
+		return Cast<UNPCAnimInstance>(NPCMesh->GetAnimInstance());
+	}
+	return nullptr;
+}
+
+void ABasicNPC::SnapToGround()
+{
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	const FVector CurrentLoc = GetActorLocation();
+	const FVector Start(CurrentLoc.X, CurrentLoc.Y,  50000.0f);
+	const FVector End  (CurrentLoc.X, CurrentLoc.Y, -10000.0f);
+
+	FCollisionQueryParams Params;
+	Params.bTraceComplex = true;
+	Params.AddIgnoredActor(this);
+
+	FHitResult Hit;
+	if (World->LineTraceSingleByChannel(Hit, Start, End, ECC_WorldStatic, Params))
+	{
+		const float HalfHeight = GetCapsuleComponent()
+			? GetCapsuleComponent()->GetScaledCapsuleHalfHeight()
+			: 90.0f;
+		SetActorLocation(FVector(CurrentLoc.X, CurrentLoc.Y, Hit.ImpactPoint.Z + HalfHeight));
+	}
 }
 
 void ABasicNPC::SetupNPCVisual(FName NPCSlug)
@@ -367,6 +413,11 @@ void ABasicNPC::SetupNPCVisual(FName NPCSlug)
 							Cap->SetCapsuleHalfHeight(CapsuleHalf);
 
 							MC->SetRelativeLocation(FVector(0, 0, -Cap->GetUnscaledCapsuleHalfHeight()));
+
+							// Re-snap after the capsule is correctly sized.
+							// The initial SnapToGround() used the default ACharacter capsule,
+							// so the actor Z needs to be corrected now that we know the real height.
+							Self->SnapToGround();
 						}
 					}
 				}
@@ -386,13 +437,33 @@ void ABasicNPC::SetupNPCVisual(FName NPCSlug)
 				if (UClass* AnimClass = AnimBPSoft.Get())
 				{
 					if (USkeletalMeshComponent* MC = Self->GetMesh())
+					{
 						MC->SetAnimInstanceClass(AnimClass);
+						// Start idle animation cycle once the ABP is ready
+						Self->ScheduleNextIdleAnim();
+					}
 				}
 			});
 	}
 	else {
 		UE_LOG(LogTemp, Warning, TEXT("AnimBPClass is not set for slug %s"), *NPCSlug.ToString());
 	}
+}
+
+void ABasicNPC::ScheduleNextIdleAnim()
+{
+	if (!GetWorld()) return;
+	const float Delay = FMath::FRandRange(15.0f, 30.0f);
+	GetWorld()->GetTimerManager().SetTimer(IdleAnimTimerHandle, this, &ABasicNPC::TriggerRandomIdleAnim, Delay, false);
+}
+
+void ABasicNPC::TriggerRandomIdleAnim()
+{
+	if (UNPCAnimInstance* Anim = GetNPCAnimInstance())
+	{
+		Anim->PickRandomIdleMontage();
+	}
+	ScheduleNextIdleAnim();
 }
 
 void ABasicNPC::SetupNPCAudio(FName NPCSlug)

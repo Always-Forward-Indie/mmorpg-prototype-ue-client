@@ -2,6 +2,7 @@
 #include "Gameplay/UI/ActiveEffectsWidget.h"
 #include "Gameplay/UI/EffectSlotWidget.h"
 #include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Components/TextBlock.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
@@ -127,7 +128,11 @@ void UActiveEffectsWidget::RebuildSlots()
             if (NewSlot)
             {
                 NewSlot->SetupSlotGrouped(Rep, Modifiers, EffectDefinitionTable.Get());
-                Effects_Container->AddChild(NewSlot);
+                UHorizontalBoxSlot* BoxSlot = Cast<UHorizontalBoxSlot>(Effects_Container->AddChild(NewSlot));
+                if (BoxSlot)
+                {
+                    BoxSlot->SetPadding(FMargin(0.0f, 0.0f, 4.0f, 0.0f));
+                }
                 continue;
             }
         }

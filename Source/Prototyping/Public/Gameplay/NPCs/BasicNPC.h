@@ -14,6 +14,7 @@ class UNPCHeadInfo;
 class UW_NPCHeadInfoWidget;
 class USoundBase;
 class UNPCNameplateComponent;
+class UNPCAnimInstance;
 
 // Delegate for NPC data updates
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnNPCDataUpdated);
@@ -143,6 +144,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "NPC Audio")
 	void PlayFarewellSound();
 
+	/**
+	 * Returns the typed NPC AnimInstance, or nullptr if the mesh/AnimBP is not yet set up.
+	 * Use this from C++ to call NotifyGreet(), PlayAction(), SetTalking() etc.
+	 * The ABP must inherit from UNPCAnimInstance.
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "NPC|Animation")
+	UNPCAnimInstance* GetNPCAnimInstance() const;
+
 	// Visual setup methods
 	UFUNCTION(BlueprintCallable, Category = "NPC Visual")
 	void SetupNPCVisual(FName NPCSlug);
@@ -210,4 +219,12 @@ private:
 	// Idle sound scheduling
 	void ScheduleNextIdleSound();
 	FTimerHandle IdleSoundTimerHandle;
+
+	// Idle animation scheduling
+	void ScheduleNextIdleAnim();
+	void TriggerRandomIdleAnim();
+	FTimerHandle IdleAnimTimerHandle;
+
+	// Ground snapping
+	void SnapToGround();
 };

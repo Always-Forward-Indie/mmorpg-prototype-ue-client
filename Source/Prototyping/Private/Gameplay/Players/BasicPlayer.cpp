@@ -132,94 +132,30 @@ void ABasicPlayer::SetLockedTarget(ABasicMOB* NewTarget)
         LockedTarget->MobHeadInfo->ShowWidget(false);
     }
 
-    LockedTarget = NewTarget;� we search again here to find it)
-    ABasicMOB* BestTarget = LockedTarget; // re-use existing lock if present
-
-    if (!BestTarget)
-    {
-        // Search within twice the current skill range so approaching still makes sense
-        const float SearchRadius = GetCurrentSkillRange() * 2.0f;
-        FVector Start = GetActorLocation();
-        FVector End   = Start + GetActorForwardVector() * SearchRadius;
-
-        FCollisionQueryParams Params;
-        Params.AddIgnoredActor(this);
-
-        TArray<FHitResult> HitResults;
-        GetWorld()->SweepMultiByChannel(HitResults, Start, End, FQuat::Identity,
-            ECC_Pawn, FCollisionShape::MakeCapsule(80.0f, 100.0f), Params);
-
-        float ClosestDist = FLT_MAX;
-        for (const FHitResult& Hit : HitResults)
-        {
-            ABasicMOB* Mob = Cast<ABasicMOB>(Hit.GetActor());
-            if (Mob && !Mob->GetMOBIsDead())
-            {
-                float Dist = FVector::Dist(GetActorLocation(), Mob->GetActorLocation());
-                if (Dist < ClosestDist)
-                {
-                    ClosestDist = Dist;
-                    BestTarget  = Mob;
-                }
-            }
-        }
-    }
-
-    if (BestTarget)
-    {
-        SetLockedTarget(BestTarget);
-        bIsAutoAttacking = true;
-        DoAutoAttack();
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("No MOB in range to attack"));
-    }
-}
-
-void ABasicPlayer::SetLockedTarget(ABasicMOB* NewTarget)
-{
-    if (LockedTarget == NewTarget) return;
-
-    // Hide head info of the old locked target before switching
-    if (LockedTarget && LockedTarget->MobHeadInfo)
-    {
-        LockedTarget->MobHeadInfo->ShowWidget(false);
-    }
-
     LockedTarget = NewTarget;
 
     if (LockedTarget)
+    {
+        const int32 MobId = FCString::Atoi(*LockedTarget->GetMOBUId());
+        if (UIManager)
         {
-            const int32 MobId = FCString::Atoi(*LockedTarget->GetMOBUId());
-            if (UIManager)
-            {
-    if (LockedTarget)
-        {
-            const int32 MobId = FCString::Atoi(*LockedTarget->GetMOBUId());
-            if (UIManager)
-            {
-                UIManager->SetSkillTarget(MobId, ECasterType::Mob);
+            UIManager->SetSkillTarget(MobId, ECasterType::Mob);
 
-                // bIsAggro: prefer the runtime flag (set by server aggro packet);
-                // fall back to the definition table's IsAggressive flag so the
-                // target frame shows the correct color even before the first aggro packet.
-                bool bIsAggro = LockedTarget->GetMOBIsAggressive();
+            bool bIsAggro = LockedTarget->GetMOBIsAggressive();
 
-                UIManager->ShowMobTargetFrame(
-                    LockedTarget->GetMOBData().mobSlug,
-                    LockedTarget->GetMobName(),
-                    LockedTarget->GetMOBLevel(),
-                    LockedTarget->GetMOBCurrentHealth(),
-                    LockedTarget->GetMOBAttributes().attributesData.Contains(TEXT("max_health"))
-                        ? LockedTarget->GetMOBAttributes().attributesData[TEXT("max_health")].attributeValue
-                        : 100,
-                    bIsAggro,
-                    LockedTarget->CachedIcon);
-                bLastKnownTargetAggro = bIsAggro;
-            }
+            UIManager->ShowMobTargetFrame(
+                LockedTarget->GetMOBData().mobSlug,
+                LockedTarget->GetMobName(),
+                LockedTarget->GetMOBLevel(),
+                LockedTarget->GetMOBCurrentHealth(),
+                LockedTarget->GetMOBAttributes().attributesData.Contains(TEXT("max_health"))
+                    ? LockedTarget->GetMOBAttributes().attributesData[TEXT("max_health")].attributeValue
+                    : 100,
+                bIsAggro,
+                LockedTarget->CachedIcon);
+            bLastKnownTargetAggro = bIsAggro;
+        }
 
-        // Keep the head info widget always visible for the locked target
         if (LockedTarget->MobHeadInfo)
         {
             LockedTarget->MobHeadInfo->ShowWidget(true);
@@ -230,7 +166,6 @@ void ABasicPlayer::SetLockedTarget(ABasicMOB* NewTarget)
             MobId, *LockedTarget->GetMobName());
     }
 
-    // Notify cursor system - old locked actor inferred from CursorInteractionComponent.VisualLockedActor
     if (CursorInteractionComponent)
     {
         const EInteractableType NewType = NewTarget ? NewTarget->GetInteractableType() : EInteractableType::None;
@@ -342,11 +277,21 @@ void ABasicPlayer::UpdateApproach(float DeltaTime)
     }
 
     // ── Combat approach (uses LockedTarget) ───────────────────────────────────
-    if (!IsValid(LockedTarget) || LockedTarget->GetMOBIsDead())
+    if (!IsValid(LockedTarget))
     {
         bIsApproachingTarget = false;
         PendingSkillSlug.Empty();
         ClearLockedTarget();
+        return;
+    }
+    if (LockedTarget->GetMOBIsDead())
+    {
+        // Mob died while we were approaching — stop movement but keep lock for harvesting.
+        bIsApproachingTarget = false;
+        PendingSkillSlug.Empty();
+        StopAutoAttack();
+        if (CursorInteractionComponent)
+            CursorInteractionComponent->SetVisualLock(LockedTarget, EInteractableType::MOB_Harvestable);
         return;
     }
 
@@ -475,7 +420,12 @@ void ABasicPlayer::TryCastSkillWithApproach(const FString& SkillSlug)
 
     if (LockedTarget->GetMOBIsDead())
     {
-        ClearLockedTarget();
+        // Mob died before we cast — stop approach but keep lock for harvesting.
+        bIsAutoAttacking   = false;
+        bIsApproachingTarget = false;
+        PendingSkillSlug.Empty();
+        if (CursorInteractionComponent)
+            CursorInteractionComponent->SetVisualLock(LockedTarget, EInteractableType::MOB_Harvestable);
         return;
     }
 

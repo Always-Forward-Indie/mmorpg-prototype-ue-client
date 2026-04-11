@@ -268,6 +268,7 @@ void ABasicMOB::OnReceiveSkillResult(const FSkillResultData& SkillResult)
 	{
 		SetMOBCurrentHealth(SkillResult.finalTargetHealth);
 		SetMOBCurrentMana(SkillResult.finalTargetMana);
+	ForceUpdateUI();
 
 		if (!SkillResult.isMissed)
 		{
@@ -305,6 +306,7 @@ void ABasicMOB::OnReceiveEffectTick(const FEffectTickData& EffectData)
 
 	SetMOBCurrentHealth(EffectData.newHealth);
 	SetMOBCurrentMana(EffectData.newMana);
+	ForceUpdateUI();
 
 	// Damage-over-time: flag as damaged for visual feedback
 	if (EffectData.value > 0 && EffectData.effectTypeSlug.Contains(TEXT("damage")))
@@ -327,12 +329,24 @@ void ABasicMOB::OnReceiveTargetLost()
 {
 	SetMobTargetId(0);
 	SetMobTargetType(TEXT(""));
-	SetMOBIsAggressive(false);
 	bAggroLockedOut = true;
 
-	if (MobHeadInfo)
+	// Only flip to yellow if this mob is NOT naturally aggressive.
+	// Naturally-aggressive mobs (wolves, hostile undead, etc.) should stay red
+	// when returning to their zone — they are always hostile and will re-aggro.
+	if (!bIsNaturallyAggressive)
 	{
-		MobHeadInfo->UpdateMobAggressive(false);
+		SetMOBIsAggressive(false);
+		if (MobHeadInfo)
+		{
+			MobHeadInfo->UpdateMobAggressive(false);
+		}
+	}
+	else
+	{
+		// Naturally-aggressive mob returned to zone — reset runtime flag to match
+		// the base definition (still aggressive = still red).
+		SetMOBIsAggressive(true);
 	}
 
 	if (UMOBAnimInstance* AnimInst = Cast<UMOBAnimInstance>(GetMesh()->GetAnimInstance()))
@@ -444,6 +458,9 @@ void ABasicMOB::Tick(float DeltaTime)
 		// 1. Изменились параметры
 		// 2. UI еще не была инициализирована
 		// 3. Есть данные для отображения (mobID != 0)
+		// Use GetMaxMana_Implementation() fallback (100) when max_mana is missing from attributes.
+		if (MaxMana <= 0.f) { MaxMana = static_cast<float>(GetMaxMana_Implementation()); }
+
 		if ((LastHealth != MOBData.mobCurrentHealth || LastMana != MOBData.mobCurrentMana || MOBData.bIsAggressive != LastAggressive || !bUIInitialized) && MOBData.mobID != 0)
 		{
 			MobHeadInfo->UpdateInfo(
@@ -456,7 +473,6 @@ void ABasicMOB::Tick(float DeltaTime)
 				MOBData.bIsAggressive
 			);
 
-			// ВАЖНО: Обновляем последние значения после обновления UI
 			LastHealth = MOBData.mobCurrentHealth;
 			LastMana = MOBData.mobCurrentMana;
 			LastAggressive = MOBData.bIsAggressive;
@@ -1416,6 +1432,9 @@ void ABasicMOB::SetMOBData(const FMOBStruct& Data)
 	if (MOBData.mobID == 0 && Data.mobID > 0 && !Data.mobUniqueID.IsEmpty())
 	{
 		MOBData = Data;
+		// Cache the "born-aggressive" flag from the server definition.
+		// This never changes: naturally-aggressive mobs stay red after losing a target.
+		bIsNaturallyAggressive = Data.bIsAggressive;
 		MOBDataUpdated.Broadcast();
 		
 		UE_LOG(LogTemp, Warning, TEXT("MOB Data set for %s (ID:%d, UID:%s): HP=%d, MP=%d"), 
@@ -1885,20 +1904,27 @@ void ABasicMOB::Die()
 
 	UE_LOG(LogTemp, Warning, TEXT("MOB %s (ID:%d) has died."), *MOBData.mobName, MOBData.mobID);
 
-	// Disable broad collision so the corpse no longer blocks navigation/camera,
-	// but re-enable only the Capsule WorldDynamic overlap channel so any already
-	// in-flight projectiles can still register their impact and flush pending damage.
-	SetActorEnableCollision(false);
+	// Disable mesh physics so the corpse does not block movement or camera.
+	// IMPORTANT: Do NOT call SetActorEnableCollision(false) here — that actor-level flag
+	// overrides UPrimitiveComponent::GetCollisionEnabled() and makes every query on this
+	// actor return NoCollision, which breaks the ECC_Visibility hover trace on the corpse.
+	if (USkeletalMeshComponent* MobMesh = GetMesh())
+	{
+		MobMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+	// Keep the capsule alive for queries only: block ECC_Visibility so the mouse-hover
+	// trace still hits the corpse, and overlap WorldDynamic so in-flight projectiles
+	// can still register their impact event.
 	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
 	{
 		Capsule->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 		Capsule->SetCollisionResponseToAllChannels(ECR_Ignore);
 		Capsule->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
+		Capsule->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	}
 
 	// Freeze movement component so the corpse does not slide in the last
-	// dead-reckoned direction.  Must be called AFTER SetActorEnableCollision
-	// so no further positional updates overwrite the final resting location.
+	// dead-reckoned direction.
 	if (MOBMovementComponent)
 	{
 		MOBMovementComponent->FreezeMob();

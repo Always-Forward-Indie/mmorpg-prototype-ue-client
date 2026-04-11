@@ -443,6 +443,12 @@ public:
 	// Lock-out flag set after target is lost to prevent immediate re-aggro
 	bool bAggroLockedOut = false;
 
+	// Set once in SetMOBData() from the server definition's isAggressive field.
+	// Unlike MOBData.bIsAggressive (which fluctuates with combat state), this flag
+	// never changes: it marks mobs that are always hostile by nature (e.g. wolves).
+	// Used to keep the nameplate red when a naturally-aggressive mob returns to zone.
+	bool bIsNaturallyAggressive = false;
+
 	// Current skill name set during combat (used for VFX/SFX lookup)
 	FString CurrentSkillName;
 

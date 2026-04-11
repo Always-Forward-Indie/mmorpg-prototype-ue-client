@@ -152,7 +152,7 @@ public:
      * Default 60 cm covers most character capsule bases.
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Decal|Sizes",
-        meta = (ClampMin = "10", Units = "cm"))
+        meta = (ClampMin = "1", Units = "cm"))
     float DecalDepth = 60.f;
 
     /** Decal material Opacity value in Hover state (0 = invisible, 1 = fully opaque). */
@@ -207,7 +207,7 @@ public:
      * for non-combat interactions (NPC dialogue, harvest, item pickup).
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction|Ranges",
-        meta = (ClampMin = "50", Units = "cm"))
+        meta = (ClampMin = "10", Units = "cm"))
     float InteractionRange = 280.f;
 
     // ─────────────────────────────────────────────────────────────────────────

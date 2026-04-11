@@ -104,6 +104,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void PickupNearbyItem();
 
+	// Pick up a specific dropped item directly (cursor double-click).
+	// Validates canBePickedUp flag and proximity before sending the request.
+	void PickupSpecificItem(ADroppedItemActor* TargetItem);
+
 	// Get the nearest dropped item within specified distance (returns null if none found)
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	ADroppedItemActor* GetNearestDroppedItem(float MaxDistance = 500.0f) const;

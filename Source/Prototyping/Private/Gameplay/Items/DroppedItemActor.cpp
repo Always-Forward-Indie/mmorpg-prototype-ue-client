@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Items/DroppedItemActor.h"
+#include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "Gameplay/Mobs/BasicMOB.h"
 #include "Gameplay/NPCs/BasicNPC.h"
@@ -77,6 +78,8 @@ ADroppedItemActor::ADroppedItemActor()
 	InteractionSphere = CreateDefaultSubobject<USphereComponent>(TEXT("InteractionSphere"));
 	InteractionSphere->SetupAttachment(RootSceneComponent);
 	InteractionSphere->SetSphereRadius(PickupRadius);
+	// Block ECC_Visibility so the cursor hover trace can detect this dropped item.
+	InteractionSphere->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	InteractionSphere->SetCollisionProfileName(TEXT("Trigger"));
 	InteractionSphere->SetGenerateOverlapEvents(true);
 
@@ -85,7 +88,30 @@ ADroppedItemActor::ADroppedItemActor()
 	DropNiagaraComponent->SetupAttachment(RootSceneComponent);
 	DropNiagaraComponent->SetAutoActivate(false);
 
+	// Cursor target-indicator decal (floor circle).
+	TargetDecal = CreateDefaultSubobject<UTargetDecalComponent>(TEXT("TargetDecal"));
+	TargetDecal->SetupAttachment(RootSceneComponent);
+
 	bVisualsSetupComplete = false;
+}
+
+// ─── IWorldInteractable interface ────────────────────────────────────────────
+EInteractableType ADroppedItemActor::GetInteractableType() const
+{
+    return EInteractableType::DroppedItem;
+}
+
+FText ADroppedItemActor::GetInteractableDisplayName() const
+{
+    const int32 Rarity = GetItemRarity();
+    if (Rarity > 0)
+        return FText::FromString(FString::Printf(TEXT("%s  (%d)"), *GetItemName(), Rarity));
+    return FText::FromString(GetItemName());
+}
+
+bool ADroppedItemActor::CanInteract() const
+{
+    return ItemData.canBePickedUp;
 }
 
 // Called when the game starts or when spawned

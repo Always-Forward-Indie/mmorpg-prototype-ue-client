@@ -165,6 +165,14 @@ public:
 
 	void Init();
 
+	/**
+	 * Called by the engine after the first map has finished loading (login level).
+	 * At this point the game viewport widget is fully in the Slate tree, so we can
+	 * safely pass focus to it and make the custom cursor visible without waiting
+	 * for a BasicPlayer / CursorInteractionComponent to exist.
+	 */
+	void OnStart() override;
+
 	void InitNetworkingSetup();
 
 	void InitGameSystems();
@@ -304,6 +312,36 @@ public:
 	 *  Create DA_AudioConfig in Content Browser and assign it here. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
 	UAudioConfigDataAsset* AudioConfig;
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// World Interaction / Cursor system
+	// ─────────────────────────────────────────────────────────────────────────
+
+	/**
+	 * Cursor icons, decal settings and interaction ranges.
+	 * Assign DA_WorldInteractionConfig HERE (in BP_GameInstance) instead of on each
+	 * player Blueprint — the asset is then loaded once for the whole session and
+	 * cursor handles survive level transitions (login → game world).
+	 *
+	 * CursorInteractionComponent on the player will also accept a local Config override, 
+	 * but if left empty it will fall back to this GameInstance config automatically.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "World Interaction")
+	class UWorldInteractionConfig* WorldInteractionConfig;
+
+	/**
+	 * Preloaded OS-level cursor handles built from WorldInteractionConfig.
+	 * On Windows each entry is an HCURSOR.  Built once in Init() so they are
+	 * available in the login level and survive level transitions.
+	 * void* keeps platform headers out of this header.
+	 */
+	TMap<uint8, void*> PreloadedCursorHandles;
+
+	/** Default cursor handle (nothing under cursor). */
+	void* PreloadedDefaultCursorHandle = nullptr;
+
+	/** Build handles from WorldInteractionConfig. Called once at the end of Init(). */
+	void PreloadWorldInteractionCursors();
 
 	// Player stats manager
 	UPROPERTY()

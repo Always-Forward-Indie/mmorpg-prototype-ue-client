@@ -60,6 +60,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Harvest")
 	void TryHarvestNearbyCorpse();
 
+	// Harvest a specific corpse actor directly (cursor double-click).
+	// Validates range before sending the request; does nothing if out of range.
+	UFUNCTION(BlueprintCallable, Category = "Harvest")
+	void TryHarvestSpecificCorpse(ABasicMOB* TargetCorpse);
+
 	// Inspect loot on a nearby harvested corpse
 	UFUNCTION(BlueprintCallable, Category = "Harvest")
 	void TryInspectNearbyCorpseLoot();

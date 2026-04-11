@@ -58,6 +58,15 @@
 #include "Services/LocalizationSubsystem.h"
 #include "Data/LocalizationDataAsset.h"
 #include "WorldPartition/WorldPartitionSubsystem.h"
+#include "Gameplay/Interaction/CursorInteractionComponent.h"
+#include "Gameplay/Interaction/WorldInteractionConfig.h"
+#include "Framework/Application/SlateApplication.h"
+#include "GenericPlatform/ICursor.h"
+#if PLATFORM_WINDOWS
+#include "Windows/AllowWindowsPlatformTypes.h"
+#include <windows.h>
+#include "Windows/HideWindowsPlatformTypes.h"
+#endif
 #include "Engine/GameViewportClient.h"
 #include "Camera/CameraComponent.h"
 #include "UObject/UObjectGlobals.h"
@@ -185,6 +194,10 @@ void UMyGameInstance::Init()
 		LocSys->SetLocalizationData(LocalizationDataAsset);
 	}
 
+	// Build OS cursor handles from WorldInteractionConfig once, before the login level loads.
+	// Handles survive level transitions so they're available immediately in game world too.
+	PreloadWorldInteractionCursors();
+
 	UE_LOG(LogTemp, Warning, TEXT("GameInstance Init called"));
 
 	// Load the LoginLevel after some delay to prevent issue with the loading screen not showing up as viewport is not yet created
@@ -211,6 +224,22 @@ void UMyGameInstance::Init()
 	PreLoadMapDelegateHandle = FCoreUObjectDelegates::PreLoadMap.AddUObject(
 		this, &UMyGameInstance::InvalidateManagerWorldContexts);
 	InitGameSystems();
+}
+
+void UMyGameInstance::OnStart()
+{
+	Super::OnStart();
+
+	// The first level (login level) has finished loading and the game viewport
+	// widget is now fully in the Slate hierarchy.  Give Slate focus to the game
+	// viewport so the custom cursor shapes set in PreloadWorldInteractionCursors()
+	// are visible immediately — without this the OS cursor shows until the user
+	// clicks inside the PIE window.
+	if (FSlateApplication::IsInitialized())
+	{
+		FSlateApplication::Get().SetAllUserFocusToGameViewport();
+		UE_LOG(LogTemp, Log, TEXT("GameInstance: OnStart — viewport focus set, custom cursor active."));
+	}
 }
 
 // init networking setup
@@ -638,6 +667,37 @@ void UMyGameInstance::LoadLoginLevel()
 // Both PIE instances run in the same process so a file-scope static is safe here.
 static volatile int32 GActiveWorldPartitionTransitions = 0;
 
+void UMyGameInstance::PreloadWorldInteractionCursors()
+{
+	if (!WorldInteractionConfig)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("GameInstance: WorldInteractionConfig not assigned. "
+			     "Open BP_GameInstance → Details → World Interaction → assign DA_WorldInteractionConfig. "
+			     "Custom cursors will not show until this is set."));
+		return;
+	}
+
+	// Build the default (empty-world) cursor.
+	PreloadedDefaultCursorHandle = UCursorInteractionComponent::BuildCursorHandle(
+		WorldInteractionConfig->DefaultCursor);
+
+	// Build per-interactable-type cursors.
+	for (const auto& Pair : WorldInteractionConfig->InteractionCursors)
+	{
+		void* Handle = UCursorInteractionComponent::BuildCursorHandle(Pair.Value);
+		if (Handle)
+		{
+			PreloadedCursorHandles.Add(static_cast<uint8>(Pair.Key), Handle);
+		}
+	}
+
+	UE_LOG(LogTemp, Log,
+		TEXT("GameInstance: Cursor preload complete. Default=%s, TypedHandles=%d"),
+		PreloadedDefaultCursorHandle ? TEXT("OK") : TEXT("FAILED — check texture settings"),
+		PreloadedCursorHandles.Num());
+}
+
 void UMyGameInstance::Shutdown()
 {
 	if (PreLoadMapDelegateHandle.IsValid())
@@ -688,6 +748,24 @@ void UMyGameInstance::Shutdown()
 	if (NetworkManager)
 	{
 		NetworkManager->Shutdown();
+	}
+
+	// Restore the OS-default cursor shapes we replaced in PreloadWorldInteractionCursors.
+	// Without this, the custom cursor persists in the editor after PIE ends.
+	if (FSlateApplication::IsInitialized())
+	{
+		if (TSharedPtr<ICursor> PlatformCursor = FSlateApplication::Get().GetPlatformCursor())
+		{
+#if PLATFORM_WINDOWS
+			// Restore the standard Windows arrow cursor.
+			// LoadCursorW(null, IDC_ARROW) returns the built-in system arrow  no files needed.
+			void* ArrowCursor = reinterpret_cast<void*>(::LoadCursorW(nullptr, IDC_ARROW));
+			PlatformCursor->SetTypeShape(EMouseCursor::Default, ArrowCursor);
+#else
+			PlatformCursor->SetTypeShape(EMouseCursor::Default, nullptr);
+#endif
+			PlatformCursor->SetTypeShape(EMouseCursor::Custom, nullptr);
+		}
 	}
 
 	Super::Shutdown();
@@ -995,6 +1073,28 @@ void UMyGameInstance::OnLoginLevelLoaded()
 		if (GetWorld() && GetWorld()->GetFirstPlayerController())
 		{
 			GetWorld()->GetFirstPlayerController()->bShowMouseCursor = true;
+		}
+
+		// Login level is fully loaded and widgets are in the viewport.
+		// 1. Focus the game viewport so Slate routes input (and cursor) to it.
+		// 2. Re-apply SetTypeShape — the slot set in Init() can be reset when the
+		//    viewport widget is created after Init() (PIE viewport init order).
+		if (FSlateApplication::IsInitialized())
+		{
+			FSlateApplication::Get().SetAllUserFocusToGameViewport();
+
+			if (TSharedPtr<ICursor> PlatformCursor = FSlateApplication::Get().GetPlatformCursor())
+			{
+				if (PreloadedDefaultCursorHandle)
+				{
+					PlatformCursor->SetTypeShape(EMouseCursor::Default, PreloadedDefaultCursorHandle);
+					UE_LOG(LogTemp, Log, TEXT("GameInstance: OnLoginLevelLoaded — Default cursor slot re-applied (handle=%p)."), PreloadedDefaultCursorHandle);
+				}
+				else
+				{
+					UE_LOG(LogTemp, Warning, TEXT("GameInstance: OnLoginLevelLoaded — PreloadedDefaultCursorHandle is null, custom cursor NOT applied. Check DA_WorldInteractionConfig."));
+				}
+			}
 		}
 
 		LoginLevelCamera = GetWorld()->SpawnActor<AMyCameraActor>(LoginCameraClass, LoginLevelCameraLocation, LoginLevelCameraRotation);

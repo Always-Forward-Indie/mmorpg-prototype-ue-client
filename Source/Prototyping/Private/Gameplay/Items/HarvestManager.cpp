@@ -174,8 +174,37 @@ void UHarvestManager::TryHarvestNearbyCorpse()
 	}
 }
 
-void UHarvestManager::StartHarvest(int32 CorpseUID)
+void UHarvestManager::TryHarvestSpecificCorpse(ABasicMOB* TargetCorpse)
 {
+    if (!IsValid(TargetCorpse))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("HarvestManager: TryHarvestSpecificCorpse - null target"));
+        return;
+    }
+
+    if (bIsHarvesting)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Already harvesting"));
+        return;
+    }
+
+    const int32 CorpseUID = FCString::Atoi(*TargetCorpse->GetMOBUId());
+
+    // MOB is harvestable (not yet harvested) → start harvest
+    if (!TargetCorpse->GetMOBData().bHasBeenHarvested)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Harvesting specific corpse UID=%d"), CorpseUID);
+        StartHarvest(CorpseUID);
+    }
+    else
+    {
+        // Already harvested → inspect loot instead
+        UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Inspecting already-harvested corpse UID=%d"), CorpseUID);
+        InspectCorpseLoot(CorpseUID);
+    }
+}
+
+void UHarvestManager::StartHarvest(int32 CorpseUID){
 	if (bIsHarvesting)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Already harvesting"));

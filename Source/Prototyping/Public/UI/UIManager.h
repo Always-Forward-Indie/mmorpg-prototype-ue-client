@@ -241,6 +241,15 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	bool ShouldShowCursor() const;
 
+	/**
+	 * Returns true only when an actual UI panel (inventory, vendor, dialogue, etc.) is open
+	 * and consuming cursor input.  Does NOT include bAltCursorActive so that cursor world
+	 * interaction stays functional even while the cursor is always shown.
+	 * Use this check for: IsUIBlockingInteraction, ApplyMouseCaptureIfNoUIOpen, scroll guard.
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	bool HasUIWindowOpen() const;
+
 	// Additional UI toggles
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void ToggleEquipment();

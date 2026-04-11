@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Gameplay/Players/BasicPlayer.h"
@@ -17,6 +17,7 @@
 #include "Gameplay/UI/DamageTextWidget.h"
 #include "Gameplay/Mobs/BasicMOB.h"
 #include "Gameplay/NPCs/BasicNPC.h"
+#include "Gameplay/Items/DroppedItemActor.h"
 #include "Gameplay/Dialogue/DialogueManager.h"
 #include "Gameplay/Quest/QuestManager.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
@@ -28,6 +29,9 @@
 #include "Gameplay/Trade/TradeManager.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "UI/PlayerStatsWidget.h"
+#include "Gameplay/Interaction/CursorInteractionComponent.h"
+#include "Gameplay/Interaction/TargetDecalComponent.h"
+#include "Gameplay/Interaction/WorldInteractionConfig.h"
 #include "Gameplay/Bestiary/BestiaryNetworkHandler.h"
 #include "Utils/PlayerAttributeParser.h"
 #include "Components/CapsuleComponent.h"
@@ -98,16 +102,37 @@ void ABasicPlayer::OnAttackInput()
 {
     if (playerData.characterData.bIsDead) return;
 
-    // If we already have a locked target and auto-attack is running, toggle it off
+    // Toggle off auto-attack if it is already running on the locked target.
     if (LockedTarget && bIsAutoAttacking)
     {
-        ClearLockedTarget();
+        StopAutoAttack();
         UE_LOG(LogTemp, Warning, TEXT("Auto-attack cancelled"));
         return;
     }
 
-    // If we have a soft-highlight target from CheckForMOB, lock it and start attacking
-    // (CheckForMOB stores result in a temporary � we search again here to find it)
+    // Only attack if the player already has a target lock (cursor click sets the lock).
+    // No implicit sweep-to-find-nearest: the player must explicitly target via cursor.
+    if (!LockedTarget || LockedTarget->GetMOBIsDead())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("OnAttackInput: no live locked target"));
+        return;
+    }
+
+    bIsAutoAttacking = true;
+    DoAutoAttack();
+}
+
+void ABasicPlayer::SetLockedTarget(ABasicMOB* NewTarget)
+{
+    if (LockedTarget == NewTarget) return;
+
+    // Hide head info of the old locked target before switching
+    if (LockedTarget && LockedTarget->MobHeadInfo)
+    {
+        LockedTarget->MobHeadInfo->ShowWidget(false);
+    }
+
+    LockedTarget = NewTarget;� we search again here to find it)
     ABasicMOB* BestTarget = LockedTarget; // re-use existing lock if present
 
     if (!BestTarget)
@@ -169,6 +194,11 @@ void ABasicPlayer::SetLockedTarget(ABasicMOB* NewTarget)
             const int32 MobId = FCString::Atoi(*LockedTarget->GetMOBUId());
             if (UIManager)
             {
+    if (LockedTarget)
+        {
+            const int32 MobId = FCString::Atoi(*LockedTarget->GetMOBUId());
+            if (UIManager)
+            {
                 UIManager->SetSkillTarget(MobId, ECasterType::Mob);
 
                 // bIsAggro: prefer the runtime flag (set by server aggro packet);
@@ -199,6 +229,13 @@ void ABasicPlayer::SetLockedTarget(ABasicMOB* NewTarget)
         UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Locked target -> MOB %d (%s)"),
             MobId, *LockedTarget->GetMobName());
     }
+
+    // Notify cursor system - old locked actor inferred from CursorInteractionComponent.VisualLockedActor
+    if (CursorInteractionComponent)
+    {
+        const EInteractableType NewType = NewTarget ? NewTarget->GetInteractableType() : EInteractableType::None;
+        CursorInteractionComponent->NotifyLockedTargetChanged(nullptr, NewTarget, NewType);
+    }
 }
 
 void ABasicPlayer::ClearLockedTarget()
@@ -225,6 +262,12 @@ void ABasicPlayer::ClearLockedTarget()
     {
         UIManager->SetSkillTarget(0, ECasterType::None);
         UIManager->HideMobTargetFrame();
+    }
+
+    // Notify cursor system so decal is released
+    if (CursorInteractionComponent)
+    {
+        CursorInteractionComponent->NotifyLockedTargetChanged(nullptr, nullptr, EInteractableType::None);
     }
 }
 
@@ -257,6 +300,48 @@ void ABasicPlayer::UpdateApproach(float DeltaTime)
 {
     if (!bIsApproachingTarget) return;
 
+    // ── Non-combat pending approach (NPC / Item / Harvest) ───────────────────
+    // These don't use LockedTarget; they use PendingInteractionTarget instead.
+    if (PendingInteraction != EPendingInteraction::None)
+    {
+        AActor* PendingTarget = PendingInteractionTarget.Get();
+        if (!IsValid(PendingTarget))
+        {
+            // Target disappeared — abort
+            bIsApproachingTarget = false;
+            PendingInteraction       = EPendingInteraction::None;
+            PendingInteractionTarget = nullptr;
+            return;
+        }
+
+        FVector ToPending = PendingTarget->GetActorLocation() - GetActorLocation();
+        ToPending.Z = 0.f;
+        float PendingDist = ToPending.Size();
+
+        // Subtract capsule radius so we stop at the surface, not the pivot.
+        if (const ACharacter* TargetChar = Cast<ACharacter>(PendingTarget))
+        {
+            if (const UCapsuleComponent* Cap = TargetChar->GetCapsuleComponent())
+            {
+                PendingDist = FMath::Max(0.f, PendingDist - Cap->GetScaledCapsuleRadius());
+            }
+        }
+
+        const FVector PendingDir = ToPending.GetSafeNormal();
+
+        AddMovementInput(PendingDir, 1.0f);
+        DesiredMeshYaw    = PendingDir.Rotation().Yaw;
+        bHasDesiredMeshYaw = true;
+
+        if (PendingDist <= GetInteractionRange())
+        {
+            bIsApproachingTarget = false;
+            DispatchPendingInteraction();
+        }
+        return;
+    }
+
+    // ── Combat approach (uses LockedTarget) ───────────────────────────────────
     if (!IsValid(LockedTarget) || LockedTarget->GetMOBIsDead())
     {
         bIsApproachingTarget = false;
@@ -440,10 +525,21 @@ void ABasicPlayer::DoAutoAttack()
     if (playerData.characterData.bIsDead || !bIsAutoAttacking) return;
 
     // Validate target
-    if (!IsValid(LockedTarget) || LockedTarget->GetMOBIsDead())
+    if (!IsValid(LockedTarget))
     {
-        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: DoAutoAttack - target gone, clearing lock"));
+        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: DoAutoAttack - target invalid, clearing lock"));
         ClearLockedTarget();
+        return;
+    }
+
+    if (LockedTarget->GetMOBIsDead())
+    {
+        // Mob died — stop the attack cycle but KEEP the target lock so the
+        // player can immediately harvest the corpse without re-clicking.
+        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: DoAutoAttack - mob dead, keeping lock for harvest"));
+        StopAutoAttack();
+        if (CursorInteractionComponent)
+            CursorInteractionComponent->SetVisualLock(LockedTarget, EInteractableType::MOB_Harvestable);
         return;
     }
 
@@ -486,21 +582,29 @@ void ABasicPlayer::DoAutoAttack()
 
         AutoAttackAnimEndDelegateHandle = AnimInst->OnAttackEnded.AddLambda([this]()
         {
-            // Small delay after swing ends before the next one begins
+            // Cancel the fallback timer — the normal animation chain is alive.
+            GetWorld()->GetTimerManager().ClearTimer(AutoAttackRetryTimerHandle);
+
             if (bIsAutoAttacking && IsValid(LockedTarget) && !LockedTarget->GetMOBIsDead())
             {
+                // Normal path: schedule the next swing after a short delay.
                 GetWorld()->GetTimerManager().SetTimer(AutoAttackRetryTimerHandle,
                     this, &ABasicPlayer::DoAutoAttack, AutoAttackSwingDelay, false);
             }
-            else if (!IsValid(LockedTarget) || LockedTarget->GetMOBIsDead())
+            else if (IsValid(LockedTarget) && LockedTarget->GetMOBIsDead())
             {
-                // Target is gone or dead — release the lock so the player can re-target.
+                // Mob died during this swing. Stop attacking but keep the lock
+                // so the player can harvest without re-clicking.
+                StopAutoAttack();
+                if (CursorInteractionComponent)
+                    CursorInteractionComponent->SetVisualLock(LockedTarget, EInteractableType::MOB_Harvestable);
+            }
+            else if (!IsValid(LockedTarget))
+            {
+                // Target completely gone — release the lock.
                 ClearLockedTarget();
             }
-            // else: bIsAutoAttacking=false but target still alive (e.g. a manual skill was cast
-            // while auto-attack was mid-swing) — keep the lock so the player can resume.
-            // Bug 7 fix: previously the else branch always called ClearLockedTarget(), which
-            // dropped the lock whenever a server-confirmed skill animation ended mid-combo.
+            // else: bIsAutoAttacking=false but target still alive (manual skill mid-swing) — keep lock.
         });
     }
     else
@@ -511,6 +615,12 @@ void ABasicPlayer::DoAutoAttack()
     }
 
     AttackTarget(MobId, CurrentSkillName, 3);
+
+    // Fallback safety timer: if the server never responds (cooldown desync, packet loss)
+    // the OnAttackEnded lambda will never fire and the chain would silently die.
+    // Set a generous timeout here; the lambda overwrites it with a shorter delay on success.
+    GetWorld()->GetTimerManager().SetTimer(
+        AutoAttackRetryTimerHandle, this, &ABasicPlayer::DoAutoAttack, 3.0f, false);
 }
 
 void ABasicPlayer::OnTabTargetInput()
@@ -983,6 +1093,13 @@ ABasicPlayer::ABasicPlayer()
 	// Create equipment visual component � attaches item meshes to skeleton sockets
 	EquipmentVisualComponent = CreateDefaultSubobject<UEquipmentVisualComponent>(TEXT("EquipmentVisualComponent"));
 
+	// Create cursor interaction component - hover trace, click/double-click, cursor icons, decal management
+	CursorInteractionComponent = CreateDefaultSubobject<UCursorInteractionComponent>(TEXT("CursorInteractionComponent"));
+
+	// Create floor-circle decal for when THIS player is targeted by other players
+	TargetDecal = CreateDefaultSubobject<UTargetDecalComponent>(TEXT("TargetDecal"));
+	TargetDecal->SetupAttachment(RootComponent);
+
     // Init simulation variables
     SquareCenter = FVector(0.f, 0.f, 90.f); // Assuming Z is up and you want to move around this center
     SideLength = 1000.f; // The length of the side of the square
@@ -1347,12 +1464,252 @@ void ABasicPlayer::HandleUIManagerInitialized()
         MyGameInstance->NotifyUIInitialized();
     }
 
+    // Bind cursor interaction delegates now that UI is ready.
+    if (CursorInteractionComponent)
+    {
+        CursorInteractionComponent->OnSingleClicked.AddDynamic(
+            this, &ABasicPlayer::DispatchCursorSelect);
+        CursorInteractionComponent->OnDoubleClicked.AddDynamic(
+            this, &ABasicPlayer::DispatchCursorInteract);
+    }
+
     UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] HandleUIManagerInitialized: bUIInitDone=true, NotifyUIInitialized sent. Pos=(%.0f,%.0f,%.0f)"),
         GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z);
 }
 
-void ABasicPlayer::HandleWeightStatusChanged(const FWeightStatusData& WeightStatus)
+// ─── IWorldInteractable (remote player targeting) ────────────────────────────
+
+EInteractableType ABasicPlayer::GetInteractableType() const
 {
+    // Only other clients appear as interactable remote players.
+    return playerData.isOtherClient ? EInteractableType::RemotePlayer : EInteractableType::None;
+}
+
+FText ABasicPlayer::GetInteractableDisplayName() const
+{
+    const FString Name  = playerData.characterData.characterName;
+    const int32   Level = playerData.characterData.characterLevel;
+    if (Level > 0)
+        return FText::FromString(FString::Printf(TEXT("%s  [%d]"), *Name, Level));
+    return FText::FromString(Name);
+}
+
+// ─── Cursor Interaction ───────────────────────────────────────────────────────
+
+bool ABasicPlayer::IsUIBlockingInteraction() const
+{
+    // Use HasUIWindowOpen() — not ShouldShowCursor() — so that cursor world interaction
+    // is never blocked by bAltCursorActive (which is true whenever the cursor is shown).
+    return UIManager && UIManager->HasUIWindowOpen();
+}
+
+float ABasicPlayer::GetInteractionRange() const
+{
+    return CursorInteractionComponent ? CursorInteractionComponent->GetInteractionRange() : 280.f;
+}
+
+void ABasicPlayer::DispatchCursorSelect(AActor* Target, EInteractableType Type)
+{
+    if (!Target)
+    {
+        // Click on empty ground → clear all locks
+        ClearLockedTarget();
+        if (CursorInteractionComponent)
+            CursorInteractionComponent->SetVisualLock(nullptr, EInteractableType::None);
+        return;
+    }
+
+    switch (Type)
+    {
+    case EInteractableType::MOB_Alive:
+    case EInteractableType::MOB_Harvestable:
+    case EInteractableType::MOB_Harvested:
+        if (ABasicMOB* Mob = Cast<ABasicMOB>(Target))
+        {
+            // Select only — no auto-attack on single click
+            SetLockedTarget(Mob);
+        }
+        break;
+
+    case EInteractableType::NPC:
+    case EInteractableType::DroppedItem:
+    case EInteractableType::RemotePlayer:
+        // Visual lock so the floor circle shows, no combat action
+        if (CursorInteractionComponent)
+            CursorInteractionComponent->SetVisualLock(Target, Type);
+        break;
+
+    default:
+        break;
+    }
+}
+
+void ABasicPlayer::DispatchCursorInteract(AActor* Target, EInteractableType Type)
+{
+    if (!Target) return;
+
+    const float Range = GetInteractionRange();
+
+    // Measure from the nearest point on the target's capsule (or actor origin as fallback)
+    // so the player stops at the surface of the actor, not at its pivot (which can be
+    // at chest/mid height, causing the player to stop 60-80 cm too far away).
+    float Dist = FVector::Dist(GetActorLocation(), Target->GetActorLocation());
+    if (const ACharacter* TargetChar = Cast<ACharacter>(Target))
+    {
+        if (const UCapsuleComponent* Cap = TargetChar->GetCapsuleComponent())
+        {
+            Dist = FMath::Max(0.f, Dist - Cap->GetScaledCapsuleRadius());
+        }
+    }
+    const bool bInRange = (Dist <= Range);
+
+    switch (Type)
+    {
+    // ── MOB: alive → attack ───────────────────────────────────────────────────
+    case EInteractableType::MOB_Alive:
+        if (ABasicMOB* Mob = Cast<ABasicMOB>(Target))
+        {
+            SetLockedTarget(Mob);
+            if (bInRange)
+            {
+                bIsAutoAttacking = true;
+                DoAutoAttack();
+            }
+            else
+            {
+                PendingInteraction       = EPendingInteraction::AutoAttack;
+                PendingInteractionTarget = Target;
+                bIsApproachingTarget     = true;
+            }
+        }
+        break;
+
+    // ── MOB: harvestable / harvested → harvest or inspect ────────────────────
+    case EInteractableType::MOB_Harvestable:
+    case EInteractableType::MOB_Harvested:
+        if (ABasicMOB* Mob = Cast<ABasicMOB>(Target))
+        {
+            SetLockedTarget(Mob);
+            if (bInRange)
+            {
+                UHarvestManager* HMgr = MyGameInstance ? MyGameInstance->GetHarvestManager() : nullptr;
+                if (HMgr)
+                    HMgr->TryHarvestSpecificCorpse(Mob);
+            }
+            else
+            {
+                PendingInteraction       = EPendingInteraction::Harvest;
+                PendingInteractionTarget = Target;
+                bIsApproachingTarget     = true;
+            }
+        }
+        break;
+
+    // ── NPC → open dialogue ───────────────────────────────────────────────────
+    case EInteractableType::NPC:
+        if (ABasicNPC* NPC = Cast<ABasicNPC>(Target))
+        {
+            if (CursorInteractionComponent)
+                CursorInteractionComponent->SetVisualLock(Target, Type);
+
+            UDialogueManager* DlgMgr = MyGameInstance ? MyGameInstance->GetDialogueManager() : nullptr;
+            if (bInRange)
+            {
+                if (DlgMgr)
+                {
+                    DlgMgr->OpenDialogue(NPC->GetNPCId());
+                }
+            }
+            else
+            {
+                PendingInteraction       = EPendingInteraction::TalkNPC;
+                PendingInteractionTarget = Target;
+                bIsApproachingTarget     = true;
+            }
+        }
+        break;
+
+    // ── DroppedItem → pick up ─────────────────────────────────────────────────
+    case EInteractableType::DroppedItem:
+        if (ADroppedItemActor* Item = Cast<ADroppedItemActor>(Target))
+        {
+            if (CursorInteractionComponent)
+                CursorInteractionComponent->SetVisualLock(Target, Type);
+
+            if (bInRange)
+            {
+                if (InventoryManager)
+                    InventoryManager->PickupSpecificItem(Item);
+            }
+            else
+            {
+                PendingInteraction       = EPendingInteraction::PickupItem;
+                PendingInteractionTarget = Target;
+                bIsApproachingTarget     = true;
+            }
+        }
+        break;
+
+    // ── RemotePlayer → inspect (placeholder) ─────────────────────────────────
+    case EInteractableType::RemotePlayer:
+        if (CursorInteractionComponent)
+            CursorInteractionComponent->SetVisualLock(Target, Type);
+        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Double-click on remote player — inspect not yet implemented"));
+        break;
+
+    default:
+        break;
+    }
+}
+
+void ABasicPlayer::DispatchPendingInteraction()
+{
+    AActor* Target = PendingInteractionTarget.Get();
+
+    // Reset state first so re-entrant calls don't loop
+    const EPendingInteraction Pending = PendingInteraction;
+    PendingInteraction       = EPendingInteraction::None;
+    PendingInteractionTarget = nullptr;
+
+    if (!Target) return;
+
+    switch (Pending)
+    {
+    case EPendingInteraction::AutoAttack:
+        bIsAutoAttacking = true;
+        DoAutoAttack();
+        break;
+
+    case EPendingInteraction::Harvest:
+        {
+            UHarvestManager* HMgr = MyGameInstance ? MyGameInstance->GetHarvestManager() : nullptr;
+            if (HMgr)
+                HMgr->TryHarvestSpecificCorpse(Cast<ABasicMOB>(Target));
+        }
+        break;
+
+    case EPendingInteraction::TalkNPC:
+        {
+            UDialogueManager* DlgMgr = MyGameInstance ? MyGameInstance->GetDialogueManager() : nullptr;
+            if (DlgMgr)
+            {
+                if (ABasicNPC* NPC = Cast<ABasicNPC>(Target))
+                    DlgMgr->OpenDialogue(NPC->GetNPCId());
+            }
+        }
+        break;
+
+    case EPendingInteraction::PickupItem:
+        if (InventoryManager)
+            InventoryManager->PickupSpecificItem(Cast<ADroppedItemActor>(Target));
+        break;
+
+    default:
+        break;
+    }
+}
+
+void ABasicPlayer::HandleWeightStatusChanged(const FWeightStatusData& WeightStatus){
     // Weight status is informational only (used by UI weight bar).
     // Movement speed is fully server-authoritative and arrives via move_speed in stats_update.
     // No client-side speed penalty is applied here.
@@ -1550,6 +1907,28 @@ void ABasicPlayer::Look(const FInputActionValue& Value)
     {
         const FVector2D LookValue = Value.Get<FVector2D>();
 
+        // ── LMB-only drag detection ──────────────────────────────────────────
+        // When only LMB is held (no RMB), accumulate pixel movement.  Once the
+        // drag threshold is exceeded we capture the mouse and mark the press as a
+        // drag so OnLeftMouseReleased won't fire HandleConfirmedClick.
+        if (bIsLeftMouseDown && !bIsRightMouseDown && !bLMBDragActive)
+        {
+            const float DragThreshold = (CursorInteractionComponent && CursorInteractionComponent->GetEffectiveConfig())
+                ? CursorInteractionComponent->GetEffectiveConfig()->DragThresholdPixels
+                : 8.f;
+
+            LMBDragPixelsAccum += LookValue.Size();
+            if (LMBDragPixelsAccum >= DragThreshold)
+            {
+                bLMBDragActive = true;
+                ApplyMouseCaptureIfNoUIOpen();
+                if (CursorInteractionComponent)
+                {
+                    CursorInteractionComponent->NotifyDragStarted();
+                }
+            }
+        }
+
         if (!FMath::IsNearlyZero(LookValue.X))
         {
             AddControllerYawInput(LookValue.X * CameraYawSensitivity);
@@ -1573,6 +1952,12 @@ void ABasicPlayer::OnRightMousePressed()
 {
     bIsRightMouseDown = true;
     ApplyMouseCaptureIfNoUIOpen();
+
+    // Disable hover trace during RMB camera drag — no point doing it when cursor is invisible.
+    if (CursorInteractionComponent)
+    {
+        CursorInteractionComponent->SetHoverTraceEnabled(false);
+    }
 }
 
 void ABasicPlayer::OnRightMouseReleased()
@@ -1583,12 +1968,26 @@ void ABasicPlayer::OnRightMouseReleased()
     {
         RestoreCursorToUIManager();
     }
+
+    // Re-enable hover trace now that the cursor is visible again.
+    if (CursorInteractionComponent)
+    {
+        CursorInteractionComponent->SetHoverTraceEnabled(true);
+    }
 }
 
 void ABasicPlayer::OnLeftMousePressed()
 {
     bIsLeftMouseDown = true;
-    ApplyMouseCaptureIfNoUIOpen();
+
+    // Record press state for click-vs-drag detection.
+    // We do NOT capture the mouse immediately (unlike RMB) — instead we wait to
+    // see if the player drags (Look() accumulates movement and fires the capture
+    // once the threshold is exceeded).  This lets a clean click-release reach
+    // HandleConfirmedClick so CursorInteractionComponent can fire select/interact.
+    LMBPressTime        = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+    LMBDragPixelsAccum  = 0.f;
+    bLMBDragActive      = false;
 }
 
 void ABasicPlayer::OnLeftMouseReleased()
@@ -1599,14 +1998,34 @@ void ABasicPlayer::OnLeftMouseReleased()
     {
         RestoreCursorToUIManager();
     }
+
+    // Click confirmed: short press with no meaningful drag and no UI window blocking input.
+    if (!bLMBDragActive && CursorInteractionComponent && !IsUIBlockingInteraction())
+    {
+        CursorInteractionComponent->HandleConfirmedClick();
+    }
+    else
+    {
+        UE_LOG(LogTemp, Log, TEXT("CursorInteraction: LMB click BLOCKED — drag=%d, comp=%s, UIBlocking=%d"),
+            bLMBDragActive ? 1 : 0,
+            CursorInteractionComponent ? TEXT("OK") : TEXT("NULL"),
+            IsUIBlockingInteraction() ? 1 : 0);
+        if (bLMBDragActive && CursorInteractionComponent)
+        {
+            // Drag ended — signal the component to break any pending double-click chain.
+            CursorInteractionComponent->NotifyDragStarted(); // resets double-click window
+        }
+    }
+
+    bLMBDragActive = false;
 }
 
 void ABasicPlayer::OnScroll(const FInputActionValue& Value)
 {
     if (!CameraBoom) return;
 
-    // Don't zoom if any UI window is open � let the scroll reach the widget
-    if (UIManager && UIManager->ShouldShowCursor()) return;
+    // Don't zoom if any UI window is open — let the scroll reach the widget
+    if (UIManager && UIManager->HasUIWindowOpen()) return;
 
     // Value is a float: positive = scroll up (zoom in), negative = scroll down (zoom out)
     const float ScrollDelta = Value.Get<float>();
@@ -1617,7 +2036,7 @@ void ABasicPlayer::ApplyMouseCaptureIfNoUIOpen()
 {
     // Don't capture the mouse if any UI window is open - the player needs
     // the cursor to interact with inventory, vendor, etc.
-    if (UIManager && UIManager->ShouldShowCursor()) return;
+    if (UIManager && UIManager->HasUIWindowOpen()) return;
 
     if (APlayerController* PC = Cast<APlayerController>(GetController()))
     {
@@ -1674,7 +2093,7 @@ void ABasicPlayer::HandleMouseButtonsMoveForward()
     if (!bEnableMouseButtonsMoveForward) return;
     if (!bIsLeftMouseDown || !bIsRightMouseDown) return;
     if (playerData.characterData.bIsDead || bIsPickingUp || bIsCasting) return;
-    if (UIManager && UIManager->ShouldShowCursor()) return;
+    if (UIManager && UIManager->HasUIWindowOpen()) return;
     if (!Controller) return;
 
     if (bIsAutoAttacking || bIsApproachingTarget)

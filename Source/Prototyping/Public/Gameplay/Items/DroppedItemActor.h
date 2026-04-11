@@ -6,10 +6,11 @@
 #include "GameFramework/Actor.h"
 #include "Data/ItemStruct.h"
 #include "NiagaraSystem.h"
+#include "Gameplay/Interaction/IWorldInteractable.h"
 #include "DroppedItemActor.generated.h"
 
 UCLASS()
-class PROTOTYPING_API ADroppedItemActor : public AActor
+class PROTOTYPING_API ADroppedItemActor : public AActor, public IWorldInteractable
 {
 	GENERATED_BODY()
 
@@ -106,6 +107,15 @@ protected:
 	// Niagara component for the idle drop effect (loops while item is on the ground)
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	class UNiagaraComponent* DropNiagaraComponent;
+
+	// ── Target Decal (cursor-over floor indicator) ────
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "World Interaction")
+	class UTargetDecalComponent* TargetDecal;
+
+	// IWorldInteractable interface
+	virtual EInteractableType GetInteractableType()    const override;
+	virtual FText GetInteractableDisplayName()         const override;
+	virtual bool  CanInteract()                        const override;
 
 	// The radius within which the item can be picked up
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dropped Item")

@@ -632,6 +632,56 @@ void UInventoryManager::PickupNearbyItem()
 	}
 }
 
+void UInventoryManager::PickupSpecificItem(ADroppedItemActor* TargetItem)
+{
+    if (!IsValid(TargetItem))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("InventoryManager: PickupSpecificItem - null target"));
+        return;
+    }
+
+    if (!TargetItem->CanBePickedUp())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("InventoryManager: PickupSpecificItem - item cannot be picked up"));
+        return;
+    }
+
+    if (!worldContext) return;
+
+    APlayerController* PC = worldContext->GetFirstPlayerController();
+    if (!PC || !PC->GetPawn()) return;
+
+    FVector PlayerLocation = PC->GetPawn()->GetActorLocation();
+
+    // Face the item and lock movement
+    if (ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn()))
+    {
+        FVector ToItem = TargetItem->GetActorLocation() - PlayerLocation;
+        ToItem.Z = 0.f;
+        if (!ToItem.IsNearlyZero())
+        {
+            Player->SetDesiredFaceYaw(ToItem.Rotation().Yaw);
+        }
+        Player->LockMovementForPickup();
+    }
+
+    bool bSuccess = TargetItem->AttemptPickup();
+    if (bSuccess)
+    {
+        OnItemPickupAttempted.Broadcast(TargetItem->GetItemBaseData());
+    }
+    else
+    {
+        if (ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn()))
+        {
+            Player->UnlockMovementAfterPickup();
+        }
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("InventoryManager: PickupSpecificItem %s - %s"),
+        *TargetItem->GetItemName(), bSuccess ? TEXT("OK") : TEXT("FAILED"));
+}
+
 ADroppedItemActor* UInventoryManager::GetNearestDroppedItem(float MaxDistance) const
 {
 	if (!worldContext)

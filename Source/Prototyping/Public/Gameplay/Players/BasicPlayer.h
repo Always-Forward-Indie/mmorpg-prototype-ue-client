@@ -13,6 +13,7 @@
 #include <Kismet/GameplayStatics.h>
 #include "Gameplay/UI/PlayerInterfaceWidget.h"
 #include "Gameplay/Combat/ICombatable.h"
+#include "Gameplay/Interaction/IWorldInteractable.h"
 #include "Animation/AnimNotify_PlayerCombatEvent.h"
 #include "BasicPlayer.generated.h"
 
@@ -24,7 +25,7 @@ class ABasicNPC;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnZoneUpdated, int32, PlayerID);
 
 UCLASS()
-class PROTOTYPING_API ABasicPlayer : public ACharacter, public ICombatable
+class PROTOTYPING_API ABasicPlayer : public ACharacter, public ICombatable, public IWorldInteractable
 {
 	GENERATED_BODY()
 
@@ -147,6 +148,18 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
 	class UEquipmentVisualComponent* EquipmentVisualComponent;
 
+	// ── Cursor Interaction ────────────────────────────────────────────────────
+
+	/** Handles hover trace, click/double-click detection, cursor icons, and decal states. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "World Interaction",
+		meta = (AllowPrivateAccess = "true"))
+	class UCursorInteractionComponent* CursorInteractionComponent;
+
+	/** Floor-circle decal for targeting this player (remote player selection). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "World Interaction",
+		meta = (AllowPrivateAccess = "true"))
+	class UTargetDecalComponent* TargetDecal;
+
 	// Pickup lock
 	bool bIsPickingUp = false;
 
@@ -184,6 +197,33 @@ private:
 	// Approach movement state
 	bool bIsApproachingTarget = false;
 	FString PendingSkillSlug;
+
+	// ── Cursor Interaction: pending non-combat approach ──────────────────────
+	// When a cursor double-click targets an NPC/Item/Harvest out of range,
+	// the player walks toward PendingInteractionTarget and calls
+	// DispatchPendingInteraction() on arrival.
+
+	enum class EPendingInteraction : uint8
+	{
+		None,
+		AutoAttack,
+		Harvest,
+		TalkNPC,
+		PickupItem,
+	};
+
+	EPendingInteraction PendingInteraction = EPendingInteraction::None;
+	TWeakObjectPtr<AActor> PendingInteractionTarget;
+
+	// ── LMB click / drag state ───────────────────────────────────────────────
+	// OnLeftMousePressed records press time and position.
+	// Look() accumulates pixel movement; once it exceeds the drag threshold
+	// it sets bLMBDragActive and captures the mouse.
+	// OnLeftMouseReleased fires HandleConfirmedClick() if NOT dragging.
+
+	float     LMBPressTime   = 0.f;
+	float     LMBDragPixelsAccum = 0.f;
+	bool      bLMBDragActive = false;
 
 	// Cached from the most recent combatInitiation packet.
 	// Used at CastRelease to compute distance-proportional projectile speed.
@@ -313,6 +353,11 @@ public:
 	virtual void ShowBuffEffect_Implementation(const FAppliedEffectData& Effect) override;
 	virtual void ShowCastBar_Implementation(float CastTime, const FString& SkillName) override;
 	virtual void HideCastBar_Implementation() override;
+
+	// IWorldInteractable interface (used when another player clicks on this remote player)
+	virtual EInteractableType GetInteractableType()    const override;
+	virtual FText GetInteractableDisplayName()         const override;
+	virtual bool  CanInteract()                        const override { return playerData.isOtherClient; }
 
 	// Event variable
 	UPROPERTY(BlueprintAssignable, Category = "Events")
@@ -672,6 +717,37 @@ public:
 	void UpdateMeshRotation(float DeltaTime);
 	void HandleMouseButtonsMoveForward();
 	void ClampControlPitch();
+
+	// ── Cursor Interaction Dispatch ───────────────────────────────────────────
+
+	/**
+	 * Single-click handler: visually "select" the target without triggering any action.
+	 * - MOB alive / dead     → SetLockedTarget / decal lock (no auto-attack)
+	 * - NPC                  → visual lock + show nameplate
+	 * - DroppedItem          → visual lock
+	 * - RemotePlayer         → visual lock
+	 * - null (empty ground)  → ClearLockedTarget
+	 */
+	UFUNCTION()
+	void DispatchCursorSelect(AActor* Target, EInteractableType Type);
+
+	/**
+	 * Double-click handler: execute the contextual action for the target.
+	 * If the target is out of range, starts auto-approach and stores
+	 * EPendingInteraction so the action fires on arrival.
+	 */
+	UFUNCTION()
+	void DispatchCursorInteract(AActor* Target, EInteractableType Type);
+
+	/** Called by UpdateApproach when PendingInteraction is set and the player has arrived. */
+	void DispatchPendingInteraction();
+
+	/** Helper: returns InteractionRange from CursorInteractionComponent config, or 280 cm. */
+	float GetInteractionRange() const;
+
+	/** Returns true when a UI window is open and should consume mouse input exclusively. */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "World Interaction")
+	bool IsUIBlockingInteraction() const;
 
 	// Initialise nameplate
 	void InitialiseNameplate(bool bIsLocal);

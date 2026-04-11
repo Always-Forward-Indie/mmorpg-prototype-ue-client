@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Mobs/MOBAnimInstance.h"
 #include "Gameplay/Combat/CombatSystemManager.h"
@@ -111,6 +112,11 @@ ABasicMOB::ABasicMOB()
 		// Prevent mob capsules from compressing the player camera spring arm.
 		// The camera ProbeChannel is ECC_Camera; mobs must not block it.
 		Capsule->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+
+		// Cursor hover trace runs on ECC_Visibility.  Ensure the capsule blocks it
+		// so the mouse-over / click system can detect mobs regardless of
+		// whatever collision profile the Blueprint might set as the default.
+		Capsule->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	}
 
 	// The skeletal mesh component has its own collision settings separate from the capsule.
@@ -139,6 +145,11 @@ ABasicMOB::ABasicMOB()
 	AudioComponentSecond = CreateDefaultSubobject<UAudioComponent>(TEXT("MobSecondAudio"));
 	AudioComponentSecond->SetupAttachment(RootComponent);
 	AudioComponentSecond->bAutoActivate = false;
+
+	// Cursor target-indicator decal (floor circle).
+	// Managed entirely by UCursorInteractionComponent — no editor setup needed.
+	TargetDecal = CreateDefaultSubobject<UTargetDecalComponent>(TEXT("TargetDecal"));
+	TargetDecal->SetupAttachment(RootComponent);
 }
 
 // Called when the game starts or when spawned
@@ -1718,6 +1729,26 @@ void ABasicMOB::SetHarvested(bool bHarvested)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("MOB %s (ID:%d) has been harvested"), *MOBData.mobName, MOBData.mobID);
 	}
+}
+
+// ─── IWorldInteractable interface ────────────────────────────────────────────
+EInteractableType ABasicMOB::GetInteractableType() const
+{
+    if (!MOBData.bIsDead)              return EInteractableType::MOB_Alive;
+    if (!MOBData.bHasBeenHarvested)    return EInteractableType::MOB_Harvestable;
+    return EInteractableType::MOB_Harvested;
+}
+
+FText ABasicMOB::GetInteractableDisplayName() const
+{
+    return FText::FromString(
+        FString::Printf(TEXT("%s  [Lv.%d]"), *GetMobName(), GetMOBLevel()));
+}
+
+bool ABasicMOB::CanInteract() const
+{
+    // A mob is always "interactable": alive = attack candidate, dead = harvest candidate.
+    return true;
 }
 
 // Force update UI immediately

@@ -14,6 +14,7 @@
 #include <Gameplay/UI/W_MOBHeadInfoWidget.h>
 #include "Gameplay/Mobs/MOBMovementComponent.h"
 #include "Gameplay/Combat/ICombatable.h"
+#include "Gameplay/Interaction/IWorldInteractable.h"
 #include "BasicMOB.generated.h"
 
 // Forward declarations
@@ -36,7 +37,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMOBEffectTick,      const FEffect
  *
  */
 UCLASS()
-class PROTOTYPING_API ABasicMOB : public ACharacter, public ICombatable
+class PROTOTYPING_API ABasicMOB : public ACharacter, public ICombatable, public IWorldInteractable
 {
 	GENERATED_BODY()
 
@@ -298,6 +299,15 @@ public:
 	public:
 		UPROPERTY(EditAnywhere, Category = "UI")
 		UMOBHeadInfo* MobHeadInfo;
+
+		// ── Target Decal (cursor-over floor indicator) ──────────────────────────
+		UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "World Interaction")
+		class UTargetDecalComponent* TargetDecal;
+
+		// IWorldInteractable interface impl
+		virtual EInteractableType GetInteractableType()    const override;
+		virtual FText GetInteractableDisplayName()         const override;
+		virtual bool  CanInteract()                        const override;
 
 		// In your BasicMOB.h file add these with more appropriate values
 		UPROPERTY(EditAnywhere, Category = "UI")

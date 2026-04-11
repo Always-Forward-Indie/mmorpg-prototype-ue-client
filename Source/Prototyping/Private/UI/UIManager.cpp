@@ -111,7 +111,9 @@ UUIManager::UUIManager()
 	bEquipmentVisible = false;
 	bPlayerStatsVisible = false;
 	bBestiaryVisible = false;
-	bAltCursorActive = false;
+	// bAltCursorActive = true keeps the cursor visible in world interaction mode at all times.
+	// UpdateCursorAndInputMode() uses ShouldShowCursor() which includes this flag.
+	bAltCursorActive = true;
 	bGameMenuVisible = false;
 }
 
@@ -983,7 +985,7 @@ void UUIManager::UpdateCursorAndInputMode()
 	{
 		// ���� �������� UI ������� - ���������� ����� Game+UI
 		FInputModeGameAndUI InputMode;
-		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::LockAlways);
 		InputMode.SetHideCursorDuringCapture(false);
 		PlayerController->SetInputMode(InputMode);
 		
@@ -997,6 +999,18 @@ void UUIManager::UpdateCursorAndInputMode()
 		
 		UE_LOG(LogTemp, Warning, TEXT("UIManager: Cursor hidden - Game only mode"));
 	}
+}
+
+bool UUIManager::HasUIWindowOpen() const
+{
+	// True only when an actual panel window is open and consuming cursor input.
+	// Intentionally excludes bAltCursorActive so world interaction is never blocked
+	// just because the cursor is always shown.
+	return bInventoryVisible || bSkillsPanelVisible || bHarvestLootVisible
+		|| bDialogueVisible || bQuestJournalVisible
+		|| bVendorShopVisible || bRepairShopVisible || bSkillShopVisible || bTradeVisible || bEquipmentVisible
+		|| bPlayerStatsVisible || bBestiaryVisible || bTitlesVisible || bReputationVisible
+		|| bGameMenuVisible;
 }
 
 bool UUIManager::ShouldShowCursor() const

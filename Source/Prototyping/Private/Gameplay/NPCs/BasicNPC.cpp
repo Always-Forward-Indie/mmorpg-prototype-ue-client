@@ -1,5 +1,6 @@
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "Gameplay/NPCs/BasicNPC.h"
+#include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/NPCs/NPCAnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Components/CapsuleComponent.h"
@@ -30,6 +31,10 @@ ABasicNPC::ABasicNPC()
 		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 		// Projectiles use ObjectType=WorldDynamic + OverlapAllDynamic — keep Overlap so hits register.
 		Capsule->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
+
+		// Cursor hover trace runs on ECC_Visibility.  Ensure the capsule blocks it
+		// so the mouse-over / click system can detect NPCs regardless of Blueprint defaults.
+		Capsule->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	}
 
 	// NPCs are server-driven; disable physics push to prevent client-side jitter.
@@ -49,6 +54,10 @@ ABasicNPC::ABasicNPC()
 
 	// Create nameplate component - registers with central NameplateManager
 	NPCNameplateComponent = CreateDefaultSubobject<UNPCNameplateComponent>(TEXT("NPCNameplate"));
+
+	// Cursor target-indicator decal (floor circle).
+	TargetDecal = CreateDefaultSubobject<UTargetDecalComponent>(TEXT("TargetDecal"));
+	TargetDecal->SetupAttachment(RootComponent);
 
 	// Set default values
 	MinDistance = 500.0f;
@@ -421,6 +430,25 @@ UNPCAnimInstance* ABasicNPC::GetNPCAnimInstance() const
 		return Cast<UNPCAnimInstance>(NPCMesh->GetAnimInstance());
 	}
 	return nullptr;
+}
+
+// ─── IWorldInteractable interface ────────────────────────────────────────────
+EInteractableType ABasicNPC::GetInteractableType() const
+{
+    return EInteractableType::NPC;
+}
+
+FText ABasicNPC::GetInteractableDisplayName() const
+{
+    const FString Label = NPCData.level > 0
+        ? FString::Printf(TEXT("%s  [Lv.%d]"), *NPCData.name, NPCData.level)
+        : NPCData.name;
+    return FText::FromString(Label);
+}
+
+bool ABasicNPC::CanInteract() const
+{
+    return NPCData.isInteractable;
 }
 
 void ABasicNPC::SnapToGround()

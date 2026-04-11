@@ -8,6 +8,7 @@
 #include "Components/AudioComponent.h"
 #include "TimerManager.h"
 #include "Animation/AnimInstance.h"
+#include "Gameplay/Interaction/IWorldInteractable.h"
 #include "BasicNPC.generated.h"
 
 // Forward declarations
@@ -25,7 +26,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnNPCDataUpdated);
  * Follows SOLID principles and integrates with the existing architecture
  */
 UCLASS(BlueprintType, Blueprintable)
-class PROTOTYPING_API ABasicNPC : public ACharacter
+class PROTOTYPING_API ABasicNPC : public ACharacter, public IWorldInteractable
 {
 	GENERATED_BODY()
 
@@ -200,6 +201,15 @@ protected:
 	// Nameplate component - registers with central NameplateManager for screen-space rendering
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NPC UI")
 	UNPCNameplateComponent* NPCNameplateComponent;
+
+	// ── Target Decal (cursor-over floor indicator) ──────────────────────────
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "World Interaction")
+	class UTargetDecalComponent* TargetDecal;
+
+	// IWorldInteractable interface
+	virtual EInteractableType GetInteractableType()    const override;
+	virtual FText GetInteractableDisplayName()         const override;
+	virtual bool  CanInteract()                        const override;
 
 	// Audio Components
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NPC Audio")

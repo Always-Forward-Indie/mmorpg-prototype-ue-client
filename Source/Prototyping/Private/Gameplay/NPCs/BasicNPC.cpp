@@ -1,6 +1,7 @@
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "Gameplay/NPCs/NPCAnimInstance.h"
+#include "Animation/AnimMontage.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/AudioComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -92,6 +93,10 @@ void ABasicNPC::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		GetWorld()->GetTimerManager().ClearTimer(IdleSoundTimerHandle);
 		GetWorld()->GetTimerManager().ClearTimer(IdleAnimTimerHandle);
 	}
+
+	// Unbind montage delegates so ended callbacks don't fire on a dead object
+	IdleEndedDelegate.Unbind();
+	ActionEndedDelegate.Unbind();
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -286,9 +291,17 @@ void ABasicNPC::OnPlayerInteract(APlayerController* InteractingPlayer)
 	
 	// Play interaction sound if available
 	PlaySoundByName("Interact");
+
+	// Trigger greeting animation + talking state
+	PlayGreetingSound();
 	
 	// Call Blueprint event
 	OnInteractionReceived(InteractingPlayer);
+}
+
+void ABasicNPC::NotifyDialogueClosed()
+{
+	PlayFarewellSound();
 }
 
 void ABasicNPC::PlaySoundByName(FName SoundName)
@@ -328,22 +341,77 @@ void ABasicNPC::ScheduleNextIdleSound()
 
 void ABasicNPC::PlayGreetingSound()
 {
-	PlaySoundByName("Greeting");
-	if (UNPCAnimInstance* Anim = GetNPCAnimInstance())
+	// Interrupt any idle that is currently playing
+	if (bIdleAnimPlaying && ActiveIdleMontage)
 	{
+		StopAnimMontage(ActiveIdleMontage);
+		// OnIdleMontageEnded fires with bInterrupted=true and does NOT reschedule
+	}
+
+	PlaySoundByName("Greeting");
+
+	// bIsTalking: set on AnimInstance if the ABP uses UNPCAnimInstance
+	if (UNPCAnimInstance* Anim = GetNPCAnimInstance())
 		Anim->SetTalking(true);
-		Anim->NotifyGreet();
+
+	if (GreetMontageAsset)
+	{
+		const float Duration = PlayAnimMontage(GreetMontageAsset);
+		if (Duration > 0.f)
+		{
+			// After the greet montage ends, restart the idle cycle
+			if (UAnimInstance* AnimInst = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+			{
+				ActionEndedDelegate.BindUObject(this, &ABasicNPC::OnActionMontageEnded);
+				AnimInst->Montage_SetEndDelegate(ActionEndedDelegate, GreetMontageAsset);
+			}
+		}
+		UE_LOG(LogTemp, Log, TEXT("[NPCAnim] '%s' playing greet montage '%s'"),
+			*GetNPCName(), *GreetMontageAsset->GetName());
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[NPCAnim] '%s' has no GreetMontage — assign it in the NPCDefinition DataTable (Visual.GreetMontage)"),
+			*GetNPCName());
 	}
 }
 
 void ABasicNPC::PlayFarewellSound()
 {
-	PlaySoundByName("Farewell");
-	if (UNPCAnimInstance* Anim = GetNPCAnimInstance())
+	// Interrupt any idle that is currently playing
+	if (bIdleAnimPlaying && ActiveIdleMontage)
 	{
-		Anim->NotifyFarewell();
-		Anim->SetTalking(false);
+		StopAnimMontage(ActiveIdleMontage);
 	}
+
+	PlaySoundByName("Farewell");
+
+	if (FarewellMontageAsset)
+	{
+		const float Duration = PlayAnimMontage(FarewellMontageAsset);
+		if (Duration > 0.f)
+		{
+			// After the farewell montage ends, restart the idle cycle
+			if (UAnimInstance* AnimInst = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+			{
+				ActionEndedDelegate.BindUObject(this, &ABasicNPC::OnActionMontageEnded);
+				AnimInst->Montage_SetEndDelegate(ActionEndedDelegate, FarewellMontageAsset);
+			}
+		}
+		UE_LOG(LogTemp, Log, TEXT("[NPCAnim] '%s' playing farewell montage '%s'"),
+			*GetNPCName(), *FarewellMontageAsset->GetName());
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[NPCAnim] '%s' has no FarewellMontage — assign it in the NPCDefinition DataTable (Visual.FarewellMontage)"),
+			*GetNPCName());
+	}
+
+	// Clear talking state after the farewell starts
+	if (UNPCAnimInstance* Anim = GetNPCAnimInstance())
+		Anim->SetTalking(false);
 }
 
 UNPCAnimInstance* ABasicNPC::GetNPCAnimInstance() const
@@ -388,6 +456,10 @@ void ABasicNPC::SetupNPCVisual(FName NPCSlug)
 	const auto AnimBPSoft = Def->Visual.AnimBPClass;
 	SetActorScale3D(Def->Visual.ActorScale);
 
+	// Snapshot the visual data before entering async lambdas —
+	// the DataTable row pointer is only safe on this stack frame.
+	const FNPCVisualData VisualDataCopy = Def->Visual;
+
 	FStreamableManager& Streamable = UAssetManager::GetStreamableManager();
 	TWeakObjectPtr<ABasicNPC> WeakThis(this);
 
@@ -429,7 +501,7 @@ void ABasicNPC::SetupNPCVisual(FName NPCSlug)
 
 	if (!AnimBPSoft.IsNull())
 	{
-		Streamable.RequestAsyncLoad(AnimBPSoft.ToSoftObjectPath(), [WeakThis, AnimBPSoft]()
+		Streamable.RequestAsyncLoad(AnimBPSoft.ToSoftObjectPath(), [WeakThis, AnimBPSoft, VisualDataCopy]()
 			{
 				ABasicNPC* Self = WeakThis.Get();
 				if (!Self) { return; }
@@ -439,7 +511,41 @@ void ABasicNPC::SetupNPCVisual(FName NPCSlug)
 					if (USkeletalMeshComponent* MC = Self->GetMesh())
 					{
 						MC->SetAnimInstanceClass(AnimClass);
-						// Start idle animation cycle once the ABP is ready
+
+						// --- Populate montage assets on BasicNPC directly ---
+						// Using ACharacter::PlayAnimMontage() so playback works
+						// regardless of whether the ABP inherits from UNPCAnimInstance.
+						if (!VisualDataCopy.GreetMontage.IsNull())
+							Self->GreetMontageAsset = VisualDataCopy.GreetMontage.LoadSynchronous();
+
+						if (!VisualDataCopy.FarewellMontage.IsNull())
+							Self->FarewellMontageAsset = VisualDataCopy.FarewellMontage.LoadSynchronous();
+
+						Self->IdleMontageAssets.Reset();
+						for (const auto& Soft : VisualDataCopy.IdleMontages)
+							if (!Soft.IsNull())
+								if (UAnimMontage* M = Soft.LoadSynchronous())
+									Self->IdleMontageAssets.Add(M);
+
+						UE_LOG(LogTemp, Log,
+							TEXT("[NPCAnim] Montages loaded for '%s': greet=%s farewell=%s idleCount=%d"),
+							*Self->GetNPCName(),
+							Self->GreetMontageAsset   ? *Self->GreetMontageAsset->GetName()   : TEXT("none"),
+							Self->FarewellMontageAsset ? *Self->FarewellMontageAsset->GetName() : TEXT("none"),
+							Self->IdleMontageAssets.Num());
+
+						// --- Also populate UNPCAnimInstance maps if the ABP uses it ---
+						// (allows bIsTalking / Speed state-machine integration)
+						if (UNPCAnimInstance* Anim = Self->GetNPCAnimInstance())
+						{
+							if (Self->GreetMontageAsset)
+								Anim->ActionMontageMap.Add(FName("greet"), Self->GreetMontageAsset);
+							if (Self->FarewellMontageAsset)
+								Anim->ActionMontageMap.Add(FName("farewell"), Self->FarewellMontageAsset);
+							Anim->IdleMontages = Self->IdleMontageAssets;
+						}
+
+						// Start idle animation cycle once assets are ready
 						Self->ScheduleNextIdleAnim();
 					}
 				}
@@ -453,17 +559,77 @@ void ABasicNPC::SetupNPCVisual(FName NPCSlug)
 void ABasicNPC::ScheduleNextIdleAnim()
 {
 	if (!GetWorld()) return;
-	const float Delay = FMath::FRandRange(15.0f, 30.0f);
+	// 8-20 seconds between random idle variants — visible during normal gameplay
+	const float Delay = FMath::FRandRange(8.0f, 20.0f);
 	GetWorld()->GetTimerManager().SetTimer(IdleAnimTimerHandle, this, &ABasicNPC::TriggerRandomIdleAnim, Delay, false);
 }
 
 void ABasicNPC::TriggerRandomIdleAnim()
 {
-	if (UNPCAnimInstance* Anim = GetNPCAnimInstance())
+	// If an idle is already playing let it finish — the end delegate reschedules.
+	if (bIdleAnimPlaying)
+		return;
+
+	if (IdleMontageAssets.Num() == 0)
 	{
-		Anim->PickRandomIdleMontage();
+		UE_LOG(LogTemp, Warning,
+			TEXT("[NPCAnim] '%s' has no IdleMontages — assign them in the NPCDefinition DataTable (Visual.IdleMontages)"),
+			*GetNPCName());
+		return; // nothing to play, don't reschedule
 	}
-	ScheduleNextIdleAnim();
+
+	const int32 Idx  = FMath::RandRange(0, IdleMontageAssets.Num() - 1);
+	UAnimMontage* Montage = IdleMontageAssets[Idx];
+	if (!Montage) { ScheduleNextIdleAnim(); return; }
+
+	const float Duration = PlayAnimMontage(Montage);
+	if (Duration > 0.f)
+	{
+		ActiveIdleMontage = Montage;
+		bIdleAnimPlaying   = true;
+
+		// Bind end delegate — fires when the montage finishes or is stopped
+		if (UAnimInstance* AnimInst = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+		{
+			IdleEndedDelegate.BindUObject(this, &ABasicNPC::OnIdleMontageEnded);
+			AnimInst->Montage_SetEndDelegate(IdleEndedDelegate, Montage);
+		}
+		UE_LOG(LogTemp, Log, TEXT("[NPCAnim] '%s' playing idle variant %d: '%s'"),
+			*GetNPCName(), Idx, *Montage->GetName());
+	}
+	else
+	{
+		// Playback failed (e.g. no DefaultSlot in AnimGraph) — fall back to timer
+		ScheduleNextIdleAnim();
+	}
+
+	// Keep UNPCAnimInstance IdleVariantIndex in sync for State Machine read-back
+	if (UNPCAnimInstance* Anim = GetNPCAnimInstance())
+		Anim->IdleVariantIndex = Idx;
+}
+
+void ABasicNPC::OnIdleMontageEnded(UAnimMontage* Montage, bool bInterrupted)
+{
+	if (ActiveIdleMontage != Montage) return;
+	ActiveIdleMontage = nullptr;
+	bIdleAnimPlaying  = false;
+
+	// Only reschedule the idle cycle when the montage finished naturally.
+	// If it was interrupted by greet/farewell those methods bind their own
+	// ActionEndedDelegate and reschedule after the action montage ends.
+	if (!bInterrupted)
+	{
+		ScheduleNextIdleAnim();
+	}
+}
+
+void ABasicNPC::OnActionMontageEnded(UAnimMontage* /*Montage*/, bool bInterrupted)
+{
+	// After a greeting or farewell montage ends, resume the idle animation cycle.
+	if (!bInterrupted)
+	{
+		ScheduleNextIdleAnim();
+	}
 }
 
 void ABasicNPC::SetupNPCAudio(FName NPCSlug)

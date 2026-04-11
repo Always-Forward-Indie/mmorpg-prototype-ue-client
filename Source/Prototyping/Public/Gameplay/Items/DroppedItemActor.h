@@ -78,8 +78,7 @@ public:
 	void SetupTrajectoryAnimation(const FVector& SourceLocation);
 
 	// Find the ground (or surface) Z level at the given XY location.
-	// Traces against WorldStatic + WorldDynamic; ignores Characters, Mobs, NPCs
-	// and other DroppedItemActors so items never snap on top of pawns.
+	// Traces against WorldStatic; ignores Characters, Mobs, NPCs and other DroppedItemActors.
 	float FindGroundLevelAt(const FVector& Location);
 
 	// Immediately snap the actor to the surface beneath it.
@@ -152,4 +151,10 @@ private:
 	// Delayed re-snap: fires 0.5s after spawn to handle landscape collision
 	// not yet streamed in at BeginPlay time.
 	FTimerHandle DelayedSnapTimerHandle;
+
+	// True when the item was dropped by a player (not a mob/world drop).
+	// Set in BeginPlay so the arc animation formula is used for player drops
+	// the same way it is for mob drops, ensuring all clients see an identical
+	// arc from the server-recorded spawn position to the ground.
+	bool bIsPlayerDrop = false;
 };

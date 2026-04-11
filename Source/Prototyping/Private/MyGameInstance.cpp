@@ -1698,6 +1698,21 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 	// Initialize nameplate for both local and remote players
 	NewPlayer->InitialiseNameplate(bIsLocal);
 
+	// Remote players must not block the local player's camera spring arm.
+	// Disable ECC_Camera response on both the capsule and the skeletal mesh so
+	// the camera never zooms in when another player walks in front of it.
+	if (!bIsLocal)
+	{
+		if (UCapsuleComponent* Cap = NewPlayer->GetCapsuleComponent())
+		{
+			Cap->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+		}
+		if (USkeletalMeshComponent* Mesh = NewPlayer->GetMesh())
+		{
+			Mesh->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+		}
+	}
+
 	// Apply cached move_speed immediately so the player has the correct MaxWalkSpeed
 	// from frame 1. stats_update packets arrive before the actor is spawned (world travel),
 	// so the authoritative speed sits in PlayerStatsManager cache — apply it now.

@@ -74,7 +74,12 @@ void UNPCAnimInstance::NotifyFarewell()
 // ---------------------------------------------------------------------------
 void UNPCAnimInstance::PickRandomIdleMontage()
 {
-    if (IdleMontages.Num() == 0) return;
+    if (IdleMontages.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning,
+            TEXT("[NPCAnimInstance] PickRandomIdleMontage: IdleMontages array is empty — assign AnimMontages in the AnimBlueprint defaults (NPC|Montages category)"));
+        return;
+    }
 
     const int32 Idx = FMath::RandRange(0, IdleMontages.Num() - 1);
     IdleVariantIndex = Idx;
@@ -139,8 +144,9 @@ bool UNPCAnimInstance::PlayMontageInternal(UAnimMontage* Montage, float PlayRate
         Montage_SetEndDelegate(ActionMontageEndedDelegate, Montage);
         return true;
     }
-
-    ActiveActionMontage = nullptr;
+    UE_LOG(LogTemp, Warning,
+        TEXT("[NPCAnimInstance] Montage_Play failed for '%s' — verify the AnimGraph has a 'DefaultSlot' node and the montage is compatible with this skeleton"),
+        *Montage->GetName());    ActiveActionMontage = nullptr;
     return false;
 }
 

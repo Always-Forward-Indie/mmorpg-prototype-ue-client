@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Gameplay/Items/DroppedItemActor.h"
@@ -21,7 +21,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogDropSnap, Log, All);
 
-// Spawn a one-shot SFX with SoundClassOverride set BEFORE Play() � same pattern
+// Spawn a one-shot SFX with SoundClassOverride set BEFORE Play() пїЅ same pattern
 // used across the whole codebase.  SpawnSoundAtLocation/PlaySoundAtLocation call
 // Play() internally so any class override set afterwards is silently ignored.
 static void PlayItemSFX(AActor* Owner, USoundBase* Sound)
@@ -109,9 +109,9 @@ void ADroppedItemActor::BeginPlay()
 	}
 
 	// Determine drop source and choose the correct animation path:
-	//   1. Mob drop   � fly arc from mob location to ground
-	//   2. Player drop � small toss arc from player's current position
-	//   3. World/nearby � item already on the ground, just snap
+	//   1. Mob drop   пїЅ fly arc from mob location to ground
+	//   2. Player drop пїЅ small toss arc from player's current position
+	//   3. World/nearby пїЅ item already on the ground, just snap
 	const bool bFromMob    = !ItemData.droppedByMobUID.IsEmpty();
 	const bool bFromPlayer = !bFromMob && (ItemData.droppedByCharacterId > 0);
 
@@ -124,42 +124,36 @@ void ADroppedItemActor::BeginPlay()
 		TryStartTrajectoryFromMob();
 	}
 	else if (bFromPlayer)
-	{
-		// Player drop — arc from the player's mesh center to the ground,
-		// same trajectory system as mob drops.
-		UMyGameInstance* GI = Cast<UMyGameInstance>(UGameplayStatics::GetGameInstance(GetWorld()));
-		if (GI)
-		{
-			if (ABasicPlayer* Dropper = GI->GetPlayerByCharacterId(ItemData.droppedByCharacterId))
-			{
-				// Start from the center of the player's skeletal mesh bounding box.
-				FVector LaunchOrigin = Dropper->GetActorLocation();
-				if (USkeletalMeshComponent* PlayerMesh = Dropper->GetMesh())
-				{
-					PlayerMesh->UpdateBounds();
-					LaunchOrigin.Z = PlayerMesh->Bounds.GetBox().GetCenter().Z;
-				}
-				UE_LOG(LogDropSnap, Log,
-					TEXT("[DropSnap] Player drop '%s' — launch origin Z=%.1f (server Z=%.1f)"),
-					*ItemData.item.name, LaunchOrigin.Z, InitialPosition.Z);
-				SetupTrajectoryAnimation(LaunchOrigin);
-				return;
-			}
-		}
-		// Dropper not found — fallback: snap directly to ground
-		UE_LOG(LogDropSnap, Warning,
-			TEXT("[DropSnap] Player drop '%s' — dropper not found, snapping to ground"),
-			*ItemData.item.name);
-		SnapToGround();
-		GetWorldTimerManager().SetTimer(
-			DelayedSnapTimerHandle, this, &ADroppedItemActor::SnapToGround, 0.5f, false);
-	}
+        {
+                bIsPlayerDrop = true;
+                FVector LaunchOrigin(
+                        ItemData.position.positionX,
+                        ItemData.position.positionY,
+                        ItemData.position.positionZ);
+                SetupTrajectoryAnimation(LaunchOrigin);
+
+                // FindGroundLevelAt may miss if the landscape doesn't block ECC_WorldStatic.
+                // Use the dropper's actual foot Z instead -- both clients have the dropper
+                // actor in the world, so this is always reliable and identical everywhere.
+                if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+                {
+                        if (ABasicPlayer* Dropper = GI->GetPlayerByCharacterId(ItemData.droppedByCharacterId))
+                        {
+                                const float FootZ = Dropper->GetActorLocation().Z
+                                        - Dropper->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+                                TargetPosition.Z = FootZ;
+                                UE_LOG(LogDropSnap, Log,
+                                        TEXT("[DropSnap] Player drop '%s' -- TargetPosition.Z = dropper foot Z=%.1f"),
+                                        *ItemData.item.name, FootZ);
+                        }
+                }
+        }
 	else
 	{
-		// nearbyItems / world items — already on the ground.
+		// nearbyItems / world items вЂ” already on the ground.
 		// Skip the drop animation and snap directly so items don't pop in mid-air.
 		UE_LOG(LogDropSnap, Log,
-			TEXT("[DropSnap] nearbyItem '%s' — snapping to landscape, ignoring server Z=%.1f"),
+			TEXT("[DropSnap] nearbyItem '%s' вЂ” snapping to landscape, ignoring server Z=%.1f"),
 			*ItemData.item.name, InitialPosition.Z);
 		SnapToGround();
 
@@ -203,8 +197,11 @@ void ADroppedItemActor::Tick(float DeltaTime)
 			// Calculate position along the trajectory
 			FVector CurrentPosition;
 
-			// If dropping from mob position to target, use trajectory arc
-			if (!ItemData.droppedByMobUID.IsEmpty())
+			// If dropping from mob/player position to target, use arc trajectory.
+			// bIsPlayerDrop is set in BeginPlay for player drops so they use the same
+			// formula as mob drops вЂ” arc from InitialPosition (server spawn point) to
+			// TargetPosition (ground). This keeps the visual identical on all clients.
+			if (!ItemData.droppedByMobUID.IsEmpty() || bIsPlayerDrop)
 			{
 				// Lerp from initial to target position
 				CurrentPosition = FMath::Lerp(InitialPosition, TargetPosition, EasedProgress);
@@ -237,9 +234,15 @@ void ADroppedItemActor::Tick(float DeltaTime)
 		}
 		else
 		{
-			// Animation finished � snap precisely to the surface using the loaded mesh bounds
+			// Animation finished вЂ” snap precisely to the surface using the loaded mesh bounds.
+			// Schedule a delayed retry (same pattern as nearby items): the first SnapToGround
+			// may fail if the landscape complex-collision chunk wasn't streamed in yet at the
+			// moment the trajectory started (causing FindGroundLevelAt to return the server Z
+			// ~93 instead of the real surface Z ~0).  The 0.5 s retry catches this race.
 			bIsDropAnimationActive = false;
 			SnapToGround();
+			GetWorldTimerManager().SetTimer(
+				DelayedSnapTimerHandle, this, &ADroppedItemActor::SnapToGround, 0.5f, false);
 
 			if (ItemMesh)
 			{
@@ -293,7 +296,7 @@ void ADroppedItemActor::SetItemData(const FDroppedItemStruct& InItemData)
 
 	// Visuals and trajectory are initialised in BeginPlay once the actor is
 	// fully spawned. SetItemData is called via SpawnActorDeferred BEFORE
-	// BeginPlay, so we must not start the animation here � BeginPlay will do it.
+	// BeginPlay, so we must not start the animation here пїЅ BeginPlay will do it.
 	// If SetItemData is called AFTER BeginPlay (live update), handle it then.
 	if (HasActorBegunPlay())
 	{
@@ -349,7 +352,7 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 	UE_LOG(LogTemp, Log, TEXT("Setting up visuals for item %s (Slug: %s)"),
 		*ItemData.item.name, *ItemData.item.slug);
 
-	// ������ ������� �� ������ ���������
+	// пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	VisualData = ItemManager->GetItemVisualDataBySlug(ItemData.item.slug);
 
 	// ---------- Mesh ----------
@@ -374,7 +377,7 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 
 		if (!bAppliedMesh)
 		{
-			// Fallback �� ����
+			// Fallback пїЅпїЅ пїЅпїЅпїЅпїЅ
 			FString FallbackPath;
 			switch (ItemData.item.itemType)
 			{
@@ -413,7 +416,7 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 		}
 		else
 		{
-			// ������� �� ��������
+			// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 			const int32 Rarity = GetItemRarity();
 			if (UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(ItemMesh->GetMaterial(0), this))
 			{
@@ -522,7 +525,7 @@ void ADroppedItemActor::PlayPickupEffect()
 		DropNiagaraComponent->Deactivate();
 	}
 
-	// Pickup SFX � routed through SFX SoundClass so the volume slider works
+	// Pickup SFX пїЅ routed through SFX SoundClass so the volume slider works
 	if (!VisualData.PickupSound.IsNull())
 	{
 		if (USoundCue* Cue = VisualData.PickupSound.LoadSynchronous())
@@ -624,7 +627,7 @@ void ADroppedItemActor::TryStartTrajectoryFromMob()
 {
 	if (ItemData.droppedByMobUID.IsEmpty())
 	{
-		UE_LOG(LogDropSnap, Log, TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' � no mobUID, skipping"), *ItemData.item.name);
+		UE_LOG(LogDropSnap, Log, TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' пїЅ no mobUID, skipping"), *ItemData.item.name);
 		return;
 	}
 
@@ -657,7 +660,7 @@ void ADroppedItemActor::TryStartTrajectoryFromMob()
 		else
 		{
 			UE_LOG(LogDropSnap, Warning,
-				TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | actor found but Cast<ABasicMOB> failed � falling back to SnapToGround"),
+				TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | actor found but Cast<ABasicMOB> failed пїЅ falling back to SnapToGround"),
 				*ItemData.item.name);
 			SnapToGround();
 		}
@@ -665,7 +668,7 @@ void ADroppedItemActor::TryStartTrajectoryFromMob()
 	else
 	{
 		UE_LOG(LogDropSnap, Warning,
-			TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | mob '%s' NOT found in world � falling back to SnapToGround"),
+			TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | mob '%s' NOT found in world пїЅ falling back to SnapToGround"),
 			*ItemData.item.name, *ItemData.droppedByMobUID);
 		SnapToGround();
 	}
@@ -673,147 +676,110 @@ void ADroppedItemActor::TryStartTrajectoryFromMob()
 
 float ADroppedItemActor::FindGroundLevelAt(const FVector& Location)
 {
-	UWorld* World = GetWorld();
-	if (!World) return Location.Z;
+UWorld* World = GetWorld();
+if (!World) return Location.Z;
 
-	// Trace from an absolute world-top altitude so the trace always hits the
-	// landscape regardless of what Z the server sent.  Server Z is intentionally
-	// ignored here — it reflects capsule-center offsets and is not suitable for
-	// ground placement.  The trace covers the full typical UE world height range.
-	const FVector StartPos = FVector(Location.X, Location.Y,  50000.0f);
-	const FVector EndPos   = FVector(Location.X, Location.Y, -10000.0f);
+const FVector StartPos = FVector(Location.X, Location.Y,  50000.0f);
+const FVector EndPos   = FVector(Location.X, Location.Y, -10000.0f);
 
-	FCollisionQueryParams QueryParams;
-	QueryParams.bTraceComplex = true;
-	QueryParams.bIgnoreTouches = true;
+FCollisionQueryParams QueryParams;
+QueryParams.bTraceComplex = true;
+QueryParams.bIgnoreTouches = true;
 
-	// Always ignore self
-	QueryParams.AddIgnoredActor(this);
+QueryParams.AddIgnoredActor(this);
 
-	// Explicitly ignore the local player pawn
-	if (APlayerController* PC = World->GetFirstPlayerController())
-	{
-		if (APawn* LocalPawn = PC->GetPawn())
-		{
-			QueryParams.AddIgnoredActor(LocalPawn);
-		}
-	}
+if (APlayerController* PC = World->GetFirstPlayerController())
+{
+if (APawn* LocalPawn = PC->GetPawn())
+{
+QueryParams.AddIgnoredActor(LocalPawn);
+}
+}
 
-	// Ignore all pawns (remote players, mobs, NPCs) and other dropped items
-	TArray<AActor*> PawnsToIgnore;
-	UGameplayStatics::GetAllActorsOfClass(World, ABasicPlayer::StaticClass(), PawnsToIgnore);
-	UGameplayStatics::GetAllActorsOfClass(World, ABasicMOB::StaticClass(),    PawnsToIgnore);
-	UGameplayStatics::GetAllActorsOfClass(World, ABasicNPC::StaticClass(),    PawnsToIgnore);
-	UGameplayStatics::GetAllActorsOfClass(World, ADroppedItemActor::StaticClass(), PawnsToIgnore);
-	QueryParams.AddIgnoredActors(PawnsToIgnore);
+TArray<AActor*> PawnsToIgnore;
+UGameplayStatics::GetAllActorsOfClass(World, ABasicPlayer::StaticClass(), PawnsToIgnore);
+UGameplayStatics::GetAllActorsOfClass(World, ABasicMOB::StaticClass(),    PawnsToIgnore);
+UGameplayStatics::GetAllActorsOfClass(World, ABasicNPC::StaticClass(),    PawnsToIgnore);
+UGameplayStatics::GetAllActorsOfClass(World, ADroppedItemActor::StaticClass(), PawnsToIgnore);
+QueryParams.AddIgnoredActors(PawnsToIgnore);
 
-	UE_LOG(LogDropSnap, Verbose,
-		TEXT("[DropSnap] Trace '%s' | Start=%s End=%s"),
-		*ItemData.item.name, *StartPos.ToString(), *EndPos.ToString());
+TArray<FHitResult> Hits;
+const bool bHit = World->LineTraceMultiByChannel(Hits, StartPos, EndPos, ECC_WorldStatic, QueryParams);
 
-	// Use a MULTI-hit trace so we can skip invisible collision volumes
-	// (BlockingVolumes, trigger boxes, Box/Sphere/Capsule shape components)
-	// and land on actual walkable geometry (landscape, static meshes, BSP).
-	FCollisionObjectQueryParams ObjectQueryParams;
-	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
-	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+if (bHit)
+{
+float FirstShapeHitZ = TNumericLimits<float>::Lowest();
 
-	TArray<FHitResult> Hits;
-	const bool bHit = World->LineTraceMultiByObjectType(
-		Hits, StartPos, EndPos, ObjectQueryParams, QueryParams);
+for (const FHitResult& Hit : Hits)
+{
+if (!Hit.bBlockingHit) continue;
 
-	if (bHit)
-	{
-		// Collect the first shape-component hit as a fallback in case no real
-		// geometry (landscape, static mesh) is found in this pass.
-		float FirstShapeHitZ = TNumericLimits<float>::Lowest();
+if (AActor* HitActor = Hit.GetActor())
+{
+if (HitActor->IsA<APawn>())
+{
+UE_LOG(LogDropSnap, Warning,
+TEXT("[DropSnap] Trace SKIP PAWN '%s' | Pawn='%s' at Z=%.1f"),
+*ItemData.item.name, *HitActor->GetName(), Hit.ImpactPoint.Z);
+continue;
+}
+}
 
-		for (const FHitResult& Hit : Hits)
-		{
-			if (!Hit.bBlockingHit) continue;
+const UPrimitiveComponent* HitComp = Hit.GetComponent();
+if (HitComp && HitComp->IsA<UShapeComponent>())
+{
+if (Hit.ImpactPoint.Z > FirstShapeHitZ)
+FirstShapeHitZ = Hit.ImpactPoint.Z;
+continue;
+}
 
-			// Skip invisible collision shapes (BoxComponent, SphereComponent,
-			// CapsuleComponent, etc.) so drops land on real walkable geometry
-			// instead of floating on invisible blocking volumes.
-			const UPrimitiveComponent* HitComp = Hit.GetComponent();
-			if (HitComp && HitComp->IsA<UShapeComponent>())
-			{
-				UE_LOG(LogDropSnap, Log,
-					TEXT("[DropSnap] Trace SKIP '%s' | ShapeComponent='%s' at Z=%.1f"),
-					*ItemData.item.name,
-					*HitComp->GetName(), Hit.ImpactPoint.Z);
-				// Remember highest shape hit as fallback; this covers areas where only
-				// BlockingVolumes are present (no landscape complex collision loaded yet).
-				if (Hit.ImpactPoint.Z > FirstShapeHitZ)
-					FirstShapeHitZ = Hit.ImpactPoint.Z;
-				continue;
-			}
+const float ResultZ = Hit.ImpactPoint.Z + 1.0f;
+UE_LOG(LogDropSnap, Log,
+TEXT("[DropSnap] Trace HIT '%s' | ImpactZ=%.1f -> ResultZ=%.1f | Component='%s'"),
+*ItemData.item.name, Hit.ImpactPoint.Z, ResultZ,
+HitComp ? *HitComp->GetName() : TEXT("null"));
+return ResultZ;
+}
 
-			const float ResultZ = Hit.ImpactPoint.Z + 1.0f;
-			UE_LOG(LogDropSnap, Log,
-				TEXT("[DropSnap] Trace HIT '%s' | ImpactZ=%.1f -> ResultZ=%.1f | Component='%s'"),
-				*ItemData.item.name, Hit.ImpactPoint.Z, ResultZ,
-				HitComp ? *HitComp->GetName() : TEXT("null"));
-			return ResultZ;
-		}
+if (FirstShapeHitZ > TNumericLimits<float>::Lowest())
+{
+UE_LOG(LogDropSnap, Warning,
+TEXT("[DropSnap] Trace SHAPE-FALLBACK '%s' | no geometry hit, using ShapeZ=%.1f"),
+*ItemData.item.name, FirstShapeHitZ);
+return FirstShapeHitZ + 1.0f;
+}
+}
 
-		// No real geometry hit — fall back to the highest shape component if available.
-		// This handles areas where only BlockingVolumes provide ground collision
-		// (landscape complex collision not yet streamed in, or deliberately absent).
-		if (FirstShapeHitZ > TNumericLimits<float>::Lowest())
-		{
-			UE_LOG(LogDropSnap, Warning,
-				TEXT("[DropSnap] Trace SHAPE-FALLBACK '%s' | no geometry hit, using ShapeZ=%.1f"),
-				*ItemData.item.name, FirstShapeHitZ);
-			return FirstShapeHitZ + 1.0f;
-		}
-	}
-
-	UE_LOG(LogDropSnap, Warning,
-		TEXT("[DropSnap] Trace MISS '%s' | Location=%s | keeping server Z=%.1f"),
-		*ItemData.item.name, *Location.ToString(), Location.Z);
-	return Location.Z;
+UE_LOG(LogDropSnap, Warning,
+TEXT("[DropSnap] Trace MISS '%s' | Location=%s | keeping server Z=%.1f"),
+*ItemData.item.name, *Location.ToString(), Location.Z);
+return Location.Z;
 }
 
 void ADroppedItemActor::SnapToGround()
 {
-	const FVector CurrentLoc = GetActorLocation();
-	// FindGroundLevelAt internally adds �5000 to the given Z for the trace range,
-	// so pass CurrentLoc directly � no extra offset here.
-	const float GroundZ = FindGroundLevelAt(CurrentLoc);
+const FVector CurrentLoc = GetActorLocation();
+const float GroundZ = FindGroundLevelAt(CurrentLoc);
 
-	// Work out how far the mesh pivot sits above its own bottom edge
-	// so the lowest point of the mesh lands exactly on the surface.
-	// We use the world-space bounding box of the mesh component directly �
-	// this already accounts for RelativeScale3D, MeshScale and actor scale.
-	float PivotToBottom = 0.0f;
-	if (ItemMesh && ItemMesh->GetStaticMesh())
-	{
-		// Force recalculation so Bounds reflect the current world transform
-		ItemMesh->UpdateBounds();
-		const FBox WorldBox = ItemMesh->Bounds.GetBox();
-		// Distance from the actor origin (pivot) to the bottom of the mesh in world Z
-		PivotToBottom = CurrentLoc.Z - WorldBox.Min.Z;
-		// Clamp: never go negative (pivot already below its own bottom is a degenerate case)
-		PivotToBottom = FMath::Max(PivotToBottom, 0.0f);
+float PivotToBottom = 0.0f;
+if (ItemMesh && ItemMesh->GetStaticMesh())
+{
+ItemMesh->UpdateBounds();
+const FBox WorldBox = ItemMesh->Bounds.GetBox();
+PivotToBottom = CurrentLoc.Z - WorldBox.Min.Z;
+PivotToBottom = FMath::Max(PivotToBottom, 0.0f);
 
-		UE_LOG(LogDropSnap, Log,
-			TEXT("[DropSnap] Bounds '%s' | BoxMin=%.1f BoxMax=%.1f BoxCenter=%.1f | PivotToBottom=%.1f"),
-			*ItemData.item.name,
-			WorldBox.Min.Z, WorldBox.Max.Z, WorldBox.GetCenter().Z,
-			PivotToBottom);
-	}
-	else
-	{
-		UE_LOG(LogDropSnap, Warning,
-			TEXT("[DropSnap] SnapToGround '%s' � no mesh/static mesh, PivotToBottom=0"),
-			*ItemData.item.name);
-	}
+UE_LOG(LogDropSnap, Log,
+TEXT("[DropSnap] Bounds '%s' | BoxMin=%.1f BoxMax=%.1f BoxCenter=%.1f | PivotToBottom=%.1f"),
+*ItemData.item.name,
+WorldBox.Min.Z, WorldBox.Max.Z, WorldBox.GetCenter().Z,
+PivotToBottom);
+}
 
-	const FVector SnappedLoc = FVector(CurrentLoc.X, CurrentLoc.Y, GroundZ + PivotToBottom);
-	SetActorLocation(SnappedLoc, false, nullptr, ETeleportType::TeleportPhysics);
+const FVector SnappedLoc = FVector(CurrentLoc.X, CurrentLoc.Y, GroundZ + PivotToBottom);
+SetActorLocation(SnappedLoc, false, nullptr, ETeleportType::TeleportPhysics);
 
-	UE_LOG(LogDropSnap, Log,
-		TEXT("[DropSnap] Snapped '%s' | CurrentZ=%.1f GroundZ=%.1f PivotToBottom=%.1f -> FinalZ=%.1f"),
-		*ItemData.item.name, CurrentLoc.Z, GroundZ, PivotToBottom, SnappedLoc.Z);
+UE_LOG(LogDropSnap, Log,
+TEXT("[DropSnap] Snapped '%s' | CurrentZ=%.1f GroundZ=%.1f PivotToBottom=%.1f -> FinalZ=%.1f"),
+*ItemData.item.name, CurrentLoc.Z, GroundZ, PivotToBottom, SnappedLoc.Z);
 }

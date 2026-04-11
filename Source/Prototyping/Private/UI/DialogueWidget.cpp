@@ -85,6 +85,28 @@ void UDialogueWidget::ShowDialogueNode(const FDialogueNodeData& NodeData)
         NPC_Name_Text->SetText(FText::FromString(NPCName));
     }
 
+    // Track the active speaker so farewell fires on close.
+    // If this is a new session (widget was hidden), trigger greeting on the NPC first.
+    const bool bNewSession = (CurrentSpeakerNpcId == 0);
+    CurrentSpeakerNpcId = NodeData.speakerNpcId;
+
+    if (bNewSession && CurrentSpeakerNpcId > 0)
+    {
+        if (UGameInstance* GI = GetGameInstance())
+        {
+            if (UMyGameInstance* MyGI = Cast<UMyGameInstance>(GI))
+            {
+                if (UNPCManager* NPCMgr = MyGI->GetNPCManager())
+                {
+                    if (ABasicNPC* NPC = NPCMgr->GetNPCById(CurrentSpeakerNpcId))
+                    {
+                        NPC->PlayGreetingSound();
+                    }
+                }
+            }
+        }
+    }
+
     // Node text: look up localised text by clientNodeKey via LocalizationSubsystem;
     // fall back to raw key during development if table is not yet configured.
     if (Dialogue_Text)
@@ -127,6 +149,25 @@ void UDialogueWidget::ShowError(const FDialogueErrorData& ErrorData)
 
 void UDialogueWidget::HideDialogue()
 {
+    // Notify the NPC that the dialogue session ended so it plays its farewell animation.
+    if (CurrentSpeakerNpcId > 0)
+    {
+        if (UGameInstance* GI = GetGameInstance())
+        {
+            if (UMyGameInstance* MyGI = Cast<UMyGameInstance>(GI))
+            {
+                if (UNPCManager* NPCMgr = MyGI->GetNPCManager())
+                {
+                    if (ABasicNPC* NPC = NPCMgr->GetNPCById(CurrentSpeakerNpcId))
+                    {
+                        NPC->NotifyDialogueClosed();
+                    }
+                }
+            }
+        }
+        CurrentSpeakerNpcId = 0;
+    }
+
     if (Choices_Box)
     {
         Choices_Box->ClearChildren();
@@ -165,7 +206,7 @@ void UDialogueWidget::PopulateChoices(const TArray<FDialogueChoice>& Choices)
         }
         else if (ChoiceButtonClass)
         {
-            // Generic UUserWidget — look for inner button and text by name
+            // Generic UUserWidget ï¿½ look for inner button and text by name
             UUserWidget* BtnWidget = CreateWidget<UUserWidget>(GetOwningPlayer(), ChoiceButtonClass);
             if (BtnWidget)
             {
@@ -204,7 +245,7 @@ void UDialogueWidget::PopulateChoices(const TArray<FDialogueChoice>& Choices)
         }
         else
         {
-            // Plain UDialogueChoiceButton fallback — create without a Blueprint subclass
+            // Plain UDialogueChoiceButton fallback ï¿½ create without a Blueprint subclass
             // This is lightweight and doesn't require a separate asset
             PendingChoiceEdgeIds.Add(Choice.edgeId);
             // We can't create UDialogueChoiceButton without a valid class pointer here,

@@ -141,6 +141,9 @@ private:
     // Current active node (kept for reference)
     FDialogueNodeData CurrentNode;
 
+    // NPC ID of the speaker in the current session — used to trigger farewell anim on close.
+    int32 CurrentSpeakerNpcId = 0;
+
     // EdgeId per button, ordered to match Choices_Box children
     TArray<int32> PendingChoiceEdgeIds;
 

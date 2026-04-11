@@ -7,6 +7,7 @@
 #include "Engine/AssetManager.h"
 #include "Components/AudioComponent.h"
 #include "TimerManager.h"
+#include "Animation/AnimInstance.h"
 #include "BasicNPC.generated.h"
 
 // Forward declarations
@@ -145,6 +146,14 @@ public:
 	void PlayFarewellSound();
 
 	/**
+	 * Call this when the player closes the dialogue window.
+	 * Triggers the farewell animation + sound and resets the talking state.
+	 * Wire this to the dialogue widget's OnClosed event in Blueprint.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "NPC")
+	void NotifyDialogueClosed();
+
+	/**
 	 * Returns the typed NPC AnimInstance, or nullptr if the mesh/AnimBP is not yet set up.
 	 * Use this from C++ to call NotifyGreet(), PlayAction(), SetTalking() etc.
 	 * The ABP must inherit from UNPCAnimInstance.
@@ -202,8 +211,15 @@ protected:
 	// ---- Audio assets ----
 	UPROPERTY() TMap<FName, USoundBase*> SoundMap;
 	UPROPERTY() TArray<USoundBase*> IdleSounds;
-	UPROPERTY() TArray<USoundBase*> WalkSounds;   // NEW
-	UPROPERTY() TArray<USoundBase*> RunSounds;    // NEW
+	UPROPERTY() TArray<USoundBase*> WalkSounds;
+	UPROPERTY() TArray<USoundBase*> RunSounds;
+
+	// ---- Montage assets (loaded from FNPCVisualData in SetupNPCVisual) ----
+	// Stored here so playback via ACharacter::PlayAnimMontage() works regardless
+	// of whether the AnimBlueprint inherits from UNPCAnimInstance.
+	UPROPERTY() UAnimMontage* GreetMontageAsset  = nullptr;
+	UPROPERTY() UAnimMontage* FarewellMontageAsset = nullptr;
+	UPROPERTY() TArray<UAnimMontage*> IdleMontageAssets;
 
 	// ---- UI state tracking ----
 	bool  bUIInitialized = false;
@@ -221,9 +237,17 @@ private:
 	FTimerHandle IdleSoundTimerHandle;
 
 	// Idle animation scheduling
+	// -- Idle plays to completion; greet/farewell interrupt and resume the cycle after they end.
 	void ScheduleNextIdleAnim();
 	void TriggerRandomIdleAnim();
+	void OnIdleMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+	void OnActionMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	FTimerHandle IdleAnimTimerHandle;
+
+	UPROPERTY() UAnimMontage* ActiveIdleMontage = nullptr;
+	bool bIdleAnimPlaying = false;
+	FOnMontageEnded IdleEndedDelegate;
+	FOnMontageEnded ActionEndedDelegate;
 
 	// Ground snapping
 	void SnapToGround();

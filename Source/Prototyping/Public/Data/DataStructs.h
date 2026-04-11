@@ -2,6 +2,7 @@
 #pragma once
 #include "CoreMinimal.h"
 #include "Engine/DataTable.h"
+#include "Animation/AnimMontage.h"
 #include "DataStructs.generated.h"
 
 class UNiagaraSystem;
@@ -2183,6 +2184,18 @@ struct PROTOTYPING_API FNPCVisualData
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FName NPCName;
+
+    /** Montage played when the player opens dialogue with this NPC ("greet" slot). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Animations")
+    TSoftObjectPtr<UAnimMontage> GreetMontage;
+
+    /** Montage played when the player closes dialogue ("farewell" slot). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Animations")
+    TSoftObjectPtr<UAnimMontage> FarewellMontage;
+
+    /** Montages randomly selected by the periodic idle-variant timer. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Animations")
+    TArray<TSoftObjectPtr<UAnimMontage>> IdleMontages;
 
     FNPCVisualData() {}
 };

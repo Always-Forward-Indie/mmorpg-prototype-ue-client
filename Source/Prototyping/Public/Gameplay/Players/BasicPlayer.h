@@ -148,6 +148,10 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
 	class UEquipmentVisualComponent* EquipmentVisualComponent;
 
+	// Emote component — handles montage playback, VFX, and interruption for emotes
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Emotes", meta = (AllowPrivateAccess = "true"))
+	class UEmoteComponent* EmoteComponent;
+
 	// ── Cursor Interaction ────────────────────────────────────────────────────
 
 	/** Handles hover trace, click/double-click detection, cursor icons, and decal states. */
@@ -756,6 +760,17 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
 	class UEquipmentVisualComponent* GetEquipmentVisualComponent() const { return EquipmentVisualComponent; }
 
+	// Get emote component
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Emotes")
+	class UEmoteComponent* GetEmoteComponent() const { return EmoteComponent; }
+
+	/**
+	 * Called by the emote routing code when emoteAction arrives for this character's ID.
+	 * Forwards to UEmoteComponent::PlayEmoteBySlug().
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Emotes")
+	void PlayEmoteForCharacter(const FString& EmoteSlug, const FString& AnimationName);
+
 	// Play event sound from soft ref
 	void PlayEventSound(const TSoftObjectPtr<USoundBase>& SoundRef);
 
@@ -774,6 +789,8 @@ public:
 	void OnTitlesToggle();
 	UFUNCTION()
 	void OnReputationToggle();
+	UFUNCTION()
+	void OnEmoteListToggle();
 	UFUNCTION()
 	void OnGameMenuToggle();
 	UFUNCTION()
@@ -843,6 +860,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* ReputationAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* EmoteListAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* GameMenuAction;

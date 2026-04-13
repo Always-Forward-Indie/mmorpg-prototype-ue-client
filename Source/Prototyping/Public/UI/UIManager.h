@@ -129,6 +129,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void InitializeReputationWidget(class UReputationManager* InReputationManager);
 
+	// Initialize emote window
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void InitializeEmoteListWidget(class UEmoteManager* InEmoteManager, class UEmoteNetworkHandler* InEmoteHandler, int32 InCharacterId);
+
 	// Initialize notification system
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void InitializeNotificationSystem(class UBestiaryNetworkHandler* InBestiaryHandler);
@@ -213,6 +217,9 @@ public:
 	UBestiaryWidget* GetBestiaryWidget() const { return BestiaryWidget; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	class UEmoteListWidget* GetEmoteListWidget() const { return EmoteListWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UChatWidget* GetChatWidget() const { return ChatWidget; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
@@ -268,6 +275,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void ToggleReputation();
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ToggleEmoteList();
 
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void ToggleQuestJournal();
@@ -350,6 +360,9 @@ protected:
 	void OnReputationVisibilityChanged();
 
 	UFUNCTION()
+	void OnEmoteListVisibilityChanged();
+
+	UFUNCTION()
 	void OnBestiaryVisibilityChanged(bool bIsVisible);
 
 protected:
@@ -410,6 +423,9 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UBestiaryWidget> BestiaryWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<class UEmoteListWidget> EmoteListWidgetClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UChatWidget> ChatWidgetClass;
@@ -502,6 +518,9 @@ protected:
 	UReputationWidget* ReputationWidget = nullptr;
 
 	UPROPERTY()
+	class UEmoteListWidget* EmoteListWidget = nullptr;
+
+	UPROPERTY()
 	UBestiaryWidget* BestiaryWidget;
 
 	UPROPERTY()
@@ -578,6 +597,7 @@ protected:
 	bool bBestiaryVisible;
 	bool bTitlesVisible = false;
 	bool bReputationVisible = false;
+	bool bEmoteListVisible = false;
 	bool bAltCursorActive;
 	bool bGameMenuVisible;
 
@@ -586,6 +606,7 @@ public:
 	UFUNCTION() void OnMenuBarBestiaryClicked();
 	UFUNCTION() void OnMenuBarTitlesClicked();
 	UFUNCTION() void OnMenuBarReputationClicked();
+	UFUNCTION() void OnMenuBarEmoteClicked();
 	UFUNCTION() void HandleGameMenuResumeClicked();
 	UFUNCTION() void HandleAudioSettingsClicked();
 	UFUNCTION() void HandleAudioSettingsClosed();

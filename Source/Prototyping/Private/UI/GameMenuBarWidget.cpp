@@ -29,6 +29,9 @@ void UGameMenuBarWidget::NativeConstruct()
     if (Btn_Reputation)
         Btn_Reputation->OnClicked.AddDynamic(this, &UGameMenuBarWidget::HandleReputationClicked);
 
+    if (Btn_Emote)
+        Btn_Emote->OnClicked.AddDynamic(this, &UGameMenuBarWidget::HandleEmoteClicked);
+
     if (Btn_Menu)
         Btn_Menu->OnClicked.AddDynamic(this, &UGameMenuBarWidget::HandleMenuClicked);
 }
@@ -71,6 +74,11 @@ void UGameMenuBarWidget::HandleTitlesClicked()
 void UGameMenuBarWidget::HandleReputationClicked()
 {
     OnReputationClicked.Broadcast();
+}
+
+void UGameMenuBarWidget::HandleEmoteClicked()
+{
+    OnEmoteClicked.Broadcast();
 }
 
 void UGameMenuBarWidget::HandleMenuClicked()

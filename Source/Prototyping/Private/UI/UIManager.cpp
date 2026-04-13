@@ -49,6 +49,9 @@
 #include "Gameplay/Player/TitleManager.h"
 #include "Gameplay/Player/TitleNetworkHandler.h"
 #include "Gameplay/Player/ReputationManager.h"
+#include "Gameplay/Emotes/EmoteManager.h"
+#include "Gameplay/Emotes/EmoteNetworkHandler.h"
+#include "UI/EmoteListWidget.h"
 #include "Audio/AudioManager.h"
 #include "Blueprint/UserWidget.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -584,6 +587,7 @@ void UUIManager::CreateGameMenuBarWidget()
 	GameMenuBarWidget->OnBestiaryClicked.AddDynamic(this,     &UUIManager::OnMenuBarBestiaryClicked);
 	GameMenuBarWidget->OnTitlesClicked.AddDynamic(this,       &UUIManager::OnMenuBarTitlesClicked);
 	GameMenuBarWidget->OnReputationClicked.AddDynamic(this,   &UUIManager::OnMenuBarReputationClicked);
+	GameMenuBarWidget->OnEmoteClicked.AddDynamic(this,        &UUIManager::OnMenuBarEmoteClicked);
 	GameMenuBarWidget->OnMenuClicked.AddDynamic(this,         &UUIManager::OnMenuBarMenuClicked);
 
 	UE_LOG(LogTemp, Log, TEXT("UIManager: GameMenuBarWidget created and wired"));
@@ -1009,7 +1013,7 @@ bool UUIManager::HasUIWindowOpen() const
 	return bInventoryVisible || bSkillsPanelVisible || bHarvestLootVisible
 		|| bDialogueVisible || bQuestJournalVisible
 		|| bVendorShopVisible || bRepairShopVisible || bSkillShopVisible || bTradeVisible || bEquipmentVisible
-		|| bPlayerStatsVisible || bBestiaryVisible || bTitlesVisible || bReputationVisible
+		|| bPlayerStatsVisible || bBestiaryVisible || bTitlesVisible || bReputationVisible || bEmoteListVisible
 		|| bGameMenuVisible;
 }
 
@@ -1019,7 +1023,7 @@ bool UUIManager::ShouldShowCursor() const
 	bool bAnyWidgetVisible = bInventoryVisible || bSkillsPanelVisible || bHarvestLootVisible 
 		|| bDialogueVisible || bQuestJournalVisible
 		|| bVendorShopVisible || bRepairShopVisible || bSkillShopVisible || bTradeVisible || bEquipmentVisible
-		|| bPlayerStatsVisible || bBestiaryVisible || bTitlesVisible || bReputationVisible
+		|| bPlayerStatsVisible || bBestiaryVisible || bTitlesVisible || bReputationVisible || bEmoteListVisible
 		|| bAltCursorActive || bGameMenuVisible;
 	
 	UE_LOG(LogTemp, Verbose, TEXT("UIManager: Cursor check -> Show: %s"),
@@ -1489,6 +1493,44 @@ void UUIManager::InitializeReputationWidget(UReputationManager* InReputationMana
 	}
 }
 
+void UUIManager::InitializeEmoteListWidget(UEmoteManager* InEmoteManager, UEmoteNetworkHandler* InEmoteHandler, int32 InCharacterId)
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeEmoteListWidget"));
+
+	if (!InEmoteManager)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::InitializeEmoteListWidget - EmoteManager is null"));
+		return;
+	}
+
+	if (EmoteListWidgetClass && !EmoteListWidget)
+	{
+		EmoteListWidget = CreateWidget<UEmoteListWidget>(GetWorld(), EmoteListWidgetClass);
+		if (EmoteListWidget)
+		{
+			EmoteListWidget->AddToViewport(90);
+			EmoteListWidget->SetVisibility(ESlateVisibility::Collapsed);
+			EmoteListWidget->BindToManagers(InEmoteManager, InEmoteHandler, InCharacterId);
+			EmoteListWidget->OnEmoteListVisibilityChanged.AddDynamic(this, &UUIManager::OnEmoteListVisibilityChanged);
+			UE_LOG(LogTemp, Log, TEXT("UIManager: EmoteListWidget created and bound"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create EmoteListWidget"));
+		}
+	}
+	else if (!EmoteListWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: EmoteListWidgetClass is not set in Blueprint"));
+	}
+}
+
+void UUIManager::OnEmoteListVisibilityChanged()
+{
+	bEmoteListVisible = EmoteListWidget && EmoteListWidget->GetVisibility() == ESlateVisibility::Visible;
+	UpdateCursorAndInputMode();
+}
+
 
 void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiaryHandler)
 {
@@ -1684,6 +1726,11 @@ void UUIManager::OnMenuBarReputationClicked()
 	ToggleReputation();
 }
 
+void UUIManager::OnMenuBarEmoteClicked()
+{
+	ToggleEmoteList();
+}
+
 void UUIManager::HandleGameMenuResumeClicked()
 {
 	if (GameMenuWidget) { GameMenuWidget->CloseMenu(); }
@@ -1831,6 +1878,17 @@ void UUIManager::ToggleReputation()
 
 	ReputationWidget->ToggleReputation();
 	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleReputation - Toggled"));
+}
+
+void UUIManager::ToggleEmoteList()
+{
+	if (!EmoteListWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::ToggleEmoteList - EmoteListWidget not initialized (assign EmoteListWidgetClass in Blueprint)"));
+		return;
+	}
+	EmoteListWidget->ToggleEmoteList();
+	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleEmoteList - Toggled"));
 }
 
 void UUIManager::ToggleQuestJournal()

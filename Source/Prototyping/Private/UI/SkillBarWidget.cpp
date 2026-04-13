@@ -1,6 +1,7 @@
 ﻿#include "UI/SkillBarWidget.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
+#include "Gameplay/Skills/PlayerSkillNetworkHandler.h"
 #include "Components/HorizontalBox.h"
 #include "Components/UniformGridPanel.h"
 #include "Components/HorizontalBoxSlot.h"
@@ -226,6 +227,15 @@ void USkillBarWidget::AssignSkillToSlot(int32 SlotIndex, const FString& SkillSlu
     }
 
     SkillManager->SetSkillSlot(SlotIndex, SkillSlug, Hotkey);
+
+    // Persist to server
+    if (GameInstance)
+    {
+        if (UPlayerSkillNetworkHandler* NetHandler = GameInstance->GetPlayerSkillNetworkHandler())
+        {
+            NetHandler->SendSetSkillBarSlot(SlotIndex, SkillSlug, GameInstance->GetCurrentCharacterID());
+        }
+    }
 }
 
 void USkillBarWidget::ClearSlot(int32 SlotIndex)
@@ -336,6 +346,15 @@ void USkillBarWidget::OnSkillSlotDragCleared(int32 SlotIndex)
     FKey BoundKey = SlotData.boundKey;
 
     SkillManager->SetSkillSlot(SlotIndex, "", BoundKey);
+
+    // Persist clear to server
+    if (GameInstance)
+    {
+        if (UPlayerSkillNetworkHandler* NetHandler = GameInstance->GetPlayerSkillNetworkHandler())
+        {
+            NetHandler->SendSetSkillBarSlot(SlotIndex, TEXT(""), GameInstance->GetCurrentCharacterID());
+        }
+    }
 
     UE_LOG(LogTemp, Log, TEXT("SkillBarWidget: Cleared slot %d via drag-out"), SlotIndex);
 }

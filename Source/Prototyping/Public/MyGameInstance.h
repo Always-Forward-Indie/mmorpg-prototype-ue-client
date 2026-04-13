@@ -443,6 +443,14 @@ public:
 	UPROPERTY()
 	class UChatNetworkHandler* ChatNetworkHandler;
 
+	// Emote manager
+	UPROPERTY()
+	class UEmoteManager* EmoteManager;
+
+	// Emote network handler
+	UPROPERTY()
+	class UEmoteNetworkHandler* EmoteNetworkHandler;
+
 	// DevMode configuration (editable in Blueprint defaults)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DevMode")
 	FDevModeConfig DevModeConfig;
@@ -537,6 +545,21 @@ public:
 	// get title network handler
 	UFUNCTION(BlueprintCallable, Category = "Player Progression")
 	class UTitleNetworkHandler* GetTitleNetworkHandler() { return TitleNetworkHandler; }
+
+	// get emote manager
+	UFUNCTION(BlueprintCallable, Category = "Emotes")
+	class UEmoteManager* GetEmoteManager() { return EmoteManager; }
+
+	// get emote network handler
+	UFUNCTION(BlueprintCallable, Category = "Emotes")
+	class UEmoteNetworkHandler* GetEmoteNetworkHandler() { return EmoteNetworkHandler; }
+
+	/**
+	 * Emote action routing: called by EmoteManager::OnEmoteActionReceived.
+	 * Finds the ABasicPlayer with matching characterId in SpawnedPlayers and triggers PlayEmoteForCharacter.
+	 */
+	UFUNCTION()
+	void RouteEmoteActionToPlayer(int32 CharacterId, const FString& EmoteSlug, const FString& AnimationName);
 
 	// get combat system manager
 	UFUNCTION(BlueprintCallable, Category = "Combat")

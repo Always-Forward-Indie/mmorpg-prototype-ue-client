@@ -16,6 +16,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMenuBarStatsClicked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMenuBarBestiaryClicked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMenuBarTitlesClicked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMenuBarReputationClicked);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMenuBarEmoteClicked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMenuBarMenuClicked);
 
 /**
@@ -59,6 +60,9 @@ public:
     FOnMenuBarReputationClicked OnReputationClicked;
 
     UPROPERTY(BlueprintAssignable, Category = "Game Menu Bar|Events")
+    FOnMenuBarEmoteClicked OnEmoteClicked;
+
+    UPROPERTY(BlueprintAssignable, Category = "Game Menu Bar|Events")
     FOnMenuBarMenuClicked OnMenuClicked;
 
 protected:
@@ -92,6 +96,9 @@ protected:
     UButton* Btn_Reputation;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Game Menu Bar")
+    UButton* Btn_Emote;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Game Menu Bar")
     UButton* Btn_Menu;
 
 private:
@@ -118,6 +125,9 @@ private:
 
     UFUNCTION()
     void HandleReputationClicked();
+
+    UFUNCTION()
+    void HandleEmoteClicked();
 
     UFUNCTION()
     void HandleMenuClicked();

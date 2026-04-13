@@ -23,6 +23,8 @@
 #include "Gameplay/Player/ReputationNetworkHandler.h"
 #include "Gameplay/Player/TitleManager.h"
 #include "Gameplay/Player/TitleNetworkHandler.h"
+#include "Gameplay/Emotes/EmoteManager.h"
+#include "Gameplay/Emotes/EmoteNetworkHandler.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Data/EntityAudioRepository.h"
@@ -167,6 +169,10 @@ void UMyGameInstance::Init()
 	// Initialize Titles system
 	TitleManager = NewObject<UTitleManager>(this);
 	TitleNetworkHandler = NewObject<UTitleNetworkHandler>(this);
+
+	// Initialize Emote system
+	EmoteManager = NewObject<UEmoteManager>(this);
+	EmoteNetworkHandler = NewObject<UEmoteNetworkHandler>(this);
 
 	// Initialize Bestiary system
 	BestiaryNetworkHandler = NewObject<UBestiaryNetworkHandler>(this);
@@ -410,6 +416,12 @@ void UMyGameInstance::InitNetworkingSetup()
 			SkillDefinitionRepository = PlayerSkillSystemFactory->GetSkillDefinitionRepository();
 			PlayerSkillNetworkHandler = PlayerSkillSystemFactory->GetPlayerSkillNetworkHandler();
 
+			// Provide GameInstance so the handler can build outbound packets (setSkillBarSlot)
+			if (PlayerSkillNetworkHandler)
+			{
+				PlayerSkillNetworkHandler->SetGameInstance(this);
+			}
+
 			UE_LOG(LogTemp, Warning, TEXT("Player skill system created successfully"));
 		}
 		else
@@ -603,6 +615,18 @@ void UMyGameInstance::InitNetworkingSetup()
 		TitleNetworkHandler->Initialize(TitleManager, GetNetworkManager(), this);
 		TitleNetworkHandler->SubscribeToNetworkEvents();
 		UE_LOG(LogTemp, Warning, TEXT("TitleNetworkHandler initialized and subscribed"));
+	}
+
+	// Initialize Emote system
+	if (EmoteManager && EmoteNetworkHandler)
+	{
+		EmoteNetworkHandler->Initialize(EmoteManager, GetNetworkManager(), this);
+		EmoteNetworkHandler->SubscribeToNetworkEvents();
+
+		// Route emoteAction broadcasts to the correct ABasicPlayer in the world
+		EmoteManager->OnEmoteActionReceived.AddDynamic(this, &UMyGameInstance::RouteEmoteActionToPlayer);
+
+		UE_LOG(LogTemp, Warning, TEXT("EmoteNetworkHandler initialized and subscribed"));
 	}
 
 	// Initialize Chat System
@@ -2445,4 +2469,13 @@ UBestiaryNetworkHandler* UMyGameInstance::GetBestiaryNetworkHandler() const
 UChatManager* UMyGameInstance::GetChatManager() const
 {
 	return ChatManager;
+}
+
+void UMyGameInstance::RouteEmoteActionToPlayer(int32 CharacterId, const FString& EmoteSlug, const FString& AnimationName)
+{
+    ABasicPlayer* TargetPlayer = GetPlayerByCharacterId(CharacterId);
+    if (TargetPlayer)
+    {
+        TargetPlayer->PlayEmoteForCharacter(EmoteSlug, AnimationName);
+    }
 }

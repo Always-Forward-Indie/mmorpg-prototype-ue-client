@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Gameplay/Players/BasicPlayer.h"
@@ -53,6 +53,9 @@
 #include "NiagaraSystem.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Data/EffectDefinitionTable.h"
+#include "Gameplay/Emotes/EmoteManager.h"
+#include "Gameplay/Emotes/EmoteNetworkHandler.h"
+#include "Gameplay/Emotes/EmoteComponent.h"
 
 // Convert ESkillSchool to EDamageType for FloatingCombatTextManager
 static EDamageType SchoolToDamageType(ESkillSchool School)
@@ -235,14 +238,14 @@ void ABasicPlayer::UpdateApproach(float DeltaTime)
 {
     if (!bIsApproachingTarget) return;
 
-    // ── Non-combat pending approach (NPC / Item / Harvest) ───────────────────
+    // в”Ђв”Ђ Non-combat pending approach (NPC / Item / Harvest) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     // These don't use LockedTarget; they use PendingInteractionTarget instead.
     if (PendingInteraction != EPendingInteraction::None)
     {
         AActor* PendingTarget = PendingInteractionTarget.Get();
         if (!IsValid(PendingTarget))
         {
-            // Target disappeared — abort
+            // Target disappeared вЂ” abort
             bIsApproachingTarget = false;
             PendingInteraction       = EPendingInteraction::None;
             PendingInteractionTarget = nullptr;
@@ -276,7 +279,7 @@ void ABasicPlayer::UpdateApproach(float DeltaTime)
         return;
     }
 
-    // ── Combat approach (uses LockedTarget) ───────────────────────────────────
+    // в”Ђв”Ђ Combat approach (uses LockedTarget) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     if (!IsValid(LockedTarget))
     {
         bIsApproachingTarget = false;
@@ -286,7 +289,7 @@ void ABasicPlayer::UpdateApproach(float DeltaTime)
     }
     if (LockedTarget->GetMOBIsDead())
     {
-        // Mob died while we were approaching — stop movement but keep lock for harvesting.
+        // Mob died while we were approaching вЂ” stop movement but keep lock for harvesting.
         bIsApproachingTarget = false;
         PendingSkillSlug.Empty();
         StopAutoAttack();
@@ -420,7 +423,7 @@ void ABasicPlayer::TryCastSkillWithApproach(const FString& SkillSlug)
 
     if (LockedTarget->GetMOBIsDead())
     {
-        // Mob died before we cast — stop approach but keep lock for harvesting.
+        // Mob died before we cast вЂ” stop approach but keep lock for harvesting.
         bIsAutoAttacking   = false;
         bIsApproachingTarget = false;
         PendingSkillSlug.Empty();
@@ -457,7 +460,7 @@ void ABasicPlayer::TryCastSkillWithApproach(const FString& SkillSlug)
     }
     else
     {
-        // Out of range � store pending skill and start approach
+        // Out of range пїЅ store pending skill and start approach
         PendingSkillSlug = SkillSlug;
         // For the auto-attack skill keep bIsAutoAttacking true so DoAutoAttack
         // can continue the loop after the first swing.
@@ -484,7 +487,7 @@ void ABasicPlayer::DoAutoAttack()
 
     if (LockedTarget->GetMOBIsDead())
     {
-        // Mob died — stop the attack cycle but KEEP the target lock so the
+        // Mob died вЂ” stop the attack cycle but KEEP the target lock so the
         // player can immediately harvest the corpse without re-clicking.
         UE_LOG(LogTemp, Log, TEXT("BasicPlayer: DoAutoAttack - mob dead, keeping lock for harvest"));
         StopAutoAttack();
@@ -493,7 +496,7 @@ void ABasicPlayer::DoAutoAttack()
         return;
     }
 
-    // Range check � use the same formula the server applies: maxRange * 100.0f
+    // Range check пїЅ use the same formula the server applies: maxRange * 100.0f
     const float Dist = FVector::Dist(GetActorLocation(), LockedTarget->GetActorLocation());
     const float EffectiveRange = GetCurrentSkillRange();
 
@@ -510,7 +513,7 @@ void ABasicPlayer::DoAutoAttack()
         return;
     }
 
-    // In range � make sure any lingering approach is stopped
+    // In range пїЅ make sure any lingering approach is stopped
     if (bIsApproachingTarget)
     {
         bIsApproachingTarget = false;
@@ -532,7 +535,7 @@ void ABasicPlayer::DoAutoAttack()
 
         AutoAttackAnimEndDelegateHandle = AnimInst->OnAttackEnded.AddLambda([this]()
         {
-            // Cancel the fallback timer — the normal animation chain is alive.
+            // Cancel the fallback timer вЂ” the normal animation chain is alive.
             GetWorld()->GetTimerManager().ClearTimer(AutoAttackRetryTimerHandle);
 
             if (bIsAutoAttacking && IsValid(LockedTarget) && !LockedTarget->GetMOBIsDead())
@@ -551,15 +554,15 @@ void ABasicPlayer::DoAutoAttack()
             }
             else if (!IsValid(LockedTarget))
             {
-                // Target completely gone — release the lock.
+                // Target completely gone вЂ” release the lock.
                 ClearLockedTarget();
             }
-            // else: bIsAutoAttacking=false but target still alive (manual skill mid-swing) — keep lock.
+            // else: bIsAutoAttacking=false but target still alive (manual skill mid-swing) вЂ” keep lock.
         });
     }
     else
     {
-        // No AnimInstance � retry by simple timer as fallback
+        // No AnimInstance пїЅ retry by simple timer as fallback
         GetWorld()->GetTimerManager().SetTimer(AutoAttackRetryTimerHandle,
             this, &ABasicPlayer::DoAutoAttack, 1.5f, false);
     }
@@ -588,7 +591,7 @@ void ABasicPlayer::OnTabTargetInput()
     const float MaxTabRange = 1500.0f;
     const FVector PlayerLoc = GetActorLocation();
 
-    // Collect all living mobs within range � no cone filter so Tab cycles
+    // Collect all living mobs within range пїЅ no cone filter so Tab cycles
     // through everything nearby regardless of which way the mesh faces
     TArray<ABasicMOB*> Candidates;
     for (TActorIterator<ABasicMOB> It(GetWorld()); It; ++It)
@@ -607,7 +610,7 @@ void ABasicPlayer::OnTabTargetInput()
         return;
     }
 
-    // Sort by dot product to camera forward � mobs closest to crosshair come first,
+    // Sort by dot product to camera forward пїЅ mobs closest to crosshair come first,
     // then by distance as a tiebreaker
     Candidates.Sort([&CameraLocation, &CameraForward](const ABasicMOB& A, const ABasicMOB& B)
     {
@@ -983,6 +986,12 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
             EnhancedInputComponent->BindAction(ReputationAction, ETriggerEvent::Started, this, &ABasicPlayer::OnReputationToggle);
         }
 
+        // Emote list toggle
+        if (EmoteListAction)
+        {
+            EnhancedInputComponent->BindAction(EmoteListAction, ETriggerEvent::Started, this, &ABasicPlayer::OnEmoteListToggle);
+        }
+
         // Main game menu toggle (Escape)
         if (GameMenuAction)
         {
@@ -1005,7 +1014,7 @@ ABasicPlayer::ABasicPlayer()
     AudioComponent = CreateDefaultSubobject<UAudioComponent>(TEXT("AudioComponent"));
     AudioComponent->SetupAttachment(RootComponent);
 
-    // Create spring arm � controls camera distance and pitch
+    // Create spring arm пїЅ controls camera distance and pitch
     CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
     CameraBoom->SetupAttachment(RootComponent);
     CameraBoom->TargetArmLength       = DesiredZoom;  // initial distance
@@ -1013,10 +1022,10 @@ ABasicPlayer::ABasicPlayer()
     CameraBoom->bEnableCameraLag       = true;
     CameraBoom->CameraLagSpeed         = 8.0f;
     CameraBoom->bEnableCameraRotationLag = false;
-    // Only collide with world geometry (walls, terrain) — ignore pawns (mobs, NPCs, players)
+    // Only collide with world geometry (walls, terrain) вЂ” ignore pawns (mobs, NPCs, players)
     // so the spring arm does not compress when another character stands between the camera and the player.
     // Use ECC_Camera (not ECC_Visibility) because ECC_Visibility is also used for line-of-sight
-    // checks — mobs/NPCs must still block Visibility for targeting, but must NOT block Camera.
+    // checks вЂ” mobs/NPCs must still block Visibility for targeting, but must NOT block Camera.
     CameraBoom->ProbeChannel           = ECC_Camera;
 
     // Prevent other players' capsules from compressing the spring arm.
@@ -1029,7 +1038,7 @@ ABasicPlayer::ABasicPlayer()
     // Create the follow camera
     FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
     FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
-    FollowCamera->bUsePawnControlRotation = false; // camera does not rotate � arm does
+    FollowCamera->bUsePawnControlRotation = false; // camera does not rotate пїЅ arm does
 
 	// Create UI Manager component
 	UIManager = CreateDefaultSubobject<UUIManager>(TEXT("UIManager"));
@@ -1037,11 +1046,14 @@ ABasicPlayer::ABasicPlayer()
 	// Create Inventory Manager component  
 	InventoryManager = CreateDefaultSubobject<UInventoryManager>(TEXT("InventoryManager"));
 
-	// Create nameplate component � auto-hidden for local player, visible for remote players
+	// Create nameplate component пїЅ auto-hidden for local player, visible for remote players
 	NameplateComponent = CreateDefaultSubobject<UPlayerNameplateComponent>(TEXT("NameplateComponent"));
 
-	// Create equipment visual component � attaches item meshes to skeleton sockets
+	// Create equipment visual component пїЅ attaches item meshes to skeleton sockets
 	EquipmentVisualComponent = CreateDefaultSubobject<UEquipmentVisualComponent>(TEXT("EquipmentVisualComponent"));
+
+	// Create emote component - handles emote montage playback, VFX, audio, and interruption
+	EmoteComponent = CreateDefaultSubobject<UEmoteComponent>(TEXT("EmoteComponent"));
 
 	// Create cursor interaction component - hover trace, click/double-click, cursor icons, decal management
 	CursorInteractionComponent = CreateDefaultSubobject<UCursorInteractionComponent>(TEXT("CursorInteractionComponent"));
@@ -1084,7 +1096,7 @@ Super::BeginPlay();
    MyGameInstance = Cast<UMyGameInstance>(UGameplayStatics::GetGameInstance(this));
    if (MyGameInstance)
    {
-       UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] BasicPlayer::BeginPlay — CharID=%d isOtherClient=%d Pos=(%.0f,%.0f,%.0f)"),
+       UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] BasicPlayer::BeginPlay вЂ” CharID=%d isOtherClient=%d Pos=(%.0f,%.0f,%.0f)"),
            playerData.characterData.characterId, (int)playerData.isOtherClient,
            GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z);
         UE_LOG(LogTemp, Warning, TEXT("GameInstance found"));
@@ -1102,7 +1114,7 @@ Super::BeginPlay();
             MyGameInstance->MOBManager->RegisterPlayer(ActorId, this);
         }
 
-        // Remote players: disable physics push — positions are server-authoritative.
+        // Remote players: disable physics push вЂ” positions are server-authoritative.
         // Prevents remote capsules from physically blocking the local player's movement.
         // Projectile hits still work because ECC_WorldDynamic is set to Overlap.
         if (playerData.isOtherClient)
@@ -1318,6 +1330,12 @@ Super::BeginPlay();
 				UIManager->InitializeReputationWidget(
 					MyGameInstance ? MyGameInstance->GetReputationManager() : nullptr);
 
+				// Bind emote list window
+				UIManager->InitializeEmoteListWidget(
+					MyGameInstance ? MyGameInstance->GetEmoteManager()        : nullptr,
+					MyGameInstance ? MyGameInstance->GetEmoteNetworkHandler() : nullptr,
+					playerData.characterData.characterId);
+
 				// Initialize world notification system (bestiary + toast/zone/etc.)
 				if (MyGameInstance && MyGameInstance->GetBestiaryNetworkHandler())
 					{
@@ -1398,7 +1416,7 @@ void ABasicPlayer::HandleLevelUp(int32 OldLevel, int32 NewLevel, int32 NewTotalE
 
 void ABasicPlayer::HandleUIManagerInitialized()
 {
-    // Unsubscribe immediately — this must fire exactly once per spawn.
+    // Unsubscribe immediately вЂ” this must fire exactly once per spawn.
     if (UIManager)
     {
         UIManager->OnUIManagerInitialized.RemoveDynamic(this, &ABasicPlayer::HandleUIManagerInitialized);
@@ -1427,7 +1445,7 @@ void ABasicPlayer::HandleUIManagerInitialized()
         GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z);
 }
 
-// ─── IWorldInteractable (remote player targeting) ────────────────────────────
+// в”Ђв”Ђв”Ђ IWorldInteractable (remote player targeting) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 EInteractableType ABasicPlayer::GetInteractableType() const
 {
@@ -1444,11 +1462,11 @@ FText ABasicPlayer::GetInteractableDisplayName() const
     return FText::FromString(Name);
 }
 
-// ─── Cursor Interaction ───────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђ Cursor Interaction в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 bool ABasicPlayer::IsUIBlockingInteraction() const
 {
-    // Use HasUIWindowOpen() — not ShouldShowCursor() — so that cursor world interaction
+    // Use HasUIWindowOpen() вЂ” not ShouldShowCursor() вЂ” so that cursor world interaction
     // is never blocked by bAltCursorActive (which is true whenever the cursor is shown).
     return UIManager && UIManager->HasUIWindowOpen();
 }
@@ -1462,7 +1480,7 @@ void ABasicPlayer::DispatchCursorSelect(AActor* Target, EInteractableType Type)
 {
     if (!Target)
     {
-        // Click on empty ground → clear all locks
+        // Click on empty ground в†’ clear all locks
         ClearLockedTarget();
         if (CursorInteractionComponent)
             CursorInteractionComponent->SetVisualLock(nullptr, EInteractableType::None);
@@ -1476,7 +1494,7 @@ void ABasicPlayer::DispatchCursorSelect(AActor* Target, EInteractableType Type)
     case EInteractableType::MOB_Harvested:
         if (ABasicMOB* Mob = Cast<ABasicMOB>(Target))
         {
-            // Select only — no auto-attack on single click
+            // Select only вЂ” no auto-attack on single click
             SetLockedTarget(Mob);
         }
         break;
@@ -1515,7 +1533,7 @@ void ABasicPlayer::DispatchCursorInteract(AActor* Target, EInteractableType Type
 
     switch (Type)
     {
-    // ── MOB: alive → attack ───────────────────────────────────────────────────
+    // в”Ђв”Ђ MOB: alive в†’ attack в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     case EInteractableType::MOB_Alive:
         if (ABasicMOB* Mob = Cast<ABasicMOB>(Target))
         {
@@ -1534,7 +1552,7 @@ void ABasicPlayer::DispatchCursorInteract(AActor* Target, EInteractableType Type
         }
         break;
 
-    // ── MOB: harvestable / harvested → harvest or inspect ────────────────────
+    // в”Ђв”Ђ MOB: harvestable / harvested в†’ harvest or inspect в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     case EInteractableType::MOB_Harvestable:
     case EInteractableType::MOB_Harvested:
         if (ABasicMOB* Mob = Cast<ABasicMOB>(Target))
@@ -1555,7 +1573,7 @@ void ABasicPlayer::DispatchCursorInteract(AActor* Target, EInteractableType Type
         }
         break;
 
-    // ── NPC → open dialogue ───────────────────────────────────────────────────
+    // в”Ђв”Ђ NPC в†’ open dialogue в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     case EInteractableType::NPC:
         if (ABasicNPC* NPC = Cast<ABasicNPC>(Target))
         {
@@ -1579,7 +1597,7 @@ void ABasicPlayer::DispatchCursorInteract(AActor* Target, EInteractableType Type
         }
         break;
 
-    // ── DroppedItem → pick up ─────────────────────────────────────────────────
+    // в”Ђв”Ђ DroppedItem в†’ pick up в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     case EInteractableType::DroppedItem:
         if (ADroppedItemActor* Item = Cast<ADroppedItemActor>(Target))
         {
@@ -1600,11 +1618,11 @@ void ABasicPlayer::DispatchCursorInteract(AActor* Target, EInteractableType Type
         }
         break;
 
-    // ── RemotePlayer → inspect (placeholder) ─────────────────────────────────
+    // в”Ђв”Ђ RemotePlayer в†’ inspect (placeholder) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     case EInteractableType::RemotePlayer:
         if (CursorInteractionComponent)
             CursorInteractionComponent->SetVisualLock(Target, Type);
-        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Double-click on remote player — inspect not yet implemented"));
+        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Double-click on remote player вЂ” inspect not yet implemented"));
         break;
 
     default:
@@ -1663,7 +1681,7 @@ void ABasicPlayer::HandleWeightStatusChanged(const FWeightStatusData& WeightStat
     // Weight status is informational only (used by UI weight bar).
     // Movement speed is fully server-authoritative and arrives via move_speed in stats_update.
     // No client-side speed penalty is applied here.
-    UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Weight status updated — current=%.1f limit=%.1f overweight=%d (speed unchanged)"),
+    UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Weight status updated вЂ” current=%.1f limit=%.1f overweight=%d (speed unchanged)"),
         WeightStatus.currentWeight, WeightStatus.weightLimit, (int)WeightStatus.isOverweight);
 }
 
@@ -1727,8 +1745,15 @@ void ABasicPlayer::Tick(float DeltaTime)
     }
 
     FVector CurrentLocation = GetActorLocation();
+    const bool bWasMoving = playerData.characterData.bIsMoving;
     playerData.characterData.bIsMoving = !CurrentLocation.Equals(LastFrameLocation, 1.0f);
     LastFrameLocation = CurrentLocation;
+
+    // Interrupt emote when the character starts moving
+    if (!bWasMoving && playerData.characterData.bIsMoving && EmoteComponent)
+    {
+        EmoteComponent->NotifyMovementStarted();
+    }
 
     if (MyGameInstance && !playerData.isOtherClient)
     {
@@ -1740,7 +1765,7 @@ void ABasicPlayer::Tick(float DeltaTime)
         // Smoothly rotate mesh toward DesiredMeshYaw
         UpdateMeshRotation(DeltaTime);
         // Drive approach movement every frame so CharacterMovementComponent gets
-        // AddMovementInput on the same frame it is consumed � no more 1mm jitter.
+        // AddMovementInput on the same frame it is consumed пїЅ no more 1mm jitter.
         UpdateApproach(DeltaTime);
         // Smoothly interpolate camera zoom
         if (CameraBoom)
@@ -1811,7 +1836,7 @@ void ABasicPlayer::Move(const FInputActionValue& Value)
         StopAutoAttack();
     }
 
-    const FVector2D MoveValue = Value.Get<FVector2D>(); // NOT normalized � keep X/Y separate
+    const FVector2D MoveValue = Value.Get<FVector2D>(); // NOT normalized пїЅ keep X/Y separate
     const float CameraYaw = Controller->GetControlRotation().Yaw;
 
     if (bIsRightMouseDown)
@@ -1850,14 +1875,14 @@ void ABasicPlayer::Look(const FInputActionValue& Value)
     // Only process mouse look when at least one mouse button is held (WoW-style)
     if (!bIsRightMouseDown && !bIsLeftMouseDown) return;
 
-    // Dead players cannot rotate — the corpse must stay still.
+    // Dead players cannot rotate вЂ” the corpse must stay still.
     if (playerData.characterData.bIsDead) return;
 
     if (Controller != nullptr)
     {
         const FVector2D LookValue = Value.Get<FVector2D>();
 
-        // ── LMB-only drag detection ──────────────────────────────────────────
+        // в”Ђв”Ђ LMB-only drag detection в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         // When only LMB is held (no RMB), accumulate pixel movement.  Once the
         // drag threshold is exceeded we capture the mouse and mark the press as a
         // drag so OnLeftMouseReleased won't fire HandleConfirmedClick.
@@ -1903,7 +1928,7 @@ void ABasicPlayer::OnRightMousePressed()
     bIsRightMouseDown = true;
     ApplyMouseCaptureIfNoUIOpen();
 
-    // Disable hover trace during RMB camera drag — no point doing it when cursor is invisible.
+    // Disable hover trace during RMB camera drag вЂ” no point doing it when cursor is invisible.
     if (CursorInteractionComponent)
     {
         CursorInteractionComponent->SetHoverTraceEnabled(false);
@@ -1931,7 +1956,7 @@ void ABasicPlayer::OnLeftMousePressed()
     bIsLeftMouseDown = true;
 
     // Record press state for click-vs-drag detection.
-    // We do NOT capture the mouse immediately (unlike RMB) — instead we wait to
+    // We do NOT capture the mouse immediately (unlike RMB) вЂ” instead we wait to
     // see if the player drags (Look() accumulates movement and fires the capture
     // once the threshold is exceeded).  This lets a clean click-release reach
     // HandleConfirmedClick so CursorInteractionComponent can fire select/interact.
@@ -1956,13 +1981,13 @@ void ABasicPlayer::OnLeftMouseReleased()
     }
     else
     {
-        UE_LOG(LogTemp, Log, TEXT("CursorInteraction: LMB click BLOCKED — drag=%d, comp=%s, UIBlocking=%d"),
+        UE_LOG(LogTemp, Log, TEXT("CursorInteraction: LMB click BLOCKED вЂ” drag=%d, comp=%s, UIBlocking=%d"),
             bLMBDragActive ? 1 : 0,
             CursorInteractionComponent ? TEXT("OK") : TEXT("NULL"),
             IsUIBlockingInteraction() ? 1 : 0);
         if (bLMBDragActive && CursorInteractionComponent)
         {
-            // Drag ended — signal the component to break any pending double-click chain.
+            // Drag ended вЂ” signal the component to break any pending double-click chain.
             CursorInteractionComponent->NotifyDragStarted(); // resets double-click window
         }
     }
@@ -1974,7 +1999,7 @@ void ABasicPlayer::OnScroll(const FInputActionValue& Value)
 {
     if (!CameraBoom) return;
 
-    // Don't zoom if any UI window is open — let the scroll reach the widget
+    // Don't zoom if any UI window is open вЂ” let the scroll reach the widget
     if (UIManager && UIManager->HasUIWindowOpen()) return;
 
     // Value is a float: positive = scroll up (zoom in), negative = scroll down (zoom out)
@@ -2025,7 +2050,7 @@ void ABasicPlayer::UpdateMeshRotation(float DeltaTime)
     // that is way too low (180/90=2). Instead use a fixed responsive interp speed
     // that covers any remaining angle in ~1-2 frames at normal frame rates.
     // For keyboard A/D turning the delta is tiny each frame so this is instant;
-    // for RMB camera snap the delta can be up to 180° and we want ~100ms to close it.
+    // for RMB camera snap the delta can be up to 180В° and we want ~100ms to close it.
     const float InterpSpeed = 15.0f;
     const FRotator Smoothed = FMath::RInterpTo(Current, Target, DeltaTime, InterpSpeed);
     SetActorRotation(Smoothed);
@@ -2153,21 +2178,21 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     SetActorRotation(NewRotation);
 
     // -----------------------------------------------------------------------
-    // 3. Animation speed / direction — EMA smoothing + graceful stop fade-out
+    // 3. Animation speed / direction вЂ” EMA smoothing + graceful stop fade-out
     //
     //    Problems solved:
-    //      a) Raw RemoteSpeed jumps instantly from 0 → full on first packet
-    //         and stays at full until the 3x timeout → causes abrupt start/stop.
-    //      b) RemoteDirection flips instantly between packets → blend-space pops.
+    //      a) Raw RemoteSpeed jumps instantly from 0 в†’ full on first packet
+    //         and stays at full until the 3x timeout в†’ causes abrupt start/stop.
+    //      b) RemoteDirection flips instantly between packets в†’ blend-space pops.
     //
     //    Solution:
-    //      • Track idle time so we know when the server has stopped sending
+    //      вЂў Track idle time so we know when the server has stopped sending
     //        meaningful displacement packets.
-    //      • EMA-smooth speed toward the raw target value each tick.
-    //      • When idle, fade SmoothedRemoteSpeed to 0 with a short decay so the
-    //        walk→idle transition in the anim graph is driven by a curve, not
+    //      вЂў EMA-smooth speed toward the raw target value each tick.
+    //      вЂў When idle, fade SmoothedRemoteSpeed to 0 with a short decay so the
+    //        walkв†’idle transition in the anim graph is driven by a curve, not
     //        a hard zero.
-    //      • Direction is smoothed similarly so the blend-space never pops.
+    //      вЂў Direction is smoothed similarly so the blend-space never pops.
     // -----------------------------------------------------------------------
 
     // Grace period: one full server interval beyond the lerp window before we
@@ -2180,7 +2205,7 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
         RemoteIdleTime += DeltaTime;
         if (RemoteIdleTime >= GracePeriod)
         {
-            // No displacement in the last packet — begin fade-out.
+            // No displacement in the last packet вЂ” begin fade-out.
             bRemoteIsMoving = false;
         }
     }
@@ -2191,7 +2216,7 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     // EMA speeds: fast blend-in (0.2 weight on new) for startup,
     // slow blend-out (0.05 weight on new target=0) for graceful stop.
     // At 60 fps the fast path reaches ~98% of full speed in ~3 packets (~300 ms).
-    // The slow path decays to near-zero in ~20 frames (~330 ms) — smooth fade.
+    // The slow path decays to near-zero in ~20 frames (~330 ms) вЂ” smooth fade.
     const float BlendIn  = FMath::Clamp(DeltaTime / 0.08f, 0.0f, 1.0f);  // ~80 ms rise
     const float BlendOut = FMath::Clamp(DeltaTime / 0.22f, 0.0f, 1.0f);  // ~220 ms fall
     const float SpeedAlpha = (TargetSpeed > SmoothedRemoteSpeed) ? BlendIn : BlendOut;
@@ -2507,7 +2532,7 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
     // This makes interpolation robust to variable server tick rates and network jitter.
     if (playerData.isOtherClient && TimeSinceLastPositionUpdate > 0.01f)
     {
-        // Clamp to a sane range (50ms – 500ms) to ignore the very first packet
+        // Clamp to a sane range (50ms вЂ“ 500ms) to ignore the very first packet
         // and any massive gaps caused by the player standing still.
         const float MeasuredInterval = FMath::Clamp(TimeSinceLastPositionUpdate, 0.05f, 0.5f);
         // Exponential moving average: 80% old value, 20% new measurement
@@ -2560,7 +2585,7 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
         }
         else
         {
-            // Packet arrived but player hasn't moved — treat as idle.
+            // Packet arrived but player hasn't moved вЂ” treat as idle.
             RemoteSpeed     = 0.0f;
             RemoteDirection = 0.0f;
         }
@@ -2750,6 +2775,12 @@ void ABasicPlayer::OnReputationToggle()
     if (UIManager) UIManager->ToggleReputation();
 }
 
+void ABasicPlayer::OnEmoteListToggle()
+{
+    if (playerData.isOtherClient) return;
+    if (UIManager) UIManager->ToggleEmoteList();
+}
+
 void ABasicPlayer::CheckForNPC()
 {
     if (playerData.isOtherClient)
@@ -2877,7 +2908,7 @@ void ABasicPlayer::CheckForMOB()
     APlayerController* PC = Cast<APlayerController>(GetController());
     if (!PC) return;
 
-    // Trace from the camera viewpoint � consistent with CheckForNPC
+    // Trace from the camera viewpoint пїЅ consistent with CheckForNPC
     FVector CameraLocation;
     FRotator CameraRotation;
     PC->GetPlayerViewPoint(CameraLocation, CameraRotation);
@@ -2983,11 +3014,11 @@ void ABasicPlayer::CheckForMOB()
         }
     }
 
-    // Show/hide head widget using a cached pointer � no TActorIterator every Tick
+    // Show/hide head widget using a cached pointer пїЅ no TActorIterator every Tick
     if (PrevSoftTarget != EffectiveTarget)
     {
         // Hide the widget on the mob that just left the crosshair
-        // (skip if it is the hard-locked target � SetLockedTarget already manages it)
+        // (skip if it is the hard-locked target пїЅ SetLockedTarget already manages it)
         if (PrevSoftTarget && PrevSoftTarget != LockedTarget && IsValid(PrevSoftTarget))
         {
             PrevSoftTarget->MobHeadInfo->ShowWidget(false);
@@ -3081,7 +3112,7 @@ void ABasicPlayer::EndPlay(const EEndPlayReason::Type EndPlayReason)
     }
 
     // For remote players: remove the equipment visual delegate binding.
-    // This is a safety net — RemovePlayerData() does it first, but if the actor
+    // This is a safety net вЂ” RemovePlayerData() does it first, but if the actor
     // is destroyed by other means (e.g. level unload) this prevents dangling callbacks.
     if (playerData.isOtherClient && MyGameInstance && EquipmentVisualComponent)
     {
@@ -3162,7 +3193,7 @@ void ABasicPlayer::SetDead_Implementation(bool bNewDead)
 {
     playerData.characterData.bIsDead = bNewDead;
 
-    // Sync dead state on the nameplate (works for both local and remote � local is already hidden)
+    // Sync dead state on the nameplate (works for both local and remote пїЅ local is already hidden)
     if (NameplateComponent)
     {
         NameplateComponent->SetDeadState(bNewDead);
@@ -3401,7 +3432,7 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
     }
     else
     {
-        // AnimBP parent class is not UPlayerAnimInstance � log the actual class so we can fix it
+        // AnimBP parent class is not UPlayerAnimInstance пїЅ log the actual class so we can fix it
         if (GetMesh() && GetMesh()->GetAnimInstance())
         {
             UE_LOG(LogTemp, Error,
@@ -3416,7 +3447,7 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
                 TEXT("[PlayerAnim] GetPlayerAnimInstance() returned nullptr and no AnimInstance exists on mesh!"));
         }
 
-        // Fallback: no AnimInstance assigned yet � schedule timer directly
+        // Fallback: no AnimInstance assigned yet пїЅ schedule timer directly
         const float HitDelay = FMath::Max(Duration * 0.45f, 0.05f);
         UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] FALLBACK timer: HitDelay=%.3fs"), HitDelay);
         if (UWorld* World = GetWorld())
@@ -3442,12 +3473,18 @@ void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritica
         bIsBlocked ? TEXT("true") : TEXT("false"),
         *SkillSlug);
 
-    // Trigger hit-react animation — only on actual hit, not miss
+    // Trigger hit-react animation вЂ” only on actual hit, not miss
     if (!bIsMissed)
     {
         if (UPlayerAnimInstance* AnimInst = GetPlayerAnimInstance())
         {
             AnimInst->NotifyHit();
+        }
+
+        // Interrupt emote on damage
+        if (EmoteComponent)
+        {
+            EmoteComponent->NotifyDamageReceived();
         }
     }
 
@@ -3589,7 +3626,7 @@ void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritica
     }
 
     // --- Hit Stop: freeze this actor briefly so the impact feels weighty ---
-    // Not on miss — missing doesn't interrupt the actor's flow.
+    // Not on miss вЂ” missing doesn't interrupt the actor's flow.
     if (!bIsMissed)
     {
         if (UWorld* W = GetWorld())
@@ -4033,8 +4070,8 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
 
     case ECombatSoundSlot::CastVoice:
     {
-        // Cast-start voice: Priority 1 — skill-specific sound (same for any caster)
-        //                   Priority 2 — this player's entity audio profile (VoiceCastStart pool)
+        // Cast-start voice: Priority 1 вЂ” skill-specific sound (same for any caster)
+        //                   Priority 2 вЂ” this player's entity audio profile (VoiceCastStart pool)
         if (!MyGameInstance) break;
         if (USkillDefinitionRepository* Repo = MyGameInstance->GetSkillDefinitionRepository())
         {
@@ -4078,7 +4115,7 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
     {
         if (!MyGameInstance) break;
 
-        // Priority 1: equipped main-hand weapon's swing sound (sword woosh ≠ staff swish ≠ unarmed)
+        // Priority 1: equipped main-hand weapon's swing sound (sword woosh в‰  staff swish в‰  unarmed)
         if (UEquipmentManager* EquipMgr = MyGameInstance->GetEquipmentManager())
         {
             const FEquipmentSlotData& MainHand = EquipMgr->GetSlot(TEXT("main_hand"));
@@ -4127,7 +4164,7 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
 
         // Release Niagara VFX at CastSocket (e.g. muzzle flash on hands, departing glow).
         // Skip when a projectile class is set: castEndEffectNiagara is used as the projectile
-        // trail (attached TrailVFX component) — spawning it here as well would leave a static
+        // trail (attached TrailVFX component) вЂ” spawning it here as well would leave a static
         // copy frozen at the cast socket.
         if (!Def.castEndEffectNiagara.IsNull() && Def.projectileClass.IsNull())
         {
@@ -4143,7 +4180,7 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
                 UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), VFX, SpawnLoc, SpawnRot);
             }
         }
-        // Release voice: Priority 1 — skill-specific (castReleaseVoice), Priority 2 — player pool
+        // Release voice: Priority 1 вЂ” skill-specific (castReleaseVoice), Priority 2 вЂ” player pool
         {
             TSoftObjectPtr<USoundBase> ReleaseVoice = Def.castReleaseVoice;
             if (!ReleaseVoice.IsNull())
@@ -4181,9 +4218,9 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
                 }
             }
         }
-        } // end if (!playerData.isOtherClient) — sounds/VFX section
+        } // end if (!playerData.isOtherClient) вЂ” sounds/VFX section
 
-        // Spawn projectile if defined (preferred over frame-0 spawn — fires at correct cast-release timing)
+        // Spawn projectile if defined (preferred over frame-0 spawn вЂ” fires at correct cast-release timing)
         // This runs for both local and remote players so skills from other characters are visible (Bug 3 fix).
         if (!Def.projectileClass.IsNull())
         {
@@ -4228,7 +4265,7 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
                     {
                         const float Dist = FVector::Dist(SpawnLoc, TargetActor->GetActorLocation());
                         CalcSpeed = Dist / SwingSeconds;
-                        UE_LOG(LogTemp, Log, TEXT("[PlayerAnim] CastRelease: dist=%.0f swing=%.3fs → projectile speed=%.0f"),
+                        UE_LOG(LogTemp, Log, TEXT("[PlayerAnim] CastRelease: dist=%.0f swing=%.3fs в†’ projectile speed=%.0f"),
                             Dist, SwingSeconds, CalcSpeed);
                     }
                     Proj->SetupProjectile(CurrentSkillName, GetActorId_Implementation(), TargetActor, CalcSpeed);
@@ -4265,7 +4302,7 @@ void ABasicPlayer::ShowCastBar_Implementation(float CastTime, const FString& Ski
         MoveComp->DisableMovement();
     }
 
-    // Gameplay timer — unlocks movement after CastTime regardless of UI state.
+    // Gameplay timer вЂ” unlocks movement after CastTime regardless of UI state.
     // This is the authoritative unlock path; HideCastBar_Implementation (called
     // by the server on interrupt/cancel) cancels this timer.
     if (CastTime > 0.0f && GetWorld())
@@ -4332,3 +4369,11 @@ void ABasicPlayer::HideCastBar_Implementation()
 
 
 
+
+void ABasicPlayer::PlayEmoteForCharacter(const FString& EmoteSlug, const FString& AnimationName)
+{
+    if (EmoteComponent)
+    {
+        EmoteComponent->PlayEmoteBySlug(EmoteSlug, AnimationName);
+    }
+}

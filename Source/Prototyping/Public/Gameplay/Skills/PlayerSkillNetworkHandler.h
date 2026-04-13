@@ -8,10 +8,12 @@
 // Forward declarations
 class UPlayerSkillManager;
 class UNetworkManager;
+class UMyGameInstance;
 
 /**
- * Handles network communication for player skills
- * Follows Single Responsibility Principle - only handles skill network events
+ * Handles network communication for player skills.
+ * Inbound:  initializePlayerSkills, skillBarState, skillBarSlotUpdated
+ * Outbound: setSkillBarSlot
  */
 UCLASS(BlueprintType)
 class PROTOTYPING_API UPlayerSkillNetworkHandler : public UObject
@@ -25,12 +27,24 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Player Skill Network Handler")
     void Initialize(UPlayerSkillManager* InSkillManager, UNetworkManager* InNetworkManager);
 
+    /** Must be called after Initialize() so outbound packets can include auth data. */
+    UFUNCTION(BlueprintCallable, Category = "Player Skill Network Handler")
+    void SetGameInstance(UMyGameInstance* InGameInstance);
+
     // Network event subscription
     UFUNCTION(BlueprintCallable, Category = "Player Skill Network Handler")
     void SubscribeToNetworkEvents();
 
     UFUNCTION(BlueprintCallable, Category = "Player Skill Network Handler")
     void UnsubscribeFromNetworkEvents();
+
+    /**
+     * Send setSkillBarSlot to chunk-server.
+     * Call this when the local player drags a skill onto a bar slot or removes it.
+     * Pass an empty SkillSlug to clear the slot.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Player Skill Network Handler")
+    void SendSetSkillBarSlot(int32 SlotIndex, const FString& SkillSlug, int32 CharacterId);
 
 protected:
     // Network event handlers
@@ -42,12 +56,19 @@ protected:
     void HandleSkillCooldownUpdate(const FString& JsonData);
     void HandleSkillLevelUpdate(const FString& JsonData);
 
+    // Skill-bar event handlers
+    void HandleSkillBarState(const FString& JsonData);
+    void HandleSkillBarSlotUpdated(const FString& JsonData);
+
     // Dependencies
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Dependencies")
     TObjectPtr<UPlayerSkillManager> SkillManager;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Dependencies")
     TObjectPtr<UNetworkManager> NetworkManager;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Dependencies")
+    TObjectPtr<UMyGameInstance> GameInstance;
 
 private:
     // Utility methods

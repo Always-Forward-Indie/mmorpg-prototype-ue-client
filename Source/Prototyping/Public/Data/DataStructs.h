@@ -3983,3 +3983,61 @@ struct PROTOTYPING_API FPlayerTitlesState
 
     FPlayerTitlesState() {}
 };
+
+// ============================================================
+// Emote System Structures
+// ============================================================
+
+/**
+ * Runtime data for a single emote definition, mirroring the server-side EmoteDefinitionStruct.
+ * Visual / audio bindings live in FEmoteTableRow (DT_EmoteDefinitions DataTable).
+ */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FEmoteDefinitionData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Emote")
+    int32 id = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Emote")
+    FString slug = "";
+
+    /** Server-provided display name (fallback when no DataTable row exists). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Emote")
+    FString displayName = "";
+
+    /** Animation name string from the server (maps to a montage via DataTable). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Emote")
+    FString animationName = "";
+
+    /** Category slug: "general" | "social" | "dance" */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Emote")
+    FString category = "general";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Emote")
+    bool bIsDefault = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Emote")
+    int32 sortOrder = 0;
+
+    FEmoteDefinitionData() {}
+};
+
+/**
+ * Full player emote state sent by the server (player_emotes packet).
+ * Contains the character's unlocked emotes with full definition data.
+ */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FPlayerEmotesState
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Emotes")
+    int32 characterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Emotes")
+    TArray<FEmoteDefinitionData> emotes;
+
+    FPlayerEmotesState() {}
+};

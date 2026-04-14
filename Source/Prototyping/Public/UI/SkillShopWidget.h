@@ -13,6 +13,8 @@
 
 class USkillShopManager;
 class USkillShopRowBinding;
+class UInventoryManager;
+class UPlayerStatsManager;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSkillShopVisibilityChanged, bool, bIsVisible);
 
@@ -55,11 +57,22 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Skill Shop UI")
     void BindToSkillShopManager(USkillShopManager* InManager);
 
+    /** Bind to the inventory manager so the gold display stays in sync after purchases. */
+    UFUNCTION(BlueprintCallable, Category = "Skill Shop UI")
+    void BindToInventoryManager(UInventoryManager* InInventoryManager);
+
+    /** Bind to the stats manager so SP updates (level-up, passive skill) are reflected live. */
+    UFUNCTION(BlueprintCallable, Category = "Skill Shop UI")
+    void BindToStatsManager(UPlayerStatsManager* InStatsManager);
+
     UFUNCTION(BlueprintCallable, Category = "Skill Shop UI")
     void OpenShop();
 
     UFUNCTION(BlueprintCallable, Category = "Skill Shop UI")
     void CloseShop();
+
+    /** Returns the NPC id of the trainer currently shown (0 if none). */
+    int32 GetActiveNpcId() const { return ActiveNpcId; }
 
     UFUNCTION(BlueprintCallable, Category = "Skill Shop UI")
     void RefreshDisplay();
@@ -89,6 +102,8 @@ protected:
     UFUNCTION() void HandleSkillLearned(const FLearnSkillResultData& Result);
     UFUNCTION() void HandleSkillLearnFailed(const FString& SkillSlug, const FString& Reason);
     UFUNCTION() void HandleCloseButtonClicked();
+    UFUNCTION() void HandleInventoryUpdated(const FCharacterInventoryStruct& Inventory);
+    UFUNCTION() void HandlePlayerStatsUpdated(const FPlayerStatsUpdateStruct& NewStats);
 
     // --- Bound widgets ---
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))         UScrollBox* Skill_List_Box   = nullptr;
@@ -107,6 +122,8 @@ private:
     void SetRowState(UUserWidget* Row, const FSkillShopSkillData& Skill);
 
     UPROPERTY() USkillShopManager* SkillShopManager = nullptr;
+    UPROPERTY() UInventoryManager* InventoryManager  = nullptr;
+    UPROPERTY() UPlayerStatsManager* StatsManager    = nullptr;
     UPROPERTY() TArray<USkillShopRowBinding*> RowBindings;
 
     FSkillShopData CachedShop;

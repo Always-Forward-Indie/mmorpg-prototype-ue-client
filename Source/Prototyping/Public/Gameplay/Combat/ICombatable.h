@@ -104,6 +104,10 @@ public:
     virtual void ShowHealingEffect_Implementation(int32 Healing, const FString& SkillSlug) {}  
 
     UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Combatable|Effects")
+    void ShowManaRestoreEffect(int32 ManaRestored);
+    virtual void ShowManaRestoreEffect_Implementation(int32 ManaRestored) {}
+
+    UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Combatable|Effects")
     void ShowBuffEffect(const FAppliedEffectData& Effect);
     virtual void ShowBuffEffect_Implementation(const FAppliedEffectData& Effect) {}
 

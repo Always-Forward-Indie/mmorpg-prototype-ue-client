@@ -34,6 +34,34 @@ void UItemTooltipWidget::NativeConstruct()
 	// Hide tooltip initially
 	SetVisibility(ESlateVisibility::Hidden);
 	SetRenderOpacity(0.0f);
+
+	// Subscribe to inventory updates so kill count refreshes live while the tooltip is open
+	if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+	{
+		if (UInventoryManager* InvMgr = GI->GetInventoryManager())
+		{
+			InvMgr->OnInventoryUpdated.AddDynamic(this, &UItemTooltipWidget::OnInventoryUpdated);
+		}
+	}
+}
+
+void UItemTooltipWidget::OnInventoryUpdated(const FCharacterInventoryStruct& UpdatedInventory)
+{
+	if (CurrentItem.id <= 0 || !bIsVisible) return;
+
+	// Find the matching item in the updated inventory and refresh kill count
+	for (const FInventoryItemStruct& Item : UpdatedInventory.items)
+	{
+		if (Item.id == CurrentItem.id)
+		{
+			if (Item.killCount != CurrentItem.killCount)
+			{
+				CurrentItem.killCount = Item.killCount;
+				UpdateKillCount();
+			}
+			break;
+		}
+	}
 }
 
 void UItemTooltipWidget::SetItemData(const FInventoryItemStruct& Item)
@@ -68,42 +96,42 @@ void UItemTooltipWidget::UpdateTooltipPosition(FVector2D /*ScreenPosUnused*/)
 	APlayerController* PC = GetOwningPlayer();
 	if (!PC) return;
 
-	// 1) Позиция курсора в координатах вьюпорта (UE5)
+	// 1) пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (UE5)
 	const FVector2D MousePos = UWidgetLayoutLibrary::GetMousePositionOnViewport(PC);
 
-	// 2) Получаем максимально достоверный размер
-	SetVisibility(ESlateVisibility::HitTestInvisible); // не Collapsed
+	// 2) пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
+	SetVisibility(ESlateVisibility::HitTestInvisible); // пїЅпїЅ Collapsed
 	ForceLayoutPrepass();
 
-	FVector2D Size = GetCachedGeometry().GetLocalSize(); // точнее, чем DesiredSize
+	FVector2D Size = GetCachedGeometry().GetLocalSize(); // пїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅ DesiredSize
 	if (Size.X <= 1.f || Size.Y <= 1.f)
 		Size = GetDesiredSize();                         // fallback
 	if (Size.IsZero())
-		Size = FVector2D(300, 200);                      // страховка
+		Size = FVector2D(300, 200);                      // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 
-	// 3) Границы вьюпорта
+	// 3) пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	int32 Wpx = 0, Hpx = 0; PC->GetViewportSize(Wpx, Hpx);
 	const FVector2D View(Wpx, Hpx);
 
 	const float SafePad = 20.f;
 	const FVector2D BaseOffset = TooltipOffset + FVector2D(SafePad, SafePad);
 
-	// 4) Пробуем справа-внизу
+	// 4) пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ-пїЅпїЅпїЅпїЅпїЅ
 	FVector2D Pos = MousePos + BaseOffset;
 
-	// 5) Раннее зеркалирование БЕЗ урезания - увеличиваем EarlyPad
-	const float EarlyPad = SafePad + 50.f; // Увеличили с 2.f до 30.f для более раннего срабатывания
+	// 5) пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ - пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ EarlyPad
+	const float EarlyPad = SafePad + 50.f; // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ 2.f пїЅпїЅ 30.f пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	if (Pos.X + Size.X > View.X - EarlyPad)
 		Pos.X = MousePos.X - Size.X - FMath::Abs(TooltipOffset.X) - SafePad;
 
 	if (Pos.Y + Size.Y > View.Y - EarlyPad)
 		Pos.Y = MousePos.Y - Size.Y - FMath::Abs(TooltipOffset.Y) - SafePad;
 
-	// 6) Жёсткий кламп (теперь срабатывает реже)
+	// 6) ЖёпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ)
 	Pos.X = FMath::Clamp(Pos.X, 0.f, View.X - Size.X);
 	Pos.Y = FMath::Clamp(Pos.Y, 0.f, View.Y - Size.Y);
 
-	// 7) Фиксируем pivot и ставим позицию
+	// 7) пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ pivot пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	SetAlignmentInViewport(FVector2D(0, 0));
 	SetPositionInViewport(Pos, /*bRemoveDPIScale=*/false);
 }
@@ -280,6 +308,7 @@ void UItemTooltipWidget::UpdateTooltipContent()
 	UpdateItemAttributes();
 	UpdateUseEffects();
 	UpdateVendorPrices();
+	UpdateKillCount();
 }
 
 void UItemTooltipWidget::UpdateItemHeader()
@@ -414,18 +443,18 @@ void UItemTooltipWidget::UpdateItemWeight()
 	{
 		if (CurrentItem.weight > 0.0f)
 		{
-			// Используем централизованную функцию форматирования
+			// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 			FText WeightText_FormattedText = FormatWeightText(CurrentItem.weight);
 			
 			WeightText->SetText(WeightText_FormattedText);
 			WeightText->SetVisibility(ESlateVisibility::Visible);
 			
-			// Добавляем цветовое кодирование веса
+			// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
 			WeightText->SetColorAndOpacity(GetWeightColor(CurrentItem.weight));
 		}
 		else
 		{
-			// Скрываем виджет веса, если вес 0 или отрицательный
+			// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ 0 пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 			WeightText->SetVisibility(ESlateVisibility::Collapsed);
 		}
 	}
@@ -542,6 +571,22 @@ void UItemTooltipWidget::UpdateUseEffects()
 	if (Separator4) Separator4->SetVisibility(ESlateVisibility::HitTestInvisible);
 }
 
+void UItemTooltipWidget::UpdateKillCount()
+{
+	if (!KillCountText) return;
+
+	if (CurrentItem.killCount > 0)
+	{
+		KillCountText->SetText(FText::FromString(FString::Printf(TEXT("Kills: %d"), CurrentItem.killCount)));
+		KillCountText->SetColorAndOpacity(FLinearColor(1.0f, 0.4f, 0.2f, 1.0f));
+		KillCountText->SetVisibility(ESlateVisibility::Visible);
+	}
+	else
+	{
+		KillCountText->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
 FLinearColor UItemTooltipWidget::GetRarityColor(const FString& Rarity) const
 {
 	if (const FLinearColor* Color = RarityColors.Find(Rarity.ToLower()))
@@ -574,18 +619,18 @@ FLinearColor UItemTooltipWidget::GetWeightColor(float Weight) const
 
 	if (Weight > HeavyWeightThreshold)
 	{
-		return FLinearColor::Red; // Тяжёлые предметы - красным
+		return FLinearColor::Red; // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ - пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	}
 	else if (Weight > MediumWeightThreshold)
 	{
-		return FLinearColor::Yellow; // Средний вес - жёлтым
+		return FLinearColor::Yellow; // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ - пїЅпїЅпїЅпїЅпїЅ
 	}
 	else if (Weight > LightWeightThreshold)
 	{
-		return FLinearColor(1.0f, 0.8f, 0.4f, 1.0f); // Лёгкие предметы - оранжевым
+		return FLinearColor(1.0f, 0.8f, 0.4f, 1.0f); // ЛёпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ - пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	}
 	
-	// Очень лёгкие предметы остаются белыми
+	// пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
 	return Col;
 }
 
@@ -596,21 +641,21 @@ FText UItemTooltipWidget::FormatWeightText(float Weight) const
 		return FText::GetEmpty();
 	}
 
-	// Формируем базовый текст веса
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
 	FString WeightString;
 	
-	// Если вес является целым числом (без дробной части)
+	// пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ)
 	if (FMath::IsNearlyEqual(Weight, FMath::RoundToFloat(Weight), 0.001f))
 	{
-		// Показываем как целое число
+		// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 		WeightString = FString::Printf(TEXT("%d"), FMath::RoundToInt(Weight));
 	}
 	else
 	{
-		// Показываем с двумя знаками после запятой, убираем лишние нули
+		// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
 		WeightString = FString::Printf(TEXT("%.2f"), Weight);
 		
-		// Убираем лишние нули в конце
+		// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅ
 		while (WeightString.EndsWith(TEXT("0")) && WeightString.Contains(TEXT(".")))
 		{
 			WeightString = WeightString.LeftChop(1);
@@ -621,7 +666,7 @@ FText UItemTooltipWidget::FormatWeightText(float Weight) const
 		}
 	}
 	
-	// Добавляем единицы измерения если включено
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	if (bShowWeightUnit && !WeightUnit.IsEmpty())
 	{
 		return FText::FromString(FString::Printf(TEXT("Weight: %s %s"), *WeightString, *WeightUnit));
@@ -712,7 +757,7 @@ UTextBlock* UItemTooltipWidget::AddAttributeTextWidget(const FString& AttributeN
 
 	//set font size
 	FSlateFontInfo FontInfo = AttributeTextWidget->GetFont();
-	FontInfo.Size = 12; // любой размер в pt
+	FontInfo.Size = 12; // пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ pt
 	AttributeTextWidget->SetFont(FontInfo);
 
 	// Add to attributes box

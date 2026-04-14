@@ -89,18 +89,39 @@ void USkillShopManager::OnSkillShopReceived(const FSkillShopData& ShopData)
 
 void USkillShopManager::OnSkillLearnedReceived(const FLearnSkillResultData& Result)
 {
-    // Mark skill as learned in cached shop (so widget can update icons/buttons)
+    // Mark skill as learned in cached shop and deduct its cost
     for (FSkillShopSkillData& Skill : CurrentShop.skills)
     {
         if (Skill.skillSlug.Equals(Result.skillSlug, ESearchCase::IgnoreCase))
         {
+            // Deduct gold cost (server does not send newGoldBalance in skill_learned)
+            CurrentShop.goldBalance = FMath::Max(0, CurrentShop.goldBalance - Skill.goldCost);
             Skill.isLearned = true;
             Skill.canLearn  = false;
             break;
         }
     }
-    // Update SP balance
+    // Update SP balance from the authoritative server value
     CurrentShop.freeSkillPoints = Result.newFreeSkillPoints;
+
+    // Recalculate affordability flags for all remaining unlearned skills:
+    // prereqMet may change (the just-learned skill could be a prerequisite),
+    // spMet/goldMet change because resources were spent.
+    for (FSkillShopSkillData& Skill : CurrentShop.skills)
+    {
+        if (Skill.isLearned) continue;
+
+        // Unlock prerequisite if this skill depended on the one just learned
+        if (!Skill.prerequisiteSkillSlug.IsEmpty() &&
+            Skill.prerequisiteSkillSlug.Equals(Result.skillSlug, ESearchCase::IgnoreCase))
+        {
+            Skill.prereqMet = true;
+        }
+
+        Skill.spMet   = (CurrentShop.freeSkillPoints >= Skill.spCost);
+        Skill.goldMet = (CurrentShop.goldBalance >= Skill.goldCost);
+        Skill.canLearn = Skill.prereqMet && Skill.levelMet && Skill.spMet && Skill.goldMet && Skill.bookMet;
+    }
 
     OnSkillLearnedDelegate.Broadcast(Result);
 }

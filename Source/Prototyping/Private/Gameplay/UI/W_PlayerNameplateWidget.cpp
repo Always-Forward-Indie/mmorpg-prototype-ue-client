@@ -79,7 +79,7 @@ void UW_PlayerNameplateWidget::UpdateHealthBar(int32 CurrentHP, int32 MaxHP)
     if (HpVisibleDuration > 0.0f)
     {
         // Always show the bar and reset the hide timer on each health update.
-        // If the bar was already visible (previous damage), just extend the timer —
+        // If the bar was already visible (previous damage), just extend the timer ï¿½
         // don't call ShowHPBar(true) again to avoid redundant visibility toggles.
         if (!bHPBarVisible)
         {
@@ -114,6 +114,21 @@ void UW_PlayerNameplateWidget::SetDeadState(bool bNewDead)
     }
 }
 
+void UW_PlayerNameplateWidget::SetTitle(const FString& InTitle)
+{
+    if (!TitleText) return;
+
+    if (InTitle.IsEmpty())
+    {
+        TitleText->SetVisibility(ESlateVisibility::Collapsed);
+    }
+    else
+    {
+        TitleText->SetText(FText::FromString(InTitle));
+        TitleText->SetVisibility(ESlateVisibility::HitTestInvisible);
+    }
+}
+
 void UW_PlayerNameplateWidget::SetWidgetScale(float Scale)
 {
     FWidgetTransform Transform = GetRenderTransform();
@@ -125,16 +140,14 @@ void UW_PlayerNameplateWidget::NativeTick(const FGeometry& MyGeometry, float InD
 {
     Super::NativeTick(MyGeometry, InDeltaTime);
 
-    if (!bHPBarVisible || HpVisibleDuration <= 0.0f)
+    if (bHPBarVisible && HpVisibleDuration > 0.0f)
     {
-        return;
-    }
-
-    HpHideTimer -= InDeltaTime;
-    if (HpHideTimer <= 0.0f)
-    {
-        HpHideTimer = 0.0f;
-        ShowHPBar(false);
+        HpHideTimer -= InDeltaTime;
+        if (HpHideTimer <= 0.0f)
+        {
+            HpHideTimer = 0.0f;
+            ShowHPBar(false);
+        }
     }
 }
 

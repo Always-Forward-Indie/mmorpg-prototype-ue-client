@@ -17,6 +17,7 @@
 #include "Gameplay/UI/DamageTextWidget.h"
 #include "Gameplay/Mobs/BasicMOB.h"
 #include "Gameplay/NPCs/BasicNPC.h"
+#include "Gameplay/NPCs/NPCManager.h"
 #include "Gameplay/Items/DroppedItemActor.h"
 #include "Gameplay/Dialogue/DialogueManager.h"
 #include "Gameplay/Quest/QuestManager.h"
@@ -28,6 +29,7 @@
 #include "Gameplay/Repair/RepairManager.h"
 #include "Gameplay/Trade/TradeManager.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
+#include "Gameplay/Player/PlayerStatsNetworkHandler.h"
 #include "UI/PlayerStatsWidget.h"
 #include "Gameplay/Interaction/CursorInteractionComponent.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
@@ -52,6 +54,8 @@
 #include "Particles/ParticleSystem.h"
 #include "NiagaraSystem.h"
 #include "NiagaraFunctionLibrary.h"
+#include "Gameplay/Chat/ChatManager.h"
+#include "Gameplay/Player/TitleManager.h"
 #include "Data/EffectDefinitionTable.h"
 #include "Gameplay/Emotes/EmoteManager.h"
 #include "Gameplay/Emotes/EmoteNetworkHandler.h"
@@ -1229,6 +1233,15 @@ Super::BeginPlay();
 					{
 						ExperienceManager->OnLevelUp.AddDynamic(this, &ABasicPlayer::HandleLevelUp);
 					}
+
+					// Subscribe to effectTick to show floating heal/regen numbers above this player.
+					// Applied for ALL players (both local and others) so HoT ticks on remote
+					// characters also show a number floating over their heads.
+					if (MyGameInstance && MyGameInstance->PlayerStatsNetworkHandler)
+					{
+						MyGameInstance->PlayerStatsNetworkHandler->OnEffectTick.AddDynamic(
+							this, &ABasicPlayer::HandleEffectTickFCT);
+					}
 					
 					// Get SkillManager from GameInstance
 					UPlayerSkillManager* SkillManager = MyGameInstance ? MyGameInstance->GetPlayerSkillManager() : nullptr;
@@ -1379,6 +1392,22 @@ Super::BeginPlay();
 					}
 				}
 
+				// Subscribe to ChatManager: routes each received message to the sender's nameplate bubble.
+				if (UChatManager* ChatMgr = MyGameInstance ? MyGameInstance->GetChatManager() : nullptr)
+				{
+					ChatMgr->OnChatMessageReceived.AddDynamic(this, &ABasicPlayer::HandleChatMessageForBubble);
+				}
+
+				// For the LOCAL player: when they equip/remove a title, push the new display name
+				// to their nameplate so other viewers see it immediately.
+				if (!playerData.isOtherClient)
+				{
+					if (UTitleManager* TitleMgr = MyGameInstance ? MyGameInstance->GetTitleManager() : nullptr)
+					{
+						TitleMgr->OnTitlesUpdated.AddDynamic(this, &ABasicPlayer::HandleTitlesUpdated);
+					}
+				}
+
 				// The death screen will be shown automatically via the pending mechanism
 				// in UIManager if the character spawned as dead (SetDead_Implementation
 				// already called in SpawnPlayerForClient before this timer fires).
@@ -1411,6 +1440,56 @@ void ABasicPlayer::HandleLevelUp(int32 OldLevel, int32 NewLevel, int32 NewTotalE
     if (const FEntityAudioProfile* Profile = GetAudioProfile())
     {
         PlayEventSound(Profile->LevelUp);
+    }
+}
+
+void ABasicPlayer::HandleEffectTickFCT(const FEffectTickData& TickData)
+{
+    // Only process ticks that belong to this specific player actor.
+    if (TickData.characterId != playerData.characterData.characterId) return;
+
+    // Heal-over-time → show green "+N" via the normal healing path
+    // (ShowHealingEffect_Implementation handles FCT + optional skill sounds/VFX).
+    if (TickData.effectTypeSlug == TEXT("hot") && TickData.value > 0)
+    {
+        ShowHealingEffect_Implementation(TickData.value, TickData.effectSlug);
+    }
+}
+
+void ABasicPlayer::HandleChatMessageForBubble(const FChatMessageStruct& Message)
+{
+    // Ignore error / system messages.
+    if (Message.bIsError) return;
+    if (Message.senderId <= 0) return;
+
+    // Find the player actor who sent this message and show their speech bubble.
+    // Only remote players are registered in NameplateManager, so the local player's
+    // own messages are silently skipped (no nameplate entry for bIsLocalPlayer actors).
+    if (!MyGameInstance) return;
+
+    ABasicPlayer* Sender = MyGameInstance->GetPlayerByCharacterId(Message.senderId);
+    if (!Sender || !Sender->GetNameplateComponent()) return;
+
+    Sender->GetNameplateComponent()->ShowChatBubble(Message.text, ChatBubbleDisplayDuration);
+}
+
+void ABasicPlayer::HandleTitlesUpdated(const FPlayerTitlesState& State)
+{
+    // Push the currently-equipped title name to this actor's nameplate.
+    // The display name is empty when no title is equipped → nameplate hides the title row.
+    if (NameplateComponent)
+    {
+        NameplateComponent->UpdateTitle(State.equippedTitle.displayName);
+    }
+}
+
+void ABasicPlayer::SetEquippedTitle(const FString& TitleDisplayName)
+{
+    // Called by SpawnPlayerForClient (or a future title-broadcast handler) to set the
+    // initial / updated title for a remote player's nameplate.
+    if (NameplateComponent)
+    {
+        NameplateComponent->UpdateTitle(TitleDisplayName);
     }
 }
 
@@ -1772,6 +1851,14 @@ void ABasicPlayer::Tick(float DeltaTime)
         {
             CameraBoom->TargetArmLength = FMath::FInterpTo(
                 CameraBoom->TargetArmLength, DesiredZoom, DeltaTime, ZoomInterpSpeed);
+        }
+
+        // Throttled check: close NPC windows if player has walked too far from the NPC.
+        NpcDistCheckAccum += DeltaTime;
+        if (NpcDistCheckAccum >= 0.5f)
+        {
+            NpcDistCheckAccum = 0.0f;
+            CheckNPCInteractionDistance();
         }
     }
 
@@ -2856,6 +2943,35 @@ void ABasicPlayer::CheckForNPC()
     TrackedNPC = (HitNPC && HitNPC->IsNPCInteractable()) ? HitNPC : nullptr;
 }
 
+void ABasicPlayer::CheckNPCInteractionDistance()
+{
+    if (!MyGameInstance || !UIManager) return;
+
+    const int32 ActiveNpcId = UIManager->GetActiveInteractionNpcId();
+    if (ActiveNpcId == 0) return; // No NPC windows are open.
+
+    UNPCManager* NPCMgr = MyGameInstance->GetNPCManager();
+    if (!NPCMgr) return;
+
+    ABasicNPC* NPC = NPCMgr->GetNPCById(ActiveNpcId);
+    if (!IsValid(NPC)) return;
+
+    // Use 2D distance (ignores Z) so hills/ramps don't accidentally trigger close.
+    const float Dist2D = FVector::Dist2D(GetActorLocation(), NPC->GetActorLocation());
+
+    // Close threshold: interaction radius + 300 units so the player has to clearly
+    // walk away before windows auto-close. This must exceed npc.radius (200 default).
+    const float CloseThreshold = static_cast<float>(NPC->GetNPCData().radius) + 300.0f;
+
+    if (Dist2D > CloseThreshold)
+    {
+        UE_LOG(LogTemp, Log, TEXT("[NPC] Player moved %.0f units from NPC %d (threshold %.0f). Force-closing NPC windows."),
+            Dist2D, ActiveNpcId, CloseThreshold);
+        UDialogueManager* DlgMgr = MyGameInstance->GetDialogueManager();
+        UIManager->ForceCloseAllNPCWindows(DlgMgr);
+    }
+}
+
 void ABasicPlayer::OnInteractInput()
 {
     UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: OnInteractInput triggered"));
@@ -2890,9 +3006,21 @@ void ABasicPlayer::OnInteractInput()
 
     if (DlgManager->IsDialogueActive())
     {
-        // Close running session before opening a new one
-        DlgManager->CloseDialogue();
+        // Close running session (and any open shop windows) before opening a new one.
+        UIManager ? UIManager->ForceCloseAllNPCWindows(DlgManager) : DlgManager->CloseDialogue();
         return;
+    }
+
+    // If a shop from a DIFFERENT NPC is still open, close it before starting new dialogue.
+    if (UIManager)
+    {
+        const int32 ActiveNpcId = UIManager->GetActiveInteractionNpcId();
+        if (ActiveNpcId > 0 && ActiveNpcId != TrackedNPC->GetNPCId())
+        {
+            UE_LOG(LogTemp, Log, TEXT("[NPC] Closing windows for NPC %d before opening dialogue with NPC %d"),
+                ActiveNpcId, TrackedNPC->GetNPCId());
+            UIManager->ForceCloseAllNPCWindows(DlgManager);
+        }
     }
 
     UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Opening dialogue with NPC %d (%s)"),
@@ -3311,8 +3439,10 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
     UCombatSystemManager* CombatMgr = MyGameInstance->GetCombatSystemManager();
     if (!CombatMgr) return;
 
-    // Store current skill slug so AnimNotify_PlayerCombatEvent can look up the right definition.
-    CurrentSkillName = SkillSlug.IsEmpty() ? AnimationName : SkillSlug;
+    // Track the animating skill slug for audio/VFX only (see PlayCombatSoundEvent).
+    // CurrentSkillName is intentionally NOT overwritten here so the auto-attack
+    // loop (DoAutoAttack) always sends "basic_attack" to the server.
+    ActiveAnimSkillSlug = SkillSlug.IsEmpty() ? AnimationName : SkillSlug;
     CurrentAnimationDuration = Duration;
 
     const int32 CasterId = GetActorId_Implementation();
@@ -3718,6 +3848,21 @@ void ABasicPlayer::ShowHealingEffect_Implementation(int32 Healing, const FString
     }
 }
 
+void ABasicPlayer::ShowManaRestoreEffect_Implementation(int32 ManaRestored)
+{
+    if (ManaRestored <= 0) return;
+
+    UE_LOG(LogTemp, Log, TEXT("Player %d mana restored by %d"), GetActorId_Implementation(), ManaRestored);
+
+    if (UIManager)
+    {
+        if (UFloatingCombatTextManager* FCT = UIManager->GetFCTManager())
+        {
+            FCT->ShowDamage(GetCombatPosition_Implementation(), static_cast<float>(ManaRestored), false, EDamageType::ManaRegen);
+        }
+    }
+}
+
 void ABasicPlayer::ShowBuffEffect_Implementation(const FAppliedEffectData& Effect)
 {
     UE_LOG(LogTemp, Log, TEXT("Player %d received %s effect: %s (Value: %d, Duration: %.1f)"), 
@@ -3948,6 +4093,10 @@ void ABasicPlayer::HandleStatsManagerUpdate(const FPlayerStatsUpdateStruct& NewS
 	if (playerData.isOtherClient) return;
 	if (NewStats.characterId != playerData.characterData.characterId) return;
 
+	// Capture current vitals before the update so we can compute regen deltas.
+	const int32 OldHP = playerData.characterData.characterCurrentHealth;
+	const int32 OldMP = playerData.characterData.characterCurrentMana;
+
 	// Use the authoritative parser so that max_health / max_mana attributes in
 	// playerData are always kept in sync alongside the current vitals.
 	// Previously only healthCurrent/manaCurrent were updated here, which meant
@@ -3955,6 +4104,22 @@ void ABasicPlayer::HandleStatsManagerUpdate(const FPlayerStatsUpdateStruct& NewS
 	PlayerAttributeParser::UpdateCharacterDataFromStatsUpdate(playerData.characterData, NewStats);
 
 	RefreshHUD();
+
+	// For passive regen ticks the server tags the update with source="regen".
+	// Show floating combat text for the HP/MP gain so the player can see the numbers.
+	if (NewStats.updateSource == TEXT("regen") && UIManager)
+	{
+		if (UFloatingCombatTextManager* FCT = UIManager->GetFCTManager())
+		{
+			const int32 HPGain = playerData.characterData.characterCurrentHealth - OldHP;
+			const int32 MPGain = playerData.characterData.characterCurrentMana - OldMP;
+
+			if (HPGain > 0)
+				FCT->ShowDamage(GetCombatPosition_Implementation(), static_cast<float>(HPGain), false, EDamageType::Heal);
+			if (MPGain > 0)
+				FCT->ShowDamage(GetCombatPosition_Implementation(), static_cast<float>(MPGain), false, EDamageType::ManaRegen);
+		}
+	}
 
 	// Forward activeEffects to the HUD buff bar. This mirrors ProcessStatsUpdate's
 	// behaviour and ensures effects are visible even when stats arrive before the
@@ -4045,7 +4210,7 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
             if (UEntityAudioRepository* Repo = MyGameInstance->GetEntityAudioRepository())
             {
                 if (const FEntitySkillVoiceOverride* Override =
-                        Repo->FindSkillVoiceOverride(AudioProfileId, FName(*CurrentSkillName)))
+                        Repo->FindSkillVoiceOverride(AudioProfileId, FName(*ActiveAnimSkillSlug)))
                 {
                     if (Override->VoiceAttack.Num() > 0)
                     {
@@ -4075,7 +4240,7 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
         if (!MyGameInstance) break;
         if (USkillDefinitionRepository* Repo = MyGameInstance->GetSkillDefinitionRepository())
         {
-            const FSkillDefinitionData& Def = Repo->GetDefinition(CurrentSkillName);
+            const FSkillDefinitionData& Def = Repo->GetDefinition(ActiveAnimSkillSlug);
             if (!Def.castStartVoice.IsNull())
             {
                 PlayEventSound(Def.castStartVoice);
@@ -4090,7 +4255,7 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
             if (UEntityAudioRepository* Repo = MyGameInstance->GetEntityAudioRepository())
             {
                 if (const FEntitySkillVoiceOverride* Override =
-                        Repo->FindSkillVoiceOverride(AudioProfileId, FName(*CurrentSkillName)))
+                        Repo->FindSkillVoiceOverride(AudioProfileId, FName(*ActiveAnimSkillSlug)))
                 {
                     if (Override->CastStartVoice.Num() > 0)
                     {
@@ -4136,7 +4301,7 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
         // Priority 2: skill-level swing sound (generic fallback)
         if (USkillDefinitionRepository* Repo = MyGameInstance->GetSkillDefinitionRepository())
         {
-            const FSkillDefinitionData& Def = Repo->GetDefinition(CurrentSkillName);
+            const FSkillDefinitionData& Def = Repo->GetDefinition(ActiveAnimSkillSlug);
             if (!Def.swingSound.IsNull())
             {
                 PlayEventSound(Def.swingSound);
@@ -4151,7 +4316,7 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
         USkillDefinitionRepository* Repo = MyGameInstance->GetSkillDefinitionRepository();
         if (!Repo) break;
 
-        const FSkillDefinitionData& Def = Repo->GetDefinition(CurrentSkillName);
+        const FSkillDefinitionData& Def = Repo->GetDefinition(ActiveAnimSkillSlug);
 
         // Sounds and VFX are only played for the local player.
         if (!playerData.isOtherClient)
@@ -4198,7 +4363,7 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
                     if (UEntityAudioRepository* RepoAudio = MyGameInstance->GetEntityAudioRepository())
                     {
                         if (const FEntitySkillVoiceOverride* Override =
-                            RepoAudio->FindSkillVoiceOverride(AudioProfileId, FName(*CurrentSkillName)))
+                            RepoAudio->FindSkillVoiceOverride(AudioProfileId, FName(*ActiveAnimSkillSlug)))
                         {
                             if (Override->CastReleaseVoice.Num() > 0)
                             {
@@ -4268,11 +4433,11 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
                         UE_LOG(LogTemp, Log, TEXT("[PlayerAnim] CastRelease: dist=%.0f swing=%.3fs в†’ projectile speed=%.0f"),
                             Dist, SwingSeconds, CalcSpeed);
                     }
-                    Proj->SetupProjectile(CurrentSkillName, GetActorId_Implementation(), TargetActor, CalcSpeed);
+                    Proj->SetupProjectile(ActiveAnimSkillSlug, GetActorId_Implementation(), TargetActor, CalcSpeed);
                 }
 
                 UE_LOG(LogTemp, Log, TEXT("[PlayerAnim] CastRelease: spawned projectile '%s' for skill '%s'"),
-                    *ProjClass->GetName(), *CurrentSkillName);
+                    *ProjClass->GetName(), *ActiveAnimSkillSlug);
             }
         }
         break;

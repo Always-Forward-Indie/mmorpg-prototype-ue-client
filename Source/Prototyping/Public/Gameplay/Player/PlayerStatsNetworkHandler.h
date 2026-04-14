@@ -35,7 +35,8 @@ public:
      *  Pass the new local character ID so the filter uses the correct value for the new session. */
     void ResetFirstStatsFlag(int32 NewLocalCharacterId = 0)
     {
-        bFirstStatsDelivered = false;
+        bFirstStatsDelivered  = false;
+        FullStatsPacketCount  = 0;
         if (NewLocalCharacterId > 0)
         {
             LocalCharacterId = NewLocalCharacterId;
@@ -64,11 +65,18 @@ void HandleSetPlayerActiveEffects(const FString& ReceivedData) const;
 
     bool bIsSubscribed = false;
 
-    // True after the first stats_update for our local character has been delivered.
-    // Used to signal the loading screen gate exactly once per session.
+    // True after the loading screen gate has been signalled for this session.
     bool bFirstStatsDelivered = false;
 
-    // Character ID of the local player — cached at Initialize() time.
+    // Counts full stats_update packets (those that carry attributes).
+    // We fire NotifyStatsReceived on the SECOND full packet so that the
+    // SET_PLAYER_ACTIVE_EFFECTS stats_update (which always follows the
+    // inventory-load stats_update) has time to arrive before the loading
+    // screen is dismissed.  Characters with only one full packet at login
+    // still trigger the gate via the BasicPlayer::ProcessStatsUpdate path.
+    int32 FullStatsPacketCount = 0;
+
+    // Character ID of the local player ï¿½ cached at Initialize() time.
     // Avoids reading GameInstance ambient state on every packet callback.
     int32 LocalCharacterId = 0;
 };

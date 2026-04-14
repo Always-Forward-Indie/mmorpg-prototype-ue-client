@@ -270,6 +270,9 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 	 if (CD->HasField(TEXT("attributes")))
 		 Character.characterAttributes.attributesData = JSONParser::DeserializeAttributesArray(CD->GetArrayField(TEXT("attributes")));
 
+	 CD->TryGetStringField(TEXT("equippedTitleSlug"), Character.equippedTitleSlug);
+	 CD->TryGetStringField(TEXT("equippedTitleDisplayName"), Character.equippedTitleDisplayName);
+
 	 return Character;
  }
 
@@ -1042,6 +1045,8 @@ static void ParseItemFields(const TSharedPtr<FJsonObject>& Src, FInventoryItemSt
 	if (Src->HasField(TEXT("isContainer")))   Out.isContainer   = Src->GetBoolField(TEXT("isContainer"));
 	if (Src->HasField(TEXT("isTwoHanded")))   Out.isTwoHanded   = Src->GetBoolField(TEXT("isTwoHanded"));
 
+	if (Src->HasField(TEXT("killCount")))     Out.killCount     = Src->GetIntegerField(TEXT("killCount"));
+
 	// Legacy: derive isEquippable from numeric equipSlot field when explicit bool is absent
 	if (!Src->HasField(TEXT("isEquippable")) && Src->HasField(TEXT("equipSlot")))
 	{
@@ -1774,6 +1779,9 @@ FSkillResultData JSONParser::DeserializeSkillResult(const TSharedPtr<FJsonObject
 	
 	if (ResultObj->HasField(TEXT("healing")))
 		SkillResult.healing = ResultObj->GetIntegerField(TEXT("healing"));
+
+	if (ResultObj->HasField(TEXT("manaHealing")))
+		SkillResult.manaHealing = ResultObj->GetIntegerField(TEXT("manaHealing"));
 	
 	if (ResultObj->HasField(TEXT("finalTargetHealth")))
 		SkillResult.finalTargetHealth = ResultObj->GetIntegerField(TEXT("finalTargetHealth"));

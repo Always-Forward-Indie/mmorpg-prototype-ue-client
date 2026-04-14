@@ -53,6 +53,77 @@ void UNameplateCanvasWidget::NativeTick(const FGeometry& MyGeometry, float InDel
 
         TickEntry(Entry, PC, PawnLocation, InDeltaTime);
     }
+
+    // ---- Chat-bubble tick --------------------------------------------------
+    // Same projection pipeline as nameplates but at an extra Z offset so the
+    // bubble appears above the nameplate.  We also respect IsShowing() to avoid
+    // occupying screen space when the bubble has timed out.
+    for (auto It = ChatBubbles.CreateIterator(); It; ++It)
+    {
+        AActor* BubbleActor = It.Key().Get();
+        UChatBubbleWidget* Bubble = It.Value();
+
+        if (!IsValid(BubbleActor) || !Bubble)
+        {
+            if (Bubble) Bubble->RemoveFromParent();
+            It.RemoveCurrent();
+            continue;
+        }
+
+        if (!Bubble->IsShowing())
+        {
+            Bubble->SetVisibility(ESlateVisibility::Collapsed);
+            if (UCanvasPanelSlot* S = Cast<UCanvasPanelSlot>(Bubble->Slot))
+                S->SetPosition(FVector2D(-9999.f, -9999.f));
+            continue;
+        }
+
+        // World-space anchor: capsule top + extra offset above where the nameplate sits
+        float CapsuleHalf = 0.f;
+        if (const ACharacter* Char = Cast<ACharacter>(BubbleActor))
+            if (const UCapsuleComponent* Cap = Char->GetCapsuleComponent())
+                CapsuleHalf = Cap->GetScaledCapsuleHalfHeight();
+
+        // Find the actor's HeadOffsetZ from the nameplate entry (fallback to default)
+        float PlateOffsetZ = DefaultPlayerHeadOffsetZ;
+        if (const FNameplateEntry* PlateEntry = FindEntry(BubbleActor))
+            PlateOffsetZ = PlateEntry->HeadOffsetZ;
+
+        const FVector BubbleWorld = BubbleActor->GetActorLocation()
+                                  + FVector(0.f, 0.f, CapsuleHalf + ChatBubbleHeadOffsetZ);
+
+        // Camera dot-product guard
+        if (APlayerCameraManager* CamMgr = PC->PlayerCameraManager)
+        {
+            const FVector CamFwd = CamMgr->GetActorForwardVector();
+            const FVector ToPoint = BubbleWorld - CamMgr->GetCameraLocation();
+            if (FVector::DotProduct(ToPoint, CamFwd) <= 0.f)
+            {
+                Bubble->SetVisibility(ESlateVisibility::Collapsed);
+                if (UCanvasPanelSlot* S = Cast<UCanvasPanelSlot>(Bubble->Slot))
+                    S->SetPosition(FVector2D(-9999.f, -9999.f));
+                continue;
+            }
+        }
+
+        FVector2D ScreenPosPx;
+        if (!PC->ProjectWorldLocationToScreen(BubbleWorld, ScreenPosPx, true))
+        {
+            Bubble->SetVisibility(ESlateVisibility::Collapsed);
+            if (UCanvasPanelSlot* S = Cast<UCanvasPanelSlot>(Bubble->Slot))
+                S->SetPosition(FVector2D(-9999.f, -9999.f));
+            continue;
+        }
+
+        const float DPIScale = UWidgetLayoutLibrary::GetViewportScale(this);
+        const FVector2D ScreenPos = ScreenPosPx / FMath::Max(DPIScale, 0.01f);
+
+        if (UCanvasPanelSlot* S = Cast<UCanvasPanelSlot>(Bubble->Slot))
+            S->SetPosition(ScreenPos);
+
+        if (Bubble->GetVisibility() == ESlateVisibility::Collapsed)
+            Bubble->SetVisibility(ESlateVisibility::HitTestInvisible);
+    }
 }
 
 // -----------------------------------------------------------------------
@@ -151,6 +222,14 @@ void UNameplateCanvasWidget::RegisterNPC(AActor*               Actor,
 
 void UNameplateCanvasWidget::Unregister(AActor* Actor)
 {
+    // Remove chat bubble for this actor
+    TWeakObjectPtr<AActor> WeakActor(Actor);
+    if (UChatBubbleWidget** BubblePtr = ChatBubbles.Find(WeakActor))
+    {
+        if (*BubblePtr) (*BubblePtr)->RemoveFromParent();
+        ChatBubbles.Remove(WeakActor);
+    }
+
     for (int32 i = Entries.Num() - 1; i >= 0; --i)
     {
         if (Entries[i].Actor == Actor)
@@ -175,6 +254,12 @@ void UNameplateCanvasWidget::UnregisterAll()
         }
     }
     Entries.Reset();
+
+    for (auto& Pair : ChatBubbles)
+    {
+        if (Pair.Value) Pair.Value->RemoveFromParent();
+    }
+    ChatBubbles.Empty();
 }
 
 // -----------------------------------------------------------------------
@@ -209,6 +294,54 @@ void UNameplateCanvasWidget::SetPlayerDeadState(AActor* Actor, bool bDead)
     {
         Nameplate->SetDeadState(bDead);
     }
+}
+void UNameplateCanvasWidget::SetPlayerTitle(AActor* Actor, const FString& InTitle)
+{
+    FNameplateEntry* Entry = FindEntry(Actor);
+    if (!Entry || Entry->bIsNPC) return;
+
+    UW_PlayerNameplateWidget* Nameplate = Cast<UW_PlayerNameplateWidget>(Entry->Widget);
+    if (Nameplate)
+    {
+        Nameplate->SetTitle(InTitle);
+    }
+}
+
+void UNameplateCanvasWidget::ShowPlayerChatBubble(AActor* Actor, const FString& Text, float Duration)
+{
+    if (!Actor) return;
+
+    // Only for registered remote player nameplates (not NPCs).
+    FNameplateEntry* Entry = FindEntry(Actor);
+    if (!Entry || Entry->bIsNPC) return;
+
+    if (!ChatBubbleWidgetClass)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget::ShowPlayerChatBubble - ChatBubbleWidgetClass is not set"));
+        return;
+    }
+
+    // Look up or lazy-create the bubble for this actor.
+    TWeakObjectPtr<AActor> WeakActor(Actor);
+    UChatBubbleWidget** Found = ChatBubbles.Find(WeakActor);
+    UChatBubbleWidget*  Bubble = Found ? *Found : nullptr;
+
+    if (!Bubble)
+    {
+        APlayerController* PC = GetOwningPlayer();
+        if (!PC) return;
+
+        UUserWidget* RawWidget = AddWidgetToCanvas(ChatBubbleWidgetClass);
+        Bubble = Cast<UChatBubbleWidget>(RawWidget);
+        if (!Bubble)
+        {
+            UE_LOG(LogTemp, Error, TEXT("NameplateCanvasWidget::ShowPlayerChatBubble - failed to create ChatBubbleWidget"));
+            return;
+        }
+        ChatBubbles.Add(WeakActor, Bubble);
+    }
+
+    Bubble->Show(Text, Duration);
 }
 
 void UNameplateCanvasWidget::SetNPCInteractionState(AActor* Actor, ENPCInteractionState NewState)
@@ -255,14 +388,14 @@ UUserWidget* UNameplateCanvasWidget::AddWidgetToCanvas(TSubclassOf<UUserWidget> 
     APlayerController* PC = GetOwningPlayer();
     if (!PC)
     {
-        UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget::AddWidgetToCanvas – no owning PlayerController"));
+        UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget::AddWidgetToCanvas ï¿½ no owning PlayerController"));
         return nullptr;
     }
 
     UUserWidget* Widget = CreateWidget<UUserWidget>(PC, WidgetClass);
     if (!Widget)
     {
-        UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget::AddWidgetToCanvas – CreateWidget returned null for class %s"),
+        UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget::AddWidgetToCanvas ï¿½ CreateWidget returned null for class %s"),
             *WidgetClass->GetName());
         return nullptr;
     }
@@ -319,7 +452,7 @@ void UNameplateCanvasWidget::TickEntry(FNameplateEntry&  Entry,
         const FVector ToHead = HeadWorld - CamMgr->GetCameraLocation();
         if (FVector::DotProduct(ToHead, CamFwd) <= 0.f)
         {
-            // Snap to invisible instantly — no fade tail that could linger over
+            // Snap to invisible instantly ï¿½ no fade tail that could linger over
             // another visible actor while this one is behind the camera.
             Entry.CurrentOpacity = 0.f;
             Entry.Widget->SetRenderOpacity(0.f);
@@ -337,7 +470,7 @@ void UNameplateCanvasWidget::TickEntry(FNameplateEntry&  Entry,
 
     // --- Project to screen ---
     // ProjectWorldLocationToScreen returns pixel coordinates but does NOT guarantee
-    // the result is within the visible viewport — points behind or beside the camera
+    // the result is within the visible viewport ï¿½ points behind or beside the camera
     // produce mirrored / out-of-bounds coordinates that must be rejected explicitly.
     FVector2D ScreenPosPx;
     const bool bOnScreen = PC->ProjectWorldLocationToScreen(HeadWorld, ScreenPosPx, true);
@@ -363,7 +496,7 @@ void UNameplateCanvasWidget::TickEntry(FNameplateEntry&  Entry,
     }
 
     // Smooth fade in both directions.
-    // If was already invisible and target is also 0 — snap to stay at 0
+    // If was already invisible and target is also 0 ï¿½ snap to stay at 0
     // so we never accumulate a tiny residual opacity from the interp.
     const bool bWasInvisible = Entry.CurrentOpacity < 0.01f;
     if (bWasInvisible && TargetOpacity <= 0.f)
@@ -394,7 +527,7 @@ void UNameplateCanvasWidget::TickEntry(FNameplateEntry&  Entry,
 
     // --- Position and opacity must be committed BEFORE making the widget visible.
     // If we set Visible first and then SetPosition, Slate can render the widget
-    // for one frame at its previous (stale) position — which is how a nameplate
+    // for one frame at its previous (stale) position ï¿½ which is how a nameplate
     // appears to "teleport" or show above the wrong actor for a single frame.
     if (UCanvasPanelSlot* EntrySlot = Cast<UCanvasPanelSlot>(Entry.Widget->Slot))
     {

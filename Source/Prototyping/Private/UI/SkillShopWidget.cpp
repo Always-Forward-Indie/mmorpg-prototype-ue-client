@@ -2,6 +2,10 @@
 #include "UI/SkillShopRowWidget.h"
 #include "Gameplay/SkillShop/SkillShopManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
+#include "Gameplay/Items/InventoryManager.h"
+#include "Gameplay/Player/PlayerStatsManager.h"
+#include "Gameplay/NPCs/BasicNPC.h"
+#include "Gameplay/NPCs/NPCManager.h"
 #include "MyGameInstance.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
@@ -39,9 +43,13 @@ void USkillShopWidget::NativeConstruct()
     {
         int32 W = 0, H = 0;
         PC->GetViewportSize(W, H);
+        const float InitScale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
+        const FVector2D VPSizeInit = FVector2D(W, H) / InitScale;
         ForceLayoutPrepass();
         const FVector2D Size = GetDesiredSize();
-        CurrentViewportPosition = FVector2D((W - Size.X) * 0.5f, (H - Size.Y) * 0.5f);
+        CurrentViewportPosition = FVector2D(
+            FMath::Max(0.f, (VPSizeInit.X - Size.X) * 0.5f),
+            FMath::Max(0.f, (VPSizeInit.Y - Size.Y) * 0.5f));
         SetPositionInViewport(CurrentViewportPosition, false);
     }
 
@@ -77,6 +85,21 @@ void USkillShopWidget::CloseShop()
 {
     SetVisibility(ESlateVisibility::Collapsed);
     OnSkillShopVisibilityChanged.Broadcast(false);
+
+    // Notify NPC that this shop window closed; farewell plays if no other windows remain.
+    if (ActiveNpcId > 0)
+    {
+        if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+        {
+            if (UNPCManager* NPCMgr = GI->GetNPCManager())
+            {
+                if (ABasicNPC* NPC = NPCMgr->GetNPCById(ActiveNpcId))
+                {
+                    NPC->NotifyWindowClosed();
+                }
+            }
+        }
+    }
 }
 
 void USkillShopWidget::RefreshDisplay()
@@ -91,6 +114,52 @@ void USkillShopWidget::DispatchLearnSkill(const FString& SkillSlug)
     SkillShopManager->RequestLearnSkill(ActiveNpcId, SkillSlug);
 }
 
+void USkillShopWidget::BindToInventoryManager(UInventoryManager* InInventoryManager)
+{
+    if (InventoryManager)
+        InventoryManager->OnInventoryUpdated.RemoveDynamic(this, &USkillShopWidget::HandleInventoryUpdated);
+
+    InventoryManager = InInventoryManager;
+
+    if (InventoryManager)
+        InventoryManager->OnInventoryUpdated.AddDynamic(this, &USkillShopWidget::HandleInventoryUpdated);
+}
+
+void USkillShopWidget::HandleInventoryUpdated(const FCharacterInventoryStruct& Inventory)
+{
+    // Keep the gold display in sync; the server sends getPlayerInventory (not skill_learned)
+    // after a skill purchase, so this is the authoritative source for the current gold balance.
+    CachedShop.goldBalance = Inventory.gold;
+    if (GetVisibility() == ESlateVisibility::Visible)
+        UpdateHeaderDisplay();
+}
+
+void USkillShopWidget::BindToStatsManager(UPlayerStatsManager* InStatsManager)
+{
+    if (StatsManager)
+        StatsManager->OnStatsUpdated.RemoveDynamic(this, &USkillShopWidget::HandlePlayerStatsUpdated);
+
+    StatsManager = InStatsManager;
+
+    if (StatsManager)
+        StatsManager->OnStatsUpdated.AddDynamic(this, &USkillShopWidget::HandlePlayerStatsUpdated);
+}
+
+void USkillShopWidget::HandlePlayerStatsUpdated(const FPlayerStatsUpdateStruct& NewStats)
+{
+    // Sync freeSkillPoints from the authoritative stats_update so the shop reflects
+    // changes caused by leveling up or passive-skill learning while the shop is open.
+    if (NewStats.freeSkillPoints > 0 || CachedShop.freeSkillPoints > 0)
+    {
+        CachedShop.freeSkillPoints = NewStats.freeSkillPoints;
+    }
+
+    if (GetVisibility() == ESlateVisibility::Visible)
+    {
+        UpdateHeaderDisplay();
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Delegate handlers
 // ---------------------------------------------------------------------------
@@ -101,6 +170,22 @@ void USkillShopWidget::HandleSkillShopOpened(const FSkillShopData& ShopData)
     ActiveNpcId = ShopData.npcId;   // must be set BEFORE RequestLearnSkill is called
     UE_LOG(LogTemp, Log, TEXT("[SkillShopWidget] Shop opened: npcId=%d npcSlug='%s'"),
         ActiveNpcId, *ShopData.npcSlug);
+
+    // Notify NPC that this shop window opened so the farewell counter stays balanced.
+    if (ActiveNpcId > 0)
+    {
+        if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+        {
+            if (UNPCManager* NPCMgr = GI->GetNPCManager())
+            {
+                if (ABasicNPC* NPC = NPCMgr->GetNPCById(ActiveNpcId))
+                {
+                    NPC->NotifyWindowOpened();
+                }
+            }
+        }
+    }
+
     OpenShop();
 }
 
@@ -277,7 +362,18 @@ FReply USkillShopWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FP
 
 void USkillShopWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPos)
 {
+    APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+    if (!PC) return;
+    int32 W = 0, H = 0;
+    PC->GetViewportSize(W, H);
     const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
-    CurrentViewportPosition = ScreenCursorPos / Scale - DragOffset;
-    SetPositionInViewport(CurrentViewportPosition, false);
+    const FVector2D VP = FVector2D(W, H) / Scale;
+    ForceLayoutPrepass();
+    FVector2D Size = GetDesiredSize();
+    if (Size.IsZero()) Size = FVector2D(400.f, 500.f);
+    FVector2D Pos = ScreenCursorPos / Scale - DragOffset;
+    Pos.X = FMath::Clamp(Pos.X, 0.f, FMath::Max(0.f, VP.X - Size.X));
+    Pos.Y = FMath::Clamp(Pos.Y, 0.f, FMath::Max(0.f, VP.Y - Size.Y));
+    CurrentViewportPosition = Pos;
+    SetPositionInViewport(Pos, false);
 }

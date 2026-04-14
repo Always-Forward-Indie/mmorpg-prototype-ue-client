@@ -57,6 +57,22 @@ void UNameplateManager::SetPlayerDeadState(AActor* Actor, bool bDead)
     }
 }
 
+void UNameplateManager::SetPlayerTitle(AActor* Actor, const FString& InTitle)
+{
+    if (CanvasWidget)
+    {
+        CanvasWidget->SetPlayerTitle(Actor, InTitle);
+    }
+}
+
+void UNameplateManager::ShowPlayerChatBubble(AActor* Actor, const FString& Text, float Duration)
+{
+    if (CanvasWidget)
+    {
+        CanvasWidget->ShowPlayerChatBubble(Actor, Text, Duration);
+    }
+}
+
 // -----------------------------------------------------------------------
 // NPC
 // -----------------------------------------------------------------------

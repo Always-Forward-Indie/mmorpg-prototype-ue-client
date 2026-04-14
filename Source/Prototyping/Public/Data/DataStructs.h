@@ -79,6 +79,12 @@ struct FCharacterDataStruct
 	bool bIsDead = false;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
 	bool bIsMoving = false;
+    /** Slug of the title equipped by this character, empty if none. Used for nameplate display. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
+    FString equippedTitleSlug = "";
+    /** Display name of the equipped title (e.g. "Wolf Slayer"), empty if none. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
+    FString equippedTitleDisplayName = "";
 };
 
 USTRUCT(BlueprintType)
@@ -477,6 +483,9 @@ struct FSkillResultData
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
     int32 healing = 0;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    int32 manaHealing = 0;
+
     // Final target stats
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
     int32 finalTargetHealth = 0;
@@ -526,6 +535,7 @@ struct FSkillResultData
         targetTypeString = "";
         damage = 0;
         healing = 0;
+        manaHealing = 0;
         finalTargetHealth = 0;
         finalTargetMana = 0;
         isCritical = false;
@@ -1155,7 +1165,8 @@ enum class EDamageType : uint8
     Fire,
     Ice,
     Poison,
-    Heal
+    Heal,
+    ManaRegen
 };
 
 USTRUCT(BlueprintType)
@@ -1759,6 +1770,11 @@ struct FPlayerStatsUpdateStruct
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
     int32 freeSkillPoints = 0;
 
+    // Optional source tag set by the server to identify the cause of the update.
+    // Examples: "regen" (passive HP/MP regeneration). Empty for most updates.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
+    FString updateSource = TEXT("");
+
     // Experience fields
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Stats Update")
     int32 experienceCurrent = 0;
@@ -1964,6 +1980,31 @@ struct FSkillDefinitionData : public FTableRowBase
     // Priority 1: this field. Priority 2: entity's own VoiceCastRelease pool.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition|Voice")
     TSoftObjectPtr<USoundBase> castReleaseVoice;
+
+    // ---------------------------------------------------------------
+    // UI Feedback sounds (per-skill overrides)
+    // ---------------------------------------------------------------
+
+    /**
+     * Played when the local player tries to use this skill while it is still on cooldown.
+     * Leave empty to fall back to the global AudioManager UISound (EUISoundEvent::SkillOnCooldown).
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition|UI Feedback")
+    TSoftObjectPtr<USoundBase> skillOnCooldownSound;
+
+    /**
+     * Played when this skill's cooldown expires and it becomes ready to use again.
+     * Leave empty to fall back to the global AudioManager UISound (EUISoundEvent::SkillReady).
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition|UI Feedback")
+    TSoftObjectPtr<USoundBase> skillReadySound;
+
+    /**
+     * Played when the local player tries to use this skill but has insufficient mana.
+     * Leave empty to fall back to the global AudioManager UISound (EUISoundEvent::SkillNotEnoughMana).
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition|UI Feedback")
+    TSoftObjectPtr<USoundBase> notEnoughManaSound;
 
     FSkillDefinitionData()
     {
@@ -3014,6 +3055,9 @@ struct PROTOTYPING_API FRepairShopData
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop")
     FString npcName = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop")
+    int32 goldBalance = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop")
     int32 totalRepairCost = 0;

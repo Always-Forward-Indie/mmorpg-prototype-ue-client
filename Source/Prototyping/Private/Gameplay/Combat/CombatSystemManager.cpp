@@ -312,6 +312,31 @@ void UCombatSystemManager::ProcessSkillResult(const FSkillResultData& SkillResul
         }
     }
 
+    // --- Heal results from item use (potions/elixirs) have no attack animation to sync with.
+    // Apply them immediately so the floating text appears right away instead of after the
+    // 12-second safety timeout or the next swing's hit-point notify.
+    if (SkillResult.skillEffectType == ESkillEffectType::Healing && GameInstance)
+    {
+        if (USkillDefinitionRepository* Repo = GameInstance->GetSkillDefinitionRepository())
+        {
+            const FString& LookupKey = SkillResult.skillSlug.IsEmpty() ? SkillResult.skillName : SkillResult.skillSlug;
+            if (!Repo->HasDefinition(LookupKey))
+            {
+                // Slug not in the skill DataTable → this is an item-based heal, not a cast spell.
+                // Find the target and apply effects without queueing.
+                ECasterType TargetCombatType = MapNetCasterType(SkillResult.targetType, SkillResult.targetTypeString);
+                TScriptInterface<ICombatable> Target = FindCombatableById(SkillResult.targetId, TargetCombatType);
+                if (Target.GetInterface() && Target.GetObject() && IsValid(Target.GetObject()))
+                {
+                    UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Applying item heal for '%s' immediately (no anim sync needed)"), *LookupKey);
+                    ApplySkillEffects(SkillResult, Target);
+                    OnSkillCompleted.Broadcast(SkillResult);
+                }
+                return;
+            }
+        }
+    }
+
     // --- Store the result for deferred application at the animation hit-point ---
     FPendingResult Pending;
     Pending.ResultData         = SkillResult;

@@ -15,7 +15,7 @@
 // Verbosity is controlled per-category in Config/DefaultEngine.ini [Core.Log]
 // without touching source code.
 // ---------------------------------------------------------------------------
-PROTOTYPING_API DECLARE_LOG_CATEGORY_EXTERN(LogConnection, Log, All);
-PROTOTYPING_API DECLARE_LOG_CATEGORY_EXTERN(LogNetPacket,  Log, All);
-PROTOTYPING_API DECLARE_LOG_CATEGORY_EXTERN(LogPing,       Log, All);
+PROTOTYPING_API DECLARE_LOG_CATEGORY_EXTERN(LogConnection, Log,     All);
+PROTOTYPING_API DECLARE_LOG_CATEGORY_EXTERN(LogNetPacket,  Verbose, All);
+PROTOTYPING_API DECLARE_LOG_CATEGORY_EXTERN(LogPing,       Log,     All);
 

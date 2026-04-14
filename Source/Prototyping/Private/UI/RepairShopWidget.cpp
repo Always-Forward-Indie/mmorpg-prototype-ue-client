@@ -1,5 +1,9 @@
 #include "UI/RepairShopWidget.h"
+#include "UI/RepairShopRowWidget.h"
 #include "Gameplay/Repair/RepairManager.h"
+#include "Gameplay/Items/InventoryManager.h"
+#include "Gameplay/NPCs/BasicNPC.h"
+#include "Gameplay/NPCs/NPCManager.h"
 #include "MyGameInstance.h"
 #include "Services/LocalizationSubsystem.h"
 #include "Components/TextBlock.h"
@@ -40,9 +44,13 @@ void URepairShopWidget::NativeConstruct()
     {
         int32 W = 0, H = 0;
         PC->GetViewportSize(W, H);
+        const float InitScale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
+        const FVector2D VPSizeInit = FVector2D(W, H) / InitScale;
         ForceLayoutPrepass();
         const FVector2D Size = GetDesiredSize();
-        CurrentViewportPosition = FVector2D((W - Size.X) * 0.5f, (H - Size.Y) * 0.5f);
+        CurrentViewportPosition = FVector2D(
+            FMath::Max(0.f, (VPSizeInit.X - Size.X) * 0.5f),
+            FMath::Max(0.f, (VPSizeInit.Y - Size.Y) * 0.5f));
         SetPositionInViewport(CurrentViewportPosition, false);
     }
 
@@ -66,8 +74,20 @@ void URepairShopWidget::BindToRepairManager(URepairManager* InRepairManager)
     RepairManager->OnRepairAllResultDelegate .AddDynamic(this, &URepairShopWidget::HandleRepairAllResult);
 }
 
+void URepairShopWidget::BindToInventoryManager(UInventoryManager* InInventoryManager)
+{
+    if (InventoryManager)
+        InventoryManager->OnInventoryUpdated.RemoveDynamic(this, &URepairShopWidget::HandleInventoryUpdated);
+
+    InventoryManager = InInventoryManager;
+
+    if (InventoryManager)
+        InventoryManager->OnInventoryUpdated.AddDynamic(this, &URepairShopWidget::HandleInventoryUpdated);
+}
+
 void URepairShopWidget::OpenShop()
 {
+    UpdateGoldText();
     RefreshDisplay();
     SetVisibility(ESlateVisibility::Visible);
     OnRepairShopVisibilityChanged.Broadcast(true);
@@ -77,6 +97,21 @@ void URepairShopWidget::CloseShop()
 {
     SetVisibility(ESlateVisibility::Collapsed);
     OnRepairShopVisibilityChanged.Broadcast(false);
+
+    // Notify NPC that this shop window closed; farewell plays if no other windows remain.
+    if (CachedShop.npcId > 0)
+    {
+        if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+        {
+            if (UNPCManager* NPCMgr = GI->GetNPCManager())
+            {
+                if (ABasicNPC* NPC = NPCMgr->GetNPCById(CachedShop.npcId))
+                {
+                    NPC->NotifyWindowClosed();
+                }
+            }
+        }
+    }
 }
 
 void URepairShopWidget::RefreshDisplay()
@@ -90,10 +125,10 @@ void URepairShopWidget::RefreshDisplay()
     {
         if (!RepairRowClass) continue;
 
-        UUserWidget* Row = CreateWidget<UUserWidget>(GetOwningPlayer(), RepairRowClass);
+        URepairShopRowWidget* Row = CreateWidget<URepairShopRowWidget>(GetOwningPlayer(), RepairRowClass);
         if (!Row) continue;
 
-        if (UTextBlock* NameTxt = Cast<UTextBlock>(Row->GetWidgetFromName(TEXT("Row_Name_Text"))))
+        if (Row->Row_Name_Text)
         {
             FText ItemName = FText::FromString(Item.slug);
             if (!Item.slug.IsEmpty())
@@ -107,23 +142,23 @@ void URepairShopWidget::RefreshDisplay()
                     }
                 }
             }
-            NameTxt->SetText(ItemName);
+            Row->Row_Name_Text->SetText(ItemName);
         }
 
-        if (UTextBlock* DurTxt = Cast<UTextBlock>(Row->GetWidgetFromName(TEXT("Row_Durability_Text"))))
-            DurTxt->SetText(FText::FromString(
+        if (Row->Row_Durability_Text)
+            Row->Row_Durability_Text->SetText(FText::FromString(
                 FString::Printf(TEXT("%d / %d"), Item.durabilityCurrent, Item.durabilityMax)));
 
-        if (UTextBlock* CostTxt = Cast<UTextBlock>(Row->GetWidgetFromName(TEXT("Row_Cost_Text"))))
-            CostTxt->SetText(FText::FromString(
+        if (Row->Row_Cost_Text)
+            Row->Row_Cost_Text->SetText(FText::FromString(
                 FString::Printf(TEXT("%d g"), Item.repairCost)));
 
-        if (UButton* Btn = Cast<UButton>(Row->GetWidgetFromName(TEXT("Row_Repair_Btn"))))
+        if (Row->Row_Repair_Btn)
         {
             URepairItemRowBinding* Binding = NewObject<URepairItemRowBinding>(this);
             Binding->Setup(this, Item.inventoryItemId);
             RowBindings.Add(Binding);
-            Btn->OnClicked.AddDynamic(Binding, &URepairItemRowBinding::HandleClicked);
+            Row->Row_Repair_Btn->OnClicked.AddDynamic(Binding, &URepairItemRowBinding::HandleClicked);
         }
 
         Repair_Items_Box->AddChild(Row);
@@ -139,6 +174,8 @@ void URepairShopWidget::RefreshDisplay()
     {
         Repair_All_Btn->SetIsEnabled(CachedShop.items.Num() > 0);
     }
+
+    UpdateGoldText();
 }
 
 void URepairShopWidget::DispatchRepairItem(int32 InventoryItemId)
@@ -156,6 +193,26 @@ void URepairShopWidget::DispatchRepairItem(int32 InventoryItemId)
 void URepairShopWidget::HandleRepairShopOpened(const FRepairShopData& ShopData)
 {
     CachedShop = ShopData;
+    // Server includes goldBalance in all repairShop packets; prefer it over the
+    // InventoryManager fallback when it is present.
+    if (ShopData.goldBalance > 0 || CachedGoldBalance == 0)
+        CachedGoldBalance = ShopData.goldBalance;
+
+    // Notify NPC that this shop window opened so the farewell counter stays balanced.
+    if (CachedShop.npcId > 0)
+    {
+        if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+        {
+            if (UNPCManager* NPCMgr = GI->GetNPCManager())
+            {
+                if (ABasicNPC* NPC = NPCMgr->GetNPCById(CachedShop.npcId))
+                {
+                    NPC->NotifyWindowOpened();
+                }
+            }
+        }
+    }
+
     OpenShop();
 }
 
@@ -168,15 +225,26 @@ void URepairShopWidget::HandleRepairItemResult(const FRepairItemResultData& Resu
     }
     ShowStatus(FString::Printf(TEXT("Repaired  (-%d g)"), Result.goldSpent));
 
-    // After repair durabilityCurrent == durabilityMax; update cached display
-    for (FRepairShopItemData& Item : CachedShop.items)
+    // Update gold balance immediately (server also sends a follow-up repairShop
+    // packet, but we update now for visual responsiveness)
+    if (Result.newGoldBalance > 0)
+        CachedGoldBalance = Result.newGoldBalance;
+    else
+        CachedGoldBalance = FMath::Max(0, CachedGoldBalance - Result.goldSpent);
+
+    // Remove the repaired item from the list (fully repaired items don't need repair)
+    CachedShop.items.RemoveAll([&Result](const FRepairShopItemData& Item)
     {
-        if (Item.inventoryItemId == Result.inventoryItemId)
-        {
-            Item.durabilityCurrent = Result.durabilityMax;
-            break;
-        }
-    }
+        return Item.inventoryItemId == Result.inventoryItemId;
+    });
+
+    // Recalculate total repair cost from remaining items
+    int32 NewTotal = 0;
+    for (const FRepairShopItemData& Item : CachedShop.items)
+        NewTotal += Item.repairCost;
+    CachedShop.totalRepairCost = NewTotal;
+    CachedShop.repairAllCost   = NewTotal;
+
     RefreshDisplay();
 }
 
@@ -187,20 +255,21 @@ void URepairShopWidget::HandleRepairAllResult(const FRepairAllResultData& Result
         ShowStatus(FString::Printf(TEXT("Repair all failed: %s"), *Result.errorCode));
         return;
     }
-    ShowStatus(FString::Printf(TEXT("All repaired  (-%d g)"), Result.goldSpent));
 
-    // Update cached durability for all repaired items
-    for (const FRepairedItemEntry& Entry : Result.repairedItems)
-    {
-        for (FRepairShopItemData& Item : CachedShop.items)
-        {
-            if (Item.inventoryItemId == Entry.inventoryItemId)
-            {
-                Item.durabilityCurrent = Entry.durabilityMax;
-                break;
-            }
-        }
-    }
+    const int32 TotalSpent = Result.goldSpent > 0 ? Result.goldSpent : Result.totalGoldSpent;
+    ShowStatus(FString::Printf(TEXT("All repaired  (-%d g)"), TotalSpent));
+
+    // Update gold balance immediately
+    if (Result.newGoldBalance > 0)
+        CachedGoldBalance = Result.newGoldBalance;
+    else
+        CachedGoldBalance = FMath::Max(0, CachedGoldBalance - TotalSpent);
+
+    // All items are now fully repaired — clear the list
+    CachedShop.items.Empty();
+    CachedShop.totalRepairCost = 0;
+    CachedShop.repairAllCost   = 0;
+
     RefreshDisplay();
 }
 
@@ -215,6 +284,23 @@ void URepairShopWidget::HandleRepairAllClicked()
 void URepairShopWidget::HandleCloseButtonClicked()
 {
     CloseShop();
+}
+
+void URepairShopWidget::HandleInventoryUpdated(const FCharacterInventoryStruct& Inventory)
+{
+    // Keep gold display up to date whenever the inventory changes.
+    // This handles the initial population (before repairShop goldBalance arrives)
+    // and any background gold changes.
+    CachedGoldBalance = Inventory.gold;
+    if (GetVisibility() == ESlateVisibility::Visible)
+        UpdateGoldText();
+}
+
+void URepairShopWidget::UpdateGoldText()
+{
+    if (Player_Gold_Text)
+        Player_Gold_Text->SetText(FText::FromString(
+            FString::Printf(TEXT("Gold: %d"), CachedGoldBalance)));
 }
 
 void URepairShopWidget::ShowStatus(const FString& Msg)
@@ -285,8 +371,8 @@ void URepairShopWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPo
     FVector2D Size = GetDesiredSize();
     if (Size.IsZero()) Size = FVector2D(400, 500);
     FVector2D Pos = ScreenCursorPos / Scale - DragOffset;
-    Pos.X = FMath::Clamp(Pos.X, 0.f, VP.X - Size.X);
-    Pos.Y = FMath::Clamp(Pos.Y, 0.f, VP.Y - Size.Y);
+    Pos.X = FMath::Clamp(Pos.X, 0.f, FMath::Max(0.f, VP.X - Size.X));
+    Pos.Y = FMath::Clamp(Pos.Y, 0.f, FMath::Max(0.f, VP.Y - Size.Y));
     CurrentViewportPosition = Pos;
     SetPositionInViewport(Pos, false);
 }

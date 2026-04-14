@@ -32,9 +32,17 @@ void UHealingEffectHandler::ProcessSkillResult_Implementation(const FSkillResult
     // Use server-authoritative finalTargetHealth instead of local calculation.
     // The server already computed the correct HP after healing (clamped to max).
     int32 OldHealth = ICombatable::Execute_GetCurrentHealth(TargetObject);
+    int32 OldMana   = ICombatable::Execute_GetCurrentMana(TargetObject);
     int32 NewHealth = SkillResult.finalTargetHealth;
     ICombatable::Execute_SetCurrentHealth(TargetObject, NewHealth);
-    ICombatable::Execute_SetCurrentMana(TargetObject, SkillResult.finalTargetMana);
+
+    // Only overwrite mana if the server sent a meaningful value; 0 means the field
+    // was not included in this packet (e.g. HP-only skill packets) and we must not
+    // zero out the player's current mana.
+    if (SkillResult.finalTargetMana > 0)
+    {
+        ICombatable::Execute_SetCurrentMana(TargetObject, SkillResult.finalTargetMana);
+    }
 
     // Calculate actual healing done for display (in case of overheal)
     int32 ActualHealing = FMath::Max(0, NewHealth - OldHealth);
@@ -44,8 +52,26 @@ void UHealingEffectHandler::ProcessSkillResult_Implementation(const FSkillResult
         ActualHealing = FinalHealing;
     }
 
-    // Show healing effect
-    ICombatable::Execute_ShowHealingEffect(TargetObject, ActualHealing, SkillResult.skillSlug);
+    // Show HP healing effect
+    if (ActualHealing > 0)
+    {
+        ICombatable::Execute_ShowHealingEffect(TargetObject, ActualHealing, SkillResult.skillSlug);
+    }
+
+    // Show mana restore FCT if mana was gained (item-based mana potions / mana restore skills)
+    if (SkillResult.finalTargetMana > 0)
+    {
+        int32 ActualManaHeal = FMath::Max(0, SkillResult.finalTargetMana - OldMana);
+        if (ActualManaHeal == 0 && SkillResult.manaHealing > 0)
+        {
+            // Edge case: already at max mana, but server confirmed a restore happened
+            ActualManaHeal = SkillResult.manaHealing;
+        }
+        if (ActualManaHeal > 0)
+        {
+            ICombatable::Execute_ShowManaRestoreEffect(TargetObject, ActualManaHeal);
+        }
+    }
 
     // Handle overheal if any
     if (FinalHealing > ActualHealing)

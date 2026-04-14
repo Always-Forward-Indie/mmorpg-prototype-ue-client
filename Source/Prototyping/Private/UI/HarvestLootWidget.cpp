@@ -30,11 +30,15 @@ void UHarvestLootWidget::NativeConstruct()
 	{
 		int32 W = 0, H = 0;
 		PC->GetViewportSize(W, H);
+		const float InitScale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
+		const FVector2D VPSizeInit = FVector2D(W, H) / InitScale;
 		ForceLayoutPrepass();
 		const FVector2D Size = GetDesiredSize();
 		
-		// Center the widget
-		CurrentViewportPosition = FVector2D((W - Size.X) * 0.5f, (H - Size.Y) * 0.5f);
+		// Center the widget, clamp to viewport so it never opens off-screen
+		CurrentViewportPosition = FVector2D(
+			FMath::Max(0.f, (VPSizeInit.X - Size.X) * 0.5f),
+			FMath::Max(0.f, (VPSizeInit.Y - Size.Y) * 0.5f));
 		SetPositionInViewport(CurrentViewportPosition, false);
 	}
 
@@ -194,8 +198,8 @@ void UHarvestLootWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorP
 	FVector2D Pos = MouseVP - DragOffset;
 
 	// Clamp to viewport bounds
-	Pos.X = FMath::Clamp(Pos.X, DragPadding.Left, ViewportSize.X - Size.X - DragPadding.Right);
-	Pos.Y = FMath::Clamp(Pos.Y, DragPadding.Top, ViewportSize.Y - Size.Y - DragPadding.Bottom);
+	Pos.X = FMath::Clamp(Pos.X, DragPadding.Left, FMath::Max(DragPadding.Left, ViewportSize.X - Size.X - DragPadding.Right));
+	Pos.Y = FMath::Clamp(Pos.Y, DragPadding.Top, FMath::Max(DragPadding.Top, ViewportSize.Y - Size.Y - DragPadding.Bottom));
 
 	// Update position
 	CurrentViewportPosition = Pos;
@@ -306,8 +310,8 @@ void UHarvestLootWidget::ShowWidget()
 		bIsVisible = true;
 		SetVisibility(ESlateVisibility::Visible);
 		
-		// НЕ управляем курсором здесь - это делает UIManager
-		// Уведомляем UIManager об изменении видимости
+		// пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ - пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ UIManager
+		// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ UIManager пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 		OnHarvestLootVisibilityChanged.Broadcast(true);
 		
 		UE_LOG(LogTemp, Warning, TEXT("HarvestLootWidget: Widget shown - Items: %d"), CurrentLootItems.Num());
@@ -323,8 +327,8 @@ void UHarvestLootWidget::HideWidget()
 	// Hide tooltip when widget is hidden
 	HideTooltip();
 	
-	// НЕ управляем курсором здесь - это делает UIManager
-	// Уведомляем UIManager об изменении видимости
+	// пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ - пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ UIManager
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ UIManager пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	OnHarvestLootVisibilityChanged.Broadcast(false);
 	
 	UE_LOG(LogTemp, Warning, TEXT("HarvestLootWidget: Widget hidden"));

@@ -71,6 +71,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Vendor UI")
     void CloseShop();
 
+    /** Returns the NPC id whose items are currently shown (0 if no shop loaded). */
+    int32 GetActiveNpcId() const { return CachedShop.npcId; }
+
     UFUNCTION(BlueprintCallable, Category = "Vendor UI")
     void SwitchToTab(EVendorTab Tab);
 

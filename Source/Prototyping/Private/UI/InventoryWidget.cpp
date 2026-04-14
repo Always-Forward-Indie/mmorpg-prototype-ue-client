@@ -32,23 +32,27 @@ void UInventoryWidget::NativeConstruct()
 	Super::NativeConstruct();
 
 
-	// Чтобы окно можно было позиционировать
-	SetAnchorsInViewport(FAnchors(0.f, 0.f, 0.f, 0.f)); // абсолютная позиция
-	SetAlignmentInViewport(FVector2D(0.f, 0.f));        // левый-верх как опорная точка
+	// пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+	SetAnchorsInViewport(FAnchors(0.f, 0.f, 0.f, 0.f)); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+	SetAlignmentInViewport(FVector2D(0.f, 0.f));        // пїЅпїЅпїЅпїЅпїЅ-пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 
-	// Начальная позиция - правый нижний угол с отступом
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ - пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
 	{
 		int32 W = 0, H = 0;
 		PC->GetViewportSize(W, H);
+		const float InitScale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
+		const FVector2D VPSizeInit = FVector2D(W, H) / InitScale;
 		ForceLayoutPrepass();
 		const FVector2D Size = GetDesiredSize();
 
-	//	// Отступ от краев экрана
+	//	// пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
 		const float Margin = 100.0f;
 
-	//	// Позиция в правом нижнем углу: справа (W - ширина виджета - отступ), снизу (H - высота виджета - отступ)
-		CurrentViewportPosition = FVector2D(W - Size.X - Margin, H - Size.Y - Margin);
+	//	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅпїЅ (W - пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ - пїЅпїЅпїЅпїЅпїЅпїЅ), пїЅпїЅпїЅпїЅпїЅ (H - пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ - пїЅпїЅпїЅпїЅпїЅпїЅ)
+		CurrentViewportPosition = FVector2D(
+			FMath::Max(0.f, VPSizeInit.X - Size.X - Margin),
+			FMath::Max(0.f, VPSizeInit.Y - Size.Y - Margin));
 
 		UE_LOG(LogTemp, Warning, TEXT("InventoryWidget: Setting initial position to bottom-right: %s (Viewport: %dx%d, Size: %s)"),
 			*CurrentViewportPosition.ToString(), W, H, *Size.ToString());
@@ -146,23 +150,23 @@ void UInventoryWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
 
-	// если инвентарь скрыт — выходим
+	// пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	if (!bIsInventoryVisible || !ItemTooltipWidget) return;
 
-	// тултип реально виден?
+	// пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ?
 	const ESlateVisibility Vis = ItemTooltipWidget->GetVisibility();
 	const bool bTooltipVisible = (Vis == ESlateVisibility::HitTestInvisible ||
 		Vis == ESlateVisibility::SelfHitTestInvisible) &&
 		ItemTooltipWidget->GetRenderOpacity() > 0.f;
 	if (!bTooltipVisible) return;
 
-	// получаем позицию мыши и двигаем тултип
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
 	if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
 	{
 		FVector2D Mouse;
 		if (PC->GetMousePosition(Mouse.X, Mouse.Y))
 		{
-			// на всякий случай — перед расчетом размера
+			// пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 			ItemTooltipWidget->ForceLayoutPrepass();
 			ItemTooltipWidget->UpdateTooltipPosition(Mouse);
 		}
@@ -250,8 +254,8 @@ void UInventoryWidget::SetInventoryVisible(bool bVisible)
 		CloseContextMenu();
 	}
 
-	// НЕ управляем курсором здесь - это делает UIManager
-	// Уведомляем UIManager об изменении видимости
+	// пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ - пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ UIManager
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ UIManager пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	OnInventoryVisibilityChanged.Broadcast(bVisible);
 
 	// Hide tooltip when inventory is hidden
@@ -283,9 +287,9 @@ void UInventoryWidget::CreateInventoryGrid()
 
 	ClearInventoryGrid();
 
-	// Настройки WrapBox
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ WrapBox
 	InventoryWrap->SetExplicitWrapSize(false); // = Use Allotted Width
-	InventoryWrap->SetInnerSlotPadding(FVector2D(SlotGap, SlotGap)); // отступы между ячейками
+	InventoryWrap->SetInnerSlotPadding(FVector2D(SlotGap, SlotGap)); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 
 	const int32 TotalSlots = GetTotalSlots();
 	InventorySlots.Reserve(TotalSlots);
@@ -306,7 +310,7 @@ void UInventoryWidget::CreateInventoryGrid()
 			W->SetPadding(FMargin(SlotGap));
 			W->SetHorizontalAlignment(HAlign_Left);
 			W->SetVerticalAlignment(VAlign_Top);
-			W->SetFillEmptySpace(false); // фикс-размерные слоты, не растягиваем
+			W->SetFillEmptySpace(false); // пїЅпїЅпїЅпїЅ-пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ, пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 		}
 
 		InventorySlots.Add(SlotWidget);
@@ -388,7 +392,7 @@ void UInventoryWidget::OnSlotRightClicked(int32 SlotIndex)
 	// Also broadcast so external listeners can react if needed
 	OnInventorySlotRightClicked.Broadcast(SlotIndex, Item);
 
-	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Context menu opened for slot %d – %s"), SlotIndex, *Item.name);
+	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Context menu opened for slot %d пїЅ %s"), SlotIndex, *Item.name);
 }
 
 void UInventoryWidget::OnSlotHovered(int32 SlotIndex, bool bIsHovered)
@@ -467,19 +471,19 @@ void UInventoryWidget::HandleContextAction(EItemContextAction Action, const FInv
 
 	if (Item.quantity <= 1)
 	{
-		// Single item – drop immediately without asking
+		// Single item пїЅ drop immediately without asking
 		HandleDropConfirmed(Item, 1);
 		return;
 	}
 
-	// Stacked item – show quantity picker
+	// Stacked item пїЅ show quantity picker
 	if (DropQuantityPopupWidget)
 	{
 		DropQuantityPopupWidget->ShowForItem(Item);
 	}
 	else
 	{
-		// No popup configured – drop everything
+		// No popup configured пїЅ drop everything
 		HandleDropConfirmed(Item, Item.quantity);
 	}
 }
@@ -490,7 +494,7 @@ void UInventoryWidget::HandleDropConfirmed(const FInventoryItemStruct& Item, int
 
 	InventoryManager->DropItem(Item.itemId, Quantity);
 
-	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Drop confirmed – itemId=%d qty=%d"), Item.itemId, Quantity);
+	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Drop confirmed пїЅ itemId=%d qty=%d"), Item.itemId, Quantity);
 }
 
 void UInventoryWidget::HandleDropCancelled()
@@ -543,11 +547,11 @@ FReply UInventoryWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 
 		if (DragHandle)
 		{
-			// Получаемгеометрию DragHandle
+			// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ DragHandle
 			const FGeometry DragHandleGeometry = DragHandle->GetCachedGeometry();
 			const FVector2D LocalMousePos = DragHandleGeometry.AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());
 
-			// Проверяем, попал ли клик в область DragHandle
+			// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ DragHandle
 			const FVector2D DragHandleSize = DragHandleGeometry.GetLocalSize();
 			bShouldStartDrag = (LocalMousePos.X >= 0 && LocalMousePos.X <= DragHandleSize.X &&
 				LocalMousePos.Y >= 0 && LocalMousePos.Y <= DragHandleSize.Y);
@@ -557,7 +561,7 @@ FReply UInventoryWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 		}
 		else
 		{
-			// Если нет DragHandle, разрешаем перетаскивание везде
+			// пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ DragHandle, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 			bShouldStartDrag = true;
 			UE_LOG(LogTemp, Warning, TEXT("InventoryWidget: No DragHandle, allowing drag from anywhere"));
 		}
@@ -569,8 +573,8 @@ FReply UInventoryWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 			const FVector2D Screen = InMouseEvent.GetScreenSpacePosition();
 			const FVector2D MouseVP = Screen / Scale;
 
-			// Важно! Используем текущую позицию виджета, а не геометрию из события
-			const FVector2D CurrentPos = CurrentViewportPosition; // Используем отслеживаемую позицию
+			// пїЅпїЅпїЅпїЅпїЅ! пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+			const FVector2D CurrentPos = CurrentViewportPosition; // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 
 			DragOffset = MouseVP - CurrentPos;
 			bDragging = true;
@@ -645,15 +649,15 @@ void UInventoryWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPos
 	FVector2D Size = GetDesiredSize();
 	if (Size.IsZero()) Size = FVector2D(400, 300);
 
-	// курсор -> viewport space
+	// пїЅпїЅпїЅпїЅпїЅпїЅ -> viewport space
 	const FVector2D MouseVP = ScreenCursorPosAbs / Scale;
 
-	// желаемая позиция в viewport space
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ viewport space
 	FVector2D Pos = MouseVP - DragOffset;
 
-	// клампы
-	Pos.X = FMath::Clamp(Pos.X, DragPadding.Left, ViewportSize.X - Size.X - DragPadding.Right);
-	Pos.Y = FMath::Clamp(Pos.Y, DragPadding.Top, ViewportSize.Y - Size.Y - DragPadding.Bottom);
+	// пїЅпїЅпїЅпїЅпїЅпїЅ
+	Pos.X = FMath::Clamp(Pos.X, DragPadding.Left, FMath::Max(DragPadding.Left, ViewportSize.X - Size.X - DragPadding.Right));
+	Pos.Y = FMath::Clamp(Pos.Y, DragPadding.Top, FMath::Max(DragPadding.Top, ViewportSize.Y - Size.Y - DragPadding.Bottom));
 
 	UE_LOG(LogTemp, Warning, TEXT("InventoryWidget: Previous position: %s, New position: %s"),
 		*CurrentViewportPosition.ToString(), *Pos.ToString());

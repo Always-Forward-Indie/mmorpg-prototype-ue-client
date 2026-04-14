@@ -58,6 +58,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Dialogue UI")
     void HideDialogue();
 
+    // Returns the NPC id of the speaker currently shown in this widget (0 if hidden).
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Dialogue UI")
+    int32 GetCurrentSpeakerNpcId() const { return CurrentSpeakerNpcId; }
+
     // Bind this to DialogueManager
     UFUNCTION(BlueprintCallable, Category = "Dialogue UI")
     void BindToDialogueManager(UDialogueManager* InDialogueManager);

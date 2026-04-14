@@ -2,6 +2,7 @@
 #include "Gameplay/Player/TitleManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Players/BasicPlayer.h"
 #include "Utils/JSONParser.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
@@ -88,13 +89,24 @@ void UTitleNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
     if (ReceivedData.IsEmpty() || !Manager) return;
 
     FMessageDataStruct Msg = JSONParser::DeserializeMessageData(ReceivedData);
-    if (Msg.eventType != TEXT("player_titles_update")) return;
 
     TSharedPtr<FJsonObject> Root;
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
     if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
 
-    // Check for error status (e.g. equipTitle error reuses this eventType convention?)
+    if (Msg.eventType == TEXT("player_titles_update"))
+    {
+        HandleOwnTitlesUpdate(Root);
+    }
+    else if (Msg.eventType == TEXT("PLAYER_TITLE_CHANGED"))
+    {
+        HandleRemoteTitleChanged(Root);
+    }
+}
+
+void UTitleNetworkHandler::HandleOwnTitlesUpdate(const TSharedPtr<FJsonObject>& Root)
+{
+    // Check for error status
     FString Status;
     if (const TSharedPtr<FJsonObject>* HeaderPtr = nullptr; Root->TryGetObjectField(TEXT("header"), HeaderPtr))
         (*HeaderPtr)->TryGetStringField(TEXT("status"), Status);
@@ -108,6 +120,31 @@ void UTitleNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
     if (LocalCharacterId > 0 && State.characterId > 0 && State.characterId != LocalCharacterId) return;
 
     Manager->ApplyTitlesState(State);
+}
+
+void UTitleNetworkHandler::HandleRemoteTitleChanged(const TSharedPtr<FJsonObject>& Root)
+{
+    if (!GameInstance) return;
+
+    const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+    if (!Root->TryGetObjectField(TEXT("body"), BodyPtr)) return;
+
+    int32 CharacterId = 0;
+    (*BodyPtr)->TryGetNumberField(TEXT("characterId"), CharacterId);
+    if (CharacterId <= 0) return;
+
+    FString TitleSlug;
+    FString TitleDisplayName;
+    (*BodyPtr)->TryGetStringField(TEXT("equippedTitleSlug"),       TitleSlug);
+    (*BodyPtr)->TryGetStringField(TEXT("equippedTitleDisplayName"), TitleDisplayName);
+
+    // Prefer display name; fall back to slug so the nameplate always shows something.
+    const FString TitleText = TitleDisplayName.IsEmpty() ? TitleSlug : TitleDisplayName;
+
+    ABasicPlayer* RemotePlayer = GameInstance->GetPlayerByCharacterId(CharacterId);
+    if (!RemotePlayer || !IsValid(RemotePlayer)) return;
+
+    RemotePlayer->SetEquippedTitle(TitleText);
 }
 
 // ---------------------------------------------------------------------------

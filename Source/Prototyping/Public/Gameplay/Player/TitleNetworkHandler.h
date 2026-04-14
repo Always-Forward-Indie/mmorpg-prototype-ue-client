@@ -16,6 +16,8 @@ class UMyGameInstance;
  * Handled inbound events:
  *   player_titles_update  — full state snapshot (response to getTitles /
  *                           setPlayerTitlesData / successful equipTitle)
+ *   PLAYER_TITLE_CHANGED  — broadcast when another player equips/removes a title;
+ *                           updates their nameplate without touching TitleManager.
  *
  * Outbound requests:
  *   getTitles   — request full title list from server
@@ -49,6 +51,12 @@ public:
 private:
     UFUNCTION()
     void HandleChunkServerData(const FString& ReceivedData);
+
+    /** Handle player_titles_update — own character title state from server. */
+    void HandleOwnTitlesUpdate(const TSharedPtr<FJsonObject>& Root);
+
+    /** Handle PLAYER_TITLE_CHANGED — update a remote player's nameplate title. */
+    void HandleRemoteTitleChanged(const TSharedPtr<FJsonObject>& Root);
 
     FPlayerTitlesState ParseTitlesState(const TSharedPtr<FJsonObject>& Body) const;
     static FTitleEntry ParseTitleEntry (const TSharedPtr<FJsonObject>& Obj);

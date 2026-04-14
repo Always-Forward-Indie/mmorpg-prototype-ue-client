@@ -15,6 +15,9 @@
 #include "Gameplay/Mobs/MOBMovementComponent.h"
 #include "Gameplay/Combat/ICombatable.h"
 #include "Gameplay/Interaction/IWorldInteractable.h"
+#include "NiagaraSystem.h"
+#include "NiagaraComponent.h"
+#include "NiagaraFunctionLibrary.h"
 #include "BasicMOB.generated.h"
 
 // Forward declarations
@@ -412,6 +415,24 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Harvest")
 	void SetHarvested(bool bHarvested);
 
+	// ── Harvestable VFX ───────────────────────────────────────────────────────
+
+	/**
+	 * Optional looping Niagara effect played on a dead body that still has
+	 * harvestable loot.  Shown when bIsDead == true && bHasBeenHarvested == false.
+	 * Stop when the mob is fully looted (bHasBeenHarvested = true).
+	 *
+	 * Assign in the mob's Blueprint CDO under "Harvest|VFX".
+	 * Leave empty (null) to disable the indicator entirely.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest|VFX")
+	TSoftObjectPtr<UNiagaraSystem> HarvestableVFX;
+
+	/** Updates the harvestable VFX state to match bIsDead / bHasBeenHarvested.
+	 *  Called automatically from SetMOBIsDead() and SetHarvested(). */
+	UFUNCTION(BlueprintCallable, Category = "Harvest|VFX")
+	void RefreshHarvestableVFX();
+
 	// ?? New skill / combat system callbacks ???????????????????????????????
 	void OnReceiveSkillInitiation(const FSkillInitiationData& SkillData);
 	void OnReceiveSkillResult(const FSkillResultData& SkillResult);
@@ -458,4 +479,9 @@ public:
 
 	// Cached combat hit height from MobDefinitionTable
 	float CachedCombatHitHeight = 120.0f;
+
+private:
+	/** Live Niagara component for the harvestable indicator; null until first spawn. */
+	UPROPERTY()
+	class UNiagaraComponent* HarvestableVFXComponent = nullptr;
 };

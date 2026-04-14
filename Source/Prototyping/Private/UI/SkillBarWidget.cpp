@@ -7,6 +7,7 @@
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/UniformGridSlot.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Kismet/GameplayStatics.h"
 
 USkillBarWidget::USkillBarWidget(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -262,14 +263,40 @@ void USkillBarWidget::CastSkillFromSlot(int32 SlotIndex)
     }
 
     FString SkillSlug = SlotWidget->GetAssignedSkillSlug();
-    
+
+    // Check cooldown first so we can play the right feedback sound.
+    if (SkillManager->IsSkillOnCooldown(SkillSlug))
+    {
+        // Per-skill override, or fall back to global AudioManager event.
+        FPlayerSkillData SkillData = SkillManager->GetSkillData(SkillSlug);
+        if (!SkillData.definitionData.skillOnCooldownSound.IsNull())
+        {
+            UGameplayStatics::PlaySound2D(this, SkillData.definitionData.skillOnCooldownSound.LoadSynchronous());
+        }
+        else if (GameInstance && GameInstance->AudioManager)
+        {
+            GameInstance->AudioManager->PlayUISound(EUISoundEvent::SkillCooldownStart);
+        }
+        return;
+    }
+
     if (!SkillManager->CanCastSkill(SkillSlug))
     {
+        // CanCastSkill failed for a reason other than cooldown (most likely not enough mana).
+        FPlayerSkillData SkillData = SkillManager->GetSkillData(SkillSlug);
+        if (!SkillData.definitionData.notEnoughManaSound.IsNull())
+        {
+            UGameplayStatics::PlaySound2D(this, SkillData.definitionData.notEnoughManaSound.LoadSynchronous());
+        }
+        else if (GameInstance && GameInstance->AudioManager)
+        {
+            GameInstance->AudioManager->PlayUISound(EUISoundEvent::SkillNotEnoughMana);
+        }
         return;
     }
 
     bool bSuccess = SkillManager->TryCastSkill(SkillSlug, CurrentTargetId, CurrentTargetType);
-    
+
     if (bSuccess)
     {
         OnSkillCast.Broadcast(SlotIndex, SkillSlug);
@@ -389,6 +416,17 @@ void USkillBarWidget::OnSkillReady(const FString& SkillSlug)
         if (SlotWidget && SlotWidget->GetAssignedSkillSlug() == SkillSlug)
         {
             RefreshSlot(i);
+        }
+    }
+
+    // Per-skill ready sound, or fall back to global.
+    if (SkillManager)
+    {
+        FPlayerSkillData SkillData = SkillManager->GetSkillData(SkillSlug);
+        if (!SkillData.definitionData.skillReadySound.IsNull())
+        {
+            UGameplayStatics::PlaySound2D(this, SkillData.definitionData.skillReadySound.LoadSynchronous());
+            return;
         }
     }
     if (GameInstance && GameInstance->AudioManager)

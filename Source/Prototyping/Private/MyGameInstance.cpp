@@ -1924,6 +1924,17 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 			// handlePlayerReadyEvent, so the PLAYER_EQUIPMENT_UPDATE will arrive
 			// automatically and be routed here through OnRemoteEquipmentStateReceivedDelegate.
 		}
+
+		// Apply initial equipped title to this remote player's nameplate.
+		// The server includes equippedTitleDisplayName (and equippedTitleSlug) in
+		// joinGameCharacter/getConnectedCharacters.
+		if (!PlayerData.characterData.equippedTitleSlug.IsEmpty())
+		{
+			const FString& TitleText = PlayerData.characterData.equippedTitleDisplayName.IsEmpty()
+				? PlayerData.characterData.equippedTitleSlug
+				: PlayerData.characterData.equippedTitleDisplayName;
+			NewPlayer->SetEquippedTitle(TitleText);
+		}
 	}
 }
 void UMyGameInstance::SetCurrentClientID(int32 ClientID)

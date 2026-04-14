@@ -144,6 +144,12 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI", meta = (AllowPrivateAccess = "true"))
 	class UPlayerNameplateComponent* NameplateComponent;
 
+	// ── Chat Bubble ──────────────────────────────────────────────────────────
+
+	/** How many seconds the chat speech bubble stays visible above the sender's nameplate. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Chat Bubble", meta = (AllowPrivateAccess = "true"))
+	float ChatBubbleDisplayDuration = 5.0f;
+
 	// Equipment visual component
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
 	class UEquipmentVisualComponent* EquipmentVisualComponent;
@@ -191,8 +197,14 @@ private:
 	ECasterType CurrentTargetType = ECasterType::None;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Configuration", meta = (AllowPrivateAccess = "true"))
-	//skill name
+	// Skill slug used by the auto-attack loop. Always "basic_attack" unless
+	// explicitly changed. Must NOT be overwritten by PlaySkillAnimation.
 	FString CurrentSkillName = "basic_attack";
+
+	// Skill slug of the currently-playing animation (set by PlaySkillAnimation_Implementation).
+	// Used ONLY for audio/VFX lookups inside PlayCombatSoundEvent.
+	// Kept separate from CurrentSkillName so the auto-attack loop always sends basic_attack.
+	FString ActiveAnimSkillSlug = TEXT("basic_attack");
 
 	// Previous soft-highlighted target
 	UPROPERTY()
@@ -228,6 +240,9 @@ private:
 	float     LMBPressTime   = 0.f;
 	float     LMBDragPixelsAccum = 0.f;
 	bool      bLMBDragActive = false;
+
+	// Accumulates DeltaTime for the throttled NPC-interaction distance check in Tick.
+	float     NpcDistCheckAccum = 0.f;
 
 	// Cached from the most recent combatInitiation packet.
 	// Used at CastRelease to compute distance-proportional projectile speed.
@@ -354,6 +369,7 @@ public:
 	virtual void PlaySkillAnimation_Implementation(const FString& AnimationName, const FString& SkillSlug, float Duration = 0.0f) override;
 	virtual void ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, ESkillSchool School, bool bIsMissed, bool bIsBlocked, const FString& SkillSlug) override;
 	virtual void ShowHealingEffect_Implementation(int32 Healing, const FString& SkillSlug) override;
+	virtual void ShowManaRestoreEffect_Implementation(int32 ManaRestored) override;
 	virtual void ShowBuffEffect_Implementation(const FAppliedEffectData& Effect) override;
 	virtual void ShowCastBar_Implementation(float CastTime, const FString& SkillName) override;
 	virtual void HideCastBar_Implementation() override;
@@ -663,6 +679,10 @@ public:
 	bool bIsAutoAttacking = false;
 	bool bLastKnownTargetAggro = false;
 
+	/** Returns the nameplate component (valid for both local and remote players). */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI")
+	UPlayerNameplateComponent* GetNameplateComponent() const { return NameplateComponent; }
+
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void SetLockedTarget(ABasicMOB* NewTarget);
 
@@ -798,6 +818,10 @@ public:
 
 	void CheckForNPC();
 
+	// Checks if the player has walked too far from the NPC whose UI windows are open,
+	// and force-closes those windows if so. Called from Tick at a throttled interval.
+	void CheckNPCInteractionDistance();
+
 	// Death screen
 	void ShowDeathScreen();
 	void HideDeathScreen();
@@ -821,6 +845,24 @@ public:
 	// Weight status handler
 	UFUNCTION()
 	void HandleWeightStatusChanged(const FWeightStatusData& WeightStatus);
+
+	// Handles effectTick broadcast from PlayerStatsNetworkHandler.
+	// Shows floating "+N" numbers above this player when a HoT tick lands.
+	UFUNCTION()
+	void HandleEffectTickFCT(const FEffectTickData& TickData);
+
+	// Handles incoming chat messages: shows the bubble if the message belongs to this player.
+	UFUNCTION()
+	void HandleChatMessageForBubble(const FChatMessageStruct& Message);
+
+	// Called when the local player equips/removes a title; routes the display name to the nameplate.
+	UFUNCTION()
+	void HandleTitlesUpdated(const FPlayerTitlesState& State);
+
+	// Push an equipped title display name to this player's nameplate (called by the server spawn path
+	// for remote players once the server includes title data in the player spawn handshake).
+	UFUNCTION(BlueprintCallable, Category = "Player|Title")
+	void SetEquippedTitle(const FString& TitleDisplayName);
 
 	// Called one tick after PlayerInterfaceWidget->AddToViewport() via UIManager delegate.
 	// This is the authoritative signal that the game UI is visible to the renderer.

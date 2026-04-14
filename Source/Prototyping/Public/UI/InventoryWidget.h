@@ -72,10 +72,10 @@ protected:
 	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
-	// хелпер для пересчёта позиции
+	// пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	void UpdateWindowDragPosition(const FVector2D& ScreenCursorPos);
 
-	// переопределяем события мыши
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
@@ -166,13 +166,13 @@ protected:
 
 protected:
 	// UI Components (bind these in Blueprint)
-	// вместо GridPanel
+	// пїЅпїЅпїЅпїЅпїЅпїЅ GridPanel
 	UPROPERTY(meta = (BindWidget))
 	UWrapBox* InventoryWrap;
 
-	// настройки
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory UI")
-	float SlotGap = 5.f;           // отступ между ячейками
+	float SlotGap = 5.f;           // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* InventoryTitle;
@@ -247,11 +247,11 @@ protected:
 	int32 HoveredSlotIndex = -1;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	UHorizontalBox* DragHandle = nullptr; // верхняя панель/шапка окна (можно любой виджет)
+	UHorizontalBox* DragHandle = nullptr; // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ/пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ (пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ)
 
 	bool bDragging = false;
 	FVector2D DragOffset = FVector2D::ZeroVector;
-	FMargin DragPadding = FMargin(8.f); // небольшой отступ от краев
+	FMargin DragPadding = FMargin(0.f); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 
 	UPROPERTY()
 	FVector2D CurrentViewportPosition = FVector2D::ZeroVector;

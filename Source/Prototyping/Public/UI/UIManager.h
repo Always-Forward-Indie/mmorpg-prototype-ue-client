@@ -257,6 +257,19 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	bool HasUIWindowOpen() const;
 
+	/**
+	 * Returns the NPC id of the currently-open NPC interaction window
+	 * (dialogue, vendor shop, repair shop, or skill shop). Returns 0 if none.
+	 */
+	int32 GetActiveInteractionNpcId() const;
+
+	/**
+	 * Force-closes all NPC-related UI windows (dialogue widget + all shop widgets).
+	 * Sends the dialogueClose packet to the server when a dialogue session is active.
+	 * Call this when the player walks away from a NPC or starts interacting with another.
+	 */
+	void ForceCloseAllNPCWindows(class UDialogueManager* DlgMgr);
+
 	// Additional UI toggles
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void ToggleEquipment();

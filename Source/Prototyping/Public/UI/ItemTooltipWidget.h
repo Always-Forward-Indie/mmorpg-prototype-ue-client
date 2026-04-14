@@ -9,6 +9,7 @@
 #include "Components/HorizontalBox.h"
 #include "Data/DataStructs.h"
 #include "Data/ItemStruct.h"
+#include "Gameplay/Items/InventoryManager.h"
 #include "ItemTooltipWidget.generated.h"
 
 /**
@@ -72,6 +73,10 @@ protected:
 	// Update use effects (consumables)
 	UFUNCTION(BlueprintCallable, Category = "Item Tooltip")
 	void UpdateUseEffects();
+
+	// Update kill counter (weapons)
+	UFUNCTION(BlueprintCallable, Category = "Item Tooltip")
+	void UpdateKillCount();
 
 	// Update item type and level
 	UFUNCTION(BlueprintCallable, Category = "Item Tooltip")
@@ -145,7 +150,7 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* WeightText;
 
-	// Optional bindings — add these widgets in Blueprint to enable the section
+	// Optional bindings ï¿½ add these widgets in Blueprint to enable the section
 	UPROPERTY(meta = (BindWidgetOptional))
 	UTextBlock* DurabilityText;
 
@@ -154,7 +159,9 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	UTextBlock* VendorPriceText;
-
+	/** Shows "Kills: N" for weapons/items that track a kill counter. Hidden when killCount == 0. */
+	UPROPERTY(meta = (BindWidgetOptional))
+	UTextBlock* KillCountText;
 	UPROPERTY(meta = (BindWidgetOptional))
 	UVerticalBox* UseEffectsBox;
 
@@ -234,4 +241,8 @@ private:
 
 	//load item icon
 	void LoadItemIcon();
+
+	/** Called when inventory changes â€” refreshes kill count if this item is displayed */
+	UFUNCTION()
+	void OnInventoryUpdated(const FCharacterInventoryStruct& UpdatedInventory);
 };

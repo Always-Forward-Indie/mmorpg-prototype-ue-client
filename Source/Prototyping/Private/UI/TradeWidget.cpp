@@ -45,9 +45,13 @@ void UTradeWidget::NativeConstruct()
     {
         int32 W = 0, H = 0;
         PC->GetViewportSize(W, H);
+        const float InitScale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
+        const FVector2D VPSizeInit = FVector2D(W, H) / InitScale;
         ForceLayoutPrepass();
         const FVector2D Size = GetDesiredSize();
-        CurrentViewportPosition = FVector2D((W - Size.X) * 0.5f, (H - Size.Y) * 0.5f);
+        CurrentViewportPosition = FVector2D(
+            FMath::Max(0.f, (VPSizeInit.X - Size.X) * 0.5f),
+            FMath::Max(0.f, (VPSizeInit.Y - Size.Y) * 0.5f));
         SetPositionInViewport(CurrentViewportPosition, false);
     }
 
@@ -191,13 +195,13 @@ void UTradeWidget::HandleTradeDeclined(const FTradeDeclinedData& Data)
 
 void UTradeWidget::HandleTradeCancelled(const FTradeCancelledData& Data)
 {
-    UE_LOG(LogTemp, Warning, TEXT("TradeWidget: Trade cancelled — %s"), *Data.reason);
+    UE_LOG(LogTemp, Warning, TEXT("TradeWidget: Trade cancelled ï¿½ %s"), *Data.reason);
     CloseTrade();
 }
 
 void UTradeWidget::HandleTradeCompleted(const FTradeCompleteData& Data)
 {
-    UE_LOG(LogTemp, Warning, TEXT("TradeWidget: Trade completed — session %s"), *Data.sessionId);
+    UE_LOG(LogTemp, Warning, TEXT("TradeWidget: Trade completed ï¿½ session %s"), *Data.sessionId);
     CloseTrade();
 }
 
@@ -427,8 +431,8 @@ void UTradeWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPos)
     FVector2D Size = GetDesiredSize();
     if (Size.IsZero()) Size = FVector2D(600, 600);
     FVector2D Pos = ScreenCursorPos / Scale - DragOffset;
-    Pos.X = FMath::Clamp(Pos.X, 0.f, VP.X - Size.X);
-    Pos.Y = FMath::Clamp(Pos.Y, 0.f, VP.Y - Size.Y);
+    Pos.X = FMath::Clamp(Pos.X, 0.f, FMath::Max(0.f, VP.X - Size.X));
+    Pos.Y = FMath::Clamp(Pos.Y, 0.f, FMath::Max(0.f, VP.Y - Size.Y));
     CurrentViewportPosition = Pos;
     SetPositionInViewport(Pos, false);
 }

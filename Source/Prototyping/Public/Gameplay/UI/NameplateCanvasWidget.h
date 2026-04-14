@@ -7,6 +7,7 @@
 #include "Gameplay/UI/W_PlayerNameplateWidget.h"
 #include "Gameplay/UI/W_NPCNameplateWidget.h"
 #include "Data/DataStructs.h"
+#include "UI/ChatBubbleWidget.h"
 #include "NameplateCanvasWidget.generated.h"
 
 // -----------------------------------------------------------------------
@@ -100,6 +101,23 @@ public:
     void SetPlayerDeadState(AActor* Actor, bool bDead);
     void SetNPCInteractionState(AActor* Actor, ENPCInteractionState NewState);
 
+    /**
+     * Push an equipped-title string to a specific player nameplate.
+     * The canvas finds the FNameplateEntry for this actor and calls
+     * UW_PlayerNameplateWidget::SetTitle().
+     */
+    void SetPlayerTitle(AActor* Actor, const FString& InTitle);
+
+    /**
+     * Show a chat speech bubble on a specific player's nameplate widget.
+     * Delegates to UW_PlayerNameplateWidget::ShowChatBubble().
+     *
+     * @param Actor     The remote player actor.
+     * @param Text      Message text to display.
+     * @param Duration  Seconds before the bubble auto-hides.
+     */
+    void ShowPlayerChatBubble(AActor* Actor, const FString& Text, float Duration);
+
     // ------------------------------------------------------------------
     // Configuration  (set in the BP CDO or UIManager)
     // ------------------------------------------------------------------
@@ -111,6 +129,22 @@ public:
     /** Widget class used for NPC nameplates. Assign in BP. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Classes")
     TSubclassOf<UW_NPCNameplateWidget> NPCNameplateWidgetClass;
+
+    /**
+     * Widget class used for chat speech bubbles above player heads.
+     * Assign WBP_ChatBubble in the Blueprint CDO.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Classes")
+    TSubclassOf<UChatBubbleWidget> ChatBubbleWidgetClass;
+
+    /**
+     * Height (cm) above the CAPSULE TOP where the chat bubble anchor sits.
+     * Larger value = bubble appears higher above the player's head.
+     * Default 80 cm puts the bubble visibly above a default nameplate (HeadOffsetZ~20).
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Head Offset",
+              meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "400.0"))
+    float ChatBubbleHeadOffsetZ = 80.0f;
 
     /**
      * Extra Z margin (cm) above the top of the capsule where the nameplate anchors
@@ -200,4 +234,8 @@ private:
 
     UPROPERTY()
     TArray<FNameplateEntry> Entries;
+
+    // Chat bubbles: one widget per remote player actor, created on first message.
+    UPROPERTY()
+    TMap<TWeakObjectPtr<AActor>, UChatBubbleWidget*> ChatBubbles;
 };

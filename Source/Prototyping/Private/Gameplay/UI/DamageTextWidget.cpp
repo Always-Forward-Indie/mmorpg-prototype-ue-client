@@ -104,15 +104,26 @@ void UDamageTextWidget::Init(float Damage, bool bCrit, EDamageType Type)
 		return;
 	}
 
-	FString Text = bCrit ? FString::Printf(TEXT("CRIT: %.0f"), Damage) : FString::Printf(TEXT("%.0f"), Damage);
+	FString Text;
+	const bool bIsHealType = (Type == EDamageType::Heal || Type == EDamageType::ManaRegen);
+	if (bCrit)
+	{
+		Text = bIsHealType ? FString::Printf(TEXT("CRIT: +%.0f"), Damage) : FString::Printf(TEXT("CRIT: %.0f"), Damage);
+	}
+	else
+	{
+		Text = bIsHealType ? FString::Printf(TEXT("+%.0f"), Damage) : FString::Printf(TEXT("%.0f"), Damage);
+	}
 	DamageText->SetText(FText::FromString(Text));
 
 	FLinearColor Color = bCrit ? FLinearColor::Yellow : FLinearColor::White;
 	switch (Type)
 	{
-	case EDamageType::Fire:   Color = FLinearColor::Red; break;
-	case EDamageType::Ice:    Color = FLinearColor::Blue; break;
-	case EDamageType::Poison: Color = FLinearColor::Green; break;
+	case EDamageType::Fire:      Color = FLinearColor::Red; break;
+	case EDamageType::Ice:       Color = FLinearColor::Blue; break;
+	case EDamageType::Poison:    Color = FLinearColor::Green; break;
+	case EDamageType::Heal:      Color = FLinearColor(0.1f, 1.0f, 0.3f, 1.0f); break;  // Bright green
+	case EDamageType::ManaRegen: Color = FLinearColor(0.2f, 0.6f, 1.0f, 1.0f); break;  // Cyan-blue
 	default: break;
 	}
 	DamageText->SetColorAndOpacity(Color);

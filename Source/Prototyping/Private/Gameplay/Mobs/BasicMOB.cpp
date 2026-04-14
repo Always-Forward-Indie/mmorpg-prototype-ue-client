@@ -308,6 +308,25 @@ void ABasicMOB::OnReceiveEffectTick(const FEffectTickData& EffectData)
 	SetMOBCurrentMana(EffectData.newMana);
 	ForceUpdateUI();
 
+	// Heal-over-time tick: show green floating number above the mob.
+	if (EffectData.effectTypeSlug == TEXT("hot") && EffectData.value > 0)
+	{
+		APawn* LocalPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+		if (LocalPawn)
+		{
+			if (UUIManager* UIM = LocalPawn->FindComponentByClass<UUIManager>())
+			{
+				if (UFloatingCombatTextManager* FCT = UIM->GetFCTManager())
+				{
+					FCT->ShowDamage(GetCombatPosition_Implementation(),
+						static_cast<float>(EffectData.value),
+						/*bIsCrit=*/ false,
+						EDamageType::Heal);
+				}
+			}
+		}
+	}
+
 	// Damage-over-time: flag as damaged for visual feedback
 	if (EffectData.value > 0 && EffectData.effectTypeSlug.Contains(TEXT("damage")))
 	{
@@ -1607,6 +1626,7 @@ void ABasicMOB::SetMOBAttribute(const FString& AttributeSlug, const FAttributeDa
 void ABasicMOB::SetMOBIsDead(const bool& bIsDead)
 {
 	MOBData.bIsDead = bIsDead;
+	RefreshHarvestableVFX();
 }
 
 void ABasicMOB::SetMOBIsAggressive(const bool& bIsAggressive)
@@ -1743,10 +1763,45 @@ bool ABasicMOB::HasBeenHarvested() const
 void ABasicMOB::SetHarvested(bool bHarvested)
 {
 	MOBData.bHasBeenHarvested = bHarvested;
-	
+	RefreshHarvestableVFX();
+
 	if (bHarvested)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("MOB %s (ID:%d) has been harvested"), *MOBData.mobName, MOBData.mobID);
+	}
+}
+
+void ABasicMOB::RefreshHarvestableVFX()
+{
+	const bool bShouldShow = MOBData.bIsDead && !MOBData.bHasBeenHarvested && !HarvestableVFX.IsNull();
+
+	if (bShouldShow)
+	{
+		// Spawn the Niagara component on first use; reuse it afterwards.
+		if (!HarvestableVFXComponent)
+		{
+			UNiagaraSystem* System = HarvestableVFX.LoadSynchronous();
+			if (!System) return;
+			HarvestableVFXComponent = UNiagaraFunctionLibrary::SpawnSystemAttached(
+				System,
+				GetRootComponent(),
+				NAME_None,
+				FVector::ZeroVector,
+				FRotator::ZeroRotator,
+				EAttachLocation::KeepRelativeOffset,
+				/*bAutoDestroy=*/ false);
+		}
+		else
+		{
+			HarvestableVFXComponent->Activate(/*bReset=*/ false);
+		}
+	}
+	else
+	{
+		if (HarvestableVFXComponent && HarvestableVFXComponent->IsActive())
+		{
+			HarvestableVFXComponent->Deactivate();
+		}
 	}
 }
 

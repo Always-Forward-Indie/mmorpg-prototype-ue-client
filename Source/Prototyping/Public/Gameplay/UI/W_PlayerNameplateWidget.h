@@ -16,12 +16,12 @@
  * Layout expected in the Blueprint (WBP_PlayerNameplate):
  *
  *   RootScaleBox  (ScaleBox)
- *     PlayerNameText    (TextBlock)   – character name
- *     PlayerClassText   (TextBlock)   – character class, e.g. "[Warrior]"  (BindWidgetOptional)
- *     PlayerLevelText   (TextBlock)   – level, e.g. "Lv. 42"               (BindWidgetOptional)
- *     DeadIcon          (Image)       – skull icon visible only when dead   (BindWidgetOptional)
- *     HPBar             (ProgressBar) – shown only during combat proximity  (BindWidgetOptional)
- *     HPText            (TextBlock)   – "1024 / 2000"                       (BindWidgetOptional)
+ *     PlayerNameText    (TextBlock)   ï¿½ character name
+ *     PlayerClassText   (TextBlock)   ï¿½ character class, e.g. "[Warrior]"  (BindWidgetOptional)
+ *     PlayerLevelText   (TextBlock)   ï¿½ level, e.g. "Lv. 42"               (BindWidgetOptional)
+ *     DeadIcon          (Image)       ï¿½ skull icon visible only when dead   (BindWidgetOptional)
+ *     HPBar             (ProgressBar) ï¿½ shown only during combat proximity  (BindWidgetOptional)
+ *     HPText            (TextBlock)   ï¿½ "1024 / 2000"                       (BindWidgetOptional)
  *
  * Call SetPlayerInfo()     once when the remote player spawns.
  * Call UpdateHealthBar()   when health data is received (on damage event).
@@ -35,7 +35,7 @@ class PROTOTYPING_API UW_PlayerNameplateWidget : public UUserWidget
 
 public:
     // ------------------------------------------------------------------ //
-    //  Primary update – call once after the remote player's data arrives  //
+    //  Primary update ï¿½ call once after the remote player's data arrives  //
     // ------------------------------------------------------------------ //
 
     /**
@@ -69,12 +69,22 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Player Nameplate")
     void SetDeadState(bool bNewDead);
 
+    /**
+     * Update the title line under the player name.
+     * Pass an empty string to hide the title.
+     *
+     * @param InTitle   Localised display name from FTitleEntry::displayName,
+     *                  or empty string when no title is equipped.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Player Nameplate")
+    void SetTitle(const FString& InTitle);
+
     /** Uniform scale applied via RenderTransform (called by UPlayerNameplateComponent). */
     UFUNCTION(BlueprintCallable, Category = "Player Nameplate")
     void SetWidgetScale(float Scale);
 
     // ------------------------------------------------------------------ //
-    //  Tick – must be called every frame to handle the HP bar auto-hide   //
+    //  Tick ï¿½ must be called every frame to handle the HP bar auto-hide   //
     // ------------------------------------------------------------------ //
     virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
@@ -109,7 +119,7 @@ protected:
     UImage* DeadIcon;
 
     /**
-     * HP bar – shown for HpVisibleDuration seconds after UpdateHealthBar() is called,
+     * HP bar ï¿½ shown for HpVisibleDuration seconds after UpdateHealthBar() is called,
      * then auto-hides. Optional.
      */
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
@@ -118,6 +128,10 @@ protected:
     /** HP value label "1024 / 2000". Optional. */
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UTextBlock* HPText;
+
+    /** Title label shown below the name, e.g. "Wolf Slayer". Hidden when empty. Optional. */
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* TitleText;
 
     // ------------------------------------------------------------------ //
     //  Configurable style (set defaults in BP CDO)                         //

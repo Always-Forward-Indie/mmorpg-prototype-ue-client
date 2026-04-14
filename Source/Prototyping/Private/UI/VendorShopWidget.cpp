@@ -8,6 +8,7 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/WrapBox.h"
 #include "Gameplay/NPCs/BasicNPC.h"
+#include "Gameplay/NPCs/NPCManager.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "EngineUtils.h"
 
@@ -38,9 +39,13 @@ void UVendorShopWidget::NativeConstruct()
     {
         int32 W = 0, H = 0;
         PC->GetViewportSize(W, H);
+        const float InitScale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
+        const FVector2D VPSizeInit = FVector2D(W, H) / InitScale;
         ForceLayoutPrepass();
         const FVector2D Size = GetDesiredSize();
-        CurrentViewportPosition = FVector2D((W - Size.X) * 0.5f, (H - Size.Y) * 0.5f);
+        CurrentViewportPosition = FVector2D(
+            FMath::Max(0.f, (VPSizeInit.X - Size.X) * 0.5f),
+            FMath::Max(0.f, (VPSizeInit.Y - Size.Y) * 0.5f));
         SetPositionInViewport(CurrentViewportPosition, false);
     }
 
@@ -140,6 +145,21 @@ void UVendorShopWidget::CloseShop()
     if (VendorTooltipWidget) VendorTooltipWidget->HideTooltip();
     SetVisibility(ESlateVisibility::Collapsed);
     OnVendorShopVisibilityChanged.Broadcast(false);
+
+    // Notify NPC that this shop window closed; farewell plays if no other windows remain.
+    if (CachedShop.npcId > 0)
+    {
+        if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+        {
+            if (UNPCManager* NPCMgr = GI->GetNPCManager())
+            {
+                if (ABasicNPC* NPC = NPCMgr->GetNPCById(CachedShop.npcId))
+                {
+                    NPC->NotifyWindowClosed();
+                }
+            }
+        }
+    }
 }
 
 void UVendorShopWidget::SwitchToTab(EVendorTab Tab)
@@ -227,7 +247,7 @@ void UVendorShopWidget::RefreshBuyCartDisplay()
     Buy_Cart_Box->ClearChildren();
     BuyCartSlots.Reset();
 
-    // Total cost of all cart entries — used to check if player can afford everything
+    // Total cost of all cart entries ï¿½ used to check if player can afford everything
     int32 TotalCartCost = 0;
     for (const FVendorCartEntry& E : BuyCart) TotalCartCost += E.pricePerUnit * E.quantity;
 
@@ -264,6 +284,12 @@ void UVendorShopWidget::RefreshSellCartDisplay()
         NewSlot->SetupAsCartSlot(i, SellCart[i]);
         SellCartSlots.Add(NewSlot);
     }
+
+    // Keep the confirm button in sync with cart content so it enables
+    // automatically whenever a new item is added, even after a prior sale cleared the cart.
+    if (Sell_Confirm_Button)
+        Sell_Confirm_Button->SetIsEnabled(SellCart.Num() > 0);
+
     UpdateSellTotalText();
     UpdatePlayerGoldText();
 }
@@ -305,7 +331,7 @@ void UVendorShopWidget::HandleShopSlotClicked(int32 SlotIndex)
     ActivePopup->OnQuantityRemove   .AddDynamic(this, &UVendorShopWidget::HandleBuyQuantityRemove);
 
     // stockCurrent == -1 means unlimited supply, use stackMax as the cap
-    // stockCurrent >= 0 means finite stock — that is the hard ceiling
+    // stockCurrent >= 0 means finite stock ï¿½ that is the hard ceiling
     const int32 StockLimit = (Item.stockCurrent == -1) ? Item.stackMax : Item.stockCurrent;
 
     int32 CartIdx = -1;
@@ -419,7 +445,7 @@ void UVendorShopWidget::HandleBuyQuantityRemove(int32 SlotIndex)
     }
 }
 
-// Cart-slot popup handlers — SlotIndex is the index inside the cart array
+// Cart-slot popup handlers ï¿½ SlotIndex is the index inside the cart array
 
 void UVendorShopWidget::HandleBuyCartQuantityConfirmed(int32 CartIndex, int32 Quantity)
 {
@@ -525,6 +551,22 @@ void UVendorShopWidget::HandleVendorShopOpened(const FVendorShopData& ShopData)
         SellCart.Reset();
     }
     CachedShop = ShopData;
+
+    // Notify NPC that the shop window opened so the farewell counter stays balanced.
+    if (CachedShop.npcId > 0)
+    {
+        if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+        {
+            if (UNPCManager* NPCMgr = GI->GetNPCManager())
+            {
+                if (ABasicNPC* NPC = NPCMgr->GetNPCById(CachedShop.npcId))
+                {
+                    NPC->NotifyWindowOpened();
+                }
+            }
+        }
+    }
+
     if (NPC_Name_Text)
     {
         FString DisplayName = ShopData.npcName;
@@ -627,8 +669,22 @@ void UVendorShopWidget::HandleSellItemBatchResult(const FSellItemBatchResultData
 void UVendorShopWidget::HandleInventoryUpdated(const FCharacterInventoryStruct& Inventory)
 {
     CachedInventory = Inventory;
+
+    // Remove sell cart entries for items that are no longer in the inventory.
+    // The server typically responds to a successful sell with getPlayerInventory
+    // (instead of a dedicated sell-result event), so this keeps the cart in sync.
+    for (int32 i = SellCart.Num() - 1; i >= 0; --i)
+    {
+        const int32 CartInvId = SellCart[i].inventoryItemId;
+        const bool bStillExists = CachedInventory.items.ContainsByPredicate(
+            [CartInvId](const FInventoryItemStruct& InvItem){ return InvItem.id == CartInvId; });
+        if (!bStillExists)
+            SellCart.RemoveAt(i);
+    }
+
     if (GetVisibility() == ESlateVisibility::Visible)
     {
+        RefreshSellCartDisplay();
         RefreshInventoryDisplay();
         UpdatePlayerGoldText();
     }
@@ -777,7 +833,7 @@ int32 UVendorShopWidget::GetPlayerLevel() const
 
 EVendorSlotAffordability UVendorShopWidget::GetShopItemAffordability(const FVendorShopItemData& Item, int32 TotalCartCost) const
 {
-    // Level check takes priority over gold — more informative to the player
+    // Level check takes priority over gold ï¿½ more informative to the player
     const int32 PlayerLevel = GetPlayerLevel();
     if (PlayerLevel > 0 && Item.levelRequirement > PlayerLevel)
         return EVendorSlotAffordability::LevelTooLow;
@@ -888,8 +944,8 @@ void UVendorShopWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPo
     FVector2D Size = GetDesiredSize();
     if (Size.IsZero()) Size = FVector2D(500, 600);
     FVector2D Pos = ScreenCursorPos / Scale - DragOffset;
-    Pos.X = FMath::Clamp(Pos.X, 0.f, VP.X - Size.X);
-    Pos.Y = FMath::Clamp(Pos.Y, 0.f, VP.Y - Size.Y);
+    Pos.X = FMath::Clamp(Pos.X, 0.f, FMath::Max(0.f, VP.X - Size.X));
+    Pos.Y = FMath::Clamp(Pos.Y, 0.f, FMath::Max(0.f, VP.Y - Size.Y));
     CurrentViewportPosition = Pos;
     SetPositionInViewport(Pos, false);
 }

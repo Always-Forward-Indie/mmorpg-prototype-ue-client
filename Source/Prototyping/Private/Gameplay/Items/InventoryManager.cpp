@@ -121,6 +121,43 @@ void UInventoryManager::ProcessGameServerData(const FString& ReceivedData)
 		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Item dropped successfully"));
 		ProcessInventoryUpdate(ReceivedData);
 	}
+	// Handle weapon kill count update (item soul system — server pushes new count on every kill)
+	else if (MessageData.eventType == "world_notification")
+	{
+		TSharedPtr<FJsonObject> Root;
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
+		if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
+		{
+			const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+			if (Root->TryGetObjectField(TEXT("body"), BodyPtr) && (*BodyPtr).IsValid())
+			{
+				FString NotifType;
+				(*BodyPtr)->TryGetStringField(TEXT("notificationType"), NotifType);
+				if (NotifType == TEXT("weapon_kill_count_update"))
+				{
+					const TSharedPtr<FJsonObject>* DataPtr = nullptr;
+					if ((*BodyPtr)->TryGetObjectField(TEXT("data"), DataPtr) && (*DataPtr).IsValid())
+					{
+						int32 InventoryItemId = (*DataPtr)->GetIntegerField(TEXT("inventoryItemId"));
+						int32 NewKillCount    = (*DataPtr)->GetIntegerField(TEXT("killCount"));
+						if (InventoryItemId > 0)
+						{
+							for (FInventoryItemStruct& Item : CurrentInventory.items)
+							{
+								if (Item.id == InventoryItemId)
+								{
+									Item.killCount = NewKillCount;
+									UE_LOG(LogTemp, Log, TEXT("InventoryManager: Updated killCount=%d for inventoryItemId=%d"), NewKillCount, InventoryItemId);
+									OnInventoryUpdated.Broadcast(CurrentInventory);
+									break;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 void UInventoryManager::ProcessInventoryData(const FString& JsonData)

@@ -8,10 +8,12 @@
 #include "Components/Button.h"
 #include "Components/ScrollBox.h"
 #include "Data/DataStructs.h"
+#include "UI/RepairShopRowWidget.h"
 #include "RepairShopWidget.generated.h"
 
 class URepairManager;
 class URepairItemRowBinding;
+class UInventoryManager;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRepairShopVisibilityChanged, bool, bIsVisible);
 
@@ -22,9 +24,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRepairShopVisibilityChanged, bool
  * Provides per-item repair and "Repair All" button.
  *
  * Blueprint subclass must bind:
- *   Repair_Items_Box  UScrollBox  — item rows added here
- *   Total_Cost_Text   UTextBlock  — total repair cost summary
- *   Repair_All_Btn    UButton     — repair all button
+ *   Repair_Items_Box  UScrollBox  ï¿½ item rows added here
+ *   Total_Cost_Text   UTextBlock  ï¿½ total repair cost summary
+ *   Repair_All_Btn    UButton     ï¿½ repair all button
  *   Status_Text       UTextBlock  (BindWidgetOptional)
  *   Close_Button      UButton     (BindWidgetOptional)
  *
@@ -43,6 +45,11 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Repair UI")
     void BindToRepairManager(URepairManager* InRepairManager);
 
+    /** Bind to InventoryManager so the gold display is populated when the shop opens
+     *  and stays updated whenever the player's inventory changes. */
+    UFUNCTION(BlueprintCallable, Category = "Repair UI")
+    void BindToInventoryManager(UInventoryManager* InInventoryManager);
+
     UFUNCTION(BlueprintCallable, Category = "Repair UI")
     void RefreshDisplay();
 
@@ -52,8 +59,11 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Repair UI")
     void CloseShop();
 
+    /** Returns the NPC id whose shop is currently loaded (0 if none). */
+    int32 GetActiveNpcId() const { return CachedShop.npcId; }
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair UI")
-    TSubclassOf<UUserWidget> RepairRowClass;
+    TSubclassOf<URepairShopRowWidget> RepairRowClass;
 
     UPROPERTY(BlueprintAssignable, Category = "Repair UI Events")
     FOnRepairShopVisibilityChanged OnRepairShopVisibilityChanged;
@@ -71,23 +81,28 @@ protected:
     UFUNCTION() void HandleRepairShopOpened(const FRepairShopData& ShopData);
     UFUNCTION() void HandleRepairItemResult(const FRepairItemResultData& Result);
     UFUNCTION() void HandleRepairAllResult(const FRepairAllResultData& Result);
+    UFUNCTION() void HandleInventoryUpdated(const FCharacterInventoryStruct& Inventory);
     UFUNCTION() void HandleRepairAllClicked();
     UFUNCTION() void HandleCloseButtonClicked();
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))         UScrollBox* Repair_Items_Box = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))         UTextBlock* Total_Cost_Text  = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))         UButton*    Repair_All_Btn   = nullptr;
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UTextBlock* Player_Gold_Text = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UTextBlock* Status_Text      = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UButton*    Close_Button     = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UWidget*    DragHandle       = nullptr;
 
 private:
-    UPROPERTY() URepairManager* RepairManager = nullptr;
+    UPROPERTY() URepairManager*   RepairManager   = nullptr;
+    UPROPERTY() UInventoryManager* InventoryManager = nullptr;
     UPROPERTY() TArray<URepairItemRowBinding*> RowBindings;
 
     FRepairShopData CachedShop;
+    int32           CachedGoldBalance = 0;
 
     void ShowStatus(const FString& Msg);
+    void UpdateGoldText();
 
     bool      bDragging = false;
     FVector2D DragOffset = FVector2D::ZeroVector;

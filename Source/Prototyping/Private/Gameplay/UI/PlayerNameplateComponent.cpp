@@ -34,7 +34,7 @@ void UPlayerNameplateComponent::TryRegister()
     UNameplateManager* Mgr = ResolveNameplateManager();
     if (!Mgr)
     {
-        // NameplateManager not ready yet — retry in 0.5s
+        // NameplateManager not ready yet ï¿½ retry in 0.5s
         if (UWorld* World = GetWorld())
         {
             World->GetTimerManager().SetTimer(
@@ -50,6 +50,12 @@ void UPlayerNameplateComponent::TryRegister()
                         CachedCharData.bIsDead,
                         HeadOffsetZ);
     bRegistered = true;
+
+    // Apply any title that arrived before registration completed.
+    if (!PendingTitle.IsEmpty())
+    {
+        Mgr->SetPlayerTitle(GetOwner(), PendingTitle);
+    }
 }
 
 void UPlayerNameplateComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -108,6 +114,23 @@ void UPlayerNameplateComponent::SetDeadState(bool bNewDead)
     if (UNameplateManager* Mgr = ResolveNameplateManager())
     {
         Mgr->SetPlayerDeadState(GetOwner(), bNewDead);
+    }
+}
+
+void UPlayerNameplateComponent::UpdateTitle(const FString& InTitle)
+{
+    PendingTitle = InTitle;  // Always cache so post-registration replay works.
+    if (UNameplateManager* Mgr = ResolveNameplateManager())
+    {
+        Mgr->SetPlayerTitle(GetOwner(), InTitle);
+    }
+}
+
+void UPlayerNameplateComponent::ShowChatBubble(const FString& Text, float Duration)
+{
+    if (UNameplateManager* Mgr = ResolveNameplateManager())
+    {
+        Mgr->ShowPlayerChatBubble(GetOwner(), Text, Duration);
     }
 }
 

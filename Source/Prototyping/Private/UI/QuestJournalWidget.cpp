@@ -40,9 +40,13 @@ void UQuestJournalWidget::NativeConstruct()
     {
         int32 W = 0, H = 0;
         PC->GetViewportSize(W, H);
+        const float InitScale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
+        const FVector2D VPSizeInit = FVector2D(W, H) / InitScale;
         ForceLayoutPrepass();
         const FVector2D Size = GetDesiredSize();
-        CurrentViewportPosition = FVector2D((W - Size.X) * 0.5f, (H - Size.Y) * 0.5f);
+        CurrentViewportPosition = FVector2D(
+            FMath::Max(0.f, (VPSizeInit.X - Size.X) * 0.5f),
+            FMath::Max(0.f, (VPSizeInit.Y - Size.Y) * 0.5f));
         SetPositionInViewport(CurrentViewportPosition, false);
     }
 
@@ -284,7 +288,7 @@ FString UQuestJournalWidget::FormatStepProgress(const FQuestProgressData& Data) 
         return Data.progressCurrent > 0 ? TEXT("Done") : TEXT("In progress");
     }
 
-    return Data.progressJson.IsEmpty() ? TEXT("—") : Data.progressJson;
+    return Data.progressJson.IsEmpty() ? TEXT("ï¿½") : Data.progressJson;
 }
 
 // ??? Delegate handlers ????????????????????????????????????????????????????????
@@ -405,8 +409,8 @@ void UQuestJournalWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursor
     if (Size.IsZero()) Size = FVector2D(600, 400);
 
     FVector2D Pos = ScreenCursorPos / Scale - DragOffset;
-    Pos.X = FMath::Clamp(Pos.X, 0.f, ViewportSize.X - Size.X);
-    Pos.Y = FMath::Clamp(Pos.Y, 0.f, ViewportSize.Y - Size.Y);
+    Pos.X = FMath::Clamp(Pos.X, 0.f, FMath::Max(0.f, ViewportSize.X - Size.X));
+    Pos.Y = FMath::Clamp(Pos.Y, 0.f, FMath::Max(0.f, ViewportSize.Y - Size.Y));
 
     CurrentViewportPosition = Pos;
     SetPositionInViewport(Pos, false);

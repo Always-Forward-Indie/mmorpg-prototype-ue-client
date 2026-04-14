@@ -150,9 +150,25 @@ public:
 	 * Call this when the player closes the dialogue window.
 	 * Triggers the farewell animation + sound and resets the talking state.
 	 * Wire this to the dialogue widget's OnClosed event in Blueprint.
+	 * @deprecated Prefer NotifyWindowClosed() for correct multi-window farewell handling.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "NPC")
 	void NotifyDialogueClosed();
+
+	/**
+	 * Call when ANY NPC-related window (dialogue, shop, repair, skill trainer) opens for this NPC.
+	 * Increments the active interaction counter and cancels any pending farewell timer.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "NPC")
+	void NotifyWindowOpened();
+
+	/**
+	 * Call when ANY NPC-related window closes.
+	 * Decrements the counter; schedules farewell only when ALL windows are closed.
+	 * A short deferred timer is used to tolerate dialogue→shop packet-ordering races.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "NPC")
+	void NotifyWindowClosed();
 
 	/**
 	 * Returns the typed NPC AnimInstance, or nullptr if the mesh/AnimBP is not yet set up.
@@ -237,6 +253,13 @@ protected:
 	int32 LastMana = -1;
 	float CurrentWidgetScale = 1.0f;
 	float LastUpdateTime = 0.0f;
+
+	// ---- Multi-window farewell tracking ----
+	// Counts open NPC-related windows (dialogue + any shops). Farewell plays only
+	// when the count returns to zero, with a short grace-period timer so that a
+	// dialogue→shop transition (two rapid open/close events) doesn't fire early.
+	int32 ActiveInteractionWindowCount = 0;
+	FTimerHandle FarewellTimer;
 
 private:
 	// Initialize UI with delay

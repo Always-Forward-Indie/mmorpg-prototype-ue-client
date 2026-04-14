@@ -36,9 +36,13 @@ void UPlayerStatsWidget::NativeConstruct()
     {
         int32 W = 0, H = 0;
         PC->GetViewportSize(W, H);
+        const float InitScale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
+        const FVector2D VPSizeInit = FVector2D(W, H) / InitScale;
         ForceLayoutPrepass();
         const FVector2D Size = GetDesiredSize();
-        CurrentViewportPosition = FVector2D((W - Size.X) * 0.5f, (H - Size.Y) * 0.5f);
+        CurrentViewportPosition = FVector2D(
+            FMath::Max(0.f, (VPSizeInit.X - Size.X) * 0.5f),
+            FMath::Max(0.f, (VPSizeInit.Y - Size.Y) * 0.5f));
         SetPositionInViewport(CurrentViewportPosition, false);
     }
 
@@ -74,10 +78,14 @@ void UPlayerStatsWidget::BindToStatsManager(UPlayerStatsManager* InStatsManager)
     if (StatsManager)
     {
         StatsManager->OnStatsUpdated.AddDynamic(this, &UPlayerStatsWidget::HandleStatsUpdated);
-        // Populate immediately if we already have data
+        // Prime widget-local cache so OpenStats always reads fresh data even before
+        // the first HandleStatsUpdated fires (which would set CachedStats.characterId).
         const FPlayerStatsUpdateStruct& Cached = StatsManager->GetCachedStats();
         if (Cached.characterId > 0)
+        {
+            CachedStats = Cached;
             RefreshAll(Cached);
+        }
     }
 }
 
@@ -563,8 +571,8 @@ void UPlayerStatsWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorP
     FVector2D Size = GetDesiredSize();
     if (Size.IsZero()) Size = FVector2D(400, 600);
     FVector2D Pos = ScreenCursorPos / Scale - DragOffset;
-    Pos.X = FMath::Clamp(Pos.X, 0.f, VP.X - Size.X);
-    Pos.Y = FMath::Clamp(Pos.Y, 0.f, VP.Y - Size.Y);
+    Pos.X = FMath::Clamp(Pos.X, 0.f, FMath::Max(0.f, VP.X - Size.X));
+    Pos.Y = FMath::Clamp(Pos.Y, 0.f, FMath::Max(0.f, VP.Y - Size.Y));
     CurrentViewportPosition = Pos;
     SetPositionInViewport(Pos, false);
 }

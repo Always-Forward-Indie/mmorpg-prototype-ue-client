@@ -196,7 +196,7 @@ private:
     // Dragging state
     bool bDragging = false;
     FVector2D DragOffset = FVector2D::ZeroVector;
-    FMargin DragPadding = FMargin(8.f);
+    FMargin DragPadding = FMargin(0.f);
     FVector2D CurrentViewportPosition = FVector2D::ZeroVector;
 
     // Internal methods

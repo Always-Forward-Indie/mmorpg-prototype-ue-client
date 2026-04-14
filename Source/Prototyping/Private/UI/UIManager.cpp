@@ -702,8 +702,8 @@ void UUIManager::CreateSkillWidgets()
 		AvailableSkillsWidget = CreateWidget<UAvailableSkillsWidget>(GetWorld(), AvailableSkillsWidgetClass);
 		if (AvailableSkillsWidget)
 		{
-			// Add to viewport with higher Z-Order than skill bar but lower than inventory
-			AvailableSkillsWidget->AddToViewport(50);
+			// Add to viewport with same Z-order as other draggable windows
+			AvailableSkillsWidget->AddToViewport(90);
 			
 			// Initially hide the available skills panel
 			AvailableSkillsWidget->SetVisibility(ESlateVisibility::Hidden);
@@ -1017,6 +1017,49 @@ bool UUIManager::HasUIWindowOpen() const
 		|| bGameMenuVisible;
 }
 
+int32 UUIManager::GetActiveInteractionNpcId() const
+{
+	if (bDialogueVisible && DialogueWidget)
+	{
+		const int32 Id = DialogueWidget->GetCurrentSpeakerNpcId();
+		if (Id > 0) return Id;
+	}
+	if (bVendorShopVisible && VendorShopWidget)
+	{
+		const int32 Id = VendorShopWidget->GetActiveNpcId();
+		if (Id > 0) return Id;
+	}
+	if (bRepairShopVisible && RepairShopWidget)
+	{
+		const int32 Id = RepairShopWidget->GetActiveNpcId();
+		if (Id > 0) return Id;
+	}
+	if (bSkillShopVisible && SkillShopWidget)
+	{
+		const int32 Id = SkillShopWidget->GetActiveNpcId();
+		if (Id > 0) return Id;
+	}
+	return 0;
+}
+
+void UUIManager::ForceCloseAllNPCWindows(UDialogueManager* DlgMgr)
+{
+	// Close dialogue: send server packet then hide widget immediately.
+	if (bDialogueVisible && DialogueWidget)
+	{
+		if (DlgMgr && DlgMgr->IsDialogueActive())
+			DlgMgr->CloseDialogue();
+		DialogueWidget->HideDialogue();
+	}
+	// Close shops (each CloseShop also handles the NPC farewell-window counter).
+	if (bVendorShopVisible && VendorShopWidget)
+		VendorShopWidget->CloseShop();
+	if (bRepairShopVisible && RepairShopWidget)
+		RepairShopWidget->CloseShop();
+	if (bSkillShopVisible && SkillShopWidget)
+		SkillShopWidget->CloseShop();
+}
+
 bool UUIManager::ShouldShowCursor() const
 {
 	// Show cursor if any UI element is open or alt-cursor is active
@@ -1315,6 +1358,12 @@ void UUIManager::InitializeItemSystemWidgets(UEquipmentManager* InEquipmentManag
 			{
 				RepairShopWidget->BindToRepairManager(InRepairManager);
 			}
+			// Bind inventory so gold is populated immediately when the shop opens
+			// and stays in sync after every repair.
+			if (InventoryManager)
+			{
+				RepairShopWidget->BindToInventoryManager(InventoryManager);
+			}
 			RepairShopWidget->OnRepairShopVisibilityChanged.AddDynamic(this, &UUIManager::OnRepairShopVisibilityChanged);
 			UE_LOG(LogTemp, Log, TEXT("UIManager: RepairShopWidget created and bound"));
 		}
@@ -1378,6 +1427,23 @@ void UUIManager::InitializeSkillShopWidget(USkillShopManager* InSkillShopManager
 	if (InSkillShopManager)
 	{
 		SkillShopWidget->BindToSkillShopManager(InSkillShopManager);
+	}
+
+	// Bind inventory manager so the gold display updates when getPlayerInventory arrives
+	// (the server sends getPlayerInventory, not skill_learned, after a skill purchase).
+	if (InventoryManager)
+	{
+		SkillShopWidget->BindToInventoryManager(InventoryManager);
+	}
+
+	// Bind stats manager so SP display updates when stats_update arrives
+	// (e.g. from learning a passive skill or leveling up while shop is open).
+	if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetWorld()->GetGameInstance()))
+	{
+		if (UPlayerStatsManager* SM = GI->GetPlayerStatsManager())
+		{
+			SkillShopWidget->BindToStatsManager(SM);
+		}
 	}
 
 	SkillShopWidget->OnSkillShopVisibilityChanged.AddDynamic(this, &UUIManager::OnSkillShopVisibilityChanged);

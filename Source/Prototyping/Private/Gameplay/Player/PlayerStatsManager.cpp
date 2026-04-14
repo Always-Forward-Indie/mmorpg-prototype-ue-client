@@ -43,6 +43,17 @@ void UPlayerStatsManager::ApplyStatsUpdate(const FPlayerStatsUpdateStruct& InSta
         CachedStats.attributes      = InStats.attributes;
         // freeSkillPoints is only included in full stat packets (same conditions as attributes)
         CachedStats.freeSkillPoints = InStats.freeSkillPoints;
+
+        // Passive effects (e.g. mana_shield) raise the *effective* max HP/MP above the base
+        // value that arrives in the health/mana sub-objects.  Override healthMax/manaMax here
+        // so the HUD bars always display the correct, effect-adjusted maximums.
+        for (const FStatAttributeEntry& Attr : CachedStats.attributes)
+        {
+            if (Attr.slug == TEXT("max_health") && Attr.effective > 0)
+                CachedStats.healthMax = Attr.effective;
+            else if (Attr.slug == TEXT("max_mana") && Attr.effective > 0)
+                CachedStats.manaMax = Attr.effective;
+        }
     }
 
     // Replace effects when a full packet arrives (bHasAttributes) OR when a focused

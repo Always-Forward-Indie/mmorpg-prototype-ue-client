@@ -76,13 +76,30 @@ void UPlayerStatsNetworkHandler::HandleChunkServerData(const FString& ReceivedDa
 
         StatsManager->ApplyStatsUpdate(Stats);
 
-        // Signal the loading screen gate on the very first stats_update for our character.
-        // This ensures the loading screen stays up until the HUD has real data to display.
-        if (!bFirstStatsDelivered && GameInstance)
+        // Signal the loading screen gate when we have received enough full packets to
+        // be confident that SET_PLAYER_ACTIVE_EFFECTS has already been processed on the
+        // server and its stats_update is already in CachedStats.
+        //
+        // A "full" packet is any stats_update that carries attributes (as opposed to a
+        // bare regen tick that only has health/mana fields).  At login the server always
+        // sends at least two full packets:
+        //   1. From handleSetPlayerInventoryEvent  (may have no active effects yet)
+        //   2. From handleSetPlayerActiveEffectsEvent (always includes all effects)
+        //
+        // Waiting for the SECOND full packet therefore guarantees effects are present in
+        // CachedStats before the loading-screen gate opens.
+        // Characters who receive only one full packet here (unusual) still get the gate
+        // fired by the BasicPlayer::ProcessStatsUpdate path, which calls
+        // NotifyStatsReceived unconditionally every time it runs.
+        if (!bFirstStatsDelivered && Stats.attributes.Num() > 0)
         {
-            bFirstStatsDelivered = true;
-            GameInstance->NotifyStatsReceived();
-            UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: NotifyStatsReceived() fired"));
+            ++FullStatsPacketCount;
+            if (FullStatsPacketCount >= 2 && GameInstance)
+            {
+                bFirstStatsDelivered = true;
+                GameInstance->NotifyStatsReceived();
+                UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: NotifyStatsReceived() fired (2nd full packet, effects confirmed)"));
+            }
         }
     }
     else if (Msg.eventType == TEXT("setPlayerActiveEffects"))
@@ -125,6 +142,7 @@ FPlayerStatsUpdateStruct UPlayerStatsNetworkHandler::ParseStatsUpdate(const TSha
     Body->TryGetNumberField(TEXT("characterId"),    S.characterId);
     Body->TryGetNumberField(TEXT("level"),            S.level);
     Body->TryGetNumberField(TEXT("freeSkillPoints"),  S.freeSkillPoints);
+    Body->TryGetStringField(TEXT("source"),           S.updateSource);
 
     // health
     const TSharedPtr<FJsonObject>* HealthObj = nullptr;

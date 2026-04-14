@@ -79,7 +79,8 @@ void URepairNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
 FRepairShopData URepairNetworkHandler::ParseRepairShop(const TSharedPtr<FJsonObject>& Body) const
 {
     FRepairShopData Shop;
-    Body->TryGetNumberField(TEXT("npcId"), Shop.npcId);
+    Body->TryGetNumberField(TEXT("npcId"),        Shop.npcId);
+    Body->TryGetNumberField(TEXT("goldBalance"),  Shop.goldBalance);
 
     const TArray<TSharedPtr<FJsonValue>>* ItemsArray = nullptr;
     if (!Body->TryGetArrayField(TEXT("items"), ItemsArray)) return Shop;
@@ -94,8 +95,11 @@ FRepairShopData URepairNetworkHandler::ParseRepairShop(const TSharedPtr<FJsonObj
         Obj->TryGetNumberField(TEXT("inventoryItemId"),  Item.inventoryItemId);
         Obj->TryGetNumberField(TEXT("inventorySlotId"),  Item.inventoryItemId); // protocol uses inventorySlotId
         Obj->TryGetNumberField(TEXT("itemId"),           Item.itemId);
-        // Server sends "slug" (localization key); keep name empty, UI resolves via LocalizationSubsystem
-        Obj->TryGetStringField(TEXT("slug"), Item.slug);
+        // Server sends "itemName"; legacy clients may send "slug".  Populate both and
+        // use itemName as a fallback so the row widget always has a name to display.
+        Obj->TryGetStringField(TEXT("slug"),     Item.slug);
+        Obj->TryGetStringField(TEXT("itemName"), Item.itemName);
+        if (Item.slug.IsEmpty()) Item.slug = Item.itemName;
         Obj->TryGetNumberField(TEXT("durabilityMax"),    Item.durabilityMax);
         Obj->TryGetNumberField(TEXT("durabilityCurrent"),Item.durabilityCurrent);
         Obj->TryGetNumberField(TEXT("repairCost"),       Item.repairCost);

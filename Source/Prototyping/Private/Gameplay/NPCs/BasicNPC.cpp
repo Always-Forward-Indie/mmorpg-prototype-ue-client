@@ -37,6 +37,15 @@ ABasicNPC::ABasicNPC()
 		Capsule->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	}
 
+	// The skeletal mesh component has its own collision settings separate from the capsule.
+	// If the project's CharacterMesh profile blocks ECC_Camera, the spring arm probe will
+	// collapse when an NPC stands between the camera and the player.
+	// Explicitly silence the mesh on the camera channel (mirrors the fix in BasicMOB.cpp).
+	if (USkeletalMeshComponent* MeshComp = GetMesh())
+	{
+		MeshComp->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+	}
+
 	// NPCs are server-driven; disable physics push to prevent client-side jitter.
 	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
 	{

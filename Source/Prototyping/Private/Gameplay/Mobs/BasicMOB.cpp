@@ -461,39 +461,22 @@ void ABasicMOB::Tick(float DeltaTime)
 	if (MobHeadInfo)
 	{
 		float MaxHealth = 0.0f;
-		float MaxMana = 0.0f;
-
-		// Проверяем, есть ли в attributesData нужные ключи
 		if (const FAttributeDataStruct* HealthAttr = MOBData.mobAttributes.attributesData.Find(TEXT("max_health")))
 		{
 			MaxHealth = HealthAttr->attributeValue;
 		}
-		if (const FAttributeDataStruct* ManaAttr = MOBData.mobAttributes.attributesData.Find(TEXT("max_mana")))
-		{
-			MaxMana = ManaAttr->attributeValue;
-		}
 
-		// Обновляем UI если: 
-		// 1. Изменились параметры
-		// 2. UI еще не была инициализирована
-		// 3. Есть данные для отображения (mobID != 0)
-		// Use GetMaxMana_Implementation() fallback (100) when max_mana is missing from attributes.
-		if (MaxMana <= 0.f) { MaxMana = static_cast<float>(GetMaxMana_Implementation()); }
-
-		if ((LastHealth != MOBData.mobCurrentHealth || LastMana != MOBData.mobCurrentMana || MOBData.bIsAggressive != LastAggressive || !bUIInitialized) && MOBData.mobID != 0)
+		if ((LastHealth != MOBData.mobCurrentHealth || MOBData.bIsAggressive != LastAggressive || !bUIInitialized) && MOBData.mobID != 0)
 		{
 			MobHeadInfo->UpdateInfo(
 				MOBData.mobCurrentHealth,
 				MaxHealth,
-				MOBData.mobCurrentMana,
-				MaxMana,
 				MOBData.mobName,
 				MOBData.mobLevel,
 				MOBData.bIsAggressive
 			);
 
 			LastHealth = MOBData.mobCurrentHealth;
-			LastMana = MOBData.mobCurrentMana;
 			LastAggressive = MOBData.bIsAggressive;
 			bUIInitialized = true;
 		}
@@ -1847,17 +1830,9 @@ void ABasicMOB::ForceUpdateUI()
 	if (MobHeadInfo)
 	{
 		float MaxHealth = 0.0f;
-		float MaxMana = 0.0f;
-
-		// Проверяем, есть ли в attributesData нужные ключи
 		if (const FAttributeDataStruct* HealthAttr = MOBData.mobAttributes.attributesData.Find(TEXT("max_health")))
 		{
 			MaxHealth = HealthAttr->attributeValue;
-		}
-
-		if (const FAttributeDataStruct* ManaAttr = MOBData.mobAttributes.attributesData.Find(TEXT("max_mana")))
-		{
-			MaxMana = ManaAttr->attributeValue;
 		}
 
 		// Resolve localised name from slug; fall back to server-provided name
@@ -1878,8 +1853,6 @@ void ABasicMOB::ForceUpdateUI()
 		MobHeadInfo->UpdateInfo(
 			MOBData.mobCurrentHealth,
 			MaxHealth,
-			MOBData.mobCurrentMana,
-			MaxMana,
 			DisplayName,
 			MOBData.mobLevel,
 			MOBData.bIsAggressive
@@ -1887,7 +1860,6 @@ void ABasicMOB::ForceUpdateUI()
 
 		// Обновляем последние значения и помечаем UI как инициализированный
 		LastHealth = MOBData.mobCurrentHealth;
-		LastMana = MOBData.mobCurrentMana;
 		LastAggressive = MOBData.bIsAggressive;
 		bUIInitialized = true;
 		

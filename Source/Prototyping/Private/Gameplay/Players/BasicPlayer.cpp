@@ -1936,8 +1936,15 @@ void ABasicPlayer::Move(const FInputActionValue& Value)
         const FVector Input = (Forward * MoveValue.Y + Right * MoveValue.X).GetSafeNormal();
         AddMovementInput(Input, 1.0f);
 
-        DesiredMeshYaw = CameraYaw;
-        bHasDesiredMeshYaw = true;
+        // During a skill animation the mesh is locked toward the target — do not
+        // let RMB drag rotate the character away from the enemy mid-cast.
+        const bool bAnimLocked = MyGameInstance && MyGameInstance->GetPlayerSkillManager()
+            && MyGameInstance->GetPlayerSkillManager()->IsSkillAnimationPlaying();
+        if (!bAnimLocked)
+        {
+            DesiredMeshYaw = CameraYaw;
+            bHasDesiredMeshYaw = true;
+        }
     }
     else
     {
@@ -1995,11 +2002,18 @@ void ABasicPlayer::Look(const FInputActionValue& Value)
         {
             AddControllerYawInput(LookValue.X * CameraYawSensitivity);
 
-            // RMB held: character follows camera yaw
+            // RMB held: character follows camera yaw — but not mid-cast.
+            // The camera itself still rotates freely; only the mesh stays locked
+            // toward the target until the animation finishes.
             if (bIsRightMouseDown)
             {
-                DesiredMeshYaw = Controller->GetControlRotation().Yaw;
-                bHasDesiredMeshYaw = true;
+                const bool bAnimLocked = MyGameInstance && MyGameInstance->GetPlayerSkillManager()
+                    && MyGameInstance->GetPlayerSkillManager()->IsSkillAnimationPlaying();
+                if (!bAnimLocked)
+                {
+                    DesiredMeshYaw = Controller->GetControlRotation().Yaw;
+                    bHasDesiredMeshYaw = true;
+                }
             }
         }
 

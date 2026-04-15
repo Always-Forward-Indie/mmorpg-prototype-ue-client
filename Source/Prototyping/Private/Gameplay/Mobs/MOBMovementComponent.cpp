@@ -665,6 +665,29 @@ FVector UMOBMovementComponent::AdjustToGround(const FVector& Location, float Del
     TArray<float, TInlineAllocator<5>> GroundHeights;
     bool bFoundGround = false;
 
+    // Center trace — recorded separately so we can prefer it when descending off
+    // an elevated surface (fence / ledge).  Surrounding probes may still "see"
+    // the elevated surface within their ±30-unit offset radius even after the mob
+    // center has moved past it, causing the median to stay too high.
+    float CenterGroundZ = 0.f;
+    bool  bCenterFound  = false;
+    {
+        const FVector Start = FVector(Location.X, Location.Y, Location.Z + GroundTraceHeight);
+        const FVector End   = FVector(Location.X, Location.Y, Location.Z - GroundTraceDepth);
+        FHitResult CenterHit;
+        if (World->LineTraceSingleByObjectType(CenterHit, Start, End, ObjectParams, Params))
+        {
+            CenterGroundZ = CenterHit.Location.Z;
+            bCenterFound  = true;
+            GroundHeights.Add(CenterGroundZ);
+            bFoundGround  = true;
+            if (bDebugGroundAdjustment)
+            {
+                DrawDebugLine(World, Start, CenterHit.Location, FColor::Green, false, 0.05f);
+            }
+        }
+    }
+
     auto DoTrace = [&](const FVector& Origin)
     {
         const FVector Start = FVector(Origin.X, Origin.Y, Location.Z + GroundTraceHeight);
@@ -680,8 +703,6 @@ FVector UMOBMovementComponent::AdjustToGround(const FVector& Location, float Del
             }
         }
     };
-
-    DoTrace(Location);
 
     if (bIsMoving)
     {
@@ -709,7 +730,22 @@ FVector UMOBMovementComponent::AdjustToGround(const FVector& Location, float Del
         MedianGround = Sum / GroundHeights.Num();
     }
 
-    const float DesiredZ = MedianGround + Capsule->GetScaledCapsuleHalfHeight();
+    // When descending: if the center trace finds ground significantly lower than the
+    // multi-probe median (mob just stepped off a fence / ledge), trust the center
+    // exclusively.  This prevents surrounding probes — which still "see" the elevated
+    // surface — from holding the mob airborne after it has moved past the obstacle.
+    float GroundToUse = MedianGround;
+    if (bCenterFound)
+    {
+        const float CenterDesiredZ = CenterGroundZ + Capsule->GetScaledCapsuleHalfHeight();
+        // Going down AND center is clearly lower than what surrounding probes found
+        if (CenterDesiredZ < Location.Z && (MedianGround - CenterGroundZ) > CenterPriorityThreshold)
+        {
+            GroundToUse = CenterGroundZ;
+        }
+    }
+
+    const float DesiredZ = GroundToUse + Capsule->GetScaledCapsuleHalfHeight();
     const float CurrentZ = Location.Z;
     const float ZDiff    = DesiredZ - CurrentZ;
 

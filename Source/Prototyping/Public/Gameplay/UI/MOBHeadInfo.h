@@ -4,61 +4,34 @@
 
 #include "CoreMinimal.h"
 #include "Components/WidgetComponent.h"
-#include <Components/ProgressBar.h>
-#include <Components/TextBlock.h>
 #include "MOBHeadInfo.generated.h"
 
+class UW_MOBHeadInfoWidget;
+
 /**
- * 
+ * WidgetComponent that owns and drives the MOB head-info widget.
+ * Delegates all data updates to UW_MOBHeadInfoWidget via a lazy-resolved pointer.
  */
 UCLASS()
 class PROTOTYPING_API UMOBHeadInfo : public UWidgetComponent
 {
 	GENERATED_BODY()
-	
-	protected:
-		// Указатель на UI виджет
-		UPROPERTY()
-		UUserWidget* MobWidget;
 
-		// Указатели на UI элементы
-		UPROPERTY()
-		UProgressBar* HealthBar;
+public:
+	/** Full update: HP bar, name, level and aggression colour. */
+	void UpdateInfo(float CurrentHP, float MaxHP, const FString& MobName, int32 MobLevel, bool bMobAggressive);
 
-		UPROPERTY()
-		UProgressBar* ManaBar;
+	void UpdateHealth(float CurrentHP, float MaxHP);
+	void UpdateMobName(const FString& MobName);
+	void UpdateMobLevel(int32 MobLevel);
+	void UpdateMobAggressive(bool bMobAggressive);
 
-		UPROPERTY()
-		UTextBlock* MobNameText;
+	void ShowWidget(bool bShow);
 
-		UPROPERTY()
-		UTextBlock* MobLevelText;
+private:
+	/** Resolved once, the first time any Update* method is called. */
+	UPROPERTY()
+	UW_MOBHeadInfoWidget* CachedWidget = nullptr;
 
-		UPROPERTY()
-		bool bIsAggressive = false;
-
-	public:
-		// Инициализация компонента
-		virtual void BeginPlay() override;
-
-		// Обновление информации (HP, MP, Имя, Уровень)
-		void UpdateInfo(float CurrentHP, float MaxHP, float CurrentMP, float MaxMP, const FString& MobName, int MobLevel, bool isMobAggressive);
-
-		// Обновление информации HP
-		void UpdateHealth(float CurrentHP, float MaxHP);
-
-		// Обновление информации MP
-		void UpdateMana(float CurrentMP, float MaxMP);
-
-		// Обновление информации Имя
-		void UpdateMobName(const FString& MobName);
-
-		// Обновление информации Уровень
-		void UpdateMobLevel(int MobLevel);
-
-		// Обновление информации Агрессивность
-		void UpdateMobAggressive(bool isMobAggressive);
-
-		// Показать / скрыть UI
-		void ShowWidget(bool bShow);
+	UW_MOBHeadInfoWidget* GetHeadWidget();
 };

@@ -108,6 +108,11 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Skill Manager")
     float GetGCDRemaining() const;
 
+    // Returns true while a non-auto-attack skill animation is playing.
+    // Use to block player rotation input during the animation.
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Skill Manager")
+    bool IsSkillAnimationPlaying() const;
+
 protected:
     // Get world for time calculations
     UWorld* GetWorld() const;
@@ -149,4 +154,27 @@ private:
     // Global Cooldown (GCD) tracking
     double GCDEndTime = 0.0;
     bool   bGCDUsesServerClock = true;
+
+    // ── Animation cast lock ──────────────────────────────────────────────────
+    // Set to true by HandleSkillInitiation when the server confirms a non-auto-attack
+    // skill for the local player. Cleared by NotifyAnimationEnded when the montage
+    // fully completes. Prevents a skill from being re-cast while its animation is
+    // still playing (fixes the "damage appears at wrong time" bug when the previous
+    // animation's HitPoint notify fires during the new animation).
+    bool   bIsAnimationPlaying       = false;
+    double AnimationStartWorldTime   = 0.0;
+    // Safety: if NotifyAnimationEnded never fires (no montage end notify), the lock
+    // auto-expires after this many seconds so the player is never permanently blocked.
+    static constexpr double AnimationLockTimeoutSec = 6.0;
+
+    // ── Server-confirmation guard ────────────────────────────────────────────
+    // Set to true by TryCastSkill right before the request is sent.
+    // Cleared by HandleSkillInitiation when the server-confirmed combatInitiation
+    // arrives. Prevents a second skill request from being sent during the network
+    // round-trip (~100 ms) before the first confirmation (and its cooldown) arrives.
+    bool   bAwaitingServerConfirmation     = false;
+    double ConfirmationRequestWorldTime    = 0.0;
+    // Auto-expire if the server never responds (packet loss / rejection with no
+    // combatInitiation reply).  2 s is generous enough for high-latency connections.
+    static constexpr double ConfirmationTimeoutSec = 2.0;
 };

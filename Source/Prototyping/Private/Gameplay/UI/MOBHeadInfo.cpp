@@ -1,126 +1,59 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "Gameplay/UI/MOBHeadInfo.h"
+#include "Gameplay/UI/W_MOBHeadInfoWidget.h"
 
-void UMOBHeadInfo::BeginPlay()
+UW_MOBHeadInfoWidget* UMOBHeadInfo::GetHeadWidget()
 {
-	Super::BeginPlay();
-
-	// �������� ������
-	MobWidget = GetWidget();
-
-	if (MobWidget)
+	if (!CachedWidget)
 	{
-		// ���� ProgressBar'� � TextBlock'� � UI
-		HealthBar = Cast<UProgressBar>(MobWidget->GetWidgetFromName(TEXT("HealthProgressBar")));
-		ManaBar = Cast<UProgressBar>(MobWidget->GetWidgetFromName(TEXT("ManaProgressBar")));
-		MobNameText = Cast<UTextBlock>(MobWidget->GetWidgetFromName(TEXT("MobNameText")));
-		MobLevelText = Cast<UTextBlock>(MobWidget->GetWidgetFromName(TEXT("MobLevelText")));
+		CachedWidget = Cast<UW_MOBHeadInfoWidget>(GetUserWidgetObject());
 	}
-
-	// �� ��������� ��������
-	SetVisibility(false);
+	return CachedWidget;
 }
 
-void UMOBHeadInfo::UpdateInfo(float CurrentHP, float MaxHP, float CurrentMP, float MaxMP, const FString& MobName, int MobLevel, bool isMobAggressive)
+void UMOBHeadInfo::UpdateInfo(float CurrentHP, float MaxHP, const FString& MobName, int32 MobLevel, bool bMobAggressive)
 {
-	if (!MobWidget) return;
+	UW_MOBHeadInfoWidget* W = GetHeadWidget();
+	if (!W) return;
 
-	// Bidirectional assignment — was a one-way latch (bIsAggressive could never go back to false)
-	bIsAggressive = isMobAggressive;
-
-	// Update HP
-	if (HealthBar && MaxHP > 0.0f)
-	{
-		float NewPercent = CurrentHP / MaxHP;
-		HealthBar->SetPercent(NewPercent);
-		
-		// ��������� ���� ��� �������
-		UE_LOG(LogTemp, Warning, TEXT("MOB HP Updated: %f/%f = %f%%"), CurrentHP, MaxHP, NewPercent * 100.0f);
-	}
-
-	// ��������� MP
-	if (ManaBar && MaxMP > 0.0f)
-	{
-		float NewPercent = CurrentMP / MaxMP;
-		ManaBar->SetPercent(NewPercent);
-	}
-
-	// ��������� ��� ����
-	if (MobNameText)
-	{
-		MobNameText->SetText(FText::FromString(MobName));
-
-		if (bIsAggressive)
-		{
-			MobNameText->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 0.0f, 0.0f, 1.0f)));
-		}
-		else
-		{
-			MobNameText->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 1.0f, 0.0f, 1.0f)));
-		}
-	}
-
-	// ��������� �������
-	if (MobLevelText)
-	{
-		MobLevelText->SetText(FText::FromString(FString::Printf(TEXT("LVL: %d"), MobLevel)));
-	}
+	W->UpdateHealth(CurrentHP, MaxHP);
+	W->UpdateNameAndLevel(MobName, MobLevel);
+	W->SetAggressive(bMobAggressive);
 }
 
 void UMOBHeadInfo::UpdateHealth(float CurrentHP, float MaxHP)
 {
-	if (!MobWidget) return;
-	// ��������� HP
-	if (HealthBar)
+	if (UW_MOBHeadInfoWidget* W = GetHeadWidget())
 	{
-		HealthBar->SetPercent(CurrentHP / MaxHP);
-	}
-}
-
-void UMOBHeadInfo::UpdateMana(float CurrentMP, float MaxMP)
-{
-	if (!MobWidget) return;
-	// ��������� MP
-	if (ManaBar)
-	{
-		ManaBar->SetPercent(CurrentMP / MaxMP);
+		W->UpdateHealth(CurrentHP, MaxHP);
 	}
 }
 
 void UMOBHeadInfo::UpdateMobName(const FString& MobName)
 {
-	if (!MobWidget) return;
-	// ��������� ��� ����
-	if (MobNameText)
+	if (UW_MOBHeadInfoWidget* W = GetHeadWidget())
 	{
-		MobNameText->SetText(FText::FromString(MobName));
+		W->UpdateNameAndLevel(MobName, -1);
 	}
 }
 
-void UMOBHeadInfo::UpdateMobLevel(int MobLevel)
+void UMOBHeadInfo::UpdateMobLevel(int32 MobLevel)
 {
-	if (!MobWidget) return;
-	// ��������� �������
-	if (MobLevelText)
+	if (UW_MOBHeadInfoWidget* W = GetHeadWidget())
 	{
-		MobLevelText->SetText(FText::FromString(FString::Printf(TEXT("LVL: %d"), MobLevel)));
+		if (W->MobLevelText)
+		{
+			W->MobLevelText->SetText(FText::FromString(FString::Printf(TEXT("LVL: %d"), MobLevel)));
+		}
 	}
 }
 
-
-void UMOBHeadInfo::UpdateMobAggressive(bool isMobAggressive)
+void UMOBHeadInfo::UpdateMobAggressive(bool bMobAggressive)
 {
-	if (!MobWidget) return;
-	if (isMobAggressive)
+	if (UW_MOBHeadInfoWidget* W = GetHeadWidget())
 	{
-		MobNameText->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 0.0f, 0.0f, 1.0f)));
-	}
-	else
-	{
-		// Reset to default neutral (yellow) color when mob becomes passive again
-		MobNameText->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 1.0f, 0.0f, 1.0f)));
+		W->SetAggressive(bMobAggressive);
 	}
 }
 

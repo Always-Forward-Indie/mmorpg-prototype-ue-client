@@ -31,8 +31,18 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Movement")
 	float GroundTraceHeight = 200.f;
 
+	// How far below the current actor Z the ground trace extends.
+	// Must be large enough to reach terrain when the mob is elevated from stepping
+	// on props/fences.  400 was too shallow for objects taller than ~300 units.
 	UPROPERTY(EditAnywhere, Category = "Movement")
-	float GroundTraceDepth = 400.f;
+	float GroundTraceDepth = 800.f;
+
+	// When descending, if the center-only trace finds ground this many units below
+	// the multi-probe median, the center result is trusted over the median.
+	// This lets the mob snap down quickly after stepping off a fence/ledge even
+	// when the surrounding offset probes still "see" the elevated surface.
+	UPROPERTY(EditAnywhere, Category = "Movement")
+	float CenterPriorityThreshold = 30.f;
 
 	UPROPERTY(EditAnywhere, Category = "Movement")
 	float GroundInterpSpeedDown = 15.f;

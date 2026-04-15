@@ -476,10 +476,6 @@ void UPlayerExperienceWidget::UpdateExperienceTextDisplay(int32 CurrentExp, int3
     if (ExpForNextLevel > 0)
     {
         ExpString = FString::Printf(TEXT("%d / %d"), CurrentExp, ExpForNextLevel);
-        if (DebtAmount > 0)
-        {
-            ExpString += FString::Printf(TEXT(" (Debt: %d)"), DebtAmount);
-        }
     }
     else
     {

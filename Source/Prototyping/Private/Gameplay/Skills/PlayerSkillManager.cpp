@@ -133,6 +133,40 @@ bool UPlayerSkillManager::CanCastSkill(const FString& SkillSlug) const
         return false;
     }
 
+    // Check animation cast lock: a previous non-auto-attack animation is still playing.
+    // Block the cast so the new animation does not interrupt the pending result flush.
+    // The lock auto-expires after AnimationLockTimeoutSec in case NotifyAnimationEnded
+    // never fires (missing montage end notify).
+    if (bIsAnimationPlaying)
+    {
+        const double Elapsed = GetWorldSeconds() - AnimationStartWorldTime;
+        if (Elapsed < AnimationLockTimeoutSec)
+        {
+            UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Cannot cast %s - animation lock active (%.1fs elapsed)"),
+                *SkillSlug, Elapsed);
+            return false;
+        }
+        // Lock timed out — clear and allow the cast
+        const_cast<UPlayerSkillManager*>(this)->bIsAnimationPlaying = false;
+        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Animation lock timed out for %s"), *SkillSlug);
+    }
+
+    // Check server-confirmation guard: a request was already sent but combatInitiation
+    // has not arrived yet.  Block duplicate sends during the network round-trip window.
+    if (bAwaitingServerConfirmation)
+    {
+        const double Elapsed = GetWorldSeconds() - ConfirmationRequestWorldTime;
+        if (Elapsed < ConfirmationTimeoutSec)
+        {
+            UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Cannot cast %s - awaiting server confirmation (%.1fs elapsed)"),
+                *SkillSlug, Elapsed);
+            return false;
+        }
+        // Server never replied (error / packet loss) — auto-expire and allow retry
+        const_cast<UPlayerSkillManager*>(this)->bAwaitingServerConfirmation = false;
+        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Server confirmation timed out for %s"), *SkillSlug);
+    }
+
     // Use existing skill system validation
     if (SkillSystemManager)
     {
@@ -150,6 +184,12 @@ bool UPlayerSkillManager::TryCastSkill(const FString& SkillSlug, int32 TargetId,
         return false;
     }
 
+    // Set the confirmation guard BEFORE sending the request.  If the send succeeds the
+    // guard stays set until HandleSkillInitiation clears it.  If the send fails, clear
+    // immediately so the player is not permanently blocked.
+    bAwaitingServerConfirmation  = true;
+    ConfirmationRequestWorldTime = GetWorldSeconds();
+
     // Cast skill through existing system - DON'T start cooldown here anymore
     if (SkillSystemManager)
     {
@@ -159,10 +199,17 @@ bool UPlayerSkillManager::TryCastSkill(const FString& SkillSlug, int32 TargetId,
         {
             UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Successfully sent skill request %s - waiting for server confirmation"), *SkillSlug);
         }
+        else
+        {
+            // Send failed (no NetworkManager, target invalid, etc.) — release the guard so
+            // the player can try again immediately.
+            bAwaitingServerConfirmation = false;
+        }
         
         return bSuccess;
     }
 
+    bAwaitingServerConfirmation = false;
     return false;
 }
 
@@ -437,6 +484,20 @@ void UPlayerSkillManager::HandleSkillInitiation(const FString& SkillSlug, int32 
     
     UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Server-confirmed skill %s (cooldownMs=%d, gcdMs=%d)"),
         *SkillSlug, CooldownMs, GcdMs);
+
+    // Server confirmed the cast — release the confirmation guard regardless of skill slug.
+    bAwaitingServerConfirmation = false;
+
+    // Set animation cast lock for non-auto-attack skills so that re-casting the same
+    // skill while the animation is still playing is blocked.  The lock is cleared by
+    // NotifyAnimationEnded (montage end) or auto-expires after AnimationLockTimeoutSec.
+    // Auto-attack ("basic_attack") has its own per-swing timing via OnAttackEnded and
+    // must NOT be blocked by this flag.
+    if (!SkillSlug.Equals(TEXT("basic_attack"), ESearchCase::IgnoreCase))
+    {
+        bIsAnimationPlaying     = true;
+        AnimationStartWorldTime = GetWorldSeconds();
+    }
     
     // Start per-skill cooldown using per-cast cooldownMs from the initiation packet
     if (HasSkill(SkillSlug))
@@ -477,8 +538,9 @@ void UPlayerSkillManager::HandleSkillInitiation(const FString& SkillSlug, int32 
 
 void UPlayerSkillManager::NotifyAnimationEnded()
 {
+    bIsAnimationPlaying      = false;
+    bAwaitingServerConfirmation = false; // safety: clear any stale guard
     UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Animation ended, cast lock released"));
-    // TODO: release cast lock if one is implemented
 }
 
 double UPlayerSkillManager::GetServerSeconds() const {
@@ -504,6 +566,13 @@ bool UPlayerSkillManager::IsGCDActive() const
 {
     const double Now = bGCDUsesServerClock ? GetServerSeconds() : GetWorldSeconds();
     return Now < GCDEndTime;
+}
+
+bool UPlayerSkillManager::IsSkillAnimationPlaying() const
+{
+    if (!bIsAnimationPlaying) return false;
+    // Auto-expire check (mirrors CanCastSkill logic)
+    return (GetWorldSeconds() - AnimationStartWorldTime) < AnimationLockTimeoutSec;
 }
 
 float UPlayerSkillManager::GetGCDRemaining() const

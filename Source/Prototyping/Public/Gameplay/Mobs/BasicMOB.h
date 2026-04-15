@@ -336,7 +336,6 @@ public:
 
 
 		int LastHealth = 0;
-		int LastMana = 0;
 		bool bUIInitialized = false;
 		bool LastAggressive = false;
 

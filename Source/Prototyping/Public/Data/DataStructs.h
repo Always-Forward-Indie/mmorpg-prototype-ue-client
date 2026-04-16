@@ -2238,6 +2238,13 @@ struct PROTOTYPING_API FNPCVisualData
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Animations")
     TArray<TSoftObjectPtr<UAnimMontage>> IdleMontages;
 
+    /**
+     * Montage played immediately on spawn (before the random idle cycle begins).
+     * Leave empty to skip the immediate idle and go straight to the timed cycle.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Animations")
+    TSoftObjectPtr<UAnimMontage> DefaultIdleMontage;
+
     FNPCVisualData() {}
 };
 
@@ -3254,6 +3261,249 @@ struct PROTOTYPING_API FLearnSkillResultData
 // Quest
 // ============================================================
 
+// ============================================================
+// Quest Reward & Enriched Step (v0.0.5)
+// ============================================================
+
+/**
+ * Single reward entry in a quest.
+ * isHidden == true means the exact contents are secret until turned in.
+ */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FQuestRewardData
+{
+    GENERATED_BODY()
+
+    /** "exp", "item", "gold" */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Reward")
+    FString rewardType = "";
+
+    /** True before the quest is turned in for hidden rewards; always false after turn-in. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Reward")
+    bool isHidden = false;
+
+    /** Amount for exp/gold rewards. 0 for item rewards. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Reward")
+    int32 amount = 0;
+
+    /** Item slug — only present for non-hidden item rewards. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Reward")
+    FString itemSlug = "";
+
+    /** Item quantity — only present for non-hidden item rewards. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Reward")
+    int32 quantity = 0;
+
+    FQuestRewardData() {}
+};
+
+/**
+ * Enriched step data: resolved slugs and current/required counters.
+ * Provided in currentStepEnriched field of QUEST_UPDATE / quest_offered.
+ */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FQuestStepEnrichedData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Step Enriched")
+    FString clientStepKey = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Step Enriched")
+    FString stepType = "";
+
+    /** Resolved mob/item/NPC slug (for kill / collect / talk). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Step Enriched")
+    FString targetSlug = "";
+
+    /** Zone slug (for reach step). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Step Enriched")
+    FString zoneSlug = "";
+
+    /** Target world X coordinate (for reach step). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Step Enriched")
+    float targetX = 0.f;
+
+    /** Target world Y coordinate (for reach step). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Step Enriched")
+    float targetY = 0.f;
+
+    /** Required count (1 for talk/reach). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Step Enriched")
+    int32 count = 0;
+
+    /** Current progress count. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Step Enriched")
+    int32 current = 0;
+
+    /** Raw params JSON string (for custom step type). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Step Enriched")
+    FString paramsJson = "";
+
+    FQuestStepEnrichedData() {}
+};
+
+/**
+ * One item in a giftPreview — describes a give_item / give_gold / give_exp
+ * action on a dialogue edge (v0.0.6).
+ */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FGiftPreviewItem
+{
+    GENERATED_BODY()
+
+    /** "item", "gold", or "exp" */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gift Preview")
+    FString giftType = "";
+
+    /** Set when giftType == "item" */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gift Preview")
+    FString itemSlug = "";
+
+    /** Set when giftType == "item" */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gift Preview")
+    int32 quantity = 0;
+
+    /** Set when giftType == "gold" or "exp" */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gift Preview")
+    int32 amount = 0;
+
+    FGiftPreviewItem() {}
+};
+
+/**
+ * Compact quest preview shown in a dialogue choice when that edge contains
+ * offer_quest or turn_in_quest.  Lets the player read the first step and
+ * rewards before committing to the choice.
+ */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FQuestPreviewData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Preview")
+    FString questSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Preview")
+    FString clientQuestKey = "";
+
+    /** First step enriched data (absent for quests with no steps). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Preview")
+    FQuestStepEnrichedData firstStep;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Preview")
+    bool bHasFirstStep = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Preview")
+    TArray<FQuestRewardData> rewards;
+
+    FQuestPreviewData() {}
+};
+
+// ============================================================
+// NPC Ambient Speech (v0.0.5)
+// ============================================================
+
+/** Single ambient speech line as received in NPC_AMBIENT_POOLS. */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FAmbientSpeechLineData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambient Speech")
+    int32 id = 0;
+
+    /** Localization key, e.g. "npc.blacksmith.idle_1". */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambient Speech")
+    FString lineKey = "";
+
+    /** "periodic" — shown on interval timer; "proximity" — shown once on approach. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambient Speech")
+    FString triggerType = "periodic";
+
+    /** Trigger radius in world units (relevant only for proximity type). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambient Speech")
+    int32 triggerRadius = 400;
+
+    /** Weighted random weight within priority pool. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambient Speech")
+    int32 weight = 10;
+
+    /** Client-side cooldown in seconds — don't show this line again for this duration. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambient Speech")
+    int32 cooldownSec = 60;
+
+    FAmbientSpeechLineData() {}
+};
+
+/** Priority pool of ambient speech lines for one NPC. */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FAmbientSpeechPoolData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambient Speech")
+    int32 priority = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambient Speech")
+    TArray<FAmbientSpeechLineData> lines;
+
+    FAmbientSpeechPoolData() {}
+};
+
+/** Per-NPC ambient speech configuration as received from server. */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FAmbientSpeechNPCData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambient Speech")
+    int32 npcId = 0;
+
+    /** Server-specified minimum interval in seconds between periodic lines. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambient Speech")
+    int32 minIntervalSec = 20;
+
+    /** Server-specified maximum interval in seconds between periodic lines. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambient Speech")
+    int32 maxIntervalSec = 60;
+
+    /** Pools sorted by priority descending — highest priority first. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambient Speech")
+    TArray<FAmbientSpeechPoolData> pools;
+
+    FAmbientSpeechNPCData() {}
+};
+
+/**
+ * DataTable row for localized NPC ambient speech lines.
+ * Row name = lineKey (e.g. "npc.blacksmith.idle_1").
+ */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FAmbientSpeechLineDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    /** The localized speech text shown in the bubble. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambient Speech Line")
+    FText speechText;
+
+    /** Optional voice-over sound to play alongside the bubble. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambient Speech Line")
+    TSoftObjectPtr<USoundBase> SpeechSound;
+
+    /** How long the bubble stays visible. 0 = use component default. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambient Speech Line",
+              meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "20.0"))
+    float DisplayDuration = 0.f;
+
+    FAmbientSpeechLineDefinition() {}
+};
+
+// ============================================================
+// Quest Progress Data (updated)
+// ============================================================
+
 USTRUCT(BlueprintType)
 struct PROTOTYPING_API FQuestProgressData
 {
@@ -3325,6 +3575,17 @@ struct PROTOTYPING_API FQuestProgressData
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
     FString completionMode = "";
 
+    /** Enriched step with resolved slugs (from currentStepEnriched in QUEST_UPDATE). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    FQuestStepEnrichedData currentStepEnriched;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    bool bHasEnrichedStep = false;
+
+    /** Quest rewards (with isHidden flag respected until turned in). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    TArray<FQuestRewardData> rewards;
+
     FQuestProgressData() {}
 };
 
@@ -3342,6 +3603,17 @@ struct PROTOTYPING_API FQuestOfferedData
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Offered")
     int32 npcId = 0;
 
+    /** Enriched first step data (absent when quest has no steps). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Offered")
+    FQuestStepEnrichedData currentStep;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Offered")
+    bool bHasCurrentStep = false;
+
+    /** Quest rewards (with isHidden flag respected). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Offered")
+    TArray<FQuestRewardData> rewards;
+
     FQuestOfferedData() {}
 };
 
@@ -3355,6 +3627,10 @@ struct PROTOTYPING_API FQuestTurnedInData
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Turned In")
     FString clientQuestKey = "";
+
+    /** All rewards fully revealed — isHidden is irrelevant here. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Turned In")
+    TArray<FQuestRewardData> rewardsReceived;
 
     FQuestTurnedInData() {}
 };
@@ -3455,6 +3731,31 @@ struct PROTOTYPING_API FDialogueChoice
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Choice")
     bool conditionMet = true;
+
+    /** When true and conditionMet==false the button is hidden rather than greyed out. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Choice")
+    bool hideIfLocked = false;
+
+    /** Quest preview shown when this edge contains offer_quest action. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Choice")
+    FQuestPreviewData questPreview;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Choice")
+    bool bHasQuestPreview = false;
+
+    /** Turn-in preview shown when this edge contains turn_in_quest action. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Choice")
+    FQuestPreviewData turnInPreview;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Choice")
+    bool bHasTurnInPreview = false;
+
+    /** Gift preview shown when this edge contains give_item / give_gold / give_exp (v0.0.6). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Choice")
+    TArray<FGiftPreviewItem> giftPreview;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Choice")
+    bool bHasGiftPreview = false;
 
     FDialogueChoice() {}
 };
@@ -3697,7 +3998,7 @@ struct PROTOTYPING_API FQuestDefinition : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Definition")
     FText displayName;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Definition")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Definition", meta = (MultiLine = "true"))
     FText description;
 
     FQuestDefinition() {}
@@ -3708,10 +4009,10 @@ struct PROTOTYPING_API FQuestStepDefinition : public FTableRowBase
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Step Definition")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Step Definition", meta = (MultiLine = "true"))
     FText description;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Step Definition")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Step Definition", meta = (MultiLine = "true"))
     FText hint;
 
     FQuestStepDefinition() {}
@@ -3722,7 +4023,7 @@ struct PROTOTYPING_API FDialogueNodeDefinition : public FTableRowBase
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Node Definition")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Node Definition", meta = (MultiLine = "true"))
     FText nodeText;
 
     FDialogueNodeDefinition() {}
@@ -3733,7 +4034,7 @@ struct PROTOTYPING_API FDialogueChoiceDefinition : public FTableRowBase
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Choice Definition")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue Choice Definition", meta = (MultiLine = "true"))
     FText choiceText;
 
     FDialogueChoiceDefinition() {}
@@ -3747,7 +4048,7 @@ struct PROTOTYPING_API FItemLocaleDefinition : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Locale")
     FText displayName;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Locale")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Locale", meta = (MultiLine = "true"))
     FText description;
 
     FItemLocaleDefinition() {}
@@ -3761,10 +4062,10 @@ struct PROTOTYPING_API FMobLocaleDefinition : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Locale")
     FText displayName;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Locale")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Locale", meta = (MultiLine = "true"))
     FText description;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Locale")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Locale", meta = (MultiLine = "true"))
     FText loreText;
 
     FMobLocaleDefinition() {}

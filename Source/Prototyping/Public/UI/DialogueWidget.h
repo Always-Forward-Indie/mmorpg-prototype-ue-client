@@ -5,6 +5,7 @@
 #include "UI/FocusableWindowWidget.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/TextBlock.h"
+#include "Components/RichTextBlock.h"
 #include "Components/Button.h"
 #include "Components/VerticalBox.h"
 #include "Components/ScrollBox.h"
@@ -126,7 +127,7 @@ void HandleCloseButtonClicked();
     UTextBlock* NPC_Name_Text = nullptr;
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
-    UTextBlock* Dialogue_Text = nullptr;
+    URichTextBlock* Dialogue_Text = nullptr;
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
     UVerticalBox* Choices_Box = nullptr;

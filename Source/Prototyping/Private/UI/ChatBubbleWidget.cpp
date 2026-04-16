@@ -5,7 +5,6 @@ void UChatBubbleWidget::NativeConstruct()
     Super::NativeConstruct();
     SetVisibility(ESlateVisibility::Collapsed);
     bIsShowing = false;
-    HideTimer  = 0.0f;
 }
 
 void UChatBubbleWidget::Show(const FString& Text, float Duration)
@@ -21,22 +20,21 @@ void UChatBubbleWidget::Show(const FString& Text, float Duration)
         MessageText->SetText(FText::FromString(Displayed));
     }
 
-    SetVisibility(ESlateVisibility::HitTestInvisible);
     bIsShowing = true;
-    HideTimer  = FMath::Max(Duration, 0.1f);
+
+    // Reset existing timer so repeated calls extend the display duration correctly.
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().SetTimer(
+            BubbleTimerHandle,
+            this,
+            &UChatBubbleWidget::OnBubbleTimerExpired,
+            FMath::Max(Duration, 0.1f),
+            false);
+    }
 }
 
-void UChatBubbleWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+void UChatBubbleWidget::OnBubbleTimerExpired()
 {
-    Super::NativeTick(MyGeometry, InDeltaTime);
-
-    if (!bIsShowing) return;
-
-    HideTimer -= InDeltaTime;
-    if (HideTimer <= 0.0f)
-    {
-        HideTimer  = 0.0f;
-        bIsShowing = false;
-        SetVisibility(ESlateVisibility::Collapsed);
-    }
+    bIsShowing = false;
 }

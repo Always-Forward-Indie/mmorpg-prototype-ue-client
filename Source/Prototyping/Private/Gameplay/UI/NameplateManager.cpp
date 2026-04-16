@@ -73,6 +73,14 @@ void UNameplateManager::ShowPlayerChatBubble(AActor* Actor, const FString& Text,
     }
 }
 
+void UNameplateManager::ShowNPCSpeechBubble(AActor* Actor, const FText& Text, float Duration)
+{
+    if (CanvasWidget)
+    {
+        CanvasWidget->ShowNPCSpeechBubble(Actor, Text, Duration);
+    }
+}
+
 // -----------------------------------------------------------------------
 // NPC
 // -----------------------------------------------------------------------

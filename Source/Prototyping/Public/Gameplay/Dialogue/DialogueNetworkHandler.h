@@ -39,8 +39,9 @@ private:
     void HandleChunkServerData(const FString& ReceivedData);
 
     // Parsers
-    FDialogueNodeData  ParseDialogueNode(const TSharedPtr<FJsonObject>& Root)  const;
-    FDialogueErrorData ParseDialogueError(const TSharedPtr<FJsonObject>& Root) const;
+    FDialogueNodeData  ParseDialogueNode(const TSharedPtr<FJsonObject>& Root)       const;
+    FDialogueErrorData ParseDialogueError(const TSharedPtr<FJsonObject>& Root)      const;
+    FQuestPreviewData  ParseQuestPreview(const TSharedPtr<FJsonObject>& Obj)        const;
 
     UPROPERTY()
     UDialogueManager* DialogueManager = nullptr;

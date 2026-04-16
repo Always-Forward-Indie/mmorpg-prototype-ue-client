@@ -80,9 +80,19 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|NPCs")
     TSoftObjectPtr<UDataTable> NPCLocale;
 
-    // ?? World Notifications ???????????????????????????????????????????????????
+    // -- World Notifications -------------------------------------------------
 
-    // Maps notificationType ? FNotificationLocaleDefinition  (text template + icon + sound)
+    // Maps notificationType -> FNotificationLocaleDefinition  (text template + icon + sound)
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Notifications")
     TSoftObjectPtr<UDataTable> NotificationLocale;
+
+    // -- NPC Ambient Speech --------------------------------------------------
+
+    /**
+     * Maps an ambient speech lineKey -> FAmbientSpeechLineDefinition
+     * (localised speech text + optional sound + display duration override).
+     * Row name = lineKey exactly as sent by the server in FAmbientSpeechLineData.lineKey.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|AmbientSpeech")
+    TSoftObjectPtr<UDataTable> AmbientSpeechLines;
 };

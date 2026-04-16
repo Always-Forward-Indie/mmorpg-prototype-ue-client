@@ -140,14 +140,14 @@ FQuestProgressData UQuestNetworkHandler::ParseQuestUpdate(const TSharedPtr<FJson
 {
     FQuestProgressData Data;
 
-    Body->TryGetNumberField(TEXT("questId"),     Data.questId);
+    Body->TryGetNumberField(TEXT("questId"),        Data.questId);
     Body->TryGetStringField(TEXT("questSlug"),      Data.questSlug);
     Body->TryGetStringField(TEXT("clientQuestKey"), Data.clientQuestKey);
-    Body->TryGetStringField(TEXT("state"),       Data.state);
-    Body->TryGetNumberField(TEXT("currentStep"), Data.stepIndex);
-    Body->TryGetNumberField(TEXT("totalSteps"),  Data.totalSteps);
-    Body->TryGetStringField(TEXT("clientStepKey"), Data.clientStepKey);
-    Body->TryGetStringField(TEXT("stepType"),    Data.stepType);
+    Body->TryGetStringField(TEXT("state"),          Data.state);
+    Body->TryGetNumberField(TEXT("currentStep"),    Data.stepIndex);
+    Body->TryGetNumberField(TEXT("totalSteps"),     Data.totalSteps);
+    Body->TryGetStringField(TEXT("clientStepKey"),  Data.clientStepKey);
+    Body->TryGetStringField(TEXT("stepType"),       Data.stepType);
     Body->TryGetStringField(TEXT("completionMode"), Data.completionMode);
 
     // Serialize progress/required back to JSON string for raw storage
@@ -185,6 +185,21 @@ FQuestProgressData UQuestNetworkHandler::ParseQuestUpdate(const TSharedPtr<FJson
             Data.progressRequired);
     }
 
+    // currentStepEnriched (v0.0.5)
+    const TSharedPtr<FJsonObject>* EnrichedPtr = nullptr;
+    if (Body->TryGetObjectField(TEXT("currentStepEnriched"), EnrichedPtr) && EnrichedPtr)
+    {
+        Data.currentStepEnriched = ParseEnrichedStep(*EnrichedPtr);
+        Data.bHasEnrichedStep = true;
+    }
+
+    // rewards (v0.0.5)
+    const TArray<TSharedPtr<FJsonValue>>* RewardsArr = nullptr;
+    if (Body->TryGetArrayField(TEXT("rewards"), RewardsArr) && RewardsArr)
+    {
+        Data.rewards = ParseRewards(*RewardsArr);
+    }
+
     return Data;
 }
 
@@ -193,6 +208,22 @@ FQuestOfferedData UQuestNetworkHandler::ParseQuestOffered(const TSharedPtr<FJson
     FQuestOfferedData Data;
     Body->TryGetNumberField(TEXT("questId"),        Data.questId);
     Body->TryGetStringField(TEXT("clientQuestKey"), Data.clientQuestKey);
+
+    // currentStep enriched data (v0.0.5)
+    const TSharedPtr<FJsonObject>* StepPtr = nullptr;
+    if (Body->TryGetObjectField(TEXT("currentStep"), StepPtr) && StepPtr)
+    {
+        Data.currentStep    = ParseEnrichedStep(*StepPtr);
+        Data.bHasCurrentStep = true;
+    }
+
+    // rewards (v0.0.5)
+    const TArray<TSharedPtr<FJsonValue>>* RewardsArr = nullptr;
+    if (Body->TryGetArrayField(TEXT("rewards"), RewardsArr) && RewardsArr)
+    {
+        Data.rewards = ParseRewards(*RewardsArr);
+    }
+
     return Data;
 }
 
@@ -201,7 +232,64 @@ FQuestTurnedInData UQuestNetworkHandler::ParseQuestTurnedIn(const TSharedPtr<FJs
     FQuestTurnedInData Data;
     Body->TryGetNumberField(TEXT("questId"),        Data.questId);
     Body->TryGetStringField(TEXT("clientQuestKey"), Data.clientQuestKey);
+
+    // rewardsReceived — fully revealed (v0.0.5)
+    const TArray<TSharedPtr<FJsonValue>>* RewardsArr = nullptr;
+    if (Body->TryGetArrayField(TEXT("rewardsReceived"), RewardsArr) && RewardsArr)
+    {
+        Data.rewardsReceived = ParseRewards(*RewardsArr);
+    }
+
     return Data;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+TArray<FQuestRewardData> UQuestNetworkHandler::ParseRewards(
+    const TArray<TSharedPtr<FJsonValue>>& Arr) const
+{
+    TArray<FQuestRewardData> Result;
+    for (const TSharedPtr<FJsonValue>& Val : Arr)
+    {
+        const TSharedPtr<FJsonObject>* ObjPtr;
+        if (!Val->TryGetObject(ObjPtr)) continue;
+        const TSharedPtr<FJsonObject>& Obj = *ObjPtr;
+
+        FQuestRewardData R;
+        Obj->TryGetStringField(TEXT("rewardType"), R.rewardType);
+        Obj->TryGetBoolField  (TEXT("isHidden"),   R.isHidden);
+        Obj->TryGetNumberField(TEXT("amount"),      R.amount);
+        Obj->TryGetStringField(TEXT("item_slug"),   R.itemSlug);
+        Obj->TryGetNumberField(TEXT("quantity"),    R.quantity);
+        Result.Add(R);
+    }
+    return Result;
+}
+
+FQuestStepEnrichedData UQuestNetworkHandler::ParseEnrichedStep(
+    const TSharedPtr<FJsonObject>& Obj) const
+{
+    FQuestStepEnrichedData S;
+    Obj->TryGetStringField(TEXT("clientStepKey"), S.clientStepKey);
+    Obj->TryGetStringField(TEXT("stepType"),      S.stepType);
+    Obj->TryGetStringField(TEXT("target_slug"),   S.targetSlug);
+    Obj->TryGetStringField(TEXT("zone_slug"),     S.zoneSlug);
+    Obj->TryGetNumberField(TEXT("x"),             S.targetX);
+    Obj->TryGetNumberField(TEXT("y"),             S.targetY);
+    Obj->TryGetNumberField(TEXT("count"),         S.count);
+    Obj->TryGetNumberField(TEXT("current"),       S.current);
+
+    // params for custom step type
+    const TSharedPtr<FJsonObject>* ParamsPtr = nullptr;
+    if (Obj->TryGetObjectField(TEXT("params"), ParamsPtr) && ParamsPtr)
+    {
+        FString ParamsStr;
+        TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> W =
+            TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&ParamsStr);
+        FJsonSerializer::Serialize((*ParamsPtr).ToSharedRef(), W);
+        S.paramsJson = ParamsStr;
+    }
+    return S;
 }
 
 void UQuestNetworkHandler::ExtractStepProgress(const TSharedPtr<FJsonObject>& ProgressObj,

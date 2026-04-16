@@ -26,7 +26,7 @@ void UDialogueNetworkHandler::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("DialogueNetworkHandler: Cannot subscribe � NetworkManager is null"));
+        UE_LOG(LogTemp, Error, TEXT("DialogueNetworkHandler: Cannot subscribe � NetworkManager is null"));
         return;
     }
     if (bIsSubscribed)
@@ -130,12 +130,94 @@ FDialogueNodeData UDialogueNetworkHandler::ParseDialogueNode(const TSharedPtr<FJ
             ChoiceObj->TryGetNumberField(TEXT("edgeId"),          Choice.edgeId);
             ChoiceObj->TryGetStringField(TEXT("clientChoiceKey"), Choice.clientChoiceKey);
             ChoiceObj->TryGetBoolField  (TEXT("conditionMet"),    Choice.conditionMet);
+            ChoiceObj->TryGetBoolField  (TEXT("hideIfLocked"),    Choice.hideIfLocked);
+
+            // questPreview (v0.0.5) — present when edge has offer_quest action
+            const TSharedPtr<FJsonObject>* QPreviewPtr = nullptr;
+            if (ChoiceObj->TryGetObjectField(TEXT("questPreview"), QPreviewPtr) && QPreviewPtr)
+            {
+                Choice.questPreview  = ParseQuestPreview(*QPreviewPtr);
+                Choice.bHasQuestPreview = true;
+            }
+
+            // turnInPreview (v0.0.5) — present when edge has turn_in_quest action
+            const TSharedPtr<FJsonObject>* TIPreviewPtr = nullptr;
+            if (ChoiceObj->TryGetObjectField(TEXT("turnInPreview"), TIPreviewPtr) && TIPreviewPtr)
+            {
+                Choice.turnInPreview    = ParseQuestPreview(*TIPreviewPtr);
+                Choice.bHasTurnInPreview = true;
+            }
+
+            // giftPreview (v0.0.6) — present when edge has give_item / give_gold / give_exp
+            const TArray<TSharedPtr<FJsonValue>>* GiftArr = nullptr;
+            if (ChoiceObj->TryGetArrayField(TEXT("giftPreview"), GiftArr) && GiftArr && !GiftArr->IsEmpty())
+            {
+                for (const TSharedPtr<FJsonValue>& GiftVal : *GiftArr)
+                {
+                    const TSharedPtr<FJsonObject>* GiftObjPtr;
+                    if (!GiftVal->TryGetObject(GiftObjPtr)) continue;
+
+                    FGiftPreviewItem Item;
+                    (*GiftObjPtr)->TryGetStringField(TEXT("giftType"),  Item.giftType);
+                    (*GiftObjPtr)->TryGetStringField(TEXT("item_slug"), Item.itemSlug);
+                    (*GiftObjPtr)->TryGetNumberField(TEXT("quantity"),  Item.quantity);
+                    (*GiftObjPtr)->TryGetNumberField(TEXT("amount"),    Item.amount);
+                    Choice.giftPreview.Add(Item);
+                }
+                Choice.bHasGiftPreview = !Choice.giftPreview.IsEmpty();
+            }
 
             Data.choices.Add(Choice);
         }
     }
 
     return Data;
+}
+
+FQuestPreviewData UDialogueNetworkHandler::ParseQuestPreview(
+    const TSharedPtr<FJsonObject>& Obj) const
+{
+    FQuestPreviewData Preview;
+    Obj->TryGetStringField(TEXT("questSlug"),      Preview.questSlug);
+    Obj->TryGetStringField(TEXT("clientQuestKey"), Preview.clientQuestKey);
+
+    // firstStep (for offer_quest preview) — absent for turn_in preview
+    const TSharedPtr<FJsonObject>* StepPtr = nullptr;
+    if (Obj->TryGetObjectField(TEXT("firstStep"), StepPtr) && StepPtr)
+    {
+        const TSharedPtr<FJsonObject>& StepObj = *StepPtr;
+        StepObj->TryGetStringField(TEXT("clientStepKey"), Preview.firstStep.clientStepKey);
+        StepObj->TryGetStringField(TEXT("stepType"),      Preview.firstStep.stepType);
+        StepObj->TryGetStringField(TEXT("target_slug"),   Preview.firstStep.targetSlug);
+        StepObj->TryGetStringField(TEXT("zone_slug"),     Preview.firstStep.zoneSlug);
+        StepObj->TryGetNumberField(TEXT("x"),             Preview.firstStep.targetX);
+        StepObj->TryGetNumberField(TEXT("y"),             Preview.firstStep.targetY);
+        StepObj->TryGetNumberField(TEXT("count"),         Preview.firstStep.count);
+        StepObj->TryGetNumberField(TEXT("current"),       Preview.firstStep.current);
+        Preview.bHasFirstStep = true;
+    }
+
+    // rewards array
+    const TArray<TSharedPtr<FJsonValue>>* RewardsArr = nullptr;
+    if (Obj->TryGetArrayField(TEXT("rewards"), RewardsArr) && RewardsArr)
+    {
+        for (const TSharedPtr<FJsonValue>& Val : *RewardsArr)
+        {
+            const TSharedPtr<FJsonObject>* RObjPtr;
+            if (!Val->TryGetObject(RObjPtr)) continue;
+            const TSharedPtr<FJsonObject>& RObj = *RObjPtr;
+
+            FQuestRewardData R;
+            RObj->TryGetStringField(TEXT("rewardType"), R.rewardType);
+            RObj->TryGetBoolField  (TEXT("isHidden"),   R.isHidden);
+            RObj->TryGetNumberField(TEXT("amount"),      R.amount);
+            RObj->TryGetStringField(TEXT("item_slug"),   R.itemSlug);
+            RObj->TryGetNumberField(TEXT("quantity"),    R.quantity);
+            Preview.rewards.Add(R);
+        }
+    }
+
+    return Preview;
 }
 
 FDialogueErrorData UDialogueNetworkHandler::ParseDialogueError(const TSharedPtr<FJsonObject>& Root) const

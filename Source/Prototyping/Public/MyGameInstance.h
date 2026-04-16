@@ -451,9 +451,24 @@ public:
 	UPROPERTY()
 	class UEmoteNetworkHandler* EmoteNetworkHandler;
 
+	// NPC Ambient Speech manager
+	UPROPERTY()
+	class UAmbientSpeechManager* AmbientSpeechManager;
+
+	// NPC Ambient Speech network handler
+	UPROPERTY()
+	class UAmbientSpeechNetworkHandler* AmbientSpeechNetworkHandler;
+
 	// DevMode configuration (editable in Blueprint defaults)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DevMode")
 	FDevModeConfig DevModeConfig;
+
+	// DevMode runtime objects (created on demand when DevMode is enabled)
+	UPROPERTY()
+	UDevModeDataProvider* DevModeDataProvider = nullptr;
+
+	UPROPERTY()
+	class UDevModeConsoleCommands* DevModeConsoleCommands = nullptr;
 
 	TMap<int32, FClientDataStruct> ConnectedPlayers;
 

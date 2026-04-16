@@ -73,6 +73,13 @@ public:
      */
     UFUNCTION(BlueprintCallable, Category = "Nameplate Manager")
     void ShowPlayerChatBubble(AActor* Actor, const FString& Text, float Duration = 5.0f);
+
+    /**
+     * Show an ambient speech bubble above an NPC actor for Duration seconds.
+     * No-op if CanvasWidget is not set.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Nameplate Manager")
+    void ShowNPCSpeechBubble(AActor* Actor, const FText& Text, float Duration = 5.0f);
     // ------------------------------------------------------------------
     // NPC registration
     // ------------------------------------------------------------------

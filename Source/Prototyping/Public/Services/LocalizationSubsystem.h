@@ -175,6 +175,22 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Items")
     FText GetItemBrokenText(const FString& ItemSlug) const;
 
+    // -- NPC Ambient Speech --------------------------------------------------
+
+    /**
+     * Returns the localised speech text for an ambient speech lineKey.
+     * Falls back to FText::FromString(LineKey) when not found.
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|AmbientSpeech")
+    FText GetNPCSpeechText(const FString& LineKey) const;
+
+    /**
+     * Fills OutDefinition with the full FAmbientSpeechLineDefinition for the given lineKey.
+     * Returns true on success.
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|AmbientSpeech")
+    bool GetNPCSpeechLineDefinition(const FString& LineKey, FAmbientSpeechLineDefinition& OutDefinition) const;
+
 private:
     UPROPERTY()
     ULocalizationDataAsset* LocalizationData = nullptr;
@@ -189,6 +205,7 @@ private:
     UPROPERTY() mutable UDataTable* CachedBestiaryCategoryTable   = nullptr;
     UPROPERTY() mutable UDataTable* CachedZoneLocaleTable         = nullptr;
     UPROPERTY() mutable UDataTable* CachedNotificationLocaleTable = nullptr;
+    UPROPERTY() mutable UDataTable* CachedAmbientSpeechTable      = nullptr;
 
     UDataTable* GetQuestTable()              const;
     UDataTable* GetQuestStepTable()          const;
@@ -200,6 +217,7 @@ private:
     UDataTable* GetBestiaryCategoryTable()   const;
     UDataTable* GetZoneLocaleTable()         const;
     UDataTable* GetNotificationLocaleTable() const;
+    UDataTable* GetAmbientSpeechTable()      const;
 
     static FText FallbackText(const FString& Key);
 };

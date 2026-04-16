@@ -17,6 +17,7 @@ class UW_NPCHeadInfoWidget;
 class USoundBase;
 class UNPCNameplateComponent;
 class UNPCAnimInstance;
+class UNPCAmbientSpeechComponent;
 
 // Delegate for NPC data updates
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnNPCDataUpdated);
@@ -218,6 +219,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NPC UI")
 	UNPCNameplateComponent* NPCNameplateComponent;
 
+	/** Ambient speech component — drives idle/proximity speech bubbles above the NPC. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NPC Ambient Speech")
+	UNPCAmbientSpeechComponent* AmbientSpeechComponent;
+
 	// ── Target Decal (cursor-over floor indicator) ──────────────────────────
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "World Interaction")
 	class UTargetDecalComponent* TargetDecal;
@@ -243,8 +248,9 @@ protected:
 	// ---- Montage assets (loaded from FNPCVisualData in SetupNPCVisual) ----
 	// Stored here so playback via ACharacter::PlayAnimMontage() works regardless
 	// of whether the AnimBlueprint inherits from UNPCAnimInstance.
-	UPROPERTY() UAnimMontage* GreetMontageAsset  = nullptr;
-	UPROPERTY() UAnimMontage* FarewellMontageAsset = nullptr;
+	UPROPERTY() UAnimMontage* GreetMontageAsset     = nullptr;
+	UPROPERTY() UAnimMontage* FarewellMontageAsset  = nullptr;
+	UPROPERTY() UAnimMontage* DefaultIdleMontageAsset = nullptr;
 	UPROPERTY() TArray<UAnimMontage*> IdleMontageAssets;
 
 	// ---- UI state tracking ----
@@ -271,6 +277,7 @@ private:
 
 	// Idle animation scheduling
 	// -- Idle plays to completion; greet/farewell interrupt and resume the cycle after they end.
+	void StartIdleAnimCycle();   // entry point: plays DefaultIdleMontage immediately, then chains into timed cycle
 	void ScheduleNextIdleAnim();
 	void TriggerRandomIdleAnim();
 	void OnIdleMontageEnded(UAnimMontage* Montage, bool bInterrupted);

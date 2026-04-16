@@ -2,6 +2,8 @@
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/NPCs/NPCAnimInstance.h"
+#include "Gameplay/NPCs/NPCAmbientSpeechComponent.h"
+#include "Gameplay/NPCs/AmbientSpeechManager.h"
 #include "Animation/AnimMontage.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/AudioComponent.h"
@@ -63,6 +65,9 @@ ABasicNPC::ABasicNPC()
 
 	// Create nameplate component - registers with central NameplateManager
 	NPCNameplateComponent = CreateDefaultSubobject<UNPCNameplateComponent>(TEXT("NPCNameplate"));
+
+	// Create ambient speech component
+	AmbientSpeechComponent = CreateDefaultSubobject<UNPCAmbientSpeechComponent>(TEXT("AmbientSpeech"));
 
 	// Cursor target-indicator decal (floor circle).
 	TargetDecal = CreateDefaultSubobject<UTargetDecalComponent>(TEXT("TargetDecal"));
@@ -175,6 +180,23 @@ void ABasicNPC::SetNPCData(const FNPCStruct& Data)
 		if (NPCNameplateComponent)
 		{
 			NPCNameplateComponent->InitialiseFromNPCData(NPCData, false);
+		}
+
+		// Wire up ambient speech pools if available
+		if (UNPCAmbientSpeechComponent* ASComp = FindComponentByClass<UNPCAmbientSpeechComponent>())
+		{
+			if (UGameInstance* GI = GetGameInstance())
+			{
+				if (UMyGameInstance* MyGI = Cast<UMyGameInstance>(GI))
+				{
+					FAmbientSpeechNPCData AmbientData;
+					if (MyGI->AmbientSpeechManager &&
+						MyGI->AmbientSpeechManager->GetNPCAmbientData(NPCData.id, AmbientData))
+					{
+						ASComp->SetAmbientData(AmbientData);
+					}
+				}
+			}
 		}
 
 		// Setup visual and audio based on NPC slug
@@ -399,13 +421,6 @@ void ABasicNPC::ScheduleNextIdleSound()
 
 void ABasicNPC::PlayGreetingSound()
 {
-	// Interrupt any idle that is currently playing
-	if (bIdleAnimPlaying && ActiveIdleMontage)
-	{
-		StopAnimMontage(ActiveIdleMontage);
-		// OnIdleMontageEnded fires with bInterrupted=true and does NOT reschedule
-	}
-
 	PlaySoundByName("Greeting");
 
 	// bIsTalking: set on AnimInstance if the ABP uses UNPCAnimInstance
@@ -414,6 +429,10 @@ void ABasicNPC::PlayGreetingSound()
 
 	if (GreetMontageAsset)
 	{
+		// Interrupt idle only when we actually have something to replace it with
+		if (bIdleAnimPlaying && ActiveIdleMontage)
+			StopAnimMontage(ActiveIdleMontage);
+
 		const float Duration = PlayAnimMontage(GreetMontageAsset);
 		if (Duration > 0.f)
 		{
@@ -427,26 +446,19 @@ void ABasicNPC::PlayGreetingSound()
 		UE_LOG(LogTemp, Log, TEXT("[NPCAnim] '%s' playing greet montage '%s'"),
 			*GetNPCName(), *GreetMontageAsset->GetName());
 	}
-	else
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[NPCAnim] '%s' has no GreetMontage — assign it in the NPCDefinition DataTable (Visual.GreetMontage)"),
-			*GetNPCName());
-	}
+	// No GreetMontage assigned — idle keeps playing undisturbed
 }
 
 void ABasicNPC::PlayFarewellSound()
 {
-	// Interrupt any idle that is currently playing
-	if (bIdleAnimPlaying && ActiveIdleMontage)
-	{
-		StopAnimMontage(ActiveIdleMontage);
-	}
-
 	PlaySoundByName("Farewell");
 
 	if (FarewellMontageAsset)
 	{
+		// Interrupt idle only when we actually have something to replace it with
+		if (bIdleAnimPlaying && ActiveIdleMontage)
+			StopAnimMontage(ActiveIdleMontage);
+
 		const float Duration = PlayAnimMontage(FarewellMontageAsset);
 		if (Duration > 0.f)
 		{
@@ -460,14 +472,9 @@ void ABasicNPC::PlayFarewellSound()
 		UE_LOG(LogTemp, Log, TEXT("[NPCAnim] '%s' playing farewell montage '%s'"),
 			*GetNPCName(), *FarewellMontageAsset->GetName());
 	}
-	else
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[NPCAnim] '%s' has no FarewellMontage — assign it in the NPCDefinition DataTable (Visual.FarewellMontage)"),
-			*GetNPCName());
-	}
+	// No FarewellMontage assigned — idle keeps playing undisturbed
 
-	// Clear talking state after the farewell starts
+	// Clear talking state
 	if (UNPCAnimInstance* Anim = GetNPCAnimInstance())
 		Anim->SetTalking(false);
 }
@@ -604,11 +611,15 @@ void ABasicNPC::SetupNPCVisual(FName NPCSlug)
 								if (UAnimMontage* M = Soft.LoadSynchronous())
 									Self->IdleMontageAssets.Add(M);
 
+						if (!VisualDataCopy.DefaultIdleMontage.IsNull())
+							Self->DefaultIdleMontageAsset = VisualDataCopy.DefaultIdleMontage.LoadSynchronous();
+
 						UE_LOG(LogTemp, Log,
-							TEXT("[NPCAnim] Montages loaded for '%s': greet=%s farewell=%s idleCount=%d"),
+							TEXT("[NPCAnim] Montages loaded for '%s': greet=%s farewell=%s defaultIdle=%s idleCount=%d"),
 							*Self->GetNPCName(),
-							Self->GreetMontageAsset   ? *Self->GreetMontageAsset->GetName()   : TEXT("none"),
-							Self->FarewellMontageAsset ? *Self->FarewellMontageAsset->GetName() : TEXT("none"),
+							Self->GreetMontageAsset        ? *Self->GreetMontageAsset->GetName()        : TEXT("none"),
+							Self->FarewellMontageAsset     ? *Self->FarewellMontageAsset->GetName()     : TEXT("none"),
+							Self->DefaultIdleMontageAsset  ? *Self->DefaultIdleMontageAsset->GetName()  : TEXT("none"),
 							Self->IdleMontageAssets.Num());
 
 						// --- Also populate UNPCAnimInstance maps if the ABP uses it ---
@@ -622,8 +633,8 @@ void ABasicNPC::SetupNPCVisual(FName NPCSlug)
 							Anim->IdleMontages = Self->IdleMontageAssets;
 						}
 
-						// Start idle animation cycle once assets are ready
-						Self->ScheduleNextIdleAnim();
+						// Start idle animation cycle — plays DefaultIdleMontage immediately if set
+						Self->StartIdleAnimCycle();
 					}
 				}
 			});
@@ -631,6 +642,33 @@ void ABasicNPC::SetupNPCVisual(FName NPCSlug)
 	else {
 		UE_LOG(LogTemp, Warning, TEXT("AnimBPClass is not set for slug %s"), *NPCSlug.ToString());
 	}
+}
+
+void ABasicNPC::StartIdleAnimCycle()
+{
+	// If a DefaultIdleMontage is assigned, play it right now so the NPC is never
+	// frozen in a T-pose waiting for the first random timer to fire.
+	// OnIdleMontageEnded will chain into ScheduleNextIdleAnim() afterwards.
+	if (DefaultIdleMontageAsset && !bIdleAnimPlaying)
+	{
+		const float Duration = PlayAnimMontage(DefaultIdleMontageAsset);
+		if (Duration > 0.f)
+		{
+			ActiveIdleMontage = DefaultIdleMontageAsset;
+			bIdleAnimPlaying  = true;
+
+			if (UAnimInstance* AnimInst = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+			{
+				IdleEndedDelegate.BindUObject(this, &ABasicNPC::OnIdleMontageEnded);
+				AnimInst->Montage_SetEndDelegate(IdleEndedDelegate, DefaultIdleMontageAsset);
+			}
+			UE_LOG(LogTemp, Log, TEXT("[NPCAnim] '%s' playing DefaultIdleMontage immediately: '%s'"),
+				*GetNPCName(), *DefaultIdleMontageAsset->GetName());
+			return;
+		}
+	}
+	// No DefaultIdleMontage (or playback failed) — fall through to the timed cycle.
+	ScheduleNextIdleAnim();
 }
 
 void ABasicNPC::ScheduleNextIdleAnim()

@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
@@ -10,6 +10,7 @@
 #include "Data/DataStructs.h"
 #include "Services/LocalizationSubsystem.h"
 #include "UI/FocusableWindowWidget.h"
+#include "UI/QuestRewardRowWidget.h"
 #include "QuestJournalWidget.generated.h"
 
 // Forward declarations
@@ -45,8 +46,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnQuestJournalVisibilityChanged, bo
  * QuestJournalWidget
  *
  * Two-panel layout:
- *  Left  — scrollable quest list (Quest_List_Box)
- *  Right — detail panel: quest title, step description, progress bar text
+ *  Left  ï¿½ scrollable quest list (Quest_List_Box)
+ *  Right ï¿½ detail panel: quest title, step description, progress bar text
  *
  * Blueprint subclass must bind:
  *   Quest_List_Box     ? UScrollBox  (meta=(BindWidget))
@@ -84,6 +85,10 @@ public:
     // Class used to build individual quest list-row widgets
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Journal UI")
     TSubclassOf<UUserWidget> QuestRowClass;
+
+    /** Blueprint widget class to spawn per reward entry. Assign in the BP subclass. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Journal UI")
+    TSubclassOf<UQuestRewardRowWidget> RewardRowClass;
 
     // Fired when journal window opens or closes (used by UIManager for cursor)
     UPROPERTY(BlueprintAssignable, Category = "Quest Journal UI Events")
@@ -145,13 +150,28 @@ protected:
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
     UWidget* DragHandle = nullptr;
 
+    /** Optional: resolved target name for current step (e.g. 'Kill: Forest Wolf x 5/3'). */
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+    UTextBlock* Quest_Target_Text = nullptr;
+
+    /** Optional: one-line reward summary fallback (used when Quest_Rewards_Box is absent). */
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+    UTextBlock* Quest_Rewards_Text = nullptr;
+
+    /**
+     * Vertical box populated with UQuestRewardRowWidget instances at runtime.
+     * Preferred over Quest_Rewards_Text when bound and RewardRowClass is set.
+     */
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+    UVerticalBox* Quest_Rewards_Box = nullptr;
+
 private:
     UPROPERTY()
     UQuestManager* QuestManager = nullptr;
 
     int32 SelectedQuestId = 0;
 
-    // Per-row binding objects — keeps them GC-rooted and maps each row button click to a questId
+    // Per-row binding objects ï¿½ keeps them GC-rooted and maps each row button click to a questId
     UPROPERTY()
     TArray<UQuestRowBinding*> RowBindings;
 
@@ -162,5 +182,14 @@ private:
 
     // Helper: get the LocalizationSubsystem from the owning GameInstance
     ULocalizationSubsystem* GetLocSys() const;
+
+    // Build reward summary string from rewards array
+    FString BuildRewardText(const TArray<FQuestRewardData>& Rewards) const;
+
+    // Populate Quest_Rewards_Box with reward row widgets
+    void PopulateRewardBox(UVerticalBox* Box, const TArray<FQuestRewardData>& Rewards);
+
+    // Build localised target description from enriched step data
+    FString BuildTargetText(const FQuestProgressData& Data) const;
 };
 

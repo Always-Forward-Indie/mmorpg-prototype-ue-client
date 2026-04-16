@@ -25,7 +25,7 @@ void UNameplateCanvasWidget::NativeTick(const FGeometry& MyGeometry, float InDel
 {
     Super::NativeTick(MyGeometry, InDeltaTime);
 
-    if (Entries.IsEmpty() || !NameplateCanvas)
+    if (!NameplateCanvas)
     {
         return;
     }
@@ -56,49 +56,61 @@ void UNameplateCanvasWidget::NativeTick(const FGeometry& MyGeometry, float InDel
 
     // ---- Chat-bubble tick --------------------------------------------------
     // Same projection pipeline as nameplates but at an extra Z offset so the
-    // bubble appears above the nameplate.  We also respect IsShowing() to avoid
-    // occupying screen space when the bubble has timed out.
+    // bubble appears above the nameplate.  Opacity is driven by distance so the
+    // bubble fades in/out smoothly as the local player approaches / retreats,
+    // and also fades in on message arrival and out on timer expiry.
     for (auto It = ChatBubbles.CreateIterator(); It; ++It)
     {
-        AActor* BubbleActor = It.Key().Get();
+        TWeakObjectPtr<AActor> WeakActor = It.Key();
+        AActor* BubbleActor = WeakActor.Get();
         UChatBubbleWidget* Bubble = It.Value();
 
         if (!IsValid(BubbleActor) || !Bubble)
         {
             if (Bubble) Bubble->RemoveFromParent();
+            ChatBubbleOpacity.Remove(WeakActor);
             It.RemoveCurrent();
             continue;
         }
 
-        if (!Bubble->IsShowing())
+        float& CurrentOpacity = ChatBubbleOpacity.FindOrAdd(WeakActor);
+
+        // Distance-based target opacity: fade to 0 beyond ChatBubbleMaxVisibleDistance.
+        const float DistToBubble = FVector::Dist(PawnLocation, BubbleActor->GetActorLocation());
+        float TargetOpacity = 0.0f;
+        if (Bubble->IsShowing() && DistToBubble <= ChatBubbleMaxVisibleDistance)
         {
-            Bubble->SetVisibility(ESlateVisibility::Collapsed);
-            if (UCanvasPanelSlot* S = Cast<UCanvasPanelSlot>(Bubble->Slot))
-                S->SetPosition(FVector2D(-9999.f, -9999.f));
-            continue;
+            const float FadeStart = ChatBubbleMaxVisibleDistance - FMath::Max(ChatBubbleFadeDistance, 1.f);
+            if (DistToBubble <= FadeStart)
+            {
+                TargetOpacity = 1.0f;
+            }
+            else
+            {
+                TargetOpacity = FMath::Clamp(
+                    1.0f - (DistToBubble - FadeStart) / FMath::Max(ChatBubbleFadeDistance, 1.f),
+                    0.0f, 1.0f);
+            }
         }
 
-        // World-space anchor: capsule top + extra offset above where the nameplate sits
+        // World-space anchor: capsule top + extra offset above the nameplate.
         float CapsuleHalf = 0.f;
         if (const ACharacter* Char = Cast<ACharacter>(BubbleActor))
             if (const UCapsuleComponent* Cap = Char->GetCapsuleComponent())
                 CapsuleHalf = Cap->GetScaledCapsuleHalfHeight();
 
-        // Find the actor's HeadOffsetZ from the nameplate entry (fallback to default)
-        float PlateOffsetZ = DefaultPlayerHeadOffsetZ;
-        if (const FNameplateEntry* PlateEntry = FindEntry(BubbleActor))
-            PlateOffsetZ = PlateEntry->HeadOffsetZ;
-
         const FVector BubbleWorld = BubbleActor->GetActorLocation()
                                   + FVector(0.f, 0.f, CapsuleHalf + ChatBubbleHeadOffsetZ);
 
-        // Camera dot-product guard
+        // Camera dot-product guard: snap opacity to 0 instantly when behind camera.
         if (APlayerCameraManager* CamMgr = PC->PlayerCameraManager)
         {
             const FVector CamFwd = CamMgr->GetActorForwardVector();
             const FVector ToPoint = BubbleWorld - CamMgr->GetCameraLocation();
             if (FVector::DotProduct(ToPoint, CamFwd) <= 0.f)
             {
+                CurrentOpacity = 0.f;
+                Bubble->SetRenderOpacity(0.f);
                 Bubble->SetVisibility(ESlateVisibility::Collapsed);
                 if (UCanvasPanelSlot* S = Cast<UCanvasPanelSlot>(Bubble->Slot))
                     S->SetPosition(FVector2D(-9999.f, -9999.f));
@@ -106,9 +118,29 @@ void UNameplateCanvasWidget::NativeTick(const FGeometry& MyGeometry, float InDel
             }
         }
 
+        // Smooth fade toward target (skip interp when already at 0 and target is 0).
+        if (CurrentOpacity < 0.01f && TargetOpacity <= 0.f)
+            CurrentOpacity = 0.f;
+        else
+            CurrentOpacity = ChatBubbleFadeSpeed > 0.f
+                ? FMath::FInterpConstantTo(CurrentOpacity, TargetOpacity, InDeltaTime, ChatBubbleFadeSpeed)
+                : TargetOpacity;
+
+        const bool bShouldBeVisible = CurrentOpacity > 0.01f;
+
+        if (!bShouldBeVisible)
+        {
+            Bubble->SetVisibility(ESlateVisibility::Collapsed);
+            if (UCanvasPanelSlot* S = Cast<UCanvasPanelSlot>(Bubble->Slot))
+                S->SetPosition(FVector2D(-9999.f, -9999.f));
+            continue;
+        }
+
         FVector2D ScreenPosPx;
         if (!PC->ProjectWorldLocationToScreen(BubbleWorld, ScreenPosPx, true))
         {
+            // Off-screen: snap so the bubble doesn’t linger on a stale position.
+            CurrentOpacity = 0.f;
             Bubble->SetVisibility(ESlateVisibility::Collapsed);
             if (UCanvasPanelSlot* S = Cast<UCanvasPanelSlot>(Bubble->Slot))
                 S->SetPosition(FVector2D(-9999.f, -9999.f));
@@ -118,9 +150,108 @@ void UNameplateCanvasWidget::NativeTick(const FGeometry& MyGeometry, float InDel
         const float DPIScale = UWidgetLayoutLibrary::GetViewportScale(this);
         const FVector2D ScreenPos = ScreenPosPx / FMath::Max(DPIScale, 0.01f);
 
+        Bubble->SetRenderOpacity(CurrentOpacity);
         if (UCanvasPanelSlot* S = Cast<UCanvasPanelSlot>(Bubble->Slot))
             S->SetPosition(ScreenPos);
+        if (Bubble->GetVisibility() == ESlateVisibility::Collapsed)
+            Bubble->SetVisibility(ESlateVisibility::HitTestInvisible);
+    }
 
+    // ---- NPC Speech-bubble tick -------------------------------------------
+    // Identical distance-fade logic as player chat bubbles.
+    for (auto It = NPCSpeechBubbles.CreateIterator(); It; ++It)
+    {
+        TWeakObjectPtr<AActor> WeakActor = It.Key();
+        AActor* BubbleActor = WeakActor.Get();
+        UChatBubbleWidget* Bubble = It.Value();
+
+        if (!IsValid(BubbleActor) || !Bubble)
+        {
+            if (Bubble) Bubble->RemoveFromParent();
+            NPCSpeechBubbleOpacity.Remove(WeakActor);
+            NPCSpeechBubbleExpiry.Remove(WeakActor);
+            It.RemoveCurrent();
+            continue;
+        }
+
+        float& CurrentOpacity = NPCSpeechBubbleOpacity.FindOrAdd(WeakActor);
+
+        // Distance-based target opacity.
+        const float DistToBubble = FVector::Dist(PawnLocation, BubbleActor->GetActorLocation());
+        float TargetOpacity = 0.0f;
+        if (Bubble->IsShowing() && DistToBubble <= ChatBubbleMaxVisibleDistance)
+        {
+            const float FadeStart = ChatBubbleMaxVisibleDistance - FMath::Max(ChatBubbleFadeDistance, 1.f);
+            if (DistToBubble <= FadeStart)
+            {
+                TargetOpacity = 1.0f;
+            }
+            else
+            {
+                TargetOpacity = FMath::Clamp(
+                    1.0f - (DistToBubble - FadeStart) / FMath::Max(ChatBubbleFadeDistance, 1.f),
+                    0.0f, 1.0f);
+            }
+        }
+
+        float CapsuleHalf = 0.f;
+        if (const ACharacter* Char = Cast<ACharacter>(BubbleActor))
+            if (const UCapsuleComponent* Cap = Char->GetCapsuleComponent())
+                CapsuleHalf = Cap->GetScaledCapsuleHalfHeight();
+
+        const FVector BubbleWorld = BubbleActor->GetActorLocation()
+                                  + FVector(0.f, 0.f, CapsuleHalf + NPCSpeechBubbleHeadOffsetZ);
+
+        // Camera dot-product guard: snap opacity to 0 instantly when behind camera.
+        if (APlayerCameraManager* CamMgr = PC->PlayerCameraManager)
+        {
+            const FVector CamFwd = CamMgr->GetActorForwardVector();
+            const FVector ToPoint = BubbleWorld - CamMgr->GetCameraLocation();
+            if (FVector::DotProduct(ToPoint, CamFwd) <= 0.f)
+            {
+                CurrentOpacity = 0.f;
+                Bubble->SetRenderOpacity(0.f);
+                Bubble->SetVisibility(ESlateVisibility::Collapsed);
+                if (UCanvasPanelSlot* S = Cast<UCanvasPanelSlot>(Bubble->Slot))
+                    S->SetPosition(FVector2D(-9999.f, -9999.f));
+                continue;
+            }
+        }
+
+        // Smooth fade.
+        if (CurrentOpacity < 0.01f && TargetOpacity <= 0.f)
+            CurrentOpacity = 0.f;
+        else
+            CurrentOpacity = ChatBubbleFadeSpeed > 0.f
+                ? FMath::FInterpConstantTo(CurrentOpacity, TargetOpacity, InDeltaTime, ChatBubbleFadeSpeed)
+                : TargetOpacity;
+
+        const bool bShouldBeVisible = CurrentOpacity > 0.01f;
+
+        if (!bShouldBeVisible)
+        {
+            Bubble->SetVisibility(ESlateVisibility::Collapsed);
+            if (UCanvasPanelSlot* S = Cast<UCanvasPanelSlot>(Bubble->Slot))
+                S->SetPosition(FVector2D(-9999.f, -9999.f));
+            continue;
+        }
+
+        FVector2D ScreenPosPx;
+        if (!PC->ProjectWorldLocationToScreen(BubbleWorld, ScreenPosPx, true))
+        {
+            CurrentOpacity = 0.f;
+            Bubble->SetVisibility(ESlateVisibility::Collapsed);
+            if (UCanvasPanelSlot* S = Cast<UCanvasPanelSlot>(Bubble->Slot))
+                S->SetPosition(FVector2D(-9999.f, -9999.f));
+            continue;
+        }
+
+        const float DPIScale = UWidgetLayoutLibrary::GetViewportScale(this);
+        const FVector2D ScreenPos = ScreenPosPx / FMath::Max(DPIScale, 0.01f);
+
+        Bubble->SetRenderOpacity(CurrentOpacity);
+        if (UCanvasPanelSlot* S = Cast<UCanvasPanelSlot>(Bubble->Slot))
+            S->SetPosition(ScreenPos);
         if (Bubble->GetVisibility() == ESlateVisibility::Collapsed)
             Bubble->SetVisibility(ESlateVisibility::HitTestInvisible);
     }
@@ -228,7 +359,17 @@ void UNameplateCanvasWidget::Unregister(AActor* Actor)
     {
         if (*BubblePtr) (*BubblePtr)->RemoveFromParent();
         ChatBubbles.Remove(WeakActor);
+        ChatBubbleOpacity.Remove(WeakActor);
     }
+
+    // Remove NPC speech bubble for this actor
+    if (UChatBubbleWidget** NPCBubblePtr = NPCSpeechBubbles.Find(WeakActor))
+    {
+        if (*NPCBubblePtr) (*NPCBubblePtr)->RemoveFromParent();
+        NPCSpeechBubbles.Remove(WeakActor);
+        NPCSpeechBubbleOpacity.Remove(WeakActor);
+    }
+    NPCSpeechBubbleExpiry.Remove(WeakActor);
 
     for (int32 i = Entries.Num() - 1; i >= 0; --i)
     {
@@ -260,6 +401,15 @@ void UNameplateCanvasWidget::UnregisterAll()
         if (Pair.Value) Pair.Value->RemoveFromParent();
     }
     ChatBubbles.Empty();
+    ChatBubbleOpacity.Empty();
+
+    for (auto& Pair : NPCSpeechBubbles)
+    {
+        if (Pair.Value) Pair.Value->RemoveFromParent();
+    }
+    NPCSpeechBubbles.Empty();
+    NPCSpeechBubbleOpacity.Empty();
+    NPCSpeechBubbleExpiry.Empty();
 }
 
 // -----------------------------------------------------------------------
@@ -342,6 +492,45 @@ void UNameplateCanvasWidget::ShowPlayerChatBubble(AActor* Actor, const FString& 
     }
 
     Bubble->Show(Text, Duration);
+}
+
+void UNameplateCanvasWidget::ShowNPCSpeechBubble(AActor* Actor, const FText& Text, float Duration)
+{
+    if (!Actor) return;
+
+    // Determine which widget class to use (NPC variant or shared fallback)
+    TSubclassOf<UChatBubbleWidget> BubbleClass = NPCSpeechBubbleWidgetClass
+        ? NPCSpeechBubbleWidgetClass : ChatBubbleWidgetClass;
+
+    if (!BubbleClass)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget::ShowNPCSpeechBubble - no bubble widget class set"));
+        return;
+    }
+
+    TWeakObjectPtr<AActor> WeakActor(Actor);
+    UChatBubbleWidget** Found = NPCSpeechBubbles.Find(WeakActor);
+    UChatBubbleWidget*  Bubble = Found ? *Found : nullptr;
+
+    if (!Bubble)
+    {
+        UUserWidget* RawWidget = AddWidgetToCanvas(BubbleClass);
+        Bubble = Cast<UChatBubbleWidget>(RawWidget);
+        if (!Bubble)
+        {
+            UE_LOG(LogTemp, Error, TEXT("NameplateCanvasWidget::ShowNPCSpeechBubble - failed to create bubble widget"));
+            return;
+        }
+        NPCSpeechBubbles.Add(WeakActor, Bubble);
+    }
+
+    Bubble->Show(Text.ToString(), Duration);
+
+    // Record expiry time so NativeTick can position the bubble even while it is visible
+    if (UWorld* World = GetWorld())
+    {
+        NPCSpeechBubbleExpiry.Add(WeakActor, World->GetTimeSeconds() + Duration);
+    }
 }
 
 void UNameplateCanvasWidget::SetNPCInteractionState(AActor* Actor, ENPCInteractionState NewState)

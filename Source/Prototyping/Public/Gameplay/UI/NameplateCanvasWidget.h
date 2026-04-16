@@ -118,6 +118,18 @@ public:
      */
     void ShowPlayerChatBubble(AActor* Actor, const FString& Text, float Duration);
 
+    /**
+     * Show a speech bubble above an NPC actor (e.g. ambient speech).
+     * Creates/reuses a UChatBubbleWidget laid out on the canvas, positioned
+     * HeadOffsetZ cm above the capsule top.  Uses NPCSpeechBubbleWidgetClass
+     * when set, otherwise falls back to ChatBubbleWidgetClass.
+     *
+     * @param Actor     The NPC actor (ABasicNPC or any registered actor).
+     * @param Text      Speech text to display.
+     * @param Duration  Seconds before the bubble auto-hides.
+     */
+    void ShowNPCSpeechBubble(AActor* Actor, const FText& Text, float Duration);
+
     // ------------------------------------------------------------------
     // Configuration  (set in the BP CDO or UIManager)
     // ------------------------------------------------------------------
@@ -138,6 +150,14 @@ public:
     TSubclassOf<UChatBubbleWidget> ChatBubbleWidgetClass;
 
     /**
+     * Widget class used for NPC ambient speech bubbles.
+     * If left unset, ChatBubbleWidgetClass is used as fallback.
+     * Assign WBP_NPCSpeechBubble in the Blueprint CDO for distinct NPC styling.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Classes")
+    TSubclassOf<UChatBubbleWidget> NPCSpeechBubbleWidgetClass;
+
+    /**
      * Height (cm) above the CAPSULE TOP where the chat bubble anchor sits.
      * Larger value = bubble appears higher above the player's head.
      * Default 80 cm puts the bubble visibly above a default nameplate (HeadOffsetZ~20).
@@ -145,6 +165,41 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Head Offset",
               meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "400.0"))
     float ChatBubbleHeadOffsetZ = 80.0f;
+
+    /**
+     * Maximum distance (cm) at which chat bubbles (player and NPC) are visible.
+     * Bubbles beyond this distance fade out completely.
+     * 2000 cm = 20 m is a comfortable MMORPG chat range.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Chat Bubble Visibility",
+              meta = (ClampMin = "100.0", UIMin = "100.0", UIMax = "10000.0"))
+    float ChatBubbleMaxVisibleDistance = 2000.0f;
+
+    /**
+     * Width (cm) of the fade zone just inside ChatBubbleMaxVisibleDistance.
+     * Within this range the bubble alpha ramps from 1 → 0.
+     * 400 cm gives a smooth ~4-metre transition band.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Chat Bubble Visibility",
+              meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "2000.0"))
+    float ChatBubbleFadeDistance = 400.0f;
+
+    /**
+     * Opacity interpolation speed for chat bubbles (units per second).
+     * Higher = snappier appear/disappear; 5 is a smooth MMO-style fade.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Chat Bubble Visibility",
+              meta = (ClampMin = "0.1", UIMin = "0.1", UIMax = "20.0"))
+    float ChatBubbleFadeSpeed = 5.0f;
+
+    /**
+     * Height (cm) above the CAPSULE TOP where an NPC speech bubble anchor sits.
+     * Separated from ChatBubbleHeadOffsetZ so player and NPC bubbles can be
+     * positioned independently.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nameplate Canvas|Head Offset",
+              meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "400.0"))
+    float NPCSpeechBubbleHeadOffsetZ = 80.0f;
 
     /**
      * Extra Z margin (cm) above the top of the capsule where the nameplate anchors
@@ -238,4 +293,15 @@ private:
     // Chat bubbles: one widget per remote player actor, created on first message.
     UPROPERTY()
     TMap<TWeakObjectPtr<AActor>, UChatBubbleWidget*> ChatBubbles;
+
+    // NPC speech bubbles: one widget per NPC actor, created on first ambient message.
+    UPROPERTY()
+    TMap<TWeakObjectPtr<AActor>, UChatBubbleWidget*> NPCSpeechBubbles;
+
+    // Per-NPC: game time at which the current bubble should hide
+    TMap<TWeakObjectPtr<AActor>, float> NPCSpeechBubbleExpiry;
+
+    // Per-bubble current render opacity [0..1] – drives smooth distance-based fade.
+    TMap<TWeakObjectPtr<AActor>, float> ChatBubbleOpacity;
+    TMap<TWeakObjectPtr<AActor>, float> NPCSpeechBubbleOpacity;
 };

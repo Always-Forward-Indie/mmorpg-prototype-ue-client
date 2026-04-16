@@ -42,9 +42,15 @@ private:
     void HandleChunkServerData(const FString& ReceivedData);
 
     // Parsers
-    FQuestProgressData ParseQuestUpdate(const TSharedPtr<FJsonObject>& Body)    const;
-    FQuestOfferedData  ParseQuestOffered(const TSharedPtr<FJsonObject>& Body)   const;
-    FQuestTurnedInData ParseQuestTurnedIn(const TSharedPtr<FJsonObject>& Body)  const;
+    FQuestProgressData      ParseQuestUpdate(const TSharedPtr<FJsonObject>& Body)      const;
+    FQuestOfferedData       ParseQuestOffered(const TSharedPtr<FJsonObject>& Body)     const;
+    FQuestTurnedInData      ParseQuestTurnedIn(const TSharedPtr<FJsonObject>& Body)    const;
+
+    // Helper: parse a rewards JSON array into TArray<FQuestRewardData>
+    TArray<FQuestRewardData>    ParseRewards(const TArray<TSharedPtr<FJsonValue>>& Arr) const;
+
+    // Helper: parse a currentStepEnriched / currentStep JSON object
+    FQuestStepEnrichedData      ParseEnrichedStep(const TSharedPtr<FJsonObject>& Obj)  const;
 
     // Helper: extract kill/collect progress integers from raw JSON objects
     void ExtractStepProgress(const TSharedPtr<FJsonObject>& ProgressObj,

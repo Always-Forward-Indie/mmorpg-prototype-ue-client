@@ -237,6 +237,42 @@ void UQuestJournalWidget::ShowQuestDetail(int32 QuestId)
         }
         Quest_Description_Text->SetText(DescText);
     }
+
+    if (Quest_Target_Text)
+    {
+        const FString TargetStr = BuildTargetText(Data);
+        Quest_Target_Text->SetText(FText::FromString(TargetStr));
+        Quest_Target_Text->SetVisibility(
+            TargetStr.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+    }
+
+    if (Quest_Rewards_Box && RewardRowClass)
+    {
+        if (Data.rewards.Num() > 0)
+        {
+            PopulateRewardBox(Quest_Rewards_Box, Data.rewards);
+            if (Quest_Rewards_Text) Quest_Rewards_Text->SetVisibility(ESlateVisibility::Collapsed);
+        }
+        else
+        {
+            Quest_Rewards_Box->ClearChildren();
+            Quest_Rewards_Box->SetVisibility(ESlateVisibility::Collapsed);
+            if (Quest_Rewards_Text) Quest_Rewards_Text->SetVisibility(ESlateVisibility::Collapsed);
+        }
+    }
+    else if (Quest_Rewards_Text)
+    {
+        if (Data.rewards.Num() > 0)
+        {
+            const FString RewardStr = FString(TEXT("Rewards: ")) + BuildRewardText(Data.rewards);
+            Quest_Rewards_Text->SetText(FText::FromString(RewardStr));
+            Quest_Rewards_Text->SetVisibility(ESlateVisibility::HitTestInvisible);
+        }
+        else
+        {
+            Quest_Rewards_Text->SetVisibility(ESlateVisibility::Collapsed);
+        }
+    }
 }
 
 void UQuestJournalWidget::ToggleJournal()
@@ -327,6 +363,100 @@ ULocalizationSubsystem* UQuestJournalWidget::GetLocSys() const
     UGameInstance* GI = GetGameInstance();
     if (!GI) return nullptr;
     return GI->GetSubsystem<ULocalizationSubsystem>();
+}
+
+void UQuestJournalWidget::PopulateRewardBox(UVerticalBox* Box, const TArray<FQuestRewardData>& Rewards)
+{
+    Box->ClearChildren();
+    for (const FQuestRewardData& R : Rewards)
+    {
+        UQuestRewardRowWidget* Row = CreateWidget<UQuestRewardRowWidget>(GetOwningPlayer(), RewardRowClass);
+        if (Row)
+        {
+            Row->SetupFromQuestReward(R);
+            Box->AddChild(Row);
+        }
+    }
+    Box->SetVisibility(Rewards.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+}
+
+FString UQuestJournalWidget::BuildRewardText(const TArray<FQuestRewardData>& Rewards) const
+{
+    ULocalizationSubsystem* LocSys = GetLocSys();
+    TArray<FString> Parts;
+    for (const FQuestRewardData& R : Rewards)
+    {
+        if (R.rewardType == TEXT("exp"))
+        {
+            Parts.Add(FString::Printf(TEXT("* %d EXP"), R.amount));
+        }
+        else if (R.rewardType == TEXT("gold"))
+        {
+            Parts.Add(FString::Printf(TEXT("* %d Gold"), R.amount));
+        }
+        else if (R.rewardType == TEXT("item"))
+        {
+            if (R.isHidden)
+            {
+                Parts.Add(TEXT("* ???"));
+            }
+            else
+            {
+                FString ItemName;
+                if (LocSys && !R.itemSlug.IsEmpty())
+                    ItemName = LocSys->GetItemDisplayName(R.itemSlug).ToString();
+                else
+                    ItemName = R.itemSlug;
+                Parts.Add(FString::Printf(TEXT("* %dx %s"), R.quantity, *ItemName));
+            }
+        }
+    }
+    FString Result;
+    for (int32 i = 0; i < Parts.Num(); ++i)
+    {
+        if (i > 0) Result += TEXT("  ");
+        Result += Parts[i];
+    }
+    return Result;
+}
+
+FString UQuestJournalWidget::BuildTargetText(const FQuestProgressData& Data) const
+{
+    if (!Data.bHasEnrichedStep) return TEXT("");
+
+    ULocalizationSubsystem* LocSys = GetLocSys();
+    const FQuestStepEnrichedData& Step = Data.currentStepEnriched;
+
+    if (Step.stepType == TEXT("kill"))
+    {
+        FString Target = (LocSys && !Step.targetSlug.IsEmpty())
+            ? LocSys->GetMobDisplayName(Step.targetSlug).ToString()
+            : Step.targetSlug;
+        return FString::Printf(TEXT("Kill: %s  %d/%d"), *Target, Step.current, Step.count);
+    }
+    else if (Step.stepType == TEXT("collect"))
+    {
+        FString Target = (LocSys && !Step.targetSlug.IsEmpty())
+            ? LocSys->GetItemDisplayName(Step.targetSlug).ToString()
+            : Step.targetSlug;
+        return FString::Printf(TEXT("Collect: %s  %d/%d"), *Target, Step.current, Step.count);
+    }
+    else if (Step.stepType == TEXT("talk"))
+    {
+        FString Target = (LocSys && !Step.targetSlug.IsEmpty())
+            ? LocSys->GetNPCDisplayName(Step.targetSlug).ToString()
+            : Step.targetSlug;
+        return FString::Printf(TEXT("Talk to: %s"), *Target);
+    }
+    else if (Step.stepType == TEXT("reach"))
+    {
+        FString Zone = (LocSys && !Step.zoneSlug.IsEmpty())
+            ? LocSys->GetZoneDisplayName(Step.zoneSlug).ToString()
+            : Step.zoneSlug;
+        return FString::Printf(TEXT("Go to: %s"), *Zone);
+    }
+
+    return Step.clientStepKey;
 }
 
 // ---------------------------------------------------------------------------

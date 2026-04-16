@@ -36,7 +36,6 @@ public:
     bool IsShowing() const { return bIsShowing; }
 
     virtual void NativeConstruct() override;
-    virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
     /**
      * Maximum number of characters to display.  Messages longer than this are
@@ -52,6 +51,9 @@ protected:
     UTextBlock* MessageText;
 
 private:
-    float HideTimer = 0.0f;
-    bool  bIsShowing = false;
+    /** World timer - fires when the display duration expires. */
+    FTimerHandle BubbleTimerHandle;
+    bool bIsShowing = false;
+
+    void OnBubbleTimerExpired();
 };

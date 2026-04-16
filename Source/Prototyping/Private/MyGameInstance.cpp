@@ -1,9 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
-
-
-
-
 #include "MyGameInstance.h"
+#include "DevMode/DevModeDataProvider.h"
+#include "DevMode/DevModeConsoleCommands.h"
 #include "Containers/Ticker.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
 #include "Gameplay/Items/HarvestManager.h"
@@ -25,6 +23,8 @@
 #include "Gameplay/Player/TitleNetworkHandler.h"
 #include "Gameplay/Emotes/EmoteManager.h"
 #include "Gameplay/Emotes/EmoteNetworkHandler.h"
+#include "Gameplay/NPCs/AmbientSpeechManager.h"
+#include "Gameplay/NPCs/AmbientSpeechNetworkHandler.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Data/EntityAudioRepository.h"
@@ -73,6 +73,11 @@
 #include "Camera/CameraComponent.h"
 #include "UObject/UObjectGlobals.h"
 #include "Audio/MusicZoneActor.h"
+
+#if WITH_EDITOR
+#include "Editor.h"
+#include "EditorViewportClient.h"
+#endif
 
 UMyGameInstance::UMyGameInstance(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -173,6 +178,10 @@ void UMyGameInstance::Init()
 	// Initialize Emote system
 	EmoteManager = NewObject<UEmoteManager>(this);
 	EmoteNetworkHandler = NewObject<UEmoteNetworkHandler>(this);
+
+	// Initialize NPC Ambient Speech system
+	AmbientSpeechManager = NewObject<UAmbientSpeechManager>(this);
+	AmbientSpeechNetworkHandler = NewObject<UAmbientSpeechNetworkHandler>(this);
 
 	// Initialize Bestiary system
 	BestiaryNetworkHandler = NewObject<UBestiaryNetworkHandler>(this);
@@ -629,6 +638,15 @@ void UMyGameInstance::InitNetworkingSetup()
 		UE_LOG(LogTemp, Warning, TEXT("EmoteNetworkHandler initialized and subscribed"));
 	}
 
+	// Initialize NPC Ambient Speech system
+	if (AmbientSpeechManager && AmbientSpeechNetworkHandler)
+	{
+		AmbientSpeechManager->Initialize(this);
+		AmbientSpeechNetworkHandler->Initialize(AmbientSpeechManager, GetNetworkManager());
+		AmbientSpeechNetworkHandler->SubscribeToNetworkEvents();
+		UE_LOG(LogTemp, Warning, TEXT("AmbientSpeechNetworkHandler initialized and subscribed"));
+	}
+
 	// Initialize Chat System
 	if (ChatManager)
 	{
@@ -677,10 +695,21 @@ void UMyGameInstance::LoadLoginLevel()
 	// Reset join flow guard so the player can select a character again after returning to login
 	bJoinGameInProgress = false;
 
-	if (bDebug) {
+	if (DevModeConfig.bEnabled)
+	{
+		// DevMode: skip login, go straight to the configured level.
+		// LevelOverride takes priority; fall back to DebugLevelName when not set.
+		const FName DevLevelName = (DevModeConfig.LevelOverride != NAME_None)
+			? DevModeConfig.LevelOverride
+			: DebugLevelName;
+		LoadStreamingLevel(DevLevelName);
+	}
+	else if (bDebug)
+	{
 		LoadStreamingLevel(DebugLevelName);
 	}
-	else {
+	else
+	{
 		LoadStreamingLevel(LoginLevelName);
 	}
 }
@@ -1155,8 +1184,15 @@ void UMyGameInstance::OnLoginLevelLoaded()
 		}
 	}
 
-	// Handle Debug level
-	if (LevelBeingLoaded == DebugLevelName)
+	// Handle Debug / DevMode level
+	// This branch fires when:
+	//   a) bDebug is set and LevelBeingLoaded == DebugLevelName, OR
+	//   b) DevModeConfig.bEnabled is set and we loaded to LevelOverride (or DebugLevelName as fallback)
+	const FName DevModeLevelName = (DevModeConfig.bEnabled && DevModeConfig.LevelOverride != NAME_None)
+		? DevModeConfig.LevelOverride
+		: DebugLevelName;
+
+	if (LevelBeingLoaded == DevModeLevelName)
 	{
 		RemoveLoginWidgetFromViewport();
 		if (GetWorld() && GetWorld()->GetFirstPlayerController())
@@ -1165,18 +1201,112 @@ void UMyGameInstance::OnLoginLevelLoaded()
 		}
 
 		FClientDataStruct clientData;
-		clientData.clientId = 1;
-		clientData.characterData.characterId = 1;
-		clientData.characterData.characterPosition.positionX = 0.0f;
-		clientData.characterData.characterPosition.positionY = 0.0f;
-		clientData.characterData.characterPosition.positionZ = 90.0f;
-		CurrentCharacterID = 1;
-		CurrentClientID = 1;
+
+		if (DevModeConfig.bEnabled)
+		{
+			// Instantiate the data provider if not already created
+			if (!DevModeDataProvider)
+			{
+				DevModeDataProvider = NewObject<UDevModeDataProvider>(this);
+				DevModeDataProvider->Initialize(this, DevModeConfig);
+			}
+
+			if (!DevModeDataProvider->LoadPlayerData(clientData))
+			{
+				// JSON load failed — fall back to minimal stub so the level is still playable
+				UE_LOG(LogTemp, Warning, TEXT("DevMode: LoadPlayerData failed — using stub data. Check Config/DevMode/dev_player.json"));
+				clientData.clientId = 1;
+				clientData.characterData.characterId = 1;
+				clientData.characterData.characterPosition.positionX = 0.0f;
+				clientData.characterData.characterPosition.positionY = 0.0f;
+				clientData.characterData.characterPosition.positionZ = 90.0f;
+			}
+		}
+		else
+		{
+			// Legacy bDebug path — hardcoded stub
+			clientData.clientId = 1;
+			clientData.characterData.characterId = 1;
+			clientData.characterData.characterPosition.positionX = 0.0f;
+			clientData.characterData.characterPosition.positionY = 0.0f;
+			clientData.characterData.characterPosition.positionZ = 90.0f;
+		}
+
+		// ── "Play from here" ────────────────────────────────────────────────
+		// Override characterPosition with the active editor viewport camera
+		// position so the player spawns where you placed the camera in the editor.
+		// Only runs in editor builds when the flag is set.
+#if WITH_EDITOR
+		if (DevModeConfig.bSpawnAtEditorCameraPosition && GEditor)
+		{
+			FVector    CamLoc  = FVector::ZeroVector;
+			FRotator   CamRot  = FRotator::ZeroRotator;
+			bool       bFoundCamera = false;
+
+			// Iterate all level viewports to find the perspective one that PIE was launched from.
+			for (FEditorViewportClient* VC : GEditor->GetAllViewportClients())
+			{
+				if (VC && VC->IsPerspective() && !VC->IsSimulateInEditorViewport())
+				{
+					CamLoc = VC->GetViewLocation();
+					CamRot = VC->GetViewRotation();
+					bFoundCamera = true;
+					break;
+				}
+			}
+
+			if (bFoundCamera)
+			{
+				clientData.characterData.characterPosition.positionX = CamLoc.X;
+				clientData.characterData.characterPosition.positionY = CamLoc.Y;
+				clientData.characterData.characterPosition.positionZ = CamLoc.Z;
+				clientData.characterData.characterPosition.rotationZ  = CamRot.Yaw;
+
+				UE_LOG(LogTemp, Log,
+					TEXT("DevMode: SpawnAtEditorCameraPosition → (%.0f, %.0f, %.0f) Yaw=%.1f"),
+					CamLoc.X, CamLoc.Y, CamLoc.Z, CamRot.Yaw);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("DevMode: SpawnAtEditorCameraPosition — no perspective viewport found, using JSON position"));
+			}
+		}
+#endif
+
+		CurrentCharacterID = clientData.characterData.characterId;
+		CurrentClientID = clientData.clientId;
 
 		ClientData = clientData;
 
 		AddPlayerData(clientData.clientId, clientData);
 		SpawnPlayerForClient(clientData.clientId);
+
+		if (DevModeConfig.bEnabled && DevModeDataProvider)
+		{
+			// Populate test mobs
+			if (DevModeConfig.bSpawnTestMobs && MOBManager)
+			{
+				DevModeDataProvider->PopulateMobs(MOBManager);
+			}
+
+			// Populate test inventory
+			if (DevModeConfig.bPopulateInventory && InventoryManager)
+			{
+				DevModeDataProvider->PopulateInventory(InventoryManager, clientData.characterData.characterId);
+			}
+
+			// Register dev console commands once
+			if (!DevModeConsoleCommands)
+			{
+				DevModeConsoleCommands = NewObject<UDevModeConsoleCommands>(this);
+				DevModeConsoleCommands->RegisterCommands(this);
+			}
+
+			UE_LOG(LogTemp, Log, TEXT("DevMode: Active — player '%s' (clientId=%d, charId=%d)"),
+				*clientData.characterData.characterName,
+				clientData.clientId,
+				clientData.characterData.characterId);
+		}
 
 		UWorld* TargetWorld = GetWorld();
 		if (TargetWorld)
@@ -1192,9 +1322,9 @@ void UMyGameInstance::OnLoginLevelLoaded()
 	}
 
 	// Remove loading screen
-	// NOTE: For the Debug level the loading screen is removed here immediately
+	// NOTE: For the Debug/DevMode level the loading screen is removed here immediately
 	// since there is no full login→world transition flow (no ReadyFlags system).
-	if (LevelBeingLoaded == DebugLevelName)
+	if (LevelBeingLoaded == DevModeLevelName)
 	{
 		if (LoadingScreenWidget)
 		{

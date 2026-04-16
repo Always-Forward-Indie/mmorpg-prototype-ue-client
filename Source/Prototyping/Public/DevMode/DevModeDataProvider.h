@@ -47,6 +47,12 @@ struct FDevModeConfig
     // Whether to populate the inventory with test data after level load.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DevMode|Inventory")
     bool bPopulateInventory = true;
+
+    // When true the player spawns at the current editor viewport camera position
+    // instead of the position stored in dev_player.json.
+    // Has no effect in packaged builds.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DevMode")
+    bool bSpawnAtEditorCameraPosition = true;
 };
 
 // ============================================================================

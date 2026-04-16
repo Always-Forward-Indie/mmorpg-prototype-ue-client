@@ -6,6 +6,7 @@
 #include "Gameplay/NPCs/NPCManager.h"
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
+#include "Components/RichTextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Services/LocalizationSubsystem.h"
@@ -69,7 +70,7 @@ void UDialogueWidget::ShowDialogueNode(const FDialogueNodeData& NodeData)
 {
     CurrentNode = NodeData;
 
-    // NPC name: resolve via NPCManager, fallback to "NPC #id"
+    // NPC name: resolve via NPCManager + LocalizationSubsystem, fallback to raw name / "NPC #id"
     if (NPC_Name_Text)
     {
         FString NPCName = FString::Printf(TEXT("NPC #%d"), NodeData.speakerNpcId);
@@ -81,7 +82,16 @@ void UDialogueWidget::ShowDialogueNode(const FDialogueNodeData& NodeData)
                 {
                     if (ABasicNPC* NPC = NPCMgr->GetNPCById(NodeData.speakerNpcId))
                     {
-                        NPCName = NPC->GetNPCName();
+                        ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>();
+                        if (LocSys && !NPC->GetNPCSlug().IsEmpty())
+                        {
+                            const FText LocalizedName = LocSys->GetNPCDisplayName(NPC->GetNPCSlug());
+                            NPCName = LocalizedName.IsEmpty() ? NPC->GetNPCName() : LocalizedName.ToString();
+                        }
+                        else
+                        {
+                            NPCName = NPC->GetNPCName();
+                        }
                     }
                 }
             }
@@ -128,7 +138,10 @@ void UDialogueWidget::ShowDialogueNode(const FDialogueNodeData& NodeData)
         {
             NodeText = FText::FromString(NodeData.clientNodeKey);
         }
-        Dialogue_Text->SetText(NodeText);
+        // Convert literal \n (backslash + n) written in DataTable to actual newline chars
+        FString NodeStr = NodeText.ToString();
+        NodeStr = NodeStr.Replace(TEXT("\\n"), TEXT("\n"));
+        Dialogue_Text->SetText(FText::FromString(NodeStr));
     }
 
     PopulateChoices(NodeData.choices);
@@ -193,6 +206,11 @@ void UDialogueWidget::PopulateChoices(const TArray<FDialogueChoice>& Choices)
 
     for (const FDialogueChoice& Choice : Choices)
     {
+        // hideIfLocked is authoritative — always skip if server tagged it hidden when locked
+        if (!Choice.conditionMet && Choice.hideIfLocked)
+        {
+            continue;
+        }
         if (!Choice.conditionMet && !bShowLockedChoices)
         {
             continue;

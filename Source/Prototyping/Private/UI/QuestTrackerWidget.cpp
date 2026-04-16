@@ -109,6 +109,44 @@ void UQuestTrackerWidget::RefreshTracker()
 
 FString UQuestTrackerWidget::BuildTrackerLine(const FQuestProgressData& Data) const
 {
+    // Prefer enriched step data (has resolved slug names)
+    if (Data.bHasEnrichedStep)
+    {
+        const FQuestStepEnrichedData& Step = Data.currentStepEnriched;
+        ULocalizationSubsystem* LocSys = nullptr;
+        if (UGameInstance* GI = GetGameInstance()) LocSys = GI->GetSubsystem<ULocalizationSubsystem>();
+
+        if (Step.stepType == TEXT("kill"))
+        {
+            FString Target = (LocSys && !Step.targetSlug.IsEmpty())
+                ? LocSys->GetMobDisplayName(Step.targetSlug).ToString()
+                : Step.targetSlug;
+            return FString::Printf(TEXT("%s  %d/%d"), *Target, Step.current, Step.count);
+        }
+        else if (Step.stepType == TEXT("collect"))
+        {
+            FString Target = (LocSys && !Step.targetSlug.IsEmpty())
+                ? LocSys->GetItemDisplayName(Step.targetSlug).ToString()
+                : Step.targetSlug;
+            return FString::Printf(TEXT("%s  %d/%d"), *Target, Step.current, Step.count);
+        }
+        else if (Step.stepType == TEXT("talk"))
+        {
+            FString Target = (LocSys && !Step.targetSlug.IsEmpty())
+                ? LocSys->GetNPCDisplayName(Step.targetSlug).ToString()
+                : Step.targetSlug;
+            return FString::Printf(TEXT("Talk to: %s"), *Target);
+        }
+        else if (Step.stepType == TEXT("reach"))
+        {
+            FString Zone = (LocSys && !Step.zoneSlug.IsEmpty())
+                ? LocSys->GetZoneDisplayName(Step.zoneSlug).ToString()
+                : Step.zoneSlug;
+            return FString::Printf(TEXT("Go to: %s"), *Zone);
+        }
+    }
+
+    // Fallback: use the old flat fields
     if (Data.stepType == TEXT("kill") || Data.stepType == TEXT("collect"))
     {
         return FString::Printf(TEXT("%d/%d"), Data.progressCurrent, Data.progressRequired);

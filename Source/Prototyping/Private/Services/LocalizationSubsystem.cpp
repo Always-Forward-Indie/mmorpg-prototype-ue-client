@@ -429,3 +429,34 @@ FText ULocalizationSubsystem::GetItemBrokenText(const FString& ItemSlug) const
     return FText::FromString(FString::Printf(TEXT("Your %s has broken!"), *ItemName.ToString()));
 }
 
+
+
+// -- NPC Ambient Speech -----------------------------------------------------
+
+UDataTable* ULocalizationSubsystem::GetAmbientSpeechTable() const
+{
+    if (!CachedAmbientSpeechTable && LocalizationData)
+        CachedAmbientSpeechTable = LocalizationData->AmbientSpeechLines.LoadSynchronous();
+    return CachedAmbientSpeechTable;
+}
+
+FText ULocalizationSubsystem::GetNPCSpeechText(const FString& LineKey) const
+{
+    if (LineKey.IsEmpty()) return FText::GetEmpty();
+    UDataTable* Table = GetAmbientSpeechTable();
+    if (!Table) return FallbackText(LineKey);
+    const FAmbientSpeechLineDefinition* Row = Table->FindRow<FAmbientSpeechLineDefinition>(
+        FName(*LineKey), TEXT("GetNPCSpeechText"), false);
+    return (Row && !Row->speechText.IsEmpty()) ? Row->speechText : FallbackText(LineKey);
+}
+
+bool ULocalizationSubsystem::GetNPCSpeechLineDefinition(const FString& LineKey, FAmbientSpeechLineDefinition& OutDefinition) const
+{
+    if (LineKey.IsEmpty()) return false;
+    UDataTable* Table = GetAmbientSpeechTable();
+    if (!Table) return false;
+    const FAmbientSpeechLineDefinition* Row = Table->FindRow<FAmbientSpeechLineDefinition>(
+        FName(*LineKey), TEXT("GetNPCSpeechLineDefinition"), false);
+    if (Row) { OutDefinition = *Row; return true; }
+    return false;
+}

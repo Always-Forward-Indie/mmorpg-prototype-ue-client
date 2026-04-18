@@ -85,6 +85,13 @@ struct FDroppedItemStruct
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dropped Item")
 	bool canBePickedUp = true;
+
+	// Loot reservation: non-zero means only reservedForCharacterId may pick this up until reservation expires
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dropped Item")
+	int32 reservedForCharacterId = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dropped Item")
+	int64 reservationSecondsLeft = 0;
 };
 
 // Response structure for item drop events

@@ -459,6 +459,14 @@ public:
 	UPROPERTY()
 	class UAmbientSpeechNetworkHandler* AmbientSpeechNetworkHandler;
 
+	// World Interactive Objects manager
+	UPROPERTY()
+	class UWorldObjectManager* WorldObjectManager;
+
+	// World Interactive Objects network handler
+	UPROPERTY()
+	class UWIONetworkHandler* WIONetworkHandler;
+
 	// DevMode configuration (editable in Blueprint defaults)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DevMode")
 	FDevModeConfig DevModeConfig;
@@ -926,6 +934,10 @@ public:
 		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
 		class UChatManager* GetChatManager() const;
 
+		// World Object manager
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
+		class UWorldObjectManager* GetWorldObjectManager() const { return WorldObjectManager; }
+
 	// Localization data asset (assign in Blueprint defaults ? all locale DataTables)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization")
 	class ULocalizationDataAsset* LocalizationDataAsset;
@@ -936,6 +948,16 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game Instance Data")
 	class UDataTable* NPCDefinitionTable;
+
+	/** World Interactive Object definitions (FWIODefinitionRow).
+	 *  Maps WIO slug to actor class and visual overrides. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game Instance Data|WIO")
+	class UDataTable* WIODefinitionTable;
+
+	/** Default actor class used when no DataTable row is found for a WIO slug.
+	 *  Set this to your base BP_WorldInteractiveObjectActor blueprint. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game Instance Data|WIO")
+	TSubclassOf<class AWorldInteractiveObjectActor> WIODefaultActorClass;
 
 		// Data table getters
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Data")

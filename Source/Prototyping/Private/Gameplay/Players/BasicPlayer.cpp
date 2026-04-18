@@ -60,6 +60,8 @@
 #include "Gameplay/Emotes/EmoteManager.h"
 #include "Gameplay/Emotes/EmoteNetworkHandler.h"
 #include "Gameplay/Emotes/EmoteComponent.h"
+#include "Gameplay/WorldObjects/WorldInteractiveObjectActor.h"
+#include "Gameplay/WorldObjects/WorldObjectManager.h"
 
 // Convert ESkillSchool to EDamageType for FloatingCombatTextManager
 static EDamageType SchoolToDamageType(ESkillSchool School)
@@ -739,6 +741,17 @@ void ABasicPlayer::OnSkillsPanelToggle()
 
 void ABasicPlayer::OnGameMenuToggle()
 {
+    // If currently channeling a WIO, Escape cancels the channel instead of opening the menu
+    if (MyGameInstance)
+    {
+        UWorldObjectManager* WOM = MyGameInstance->GetWorldObjectManager();
+        if (WOM && WOM->IsChanneling())
+        {
+            CancelWIOChannelIfActive();
+            return;
+        }
+    }
+
     if (UIManager)
     {
         UIManager->ToggleGameMenu();
@@ -1365,6 +1378,13 @@ Super::BeginPlay();
 						}
 					}
 
+				// Initialize WIO (World Interactive Objects) widgets
+				if (MyGameInstance && MyGameInstance->GetWorldObjectManager())
+				{
+					UIManager->InitializeWIOWidgets(MyGameInstance->GetWorldObjectManager());
+					UE_LOG(LogTemp, Log, TEXT("BasicPlayer: WIO widgets initialized"));
+				}
+
 			// Subscribe to weight status and initialize equipment visuals
 				if (UEquipmentManager* EqMgr = MyGameInstance ? MyGameInstance->GetEquipmentManager() : nullptr)
 				{
@@ -1518,6 +1538,24 @@ void ABasicPlayer::HandleUIManagerInitialized()
             this, &ABasicPlayer::DispatchCursorSelect);
         CursorInteractionComponent->OnDoubleClicked.AddDynamic(
             this, &ABasicPlayer::DispatchCursorInteract);
+    }
+
+    // Subscribe to WIO actor spawns so we can track proximity changes
+    if (MyGameInstance)
+    {
+        if (UWorldObjectManager* WOM = MyGameInstance->GetWorldObjectManager())
+        {
+            WOM->OnWorldObjectActorSpawned.AddDynamic(this, &ABasicPlayer::HandleWIOActorSpawned);
+
+            // Also bind existing actors (in case they spawned before UI was ready)
+            for (AWorldInteractiveObjectActor* Actor : WOM->GetAllObjectActors())
+            {
+                if (Actor)
+                {
+                    Actor->OnProximityChanged.AddDynamic(this, &ABasicPlayer::HandleWIOProximityChanged);
+                }
+            }
+        }
     }
 
     UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] HandleUIManagerInitialized: bUIInitDone=true, NotifyUIInitialized sent. Pos=(%.0f,%.0f,%.0f)"),
@@ -1914,6 +1952,9 @@ void ABasicPlayer::Move(const FInputActionValue& Value)
 {
     if (Controller == nullptr) return;
     if (bIsCasting) return;
+
+    // Cancel WIO channel on any movement input
+    CancelWIOChannelIfActive();
 
     // Manual WASD input interrupts the auto-attack cycle and any approach walk,
     // but keeps the target lock so the player can reposition during combat.
@@ -3000,14 +3041,13 @@ void ABasicPlayer::OnInteractInput()
 
     if (!TrackedNPC)
     {
-        UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: OnInteractInput - TrackedNPC is NULL (no interactable NPC in crosshair within 600 units)"));
+        // No NPC in range — try World Interactive Object instead
+        TryInteractWithWIO();
+        return;
     }
     if (!MyGameInstance)
     {
         UE_LOG(LogTemp, Error, TEXT("BasicPlayer: OnInteractInput - MyGameInstance is NULL"));
-    }
-    if (!TrackedNPC || !MyGameInstance)
-    {
         return;
     }
 
@@ -4554,5 +4594,92 @@ void ABasicPlayer::PlayEmoteForCharacter(const FString& EmoteSlug, const FString
     if (EmoteComponent)
     {
         EmoteComponent->PlayEmoteBySlug(EmoteSlug, AnimationName);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WIO (World Interactive Objects) interaction
+// ─────────────────────────────────────────────────────────────────────────────
+
+void ABasicPlayer::HandleWIOActorSpawned(AWorldInteractiveObjectActor* SpawnedActor)
+{
+    if (SpawnedActor)
+    {
+        SpawnedActor->OnProximityChanged.AddDynamic(this, &ABasicPlayer::HandleWIOProximityChanged);
+    }
+}
+
+void ABasicPlayer::HandleWIOProximityChanged(AWorldInteractiveObjectActor* WIOActor, bool bInRange)
+{
+    if (!WIOActor) return;
+
+    if (bInRange)
+    {
+        TrackedWIOActor = WIOActor;
+
+        // Show interaction prompt
+        if (UIManager)
+        {
+            UIManager->ShowWIOInteractionPrompt(WIOActor->GetObjectData().ObjectId);
+        }
+    }
+    else
+    {
+        // Only clear if it's the same actor we were tracking
+        if (TrackedWIOActor == WIOActor)
+        {
+            TrackedWIOActor = nullptr;
+            if (UIManager)
+            {
+                UIManager->HideWIOInteractionPrompt();
+            }
+
+            // Cancel channel if we walk out of range while channeling
+            CancelWIOChannelIfActive();
+        }
+    }
+}
+
+void ABasicPlayer::TryInteractWithWIO()
+{
+    if (!TrackedWIOActor || !MyGameInstance)
+    {
+        return;
+    }
+
+    UWorldObjectManager* WOM = MyGameInstance->GetWorldObjectManager();
+    if (!WOM)
+    {
+        return;
+    }
+
+    const int32 ObjectId = TrackedWIOActor->GetObjectData().ObjectId;
+
+    // If already channeling on this object, cancel instead
+    if (WOM->IsChanneling() && WOM->GetActiveChannelObjectId() == ObjectId)
+    {
+        WOM->RequestCancelChannel(ObjectId);
+        if (UIManager)
+        {
+            UIManager->HideWIOChannelBar();
+        }
+        return;
+    }
+
+    WOM->RequestInteract(ObjectId);
+}
+
+void ABasicPlayer::CancelWIOChannelIfActive()
+{
+    if (!MyGameInstance) return;
+
+    UWorldObjectManager* WOM = MyGameInstance->GetWorldObjectManager();
+    if (WOM && WOM->IsChanneling())
+    {
+        WOM->CancelActiveChannel();
+        if (UIManager)
+        {
+            UIManager->HideWIOChannelBar();
+        }
     }
 }

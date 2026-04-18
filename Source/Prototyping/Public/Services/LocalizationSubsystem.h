@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Data/DataStructs.h"
+#include "Data/WIODataStructs.h"
 #include "LocalizationSubsystem.generated.h"
 
 class ULocalizationDataAsset;
@@ -191,6 +192,24 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|AmbientSpeech")
     bool GetNPCSpeechLineDefinition(const FString& LineKey, FAmbientSpeechLineDefinition& OutDefinition) const;
 
+    // -- World Interactive Objects -------------------------------------------
+
+    /** Localised WIO name. Key = nameKey from server (e.g. "wio.ancient_altar"). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|WorldObjects")
+    FText GetWIODisplayName(const FString& NameKey) const;
+
+    /** Localised WIO description. Key = nameKey. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|WorldObjects")
+    FText GetWIODescription(const FString& NameKey) const;
+
+    /** Localised WIO interaction prompt (e.g. "[F] Examine"). Key = nameKey. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|WorldObjects")
+    FText GetWIOInteractionPrompt(const FString& NameKey) const;
+
+    /** Full row. Returns false if not found. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|WorldObjects")
+    bool GetWIOLocaleDefinition(const FString& NameKey, FWIOLocaleDefinition& OutDefinition) const;
+
 private:
     UPROPERTY()
     ULocalizationDataAsset* LocalizationData = nullptr;
@@ -206,6 +225,7 @@ private:
     UPROPERTY() mutable UDataTable* CachedZoneLocaleTable         = nullptr;
     UPROPERTY() mutable UDataTable* CachedNotificationLocaleTable = nullptr;
     UPROPERTY() mutable UDataTable* CachedAmbientSpeechTable      = nullptr;
+    UPROPERTY() mutable UDataTable* CachedWIOLocaleTable          = nullptr;
 
     UDataTable* GetQuestTable()              const;
     UDataTable* GetQuestStepTable()          const;
@@ -218,6 +238,7 @@ private:
     UDataTable* GetZoneLocaleTable()         const;
     UDataTable* GetNotificationLocaleTable() const;
     UDataTable* GetAmbientSpeechTable()      const;
+    UDataTable* GetWIOLocaleTable()          const;
 
     static FText FallbackText(const FString& Key);
 };

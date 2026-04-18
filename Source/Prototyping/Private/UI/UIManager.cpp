@@ -66,6 +66,11 @@
 #include "Gameplay/UI/MobTargetFrameWidget.h"
 #include "Gameplay/UI/NameplateManager.h"
 #include "Gameplay/UI/NameplateCanvasWidget.h"
+#include "UI/WIOInteractionPromptWidget.h"
+#include "UI/WIOChannelBarWidget.h"
+#include "Gameplay/WorldObjects/WorldObjectManager.h"
+#include "Gameplay/WorldObjects/WorldInteractiveObjectActor.h"
+#include "Services/LocalizationSubsystem.h"
 
 UUIManager::UUIManager()
 {
@@ -2078,4 +2083,150 @@ void UUIManager::EnsureFlashWidget()
 		// ZOrder 200 keeps it above HUD but below modal popups (death screen etc.)
 		CombatScreenFlashWidget->AddToViewport(200);
 	}
+}
+
+// ============================================================================
+// WIO (World Interactive Objects) Widget Management
+// ============================================================================
+
+void UUIManager::InitializeWIOWidgets(UWorldObjectManager* InWorldObjectManager)
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeWIOWidgets - Starting initialization"));
+
+	if (!InWorldObjectManager)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::InitializeWIOWidgets - WorldObjectManager is null"));
+		return;
+	}
+
+	// Create interaction prompt widget
+	if (WIOInteractionPromptWidgetClass && !WIOInteractionPromptWidget)
+	{
+		WIOInteractionPromptWidget = CreateWidget<UWIOInteractionPromptWidget>(GetWorld(), WIOInteractionPromptWidgetClass);
+		if (WIOInteractionPromptWidget)
+		{
+			WIOInteractionPromptWidget->AddToViewport(60);
+			WIOInteractionPromptWidget->SetVisibility(ESlateVisibility::Collapsed);
+			UE_LOG(LogTemp, Log, TEXT("UIManager: WIOInteractionPromptWidget created"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create WIOInteractionPromptWidget"));
+		}
+	}
+	else if (!WIOInteractionPromptWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: WIOInteractionPromptWidgetClass is not set in Blueprint"));
+	}
+
+	// Create channel bar widget
+	if (WIOChannelBarWidgetClass && !WIOChannelBarWidget)
+	{
+		WIOChannelBarWidget = CreateWidget<UWIOChannelBarWidget>(GetWorld(), WIOChannelBarWidgetClass);
+		if (WIOChannelBarWidget)
+		{
+			WIOChannelBarWidget->AddToViewport(65);
+			WIOChannelBarWidget->SetVisibility(ESlateVisibility::Collapsed);
+			UE_LOG(LogTemp, Log, TEXT("UIManager: WIOChannelBarWidget created"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create WIOChannelBarWidget"));
+		}
+	}
+	else if (!WIOChannelBarWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIManager: WIOChannelBarWidgetClass is not set in Blueprint"));
+	}
+
+	// Bind to WorldObjectManager delegates for automatic UI updates
+	InWorldObjectManager->OnInteractResult.AddDynamic(this, &UUIManager::HandleWIOInteractResult);
+	InWorldObjectManager->OnChannelCancelled.AddDynamic(this, &UUIManager::HandleWIOChannelCancelled);
+
+	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeWIOWidgets - Completed"));
+}
+
+void UUIManager::ShowWIOInteractionPrompt(int32 ObjectId)
+{
+	if (!WIOInteractionPromptWidget) return;
+
+	UMyGameInstance* GI = Cast<UMyGameInstance>(GetWorld()->GetGameInstance());
+	if (!GI) return;
+
+	UWorldObjectManager* WOM = GI->GetWorldObjectManager();
+	if (!WOM) return;
+
+	AWorldInteractiveObjectActor* Actor = WOM->GetObjectActorById(ObjectId);
+	if (!Actor) return;
+
+	WIOInteractionPromptWidget->ShowForObject(Actor);
+	WIOInteractionPromptWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+}
+
+void UUIManager::HideWIOInteractionPrompt()
+{
+	if (!WIOInteractionPromptWidget) return;
+
+	WIOInteractionPromptWidget->HidePrompt();
+	WIOInteractionPromptWidget->SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UUIManager::ShowWIOChannelBar(int32 ObjectId, float Duration)
+{
+	if (!WIOChannelBarWidget) return;
+
+	UMyGameInstance* GI = Cast<UMyGameInstance>(GetWorld()->GetGameInstance());
+	if (!GI || !GI->GetWorldObjectManager()) return;
+
+	// Get object data for display name
+	FText ObjectName = FText::FromString(TEXT("Channeling..."));
+	if (UWorldObjectManager* WOM = GI->GetWorldObjectManager())
+	{
+		// Use localization for the display name if available
+		if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+		{
+			const TMap<int32, FWorldObjectData>& Registry = WOM->GetObjectDataRegistry();
+			if (const FWorldObjectData* ObjData = Registry.Find(ObjectId))
+			{
+				FText LocName = Loc->GetWIODisplayName(ObjData->NameKey);
+				if (!LocName.IsEmpty())
+				{
+					ObjectName = LocName;
+				}
+			}
+		}
+	}
+
+	WIOChannelBarWidget->StartChannel(ObjectName, Duration);
+	WIOChannelBarWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+}
+
+void UUIManager::HideWIOChannelBar()
+{
+	if (!WIOChannelBarWidget) return;
+
+	WIOChannelBarWidget->StopChannel();
+	WIOChannelBarWidget->SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UUIManager::HandleWIOInteractResult(const FWIOInteractResult& Result)
+{
+	if (Result.bSuccess)
+	{
+		// If this is a channeled interaction starting, show the channel bar
+		if (Result.InteractionType == TEXT("channeled") && Result.ChannelTimeSec > 0)
+		{
+			ShowWIOChannelBar(Result.ObjectId, static_cast<float>(Result.ChannelTimeSec));
+			return;
+		}
+
+		// Channeled complete or non-channeled success — hide UI
+		HideWIOInteractionPrompt();
+		HideWIOChannelBar();
+	}
+}
+
+void UUIManager::HandleWIOChannelCancelled(int32 ObjectId)
+{
+	HideWIOChannelBar();
 }

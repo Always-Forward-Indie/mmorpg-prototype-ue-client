@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Data/DataStructs.h"
+#include "Data/WIODataStructs.h"
 #include "InputActionValue.h"
 #include "UI/InventoryWidget.h"
 #include "Camera/CameraShakeBase.h"
@@ -55,6 +56,9 @@ class UReputationWidget;
 class UTitleManager;
 class UTitleNetworkHandler;
 class UReputationManager;
+class UWIOInteractionPromptWidget;
+class UWIOChannelBarWidget;
+class UWorldObjectManager;
 
 // Delegate for UI Manager initialization completion
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnUIManagerInitialized);
@@ -136,6 +140,26 @@ public:
 	// Initialize notification system
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void InitializeNotificationSystem(class UBestiaryNetworkHandler* InBestiaryHandler);
+
+	// Initialize WIO (World Interactive Objects) widgets
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void InitializeWIOWidgets(UWorldObjectManager* InWorldObjectManager);
+
+	// Show WIO interaction prompt for a specific world object
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ShowWIOInteractionPrompt(int32 ObjectId);
+
+	// Hide WIO interaction prompt
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void HideWIOInteractionPrompt();
+
+	// Show WIO channel bar
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ShowWIOChannelBar(int32 ObjectId, float Duration);
+
+	// Hide WIO channel bar
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void HideWIOChannelBar();
 
 	// Input action handlers
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
@@ -236,6 +260,12 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UNotificationToastWidget* GetNotificationToastWidget() const { return NotificationToastWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UWIOInteractionPromptWidget* GetWIOInteractionPromptWidget() const { return WIOInteractionPromptWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UWIOChannelBarWidget* GetWIOChannelBarWidget() const { return WIOChannelBarWidget; }
 
 	// Check if UIManager is fully initialized
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
@@ -465,6 +495,13 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Notification Widgets")
 	TSubclassOf<UNotificationAtmosphereWidget> NotificationAtmosphereWidgetClass;
 
+	// WIO widget classes
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UWIOInteractionPromptWidget> WIOInteractionPromptWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UWIOChannelBarWidget> WIOChannelBarWidgetClass;
+
 	// Configuration properties
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Configuration")
 	int32 InventoryRows = 6;
@@ -564,6 +601,13 @@ protected:
 	UPROPERTY()
 	UWorldNotificationManager* WorldNotificationManager = nullptr;
 
+	// WIO widget instances
+	UPROPERTY()
+	UWIOInteractionPromptWidget* WIOInteractionPromptWidget = nullptr;
+
+	UPROPERTY()
+	UWIOChannelBarWidget* WIOChannelBarWidget = nullptr;
+
 	// Manager references
 	UPROPERTY()
 	UInventoryManager* InventoryManager;
@@ -654,6 +698,13 @@ public:
 	/** Hide the mob target frame. */
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void HideMobTargetFrame();
+
+	// WIO delegate handlers (bound by InitializeWIOWidgets)
+	UFUNCTION()
+	void HandleWIOInteractResult(const FWIOInteractResult& Result);
+
+	UFUNCTION()
+	void HandleWIOChannelCancelled(int32 ObjectId);
 
 private:
 	/** Ensures the flash widget is created and in the viewport. */

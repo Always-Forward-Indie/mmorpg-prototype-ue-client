@@ -414,6 +414,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Harvest")
 	void SetHarvested(bool bHarvested);
 
+	// Set / clear the character ID of whoever is currently harvesting this corpse (0 = nobody)
+	UFUNCTION(BlueprintCallable, Category = "Harvest")
+	void SetCurrentHarvesterId(int32 HarvesterId);
+
 	// ── Harvestable VFX ───────────────────────────────────────────────────────
 
 	/**

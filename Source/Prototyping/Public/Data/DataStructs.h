@@ -256,6 +256,10 @@ struct FMOBStruct {
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
 	bool bHasBeenHarvested = false;
 
+	// Character ID of the player currently harvesting this corpse (0 = nobody)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+	int32 currentHarvesterId = 0;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
 	int32 mobCombatState = 0;
 

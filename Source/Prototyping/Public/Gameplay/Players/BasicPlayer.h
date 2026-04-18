@@ -8,6 +8,7 @@
 #include "EnhancedInputComponent.h"
 #include "InputActionValue.h"
 #include "EnhancedInputSubsystems.h"
+#include "Gameplay/WorldObjects/WorldInteractiveObjectActor.h"
 #include "InputMappingContext.h"
 #include "Components/AudioComponent.h"
 #include <Kismet/GameplayStatics.h>
@@ -101,6 +102,13 @@ private:
 	// NPC interaction tracking
 	UPROPERTY()
 	ABasicNPC* TrackedNPC = nullptr;
+
+	// WIO interaction tracking
+	UPROPERTY()
+	class AWorldInteractiveObjectActor* TrackedWIOActor = nullptr;
+
+	/** Delegate handle for the currently tracked WIO actor proximity. */
+	FDelegateHandle WIOProximityDelegateHandle;
 
 	// Animation delegate handles
 	FDelegateHandle HitPointDelegateHandle;
@@ -815,6 +823,14 @@ public:
 	void OnGameMenuToggle();
 	UFUNCTION()
 	void OnInteractInput();
+
+	// WIO (World Interactive Objects)
+	UFUNCTION()
+	void HandleWIOActorSpawned(class AWorldInteractiveObjectActor* SpawnedActor);
+	UFUNCTION()
+	void HandleWIOProximityChanged(class AWorldInteractiveObjectActor* WIOActor, bool bInRange);
+	void TryInteractWithWIO();
+	void CancelWIOChannelIfActive();
 
 	void CheckForNPC();
 

@@ -120,7 +120,7 @@ void UExperienceNetworkHandler::HandleChunkServerData(const FString& ReceivedDat
     if (EventType.IsEmpty())
         return;
 
-    // Handle characterExperience — response to getCharacterExperience
+    // Handle characterExperience ï¿½ response to getCharacterExperience
     // Body fields: characterId, currentLevel, currentExperience, expForCurrentLevel,
     //              expForNextLevel, expInCurrentLevel, expNeededForNextLevel, progressToNextLevel
     if (EventType == TEXT("characterExperience") && Status == TEXT("success"))
@@ -156,27 +156,20 @@ void UExperienceNetworkHandler::HandleChunkServerData(const FString& ReceivedDat
         return;
 
     // Process the specific experience event
-    if (EventType == TEXT("experience_update"))
+    if (EventType == TEXT("experienceUpdate"))
     {
         ProcessExperienceUpdateEvent(ReceivedData);
     }
-    else if (EventType == TEXT("level_up"))
+    else if (EventType == TEXT("levelUp"))
     {
         ProcessLevelUpEvent(ReceivedData);
-    }
-    else if (EventType == TEXT("progression_update"))
-    {
-        ProcessProgressionUpdateEvent(ReceivedData);
     }
 }
 
 bool UExperienceNetworkHandler::IsExperienceEvent(const FString& EventType) const
 {
-    // Define experience-related events
-    return EventType == TEXT("experience_update") ||
-           EventType == TEXT("level_up") ||
-           EventType == TEXT("progression_update") ||
-           EventType == TEXT("experience_gain");
+    return EventType == TEXT("experienceUpdate") ||
+           EventType == TEXT("levelUp");
 }
 
 void UExperienceNetworkHandler::ProcessExperienceUpdateEvent(const FString& JsonData)
@@ -207,9 +200,36 @@ void UExperienceNetworkHandler::ProcessExperienceUpdateEvent(const FString& Json
 
 void UExperienceNetworkHandler::ProcessLevelUpEvent(const FString& JsonData)
 {
-    // Level up events are typically handled as part of experience updates
-    // But this method allows for separate level up notifications if needed
-    ProcessExperienceUpdateEvent(JsonData);
+    if (!ExperienceManager || !IsValid(ExperienceManager)) return;
+
+    TSharedPtr<FJsonObject> Root;
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonData);
+    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
+
+    TSharedPtr<FJsonObject> Body;
+    if (!Root->HasField(TEXT("body"))) return;
+    Body = Root->GetObjectField(TEXT("body"));
+    if (!Body.IsValid()) return;
+
+    // levelUp body: characterId, oldLevel, newLevel, newExperience, expForNextLevel, newAbilities[]
+    FExperienceUpdateStruct Update;
+    Body->TryGetNumberField(TEXT("characterId"),   Update.characterId);
+    Body->TryGetNumberField(TEXT("oldLevel"),       Update.oldLevel);
+    Body->TryGetNumberField(TEXT("newLevel"),       Update.newLevel);
+    Body->TryGetNumberField(TEXT("newExperience"),  Update.newExperience);
+    Body->TryGetNumberField(TEXT("expForNextLevel"), Update.expForNextLevel);
+    Update.experienceChange = 0;
+    Update.oldExperience    = Update.newExperience;
+    Update.levelUp          = true;
+    Update.reason           = TEXT("level_up");
+
+    if (Update.characterId <= 0) return;
+
+    LogNetworkEvent(TEXT("Level Up"),
+        FString::Printf(TEXT("Character %d levelled up %d -> %d, XP=%d"),
+            Update.characterId, Update.oldLevel, Update.newLevel, Update.newExperience));
+
+    ExperienceManager->ProcessExperienceUpdate(Update);
 }
 
 void UExperienceNetworkHandler::ProcessProgressionUpdateEvent(const FString& JsonData)

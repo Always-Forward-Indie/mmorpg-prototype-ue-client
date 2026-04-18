@@ -267,6 +267,9 @@ void UHarvestManager::CancelHarvest()
 
 	UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Harvest cancelled"));
 
+	// Notify the server so it can broadcast harvestCancelBroadcast to other clients
+	SendHarvestCancelRequest(CurrentCorpseUID);
+
 	bIsHarvesting = false;
 	CurrentCorpseUID = 0;
 	HarvestStartTime = 0.0f;
@@ -274,6 +277,26 @@ void UHarvestManager::CancelHarvest()
 	ServerStartTime = 0;
 
 	HideHarvestProgress();
+}
+
+void UHarvestManager::SendHarvestCancelRequest(int32 CorpseUID)
+{
+	if (!networkManager || !gameInstance) return;
+
+	TMap<FString, TSharedPtr<FJsonValue>> HeaderData;
+	TMap<FString, TSharedPtr<FJsonValue>> BodyData;
+
+	HeaderData.Add(TEXT("clientId"), MakeShareable(new FJsonValueNumber(gameInstance->GetCurrentClientID())));
+	HeaderData.Add(TEXT("hash"),     MakeShareable(new FJsonValueString(gameInstance->GetCurrentClientHash())));
+
+	BodyData.Add(TEXT("corpseUID"), MakeShareable(new FJsonValueNumber(CorpseUID)));
+
+	FString JsonString = JSONParser::SerializeJsonWithTimeSync(
+		TEXT("harvestCancel"), HeaderData, BodyData,
+		gameInstance->GetTimeSyncService(), EServerType::ChunkServer);
+
+	networkManager->SendDataToChunkServer(JsonString);
+	UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Sent harvestCancel request for corpse: %d"), CorpseUID);
 }
 
 float UHarvestManager::GetHarvestProgress() const
@@ -655,6 +678,176 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 		}
 
 		OnLootInspectError.Broadcast(ErrorData);
+	}
+	// harvestCancelled — unicast confirmation to the player who sent harvestCancel
+	else if (MessageData.eventType == "harvestCancelled")
+	{
+		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Received harvestCancelled (server confirmed our cancel)"));
+		// The cancel was already applied locally in CancelHarvest(); nothing more to do here.
+	}
+	// harvestStartBroadcast — another player started harvesting on a corpse
+	else if (MessageData.eventType == "harvestStartBroadcast")
+	{
+		TSharedPtr<FJsonObject> Root;
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
+		if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
+		{
+			const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+			if (Root->TryGetObjectField(TEXT("body"), BodyPtr))
+			{
+				int32 HarvesterCharId = 0;
+				int32 BroadcastCorpseUID = 0;
+				(*BodyPtr)->TryGetNumberField(TEXT("characterId"), HarvesterCharId);
+				(*BodyPtr)->TryGetNumberField(TEXT("corpseUID"),   BroadcastCorpseUID);
+
+				UE_LOG(LogTemp, Warning, TEXT("HarvestManager: harvestStartBroadcast charId=%d corpseUID=%d"),
+					HarvesterCharId, BroadcastCorpseUID);
+
+				// Update the corresponding BasidMOB actor's harvesting state
+				if (worldContext && BroadcastCorpseUID > 0)
+				{
+					TArray<AActor*> FoundMobs;
+					UGameplayStatics::GetAllActorsOfClass(worldContext, ABasicMOB::StaticClass(), FoundMobs);
+					for (AActor* Actor : FoundMobs)
+					{
+						ABasicMOB* Mob = Cast<ABasicMOB>(Actor);
+						if (Mob && FCString::Atoi(*Mob->GetMOBUId()) == BroadcastCorpseUID)
+						{
+							Mob->SetCurrentHarvesterId(HarvesterCharId);
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
+	// harvestCompleteBroadcast — another player finished harvesting a corpse
+	else if (MessageData.eventType == "harvestCompleteBroadcast")
+	{
+		TSharedPtr<FJsonObject> Root;
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
+		if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
+		{
+			const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+			if (Root->TryGetObjectField(TEXT("body"), BodyPtr))
+			{
+				int32 BroadcastCorpseUID = 0;
+				(*BodyPtr)->TryGetNumberField(TEXT("corpseUID"), BroadcastCorpseUID);
+
+				UE_LOG(LogTemp, Warning, TEXT("HarvestManager: harvestCompleteBroadcast corpseUID=%d"), BroadcastCorpseUID);
+
+				if (worldContext && BroadcastCorpseUID > 0)
+				{
+					TArray<AActor*> FoundMobs;
+					UGameplayStatics::GetAllActorsOfClass(worldContext, ABasicMOB::StaticClass(), FoundMobs);
+					for (AActor* Actor : FoundMobs)
+					{
+						ABasicMOB* Mob = Cast<ABasicMOB>(Actor);
+						if (Mob && FCString::Atoi(*Mob->GetMOBUId()) == BroadcastCorpseUID)
+						{
+							Mob->SetCurrentHarvesterId(0);
+							Mob->SetHarvested(true);
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
+	// harvestCancelBroadcast — any player's harvest was cancelled (includes yourself via server-side interrupt)
+	else if (MessageData.eventType == "harvestCancelBroadcast")
+	{
+		TSharedPtr<FJsonObject> Root;
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
+		if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
+		{
+			const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+			if (Root->TryGetObjectField(TEXT("body"), BodyPtr))
+			{
+				int32 CancelledCharId  = 0;
+				int32 BroadcastCorpseUID = 0;
+				(*BodyPtr)->TryGetNumberField(TEXT("characterId"), CancelledCharId);
+				(*BodyPtr)->TryGetNumberField(TEXT("corpseUID"),   BroadcastCorpseUID);
+
+				UE_LOG(LogTemp, Warning, TEXT("HarvestManager: harvestCancelBroadcast charId=%d corpseUID=%d"),
+					CancelledCharId, BroadcastCorpseUID);
+
+				// Clear harvester state on the MOB actor
+				if (worldContext && BroadcastCorpseUID > 0)
+				{
+					TArray<AActor*> FoundMobs;
+					UGameplayStatics::GetAllActorsOfClass(worldContext, ABasicMOB::StaticClass(), FoundMobs);
+					for (AActor* Actor : FoundMobs)
+					{
+						ABasicMOB* Mob = Cast<ABasicMOB>(Actor);
+						if (Mob && FCString::Atoi(*Mob->GetMOBUId()) == BroadcastCorpseUID)
+						{
+							Mob->SetCurrentHarvesterId(0);
+							break;
+						}
+					}
+				}
+
+				// If the server interrupted our own harvest (e.g. player moved too far), cancel locally
+				if (bIsHarvesting && BroadcastCorpseUID == CurrentCorpseUID)
+				{
+					const int32 LocalCharId = gameInstance ? gameInstance->GetCurrentCharacterID() : 0;
+					if (LocalCharId > 0 && CancelledCharId == LocalCharId)
+					{
+						UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Server cancelled our harvest via broadcast, clearing local state"));
+						bIsHarvesting   = false;
+						CurrentCorpseUID = 0;
+						HarvestStartTime = 0.0f;
+						HarvestDuration  = 0.0f;
+						ServerStartTime  = 0;
+						HideHarvestProgress();
+					}
+				}
+			}
+		}
+	}
+	// corpseRemoved — server despawned the corpse; hide / destroy the corresponding MOB actor
+	else if (MessageData.eventType == "corpseRemoved")
+	{
+		TSharedPtr<FJsonObject> Root;
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
+		if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
+		{
+			const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+			if (Root->TryGetObjectField(TEXT("body"), BodyPtr))
+			{
+				int32 RemovedCorpseUID = 0;
+				(*BodyPtr)->TryGetNumberField(TEXT("corpseUID"), RemovedCorpseUID);
+
+				UE_LOG(LogTemp, Warning, TEXT("HarvestManager: corpseRemoved corpseUID=%d"), RemovedCorpseUID);
+
+				if (worldContext && RemovedCorpseUID > 0)
+				{
+					TArray<AActor*> FoundMobs;
+					UGameplayStatics::GetAllActorsOfClass(worldContext, ABasicMOB::StaticClass(), FoundMobs);
+					for (AActor* Actor : FoundMobs)
+					{
+						ABasicMOB* Mob = Cast<ABasicMOB>(Actor);
+						if (Mob && FCString::Atoi(*Mob->GetMOBUId()) == RemovedCorpseUID)
+						{
+							Mob->Destroy();
+							break;
+						}
+					}
+				}
+
+				// Cancel our harvest if it was on this corpse
+				if (bIsHarvesting && CurrentCorpseUID == RemovedCorpseUID)
+				{
+					bIsHarvesting   = false;
+					CurrentCorpseUID = 0;
+					HarvestStartTime = 0.0f;
+					HarvestDuration  = 0.0f;
+					ServerStartTime  = 0;
+					HideHarvestProgress();
+				}
+			}
+		}
 	}
 }
 

@@ -1754,6 +1754,12 @@ void ABasicMOB::SetHarvested(bool bHarvested)
 	}
 }
 
+void ABasicMOB::SetCurrentHarvesterId(int32 HarvesterId)
+{
+	MOBData.currentHarvesterId = HarvesterId;
+	UE_LOG(LogTemp, Warning, TEXT("MOB %s (ID:%d) currentHarvesterId=%d"), *MOBData.mobName, MOBData.mobID, HarvesterId);
+}
+
 void ABasicMOB::RefreshHarvestableVFX()
 {
 	const bool bShouldShow = MOBData.bIsDead && !MOBData.bHasBeenHarvested && !HarvestableVFX.IsNull();

@@ -95,4 +95,14 @@ public:
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|AmbientSpeech")
     TSoftObjectPtr<UDataTable> AmbientSpeechLines;
+
+    // -- World Interactive Objects --------------------------------------------
+
+    /**
+     * Maps WIO nameKey -> FWIOLocaleDefinition
+     * (localised name + description + interaction prompt).
+     * Row name = nameKey exactly as sent by the server (e.g. "wio.ancient_altar").
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|WorldObjects")
+    TSoftObjectPtr<UDataTable> WorldObjectLocale;
 };

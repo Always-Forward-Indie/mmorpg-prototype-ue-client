@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Data/DataStructs.h"
 #include "Data/ItemStruct.h"
+#include "Data/WIODataStructs.h"
 
 // Forward declaration
 class UTimeSyncService;
@@ -69,7 +70,7 @@ public:
 
     static TArray<FMOBStruct> DeserializeMobsList(const TSharedPtr<FJsonObject>& Body);
 
-    // Parse a mobMoveUpdate packet — returns an array of lightweight move entries
+    // Parse a mobMoveUpdate packet ï¿½ returns an array of lightweight move entries
     // paired with their mob UID. Body is the "body" JSON object.
     struct FMobMovePacketEntry
     {
@@ -147,4 +148,15 @@ public:
 
     // Active effects packet parser
     static TArray<FActiveEffectEntry> DeserializeActiveEffectsPacket(const FString& JsonString);
+
+    // World Interactive Objects parsers
+    static FWorldObjectData DeserializeWorldObject(const TSharedPtr<FJsonObject>& ObjectObj);
+    static TArray<FWorldObjectData> DeserializeWorldObjectsList(const TSharedPtr<FJsonObject>& Body);
+    static TArray<FWorldObjectData> DeserializeWorldObjectsList(const FString& JsonString);
+    static FWIOInteractResult DeserializeWIOInteractResult(const TSharedPtr<FJsonObject>& Body);
+    static FWIOInteractResult DeserializeWIOInteractResult(const FString& JsonString);
+    static FWIOStateUpdate DeserializeWIOStateUpdate(const TSharedPtr<FJsonObject>& Body);
+    static FWIOStateUpdate DeserializeWIOStateUpdate(const FString& JsonString);
+    static FWIOChannelCancelled DeserializeWIOChannelCancelled(const TSharedPtr<FJsonObject>& Body);
+    static FWIOChannelCancelled DeserializeWIOChannelCancelled(const FString& JsonString);
 };

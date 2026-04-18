@@ -157,6 +157,9 @@ protected:
 	// Send harvest start request
 	void SendHarvestStartRequest(int32 CorpseUID);
 
+	// Send harvest cancel request
+	void SendHarvestCancelRequest(int32 CorpseUID);
+
 	// Send loot pickup request
 	void SendLootPickupRequest(int32 CorpseUID, const TArray<FCorpseLootPickupRequestItem>& RequestedItems);
 

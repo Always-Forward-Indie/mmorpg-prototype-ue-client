@@ -25,6 +25,8 @@
 #include "Gameplay/Emotes/EmoteNetworkHandler.h"
 #include "Gameplay/NPCs/AmbientSpeechManager.h"
 #include "Gameplay/NPCs/AmbientSpeechNetworkHandler.h"
+#include "Gameplay/WorldObjects/WorldObjectManager.h"
+#include "Gameplay/WorldObjects/WIONetworkHandler.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Data/EntityAudioRepository.h"
@@ -182,6 +184,10 @@ void UMyGameInstance::Init()
 	// Initialize NPC Ambient Speech system
 	AmbientSpeechManager = NewObject<UAmbientSpeechManager>(this);
 	AmbientSpeechNetworkHandler = NewObject<UAmbientSpeechNetworkHandler>(this);
+
+	// Initialize World Interactive Objects system
+	WorldObjectManager = NewObject<UWorldObjectManager>(this);
+	WIONetworkHandler = NewObject<UWIONetworkHandler>(this);
 
 	// Initialize Bestiary system
 	BestiaryNetworkHandler = NewObject<UBestiaryNetworkHandler>(this);
@@ -645,6 +651,33 @@ void UMyGameInstance::InitNetworkingSetup()
 		AmbientSpeechNetworkHandler->Initialize(AmbientSpeechManager, GetNetworkManager());
 		AmbientSpeechNetworkHandler->SubscribeToNetworkEvents();
 		UE_LOG(LogTemp, Warning, TEXT("AmbientSpeechNetworkHandler initialized and subscribed"));
+	}
+
+	// Initialize World Interactive Objects system
+	if (WorldObjectManager)
+	{
+		WorldObjectManager->SetWorldContext(GetWorld());
+		WorldObjectManager->Initialize(GetNetworkManager(), this);
+
+		if (WIODefinitionTable)
+		{
+			WorldObjectManager->SetDefinitionTable(WIODefinitionTable);
+			UE_LOG(LogTemp, Warning, TEXT("WorldObjectManager: WIODefinitionTable assigned from GameInstance"));
+		}
+		if (WIODefaultActorClass)
+		{
+			WorldObjectManager->DefaultActorClass = WIODefaultActorClass;
+			UE_LOG(LogTemp, Warning, TEXT("WorldObjectManager: WIODefaultActorClass assigned from GameInstance"));
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("WorldObjectManager initialized"));
+	}
+
+	if (WIONetworkHandler && WorldObjectManager)
+	{
+		WIONetworkHandler->Initialize(WorldObjectManager, GetNetworkManager());
+		WIONetworkHandler->SubscribeToNetworkEvents();
+		UE_LOG(LogTemp, Warning, TEXT("WIONetworkHandler initialized and subscribed"));
 	}
 
 	// Initialize Chat System
@@ -1617,6 +1650,7 @@ void UMyGameInstance::InvalidateManagerWorldContexts(const FString& /*MapName*/)
 	if (HarvestManager)      { HarvestManager->SetWorldContext(nullptr); }
 	if (CombatSystemManager) { CombatSystemManager->SetWorldContext(nullptr); }
 	if (NPCManager)          { NPCManager->SetWorldContext(nullptr); }
+	if (WorldObjectManager)  { WorldObjectManager->SetWorldContext(nullptr); WorldObjectManager->ClearWorldState(); }
 	if (TimeSyncService)     { TimeSyncService->SetWorldContext(nullptr); }
 	// Release audio components that belong to the dying world so CrossfadeToTrack
 	// re-creates them in the new world instead of silently replaying on a dead device.
@@ -1666,6 +1700,7 @@ void UMyGameInstance::RefreshManagerWorldContexts()
 	if (HarvestManager) { HarvestManager->SetWorldContext(World); }
 	if (CombatSystemManager) { CombatSystemManager->SetWorldContext(World); }
 	if (NPCManager) { NPCManager->SetWorldContext(World); }
+	if (WorldObjectManager) { WorldObjectManager->SetWorldContext(World); }
 	if (TimeSyncService) { TimeSyncService->SetWorldContext(World); }
 
 	// Re-push the SoundMix and re-apply all cached volume overrides.

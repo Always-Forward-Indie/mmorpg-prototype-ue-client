@@ -85,27 +85,9 @@ void USpawnZoneManager::ProcessGameServerData(const FString& ReceivedData)
 	//log the event type
 	UE_LOG(LogTemp, Warning, TEXT("SpawnZoneManager: Received event type: %s"), *MessageData.eventType);
 
-	if (MessageData.eventType == "spawnMobsInZone" && MessageData.status == "success")
-	{
-		// Parse JSON string
-		TSharedPtr<FJsonObject> JsonObject;
-		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-		if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
-		{
-			const TSharedPtr<FJsonObject>* BodyObject = nullptr;
-			if (JsonObject->TryGetObjectField(TEXT("body"), BodyObject) && BodyObject)
-			{
-				const TSharedPtr<FJsonObject>* SpawnZoneObject = nullptr;
-				if ((*BodyObject)->TryGetObjectField(TEXT("spawnZone"), SpawnZoneObject) && SpawnZoneObject)
-				{
-					FSpawnZoneStruct SpawnZoneData = JSONParser::DeserializeSpawnZoneData(*SpawnZoneObject);
-
-					// Create the spawn zone
-					CreateSpawnZone(SpawnZoneData);
-				}
-			}
-		}
-	}
+	// NOTE: spawnMobsInZone no longer contains spawn zone geometry data (removed server-side v0.2.16).
+	// Spawn zone creation from server packets is no longer supported.
+	// Mob spawning from this event is handled by MOBManager.
 }
 
 void USpawnZoneManager::SendGetSpawnZonesData(const FClientDataStruct& ClientData)

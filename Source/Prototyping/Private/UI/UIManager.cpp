@@ -36,6 +36,7 @@
 #include "UI/GameMenuBarWidget.h"
 #include "UI/GameMenuWidget.h"
 #include "UI/AudioSettingsWidget.h"
+#include "UI/W_SettingsWidget.h"
 #include "UI/NotificationToastWidget.h"
 #include "UI/NotificationZoneBannerWidget.h"
 #include "UI/NotificationScreenCenterWidget.h"
@@ -95,6 +96,7 @@ UUIManager::UUIManager()
 	GameMenuBarWidget = nullptr;
 	GameMenuWidget = nullptr;
 	AudioSettingsWidget = nullptr;
+	GameSettingsWidget  = nullptr;
 	TitlesWidget = nullptr;
 	ReputationWidget = nullptr;
 	InventoryManager = nullptr;
@@ -622,8 +624,8 @@ void UUIManager::CreateGameMenuWidget()
 	GameMenuWidget->AddToViewport(200);
 
 	// Wire game menu delegates to UIManager handlers
-	GameMenuWidget->OnResumeClicked.AddDynamic(this,        &UUIManager::HandleGameMenuResumeClicked);
-	GameMenuWidget->OnAudioSettingsClicked.AddDynamic(this, &UUIManager::HandleAudioSettingsClicked);
+	GameMenuWidget->OnResumeClicked.AddDynamic(this,    &UUIManager::HandleGameMenuResumeClicked);
+	GameMenuWidget->OnSettingsClicked.AddDynamic(this,  &UUIManager::HandleSettingsClicked);
 	GameMenuWidget->OnExitToLoginClicked.AddDynamic(this,   &UUIManager::HandleExitToLoginClicked);
 	GameMenuWidget->OnExitToDesktopClicked.AddDynamic(this, &UUIManager::HandleExitToDesktopClicked);
 
@@ -1809,29 +1811,29 @@ void UUIManager::HandleGameMenuResumeClicked()
 	UpdateCursorAndInputMode();
 }
 
-void UUIManager::HandleAudioSettingsClicked()
+void UUIManager::HandleSettingsClicked()
 {
-	if (!AudioSettingsWidgetClass)
+	if (!GameSettingsWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::HandleAudioSettingsClicked - AudioSettingsWidgetClass not set in Blueprint"));
+		UE_LOG(LogTemp, Warning, TEXT("UIManager::HandleSettingsClicked - GameSettingsWidgetClass not set in Blueprint"));
 		return;
 	}
 
-	if (!AudioSettingsWidget)
+	// Create once, reuse on subsequent calls.
+	if (!IsValid(GameSettingsWidget))
 	{
-		AudioSettingsWidget = CreateWidget<UAudioSettingsWidget>(GetWorld(), AudioSettingsWidgetClass);
-		if (AudioSettingsWidget)
+		GameSettingsWidget = CreateWidget<UW_SettingsWidget>(GetWorld(), GameSettingsWidgetClass);
+		if (GameSettingsWidget)
 		{
-			AudioSettingsWidget->AddToViewport(210);
-			AudioSettingsWidget->OnClosed.AddDynamic(this, &UUIManager::HandleAudioSettingsClosed);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: AudioSettingsWidget created"));
+			// Z-order 210 — same level as the old audio settings widget, above the game menu (200).
+			GameSettingsWidget->AddToViewport(210);
+			UE_LOG(LogTemp, Log, TEXT("UIManager: GameSettingsWidget created"));
 		}
 	}
 
-	if (AudioSettingsWidget)
+	if (GameSettingsWidget)
 	{
-		AudioSettingsWidget->InitializeSettings();
-		AudioSettingsWidget->SetVisibility(ESlateVisibility::Visible);
+		GameSettingsWidget->OpenSettings();
 	}
 }
 

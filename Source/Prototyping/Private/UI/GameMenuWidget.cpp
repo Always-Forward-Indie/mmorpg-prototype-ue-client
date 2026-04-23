@@ -16,8 +16,8 @@ void UGameMenuWidget::NativeConstruct()
 	if (Btn_Resume)
 		Btn_Resume->OnClicked.AddDynamic(this, &UGameMenuWidget::HandleResumeClicked);
 
-	if (Btn_AudioSettings)
-		Btn_AudioSettings->OnClicked.AddDynamic(this, &UGameMenuWidget::HandleAudioSettingsClicked);
+	if (Btn_Settings)
+		Btn_Settings->OnClicked.AddDynamic(this, &UGameMenuWidget::HandleSettingsClicked);
 
 	if (Btn_ExitToLogin)
 		Btn_ExitToLogin->OnClicked.AddDynamic(this, &UGameMenuWidget::HandleExitToLoginClicked);
@@ -54,9 +54,9 @@ void UGameMenuWidget::HandleResumeClicked()
 	OnResumeClicked.Broadcast();
 }
 
-void UGameMenuWidget::HandleAudioSettingsClicked()
+void UGameMenuWidget::HandleSettingsClicked()
 {
-	OnAudioSettingsClicked.Broadcast();
+	OnSettingsClicked.Broadcast();
 }
 
 void UGameMenuWidget::HandleExitToLoginClicked()

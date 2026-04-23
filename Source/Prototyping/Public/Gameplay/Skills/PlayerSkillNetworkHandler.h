@@ -12,7 +12,7 @@ class UMyGameInstance;
 
 /**
  * Handles network communication for player skills.
- * Inbound:  initializePlayerSkills, skillBarState, skillBarSlotUpdated
+ * Inbound:  initializePlayerSkills, setSkillCooldowns, skillBarState, skillBarSlotUpdated
  * Outbound: setSkillBarSlot
  */
 UCLASS(BlueprintType)
@@ -53,6 +53,7 @@ protected:
 
     // Skill-specific event handlers
     void HandleInitializePlayerSkills(const FString& JsonData);
+    void HandleSetSkillCooldowns(const FString& JsonData);
     void HandleSkillCooldownUpdate(const FString& JsonData);
     void HandleSkillLevelUpdate(const FString& JsonData);
 

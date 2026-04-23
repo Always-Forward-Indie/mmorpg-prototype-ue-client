@@ -267,6 +267,14 @@ protected:
 	int32 ActiveInteractionWindowCount = 0;
 	FTimerHandle FarewellTimer;
 
+	// ---- Face-player rotation during dialogue ----
+	bool bIsFacingPlayer = false;
+	FRotator OriginalRotation;
+	FRotator TargetFaceRotation;
+
+	// ---- Restore original rotation after dialogue ----
+	bool bIsRestoringRotation = false;
+
 private:
 	// Initialize UI with delay
 	void InitializeUIDelayed();
@@ -291,4 +299,13 @@ private:
 
 	// Ground snapping
 	void SnapToGround();
+
+	// The Z position determined by SnapToGround after NPC data arrives.
+	// Used by the periodic corrector to restore the NPC if something pushed it.
+	float SnappedZ = 0.0f;
+	bool bSnappedZValid = false;
+
+	// Periodic Z-correction: restores the NPC to SnappedZ if it drifted.
+	void CorrectZ();
+	FTimerHandle ZCorrectionTimerHandle;
 };

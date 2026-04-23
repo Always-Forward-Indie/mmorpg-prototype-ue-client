@@ -45,6 +45,7 @@ class UChatManager;
 class UGameMenuWidget;
 class UGameMenuBarWidget;
 class UAudioSettingsWidget;
+class UW_SettingsWidget;
 class UAudioManager;
 class UNotificationToastWidget;
 class UNotificationZoneBannerWidget;
@@ -254,6 +255,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UAudioSettingsWidget* GetAudioSettingsWidget() const { return AudioSettingsWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UW_SettingsWidget* GetGameSettingsWidget() const { return GameSettingsWidget; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UWorldNotificationManager* GetWorldNotificationManager() const { return WorldNotificationManager; }
@@ -482,6 +486,11 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UAudioSettingsWidget> AudioSettingsWidgetClass;
 
+	/** Full tabbed settings window (WBP_Settings, subclass of UW_SettingsWidget).
+	 *  Opened when the player clicks Settings in the in-game pause menu. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UW_SettingsWidget> GameSettingsWidgetClass;
+
 	// Notification widget classes (world_notification visual layer)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Notification Widgets")
 	TSubclassOf<UNotificationToastWidget> NotificationToastWidgetClass;
@@ -585,6 +594,9 @@ protected:
 	UPROPERTY()
 	UAudioSettingsWidget* AudioSettingsWidget;
 
+	UPROPERTY()
+	UW_SettingsWidget* GameSettingsWidget;
+
 	// Notification widget instances
 	UPROPERTY()
 	UNotificationToastWidget* NotificationToastWidget = nullptr;
@@ -665,7 +677,7 @@ public:
 	UFUNCTION() void OnMenuBarReputationClicked();
 	UFUNCTION() void OnMenuBarEmoteClicked();
 	UFUNCTION() void HandleGameMenuResumeClicked();
-	UFUNCTION() void HandleAudioSettingsClicked();
+	UFUNCTION() void HandleSettingsClicked();
 	UFUNCTION() void HandleAudioSettingsClosed();
 	UFUNCTION() void HandleExitToLoginClicked();
 	UFUNCTION() void HandleExitToDesktopClicked();

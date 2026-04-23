@@ -217,6 +217,10 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 	 Character.characterName = CD->GetStringField(TEXT("name"));
 	 Character.characterClass = CD->GetStringField(TEXT("class"));
 	 Character.characterRace = CD->GetStringField(TEXT("race"));
+	 if (CD->HasField(TEXT("gender")))
+	 {
+		 Character.characterGender = CD->GetStringField(TEXT("gender"));
+	 }
 	 Character.characterLevel = CD->GetIntegerField(TEXT("level"));
 
 	 //is dead
@@ -446,85 +450,68 @@ FClientDataStruct JSONParser::DeserializeClientData(const FString& JsonString)
 	 return EventType;
  }
 
-//deserialize a JSON containing a list of characters
-TArray<FCharacterDataStruct> JSONParser::DeserializeLoginCharactersList(const FString& JsonString)
+//deserialize a JSON containing a list of characters (login screen — uses slug fields from server v0.1.12+)
+TArray<FLoginCharacterEntry> JSONParser::DeserializeLoginCharactersList(const FString& JsonString)
 {
-	// create an array of characters
-	TArray<FCharacterDataStruct> CharacterList;
+	TArray<FLoginCharacterEntry> CharacterList;
 	TSharedPtr<FJsonObject> JsonObject;
 
-	// Convert the string to a JSON object
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
-	if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
+	if (!FJsonSerializer::Deserialize(Reader, JsonObject) || !JsonObject.IsValid())
 	{
-		const TSharedPtr<FJsonObject>* BodyObject = nullptr;
-		if (JsonObject->TryGetObjectField(TEXT("body"), BodyObject) && BodyObject != nullptr)
+		return CharacterList;
+	}
+
+	const TSharedPtr<FJsonObject>* BodyObject = nullptr;
+	if (!JsonObject->TryGetObjectField(TEXT("body"), BodyObject) || BodyObject == nullptr)
+	{
+		return CharacterList;
+	}
+
+	const TArray<TSharedPtr<FJsonValue>>* CharactersArray = nullptr;
+	if (!(*BodyObject)->TryGetArrayField(TEXT("charactersList"), CharactersArray) || CharactersArray == nullptr)
+	{
+		return CharacterList;
+	}
+
+	for (const TSharedPtr<FJsonValue>& CharacterValue : *CharactersArray)
+	{
+		TSharedPtr<FJsonObject> CharacterObject = CharacterValue->AsObject();
+		if (!CharacterObject.IsValid()) continue;
+
+		FLoginCharacterEntry Entry;
+
+		CharacterObject->TryGetNumberField(TEXT("characterId"),    Entry.CharacterId);
+		CharacterObject->TryGetStringField(TEXT("characterName"),  Entry.CharacterName);
+		CharacterObject->TryGetNumberField(TEXT("characterLevel"), Entry.CharacterLevel);
+
+		// Server v0.1.12+: slug fields
+		CharacterObject->TryGetStringField(TEXT("classSlug"),   Entry.CharacterClass);
+		CharacterObject->TryGetStringField(TEXT("raceSlug"),    Entry.CharacterRace);
+		CharacterObject->TryGetStringField(TEXT("genderSlug"),  Entry.CharacterGender);
+
+		// Equipment preview array
+		const TArray<TSharedPtr<FJsonValue>>* EquipArray = nullptr;
+		if (CharacterObject->TryGetArrayField(TEXT("equipment"), EquipArray) && EquipArray != nullptr)
 		{
-			// get the array of characters
-			const TArray<TSharedPtr<FJsonValue>>* CharactersArray = nullptr;
-			if ((*BodyObject)->TryGetArrayField(TEXT("charactersList"), CharactersArray) && CharactersArray != nullptr)
+			for (const TSharedPtr<FJsonValue>& EquipValue : *EquipArray)
 			{
-				// iterate through the array of characters
-				for (const TSharedPtr<FJsonValue>& CharacterValue : *CharactersArray)
-				{
-					// create character data
-					FCharacterDataStruct CharacterData;
-					TSharedPtr<FJsonObject> CharacterObject = CharacterValue->AsObject();
+				TSharedPtr<FJsonObject> EquipObject = EquipValue->AsObject();
+				if (!EquipObject.IsValid()) continue;
 
-					if (CharacterObject->HasField(TEXT("characterId")))
-					{
-						CharacterData.characterId = CharacterObject->GetIntegerField(TEXT("characterId"));
-					}
-
-					if (CharacterObject->HasField(TEXT("characterName")))
-					{
-						CharacterData.characterName = CharacterObject->GetStringField(TEXT("characterName"));
-					}
-
-					if (CharacterObject->HasField(TEXT("characterClass")))
-					{
-						CharacterData.characterClass = CharacterObject->GetStringField(TEXT("characterClass"));
-					}
-
-					if (CharacterObject->HasField(TEXT("characterRace")))
-					{
-						CharacterData.characterRace = CharacterObject->GetStringField(TEXT("characterRace"));
-					}
-
-					if (CharacterObject->HasField(TEXT("characterLevel")))
-					{
-						CharacterData.characterLevel = CharacterObject->GetIntegerField(TEXT("characterLevel"));
-					}
-
-					if (CharacterObject->HasField(TEXT("characterExp")))
-					{
-						CharacterData.characterExperiencePoints = CharacterObject->GetIntegerField(TEXT("characterExp"));
-					}
-
-					if (CharacterObject->HasField(TEXT("characterCurrentHealth")))
-					{
-						CharacterData.characterCurrentHealth = CharacterObject->GetIntegerField(TEXT("characterCurrentHealth"));
-					}
-
-					if (CharacterObject->HasField(TEXT("characterCurrentMana")))
-					{
-						CharacterData.characterCurrentMana = CharacterObject->GetIntegerField(TEXT("characterCurrentMana"));
-					}
-
-					//is dead
-					if (CharacterObject->HasField(TEXT("isDead")))
-					{
-						CharacterData.bIsDead = CharacterObject->GetBoolField(TEXT("isDead"));
-					}
-
-					CharacterList.Add(CharacterData);
-				}
+				FLoginEquipmentEntry EquipEntry;
+				EquipObject->TryGetNumberField(TEXT("slotId"),   EquipEntry.SlotId);
+				EquipObject->TryGetStringField(TEXT("itemSlug"), EquipEntry.ItemSlug);
+				Entry.Equipment.Add(MoveTemp(EquipEntry));
 			}
 		}
+
+		CharacterList.Add(MoveTemp(Entry));
 	}
 
 	return CharacterList;
 }
+
 
 //deserialize a JSON containing a list of spawn zones
 TArray<FSpawnZoneStruct> JSONParser::DeserializeSpawnZonesList(const TSharedPtr<FJsonObject>& Body)
@@ -1670,6 +1657,13 @@ TArray<FAppliedEffectData> JSONParser::DeserializeAppliedEffects(const TArray<TS
 		{
 			Effects.Add(JSONParser::DeserializeAppliedEffect(EffectObj));
 		}
+		else if (Value->Type == EJson::String)
+		{
+			// skillExecutionResult format: appliedEffects is an array of slug strings
+			FAppliedEffectData Effect;
+			Effect.effectName = Value->AsString();
+			Effects.Add(Effect);
+		}
 	}
 	return Effects;
 }
@@ -1789,6 +1783,8 @@ FSkillResultData JSONParser::DeserializeSkillResult(const TSharedPtr<FJsonObject
 	
 	if (ResultObj->HasField(TEXT("healing")))
 		SkillResult.healing = ResultObj->GetIntegerField(TEXT("healing"));
+	else if (ResultObj->HasField(TEXT("healAmount")))
+		SkillResult.healing = ResultObj->GetIntegerField(TEXT("healAmount"));
 
 	if (ResultObj->HasField(TEXT("manaHealing")))
 		SkillResult.manaHealing = ResultObj->GetIntegerField(TEXT("manaHealing"));
@@ -1854,11 +1850,27 @@ FSkillResultData JSONParser::DeserializeSkillResult(const FString& JsonString)
 	if (!Body.IsValid())
 		return FSkillResultData();
 
+	// Try nested skillResult object first (combatResult / healingResult format)
 	TSharedPtr<FJsonObject> SkillResult = Body->GetObjectField(TEXT("skillResult"));
-	if (!SkillResult.IsValid())
-		return FSkillResultData();
+	if (SkillResult.IsValid())
+	{
+		return JSONParser::DeserializeSkillResult(SkillResult);
+	}
 
-	return JSONParser::DeserializeSkillResult(SkillResult);
+	// Fallback: fields directly in body (skillExecutionResult format)
+	FSkillResultData Result = JSONParser::DeserializeSkillResult(Body);
+
+	// skillExecutionResult wraps success in the header, not in body
+	if (!Body->HasField(TEXT("success")))
+	{
+		TSharedPtr<FJsonObject> Header = Root->GetObjectField(TEXT("header"));
+		if (Header.IsValid() && Header->HasField(TEXT("status")))
+		{
+			Result.success = Header->GetStringField(TEXT("status")).Equals(TEXT("success"), ESearchCase::IgnoreCase);
+		}
+	}
+
+	return Result;
 }
 
 // Deserialize network header with time sync data
@@ -2712,4 +2724,78 @@ FWIOChannelCancelled JSONParser::DeserializeWIOChannelCancelled(const FString& J
     if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr) return {};
 
     return DeserializeWIOChannelCancelled(*BodyPtr);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Login Flow — Character Creation Options
+// ─────────────────────────────────────────────────────────────────────────────
+
+FCharacterCreationOptions JSONParser::DeserializeCharacterCreationOptions(const FString& JsonString)
+{
+    FCharacterCreationOptions Options;
+
+    TSharedPtr<FJsonObject> Root;
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return Options;
+
+    const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+    if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr) return Options;
+    const TSharedPtr<FJsonObject>& Body = *BodyPtr;
+
+    // Parse classes
+    const TArray<TSharedPtr<FJsonValue>>* ClassesArray = nullptr;
+    if (Body->TryGetArrayField(TEXT("classes"), ClassesArray))
+    {
+        for (const TSharedPtr<FJsonValue>& Val : *ClassesArray)
+        {
+            const TSharedPtr<FJsonObject>* ObjPtr = nullptr;
+            if (!Val->TryGetObject(ObjPtr) || !ObjPtr) continue;
+            const TSharedPtr<FJsonObject>& Obj = *ObjPtr;
+
+            FCharacterClassOption Cls;
+            Obj->TryGetNumberField(TEXT("id"), Cls.Id);
+            Obj->TryGetStringField(TEXT("name"), Cls.Name);
+            Obj->TryGetStringField(TEXT("slug"), Cls.Slug);
+            Obj->TryGetStringField(TEXT("description"), Cls.Description);
+            Options.Classes.Add(MoveTemp(Cls));
+        }
+    }
+
+    // Parse races
+    const TArray<TSharedPtr<FJsonValue>>* RacesArray = nullptr;
+    if (Body->TryGetArrayField(TEXT("races"), RacesArray))
+    {
+        for (const TSharedPtr<FJsonValue>& Val : *RacesArray)
+        {
+            const TSharedPtr<FJsonObject>* ObjPtr = nullptr;
+            if (!Val->TryGetObject(ObjPtr) || !ObjPtr) continue;
+            const TSharedPtr<FJsonObject>& Obj = *ObjPtr;
+
+            FCharacterRaceOption Race;
+            Obj->TryGetNumberField(TEXT("id"), Race.Id);
+            Obj->TryGetStringField(TEXT("name"), Race.Name);
+            Obj->TryGetStringField(TEXT("slug"), Race.Slug);
+            Options.Races.Add(MoveTemp(Race));
+        }
+    }
+
+    // Parse genders
+    const TArray<TSharedPtr<FJsonValue>>* GendersArray = nullptr;
+    if (Body->TryGetArrayField(TEXT("genders"), GendersArray))
+    {
+        for (const TSharedPtr<FJsonValue>& Val : *GendersArray)
+        {
+            const TSharedPtr<FJsonObject>* ObjPtr = nullptr;
+            if (!Val->TryGetObject(ObjPtr) || !ObjPtr) continue;
+            const TSharedPtr<FJsonObject>& Obj = *ObjPtr;
+
+            FCharacterGenderOption Gender;
+            Obj->TryGetNumberField(TEXT("id"), Gender.Id);
+            Obj->TryGetStringField(TEXT("slug"), Gender.Name);
+            Obj->TryGetStringField(TEXT("label"), Gender.Label);
+            Options.Genders.Add(MoveTemp(Gender));
+        }
+    }
+
+    return Options;
 }

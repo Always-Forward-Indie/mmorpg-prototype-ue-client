@@ -79,6 +79,11 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Combat System")
     void SendAttackRequest(int32 AttackerId, int32 TargetId, const FString& SkillSlug, ECasterType TargetType);
 
+    // Send a skillUsage request (for non-auto-attack skills: buffs, heals, teleport, etc.)
+    // Uses "skillUsage" event type. Server identifies caster from clientId in header.
+    UFUNCTION(BlueprintCallable, Category = "Combat System")
+    void SendSkillUsageRequest(int32 TargetId, const FString& SkillSlug, ECasterType TargetType);
+
     // Event delegates
     UPROPERTY(BlueprintAssignable, Category = "Combat System|Events")
     FOnSkillInitiated OnSkillInitiated;
@@ -168,6 +173,10 @@ private:
     // immediately instead of waiting for another physical impact that will never come.
     TMap<int32, double> EarlyProjectileImpacts; // CasterId -> WorldTime of impact
     static constexpr double EarlyImpactWindowSeconds = 3.0; // > 2x max expected RTT
+
+    // Timer handles for safety timeouts, keyed by CasterId.
+    // Allows cancelling stale timers when results are flushed normally.
+    TMap<int32, FTimerHandle> PendingResultTimerHandles;
 
     // Flush pending results for a caster.
     // bSkipProjectileWaiters = true  -> skip results that need a projectile hit

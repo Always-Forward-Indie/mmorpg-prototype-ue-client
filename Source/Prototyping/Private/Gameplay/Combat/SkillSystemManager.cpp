@@ -105,9 +105,17 @@ bool USkillSystemManager::CastSkill(int32 CasterId, int32 TargetId, const FStrin
     // Send skill request to server via combat system
     if (CombatSystemManager)
     {
-        CombatSystemManager->SendAttackRequest(CasterId, TargetId, SkillSlug, TargetType);
-        UE_LOG(LogTemp, Log, TEXT("SkillSystemManager: Sent skill request %s from %d to %d - waiting for server confirmation"), 
-            *SkillSlug, CasterId, TargetId);
+        // basic_attack uses playerAttack event type; all other skills use skillUsage
+        if (SkillSlug.Equals(TEXT("basic_attack"), ESearchCase::IgnoreCase))
+        {
+            CombatSystemManager->SendAttackRequest(CasterId, TargetId, SkillSlug, TargetType);
+        }
+        else
+        {
+            CombatSystemManager->SendSkillUsageRequest(TargetId, SkillSlug, TargetType);
+        }
+        UE_LOG(LogTemp, Log, TEXT("SkillSystemManager: Sent skill request %s from %d to %d (type=%d)"), 
+            *SkillSlug, CasterId, TargetId, static_cast<int32>(TargetType));
         return true;
     }
 

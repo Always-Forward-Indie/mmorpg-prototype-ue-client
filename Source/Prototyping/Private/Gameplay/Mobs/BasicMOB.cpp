@@ -23,6 +23,7 @@
 #include "NiagaraSystem.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Data/EffectDefinitionTable.h"
+#include "Utils/AudioSpawnHelpers.h"
 
 // Convert ESkillSchool to EDamageType for floating combat text
 static EDamageType MOBSchoolToDamageType(ESkillSchool School)
@@ -33,40 +34,6 @@ static EDamageType MOBSchoolToDamageType(ESkillSchool School)
 	case ESkillSchool::Ice:     return EDamageType::Ice;
 	default:                    return EDamageType::Physical;
 	}
-}
-
-// Spawn a one-shot SFX with the correct SoundClass set BEFORE Play() is called.
-// SpawnSoundAtLocation calls Play() internally so any override set afterwards is
-// ignored by the audio engine.  This wrapper uses SpawnSoundAttached with
-// bAutoActivate=false so we can stamp SoundClassOverride first.
-static UAudioComponent* SpawnSFXAttached(AActor* Owner, USoundBase* Sound,
-	const FVector& WorldLocation, float VolumeMultiplier = 1.0f)
-{
-	if (!Owner || !Sound) { return nullptr; }
-	USoundClass* SFXClass = nullptr;
-	if (UMyGameInstance* GI = Cast<UMyGameInstance>(Owner->GetGameInstance()))
-	{
-		if (GI->AudioManager) { SFXClass = GI->AudioManager->SFXClass; }
-	}
-	if (!SFXClass)
-	{
-		// No AudioManager — fall back to plain spawn so sound still plays.
-		return UGameplayStatics::SpawnSoundAtLocation(
-			Owner, Sound, WorldLocation, FRotator::ZeroRotator, VolumeMultiplier);
-	}
-	UAudioComponent* AC = UGameplayStatics::SpawnSoundAttached(
-		Sound, Owner->GetRootComponent(), NAME_None,
-		WorldLocation, FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition,
-		/*bStopWhenAttachedToDestroyed=*/true,
-		VolumeMultiplier, 1.0f, 0.0f, nullptr, nullptr,
-		/*bAutoActivate=*/false);
-	if (AC)
-	{
-		AC->SoundClassOverride = SFXClass;
-		AC->bAutoDestroy = true;
-		AC->Play();
-	}
-	return AC;
 }
 
 // Sets default values

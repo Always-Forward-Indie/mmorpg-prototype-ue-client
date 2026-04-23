@@ -37,7 +37,22 @@ void UNameplateCanvasWidget::NativeTick(const FGeometry& MyGeometry, float InDel
     }
 
     APawn* Pawn = PC->GetPawn();
-    const FVector PawnLocation = Pawn ? Pawn->GetActorLocation() : FVector::ZeroVector;
+    // On the login/character-select screen there is no pawn — the player is
+    // viewing through a CameraActor.  Fall back to the camera position so
+    // distance-based visibility culling works correctly for preview characters.
+    FVector PawnLocation;
+    if (Pawn)
+    {
+        PawnLocation = Pawn->GetActorLocation();
+    }
+    else if (PC->PlayerCameraManager)
+    {
+        PawnLocation = PC->PlayerCameraManager->GetCameraLocation();
+    }
+    else
+    {
+        PawnLocation = FVector::ZeroVector;
+    }
 
     for (FNameplateEntry& Entry : Entries)
     {
@@ -294,6 +309,9 @@ void UNameplateCanvasWidget::RegisterPlayer(AActor*        Actor,
     if (Nameplate)
     {
         Nameplate->SetPlayerInfo(Name, Class, Level, bIsDead);
+        // Explicitly hide the title row — title arrives later via SetPlayerTitle.
+        // Prevents an empty text slot from showing when the player has no title.
+        Nameplate->SetTitle(TEXT(""));
         UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget::RegisterPlayer - successfully created and initialized nameplate for '%s'"), *Name);
     }
 

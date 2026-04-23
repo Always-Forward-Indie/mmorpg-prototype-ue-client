@@ -27,6 +27,10 @@
 #include "Gameplay/Players/MyCameraActor.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/UI/LoginWidget.h"
+#include "Gameplay/UI/LoginFlowWidget.h"
+#include "Gameplay/UI/W_LoginScreenOverlayWidget.h"
+#include "Gameplay/UI/W_LoginLogoWidget.h"
+#include "UI/W_SettingsWidget.h"
 #include "Gameplay/UI/CharacterListItem.h"
 #include "Gameplay/UI/MonitorStatsWidget.h"
 #include "Components/ListView.h"
@@ -46,6 +50,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnGameServerResponseReceived, int3
 
 class UFloatingCombatTextManager;
 class ADroppedItemActor;
+class UCharacterPreviewManager;
 
 UCLASS()
 class PROTOTYPING_API UMyGameInstance : public UGameInstance
@@ -664,6 +669,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void RemoveLoginWidgetFromViewport();
 
+	/** Show the login settings window (creates it on first call). */
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void ShowLoginSettings(ESettingsTab Tab = ESettingsTab::Audio);
+
+	/** Hide the login settings window. */
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void HideLoginSettings();
+
 	void AddLoadingScreen();
 
 	void RemoveLoadingScreen();
@@ -697,11 +710,130 @@ public:
 	UPROPERTY()
 	UUserWidget* LoadingScreenWidget;
 
+	/** Legacy login widget class (kept for backward compat, prefer LoginFlowWidgetClass). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<ULoginWidget> LoginScreenWidgetClass;
 
 	UPROPERTY()
 	ULoginWidget* LoginScreenWidget;
+
+	/** New login flow widget class with WidgetSwitcher (Login/Register/CharSelect/CharCreate).
+	 *  If set, this takes priority over LoginScreenWidgetClass. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI", meta = (DisplayName = "Login Flow Widget Class"))
+	TSubclassOf<ULoginFlowWidget> LoginFlowWidgetClass;
+
+	UPROPERTY()
+	ULoginFlowWidget* LoginFlowWidget;
+
+	/** DataTable with row struct FLoginErrorTableRow.
+	 *  Row names = server error codes (ERR_LOGIN_TAKEN, ERR_CHAR_NAME_INVALID, etc.).
+	 *  Automatically passed to LoginFlowWidget on creation. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI", meta = (DisplayName = "Login Error Messages Table"))
+	UDataTable* LoginErrorMessagesTable;
+
+	/** Overlay widget shown on top of the login/character-select screen.
+	 *  Assign WBP_LoginScreenOverlay (subclass of UW_LoginScreenOverlayWidget).
+	 *  Contains Settings and Exit Game buttons. Leave empty to disable. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI", meta = (DisplayName = "Login Screen Overlay Widget Class"))
+	TSubclassOf<UW_LoginScreenOverlayWidget> LoginScreenOverlayWidgetClass;
+
+	UPROPERTY()
+	UW_LoginScreenOverlayWidget* LoginScreenOverlayWidget;
+
+	/** Game logo widget shown on the login screen (Z-order 5, behind the login form).
+	 *  Assign WBP_LoginLogo (subclass of UW_LoginLogoWidget). Leave empty to disable. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI", meta = (DisplayName = "Login Logo Widget Class"))
+	TSubclassOf<UW_LoginLogoWidget> LoginLogoWidgetClass;
+
+	UPROPERTY()
+	UW_LoginLogoWidget* LoginLogoWidget;
+
+	/** Tabbed settings window shown when the player clicks the Settings button
+	 *  on the login screen overlay.
+	 *  Assign WBP_Settings (subclass of UW_SettingsWidget). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI", meta = (DisplayName = "Login Settings Widget Class"))
+	TSubclassOf<UW_SettingsWidget> LoginSettingsWidgetClass;
+
+	UPROPERTY()
+	UW_SettingsWidget* LoginSettingsWidget;
+
+	// ─── Character Visual System ─────────────────────────────────────────────
+
+	/** DataTable with row struct FCharacterVisualDefinition.
+	 *  Row names = "classSlug_raceSlug_genderName" (e.g. "warrior_human_male").
+	 *  Used by login preview AND in-game player spawning. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character Visuals", meta = (DisplayName = "Character Visual Definitions"))
+	UDataTable* CharacterVisualDefinitionsTable;
+
+	/** DataTable with row struct FCharacterCosmeticData.
+	 *  Row names = cosmetic slug (e.g. "hair_human_female_01", "beard_human_male_01").
+	 *  Drives UCosmeticVisualComponent — hair, facial hair, etc. that hide under helmets. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character Visuals", meta = (DisplayName = "Character Cosmetics"))
+	UDataTable* CharacterCosmeticsDataTable;
+
+	/** Character preview manager for the login screen podium. Created on login level load. */
+	UPROPERTY()
+	UCharacterPreviewManager* CharacterPreviewManager;
+
+	/** Podium spawn locations for character select preview (up to 4). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Visuals|Podium")
+	TArray<FVector> PodiumSpawnLocations;
+
+	/** Common facing rotation for podium characters (fallback / legacy). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Visuals|Podium")
+	FRotator PodiumSpawnRotation = FRotator(0.0f, 180.0f, 0.0f);
+
+	/** Per-slot facing rotations populated from LoginLevelSetupActor arrows.
+	 *  Index matches PodiumSpawnLocations.  Falls back to PodiumSpawnRotation
+	 *  when not populated. */
+	UPROPERTY(BlueprintReadOnly, Category = "Character Visuals|Podium")
+	TArray<FRotator> PodiumSpawnRotations;
+
+	/** Camera position when viewing the podium (character select). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Visuals|Podium")
+	FVector PodiumCameraLocation;
+
+	/** Camera rotation when viewing the podium (character select). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Visuals|Podium")
+	FRotator PodiumCameraRotation;
+
+	/** Where the single character-create preview spawns. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Visuals|Create Preview")
+	FVector CreatePreviewLocation;
+
+	/** Facing rotation for the character-create preview. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Visuals|Create Preview")
+	FRotator CreatePreviewRotation = FRotator(0.0f, 180.0f, 0.0f);
+
+	/** Camera position for close-up character-create view. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Visuals|Create Preview")
+	FVector CreatePreviewCameraLocation;
+
+	/** Camera rotation for close-up character-create view. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Visuals|Create Preview")
+	FRotator CreatePreviewCameraRotation;
+
+	/**
+	 * The spot a selected character walks/teleports to when chosen in character select.
+	 * Placed between the podium and the camera so the character appears to step forward.
+	 * Read from ALoginLevelSetupActor::SelectedCharacterSlot (Red arrow).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Visuals|Podium")
+	FVector SelectedCharacterLocation;
+
+	/** Facing rotation for the selected character (e.g. angled slightly toward camera). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Visuals|Podium")
+	FRotator SelectedCharacterRotation = FRotator(0.0f, 180.0f, 0.0f);
+
+	/**
+	 * Widget class used as the nameplate canvas in the login level.
+	 * Assign your WBP_NameplateCanvas (or any UNameplateCanvasWidget subclass) here.
+	 * When set, CharacterPreviewManager will spawn it and register each preview actor.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character Visuals|Podium")
+	TSubclassOf<UUserWidget> LoginNameplateCanvasClass;
+
+	// ─────────────────────────────────────────────────────────────────────────
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<UCharacterListItem> CharactersListItemWidgetClass;

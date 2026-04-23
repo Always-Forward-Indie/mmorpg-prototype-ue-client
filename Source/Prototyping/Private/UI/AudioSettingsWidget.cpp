@@ -94,10 +94,6 @@ void UAudioSettingsWidget::ApplySettings()
 	if (Slider_UI)      AM->SetUIVolume(Slider_UI->GetValue());
 
 	AM->SaveSettings();
-
-	// Close the panel after saving.
-	SetVisibility(ESlateVisibility::Collapsed);
-	OnClosed.Broadcast();
 }
 
 void UAudioSettingsWidget::ResetToDefaults()
@@ -117,7 +113,7 @@ void UAudioSettingsWidget::ResetToDefaults()
 
 void UAudioSettingsWidget::CloseWidget()
 {
-	// Do NOT call RemoveFromParent() — the widget is managed by UIManager
+	// Do NOT call RemoveFromParent() ï¿½ the widget is managed by UIManager
 	// via visibility toggling.  Removing it orphans the pointer and breaks
 	// subsequent open attempts.  Just collapse and let UIManager handle state.
 	SetVisibility(ESlateVisibility::Collapsed);
@@ -125,7 +121,7 @@ void UAudioSettingsWidget::CloseWidget()
 }
 
 // ---------------------------------------------------------------------------
-// Slider value-changed callbacks — live preview while dragging
+// Slider value-changed callbacks ï¿½ live preview while dragging
 // ---------------------------------------------------------------------------
 
 void UAudioSettingsWidget::OnMasterVolumeChanged(float Value)

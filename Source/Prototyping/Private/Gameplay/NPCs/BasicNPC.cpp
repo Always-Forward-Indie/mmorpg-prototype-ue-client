@@ -37,6 +37,11 @@ ABasicNPC::ABasicNPC()
 		// Cursor hover trace runs on ECC_Visibility.  Ensure the capsule blocks it
 		// so the mouse-over / click system can detect NPCs regardless of Blueprint defaults.
 		Capsule->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+
+		// QueryOnly: keeps trace detection (mouse-over, visibility) but removes the capsule
+		// from physics overlap resolution entirely, so the player's depenetration logic
+		// cannot push the NPC upward when they spawn at the same location.
+		Capsule->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	}
 
 	// The skeletal mesh component has its own collision settings separate from the capsule.
@@ -46,12 +51,24 @@ ABasicNPC::ABasicNPC()
 	if (USkeletalMeshComponent* MeshComp = GetMesh())
 	{
 		MeshComp->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+		// Mesh also must not participate in physics overlap resolution.
+		MeshComp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	}
 
-	// NPCs are server-driven; disable physics push to prevent client-side jitter.
+	// NPCs are server-driven and must never move on the client.
+	// DefaultLandMovementMode = MOVE_None ensures the CMC starts frozen even during
+	// the one tick that may fire between PostInitializeComponents and BeginPlay.
+	// Zero depenetration distances prevent the CMC from resolving overlaps with pawns
+	// even if something manages to call SafeMoveUpdatedComponent on it.
 	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
 	{
 		CMC->bEnablePhysicsInteraction = false;
+		CMC->DefaultLandMovementMode = MOVE_None;
+		CMC->GravityScale = 0.0f;
+		CMC->MaxDepenetrationWithGeometry = 0.0f;
+		CMC->MaxDepenetrationWithGeometryAsProxy = 0.0f;
+		CMC->MaxDepenetrationWithPawn = 0.0f;
+		CMC->MaxDepenetrationWithPawnAsProxy = 0.0f;
 	}
 
 	// Initialize audio components
@@ -88,6 +105,28 @@ void ABasicNPC::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// NPCs are server-positioned and never move on the client.
+	// Disable the CMC to prevent depenetration logic from pushing
+	// the NPC upward when a player spawns on the same spot.
+	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+	{
+		CMC->SetMovementMode(MOVE_None);
+	}
+
+	// Blueprint CDO properties are applied after the C++ constructor, so any collision
+	// preset saved in the Blueprint would override what we set there. Re-apply QueryOnly
+	// here (after Super::BeginPlay) to guarantee it is always in effect at runtime.
+	// QueryOnly keeps visibility/click traces working but removes the capsule from all
+	// physics-simulation overlap resolution, so player depenetration cannot push the NPC.
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	}
+	if (USkeletalMeshComponent* MeshComp = GetMesh())
+	{
+		MeshComp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	}
+
 	// Route NPC audio through the SFX SoundClass so the SFX volume slider works
 	if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
 	{
@@ -115,6 +154,7 @@ void ABasicNPC::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		GetWorld()->GetTimerManager().ClearTimer(IdleSoundTimerHandle);
 		GetWorld()->GetTimerManager().ClearTimer(IdleAnimTimerHandle);
+		GetWorld()->GetTimerManager().ClearTimer(ZCorrectionTimerHandle);
 	}
 
 	// Unbind montage delegates so ended callbacks don't fire on a dead object
@@ -127,6 +167,31 @@ void ABasicNPC::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void ABasicNPC::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	// Smoothly rotate toward the player during dialogue
+	if (bIsFacingPlayer)
+	{
+		if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+		{
+			if (APawn* PlayerPawn = PC->GetPawn())
+			{
+				const FVector ToPlayer = PlayerPawn->GetActorLocation() - GetActorLocation();
+				const FRotator LookRot = FRotator(0.0f, FRotationMatrix::MakeFromX(ToPlayer).Rotator().Yaw, 0.0f);
+				const FRotator NewRot = FMath::RInterpTo(GetActorRotation(), LookRot, DeltaTime, 5.0f);
+				SetActorRotation(NewRot);
+			}
+		}
+	}
+	else if (bIsRestoringRotation)
+	{
+		const FRotator NewRot = FMath::RInterpTo(GetActorRotation(), OriginalRotation, DeltaTime, 3.0f);
+		SetActorRotation(NewRot);
+		if (NewRot.Equals(OriginalRotation, 0.5f))
+		{
+			SetActorRotation(OriginalRotation);
+			bIsRestoringRotation = false;
+		}
+	}
 
 	// Update UI if initialized
 	// if (NPCHeadInfo && bUIInitialized)
@@ -423,6 +488,14 @@ void ABasicNPC::PlayGreetingSound()
 {
 	PlaySoundByName("Greeting");
 
+	// Start smoothly rotating toward the player
+	if (!bIsFacingPlayer)
+	{
+		OriginalRotation = GetActorRotation();
+		bIsFacingPlayer = true;
+		bIsRestoringRotation = false;
+	}
+
 	// bIsTalking: set on AnimInstance if the ABP uses UNPCAnimInstance
 	if (UNPCAnimInstance* Anim = GetNPCAnimInstance())
 		Anim->SetTalking(true);
@@ -452,6 +525,10 @@ void ABasicNPC::PlayGreetingSound()
 void ABasicNPC::PlayFarewellSound()
 {
 	PlaySoundByName("Farewell");
+
+	// Stop facing the player and smoothly return to original rotation
+	bIsFacingPlayer = false;
+	bIsRestoringRotation = true;
 
 	if (FarewellMontageAsset)
 	{
@@ -526,7 +603,32 @@ void ABasicNPC::SnapToGround()
 		const float HalfHeight = GetCapsuleComponent()
 			? GetCapsuleComponent()->GetScaledCapsuleHalfHeight()
 			: 90.0f;
-		SetActorLocation(FVector(CurrentLoc.X, CurrentLoc.Y, Hit.ImpactPoint.Z + HalfHeight));
+		const float CorrectZ = Hit.ImpactPoint.Z + HalfHeight;
+		SetActorLocation(FVector(CurrentLoc.X, CurrentLoc.Y, CorrectZ));
+
+		// Remember this Z so the periodic corrector can restore it if something pushes the NPC.
+		SnappedZ = CorrectZ;
+		bSnappedZValid = true;
+
+		// Start periodic Z-correction timer (or restart it if already running).
+		if (World)
+		{
+			World->GetTimerManager().SetTimer(
+				ZCorrectionTimerHandle,
+				this, &ABasicNPC::CorrectZ,
+				0.5f, /*bLoop=*/true);
+		}
+	}
+}
+
+void ABasicNPC::CorrectZ()
+{
+	if (!bSnappedZValid) return;
+
+	const FVector Loc = GetActorLocation();
+	if (!FMath::IsNearlyEqual(Loc.Z, SnappedZ, 1.0f))
+	{
+		SetActorLocation(FVector(Loc.X, Loc.Y, SnappedZ), /*bSweep=*/false, nullptr, ETeleportType::TeleportPhysics);
 	}
 }
 

@@ -85,4 +85,11 @@ private:
 
     /** Last applied state — used to skip redundant Apply() calls. */
     ETargetDecalState CurrentState = ETargetDecalState::Hidden;
+
+    /**
+     * Relative Z of the actor's floor base (negative capsule half-height for characters,
+     * 0 for items).  Cached once in EnsureDecalCreated; used by UpdateMID to keep the
+     * top of the projection volume flush with the floor so it never hits the mesh above.
+     */
+    float CachedFloorZ = 0.f;
 };

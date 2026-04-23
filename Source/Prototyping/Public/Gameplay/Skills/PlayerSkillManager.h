@@ -48,6 +48,14 @@ public:
     virtual FSkillSlotData GetSkillSlot(int32 SlotIndex) const override;
     virtual TArray<FSkillSlotData> GetAllSkillSlots() const override;
 
+    // Returns the effective target policy for a skill (resolves Auto from effectType)
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Skill Manager")
+    ESkillTargetPolicy GetEffectiveTargetPolicy(const FString& SkillSlug) const;
+
+    // Returns true if the skill targets self (SelfOnly or SelfAndTarget with no external target)
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Skill Manager")
+    bool IsSkillSelfCastable(const FString& SkillSlug) const;
+
     // Blueprint helpers
     UFUNCTION(BlueprintCallable, Category = "Player Skill Manager")
     void CastSkillBySlot(int32 SlotIndex, int32 TargetId, ECasterType TargetType);
@@ -86,6 +94,12 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Player Skill Manager") 
     void HandleSkillInitiation(const FString& SkillSlug, int32 CasterId,
         int32 CooldownMs = 0, int32 GcdMs = 0);
+
+    // Restore active cooldowns sent by the server in the setSkillCooldowns packet on login.
+    // Each entry carries remainingMs — the time *left* on the cooldown, not the full duration.
+    // Skills whose remainingMs <= 0 are silently skipped (already expired server-side).
+    UFUNCTION(BlueprintCallable, Category = "Player Skill Manager")
+    void ApplyServerCooldowns(const TArray<FSkillCooldownEntry>& Cooldowns);
 
     // Called by SkillShopNetworkHandler when a skill is successfully learned at runtime.
     // Adds the skill to the manager so it immediately becomes available for the hotbar.
@@ -148,6 +162,10 @@ private:
     FPlayerSkillData CreatePlayerSkillData(const FPlayerSkillNetworkData& NetworkData) const;
     void UpdateSkillCooldownState(FPlayerSkillData& SkillData);
     bool ValidateSkillSlot(int32 SlotIndex) const;
+
+    // Resolves the final TargetId and TargetType for a skill based on its target policy.
+    // Returns false if the target is invalid for the given skill (e.g. combat skill on self).
+    bool ResolveSkillTarget(const FString& SkillSlug, int32& InOutTargetId, ECasterType& InOutTargetType) const;
 
     bool bIsInitialized = false;
 

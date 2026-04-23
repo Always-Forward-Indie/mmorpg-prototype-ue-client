@@ -256,8 +256,18 @@ float UMOBAnimInstance::CalcHitDelay(const UAnimMontage* Montage, float PlayRate
 	return ActualDuration * DefaultHitRatio;
 }
 
-void UMOBAnimInstance::OnAttackMontageEnded(UAnimMontage* /*Montage*/, bool /*bInterrupted*/)
+void UMOBAnimInstance::OnAttackMontageEnded(UAnimMontage* /*Montage*/, bool bInterrupted)
 {
+	// If the montage was interrupted but a new attack is already in progress
+	// (StartAttack set bIsAttacking=true before Montage_Play triggered this callback),
+	// do NOT reset state — the new attack owns it now.
+	if (bInterrupted && bIsAttacking)
+	{
+		return;
+	}
+
+	const int32 EndedCasterId = CurrentCasterId;
+
 	bIsAttacking      = false;
 	CurrentAttackSlot = NAME_None;
 	CurrentCasterId   = 0;
@@ -266,5 +276,12 @@ void UMOBAnimInstance::OnAttackMontageEnded(UAnimMontage* /*Montage*/, bool /*bI
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(HitPointTimerHandle);
+	}
+
+	// If the montage was interrupted (e.g. by death or stun) and the hit-point
+	// never fired, flush any pending results now so damage doesn't wait 12 seconds.
+	if (bInterrupted && EndedCasterId > 0)
+	{
+		OnHitPoint.Broadcast(EndedCasterId);
 	}
 }

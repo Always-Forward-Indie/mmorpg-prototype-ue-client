@@ -44,7 +44,7 @@ private:
 	UPROPERTY()
 	UWorld* WorldContext = nullptr;
 
-	// Unique ID for this manager instance — used to make thread names unique
+	// Unique ID for this manager instance пїЅ used to make thread names unique
 	// across multiple PIE instances so FRunnableThread::Kill targets the right thread.
 	int32 InstanceId = 0;
 
@@ -106,7 +106,7 @@ private:
 	// Guard against double Shutdown() calls (GameInstance::Shutdown + destructor)
 	bool bIsShutDown = false;
 
-	// Класс виджета для месседж-бокса
+	// пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ-пїЅпїЅпїЅпїЅпїЅ
 	UPROPERTY()
 	TSubclassOf<UMessageBoxPopup> MessageBoxPopupClass;
 
@@ -137,6 +137,8 @@ public:
 	void SendDataToLoginServer(const FString& Data);
 	void SendDataToGameServer(const FString& Data);
 	void SendDataToChunkServer(const FString& Data);
+	/** Returns true only after the TCP handshake with the login server is done and the sender worker is running. */
+	bool IsLoginServerConnected() const;
 	void PollLoginServerNetworkData();
 	void PollGameServerNetworkData();
 	void PollChunkServerNetworkData();

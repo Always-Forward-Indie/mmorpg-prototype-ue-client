@@ -2,6 +2,17 @@
 
 #include "Gameplay/UI/W_PlayerNameplateWidget.h"
 
+void UW_PlayerNameplateWidget::NativeConstruct()
+{
+    Super::NativeConstruct();
+
+    // Ensure TitleText starts hidden so players without a title show no empty row.
+    if (TitleText)
+    {
+        TitleText->SetVisibility(ESlateVisibility::Collapsed);
+    }
+}
+
 void UW_PlayerNameplateWidget::SetPlayerInfo(const FString& InName,
                                               const FString& InClass,
                                               int32          InLevel,

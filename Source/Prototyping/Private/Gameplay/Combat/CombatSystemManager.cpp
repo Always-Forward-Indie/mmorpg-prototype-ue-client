@@ -493,6 +493,33 @@ void UCombatSystemManager::SendAttackRequest(int32 AttackerId, int32 TargetId, c
         AttackerId, TargetId, *SkillSlug);
 }
 
+void UCombatSystemManager::SendSkillUsageRequest(int32 TargetId, const FString& SkillSlug, ECasterType TargetType)
+{
+    if (!GameInstance || !NetworkManager)
+    {
+        UE_LOG(LogTemp, Error, TEXT("CombatSystemManager: Cannot send skill usage request - missing dependencies"));
+        return;
+    }
+
+    TMap<FString, TSharedPtr<FJsonValue>> HeaderData;
+    TMap<FString, TSharedPtr<FJsonValue>> BodyData;
+
+    // Add client authentication
+    HeaderData.Add(TEXT("clientId"), MakeShareable(new FJsonValueNumber(GameInstance->GetCurrentClientID())));
+    HeaderData.Add(TEXT("hash"), MakeShareable(new FJsonValueString(GameInstance->GetCurrentClientHash())));
+
+    // skillUsage body: skillSlug, targetId, targetType (no attackerId — server knows from clientId)
+    BodyData.Add(TEXT("skillSlug"), MakeShareable(new FJsonValueString(SkillSlug)));
+    BodyData.Add(TEXT("targetId"), MakeShareable(new FJsonValueNumber(TargetId)));
+    BodyData.Add(TEXT("targetType"), MakeShareable(new FJsonValueNumber(static_cast<int32>(TargetType))));
+
+    FString JsonString = JSONParser::SerializeJsonWithTimeSync(TEXT("skillUsage"), HeaderData, BodyData, GameInstance->GetTimeSyncService());
+    NetworkManager->SendDataToChunkServer(JsonString);
+
+    UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Sent skillUsage request - Skill: %s, Target: %d, TargetType: %d"),
+        *SkillSlug, TargetId, static_cast<int32>(TargetType));
+}
+
 TScriptInterface<ISkillEffectHandler> UCombatSystemManager::FindEffectHandler(ESkillEffectType EffectType)
 {
     // Iterate forward: handlers are stored highest-priority-first (index 0 = highest)
@@ -639,6 +666,19 @@ void UCombatSystemManager::FlushPendingResults(int32 CasterId, bool bSkipProject
     {
         PendingSkillResults.Add(CasterId, ResultsToRequeue);
     }
+    else
+    {
+        // Queue fully drained — cancel the safety timer so it cannot accidentally
+        // flush results from a future attack cycle that queues under the same CasterId.
+        if (FTimerHandle* Handle = PendingResultTimerHandles.Find(CasterId))
+        {
+            if (WorldContext)
+            {
+                WorldContext->GetTimerManager().ClearTimer(*Handle);
+            }
+            PendingResultTimerHandles.Remove(CasterId);
+        }
+    }
 
     if (ResultsToApply.Num() == 0)
     {
@@ -702,12 +742,22 @@ void UCombatSystemManager::StartPendingResultTimeout(int32 CasterId)
     }
     if (!World) return;
 
+    // Cancel any existing safety timer for this caster to prevent stale timers
+    // from accidentally flushing results of a future attack cycle.
+    if (FTimerHandle* ExistingHandle = PendingResultTimerHandles.Find(CasterId))
+    {
+        World->GetTimerManager().ClearTimer(*ExistingHandle);
+    }
+
     FTimerHandle TimerHandle;
     TWeakObjectPtr<UCombatSystemManager> WeakSelf(this);
     World->GetTimerManager().SetTimer(TimerHandle, [WeakSelf, CasterId]()
     {
         if (WeakSelf.IsValid())
         {
+            // Clean up the stored handle
+            WeakSelf->PendingResultTimerHandles.Remove(CasterId);
+
             // Only flush if results are still pending (hit-point may have already fired)
             if (WeakSelf->PendingSkillResults.Contains(CasterId))
             {
@@ -719,4 +769,6 @@ void UCombatSystemManager::StartPendingResultTimeout(int32 CasterId)
             }
         }
     }, static_cast<float>(PendingResultTimeoutSeconds), false);
+
+    PendingResultTimerHandles.Add(CasterId, TimerHandle);
 }

@@ -112,6 +112,15 @@ void USkillSlotWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
             }
             
             UpdateCooldownDisplay();
+
+            // First tick entering cooldown state: show the overlay.
+            // UpdateVisualState() controls CooldownOverlay visibility and icon tint.
+            // Without this call the overlay stays Hidden (set on construct/clear)
+            // and the progress bar + text inside it are never visible.
+            if (!bWasOnCooldown)
+            {
+                UpdateVisualState();
+            }
         }
         else if (bWasOnCooldown)
         {
@@ -393,6 +402,11 @@ void USkillSlotWidget::SetSkillData(const FPlayerSkillData& SkillData)
             {
                 CooldownRemainingTime = SkillManager->GetSkillCooldownRemaining(AssignedSkillSlug);
             }
+            UE_LOG(LogTemp, Warning,
+                TEXT("SkillSlotWidget[%d]: SetSkillData slug='%s' cooldownMs=%d total=%.1f onCD=%d remaining=%.1f"),
+                SlotIndex, *AssignedSkillSlug,
+                SkillData.networkData.cooldownMs, CooldownTotalTime,
+                bIsOnCooldown ? 1 : 0, CooldownRemainingTime);
         }
     }
 
@@ -771,11 +785,19 @@ void USkillSlotWidget::BeginDestroy()
 
 void USkillSlotWidget::OnSkillCooldownStarted(const FString& SkillSlug)
 {
+    UE_LOG(LogTemp, Warning,
+        TEXT("SkillSlotWidget[%d]: OnSkillCooldownStarted '%s' assigned='%s' match=%d"),
+        SlotIndex, *SkillSlug, *AssignedSkillSlug,
+        (SkillSlug == AssignedSkillSlug) ? 1 : 0);
     if (SkillSlug == AssignedSkillSlug && SkillManager)
     {
         CooldownTotalTime = CurrentSkillData.networkData.cooldownMs / 1000.0f;
         CooldownRemainingTime = SkillManager->GetSkillCooldownRemaining(SkillSlug);
         bIsOnCooldown = (CooldownRemainingTime > 0.0f);
+
+        UE_LOG(LogTemp, Warning,
+            TEXT("SkillSlotWidget[%d]: applying cooldown total=%.1f remaining=%.1f onCD=%d"),
+            SlotIndex, CooldownTotalTime, CooldownRemainingTime, bIsOnCooldown ? 1 : 0);
 
         UpdateCooldownDisplay();
         UpdateVisualState();

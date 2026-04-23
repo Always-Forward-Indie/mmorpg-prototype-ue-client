@@ -23,6 +23,7 @@
 #include "Gameplay/Quest/QuestManager.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "Gameplay/Equipment/EquipmentVisualComponent.h"
+#include "Gameplay/Players/CosmeticVisualComponent.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "Data/ItemStruct.h"
 #include "Gameplay/Vendor/VendorManager.h"
@@ -62,6 +63,9 @@
 #include "Gameplay/Emotes/EmoteComponent.h"
 #include "Gameplay/WorldObjects/WorldInteractiveObjectActor.h"
 #include "Gameplay/WorldObjects/WorldObjectManager.h"
+#include "Utils/AudioSpawnHelpers.h"
+#include "Data/CharacterVisualData.h"
+#include "Engine/AssetManager.h"
 
 // Convert ESkillSchool to EDamageType for FloatingCombatTextManager
 static EDamageType SchoolToDamageType(ESkillSchool School)
@@ -72,38 +76,6 @@ static EDamageType SchoolToDamageType(ESkillSchool School)
     case ESkillSchool::Ice:     return EDamageType::Ice;
     default:                    return EDamageType::Physical;
     }
-}
-
-// Spawn a one-shot SFX with SoundClassOverride set BEFORE Play() is called.
-// SpawnSoundAtLocation calls Play() internally so any class override set afterwards
-// is ignored by the audio engine for that playback.
-static UAudioComponent* SpawnSFXAttached(AActor* Owner, USoundBase* Sound,
-    const FVector& WorldLocation, float VolumeMultiplier = 1.0f)
-{
-    if (!Owner || !Sound) { return nullptr; }
-    USoundClass* SFXClass = nullptr;
-    if (UMyGameInstance* GI = Cast<UMyGameInstance>(Owner->GetGameInstance()))
-    {
-        if (GI->AudioManager) { SFXClass = GI->AudioManager->SFXClass; }
-    }
-    if (!SFXClass)
-    {
-        return UGameplayStatics::SpawnSoundAtLocation(
-            Owner, Sound, WorldLocation, FRotator::ZeroRotator, VolumeMultiplier);
-    }
-    UAudioComponent* AC = UGameplayStatics::SpawnSoundAttached(
-        Sound, Owner->GetRootComponent(), NAME_None,
-        WorldLocation, FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition,
-        /*bStopWhenAttachedToDestroyed=*/true,
-        VolumeMultiplier, 1.0f, 0.0f, nullptr, nullptr,
-        /*bAutoActivate=*/false);
-    if (AC)
-    {
-        AC->SoundClassOverride = SFXClass;
-        AC->bAutoDestroy = true;
-        AC->Play();
-    }
-    return AC;
 }
 
 // Implementation of missing input methods
@@ -134,6 +106,13 @@ void ABasicPlayer::OnAttackInput()
 void ABasicPlayer::SetLockedTarget(ABasicMOB* NewTarget)
 {
     if (LockedTarget == NewTarget) return;
+
+    // Clear any player/self target when locking a mob
+    if (NewTarget && LockedPlayerTarget)
+    {
+        LockedPlayerTarget = nullptr;
+    }
+    if (NewTarget) bIsSelfTargeted = false;
 
     // Hide head info of the old locked target before switching
     if (LockedTarget && LockedTarget->MobHeadInfo)
@@ -195,6 +174,8 @@ void ABasicPlayer::ClearLockedTarget()
     }
 
     LockedTarget = nullptr;
+    LockedPlayerTarget = nullptr;
+    bIsSelfTargeted = false;
     PrevSoftTarget = nullptr;
     bIsAutoAttacking = false;
     bIsApproachingTarget = false;
@@ -215,6 +196,143 @@ void ABasicPlayer::ClearLockedTarget()
     }
 }
 
+void ABasicPlayer::SetLockedPlayerTarget(ABasicPlayer* NewTarget)
+{
+    if (LockedPlayerTarget == NewTarget) return;
+    if (NewTarget == this) return; // Cannot target yourself via click
+
+    // Clear mob target when locking a player
+    if (NewTarget && LockedTarget)
+    {
+        if (LockedTarget->MobHeadInfo)
+        {
+            LockedTarget->MobHeadInfo->ShowWidget(false);
+        }
+        LockedTarget = nullptr;
+        bIsAutoAttacking = false;
+        bIsApproachingTarget = false;
+        PendingSkillSlug.Empty();
+        GetWorld()->GetTimerManager().ClearTimer(AutoAttackRetryTimerHandle);
+    }
+
+    LockedPlayerTarget = NewTarget;
+
+    if (LockedPlayerTarget)
+    {
+        bIsSelfTargeted = false;
+        const int32 PlayerId = LockedPlayerTarget->playerData.characterData.characterId;
+        if (UIManager)
+        {
+            UIManager->SetSkillTarget(PlayerId, ECasterType::Player);
+
+            // Show the target frame with player info (reuse mob target frame)
+            UIManager->ShowMobTargetFrame(
+                TEXT(""), // no mob slug
+                LockedPlayerTarget->playerData.characterData.characterName,
+                LockedPlayerTarget->playerData.characterData.characterLevel,
+                LockedPlayerTarget->playerData.characterData.characterCurrentHealth,
+                LockedPlayerTarget->GetMaxHealth_Implementation(),
+                false, // players are not aggressive
+                nullptr); // no icon
+        }
+
+        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Locked player target -> Player %d (%s)"),
+            PlayerId, *LockedPlayerTarget->playerData.characterData.characterName);
+    }
+
+    if (CursorInteractionComponent)
+    {
+        CursorInteractionComponent->NotifyLockedTargetChanged(nullptr, NewTarget, 
+            NewTarget ? EInteractableType::RemotePlayer : EInteractableType::None);
+    }
+}
+
+AActor* ABasicPlayer::GetLockedTargetActor() const
+{
+    if (LockedTarget) return LockedTarget;
+    if (LockedPlayerTarget) return LockedPlayerTarget;
+    return nullptr;
+}
+
+int32 ABasicPlayer::GetLockedTargetId() const
+{
+    if (LockedTarget)
+    {
+        return FCString::Atoi(*LockedTarget->GetMOBUId());
+    }
+    if (LockedPlayerTarget)
+    {
+        return LockedPlayerTarget->playerData.characterData.characterId;
+    }
+    return 0;
+}
+
+ECasterType ABasicPlayer::GetLockedTargetType() const
+{
+    if (LockedTarget) return ECasterType::Mob;
+    if (LockedPlayerTarget) return ECasterType::Player;
+    return ECasterType::None;
+}
+
+void ABasicPlayer::TargetSelf()
+{
+    // Clear any external target locks
+    if (LockedTarget && LockedTarget->MobHeadInfo)
+    {
+        LockedTarget->MobHeadInfo->ShowWidget(false);
+    }
+    LockedTarget = nullptr;
+    LockedPlayerTarget = nullptr;
+    bIsAutoAttacking = false;
+    bIsApproachingTarget = false;
+    PendingSkillSlug.Empty();
+    GetWorld()->GetTimerManager().ClearTimer(AutoAttackRetryTimerHandle);
+
+    bIsSelfTargeted = true;
+
+    if (UIManager)
+    {
+        UIManager->SetSkillTarget(playerData.characterData.characterId, ECasterType::Self);
+        UIManager->ShowMobTargetFrame(
+            TEXT(""),
+            playerData.characterData.characterName,
+            playerData.characterData.characterLevel,
+            playerData.characterData.characterCurrentHealth,
+            GetMaxHealth_Implementation(),
+            false,
+            nullptr);
+    }
+
+    if (CursorInteractionComponent)
+    {
+        CursorInteractionComponent->NotifyLockedTargetChanged(nullptr, nullptr, EInteractableType::None);
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Self-targeted (%s, id=%d)"),
+        *playerData.characterData.characterName, playerData.characterData.characterId);
+}
+
+void ABasicPlayer::OnTargetSelfInput()
+{
+    if (playerData.isOtherClient || playerData.characterData.bIsDead) return;
+
+    if (bIsSelfTargeted)
+    {
+        // Toggle off: clear self target
+        bIsSelfTargeted = false;
+        if (UIManager)
+        {
+            UIManager->SetSkillTarget(0, ECasterType::None);
+            UIManager->HideMobTargetFrame();
+        }
+        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Self-target cleared"));
+    }
+    else
+    {
+        TargetSelf();
+    }
+}
+
 void ABasicPlayer::StopAutoAttack()
 {
     // Interrupt the attack cycle and any approach movement but keep LockedTarget
@@ -230,9 +348,10 @@ void ABasicPlayer::StopAutoAttack()
 
 void ABasicPlayer::FaceLockedTarget()
 {
-    if (!LockedTarget) return;
+    AActor* TargetActor = GetLockedTargetActor();
+    if (!TargetActor) return;
 
-    FVector ToTarget = LockedTarget->GetActorLocation() - GetActorLocation();
+    FVector ToTarget = TargetActor->GetActorLocation() - GetActorLocation();
     ToTarget.Z = 0.f;
     if (ToTarget.IsNearlyZero()) return;
 
@@ -285,17 +404,19 @@ void ABasicPlayer::UpdateApproach(float DeltaTime)
         return;
     }
 
-    // в”Ђв”Ђ Combat approach (uses LockedTarget) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
-    if (!IsValid(LockedTarget))
+    // -- Combat approach (uses LockedTarget or LockedPlayerTarget) --
+    AActor* CombatTarget = GetLockedTargetActor();
+    if (!IsValid(CombatTarget))
     {
         bIsApproachingTarget = false;
         PendingSkillSlug.Empty();
         ClearLockedTarget();
         return;
     }
-    if (LockedTarget->GetMOBIsDead())
+
+    // Mob died while approaching — stop movement but keep lock for harvesting.
+    if (LockedTarget && LockedTarget->GetMOBIsDead())
     {
-        // Mob died while we were approaching вЂ” stop movement but keep lock for harvesting.
         bIsApproachingTarget = false;
         PendingSkillSlug.Empty();
         StopAutoAttack();
@@ -304,8 +425,16 @@ void ABasicPlayer::UpdateApproach(float DeltaTime)
         return;
     }
 
+    // Player target died while approaching
+    if (LockedPlayerTarget && LockedPlayerTarget->playerData.characterData.bIsDead)
+    {
+        bIsApproachingTarget = false;
+        PendingSkillSlug.Empty();
+        return;
+    }
+
     // Move toward the target every frame using CharacterMovementComponent
-    FVector ToTarget = LockedTarget->GetActorLocation() - GetActorLocation();
+    FVector ToTarget = CombatTarget->GetActorLocation() - GetActorLocation();
     ToTarget.Z = 0.f;
     const float Dist = ToTarget.Size();
     const FVector Direction = ToTarget.GetSafeNormal();
@@ -420,16 +549,18 @@ void ABasicPlayer::TryCastSkillWithApproach(const FString& SkillSlug)
 {
     if (playerData.characterData.bIsDead) return;
 
-    // Need a locked target to approach/cast
-    if (!LockedTarget)
+    // Need a locked target (mob or player) to approach/cast
+    AActor* TargetActor = GetLockedTargetActor();
+    if (!TargetActor)
     {
         UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: TryCastSkillWithApproach - no locked target"));
         return;
     }
 
-    if (LockedTarget->GetMOBIsDead())
+    // Mob-specific: dead mob handling
+    if (LockedTarget && LockedTarget->GetMOBIsDead())
     {
-        // Mob died before we cast вЂ” stop approach but keep lock for harvesting.
+        bIsAutoAttacking   = false; // stop approach but keep lock for harvesting.
         bIsAutoAttacking   = false;
         bIsApproachingTarget = false;
         PendingSkillSlug.Empty();
@@ -438,7 +569,16 @@ void ABasicPlayer::TryCastSkillWithApproach(const FString& SkillSlug)
         return;
     }
 
-    const float Dist = FVector::Dist(GetActorLocation(), LockedTarget->GetActorLocation());
+    // Player-specific: dead player handling
+    if (LockedPlayerTarget && LockedPlayerTarget->playerData.characterData.bIsDead)
+    {
+        bIsApproachingTarget = false;
+        PendingSkillSlug.Empty();
+        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: TryCastSkillWithApproach - player target is dead"));
+        return;
+    }
+
+    const float Dist = FVector::Dist(GetActorLocation(), TargetActor->GetActorLocation());
     const float EffectiveRange = GetSkillRange(SkillSlug);
 
     UE_LOG(LogTemp, Log, TEXT("BasicPlayer: TryCastSkillWithApproach - skill=%s dist=%.0f range=%.0f"),
@@ -765,7 +905,9 @@ void ABasicPlayer::OnSkill1Input()
 
     UPlayerSkillManager* SkillMgr = MyGameInstance->GetPlayerSkillManager();
     const FString SkillSlug = SkillMgr ? SkillMgr->GetSkillSlugFromSlot(0) : TEXT("");
-    if (!SkillSlug.IsEmpty() && LockedTarget)
+    const bool bNeedsApproach = !SkillSlug.IsEmpty() && GetLockedTargetActor()
+        && SkillMgr && SkillMgr->GetEffectiveTargetPolicy(SkillSlug) != ESkillTargetPolicy::SelfOnly;
+    if (bNeedsApproach)
     {
         TryCastSkillWithApproach(SkillSlug);
     }
@@ -782,7 +924,9 @@ void ABasicPlayer::OnSkill2Input()
 
     UPlayerSkillManager* SkillMgr = MyGameInstance->GetPlayerSkillManager();
     const FString SkillSlug = SkillMgr ? SkillMgr->GetSkillSlugFromSlot(1) : TEXT("");
-    if (!SkillSlug.IsEmpty() && LockedTarget)
+    const bool bNeedsApproach = !SkillSlug.IsEmpty() && GetLockedTargetActor()
+        && SkillMgr && SkillMgr->GetEffectiveTargetPolicy(SkillSlug) != ESkillTargetPolicy::SelfOnly;
+    if (bNeedsApproach)
     {
         TryCastSkillWithApproach(SkillSlug);
     }
@@ -799,7 +943,9 @@ void ABasicPlayer::OnSkill3Input()
 
     UPlayerSkillManager* SkillMgr = MyGameInstance->GetPlayerSkillManager();
     const FString SkillSlug = SkillMgr ? SkillMgr->GetSkillSlugFromSlot(2) : TEXT("");
-    if (!SkillSlug.IsEmpty() && LockedTarget)
+    const bool bNeedsApproach = !SkillSlug.IsEmpty() && GetLockedTargetActor()
+        && SkillMgr && SkillMgr->GetEffectiveTargetPolicy(SkillSlug) != ESkillTargetPolicy::SelfOnly;
+    if (bNeedsApproach)
     {
         TryCastSkillWithApproach(SkillSlug);
     }
@@ -816,7 +962,9 @@ void ABasicPlayer::OnSkill4Input()
 
     UPlayerSkillManager* SkillMgr = MyGameInstance->GetPlayerSkillManager();
     const FString SkillSlug = SkillMgr ? SkillMgr->GetSkillSlugFromSlot(3) : TEXT("");
-    if (!SkillSlug.IsEmpty() && LockedTarget)
+    const bool bNeedsApproach = !SkillSlug.IsEmpty() && GetLockedTargetActor()
+        && SkillMgr && SkillMgr->GetEffectiveTargetPolicy(SkillSlug) != ESkillTargetPolicy::SelfOnly;
+    if (bNeedsApproach)
     {
         TryCastSkillWithApproach(SkillSlug);
     }
@@ -833,7 +981,9 @@ void ABasicPlayer::OnSkill5Input()
 
     UPlayerSkillManager* SkillMgr = MyGameInstance->GetPlayerSkillManager();
     const FString SkillSlug = SkillMgr ? SkillMgr->GetSkillSlugFromSlot(4) : TEXT("");
-    if (!SkillSlug.IsEmpty() && LockedTarget)
+    const bool bNeedsApproach = !SkillSlug.IsEmpty() && GetLockedTargetActor()
+        && SkillMgr && SkillMgr->GetEffectiveTargetPolicy(SkillSlug) != ESkillTargetPolicy::SelfOnly;
+    if (bNeedsApproach)
     {
         TryCastSkillWithApproach(SkillSlug);
     }
@@ -898,6 +1048,12 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
         if (TabTargetAction)
         {
             EnhancedInputComponent->BindAction(TabTargetAction, ETriggerEvent::Started, this, &ABasicPlayer::OnTabTargetInput);
+        }
+
+        // Target self (F1 by default in IMC)
+        if (TargetSelfAction)
+        {
+            EnhancedInputComponent->BindAction(TargetSelfAction, ETriggerEvent::Started, this, &ABasicPlayer::OnTargetSelfInput);
         }
 
         // Pickup item action
@@ -1066,8 +1222,11 @@ ABasicPlayer::ABasicPlayer()
 	// Create nameplate component пїЅ auto-hidden for local player, visible for remote players
 	NameplateComponent = CreateDefaultSubobject<UPlayerNameplateComponent>(TEXT("NameplateComponent"));
 
-	// Create equipment visual component пїЅ attaches item meshes to skeleton sockets
+	// Create equipment visual component — attaches item meshes to skeleton sockets
 	EquipmentVisualComponent = CreateDefaultSubobject<UEquipmentVisualComponent>(TEXT("EquipmentVisualComponent"));
+
+	// Create cosmetic visual component — manages hair, facial hair, etc. via Leader Pose
+	CosmeticVisualComponent = CreateDefaultSubobject<UCosmeticVisualComponent>(TEXT("CosmeticVisualComponent"));
 
 	// Create emote component - handles emote montage playback, VFX, audio, and interruption
 	EmoteComponent = CreateDefaultSubobject<UEmoteComponent>(TEXT("EmoteComponent"));
@@ -1399,6 +1558,14 @@ Super::BeginPlay();
 						UE_LOG(LogTemp, Log, TEXT("BasicPlayer: EquipmentVisualComponent initialized"));
 					}
 
+					// Bind cosmetic component to live equipment manager so visibility
+					// (hair hidden by helmet, etc.) updates automatically on equip/unequip.
+					if (CosmeticVisualComponent)
+					{
+						CosmeticVisualComponent->BindEquipmentManager(EqMgr);
+						UE_LOG(LogTemp, Log, TEXT("BasicPlayer: CosmeticVisualComponent bound to EquipmentManager"));
+					}
+
 					// Explicitly request equipment state from server.
 					// EQUIPMENT_STATE may arrive before the visual component binds its delegate,
 					// but Initialize() above already replays the cached state.
@@ -1618,10 +1785,17 @@ void ABasicPlayer::DispatchCursorSelect(AActor* Target, EInteractableType Type)
 
     case EInteractableType::NPC:
     case EInteractableType::DroppedItem:
-    case EInteractableType::RemotePlayer:
         // Visual lock so the floor circle shows, no combat action
         if (CursorInteractionComponent)
             CursorInteractionComponent->SetVisualLock(Target, Type);
+        break;
+
+    case EInteractableType::RemotePlayer:
+        // Target the remote player for heals/buffs
+        if (ABasicPlayer* OtherPlayer = Cast<ABasicPlayer>(Target))
+        {
+            SetLockedPlayerTarget(OtherPlayer);
+        }
         break;
 
     default:
@@ -1901,7 +2075,7 @@ void ABasicPlayer::Tick(float DeltaTime)
     }
 
     // Update player movement for remote player
-    if (playerData.isOtherClient)
+    if (playerData.isOtherClient && !bPreviewMovementActive)
     {
         // UpdateRemotePlayerMovementOld(DeltaTime);
         UpdateRemotePlayerMovement();
@@ -2392,6 +2566,39 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     return AngleDifference / ServerPositionUpdateInterval;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Character-select preview movement helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+void ABasicPlayer::SetPreviewAnimationSpeed(float Speed, float Direction)
+{
+    SmoothedRemoteSpeed     = Speed;
+    SmoothedRemoteDirection = Direction;
+    bRemoteIsMoving         = Speed > 1.f;
+}
+
+void ABasicPlayer::FinishPreviewMovement(const FVector& FinalPos, const FRotator& FinalRot)
+{
+    // Hard-place the actor at the final position.
+    SetActorLocationAndRotation(FinalPos, FinalRot, false, nullptr, ETeleportType::TeleportPhysics);
+
+    // Sync received-position state so UpdateRemotePlayerMovement stays put at FinalPos
+    // once it is re-enabled by clearing bPreviewMovementActive.
+    LastReceivedPosition        = FinalPos;
+    TargetReceivedPosition      = FinalPos;
+    LastReceivedRotation        = FinalRot;
+    TargetReceivedRotation      = FinalRot;
+    bHasReceivedFirstPosition   = true;
+    TimeSinceLastPositionUpdate = 0.f;
+    RemoteSpeed                 = 0.f;
+    SmoothedRemoteSpeed         = 0.f;
+    RemoteDirection             = 0.f;
+    SmoothedRemoteDirection     = 0.f;
+    bRemoteIsMoving             = false;
+    bPreviewMovementActive      = false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 float ABasicPlayer::CalculateInterpolationSpeed(float MovementSpeed)
 {
@@ -2502,6 +2709,12 @@ void ABasicPlayer::SetPlayerClass(FString Class)
 void ABasicPlayer::SetPlayerRace(FString Race)
 {
     playerData.characterData.characterRace = Race;
+}
+
+// set player gender
+void ABasicPlayer::SetPlayerGender(FString Gender)
+{
+    playerData.characterData.characterGender = Gender;
 }
 
 // set player name
@@ -3174,25 +3387,51 @@ void ABasicPlayer::CheckForMOB()
             ClearLockedTarget();
         }
     }
+    if (LockedPlayerTarget && !bIsApproachingTarget)
+    {
+        if (FVector::Dist(GetActorLocation(), LockedPlayerTarget->GetActorLocation()) > MaxLeashDistance)
+        {
+            ClearLockedTarget();
+        }
+    }
 
     // Effective target: hard lock takes priority over soft target
     ABasicMOB* EffectiveTarget = LockedTarget ? LockedTarget : SoftTarget;
 
-    // Update skill system target
-    const int32 EffectiveTargetId = EffectiveTarget
-        ? FCString::Atoi(*EffectiveTarget->GetMOBUId()) : 0;
-
+    // Update skill system target — player target takes priority over mob soft target
     if (UIManager)
     {
-        UIManager->SetSkillTarget(EffectiveTargetId,
-            EffectiveTargetId > 0 ? ECasterType::Mob : ECasterType::None);
-
-        if (LockedTarget)
+        if (bIsSelfTargeted)
         {
-            const int32 MaxHP = LockedTarget->GetMOBAttributes().attributesData.Contains(TEXT("max_health"))
-                ? LockedTarget->GetMOBAttributes().attributesData[TEXT("max_health")].attributeValue
-                : 100;
-            UIManager->UpdateMobTargetFrameHP(LockedTarget->GetMOBCurrentHealth(), MaxHP);
+            UIManager->SetSkillTarget(playerData.characterData.characterId, ECasterType::Self);
+            UIManager->UpdateMobTargetFrameHP(
+                playerData.characterData.characterCurrentHealth,
+                GetMaxHealth_Implementation());
+        }
+        else if (LockedPlayerTarget)
+        {
+            const int32 PlayerId = LockedPlayerTarget->playerData.characterData.characterId;
+            UIManager->SetSkillTarget(PlayerId, ECasterType::Player);
+
+            // Update player target frame HP
+            UIManager->UpdateMobTargetFrameHP(
+                LockedPlayerTarget->playerData.characterData.characterCurrentHealth,
+                LockedPlayerTarget->GetMaxHealth_Implementation());
+        }
+        else
+        {
+            const int32 EffectiveTargetId = EffectiveTarget
+                ? FCString::Atoi(*EffectiveTarget->GetMOBUId()) : 0;
+            UIManager->SetSkillTarget(EffectiveTargetId,
+                EffectiveTargetId > 0 ? ECasterType::Mob : ECasterType::None);
+
+            if (LockedTarget)
+            {
+                const int32 MaxHP = LockedTarget->GetMOBAttributes().attributesData.Contains(TEXT("max_health"))
+                    ? LockedTarget->GetMOBAttributes().attributesData[TEXT("max_health")].attributeValue
+                    : 100;
+                UIManager->UpdateMobTargetFrameHP(LockedTarget->GetMOBCurrentHealth(), MaxHP);
+            }
         }
     }
 
@@ -4039,6 +4278,106 @@ void ABasicPlayer::ApplyServerMoveSpeed(float ServerMoveSpeed)
 		UE_LOG(LogTemp, Log, TEXT("BasicPlayer: MaxWalkSpeed set to %.1f (server move_speed=%.1f, scale=%.1f)"),
 			NewSpeed, ServerMoveSpeed, MoveSpeedScale);
 	}
+}
+
+void ABasicPlayer::ApplyVisualFromDataTable(UDataTable* VisualTable)
+{
+	if (!VisualTable) return;
+
+	const FString& ClassSlug  = playerData.characterData.characterClass;
+	const FString& RaceSlug   = playerData.characterData.characterRace;
+	const FString& GenderName = playerData.characterData.characterGender;
+
+	const FCharacterVisualDefinition* Def = CharacterVisualHelper::FindVisualDefinition(
+		VisualTable, ClassSlug, RaceSlug, GenderName);
+
+	if (!Def)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BasicPlayer::ApplyVisualFromDataTable: No definition for %s_%s_%s"),
+			*ClassSlug, *RaceSlug, *GenderName);
+		return;
+	}
+
+	const FCharacterVisualData& VisualData = Def->Visual;
+
+	FStreamableManager& Streamable = UAssetManager::GetStreamableManager();
+	TSoftObjectPtr<USkeletalMesh> SoftMesh = VisualData.SkeletalMesh;
+	TSoftClassPtr<UAnimInstance>  SoftAnimBP = VisualData.AnimBPClass;
+
+	TWeakObjectPtr<ABasicPlayer> WeakThis(this);
+
+	if (!SoftMesh.IsNull())
+	{
+		Streamable.RequestAsyncLoad(SoftMesh.ToSoftObjectPath(), [WeakThis, SoftMesh]()
+		{
+			if (!WeakThis.IsValid()) return;
+			ABasicPlayer* Self = WeakThis.Get();
+			if (USkeletalMesh* LoadedMesh = SoftMesh.Get())
+			{
+				USkeletalMeshComponent* MeshComp = Self->GetMesh();
+				if (MeshComp)
+				{
+					MeshComp->SetSkeletalMesh(LoadedMesh);
+					MeshComp->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+
+					const FBoxSphereBounds MeshBounds = LoadedMesh->GetBounds();
+					const FVector BoxExtent = MeshBounds.BoxExtent;
+					const FVector MeshOrigin = MeshBounds.Origin;
+
+					UCapsuleComponent* Capsule = Self->GetCapsuleComponent();
+					if (Capsule)
+					{
+						float CapsuleRadius = FMath::Max(BoxExtent.X, BoxExtent.Y);
+						float CapsuleHalfHeight = BoxExtent.Z;
+
+						Capsule->SetCapsuleRadius(CapsuleRadius);
+						Capsule->SetCapsuleHalfHeight(CapsuleHalfHeight);
+
+						float MeshBottom = MeshOrigin.Z - BoxExtent.Z;
+						float CapsuleBottom = -Capsule->GetUnscaledCapsuleHalfHeight();
+						float MeshOffset = CapsuleBottom - MeshBottom;
+						MeshComp->SetRelativeLocation(FVector(0, 0, MeshOffset));
+						MeshComp->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
+					}
+				}
+			}
+		});
+	}
+
+	if (!SoftAnimBP.IsNull())
+	{
+		Streamable.RequestAsyncLoad(SoftAnimBP.ToSoftObjectPath(), [WeakThis, SoftAnimBP]()
+		{
+			if (!WeakThis.IsValid()) return;
+			if (UClass* AnimClass = SoftAnimBP.Get())
+			{
+				WeakThis->GetMesh()->SetAnimInstanceClass(AnimClass);
+			}
+		});
+	}
+
+	SetActorScale3D(VisualData.ActorScale);
+
+	// Update audio profile if specified
+	if (VisualData.AudioProfileId != NAME_None)
+	{
+		AudioProfileId = VisualData.AudioProfileId;
+	}
+
+	// Initialize default cosmetics (hair, facial hair) from the visual definition.
+	// This must happen after SetActorScale3D so the body component pointer is stable.
+	UE_LOG(LogTemp, Log, TEXT("[Cosmetic] ApplyVisualFromDataTable: CosmeticVisualComponent=%s  MyGameInstance=%s  CosmeticsTable=%s"),
+		CosmeticVisualComponent ? TEXT("OK") : TEXT("NULL — not created in constructor?"),
+		MyGameInstance ? TEXT("OK") : TEXT("NULL"),
+		(MyGameInstance && MyGameInstance->CharacterCosmeticsDataTable) ? *MyGameInstance->CharacterCosmeticsDataTable->GetName() : TEXT("NULL — assign in BP_GameInstance"));
+	if (CosmeticVisualComponent)
+	{
+		UDataTable* CosmeticsTable = MyGameInstance ? MyGameInstance->CharacterCosmeticsDataTable : nullptr;
+		CosmeticVisualComponent->SetDefaultCosmetics(*Def, CosmeticsTable);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("BasicPlayer::ApplyVisualFromDataTable: Applied visual for %s_%s_%s"),
+		*ClassSlug, *RaceSlug, *GenderName);
 }
 
 void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdate)

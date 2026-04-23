@@ -83,8 +83,11 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Player Nameplate")
     void SetWidgetScale(float Scale);
 
+    // ------------------------------------------------------------------ //    //  Lifecycle                                                           //
     // ------------------------------------------------------------------ //
-    //  Tick � must be called every frame to handle the HP bar auto-hide   //
+    virtual void NativeConstruct() override;
+
+    // ------------------------------------------------------------------ //    //  Tick � must be called every frame to handle the HP bar auto-hide   //
     // ------------------------------------------------------------------ //
     virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 

@@ -6,6 +6,7 @@
 #include "Data/DataStructs.h"
 #include "Data/ItemStruct.h"
 #include "Data/WIODataStructs.h"
+#include "Authentication/LoginFlowTypes.h"
 
 // Forward declaration
 class UTimeSyncService;
@@ -45,7 +46,7 @@ public:
 	static FCharacterDataStruct DeserializeCharacterData(const FString& JsonString);
 	static TArray<FClientDataStruct> DeserializeCharactersList(const TSharedPtr<FJsonObject>& Body);
 
-    static TArray<FCharacterDataStruct>DeserializeLoginCharactersList(const FString& JsonString);
+    static TArray<FLoginCharacterEntry> DeserializeLoginCharactersList(const FString& JsonString);
 
     static TArray<FSpawnZoneStruct> DeserializeSpawnZonesList(const TSharedPtr<FJsonObject>& Body);
     static FSpawnZoneStruct DeserializeSpawnZoneData(const TSharedPtr<FJsonObject>& Body);
@@ -159,4 +160,7 @@ public:
     static FWIOStateUpdate DeserializeWIOStateUpdate(const FString& JsonString);
     static FWIOChannelCancelled DeserializeWIOChannelCancelled(const TSharedPtr<FJsonObject>& Body);
     static FWIOChannelCancelled DeserializeWIOChannelCancelled(const FString& JsonString);
+
+    // ── Login Flow ───────────────────────────────────────────────────────────
+    static FCharacterCreationOptions DeserializeCharacterCreationOptions(const FString& JsonString);
 };

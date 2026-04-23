@@ -909,7 +909,8 @@ void UHarvestManager::SendLootPickupRequest(int32 CorpseUID, const TArray<FCorps
 	HeaderData.Add(TEXT("message"), MessageValue);
 	
 	// Add player ID and corpse UID to the body data
-	TSharedPtr<FJsonValueNumber> PlayerIDValue = MakeShareable(new FJsonValueNumber(gameInstance->GetCurrentClientID()));
+	// Server validates playerId == characterId (from session), so send characterId here.
+	TSharedPtr<FJsonValueNumber> PlayerIDValue = MakeShareable(new FJsonValueNumber(gameInstance->GetCurrentCharacterID()));
 	BodyData.Add(TEXT("playerId"), PlayerIDValue);
 
 	TSharedPtr<FJsonValueNumber> CorpseUIDValue = MakeShareable(new FJsonValueNumber(CorpseUID));
@@ -961,7 +962,8 @@ void UHarvestManager::SendLootInspectRequest(int32 CorpseUID)
 	HeaderData.Add(TEXT("message"), MessageValue);
 	
 	// Add player ID and corpse UID to the body data
-	TSharedPtr<FJsonValueNumber> PlayerIDValue = MakeShareable(new FJsonValueNumber(gameInstance->GetCurrentClientID()));
+	// Server validates playerId == characterId (from session), so send characterId here.
+	TSharedPtr<FJsonValueNumber> PlayerIDValue = MakeShareable(new FJsonValueNumber(gameInstance->GetCurrentCharacterID()));
 	BodyData.Add(TEXT("playerId"), PlayerIDValue);
 
 	TSharedPtr<FJsonValueNumber> CorpseUIDValue = MakeShareable(new FJsonValueNumber(CorpseUID));

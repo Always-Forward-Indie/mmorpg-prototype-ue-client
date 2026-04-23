@@ -91,21 +91,21 @@ void UTargetDecalComponent::EnsureDecalCreated(UMaterialInterface* BaseMaterial)
     // Rotate so the decal face points straight down (-Z in decal space = -90 pitch).
     DecalComp->SetRelativeRotation(FRotator(-90.f, 0.f, 0.f));
 
-    // If the owner is an ACharacter, shift the decal down to the capsule base so the
-    // 40-cm projection depth only reaches the floor and never the character mesh.
-    // For other actors (items, etc.) the root is already at floor level, so no offset needed.
-    float FloorZ = 0.f;
+    // Cache the floor-level Z offset for this owner.
+    // For ACharacter: bottom of the capsule (= actual ground contact point).
+    // For other actors (items, etc.): root is already at floor level → 0.
+    CachedFloorZ = 0.f;
     if (const ACharacter* Char = Cast<ACharacter>(Owner))
     {
         if (const UCapsuleComponent* Cap = Char->GetCapsuleComponent())
         {
-            FloorZ = -Cap->GetScaledCapsuleHalfHeight();
+            CachedFloorZ = -Cap->GetScaledCapsuleHalfHeight();
         }
     }
-    DecalComp->SetRelativeLocation(FVector(0.f, 0.f, FloorZ));
+    // Initial position — will be corrected immediately by UpdateMID using CachedFloorZ.
+    DecalComp->SetRelativeLocation(FVector(0.f, 0.f, CachedFloorZ));
 
-    // Initial extent (will be overwritten by UpdateMID).
-    // Depth 40 cm: ±20 cm from the capsule base → only the floor surface is inside the volume.
+    // Initial extent (overwritten by UpdateMID).
     DecalComp->DecalSize = FVector(40.f, 60.f, 60.f);
     DecalComp->SetVisibility(false);
     // bReceivesDecals was removed in UE5 — no replacement needed.
@@ -130,7 +130,14 @@ void UTargetDecalComponent::UpdateMID(UWorldInteractionConfig* Config,
                                      : Config->HoverOpacity;
 
     if (DecalComp)
+    {
         DecalComp->DecalSize = FVector(Config->DecalDepth, HalfExt, HalfExt);
+
+        // Shift the decal center DOWN by DecalDepth so the top of the projection
+        // volume is exactly flush with the floor (CachedFloorZ) and the entire
+        // volume projects only below the floor — never into the character mesh above.
+        DecalComp->SetRelativeLocation(FVector(0.f, 0.f, CachedFloorZ - Config->DecalDepth));
+    }
 
     MID->SetVectorParameterValue(FName("Color"),   Color);
     MID->SetScalarParameterValue(FName("Opacity"), Opacity);

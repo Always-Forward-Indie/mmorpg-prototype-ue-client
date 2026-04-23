@@ -72,6 +72,8 @@ struct FCharacterDataStruct
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
     FString characterRace = "";
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
+    FString characterGender = "";
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
     FPositionDataStruct characterPosition;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
     FAttributesDataStruct characterAttributes;
@@ -318,7 +320,8 @@ enum class ESkillEffectType : uint8
     Healing     UMETA(DisplayName = "Healing"), 
     Buff        UMETA(DisplayName = "Buff"),
     Debuff      UMETA(DisplayName = "Debuff"),
-    Resource    UMETA(DisplayName = "Resource") // for mana/energy effects
+    Resource    UMETA(DisplayName = "Resource"), // for mana/energy effects
+    Teleport    UMETA(DisplayName = "Teleport")  // self-only movement/teleport skills
 };
 
 UENUM(BlueprintType)
@@ -332,6 +335,17 @@ enum class ESkillSchool : uint8
     Arcane      UMETA(DisplayName = "Arcane"),
     Shadow      UMETA(DisplayName = "Shadow"),
     Holy        UMETA(DisplayName = "Holy")
+};
+
+// Determines what targets a skill is allowed to be cast on.
+// Used by PlayerSkillManager to resolve and validate the target before sending to server.
+UENUM(BlueprintType)
+enum class ESkillTargetPolicy : uint8
+{
+    Auto        = 0 UMETA(DisplayName = "Auto (derive from effectType)"),
+    SelfOnly    = 1 UMETA(DisplayName = "Self Only (teleport)"),
+    TargetOnly  = 2 UMETA(DisplayName = "Target Only (combat)"),
+    SelfAndTarget = 3 UMETA(DisplayName = "Self and Target (buff/heal)")
 };
 
 // Integer values match the server protocol exactly.
@@ -1906,6 +1920,11 @@ struct FSkillDefinitionData : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
     ESkillEffectType effectType = ESkillEffectType::None;
 
+    // Targeting policy: who can this skill be cast on?
+    // Auto = derive from effectType (Damage/Debuff→TargetOnly, Healing/Buff→SelfAndTarget)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
+    ESkillTargetPolicy targetPolicy = ESkillTargetPolicy::Auto;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
     ESkillSchool school = ESkillSchool::None;
 
@@ -2087,6 +2106,22 @@ struct FSkillSlotData
         boundKey = FKey();
         bIsAssigned = false;
     }
+};
+
+// Single entry in the setSkillCooldowns server packet.
+// remainingMs is the time left on the cooldown (not the full duration).
+USTRUCT(BlueprintType)
+struct FSkillCooldownEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Cooldown")
+    FString skillSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Cooldown")
+    int32 remainingMs = 0;
+
+    FSkillCooldownEntry() : skillSlug(""), remainingMs(0) {}
 };
 
 

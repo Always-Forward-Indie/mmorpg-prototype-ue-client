@@ -9,9 +9,9 @@
 class UButton;
 class UMyGameInstance;
 
-// Delegates — business logic lives in UIManager; we only broadcast events.
+// Delegates ï¿½ business logic lives in UIManager; we only broadcast events.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameMenuResumeClicked);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameMenuAudioSettingsClicked);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameMenuSettingsClicked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameMenuExitToLoginClicked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameMenuExitToDesktopClicked);
 
@@ -19,18 +19,18 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameMenuExitToDesktopClicked);
  * UGameMenuWidget
  *
  * Pause / main game menu shown when the player presses Escape (or the menu hotkey).
- * Purely a presenter — business logic lives in UIManager.
+ * Purely a presenter ï¿½ business logic lives in UIManager.
  *
  * Required UMG widget names (BindWidget):
- *   Btn_Resume          — closes this menu and returns to game
- *   Btn_AudioSettings   — opens the audio settings panel
+ *   Btn_Resume    â€” closes this menu and returns to game
+ *   Btn_Settings  â€” opens the full tabbed settings window
  *
  * Optional UMG widget names (BindWidgetOptional):
- *   Btn_ExitToLogin     — disconnects and returns to the login screen
- *   Btn_ExitToDesktop   — quits the application
+ *   Btn_ExitToLogin     â€” disconnects and returns to the login screen
+ *   Btn_ExitToDesktop   â€” quits the application
  *
  * Create a Blueprint child (e.g. WBP_GameMenu) and lay out those buttons.
- * Bind OnResume / OnAudioSettings / OnExitToLogin / OnExitToDesktop in UIManager.
+ * Bind OnResume / OnSettingsClicked / OnExitToLogin / OnExitToDesktop in UIManager.
  */
 UCLASS(BlueprintType, Blueprintable)
 class PROTOTYPING_API UGameMenuWidget : public UUserWidget
@@ -47,7 +47,7 @@ public:
 	FOnGameMenuResumeClicked OnResumeClicked;
 
 	UPROPERTY(BlueprintAssignable, Category = "Game Menu|Events")
-	FOnGameMenuAudioSettingsClicked OnAudioSettingsClicked;
+	FOnGameMenuSettingsClicked OnSettingsClicked;
 
 	UPROPERTY(BlueprintAssignable, Category = "Game Menu|Events")
 	FOnGameMenuExitToLoginClicked OnExitToLoginClicked;
@@ -63,7 +63,7 @@ public:
 	UButton* Btn_Resume = nullptr;
 
 	UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "Game Menu")
-	UButton* Btn_AudioSettings = nullptr;
+	UButton* Btn_Settings = nullptr;
 
 	UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Game Menu")
 	UButton* Btn_ExitToLogin = nullptr;
@@ -98,11 +98,10 @@ bool bIsOpen = false;
 bool bDelegatesBound = false;
 
 UFUNCTION()
-void HandleResumeClicked();
+	void HandleResumeClicked();
 
 	UFUNCTION()
-	void HandleAudioSettingsClicked();
-
+	void HandleSettingsClicked();
 	UFUNCTION()
 	void HandleExitToLoginClicked();
 

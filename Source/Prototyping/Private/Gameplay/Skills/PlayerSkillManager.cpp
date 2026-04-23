@@ -184,6 +184,16 @@ bool UPlayerSkillManager::TryCastSkill(const FString& SkillSlug, int32 TargetId,
         return false;
     }
 
+    // Resolve and validate the target based on skill target policy
+    int32 ResolvedTargetId = TargetId;
+    ECasterType ResolvedTargetType = TargetType;
+    if (!ResolveSkillTarget(SkillSlug, ResolvedTargetId, ResolvedTargetType))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Invalid target for skill %s (targetId=%d, targetType=%d)"),
+            *SkillSlug, TargetId, static_cast<int32>(TargetType));
+        return false;
+    }
+
     // Set the confirmation guard BEFORE sending the request.  If the send succeeds the
     // guard stays set until HandleSkillInitiation clears it.  If the send fails, clear
     // immediately so the player is not permanently blocked.
@@ -193,11 +203,12 @@ bool UPlayerSkillManager::TryCastSkill(const FString& SkillSlug, int32 TargetId,
     // Cast skill through existing system - DON'T start cooldown here anymore
     if (SkillSystemManager)
     {
-        bool bSuccess = SkillSystemManager->CastSkill(CharacterId, TargetId, SkillSlug, TargetType);
+        bool bSuccess = SkillSystemManager->CastSkill(CharacterId, ResolvedTargetId, SkillSlug, ResolvedTargetType);
         
         if (bSuccess)
         {
-            UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Successfully sent skill request %s - waiting for server confirmation"), *SkillSlug);
+            UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Sent skill request %s (target=%d, type=%d) - waiting for server confirmation"),
+                *SkillSlug, ResolvedTargetId, static_cast<int32>(ResolvedTargetType));
         }
         else
         {
@@ -297,6 +308,94 @@ TArray<FSkillSlotData> UPlayerSkillManager::GetAllSkillSlots() const
     TArray<FSkillSlotData> Slots;
     SkillSlots.GenerateValueArray(Slots);
     return Slots;
+}
+
+ESkillTargetPolicy UPlayerSkillManager::GetEffectiveTargetPolicy(const FString& SkillSlug) const
+{
+    if (!HasSkill(SkillSlug))
+    {
+        return ESkillTargetPolicy::TargetOnly;
+    }
+
+    const FPlayerSkillData& SkillData = PlayerSkills[SkillSlug];
+    const ESkillTargetPolicy Explicit = SkillData.definitionData.targetPolicy;
+
+    // If designer set an explicit policy in the DataTable, respect it
+    if (Explicit != ESkillTargetPolicy::Auto)
+    {
+        return Explicit;
+    }
+
+    // Auto-derive from effectType
+    switch (SkillData.definitionData.effectType)
+    {
+    case ESkillEffectType::Damage:
+    case ESkillEffectType::Debuff:
+        return ESkillTargetPolicy::TargetOnly;
+
+    case ESkillEffectType::Healing:
+    case ESkillEffectType::Buff:
+    case ESkillEffectType::Resource:
+        return ESkillTargetPolicy::SelfAndTarget;
+
+    case ESkillEffectType::Teleport:
+    case ESkillEffectType::None:
+        return ESkillTargetPolicy::SelfOnly;
+
+    default:
+        return ESkillTargetPolicy::SelfOnly;
+    }
+}
+
+bool UPlayerSkillManager::IsSkillSelfCastable(const FString& SkillSlug) const
+{
+    const ESkillTargetPolicy Policy = GetEffectiveTargetPolicy(SkillSlug);
+    return Policy == ESkillTargetPolicy::SelfOnly || Policy == ESkillTargetPolicy::SelfAndTarget;
+}
+
+bool UPlayerSkillManager::ResolveSkillTarget(const FString& SkillSlug, int32& InOutTargetId, ECasterType& InOutTargetType) const
+{
+    const ESkillTargetPolicy Policy = GetEffectiveTargetPolicy(SkillSlug);
+    const bool bHasExternalTarget = (InOutTargetId > 0 && InOutTargetId != CharacterId
+        && InOutTargetType != ECasterType::None && InOutTargetType != ECasterType::Self);
+
+    switch (Policy)
+    {
+    case ESkillTargetPolicy::SelfOnly:
+        // Always target self regardless of what was passed
+        InOutTargetId = CharacterId;
+        InOutTargetType = ECasterType::Self;
+        return true;
+
+    case ESkillTargetPolicy::TargetOnly:
+        // Must have a valid external target; cannot target self
+        if (!bHasExternalTarget)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Skill %s requires a target (TargetOnly policy)"), *SkillSlug);
+            return false;
+        }
+        if (InOutTargetId == CharacterId)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Skill %s cannot target self (TargetOnly policy)"), *SkillSlug);
+            return false;
+        }
+        return true;
+
+    case ESkillTargetPolicy::SelfAndTarget:
+        // If external target is available, use it; otherwise default to self
+        if (bHasExternalTarget)
+        {
+            return true;
+        }
+        // No external target — cast on self
+        InOutTargetId = CharacterId;
+        InOutTargetType = ECasterType::Self;
+        UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Skill %s has no target, defaulting to self"), *SkillSlug);
+        return true;
+
+    default:
+        return false;
+    }
 }
 
 void UPlayerSkillManager::CastSkillBySlot(int32 SlotIndex, int32 TargetId, ECasterType TargetType)
@@ -536,11 +635,67 @@ void UPlayerSkillManager::HandleSkillInitiation(const FString& SkillSlug, int32 
     }
 }
 
-void UPlayerSkillManager::NotifyAnimationEnded()
-{
+void UPlayerSkillManager::NotifyAnimationEnded(){
     bIsAnimationPlaying      = false;
     bAwaitingServerConfirmation = false; // safety: clear any stale guard
     UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Animation ended, cast lock released"));
+}
+
+void UPlayerSkillManager::ApplyServerCooldowns(const TArray<FSkillCooldownEntry>& Cooldowns)
+{
+    // IMPORTANT: bCooldownUsesServerClock must match the time source used to set
+    // cooldownEndTime. If we set endTime = worldTime+X but mark the skill as using
+    // server clock, IsSkillOnCooldown will compare serverTime (~1.7 billion) against
+    // worldTime+X (~67) and always return false — cooldown appears instantly expired.
+    // See also: Bug 8 comment in GetSkillCooldownRemaining.
+    const bool bServerSyncValid = TimeSyncService && TimeSyncService->IsTimeSyncValid();
+    const double Now = bServerSyncValid
+        ? static_cast<double>(TimeSyncService->GetEstimatedServerTimeMs()) / 1000.0
+        : GetWorldSeconds();
+
+    UE_LOG(LogTemp, Warning,
+        TEXT("PlayerSkillManager: ApplyServerCooldowns — syncValid=%d, now=%.3f, entries=%d"),
+        bServerSyncValid ? 1 : 0, Now, Cooldowns.Num());
+
+    int32 Applied = 0;
+
+    for (const FSkillCooldownEntry& Entry : Cooldowns)
+    {
+        if (Entry.remainingMs <= 0)
+            continue; // already expired server-side — nothing to restore
+
+        FPlayerSkillData* S = PlayerSkills.Find(Entry.skillSlug);
+        if (!S)
+        {
+            UE_LOG(LogTemp, Warning,
+                TEXT("PlayerSkillManager: ApplyServerCooldowns - unknown skill '%s', skipping"),
+                *Entry.skillSlug);
+            continue;
+        }
+
+        // Sanity clamp: remainingMs must not exceed the skill's base cooldown.
+        // Guards against server bugs / extreme clock drift permanently freezing a skill.
+        const int32 MaxMs = S->networkData.cooldownMs > 0 ? S->networkData.cooldownMs : 300000;
+        const int32 ClampedMs = FMath::Clamp(Entry.remainingMs, 1, MaxMs);
+
+        const double RemainingSec = static_cast<double>(ClampedMs) / 1000.0;
+        // Use the same clock that was used to compute Now — keeps set/check consistent.
+        S->bCooldownUsesServerClock = bServerSyncValid;
+        S->cooldownEndTime          = Now + RemainingSec;
+        S->bIsOnCooldown            = true;
+        S->bIsReady                 = false;
+
+        OnSkillCooldownStarted.Broadcast(Entry.skillSlug);
+
+        UE_LOG(LogTemp, Warning,
+            TEXT("PlayerSkillManager: Restored cooldown %.1fs for '%s' (clamped from %dms to %dms) endTime=%.3f useSrvClock=%d"),
+            RemainingSec, *Entry.skillSlug, Entry.remainingMs, ClampedMs, S->cooldownEndTime, bServerSyncValid ? 1 : 0);
+        ++Applied;
+    }
+
+    UE_LOG(LogTemp, Log,
+        TEXT("PlayerSkillManager: ApplyServerCooldowns — applied %d / %d entries"),
+        Applied, Cooldowns.Num());
 }
 
 double UPlayerSkillManager::GetServerSeconds() const {

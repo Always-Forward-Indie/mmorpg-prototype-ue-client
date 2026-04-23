@@ -394,9 +394,17 @@ void USkillBarWidget::OnPlayerSkillsInitialized(const TArray<FPlayerSkillData>& 
 
 void USkillBarWidget::OnSkillCooldownStarted(const FString& SkillSlug)
 {
+    UE_LOG(LogTemp, Warning,
+        TEXT("SkillBarWidget: OnSkillCooldownStarted '%s' — slots=%d"),
+        *SkillSlug, SkillSlots.Num());
     for (int32 i = 0; i < SkillSlots.Num(); ++i)
     {
         USkillSlotWidget* SlotWidget = SkillSlots[i];
+        UE_LOG(LogTemp, Warning,
+            TEXT("SkillBarWidget:   slot[%d] assigned='%s' match=%d"),
+            i,
+            SlotWidget ? *SlotWidget->GetAssignedSkillSlug() : TEXT("NULL"),
+            (SlotWidget && SlotWidget->GetAssignedSkillSlug() == SkillSlug) ? 1 : 0);
         if (SlotWidget && SlotWidget->GetAssignedSkillSlug() == SkillSlug)
         {
             RefreshSlot(i);

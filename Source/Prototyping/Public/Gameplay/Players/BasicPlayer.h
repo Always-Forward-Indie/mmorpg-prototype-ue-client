@@ -94,6 +94,10 @@ private:
 	// Accumulates time since the last packet that contained actual displacement.
 	float RemoteIdleTime = 0.0f;
 
+	// When true, UpdateRemotePlayerMovement is skipped so CharacterPreviewManager
+	// can drive position and animation directly during character-select podium walks.
+	bool bPreviewMovementActive = false;
+
 	// Server move_speed -> Unreal units conversion scale
 	// Server validates: maxAllowedDist = move_speed * 40.0 * dt * 1.3 (30% buffer)
 	// Must match exactly so the client speed == server expectation.
@@ -161,6 +165,10 @@ private:
 	// Equipment visual component
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
 	class UEquipmentVisualComponent* EquipmentVisualComponent;
+
+	// Cosmetic visual component — manages hair, facial hair, etc. using Leader Pose
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment", meta = (AllowPrivateAccess = "true"))
+	class UCosmeticVisualComponent* CosmeticVisualComponent;
 
 	// Emote component — handles montage playback, VFX, and interruption for emotes
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Emotes", meta = (AllowPrivateAccess = "true"))
@@ -453,6 +461,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
 	void SetPlayerRace(FString Race);
 
+	// set player gender
+	UFUNCTION(BlueprintCallable, Category = "Player Data")
+	void SetPlayerGender(FString Gender);
+
 	// set player name
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
 	void SetPlayerName(FString Name);
@@ -487,8 +499,16 @@ public:
 
 	// Apply server-authoritative move_speed to CharacterMovementComponent.
 	// ServerMoveSpeed is the raw server value; it is multiplied by MoveSpeedScale internally.
-	// This is the single source of truth for MaxWalkSpeed � no client-side modifiers.
+	// This is the single source of truth for MaxWalkSpeed — no client-side modifiers.
 	void ApplyServerMoveSpeed(float ServerMoveSpeed);
+
+	/**
+	 * Look up this character's class+race+gender in the CharacterVisualDefinitionsTable
+	 * and async-load the correct SkeletalMesh + AnimBP. Follows the same pattern as
+	 * BasicMOB::SetupMobVisual.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Player Visual")
+	void ApplyVisualFromDataTable(UDataTable* VisualTable);
 
 	// Set message data
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
@@ -679,10 +699,20 @@ public:
 	UFUNCTION()
 	void OnSkill5Input();
 
+	UFUNCTION()
+	void OnTargetSelfInput();
+
 public:
 	// Target lock system
 	UPROPERTY()
 	ABasicMOB* LockedTarget = nullptr;
+
+	// Player target lock (for heals/buffs on other players)
+	UPROPERTY()
+	ABasicPlayer* LockedPlayerTarget = nullptr;
+
+	// Self-target flag — when true, skills cast on self even if another target is visible
+	bool bIsSelfTargeted = false;
 
 	bool bIsAutoAttacking = false;
 	bool bLastKnownTargetAggro = false;
@@ -694,11 +724,36 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void SetLockedTarget(ABasicMOB* NewTarget);
 
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void SetLockedPlayerTarget(ABasicPlayer* NewTarget);
+
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Combat")
 	ABasicMOB* GetLockedTarget() const { return LockedTarget; }
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Combat")
+	ABasicPlayer* GetLockedPlayerTarget() const { return LockedPlayerTarget; }
+
+	// Returns the currently locked target actor (mob or player), or nullptr
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Combat")
+	AActor* GetLockedTargetActor() const;
+
+	// Returns the locked target's combat ID (characterId for players, mobUId for mobs)
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Combat")
+	int32 GetLockedTargetId() const;
+
+	// Returns the locked target's ECasterType
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Combat")
+	ECasterType GetLockedTargetType() const;
+
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void ClearLockedTarget();
+
+	// Self-target: directs SelfAndTarget/SelfOnly skills to cast on self
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void TargetSelf();
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Combat")
+	bool IsSelfTargeted() const { return bIsSelfTargeted; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Combat")
 	float GetCurrentSkillRange() const;
@@ -788,6 +843,10 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
 	class UEquipmentVisualComponent* GetEquipmentVisualComponent() const { return EquipmentVisualComponent; }
 
+	// Get cosmetic visual component (hair/facial hair — initialized via ApplyVisualFromDataTable)
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
+	class UCosmeticVisualComponent* GetCosmeticVisualComponent() const { return CosmeticVisualComponent; }
+
 	// Get emote component
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Emotes")
 	class UEmoteComponent* GetEmoteComponent() const { return EmoteComponent; }
@@ -850,6 +909,27 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Data")
 	float GetRemoteDirection() const { return SmoothedRemoteDirection; }
+
+	// ─── Character-select preview movement (CharacterPreviewManager use only) ────
+	/**
+	 * Engage preview-movement mode: suppresses UpdateRemotePlayerMovement so
+	 * CharacterPreviewManager can drive position and animation directly.
+	 */
+	void SetPreviewMovementActive(bool bActive) { bPreviewMovementActive = bActive; }
+	bool IsPreviewMovementActive() const        { return bPreviewMovementActive; }
+
+	/**
+	 * Feed the animation system during a preview walk without a server packet.
+	 * Sets SmoothedRemoteSpeed / Direction so the AnimBP blend-space reacts.
+	 */
+	void SetPreviewAnimationSpeed(float Speed, float Direction);
+
+	/**
+	 * Finalise a preview move: sync the received-position state so
+	 * UpdateRemotePlayerMovement stays put at FinalPos once re-enabled.
+	 */
+	void FinishPreviewMovement(const FVector& FinalPos, const FRotator& FinalRot);
+	// ─────────────────────────────────────────────────────────────────────────
 
 	UFUNCTION()
 	void OnRespawnClicked();
@@ -921,6 +1001,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* EmoteListAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* TargetSelfAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* GameMenuAction;

@@ -11,7 +11,7 @@
 #include "Utils/JSONParser.h"
 #include "Prototyping.h"
 
-// File-scope counter — atomically incremented for each new UNetworkManager instance.
+// File-scope counter пїЅ atomically incremented for each new UNetworkManager instance.
 // Kept here (not in the header) so UHT never sees it.
 static int32 GNetworkManagerNextInstanceId = 0;
 
@@ -140,7 +140,7 @@ void UNetworkManager::RestartPolling()
 //start connection to login server
 void UNetworkManager::ConnectLoginServer()
 {
-	// Настраиваем сокет, если он еще не создан
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
 	if (!LoginServerSocket)
 	{
 		LoginServerSocket = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateSocket(NAME_Stream, TEXT("LoginServerSocket"), false);
@@ -150,22 +150,22 @@ void UNetworkManager::ConnectLoginServer()
 		LoginServerSocket->SetNoDelay(true);
 	}
 
-	// Устанавливаем IP и порт
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ IP пїЅ пїЅпїЅпїЅпїЅ
 	FIPv4Address LoginServerIPAddr;
 	FIPv4Address::Parse(LoginServerIP, LoginServerIPAddr);
 	FIPv4Endpoint LoginServerEndpoint(LoginServerIPAddr, LoginServerPort);
 
-	// Запускаем подключение
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	bIsLoginSocketConnected = LoginServerSocket->Connect(*LoginServerEndpoint.ToInternetAddr());
 	LoginConnectionRetryCount = 0;
 
-	// Запускаем таймер для проверки подключения
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	FTimerDelegate LoginTimerDelegate;
 	LoginTimerDelegate.BindLambda([this, LoginServerEndpoint]()
 		{
 			if (LoginServerSocket && LoginServerSocket->GetConnectionState() == ESocketConnectionState::SCS_Connected)
 			{
-				// Already set up — timer may fire again if ClearTimer was skipped
+				// Already set up пїЅ timer may fire again if ClearTimer was skipped
 				if (ReceiverLoginServerWorker) { return; }
 
 				UE_LOG(LogConnection, Log, TEXT("Login Server socket connected."));
@@ -173,7 +173,7 @@ void UNetworkManager::ConnectLoginServer()
 				if (WorldContext) { WorldContext->GetTimerManager().ClearTimer(LoginServerConnectionTimerHandle); }
 				LoginServerConnectionTimerHandle.Invalidate();
 
-				// Создаем потоки для работы с логин-сервером
+				// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅ-пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 				ReceiverLoginServerWorker = new NetworkReceiverWorker(LoginServerSocket);
 				// Set TimeSyncService reference for precise timestamps
 				if (UTimeSyncService* TimeSyncSvc = GetTimeSyncService())
@@ -202,7 +202,7 @@ void UNetworkManager::ConnectLoginServer()
 				{
 					UE_LOG(LogConnection, Error, TEXT("Failed to connect to Login Server after %d retries."), LoginConnectionRetryCount);
 					if (WorldContext) { WorldContext->GetTimerManager().ClearTimer(LoginServerConnectionTimerHandle); }
-					// Показываем попап с выбором: повторить или выйти
+					// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 					ShowLoginServerConnectionIssuePopup();
 				}
 			}
@@ -212,7 +212,7 @@ void UNetworkManager::ConnectLoginServer()
 
 void UNetworkManager::ConnectGameServer()
 {
-	// Аналогичная логика для игрового сервера
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	if (!GameServerSocket)
 	{
 		GameServerSocket = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateSocket(NAME_Stream, TEXT("GameServerSocket"), false);
@@ -234,7 +234,7 @@ void UNetworkManager::ConnectGameServer()
 		{
 			if (GameServerSocket && GameServerSocket->GetConnectionState() == ESocketConnectionState::SCS_Connected)
 			{
-				// Already set up — timer may fire again if ClearTimer was skipped
+				// Already set up пїЅ timer may fire again if ClearTimer was skipped
 				if (ReceiverGameServerWorker) { return; }
 
 				UE_LOG(LogConnection, Log, TEXT("Game Server socket connected."));
@@ -242,7 +242,7 @@ void UNetworkManager::ConnectGameServer()
 				if (WorldContext) { WorldContext->GetTimerManager().ClearTimer(GameServerConnectionTimerHandle); }
 				GameServerConnectionTimerHandle.Invalidate();
 
-				// Создаем потоки для работы с игровым сервером
+				// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 				ReceiverGameServerWorker = new NetworkReceiverWorker(GameServerSocket);
 				// Set TimeSyncService reference for precise timestamps
 				if (UTimeSyncService* TimeSyncSvc = GetTimeSyncService())
@@ -271,7 +271,7 @@ void UNetworkManager::ConnectGameServer()
 				{
 					UE_LOG(LogConnection, Error, TEXT("Failed to connect to Game Server after %d retries."), GameConnectionRetryCount);
 					if (WorldContext) { WorldContext->GetTimerManager().ClearTimer(GameServerConnectionTimerHandle); }
-					// Можно добавить аналогичный попап для игрового сервера, если нужно
+					// пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 					ShowGameServerConnectionIssuePopup();
 				}
 			}
@@ -282,7 +282,7 @@ void UNetworkManager::ConnectGameServer()
 // connect to chunk server
 void UNetworkManager::ConnectChunkServer()
 {
-	// Аналогичная логика для игрового сервера
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	if (!ChunkServerSocket)
 	{
 		ChunkServerSocket = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateSocket(NAME_Stream, TEXT("ChunkServerSocket"), false);
@@ -301,7 +301,7 @@ void UNetworkManager::ConnectChunkServer()
 		{
 			if (ChunkServerSocket && ChunkServerSocket->GetConnectionState() == ESocketConnectionState::SCS_Connected)
 			{
-				// Already set up — timer may fire again if ClearTimer was skipped
+				// Already set up пїЅ timer may fire again if ClearTimer was skipped
 				if (ReceiverChunkServerWorker) { return; }
 
 				UE_LOG(LogConnection, Log, TEXT("Chunk Server socket connected."));
@@ -309,7 +309,7 @@ void UNetworkManager::ConnectChunkServer()
 				if (WorldContext) { WorldContext->GetTimerManager().ClearTimer(ChunkServerConnectionTimerHandle); }
 				ChunkServerConnectionTimerHandle.Invalidate();
 				
-				// Создаем потоки для работы с chunk сервером
+				// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ chunk пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 				ReceiverChunkServerWorker = new NetworkReceiverWorker(ChunkServerSocket);
 				// Set TimeSyncService reference for precise timestamps
 				if (UTimeSyncService* TimeSyncSvc = GetTimeSyncService())
@@ -338,8 +338,8 @@ void UNetworkManager::ConnectChunkServer()
 				{
 					UE_LOG(LogConnection, Error, TEXT("Failed to connect to Chunk Server after %d retries."), ChunkConnectionRetryCount);
 					if (WorldContext) { WorldContext->GetTimerManager().ClearTimer(ChunkServerConnectionTimerHandle); }
-					// Можно добавить аналогичный попап для игрового сервера,
-					// если нужно
+					// пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ,
+					// пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 					ShowChunkServerConnectionIssuePopup();
 				}
 			}
@@ -366,7 +366,7 @@ void UNetworkManager::ShowChunkServerConnectionIssuePopup()
 {
 	if (MessageBoxPopupClass)
 	{
-		// Если окно уже создано, не создаём новое
+		// пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 		if (!MsgBoxChunkServer)
 		{
 			MsgBoxChunkServer = CreateWidget<UMessageBoxPopup>(WorldContext, MessageBoxPopupClass);
@@ -378,9 +378,9 @@ void UNetworkManager::ShowChunkServerConnectionIssuePopup()
 			FText YesText = FText::FromString(TEXT("Yes"));
 			FText NoText = FText::FromString(TEXT("No"));
 			MsgBoxChunkServer->SetupMessageBox(TitleMessage, ErrorMessage, YesText, NoText);
-			// Устанавливаем окно на экран
+			// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 			MsgBoxChunkServer->AddToViewport();
-			// Подписываемся на события кнопок
+			// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
 			MsgBoxChunkServer->OnLeftButtonClicked.AddDynamic(this, &UNetworkManager::OnChunkServerConnectionRetry);
 			MsgBoxChunkServer->OnRightButtonClicked.AddDynamic(this, &UNetworkManager::OnConnectCancel);
 		}
@@ -392,7 +392,7 @@ void UNetworkManager::ShowLoginServerConnectionIssuePopup()
 {
 	if (MessageBoxPopupClass)
 	{
-		// Если окно уже создано, не создаём новое
+		// пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 		if (!MsgBoxLoginServer)
 		{
 			MsgBoxLoginServer = CreateWidget<UMessageBoxPopup>(WorldContext, MessageBoxPopupClass);
@@ -406,10 +406,10 @@ void UNetworkManager::ShowLoginServerConnectionIssuePopup()
 			FText NoText = FText::FromString(TEXT("No"));
 			MsgBoxLoginServer->SetupMessageBox(TitleMessage, ErrorMessage, YesText, NoText);
 
-			// Устанавливаем окно на экран
+			// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 			MsgBoxLoginServer->AddToViewport();
 
-			// Подписываемся на события кнопок
+			// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
 			MsgBoxLoginServer->OnLeftButtonClicked.AddDynamic(this, &UNetworkManager::OnLoginServerConnectionRetry);
 			MsgBoxLoginServer->OnRightButtonClicked.AddDynamic(this, &UNetworkManager::OnConnectCancel);
 		}
@@ -420,7 +420,7 @@ void UNetworkManager::ShowGameServerConnectionIssuePopup()
 {
 	if (MessageBoxPopupClass)
 	{
-		// Если окно уже создано, не создаём новое
+		// пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 		if (!MsgBoxGameServer)
 		{
 			MsgBoxGameServer = CreateWidget<UMessageBoxPopup>(WorldContext, MessageBoxPopupClass);
@@ -433,10 +433,10 @@ void UNetworkManager::ShowGameServerConnectionIssuePopup()
 			FText NoText = FText::FromString(TEXT("No"));
 			MsgBoxGameServer->SetupMessageBox(TitleMessage, ErrorMessage, YesText, NoText);
 
-			// Устанавливаем окно на экран
+			// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 			MsgBoxGameServer->AddToViewport();
 
-			// Подписываемся на события кнопок
+			// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
 			MsgBoxGameServer->OnLeftButtonClicked.AddDynamic(this, &UNetworkManager::OnGameServerConnectionRetry);
 			MsgBoxGameServer->OnRightButtonClicked.AddDynamic(this, &UNetworkManager::OnConnectCancel);
 		}
@@ -455,7 +455,7 @@ void UNetworkManager::OnLoginServerConnectionRetry()
 	}
 
 	UE_LOG(LogConnection, Log, TEXT("User chose to retry Login Server connection."));
-	// Попытка переподключения: вызываем метод подключения заново
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
 	ConnectLoginServer();
 }
 
@@ -470,7 +470,7 @@ void UNetworkManager::OnGameServerConnectionRetry()
 		MsgBoxGameServer = nullptr;
 	}
 
-	// Попытка переподключения: вызываем метод подключения заново
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
 	ConnectGameServer();
 }
 
@@ -485,7 +485,7 @@ void UNetworkManager::OnChunkServerConnectionRetry()
 		MsgBoxChunkServer = nullptr;
 	}
 	UE_LOG(LogConnection, Log, TEXT("User chose to retry Chunk Server connection."));
-	// Попытка переподключения: вызываем метод подключения заново
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
 	ConnectChunkServer();
 }
 
@@ -494,7 +494,7 @@ void UNetworkManager::OnChunkServerConnectionRetry()
 void UNetworkManager::OnConnectCancel()
 {
 	UE_LOG(LogConnection, Log, TEXT("User cancelled Server connection."));
-	// Завершаем игру или выполняем другую логику выхода
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
 	UKismetSystemLibrary::QuitGame(WorldContext, nullptr, EQuitPreference::Quit, true);
 }
 
@@ -508,6 +508,11 @@ void UNetworkManager::SendDataToLoginServer(const FString& Data) {
 	{
 		UE_LOG(LogConnection, Error, TEXT("Sender Login Server Worker is null"));
 	}
+}
+
+bool UNetworkManager::IsLoginServerConnected() const
+{
+	return SenderLoginServerWorker != nullptr;
 }
 
 void UNetworkManager::SendDataToGameServer(const FString& Data) {
@@ -632,7 +637,7 @@ void UNetworkManager::Shutdown() {
 	if (ReceiverChunkServerWorker) ReceiverChunkServerWorker->DetachSocket();
 	if (SenderChunkServerWorker)   SenderChunkServerWorker->DetachSocket();
 
-	// Step 3b: Close and destroy sockets — workers already hold nullptr so they
+	// Step 3b: Close and destroy sockets пїЅ workers already hold nullptr so they
 	// cannot race against DestroySocket() anymore.
 	if (LoginServerSocket != nullptr)
 	{
@@ -662,7 +667,7 @@ void UNetworkManager::Shutdown() {
 		if (Worker) Worker->Stop();
 		if (Thread)
 		{
-			// 2-second safety timeout — should exit almost immediately after socket close.
+			// 2-second safety timeout пїЅ should exit almost immediately after socket close.
 			Thread->WaitForCompletion();
 			delete Thread;
 			Thread = nullptr;

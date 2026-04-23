@@ -485,9 +485,13 @@ void UMOBMovementComponent::ProcessPatrolMovement(float DeltaTime)
     const FVector TargetXY(LatestServerPos.X, LatestServerPos.Y, CurrentLocation.Z);
     const float GapToServer = FVector::Dist2D(CurrentLocation, TargetXY);
 
-    // --- Stop condition (also covers idle / no waypoint) ---------------------
+    // --- Stop condition -------------------------------------------------------
     // 5-unit hysteresis: once inside, stay until next packet resets state.
-    if (!bHasWaypoint || PatrolSpeed < 1.f || GapToServer < 5.f)
+    // bHasWaypoint is intentionally NOT checked here: the mob should move
+    // whenever the server reports speed > 0 and a position we haven't reached
+    // yet.  Requiring a waypoint blocked zone-1 (ANNULUS) mobs whose server
+    // packets legitimately omit the waypoint field.
+    if (PatrolSpeed < 1.f || GapToServer < 5.f)
     {
         // Only settle toward server pos for small corrections (< PatrolSnapThreshold).
         // Larger gaps mean LatestServerPos jumped far (e.g. first packet after spawn

@@ -1,5 +1,6 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Components/ArrowComponent.h"
 #include "DevMode/DevModeDataProvider.h"
 #include "DevMode/DevModeConsoleCommands.h"
 #include "Containers/Ticker.h"
@@ -48,12 +49,15 @@
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "Gameplay/Equipment/EquipmentNetworkHandler.h"
 #include "Gameplay/Equipment/EquipmentVisualComponent.h"
+#include "Gameplay/Players/CosmeticVisualComponent.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Gameplay/Vendor/VendorNetworkHandler.h"
 #include "Gameplay/Repair/RepairManager.h"
 #include "Gameplay/Repair/RepairNetworkHandler.h"
 #include "Gameplay/SkillShop/SkillShopManager.h"
 #include "Gameplay/SkillShop/SkillShopNetworkHandler.h"
+#include "Gameplay/Characters/CharacterPreviewManager.h"
+#include "Gameplay/LoginLevel/LoginLevelSetupActor.h"
 
 #include "Gameplay/Bestiary/BestiaryNetworkHandler.h"
 #include "Gameplay/Chat/ChatManager.h"
@@ -282,6 +286,12 @@ void UMyGameInstance::InitNetworkingSetup()
 		NetworkManager->ConnectLoginServer();
 		NetworkManager->ConnectGameServer();
 		NetworkManager->ConnectChunkServer();
+		// Start polling login server responses — requires WorldContext to be set first.
+		// InitGameSystems() also calls this but runs from Init() where WorldContext is still
+		// null, so the timer is never actually registered. We must call it here, after
+		// SetWorldContext(), so PollLoginServerNetworkData() is ticked and responses
+		// from register/login/etc. are dispatched to ProcessLoginResponse.
+		NetworkManager->StartPollingLoginServer();
 	}
 
 	if (AuthenticationManager != nullptr) {
@@ -1058,6 +1068,10 @@ void UMyGameInstance::TransitionToGameWorld()
 
 	// Clean up Login level UI and actors before the level switch
 	RemoveLoginWidgetFromViewport();
+	if (CharacterPreviewManager)
+	{
+		CharacterPreviewManager->Cleanup();
+	}
 	if (LoginLevelCamera)
 	{
 		LoginLevelCamera->StopSound();
@@ -1183,6 +1197,50 @@ void UMyGameInstance::OnLoginLevelLoaded()
 			}
 		}
 
+		// If a LoginLevelSetupActor is placed in the level, read all camera and
+		// character-slot transforms from it — overrides the Blueprint properties.
+		ALoginLevelSetupActor* SetupActor = Cast<ALoginLevelSetupActor>(
+			UGameplayStatics::GetActorOfClass(GetWorld(), ALoginLevelSetupActor::StaticClass()));
+		if (SetupActor)
+		{
+			LoginLevelCameraLocation = SetupActor->LoginCameraSpot->GetComponentLocation();
+			LoginLevelCameraRotation = SetupActor->LoginCameraSpot->GetComponentRotation();
+
+			PodiumCameraLocation = SetupActor->SelectCameraSpot->GetComponentLocation();
+			PodiumCameraRotation = SetupActor->SelectCameraSpot->GetComponentRotation();
+
+			CreatePreviewCameraLocation = SetupActor->CreateCameraSpot->GetComponentLocation();
+			CreatePreviewCameraRotation = SetupActor->CreateCameraSpot->GetComponentRotation();
+
+			CreatePreviewLocation = SetupActor->CreateSlot->GetComponentLocation();
+			CreatePreviewRotation = SetupActor->CreateSlot->GetComponentRotation();
+
+			SelectedCharacterLocation = SetupActor->SelectedCharacterSlot->GetComponentLocation();
+			SelectedCharacterRotation = SetupActor->SelectedCharacterSlot->GetComponentRotation();
+
+			PodiumSpawnLocations.Reset();
+			PodiumSpawnRotations.Reset();
+			for (UArrowComponent* Slot : SetupActor->PodiumSlots)
+			{
+				if (Slot)
+				{
+					PodiumSpawnLocations.Add(Slot->GetComponentLocation());
+					PodiumSpawnRotations.Add(Slot->GetComponentRotation());
+				}
+			}
+			// Keep legacy fallback for anything that still reads PodiumSpawnRotation.
+			if (SetupActor->PodiumSlots.Num() > 0 && SetupActor->PodiumSlots[0])
+			{
+				PodiumSpawnRotation = SetupActor->PodiumSlots[0]->GetComponentRotation();
+			}
+
+			UE_LOG(LogTemp, Log, TEXT("LoginLevelSetupActor found — camera and spawn transforms applied."));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("LoginLevelSetupActor not found in Login Level — using Blueprint-configured values."));
+		}
+
 		LoginLevelCamera = GetWorld()->SpawnActor<AMyCameraActor>(LoginCameraClass, LoginLevelCameraLocation, LoginLevelCameraRotation);
 		if (LoginLevelCamera)
 		{
@@ -1208,6 +1266,13 @@ void UMyGameInstance::OnLoginLevelLoaded()
 		}
 
 		InitNetworkingSetup();
+
+		// Initialize CharacterPreviewManager for the login level
+		if (!CharacterPreviewManager)
+		{
+			CharacterPreviewManager = NewObject<UCharacterPreviewManager>(this);
+		}
+		CharacterPreviewManager->Initialize(this);
 
 		// Login UI is now in the viewport. Remove the loading screen after one tick
 		// so the render thread has received the draw command first.
@@ -1752,22 +1817,107 @@ void UMyGameInstance::AddMonitorStatsWidgetToViewport()
 
 void UMyGameInstance::AddLoginWidgetToViewport()
 {
-	if (LoginScreenWidgetClass)
+	// Logo sits at the very bottom (Z-order 5), below the login form.
+	if (LoginLogoWidgetClass)
 	{
+		LoginLogoWidget = CreateWidget<UW_LoginLogoWidget>(this, LoginLogoWidgetClass);
+		if (LoginLogoWidget)
+		{
+			LoginLogoWidget->AddToViewport(5);
+		}
+	}
+
+	// Prefer new LoginFlowWidget if configured
+	if (LoginFlowWidgetClass)
+	{
+		LoginFlowWidget = CreateWidget<ULoginFlowWidget>(this, LoginFlowWidgetClass);
+		if (LoginFlowWidget)
+		{
+			// Pass error messages DataTable
+			if (LoginErrorMessagesTable)
+			{
+				LoginFlowWidget->ErrorMessagesTable = LoginErrorMessagesTable;
+			}
+			// Z-order 10 keeps the login UI above the nameplate canvas (Z=1).
+			LoginFlowWidget->AddToViewport(10);
+		}
+	}
+	else if (LoginScreenWidgetClass)
+	{
+		// Legacy fallback
 		LoginScreenWidget = CreateWidget<ULoginWidget>(this, LoginScreenWidgetClass);
 		if (LoginScreenWidget)
 		{
 			LoginScreenWidget->AddToViewport();
 		}
 	}
+
+	// Overlay sits on top of everything (Z-order 20).
+	if (LoginScreenOverlayWidgetClass)
+	{
+		LoginScreenOverlayWidget = CreateWidget<UW_LoginScreenOverlayWidget>(this, LoginScreenOverlayWidgetClass);
+		if (LoginScreenOverlayWidget)
+		{
+			LoginScreenOverlayWidget->AddToViewport(20);
+		}
+	}
 }
 
 void UMyGameInstance::RemoveLoginWidgetFromViewport()
 {
+	if (LoginLogoWidget)
+	{
+		LoginLogoWidget->RemoveFromParent();
+		LoginLogoWidget = nullptr;
+	}
+	if (LoginFlowWidget)
+	{
+		LoginFlowWidget->RemoveFromParent();
+		LoginFlowWidget = nullptr;
+	}
 	if (LoginScreenWidget)
 	{
 		LoginScreenWidget->RemoveFromParent();
-		LoginScreenWidget = nullptr; // Clear the reference
+		LoginScreenWidget = nullptr;
+	}
+	if (LoginScreenOverlayWidget)
+	{
+		LoginScreenOverlayWidget->RemoveFromParent();
+		LoginScreenOverlayWidget = nullptr;
+	}
+	if (LoginSettingsWidget)
+	{
+		LoginSettingsWidget->RemoveFromParent();
+		LoginSettingsWidget = nullptr;
+	}
+}
+
+void UMyGameInstance::ShowLoginSettings(ESettingsTab Tab)
+{
+	if (!LoginSettingsWidgetClass) { return; }
+
+	// Create once, reuse on subsequent calls.
+	if (!IsValid(LoginSettingsWidget))
+	{
+		LoginSettingsWidget = CreateWidget<UW_SettingsWidget>(this, LoginSettingsWidgetClass);
+		if (LoginSettingsWidget)
+		{
+			// Z-order 30: above overlay (20) and login flow (10).
+			LoginSettingsWidget->AddToViewport(30);
+		}
+	}
+
+	if (LoginSettingsWidget)
+	{
+		LoginSettingsWidget->OpenSettings(Tab);
+	}
+}
+
+void UMyGameInstance::HideLoginSettings()
+{
+	if (IsValid(LoginSettingsWidget))
+	{
+		LoginSettingsWidget->CloseSettings();
 	}
 }
 
@@ -1950,6 +2100,7 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 	NewPlayer->SetPlayerName(PlayerData.characterData.characterName);
 	NewPlayer->SetPlayerClass(PlayerData.characterData.characterClass);
 	NewPlayer->SetPlayerRace(PlayerData.characterData.characterRace);
+	NewPlayer->SetPlayerGender(PlayerData.characterData.characterGender);
 	NewPlayer->SetPlayerLevel(PlayerData.characterData.characterLevel);
 	NewPlayer->SetPlayerNextLevelExp(PlayerData.characterData.characterExpForLevelEnd);
 	NewPlayer->SetPlayerExpPoints(PlayerData.characterData.characterExperiencePoints);
@@ -1958,6 +2109,12 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 	NewPlayer->SetPlayerAttributes(PlayerData.characterData.characterAttributes.attributesData);
 	NewPlayer->SetPlayerTag(*FString::FromInt(PlayerData.characterData.characterId));
 	NewPlayer->SetPlayerTag(TEXT("Player"));
+
+	// Apply visual from DataTable (mesh, animation, scale based on class/race/gender)
+	if (CharacterVisualDefinitionsTable)
+	{
+		NewPlayer->ApplyVisualFromDataTable(CharacterVisualDefinitionsTable);
+	}
 
 	// Apply dead state from server before UI is shown so the death screen
 	// appears immediately if the character was dead at login.
@@ -2068,6 +2225,15 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 				VisComp, &UEquipmentVisualComponent::HandleRemoteEquipmentState);
 			UE_LOG(LogTemp, Log, TEXT("SpawnPlayerForClient: Equipment visuals bound for remote CharID=%d"), RemoteCharId);
 
+			// Bind cosmetic visual component to remote equipment updates so that
+			// helmets correctly hide hair for other players on the same screen.
+			if (UCosmeticVisualComponent* CosmeticVis = NewPlayer->GetCosmeticVisualComponent())
+			{
+				CosmeticVis->SetOwnerCharacterId(RemoteCharId);
+				EquipmentManager->OnRemoteEquipmentStateReceivedDelegate.AddDynamic(
+					CosmeticVis, &UCosmeticVisualComponent::HandleRemoteEquipmentState);
+			}
+
 			// Replay any PLAYER_EQUIPMENT_UPDATE that arrived before this actor was spawned.
 			// This resolves the race where the server broadcasts equipment immediately after
 			// playerReady but the client is still deferred in PendingRemotePlayerSpawns.
@@ -2078,6 +2244,12 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 					VisComp->HandleRemoteEquipmentState(*Cached);
 					UE_LOG(LogTemp, Log, TEXT("SpawnPlayerForClient: Replayed cached equipment for remote CharID=%d (%d slot(s))"),
 						RemoteCharId, Cached->slots.Num());
+
+					// Also replay to cosmetics so hair-hide is applied from the cached state.
+					if (UCosmeticVisualComponent* CosmeticVis = NewPlayer->GetCosmeticVisualComponent())
+					{
+						CosmeticVis->HandleRemoteEquipmentState(*Cached);
+					}
 				}
 			}
 
@@ -2222,6 +2394,14 @@ void UMyGameInstance::RemovePlayerData(int32 ClientID)
 				{
 					EquipmentManager->OnRemoteEquipmentStateReceivedDelegate.RemoveDynamic(
 						VisComp, &UEquipmentVisualComponent::HandleRemoteEquipmentState);
+				}
+
+				// Unsubscribe cosmetic visual component from the same remote delegate.
+				UCosmeticVisualComponent* CosmeticVis = PlayerToRemove->GetCosmeticVisualComponent();
+				if (CosmeticVis && EquipmentManager)
+				{
+					EquipmentManager->OnRemoteEquipmentStateReceivedDelegate.RemoveDynamic(
+						CosmeticVis, &UCosmeticVisualComponent::HandleRemoteEquipmentState);
 				}
 
 				// Unregister from combat system

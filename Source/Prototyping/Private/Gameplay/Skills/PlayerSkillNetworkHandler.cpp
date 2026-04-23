@@ -97,6 +97,10 @@ void UPlayerSkillNetworkHandler::HandleChunkServerData(const FString& ReceivedDa
     {
         HandleInitializePlayerSkills(ReceivedData);
     }
+    else if (MessageData.eventType == TEXT("setSkillCooldowns"))
+    {
+        HandleSetSkillCooldowns(ReceivedData);
+    }
     else if (MessageData.eventType == TEXT("skillCooldownUpdate"))
     {
         HandleSkillCooldownUpdate(ReceivedData);
@@ -141,6 +145,66 @@ void UPlayerSkillNetworkHandler::HandleInitializePlayerSkills(const FString& Jso
 
     UE_LOG(LogTemp, Warning, TEXT("PlayerSkillNetworkHandler: Initialized %d skills for character %d"), 
         SkillsData.skills.Num(), SkillsData.characterId);
+}
+
+// ---------------------------------------------------------------------------
+// Inbound: setSkillCooldowns — active cooldowns restored on login
+// Server sends this after initializePlayerSkills when the character has
+// skills still on cooldown from their previous session.
+// Each entry: { skillSlug, remainingMs } — time LEFT, not full duration.
+// ---------------------------------------------------------------------------
+void UPlayerSkillNetworkHandler::HandleSetSkillCooldowns(const FString& JsonData)
+{
+    if (!SkillManager)
+    {
+        UE_LOG(LogTemp, Error, TEXT("PlayerSkillNetworkHandler: HandleSetSkillCooldowns - SkillManager is null"));
+        return;
+    }
+
+    TSharedPtr<FJsonObject> Root;
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonData);
+    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+    {
+        UE_LOG(LogTemp, Error, TEXT("PlayerSkillNetworkHandler: HandleSetSkillCooldowns - failed to parse JSON"));
+        return;
+    }
+
+    const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+    if (!Root->TryGetObjectField(TEXT("body"), BodyPtr))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillNetworkHandler: HandleSetSkillCooldowns - missing 'body' field"));
+        return;
+    }
+
+    const TArray<TSharedPtr<FJsonValue>>* CooldownsArr = nullptr;
+    if (!(*BodyPtr)->TryGetArrayField(TEXT("cooldowns"), CooldownsArr) || CooldownsArr->IsEmpty())
+    {
+        // Empty array is valid — no active cooldowns to restore
+        UE_LOG(LogTemp, Log, TEXT("PlayerSkillNetworkHandler: HandleSetSkillCooldowns - no cooldowns to restore"));
+        return;
+    }
+
+    TArray<FSkillCooldownEntry> Cooldowns;
+    Cooldowns.Reserve(CooldownsArr->Num());
+
+    for (const TSharedPtr<FJsonValue>& Val : *CooldownsArr)
+    {
+        const TSharedPtr<FJsonObject>* EntryObj = nullptr;
+        if (!Val->TryGetObject(EntryObj)) continue;
+
+        FSkillCooldownEntry Entry;
+        if (!(*EntryObj)->TryGetStringField(TEXT("skillSlug"), Entry.skillSlug)) continue;
+        if (!(*EntryObj)->TryGetNumberField(TEXT("remainingMs"), Entry.remainingMs)) continue;
+        if (Entry.skillSlug.IsEmpty() || Entry.remainingMs <= 0) continue;
+
+        Cooldowns.Add(Entry);
+    }
+
+    UE_LOG(LogTemp, Log,
+        TEXT("PlayerSkillNetworkHandler: HandleSetSkillCooldowns - restoring %d cooldowns"),
+        Cooldowns.Num());
+
+    SkillManager->ApplyServerCooldowns(Cooldowns);
 }
 
 void UPlayerSkillNetworkHandler::HandleSkillCooldownUpdate(const FString& JsonData)

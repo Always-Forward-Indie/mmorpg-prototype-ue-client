@@ -34,6 +34,15 @@ void AAmbientSoundZoneActor::OnConstruction(const FTransform& Transform)
 	ApplyAttenuationSettings();
 }
 
+void AAmbientSoundZoneActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (AudioComponent)
+	{
+		AudioComponent->Stop();
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
 void AAmbientSoundZoneActor::ApplyAttenuationSettings()
 {
 	if (!AudioComponent) { return; }

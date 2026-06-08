@@ -106,9 +106,8 @@ private:
 	// Guard against double Shutdown() calls (GameInstance::Shutdown + destructor)
 	bool bIsShutDown = false;
 
-	// ����� ������� ��� �������-�����
 	UPROPERTY()
-	TSubclassOf<UMessageBoxPopup> MessageBoxPopupClass;
+	TSoftClassPtr<UMessageBoxPopup> MessageBoxPopupClass;
 
 	UPROPERTY()
 	UMessageBoxPopup* MsgBoxLoginServer;

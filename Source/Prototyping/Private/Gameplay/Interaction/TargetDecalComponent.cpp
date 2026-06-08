@@ -5,19 +5,22 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "GameFramework/Character.h"
 #include "Components/CapsuleComponent.h"
+#include "Engine/World.h"
+#include "EngineUtils.h"
+#include "GameFramework/Pawn.h"
+
+static constexpr float FloorInterpSpeed = 15.f;
 
 UTargetDecalComponent::UTargetDecalComponent()
 {
-    PrimaryComponentTick.bCanEverTick = false;
+    PrimaryComponentTick.bCanEverTick = true;
+    PrimaryComponentTick.TickInterval = 0.05f;
     bAutoActivate = true;
-    // Decal itself is created lazily in Apply() so the owning actor is fully
-    // initialized (RootComponent valid) before we attach to it.
 }
 
 void UTargetDecalComponent::BeginPlay()
 {
     Super::BeginPlay();
-    // Intentionally empty — decal is constructed on demand.
 }
 
 void UTargetDecalComponent::EndPlay(const EEndPlayReason::Type Reason)
@@ -31,13 +34,30 @@ void UTargetDecalComponent::EndPlay(const EEndPlayReason::Type Reason)
     Super::EndPlay(Reason);
 }
 
+void UTargetDecalComponent::TickComponent(float DeltaTime, ELevelTick TickType,
+                                          FActorComponentTickFunction* ThisTickFunction)
+{
+    Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+    if (!DecalComp || !DecalComp->IsVisible() || !KnownConfig)
+    {
+        return;
+    }
+
+    UpdateFloorTrace();
+    CachedFloorZ = FMath::FInterpTo(CachedFloorZ, TargetFloorZ, DeltaTime, FloorInterpSpeed);
+
+    const float DecalCenterZ = CachedFloorZ - KnownConfig->DecalDepth * 0.5f;
+    DecalComp->SetRelativeLocation(FVector(0.f, 0.f, DecalCenterZ));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────────────────────────────────────
 
 void UTargetDecalComponent::Apply(ETargetDecalState    NewState,
-                                  UWorldInteractionConfig* Config,
-                                  EInteractableType    Type)
+                                   UWorldInteractionConfig* Config,
+                                   EInteractableType    Type)
 {
     if (!Config)
     {
@@ -45,7 +65,7 @@ void UTargetDecalComponent::Apply(ETargetDecalState    NewState,
         return;
     }
 
-    if (NewState == CurrentState) return; // Nothing to do.
+    if (NewState == CurrentState) return;
     CurrentState = NewState;
 
     if (NewState == ETargetDecalState::Hidden)
@@ -55,8 +75,11 @@ void UTargetDecalComponent::Apply(ETargetDecalState    NewState,
     }
 
     EnsureDecalCreated(Config->DecalMaterial);
-    if (!DecalComp) return; // Material not assigned in Config yet — silently skip.
+    if (!DecalComp) return;
 
+    KnownConfig = Config;
+    UpdateFloorTrace();
+    CachedFloorZ = TargetFloorZ;
     UpdateMID(Config, Type, NewState);
     DecalComp->SetVisibility(true);
 }
@@ -73,8 +96,8 @@ void UTargetDecalComponent::ForceHide()
 
 void UTargetDecalComponent::EnsureDecalCreated(UMaterialInterface* BaseMaterial)
 {
-    if (DecalComp) return;         // Already created.
-    if (!BaseMaterial) return;     // No material configured — bail silently.
+    if (DecalComp) return;
+    if (!BaseMaterial) return;
 
     AActor* Owner = GetOwner();
     if (!Owner) return;
@@ -82,42 +105,61 @@ void UTargetDecalComponent::EnsureDecalCreated(UMaterialInterface* BaseMaterial)
     DecalComp = NewObject<UDecalComponent>(Owner, TEXT("TargetDecalVFX"));
     DecalComp->RegisterComponent();
 
-    // Attach to the root — place the decal center at the base of the capsule so the
-    // projection volume stays below the character mesh and hits only the floor.
     DecalComp->AttachToComponent(
         Owner->GetRootComponent(),
         FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 
-    // Rotate so the decal face points straight down (-Z in decal space = -90 pitch).
     DecalComp->SetRelativeRotation(FRotator(-90.f, 0.f, 0.f));
 
-    // Cache the floor-level Z offset for this owner.
-    // For ACharacter: bottom of the capsule (= actual ground contact point).
-    // For other actors (items, etc.): root is already at floor level → 0.
-    CachedFloorZ = 0.f;
+    TargetFloorZ = 0.f;
     if (const ACharacter* Char = Cast<ACharacter>(Owner))
     {
         if (const UCapsuleComponent* Cap = Char->GetCapsuleComponent())
         {
-            CachedFloorZ = -Cap->GetScaledCapsuleHalfHeight();
+            TargetFloorZ = -Cap->GetScaledCapsuleHalfHeight();
         }
     }
-    // Initial position — will be corrected immediately by UpdateMID using CachedFloorZ.
-    DecalComp->SetRelativeLocation(FVector(0.f, 0.f, CachedFloorZ));
+    CachedFloorZ = TargetFloorZ;
 
-    // Initial extent (overwritten by UpdateMID).
+    DecalComp->SetRelativeLocation(FVector(0.f, 0.f, TargetFloorZ));
     DecalComp->DecalSize = FVector(40.f, 60.f, 60.f);
     DecalComp->SetVisibility(false);
-    // bReceivesDecals was removed in UE5 — no replacement needed.
 
-    // Build the Dynamic Material Instance so we can set Color + Opacity cheaply.
     MID = UMaterialInstanceDynamic::Create(BaseMaterial, DecalComp);
     DecalComp->SetDecalMaterial(MID);
 }
 
+void UTargetDecalComponent::UpdateFloorTrace()
+{
+    AActor* Owner = GetOwner();
+    if (!Owner) return;
+
+    UWorld* World = GetWorld();
+    if (!World) return;
+
+    const FVector RootLoc = Owner->GetActorLocation();
+    const FVector Start   = RootLoc + FVector(0.f, 0.f, 200.f);
+    const FVector End     = RootLoc - FVector(0.f, 0.f, 600.f);
+
+    FCollisionQueryParams Params;
+    Params.bTraceComplex = true;
+    Params.AddIgnoredActor(Owner);
+
+    for (TActorIterator<APawn> It(World); It; ++It)
+    {
+        Params.AddIgnoredActor(*It);
+    }
+
+    FHitResult Hit;
+    if (World->LineTraceSingleByChannel(Hit, Start, End, ECC_WorldStatic, Params))
+    {
+        TargetFloorZ = Hit.ImpactPoint.Z - RootLoc.Z;
+    }
+}
+
 void UTargetDecalComponent::UpdateMID(UWorldInteractionConfig* Config,
-                                      EInteractableType        Type,
-                                      ETargetDecalState        State)
+                                       EInteractableType        Type,
+                                       ETargetDecalState        State)
 {
     if (!MID || !Config) return;
 
@@ -125,7 +167,7 @@ void UTargetDecalComponent::UpdateMID(UWorldInteractionConfig* Config,
     const float        HalfExt = (State == ETargetDecalState::Locked)
                                      ? Config->LockedDecalSize * 0.5f
                                      : Config->HoverDecalSize  * 0.5f;
-    const float        Opacity  = (State == ETargetDecalState::Locked)
+    const float        Opacity = (State == ETargetDecalState::Locked)
                                      ? Config->LockedOpacity
                                      : Config->HoverOpacity;
 
@@ -133,10 +175,8 @@ void UTargetDecalComponent::UpdateMID(UWorldInteractionConfig* Config,
     {
         DecalComp->DecalSize = FVector(Config->DecalDepth, HalfExt, HalfExt);
 
-        // Shift the decal center DOWN by DecalDepth so the top of the projection
-        // volume is exactly flush with the floor (CachedFloorZ) and the entire
-        // volume projects only below the floor — never into the character mesh above.
-        DecalComp->SetRelativeLocation(FVector(0.f, 0.f, CachedFloorZ - Config->DecalDepth));
+        const float DecalCenterZ = CachedFloorZ - Config->DecalDepth * 0.5f;
+        DecalComp->SetRelativeLocation(FVector(0.f, 0.f, DecalCenterZ));
     }
 
     MID->SetVectorParameterValue(FName("Color"),   Color);

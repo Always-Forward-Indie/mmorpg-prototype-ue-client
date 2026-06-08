@@ -67,6 +67,7 @@ Content/BasicSurvivalAnim/
 Content/sA_IceSkillPack2/
 Content/Vefects/
 Content/__ExternalActors__/
+mmo servers/
 Vefects_VFX_Stylized_UE.png
 TextFile1.txt
 chunk_debug.txt
@@ -84,3 +85,4 @@ chunk_debug.txt
 *.xcodeproj
 *.xcworkspace
 Platforms
+Prototyping 5.3.code-workspace

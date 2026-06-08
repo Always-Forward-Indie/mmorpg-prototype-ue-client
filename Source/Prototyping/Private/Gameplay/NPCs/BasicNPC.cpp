@@ -9,6 +9,7 @@
 #include "Components/AudioComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/Engine.h"
+#include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "Engine/AssetManager.h"
@@ -16,6 +17,7 @@
 #include "Gameplay/UI/NPCNameplateComponent.h"
 #include "MyGameInstance.h"
 #include "Audio/AudioManager.h"
+#include "GameFramework/Pawn.h"
 
 // Sets default values
 ABasicNPC::ABasicNPC()
@@ -596,6 +598,11 @@ void ABasicNPC::SnapToGround()
 	FCollisionQueryParams Params;
 	Params.bTraceComplex = true;
 	Params.AddIgnoredActor(this);
+
+	for (TActorIterator<APawn> It(World); It; ++It)
+	{
+		Params.AddIgnoredActor(*It);
+	}
 
 	FHitResult Hit;
 	if (World->LineTraceSingleByChannel(Hit, Start, End, ECC_WorldStatic, Params))

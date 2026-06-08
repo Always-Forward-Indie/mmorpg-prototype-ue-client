@@ -1078,8 +1078,9 @@ void UMyGameInstance::TransitionToGameWorld()
 		LoginLevelCamera->Destroy();
 		LoginLevelCamera = nullptr;
 	}
-	// Stop login music played through AudioManager (if LoginPlaylistId path was used).
-	if (AudioManager && !AudioManager->LoginPlaylistId.IsEmpty())
+	// Stop all music before the level transition.  The new world may have no
+	// MusicZoneActor, and we must not let a playlist survive across the transition.
+	if (AudioManager)
 	{
 		AudioManager->StopMusic(0.5f);
 	}

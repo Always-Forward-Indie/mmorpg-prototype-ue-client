@@ -43,6 +43,8 @@ public:
 
     virtual void BeginPlay()                                    override;
     virtual void EndPlay(const EEndPlayReason::Type Reason)     override;
+    virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+                               FActorComponentTickFunction* ThisTickFunction) override;
 
     /**
      * Apply a visual state.  Safe to call every frame — skips redundant updates.
@@ -71,6 +73,9 @@ private:
                    EInteractableType        Type,
                    ETargetDecalState        State);
 
+    /** Trace downward to find actual ground Z and update CachedFloorZ. */
+    void UpdateFloorTrace();
+
     // -------------------------------------------------------------------------
     // Internal state
     // -------------------------------------------------------------------------
@@ -88,8 +93,16 @@ private:
 
     /**
      * Relative Z of the actor's floor base (negative capsule half-height for characters,
-     * 0 for items).  Cached once in EnsureDecalCreated; used by UpdateMID to keep the
-     * top of the projection volume flush with the floor so it never hits the mesh above.
+     * 0 for items).  Updated every tick via a downward line trace so the decal projection
+     * follows uneven terrain (slopes, landscape bumps, etc.).  Lerp-smoothed toward
+     * the raw trace result stored in TargetFloorZ to eliminate flickering.
      */
     float CachedFloorZ = 0.f;
+
+    /** Raw floor Z from the latest line trace — lerped into CachedFloorZ each tick. */
+    float TargetFloorZ = 0.f;
+
+    /** Track the last KnownConfig pointer so TickComponent has access to DecalDepth. */
+    UPROPERTY()
+    UWorldInteractionConfig* KnownConfig = nullptr;
 };

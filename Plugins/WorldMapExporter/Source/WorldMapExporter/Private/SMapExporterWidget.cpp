@@ -4,7 +4,6 @@
 #include "Engine/SceneCapture2D.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
-#include "Engine/TextureRenderTarget2D.h"
 #include "RenderingThread.h"
 
 #include "IImageWrapper.h"
@@ -28,6 +27,13 @@
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Components/SkyAtmosphereComponent.h"
 #include "Components/SkyLightComponent.h"
+#include "Components/PrimitiveComponent.h"
+
+#include "HAL/IConsoleManager.h"
+
+#include "WorldPartition/WorldPartition.h"
+#include "WorldPartition/WorldPartitionHelpers.h"
+#include "WorldPartition/WorldPartitionActorDescInstance.h"
 
 #include "Styling/AppStyle.h"
 #include "Widgets/Layout/SBorder.h"
@@ -420,8 +426,56 @@ bool SMapExporterWidget::DoExport(
         return false;
     }
 
+    // ── 0. Force-load all World Partition cells ─────────────────────────────
+    if (UWorldPartition* WorldPartition = World->GetWorldPartition())
+    {
+        UE_LOG(LogTemp, Log, TEXT("[WME] World Partition detected — loading all cells..."));
+        FWorldPartitionHelpers::FForEachActorWithLoadingParams LoadParams;
+        FWorldPartitionHelpers::FForEachActorWithLoadingResult LoadResult;
+        FWorldPartitionHelpers::ForEachActorWithLoading(
+            WorldPartition,
+            [](const FWorldPartitionActorDescInstance*) { return true; },
+            LoadParams,
+            LoadResult);
+        FlushRenderingCommands();
+        UE_LOG(LogTemp, Log, TEXT("[WME] World Partition loading complete. %d actors loaded (0 = all in persistent level)."),
+            LoadResult.ActorReferences.Num());
+    }
+
+    // ── 0b. Force-generate all PCG volumes ───────────────────────────────────
+    {
+        UClass* PCGComponentClass = FindObject<UClass>(nullptr, TEXT("/Script/PCG.PCGComponent"));
+        if (PCGComponentClass)
+        {
+            int32 PCGGenerated = 0;
+            for (TActorIterator<AActor> It(World); It; ++It)
+            {
+                TArray<UActorComponent*> Comps;
+                It->GetComponents(PCGComponentClass, Comps);
+                for (UActorComponent* Comp : Comps)
+                {
+                    UFunction* GenFunc = Comp->FindFunction(FName("Generate"));
+                    if (GenFunc)
+                    {
+                        uint8* Params = GenFunc->ParmsSize > 0
+                            ? (uint8*)FMemory_Alloca(GenFunc->ParmsSize)
+                            : nullptr;
+                        if (Params)
+                        {
+                            FMemory::Memzero(Params, GenFunc->ParmsSize);
+                        }
+                        Comp->ProcessEvent(GenFunc, Params);
+                        ++PCGGenerated;
+                    }
+                }
+            }
+            FlushRenderingCommands();
+            UE_LOG(LogTemp, Log, TEXT("[WME] PCG generation triggered on %d volumes."), PCGGenerated);
+        }
+    }
+
     // ── 1a. Compute maximum Z of geometry (for camera placement) ─────────────
-    // Scan all static mesh components in the world to find the tallest point.
+    // Scan all primitive components in the world to find the tallest point.
     float CaptureMaxZ = 0.f;
     {
         constexpr float MaxSaneHalfExtent = 200000.f;
@@ -430,13 +484,15 @@ bool SMapExporterWidget::DoExport(
             AActor* Actor = *It;
             if (!IsValid(Actor) || Actor->IsHidden()) continue;
 
-            TArray<UStaticMeshComponent*> MeshComps;
-            Actor->GetComponents<UStaticMeshComponent>(MeshComps);
-            for (UStaticMeshComponent* SMC : MeshComps)
+            TArray<UPrimitiveComponent*> Prims;
+            Actor->GetComponents<UPrimitiveComponent>(Prims);
+            for (UPrimitiveComponent* Prim : Prims)
             {
-                if (!SMC || !SMC->IsRegistered() || !SMC->IsVisible()) continue;
-                if (!SMC->GetStaticMesh()) continue;
-                FBoxSphereBounds B = SMC->CalcBounds(SMC->GetComponentTransform());
+                if (!Prim || !Prim->IsRegistered() || !Prim->IsVisible()) continue;
+                if (Prim->IsA<UExponentialHeightFogComponent>() ||
+                    Prim->IsA<USkyLightComponent>() ||
+                    Prim->IsA<USkyAtmosphereComponent>()) continue;
+                FBoxSphereBounds B = Prim->CalcBounds(Prim->GetComponentTransform());
                 if (B.BoxExtent.GetAbsMax() > MaxSaneHalfExtent) continue;
                 CaptureMaxZ = FMath::Max(CaptureMaxZ, B.Origin.Z + B.BoxExtent.Z);
             }
@@ -515,10 +571,8 @@ bool SMapExporterWidget::DoExport(
     SpawnParams.bNoFail     = true;
     SpawnParams.ObjectFlags = RF_Transient;
 
-    // Place camera just above the tallest geometry instead of a fixed 500k.
-    // Z=500000 caused distance-culling: UE5 GPU scene / per-mesh MaxDrawDistance
-    // dropped everything at that range.
-    const float CaptureZ = CaptureMaxZ + 50000.f;   // 500 m above tallest mesh
+    // Place camera above the tallest geometry found in the Z-scan.
+    const float CaptureZ = CaptureMaxZ + 50000.f;   // 500 m above tallest geometry
 
     ASceneCapture2D* CaptureActor = World->SpawnActor<ASceneCapture2D>(
         FVector(CenterX, CenterY, CaptureZ),
@@ -545,9 +599,20 @@ bool SMapExporterWidget::DoExport(
     Comp->bCaptureOnMovement           = false;
     Comp->bAlwaysPersistRenderingState = true;
 
-    // Force all meshes to render regardless of per-object MaxDrawDistance / cull distance.
-    Comp->MaxViewDistanceOverride      = 0.f;  // 0 = no limit from capture side
+    // Force every mesh to render regardless of per-object MaxDrawDistance / cull-distance settings.
+    // 0 = "no override" (respects default culling); use a huge value to truly disable all distance culling.
+    Comp->MaxViewDistanceOverride      = 100000000.f;
     Comp->LODDistanceFactor            = 0.001f; // treat camera as very close for LOD selection
+
+    // Explicitly show all mesh types and distance-culled primitives.
+    Comp->ShowFlags.SetDistanceCulledPrimitives(true);
+    Comp->ShowFlags.SetStaticMeshes(true);
+    Comp->ShowFlags.SetSkeletalMeshes(true);
+    Comp->ShowFlags.SetLandscape(true);
+    Comp->ShowFlags.SetInstancedFoliage(true);
+    Comp->ShowFlags.SetInstancedStaticMeshes(true);
+    Comp->ShowFlags.SetNaniteMeshes(true);
+    Comp->ShowFlags.SetTemporalAA(false);
 
     if (bUnlit)
     {
@@ -564,22 +629,30 @@ bool SMapExporterWidget::DoExport(
     }
     else
     {
-        // FinalToneCurveHDR with manual exposure to prevent auto-exposure
-        // returning zero EV in non-PIE editor mode (which makes everything black).
-        Comp->CaptureSource = SCS_FinalToneCurveHDR;
-        Comp->PostProcessSettings.bOverride_AutoExposureMethod = true;
-        Comp->PostProcessSettings.AutoExposureMethod           = AEM_Manual;
-        Comp->PostProcessSettings.bOverride_AutoExposureMinBrightness = true;
-        Comp->PostProcessSettings.AutoExposureMinBrightness           = 1.0f;
-        Comp->PostProcessSettings.bOverride_AutoExposureMaxBrightness = true;
-        Comp->PostProcessSettings.AutoExposureMaxBrightness           = 1.0f;
-        Comp->ShowFlags.SetAtmosphere(false);
-        Comp->ShowFlags.SetFog(false);
-        Comp->ShowFlags.SetVolumetricFog(false);
+        // SCS_SceneColorHDR captures the fully lit HDR scene before tone mapping.
+        // This includes translucent objects (water planes), directional shadows,
+        // and sky-light ambient — essential for visual depth and material
+        // differentiation in the exported map.
+        // We apply Reinhard tone mapping + sRGB gamma in the pixel conversion pass.
+        Comp->CaptureSource = SCS_SceneColorHDR;
+        Comp->ShowFlags.SetLighting(true);
+        Comp->ShowFlags.SetDirectionalLights(true);
+        Comp->ShowFlags.SetPointLights(true);
+        Comp->ShowFlags.SetSpotLights(true);
+        Comp->ShowFlags.SetSkyLighting(true);
+        Comp->ShowFlags.SetGlobalIllumination(true);
+        Comp->ShowFlags.SetReflectionEnvironment(true);
+        Comp->ShowFlags.SetScreenSpaceReflections(true);
+        Comp->ShowFlags.SetAmbientOcclusion(true);
+        Comp->ShowFlags.SetTranslucency(true);
         Comp->ShowFlags.SetBloom(false);
         Comp->ShowFlags.SetMotionBlur(false);
         Comp->ShowFlags.SetLensFlares(false);
         Comp->ShowFlags.SetDepthOfField(false);
+        Comp->ShowFlags.SetTemporalAA(false);
+        Comp->ShowFlags.SetAtmosphere(false);
+        Comp->ShowFlags.SetFog(false);
+        Comp->ShowFlags.SetVolumetricFog(false);
     }
 
     UE_LOG(LogTemp, Log, TEXT("[WME] Component visible: %s | Scene: %s"),
@@ -588,8 +661,8 @@ bool SMapExporterWidget::DoExport(
 
     UE_LOG(LogTemp, Log, TEXT("[WME] CaptureSource: %s"),
         Comp->CaptureSource == SCS_BaseColor          ? TEXT("SCS_BaseColor")         :
-        Comp->CaptureSource == SCS_FinalToneCurveHDR  ? TEXT("SCS_FinalToneCurveHDR") :
-        Comp->CaptureSource == SCS_SceneColorHDR      ? TEXT("SCS_SceneColorHDR")     : TEXT("Other"));
+        Comp->CaptureSource == SCS_SceneColorHDR      ? TEXT("SCS_SceneColorHDR")      :
+        Comp->CaptureSource == SCS_FinalToneCurveHDR  ? TEXT("SCS_FinalToneCurveHDR")  : TEXT("Other"));
 
     // ── 5. Multi-frame capture ─────────────────────────────────────────────
     // A single CaptureScene() after spawning often produces black because
@@ -597,10 +670,32 @@ bool SMapExporterWidget::DoExport(
     // needs at least one full rendered frame to populate the GPU Scene buffer for
     // the new viewpoint.  We enable bCaptureEveryFrame and pump several editor
     // frames so the renderer has time to build acceleration structures.
+    //
+    // Before capture, temporarily disable minimum-screen-radius culling so
+    // small foliage instances (trees, bushes, grass) are not dropped in the
+    // orthographic top-down view where every instance projects to a tiny area.
+
+    static IConsoleVariable* CVarMinScreenRadius = IConsoleManager::Get().FindConsoleVariable(TEXT("r.MinScreenRadiusForPrimitives"));
+    static IConsoleVariable* CVarFoliageScreenSize = IConsoleManager::Get().FindConsoleVariable(TEXT("foliage.MinimumScreenSizeGpu"));
+    static IConsoleVariable* CVarFoliageVSMCull   = IConsoleManager::Get().FindConsoleVariable(TEXT("foliage.CullAllInVertexShader"));
+    static IConsoleVariable* CVarForceLOD         = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ForceLOD"));
+
+    const float OldMinScreenRadius = CVarMinScreenRadius ? CVarMinScreenRadius->GetFloat() : 0.02f;
+    const float OldFoliageScreenSize = CVarFoliageScreenSize ? CVarFoliageScreenSize->GetFloat() : 0.05f;
+    const int32 OldFoliageVSMCull   = CVarFoliageVSMCull   ? CVarFoliageVSMCull->GetInt()   : 1;
+    const int32 OldForceLOD         = CVarForceLOD         ? CVarForceLOD->GetInt()         : -1;
+
+    if (CVarMinScreenRadius) CVarMinScreenRadius->Set(0.0f);
+    if (CVarFoliageScreenSize) CVarFoliageScreenSize->Set(0.0f);
+    if (CVarFoliageVSMCull)   CVarFoliageVSMCull->Set(0, ECVF_SetByCode);
+    if (CVarForceLOD)         CVarForceLOD->Set(0, ECVF_SetByCode);
+
+    UE_LOG(LogTemp, Log, TEXT("[WME] Disabled foliage culling: r.MinScreenRadius=%.4f→0, foliage.MinScreenSizeGpu=%.4f→0, foliage.CullAllInVS=%d→0, r.ForceLOD=%d→0"),
+        OldMinScreenRadius, OldFoliageScreenSize, OldFoliageVSMCull, OldForceLOD);
     Comp->bCaptureEveryFrame = true;
     Comp->bCaptureOnMovement = true;
 
-    static constexpr int32 WarmUpFrames = 4;
+    static constexpr int32 WarmUpFrames = 30;
     for (int32 i = 0; i < WarmUpFrames; ++i)
     {
         GEditor->RedrawAllViewports(/*bInvalidateHitProxies=*/false);
@@ -618,6 +713,12 @@ bool SMapExporterWidget::DoExport(
         Fence.BeginFence();
         Fence.Wait(/*bProcessGameThreadTasks=*/true);
     }
+
+    // Restore cvar defaults
+    if (CVarMinScreenRadius) CVarMinScreenRadius->Set(OldMinScreenRadius);
+    if (CVarFoliageScreenSize) CVarFoliageScreenSize->Set(OldFoliageScreenSize);
+    if (CVarFoliageVSMCull)   CVarFoliageVSMCull->Set(OldFoliageVSMCull, ECVF_SetByCode);
+    if (CVarForceLOD)         CVarForceLOD->Set(OldForceLOD, ECVF_SetByCode);
 
     // ── 6. Read float pixels and convert to FColor ────────────────────────────
     // RTF_RGBA16f → ReadLinearColorPixels; then ToFColor(bSRGB=true) applies gamma.
@@ -638,13 +739,30 @@ bool SMapExporterWidget::DoExport(
     }
 
     // Convert to BGRA8 with sRGB gamma.
+    // Unlit (SCS_BaseColor): values are already in sRGB space; direct ToFColor.
+    // Lit   (SCS_SceneColorHDR): linear HDR → Reinhard tone map → sRGB gamma.
     // Force alpha to 255: SCS_BaseColor writes alpha=0 in the GBuffer,
     // which makes the entire PNG fully transparent (appears black in viewers).
+    static constexpr float ExposureCompensation = 2.0f;
     TArray<FColor> Pixels;
     Pixels.Reserve(LinearPixels.Num());
     for (const FLinearColor& LC : LinearPixels)
     {
-        FColor C = LC.ToFColor(/*bSRGB=*/true);
+        FLinearColor Processed;
+        if (bUnlit)
+        {
+            Processed = LC;
+        }
+        else
+        {
+            const FLinearColor Exposed = LC * ExposureCompensation;
+            Processed = FLinearColor(
+                Exposed.R / (1.0f + Exposed.R),
+                Exposed.G / (1.0f + Exposed.G),
+                Exposed.B / (1.0f + Exposed.B),
+                1.0f);
+        }
+        FColor C = Processed.ToFColor(/*bSRGB=*/true);
         C.A = 255;
         Pixels.Add(C);
     }
@@ -660,8 +778,8 @@ bool SMapExporterWidget::DoExport(
     {
         UE_LOG(LogTemp, Warning, TEXT("[WME] STILL ALL BLACK. "
             "Unlit mode uses SCS_BaseColor (should always work). "
-            "Lit mode uses SCS_FinalToneCurveHDR + manual exposure. "
-            "If lit is black, try toggling 'Unlit Mode' to verify capture is working."));
+            "Lit mode uses SCS_SceneColorHDR + manual Reinhard tone map. "
+            "If lit is black, check that the level has at least one directional/sky light."));
     }
 
     // ── 6. Ensure output directory exists ─────────────────────────────────────
@@ -720,7 +838,7 @@ bool SMapExporterWidget::DoExport(
     Meta->SetNumberField(TEXT("units_per_pixel"), UnitsPerPixel);
     Meta->SetStringField(TEXT("image_x_axis"),    TEXT("+Y"));   // image right  → world +Y (East)
     Meta->SetStringField(TEXT("image_y_axis"),    TEXT("-X"));   // image down   → world -X (South)
-    Meta->SetStringField(TEXT("ue_version"),      TEXT("5.3"));
+    Meta->SetStringField(TEXT("ue_version"),      TEXT("5.7"));
 
     FString MetaString;
     TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&MetaString);
@@ -771,41 +889,26 @@ bool SMapExporterWidget::ComputeWorldBounds(
         }
 
         // ── Only accumulate bounds from geometry-producing components ─────────
-        // This is the key filter: sky spheres, atmospheres, height fog etc.
-        // all use non-mesh primitives or enormous sky-mesh components.
-        // We only trust UStaticMeshComponent and its instanceable variants.
-        TArray<UStaticMeshComponent*> MeshComps;
-        Actor->GetComponents<UStaticMeshComponent>(MeshComps);
-
+        // Check ALL primitive components (static meshes, skeletal meshes,
+        // landscape, instanced foliage, etc.) and filter out known non-geometry
+        // types (lights, fog, sky, atmosphere).
         FBox ActorGeomBox(ForceInit);
-        for (UStaticMeshComponent* SMC : MeshComps)
         {
-            if (!SMC || !SMC->IsRegistered() || !SMC->IsVisible()) continue;
-            if (!SMC->GetStaticMesh()) continue;
-
-            FBoxSphereBounds CompBounds = SMC->CalcBounds(SMC->GetComponentTransform());
-
-            // Reject individual components with suspiciously large extents
-            // (sky spheres, atmospheric meshes).
-            if (CompBounds.BoxExtent.GetAbsMax() > MaxSaneHalfExtent) continue;
-
-            ActorGeomBox += CompBounds.GetBox();
-        }
-
-        // Also check for landscape components (no static mesh, but real geometry)
-        if (!ActorGeomBox.IsValid)
-        {
-            // Fallback: accept any remaining primitive component that's small enough
             TArray<UPrimitiveComponent*> Prims;
             Actor->GetComponents<UPrimitiveComponent>(Prims);
             for (UPrimitiveComponent* Prim : Prims)
             {
                 if (!Prim || !Prim->IsRegistered() || !Prim->IsVisible()) continue;
-                // Reject atmosphere/fog/sky components by class
                 if (Prim->IsA<UExponentialHeightFogComponent>() ||
-                    Prim->IsA<USkyLightComponent>()) continue;
+                    Prim->IsA<USkyLightComponent>() ||
+                    Prim->IsA<USkyAtmosphereComponent>()) continue;
+
                 FBoxSphereBounds PrimBounds = Prim->CalcBounds(Prim->GetComponentTransform());
+
+                // Reject individual components with suspiciously large extents
+                // (sky spheres, atmospheric meshes).
                 if (PrimBounds.BoxExtent.GetAbsMax() > MaxSaneHalfExtent) continue;
+
                 ActorGeomBox += PrimBounds.GetBox();
             }
         }

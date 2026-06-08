@@ -78,7 +78,7 @@ void UNetworkManager::SetWorldContext(UWorld* World) {
 
 void UNetworkManager::SetMessageBoxPopupClass(TSubclassOf<UMessageBoxPopup> InMessageBoxPopupClass)
 {
-	MessageBoxPopupClass = InMessageBoxPopupClass;
+	MessageBoxPopupClass = TSoftClassPtr<UMessageBoxPopup>(InMessageBoxPopupClass);
 }
 
 void UNetworkManager::StartPollingLoginServer()
@@ -160,50 +160,49 @@ void UNetworkManager::ConnectLoginServer()
 	LoginConnectionRetryCount = 0;
 
 	// ��������� ������ ��� �������� �����������
+	TWeakObjectPtr<UNetworkManager> WeakThis(this);
 	FTimerDelegate LoginTimerDelegate;
-	LoginTimerDelegate.BindLambda([this, LoginServerEndpoint]()
+	LoginTimerDelegate.BindWeakLambda(this, [WeakThis, LoginServerEndpoint]()
 		{
-			if (LoginServerSocket && LoginServerSocket->GetConnectionState() == ESocketConnectionState::SCS_Connected)
+			UNetworkManager* Mgr = WeakThis.Get();
+			if (!Mgr || Mgr->bIsShutDown || !Mgr->WorldContext) return;
+
+			if (Mgr->LoginServerSocket && Mgr->LoginServerSocket->GetConnectionState() == ESocketConnectionState::SCS_Connected)
 			{
-				// Already set up � timer may fire again if ClearTimer was skipped
-				if (ReceiverLoginServerWorker) { return; }
+				if (Mgr->ReceiverLoginServerWorker) { return; }
 
 				UE_LOG(LogConnection, Log, TEXT("Login Server socket connected."));
 
-				if (WorldContext) { WorldContext->GetTimerManager().ClearTimer(LoginServerConnectionTimerHandle); }
-				LoginServerConnectionTimerHandle.Invalidate();
+				if (Mgr->WorldContext) { Mgr->WorldContext->GetTimerManager().ClearTimer(Mgr->LoginServerConnectionTimerHandle); }
+				Mgr->LoginServerConnectionTimerHandle.Invalidate();
 
-				// ������� ������ ��� ������ � �����-��������
-				ReceiverLoginServerWorker = new NetworkReceiverWorker(LoginServerSocket);
-				// Set TimeSyncService reference for precise timestamps
-				if (UTimeSyncService* TimeSyncSvc = GetTimeSyncService())
+				Mgr->ReceiverLoginServerWorker = new NetworkReceiverWorker(Mgr->LoginServerSocket);
+				if (UTimeSyncService* TimeSyncSvc = Mgr->GetTimeSyncService())
 				{
-					ReceiverLoginServerWorker->SetTimeSyncService(TimeSyncSvc);
+					Mgr->ReceiverLoginServerWorker->SetTimeSyncService(TimeSyncSvc);
 				}
-				ReceiverLoginServerThread = FRunnableThread::Create(ReceiverLoginServerWorker,
-					*FString::Printf(TEXT("NetLoginRecv_%d"), InstanceId));
+				Mgr->ReceiverLoginServerThread = FRunnableThread::Create(Mgr->ReceiverLoginServerWorker,
+					*FString::Printf(TEXT("NetLoginRecv_%d"), Mgr->InstanceId));
 
-				SenderLoginServerWorker = new NetworkSenderWorker(LoginServerSocket);
-				// Set TimeSyncService reference for precise timestamps
-				if (UTimeSyncService* TimeSyncSvc = GetTimeSyncService())
+				Mgr->SenderLoginServerWorker = new NetworkSenderWorker(Mgr->LoginServerSocket);
+				if (UTimeSyncService* TimeSyncSvc = Mgr->GetTimeSyncService())
 				{
-					SenderLoginServerWorker->SetTimeSyncService(TimeSyncSvc);
+					Mgr->SenderLoginServerWorker->SetTimeSyncService(TimeSyncSvc);
 				}
-				SenderLoginServerThread = FRunnableThread::Create(SenderLoginServerWorker,
-					*FString::Printf(TEXT("NetLoginSend_%d"), InstanceId));
+				Mgr->SenderLoginServerThread = FRunnableThread::Create(Mgr->SenderLoginServerWorker,
+					*FString::Printf(TEXT("NetLoginSend_%d"), Mgr->InstanceId));
 			
-				OnLoginServerSocketConnected.Broadcast();
+				Mgr->OnLoginServerSocketConnected.Broadcast();
 			}
 			else
 			{
-				LoginConnectionRetryCount++;
-				UE_LOG(LogConnection, Verbose, TEXT("Waiting for Login Server socket connection... Retry %d"), LoginConnectionRetryCount);
-				if (LoginConnectionRetryCount > MaxLoginRetries)
+				Mgr->LoginConnectionRetryCount++;
+				UE_LOG(LogConnection, Verbose, TEXT("Waiting for Login Server socket connection... Retry %d"), Mgr->LoginConnectionRetryCount);
+				if (Mgr->LoginConnectionRetryCount > Mgr->MaxLoginRetries)
 				{
-					UE_LOG(LogConnection, Error, TEXT("Failed to connect to Login Server after %d retries."), LoginConnectionRetryCount);
-					if (WorldContext) { WorldContext->GetTimerManager().ClearTimer(LoginServerConnectionTimerHandle); }
-					// ���������� ����� � �������: ��������� ��� �����
-					ShowLoginServerConnectionIssuePopup();
+					UE_LOG(LogConnection, Error, TEXT("Failed to connect to Login Server after %d retries."), Mgr->LoginConnectionRetryCount);
+					if (Mgr->WorldContext) { Mgr->WorldContext->GetTimerManager().ClearTimer(Mgr->LoginServerConnectionTimerHandle); }
+					if (Mgr->WorldContext) { Mgr->ShowLoginServerConnectionIssuePopup(); }
 				}
 			}
 		});
@@ -229,50 +228,49 @@ void UNetworkManager::ConnectGameServer()
 	bIsGameSocketConnected = GameServerSocket->Connect(*GameServerEndpoint.ToInternetAddr());
 	GameConnectionRetryCount = 0;
 
+	TWeakObjectPtr<UNetworkManager> WeakThis(this);
 	FTimerDelegate GameTimerDelegate;
-	GameTimerDelegate.BindLambda([this, GameServerEndpoint]()
+	GameTimerDelegate.BindWeakLambda(this, [WeakThis, GameServerEndpoint]()
 		{
-			if (GameServerSocket && GameServerSocket->GetConnectionState() == ESocketConnectionState::SCS_Connected)
+			UNetworkManager* Mgr = WeakThis.Get();
+			if (!Mgr || Mgr->bIsShutDown || !Mgr->WorldContext) return;
+
+			if (Mgr->GameServerSocket && Mgr->GameServerSocket->GetConnectionState() == ESocketConnectionState::SCS_Connected)
 			{
-				// Already set up � timer may fire again if ClearTimer was skipped
-				if (ReceiverGameServerWorker) { return; }
+				if (Mgr->ReceiverGameServerWorker) { return; }
 
 				UE_LOG(LogConnection, Log, TEXT("Game Server socket connected."));
 
-				if (WorldContext) { WorldContext->GetTimerManager().ClearTimer(GameServerConnectionTimerHandle); }
-				GameServerConnectionTimerHandle.Invalidate();
+				if (Mgr->WorldContext) { Mgr->WorldContext->GetTimerManager().ClearTimer(Mgr->GameServerConnectionTimerHandle); }
+				Mgr->GameServerConnectionTimerHandle.Invalidate();
 
-				// ������� ������ ��� ������ � ������� ��������
-				ReceiverGameServerWorker = new NetworkReceiverWorker(GameServerSocket);
-				// Set TimeSyncService reference for precise timestamps
-				if (UTimeSyncService* TimeSyncSvc = GetTimeSyncService())
+				Mgr->ReceiverGameServerWorker = new NetworkReceiverWorker(Mgr->GameServerSocket);
+				if (UTimeSyncService* TimeSyncSvc = Mgr->GetTimeSyncService())
 				{
-					ReceiverGameServerWorker->SetTimeSyncService(TimeSyncSvc);
+					Mgr->ReceiverGameServerWorker->SetTimeSyncService(TimeSyncSvc);
 				}
-				ReceiverGameServerThread = FRunnableThread::Create(ReceiverGameServerWorker,
-					*FString::Printf(TEXT("NetGameRecv_%d"), InstanceId));
+				Mgr->ReceiverGameServerThread = FRunnableThread::Create(Mgr->ReceiverGameServerWorker,
+					*FString::Printf(TEXT("NetGameRecv_%d"), Mgr->InstanceId));
 
-				SenderGameServerWorker = new NetworkSenderWorker(GameServerSocket);
-				// Set TimeSyncService reference for precise timestamps
-				if (UTimeSyncService* TimeSyncSvc = GetTimeSyncService())
+				Mgr->SenderGameServerWorker = new NetworkSenderWorker(Mgr->GameServerSocket);
+				if (UTimeSyncService* TimeSyncSvc = Mgr->GetTimeSyncService())
 				{
-					SenderGameServerWorker->SetTimeSyncService(TimeSyncSvc);
+					Mgr->SenderGameServerWorker->SetTimeSyncService(TimeSyncSvc);
 				}
-				SenderGameServerThread = FRunnableThread::Create(SenderGameServerWorker,
-					*FString::Printf(TEXT("NetGameSend_%d"), InstanceId));
+				Mgr->SenderGameServerThread = FRunnableThread::Create(Mgr->SenderGameServerWorker,
+					*FString::Printf(TEXT("NetGameSend_%d"), Mgr->InstanceId));
 
-				OnGameServerSocketConnected.Broadcast();
+				Mgr->OnGameServerSocketConnected.Broadcast();
 			}
 			else
 			{
-				GameConnectionRetryCount++;
-				UE_LOG(LogConnection, Verbose, TEXT("Waiting for Game Server socket connection... Retry %d"), GameConnectionRetryCount);
-				if (GameConnectionRetryCount > MaxGameRetries)
+				Mgr->GameConnectionRetryCount++;
+				UE_LOG(LogConnection, Verbose, TEXT("Waiting for Game Server socket connection... Retry %d"), Mgr->GameConnectionRetryCount);
+				if (Mgr->GameConnectionRetryCount > Mgr->MaxGameRetries)
 				{
-					UE_LOG(LogConnection, Error, TEXT("Failed to connect to Game Server after %d retries."), GameConnectionRetryCount);
-					if (WorldContext) { WorldContext->GetTimerManager().ClearTimer(GameServerConnectionTimerHandle); }
-					// ����� �������� ����������� ����� ��� �������� �������, ���� �����
-					ShowGameServerConnectionIssuePopup();
+					UE_LOG(LogConnection, Error, TEXT("Failed to connect to Game Server after %d retries."), Mgr->GameConnectionRetryCount);
+					if (Mgr->WorldContext) { Mgr->WorldContext->GetTimerManager().ClearTimer(Mgr->GameServerConnectionTimerHandle); }
+					if (Mgr->WorldContext) { Mgr->ShowGameServerConnectionIssuePopup(); }
 				}
 			}
 		});
@@ -296,51 +294,49 @@ void UNetworkManager::ConnectChunkServer()
 	FIPv4Endpoint ChunkServerEndpoint(ChunkServerIPAddr, ChunkServerPort);
 	bIsChunkSocketConnected = ChunkServerSocket->Connect(*ChunkServerEndpoint.ToInternetAddr());
 	ChunkConnectionRetryCount = 0;
+	TWeakObjectPtr<UNetworkManager> WeakThis(this);
 	FTimerDelegate ChunkTimerDelegate;
-	ChunkTimerDelegate.BindLambda([this, ChunkServerEndpoint]()
+	ChunkTimerDelegate.BindWeakLambda(this, [WeakThis, ChunkServerEndpoint]()
 		{
-			if (ChunkServerSocket && ChunkServerSocket->GetConnectionState() == ESocketConnectionState::SCS_Connected)
+			UNetworkManager* Mgr = WeakThis.Get();
+			if (!Mgr || Mgr->bIsShutDown || !Mgr->WorldContext) return;
+
+			if (Mgr->ChunkServerSocket && Mgr->ChunkServerSocket->GetConnectionState() == ESocketConnectionState::SCS_Connected)
 			{
-				// Already set up � timer may fire again if ClearTimer was skipped
-				if (ReceiverChunkServerWorker) { return; }
+				if (Mgr->ReceiverChunkServerWorker) { return; }
 
 				UE_LOG(LogConnection, Log, TEXT("Chunk Server socket connected."));
 
-				if (WorldContext) { WorldContext->GetTimerManager().ClearTimer(ChunkServerConnectionTimerHandle); }
-				ChunkServerConnectionTimerHandle.Invalidate();
+				if (Mgr->WorldContext) { Mgr->WorldContext->GetTimerManager().ClearTimer(Mgr->ChunkServerConnectionTimerHandle); }
+				Mgr->ChunkServerConnectionTimerHandle.Invalidate();
 				
-				// ������� ������ ��� ������ � chunk ��������
-				ReceiverChunkServerWorker = new NetworkReceiverWorker(ChunkServerSocket);
-				// Set TimeSyncService reference for precise timestamps
-				if (UTimeSyncService* TimeSyncSvc = GetTimeSyncService())
+				Mgr->ReceiverChunkServerWorker = new NetworkReceiverWorker(Mgr->ChunkServerSocket);
+				if (UTimeSyncService* TimeSyncSvc = Mgr->GetTimeSyncService())
 				{
-					ReceiverChunkServerWorker->SetTimeSyncService(TimeSyncSvc);
+					Mgr->ReceiverChunkServerWorker->SetTimeSyncService(TimeSyncSvc);
 				}
-				ReceiverChunkServerThread = FRunnableThread::Create(ReceiverChunkServerWorker,
-					*FString::Printf(TEXT("NetChunkRecv_%d"), InstanceId));
+				Mgr->ReceiverChunkServerThread = FRunnableThread::Create(Mgr->ReceiverChunkServerWorker,
+					*FString::Printf(TEXT("NetChunkRecv_%d"), Mgr->InstanceId));
 
-				SenderChunkServerWorker = new NetworkSenderWorker(ChunkServerSocket);
-				// Set TimeSyncService reference for precise timestamps
-				if (UTimeSyncService* TimeSyncSvc = GetTimeSyncService())
+				Mgr->SenderChunkServerWorker = new NetworkSenderWorker(Mgr->ChunkServerSocket);
+				if (UTimeSyncService* TimeSyncSvc = Mgr->GetTimeSyncService())
 				{
-					SenderChunkServerWorker->SetTimeSyncService(TimeSyncSvc);
+					Mgr->SenderChunkServerWorker->SetTimeSyncService(TimeSyncSvc);
 				}
-				SenderChunkServerThread = FRunnableThread::Create(SenderChunkServerWorker,
-					*FString::Printf(TEXT("NetChunkSend_%d"), InstanceId));
+				Mgr->SenderChunkServerThread = FRunnableThread::Create(Mgr->SenderChunkServerWorker,
+					*FString::Printf(TEXT("NetChunkSend_%d"), Mgr->InstanceId));
 
-				OnChunkServerSocketConnected.Broadcast();
+				Mgr->OnChunkServerSocketConnected.Broadcast();
 			}
 			else
 			{
-				ChunkConnectionRetryCount++;
-				UE_LOG(LogConnection, Verbose, TEXT("Waiting for Chunk Server socket connection... Retry %d"), ChunkConnectionRetryCount);
-				if (ChunkConnectionRetryCount > MaxChunkRetries)
+				Mgr->ChunkConnectionRetryCount++;
+				UE_LOG(LogConnection, Verbose, TEXT("Waiting for Chunk Server socket connection... Retry %d"), Mgr->ChunkConnectionRetryCount);
+				if (Mgr->ChunkConnectionRetryCount > Mgr->MaxChunkRetries)
 				{
-					UE_LOG(LogConnection, Error, TEXT("Failed to connect to Chunk Server after %d retries."), ChunkConnectionRetryCount);
-					if (WorldContext) { WorldContext->GetTimerManager().ClearTimer(ChunkServerConnectionTimerHandle); }
-					// ����� �������� ����������� ����� ��� �������� �������,
-					// ���� �����
-					ShowChunkServerConnectionIssuePopup();
+					UE_LOG(LogConnection, Error, TEXT("Failed to connect to Chunk Server after %d retries."), Mgr->ChunkConnectionRetryCount);
+					if (Mgr->WorldContext) { Mgr->WorldContext->GetTimerManager().ClearTimer(Mgr->ChunkServerConnectionTimerHandle); }
+					if (Mgr->WorldContext) { Mgr->ShowChunkServerConnectionIssuePopup(); }
 				}
 			}
 		});
@@ -364,82 +360,88 @@ UTimeSyncService* UNetworkManager::GetTimeSyncService()
 // show popup for chunk server connection issue
 void UNetworkManager::ShowChunkServerConnectionIssuePopup()
 {
-	if (MessageBoxPopupClass)
+	if (!WorldContext || bIsShutDown) return;
+
+	UClass* PopupClass = MessageBoxPopupClass.LoadSynchronous();
+	if (!IsValid(PopupClass)) return;
+
+	// ���� ���� ��� �������, �� ������ �����
+	if (!MsgBoxChunkServer)
 	{
-		// ���� ���� ��� �������, �� ������ �����
-		if (!MsgBoxChunkServer)
-		{
-			MsgBoxChunkServer = CreateWidget<UMessageBoxPopup>(WorldContext, MessageBoxPopupClass);
-		}
-		if (MsgBoxChunkServer)
-		{
-			FText TitleMessage = FText::FromString(TEXT("Error"));
-			FText ErrorMessage = FText::FromString(TEXT("Can not connect to Chunk Server. Retry?"));
-			FText YesText = FText::FromString(TEXT("Yes"));
-			FText NoText = FText::FromString(TEXT("No"));
-			MsgBoxChunkServer->SetupMessageBox(TitleMessage, ErrorMessage, YesText, NoText);
-			// ������������� ���� �� �����
-			MsgBoxChunkServer->AddToViewport();
-			// ������������� �� ������� ������
-			MsgBoxChunkServer->OnLeftButtonClicked.AddDynamic(this, &UNetworkManager::OnChunkServerConnectionRetry);
-			MsgBoxChunkServer->OnRightButtonClicked.AddDynamic(this, &UNetworkManager::OnConnectCancel);
-		}
+		MsgBoxChunkServer = CreateWidget<UMessageBoxPopup>(WorldContext, PopupClass);
+	}
+	if (MsgBoxChunkServer)
+	{
+		FText TitleMessage = FText::FromString(TEXT("Error"));
+		FText ErrorMessage = FText::FromString(TEXT("Can not connect to Chunk Server. Retry?"));
+		FText YesText = FText::FromString(TEXT("Yes"));
+		FText NoText = FText::FromString(TEXT("No"));
+		MsgBoxChunkServer->SetupMessageBox(TitleMessage, ErrorMessage, YesText, NoText);
+		// ������������� ���� �� �����
+		MsgBoxChunkServer->AddToViewport();
+		// ������������� �� ������� ������
+		MsgBoxChunkServer->OnLeftButtonClicked.AddDynamic(this, &UNetworkManager::OnChunkServerConnectionRetry);
+		MsgBoxChunkServer->OnRightButtonClicked.AddDynamic(this, &UNetworkManager::OnConnectCancel);
 	}
 }
 
 // show popup for login server connection issue
 void UNetworkManager::ShowLoginServerConnectionIssuePopup()
 {
-	if (MessageBoxPopupClass)
+	if (!WorldContext || bIsShutDown) return;
+
+	UClass* PopupClass = MessageBoxPopupClass.LoadSynchronous();
+	if (!IsValid(PopupClass)) return;
+
+	// ���� ���� ��� �������, �� ������ �����
+	if (!MsgBoxLoginServer)
 	{
-		// ���� ���� ��� �������, �� ������ �����
-		if (!MsgBoxLoginServer)
-		{
-			MsgBoxLoginServer = CreateWidget<UMessageBoxPopup>(WorldContext, MessageBoxPopupClass);
-		}
-		if (MsgBoxLoginServer)
-		{
+		MsgBoxLoginServer = CreateWidget<UMessageBoxPopup>(WorldContext, PopupClass);
+	}
+	if (MsgBoxLoginServer)
+	{
 
-			FText TitleMessage = FText::FromString(TEXT("Error"));
-			FText ErrorMessage = FText::FromString(TEXT("Can not connect to Login Server. Retry?"));
-			FText YesText = FText::FromString(TEXT("Yes"));
-			FText NoText = FText::FromString(TEXT("No"));
-			MsgBoxLoginServer->SetupMessageBox(TitleMessage, ErrorMessage, YesText, NoText);
+		FText TitleMessage = FText::FromString(TEXT("Error"));
+		FText ErrorMessage = FText::FromString(TEXT("Can not connect to Login Server. Retry?"));
+		FText YesText = FText::FromString(TEXT("Yes"));
+		FText NoText = FText::FromString(TEXT("No"));
+		MsgBoxLoginServer->SetupMessageBox(TitleMessage, ErrorMessage, YesText, NoText);
 
-			// ������������� ���� �� �����
-			MsgBoxLoginServer->AddToViewport();
+		// ������������� ���� �� �����
+		MsgBoxLoginServer->AddToViewport();
 
-			// ������������� �� ������� ������
-			MsgBoxLoginServer->OnLeftButtonClicked.AddDynamic(this, &UNetworkManager::OnLoginServerConnectionRetry);
-			MsgBoxLoginServer->OnRightButtonClicked.AddDynamic(this, &UNetworkManager::OnConnectCancel);
-		}
+		// ������������� �� ������� ������
+		MsgBoxLoginServer->OnLeftButtonClicked.AddDynamic(this, &UNetworkManager::OnLoginServerConnectionRetry);
+		MsgBoxLoginServer->OnRightButtonClicked.AddDynamic(this, &UNetworkManager::OnConnectCancel);
 	}
 }
 
 void UNetworkManager::ShowGameServerConnectionIssuePopup()
 {
-	if (MessageBoxPopupClass)
+	if (!WorldContext || bIsShutDown) return;
+
+	UClass* PopupClass = MessageBoxPopupClass.LoadSynchronous();
+	if (!IsValid(PopupClass)) return;
+
+	// ���� ���� ��� �������, �� ������ �����
+	if (!MsgBoxGameServer)
 	{
-		// ���� ���� ��� �������, �� ������ �����
-		if (!MsgBoxGameServer)
-		{
-			MsgBoxGameServer = CreateWidget<UMessageBoxPopup>(WorldContext, MessageBoxPopupClass);
-		}
-		if (MsgBoxGameServer)
-		{
-			FText TitleMessage = FText::FromString(TEXT("Error"));
-			FText ErrorMessage = FText::FromString(TEXT("Can not connect to Game Server. Retry?"));
-			FText YesText = FText::FromString(TEXT("Yes"));
-			FText NoText = FText::FromString(TEXT("No"));
-			MsgBoxGameServer->SetupMessageBox(TitleMessage, ErrorMessage, YesText, NoText);
+		MsgBoxGameServer = CreateWidget<UMessageBoxPopup>(WorldContext, PopupClass);
+	}
+	if (MsgBoxGameServer)
+	{
+		FText TitleMessage = FText::FromString(TEXT("Error"));
+		FText ErrorMessage = FText::FromString(TEXT("Can not connect to Game Server. Retry?"));
+		FText YesText = FText::FromString(TEXT("Yes"));
+		FText NoText = FText::FromString(TEXT("No"));
+		MsgBoxGameServer->SetupMessageBox(TitleMessage, ErrorMessage, YesText, NoText);
 
-			// ������������� ���� �� �����
-			MsgBoxGameServer->AddToViewport();
+		// ������������� ���� �� �����
+		MsgBoxGameServer->AddToViewport();
 
-			// ������������� �� ������� ������
-			MsgBoxGameServer->OnLeftButtonClicked.AddDynamic(this, &UNetworkManager::OnGameServerConnectionRetry);
-			MsgBoxGameServer->OnRightButtonClicked.AddDynamic(this, &UNetworkManager::OnConnectCancel);
-		}
+		// ������������� �� ������� ������
+		MsgBoxGameServer->OnLeftButtonClicked.AddDynamic(this, &UNetworkManager::OnGameServerConnectionRetry);
+		MsgBoxGameServer->OnRightButtonClicked.AddDynamic(this, &UNetworkManager::OnConnectCancel);
 	}
 }
 

@@ -123,6 +123,7 @@ void UAudioManager::InvalidateAudioComponents()
 	ActiveMusicComponent = nullptr;
 	bUseComponentB       = false;
 	bComponentsValid     = false;
+	ActivePlaylistId.Empty();
 	UE_LOG(LogTemp, Log, TEXT("UAudioManager::InvalidateAudioComponents: components cleared (pending world transition)"));
 }
 

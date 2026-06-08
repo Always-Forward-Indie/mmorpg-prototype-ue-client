@@ -147,13 +147,13 @@ public:
 
     /**
      * Depth of the decal projection volume in cm.
-     * The decal is projected ±(Depth/2) above/below the actor base.
-     * Increase if the decal clips into sloped terrain or stays invisible on uneven ground.
-     * Default 60 cm covers most character capsule bases.
+     * The top of the projection box sits flush with the ground surface; the volume
+     * extends DecalDepth downward.  Increase if the decal clips into sloped terrain
+     * or stays invisible on uneven ground.  300 cm covers steep landscape slopes.
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Decal|Sizes",
         meta = (ClampMin = "1", Units = "cm"))
-    float DecalDepth = 60.f;
+    float DecalDepth = 300.f;
 
     /** Decal material Opacity value in Hover state (0 = invisible, 1 = fully opaque). */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Decal|Opacity",

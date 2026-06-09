@@ -201,6 +201,7 @@ UPROPERTY() UVendorTooltipWidget* VendorTooltipWidget = nullptr;
 
     // Helpers
     void ShowStatus(const FString& Msg);
+    FText GetVendorErrorText(const FString& ErrorCode) const;
     void UpdateBuyTotalText();
     void UpdateSellTotalText();
     void UpdatePlayerGoldText();

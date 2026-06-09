@@ -6,51 +6,70 @@
 #include "CombatScreenFlashWidget.generated.h"
 
 /**
- * Full-screen flash overlay used for damage (red) and heal (green) feedback.
- * The widget must contain a UImage named "FlashImage" bound via BindWidget,
- * OR it will create one dynamically at runtime.
+ * Full-screen flash overlay used for damage (red) and heal (green) feedback,
+ * plus a persistent low-health warning (pulsing red border).
  *
  * Usage:
- *   FlashWidget->PlayDamageFlash();   // red vignette
- *   FlashWidget->PlayHealFlash();     // green vignette
+ *   FlashWidget->PlayDamageFlash();          // brief red vignette
+ *   FlashWidget->PlayHealFlash();            // brief green vignette
+ *   FlashWidget->SetLowHealthWarning(true);  // persistent pulsing red border
+ *   FlashWidget->SetLowHealthWarning(false); // disable warning
  */
 UCLASS(BlueprintType, Blueprintable)
 class PROTOTYPING_API UCombatScreenFlashWidget : public UUserWidget
 {
-    GENERATED_BODY()
+	GENERATED_BODY()
 
 public:
-    /** Trigger a red damage flash */
-    UFUNCTION(BlueprintCallable, Category = "Combat Flash")
-    void PlayDamageFlash();
+	UFUNCTION(BlueprintCallable, Category = "Combat Flash")
+	void PlayDamageFlash();
 
-    /** Trigger a green heal flash */
-    UFUNCTION(BlueprintCallable, Category = "Combat Flash")
-    void PlayHealFlash();
+	UFUNCTION(BlueprintCallable, Category = "Combat Flash")
+	void PlayHealFlash();
 
-    /** Tick-driven fade; called automatically */
-    virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+	UFUNCTION(BlueprintCallable, Category = "Combat Flash")
+	void SetLowHealthWarning(bool bActive);
+
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 protected:
-    virtual void NativeConstruct() override;
+	virtual void NativeConstruct() override;
 
-    /** Bound in Blueprint UMG. Falls back to dynamic creation if absent. */
-    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Combat Flash")
-    UImage* FlashImage = nullptr;
+	/** Bound in Blueprint UMG. Falls back to dynamic creation if absent. */
+	UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Combat Flash")
+	UImage* FlashImage = nullptr;
 
-    /** Peak opacity of the flash (0..1) */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Flash|Config")
-    float PeakOpacity = 0.45f;
+	/** Optional second image for low-health border (pulsing vignette). */
+	UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Combat Flash")
+	UImage* LowHealthBorder = nullptr;
 
-    /** How long the fade-out takes in seconds */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Flash|Config")
-    float FadeOutDuration = 0.4f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Flash|Config")
+	float PeakOpacity = 0.45f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Flash|Config")
+	float FadeOutDuration = 0.4f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Flash|LowHealth")
+	float LowHealthOpacity = 0.35f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Flash|LowHealth")
+	float LowHealthPulseSpeed = 3.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Flash|LowHealth")
+	float LowHealthThreshold = 0.3f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Flash|LowHealth")
+	FLinearColor LowHealthColor = FLinearColor(0.85f, 0.05f, 0.05f, 1.0f);
 
 private:
-    void StartFlash(FLinearColor Color);
-    void EnsureFlashImage();
+	void StartFlash(FLinearColor Color);
+	void EnsureFlashImage();
+	void EnsureLowHealthBorder();
 
-    float CurrentOpacity  = 0.0f;
-    bool  bFading         = false;
-    FLinearColor FlashColor = FLinearColor::Red;
+	float CurrentOpacity  = 0.0f;
+	bool  bFading         = false;
+	FLinearColor FlashColor = FLinearColor::Red;
+
+	bool  bLowHealthWarning = false;
+	float LowHealthPulseTime = 0.0f;
 };

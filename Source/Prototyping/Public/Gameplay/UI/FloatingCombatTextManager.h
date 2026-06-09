@@ -19,10 +19,14 @@ class PROTOTYPING_API UFloatingCombatTextManager : public UObject
 public:
 	void Init(UCanvasPanel* InCanvas, APlayerController* InPC, TSubclassOf<UDamageTextWidget> InDamageTextClass);
 
-	void ShowDamage(const FVector& WorldLocation, float Damage, bool bIsCrit, EDamageType DamageType);
+	void ShowDamage(const FVector& WorldLocation, float Damage, bool bIsCrit, EDamageType DamageType,
+		bool bOnLocalPlayer = false);
 
 	void ShowMissText(const FVector& WorldLocation);
 	void ShowBlockedText(const FVector& WorldLocation);
+
+	// Per-call counter for spread cycling (avoids pure randomness).
+	int32 SpreadCounter = 0;
 
 	TSubclassOf<UDamageTextWidget> DamageTextClass;
 

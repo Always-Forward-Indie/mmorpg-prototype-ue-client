@@ -21,6 +21,9 @@ void ULocalizationSubsystem::SetLocalizationData(ULocalizationDataAsset* InAsset
     CachedBestiaryCategoryTable   = nullptr;
     CachedZoneLocaleTable         = nullptr;
     CachedNotificationLocaleTable = nullptr;
+    CachedAmbientSpeechTable      = nullptr;
+    CachedWIOLocaleTable          = nullptr;
+    CachedTitleLocaleTable        = nullptr;
 
     UE_LOG(LogTemp, Log, TEXT("LocalizationSubsystem: data asset %s"),
         InAsset ? TEXT("assigned") : TEXT("cleared"));
@@ -470,6 +473,13 @@ UDataTable* ULocalizationSubsystem::GetWIOLocaleTable() const
     return CachedWIOLocaleTable;
 }
 
+UDataTable* ULocalizationSubsystem::GetTitleLocaleTable() const
+{
+    if (!CachedTitleLocaleTable && LocalizationData)
+        CachedTitleLocaleTable = LocalizationData->TitleLocale.LoadSynchronous();
+    return CachedTitleLocaleTable;
+}
+
 FText ULocalizationSubsystem::GetWIODisplayName(const FString& NameKey) const
 {
     if (NameKey.IsEmpty()) return FText::GetEmpty();
@@ -507,6 +517,39 @@ bool ULocalizationSubsystem::GetWIOLocaleDefinition(const FString& NameKey, FWIO
     if (!Table) return false;
     const FWIOLocaleDefinition* Row = Table->FindRow<FWIOLocaleDefinition>(
         FName(*NameKey), TEXT("GetWIOLocaleDefinition"), false);
+    if (Row) { OutDefinition = *Row; return true; }
+    return false;
+}
+
+// -- Titles ------------------------------------------------------------------
+
+FText ULocalizationSubsystem::GetTitleDisplayName(const FString& TitleSlug) const
+{
+    if (TitleSlug.IsEmpty()) return FText::GetEmpty();
+    UDataTable* Table = GetTitleLocaleTable();
+    if (!Table) return FallbackText(TitleSlug);
+    const FTitleLocaleDefinition* Row = Table->FindRow<FTitleLocaleDefinition>(
+        FName(*TitleSlug), TEXT("GetTitleDisplayName"), false);
+    return (Row && !Row->displayName.IsEmpty()) ? Row->displayName : FallbackText(TitleSlug);
+}
+
+FText ULocalizationSubsystem::GetTitleDescription(const FString& TitleSlug) const
+{
+    if (TitleSlug.IsEmpty()) return FText::GetEmpty();
+    UDataTable* Table = GetTitleLocaleTable();
+    if (!Table) return FText::GetEmpty();
+    const FTitleLocaleDefinition* Row = Table->FindRow<FTitleLocaleDefinition>(
+        FName(*TitleSlug), TEXT("GetTitleDescription"), false);
+    return (Row && !Row->description.IsEmpty()) ? Row->description : FText::GetEmpty();
+}
+
+bool ULocalizationSubsystem::GetTitleLocaleDefinition(const FString& TitleSlug, FTitleLocaleDefinition& OutDefinition) const
+{
+    if (TitleSlug.IsEmpty()) return false;
+    UDataTable* Table = GetTitleLocaleTable();
+    if (!Table) return false;
+    const FTitleLocaleDefinition* Row = Table->FindRow<FTitleLocaleDefinition>(
+        FName(*TitleSlug), TEXT("GetTitleLocaleDefinition"), false);
     if (Row) { OutDefinition = *Row; return true; }
     return false;
 }

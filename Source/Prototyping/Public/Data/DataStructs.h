@@ -444,6 +444,15 @@ struct FSkillInitiationData
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
     int32 gcdMs = 0;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    int64 serverTimestamp = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    int64 castStartedAt = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+    FString errorReason;
+
     FSkillInitiationData()
     {
         skillName = "";
@@ -461,6 +470,9 @@ struct FSkillInitiationData
         success = false;
         cooldownMs = 0;
         gcdMs = 0;
+        serverTimestamp = 0;
+        castStartedAt = 0;
+        errorReason = "";
     }
 };
 
@@ -527,6 +539,12 @@ struct FSkillResultData
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
     bool success = false;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    int64 serverTimestamp = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+    FString errorReason;
+
     // Skill type and school
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
     ESkillEffectType skillEffectType = ESkillEffectType::None;
@@ -561,6 +579,8 @@ struct FSkillResultData
         isMissed = false;
         targetDied = false;
         success = false;
+        serverTimestamp = 0;
+        errorReason = "";
         skillEffectType = ESkillEffectType::None;
         skillSchool = ESkillSchool::None;
         finalCasterMana = 0;
@@ -4424,4 +4444,53 @@ struct PROTOTYPING_API FPlayerEmotesState
     TArray<FEmoteDefinitionData> emotes;
 
     FPlayerEmotesState() {}
+};
+
+// ============================================================
+// Item Quickbar
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FItemQuickSlotData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quickbar")
+    int32 slotIndex = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quickbar")
+    int32 itemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quickbar")
+    FString itemSlug;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quickbar")
+    int32 quantity = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quickbar")
+    FString iconPath;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quickbar")
+    FKey boundKey;
+
+    FItemQuickSlotData() {}
+};
+
+// ============================================================
+// Title Locale Definition
+// ============================================================
+
+/** DataTable row for localised title display names and descriptions. */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FTitleLocaleDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Title Locale")
+    FText displayName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Title Locale")
+    FText description;
+
+    FTitleLocaleDefinition() {}
 };

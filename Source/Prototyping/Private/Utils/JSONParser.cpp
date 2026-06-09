@@ -1728,6 +1728,15 @@ FSkillInitiationData JSONParser::DeserializeSkillInitiation(const TSharedPtr<FJs
 	if (InitiationObj->HasField(TEXT("gcdMs")))
 		SkillData.gcdMs = InitiationObj->GetIntegerField(TEXT("gcdMs"));
 
+	if (InitiationObj->HasField(TEXT("serverTimestamp")))
+		SkillData.serverTimestamp = static_cast<int64>(InitiationObj->GetNumberField(TEXT("serverTimestamp")));
+
+	if (InitiationObj->HasField(TEXT("castStartedAt")))
+		SkillData.castStartedAt = static_cast<int64>(InitiationObj->GetNumberField(TEXT("castStartedAt")));
+
+	if (InitiationObj->HasField(TEXT("errorReason")))
+		SkillData.errorReason = InitiationObj->GetStringField(TEXT("errorReason"));
+
 	return SkillData;
 }
 
@@ -1812,6 +1821,12 @@ FSkillResultData JSONParser::DeserializeSkillResult(const TSharedPtr<FJsonObject
 	
 	if (ResultObj->HasField(TEXT("success")))
 		SkillResult.success = ResultObj->GetBoolField(TEXT("success"));
+
+	if (ResultObj->HasField(TEXT("serverTimestamp")))
+		SkillResult.serverTimestamp = static_cast<int64>(ResultObj->GetNumberField(TEXT("serverTimestamp")));
+
+	if (ResultObj->HasField(TEXT("errorReason")))
+		SkillResult.errorReason = ResultObj->GetStringField(TEXT("errorReason"));
 
 	// Parse effect type and school
 	if (ResultObj->HasField(TEXT("skillEffectType")))

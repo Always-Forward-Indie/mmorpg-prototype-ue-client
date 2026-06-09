@@ -107,6 +107,12 @@ void ABasicPlayer::SetLockedTarget(ABasicMOB* NewTarget)
 {
     if (LockedTarget == NewTarget) return;
 
+    // Any previous non-combat pending interaction (e.g. double-click approach
+    // toward a different target) is now stale — clear it so UpdateApproach
+    // uses the combat path and moves toward the new LockedTarget.
+    PendingInteraction       = EPendingInteraction::None;
+    PendingInteractionTarget = nullptr;
+
     // Clear any player/self target when locking a mob
     if (NewTarget && LockedPlayerTarget)
     {
@@ -361,6 +367,22 @@ void ABasicPlayer::FaceLockedTarget()
 
 void ABasicPlayer::UpdateApproach(float DeltaTime)
 {
+    if (LockedTarget || LockedPlayerTarget)
+    {
+        AActor* Target = GetLockedTargetActor();
+        if (IsValid(Target))
+        {
+            const float Dist = FVector::Dist(GetActorLocation(), Target->GetActorLocation());
+            if (Dist > 20000.0f)
+            {
+                ClearLockedTarget();
+                bIsApproachingTarget = false;
+                PendingSkillSlug.Empty();
+                return;
+            }
+        }
+    }
+
     if (!bIsApproachingTarget) return;
 
     // в”Ђв”Ђ Non-combat pending approach (NPC / Item / Harvest) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
@@ -606,7 +628,12 @@ void ABasicPlayer::TryCastSkillWithApproach(const FString& SkillSlug)
     }
     else
     {
-        // Out of range пїЅ store pending skill and start approach
+        // Out of range — store pending skill and start approach.
+        // Clear any stale non-combat PendingInteraction so UpdateApproach
+        // takes the combat path and moves toward LockedTarget instead of
+        // a previous PendingInteractionTarget.
+        PendingInteraction       = EPendingInteraction::None;
+        PendingInteractionTarget = nullptr;
         PendingSkillSlug = SkillSlug;
         // For the auto-attack skill keep bIsAutoAttacking true so DoAutoAttack
         // can continue the loop after the first swing.
@@ -620,106 +647,63 @@ void ABasicPlayer::TryCastSkillWithApproach(const FString& SkillSlug)
 
 void ABasicPlayer::DoAutoAttack()
 {
-
     if (playerData.characterData.bIsDead || !bIsAutoAttacking) return;
 
-    // Validate target
     if (!IsValid(LockedTarget))
     {
-        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: DoAutoAttack - target invalid, clearing lock"));
         ClearLockedTarget();
         return;
     }
 
     if (LockedTarget->GetMOBIsDead())
     {
-        // Mob died вЂ” stop the attack cycle but KEEP the target lock so the
-        // player can immediately harvest the corpse without re-clicking.
-        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: DoAutoAttack - mob dead, keeping lock for harvest"));
         StopAutoAttack();
         if (CursorInteractionComponent)
             CursorInteractionComponent->SetVisualLock(LockedTarget, EInteractableType::MOB_Harvestable);
         return;
     }
 
-    // Range check пїЅ use the same formula the server applies: maxRange * 100.0f
     const float Dist = FVector::Dist(GetActorLocation(), LockedTarget->GetActorLocation());
     const float EffectiveRange = GetCurrentSkillRange();
 
-    UE_LOG(LogTemp, Log, TEXT("BasicPlayer: DoAutoAttack - dist=%.0f, effectiveRange=%.0f (skill=%s)"),
-        Dist, EffectiveRange, *CurrentSkillName);
-
     if (Dist > EffectiveRange)
     {
-        if (!bIsApproachingTarget)
-        {
-            bIsApproachingTarget = true;
-            UE_LOG(LogTemp, Log, TEXT("BasicPlayer: DoAutoAttack - out of range (%.0f > %.0f), starting approach"), Dist, EffectiveRange);
-        }
+        if (!bIsApproachingTarget) bIsApproachingTarget = true;
         return;
     }
 
-    // In range пїЅ make sure any lingering approach is stopped
-    if (bIsApproachingTarget)
-    {
-        bIsApproachingTarget = false;
-    }
+    if (bIsApproachingTarget) bIsApproachingTarget = false;
 
-    // Face the target before swinging
     FaceLockedTarget();
 
     const int32 MobId = FCString::Atoi(*LockedTarget->GetMOBUId());
 
-    // Bind next swing to fire after this animation ends
-    if (UPlayerAnimInstance* AnimInst = GetPlayerAnimInstance())
-    {
-        if (AutoAttackAnimEndDelegateHandle.IsValid())
-        {
-            AnimInst->OnAttackEnded.Remove(AutoAttackAnimEndDelegateHandle);
-            AutoAttackAnimEndDelegateHandle.Reset();
-        }
+    const bool bSent = AttackTarget(MobId, CurrentSkillName, 3);
 
-        AutoAttackAnimEndDelegateHandle = AnimInst->OnAttackEnded.AddLambda([this]()
-        {
-            // Cancel the fallback timer вЂ” the normal animation chain is alive.
-            GetWorld()->GetTimerManager().ClearTimer(AutoAttackRetryTimerHandle);
-
-            if (bIsAutoAttacking && IsValid(LockedTarget) && !LockedTarget->GetMOBIsDead())
-            {
-                // Normal path: schedule the next swing after a short delay.
-                GetWorld()->GetTimerManager().SetTimer(AutoAttackRetryTimerHandle,
-                    this, &ABasicPlayer::DoAutoAttack, AutoAttackSwingDelay, false);
-            }
-            else if (IsValid(LockedTarget) && LockedTarget->GetMOBIsDead())
-            {
-                // Mob died during this swing. Stop attacking but keep the lock
-                // so the player can harvest without re-clicking.
-                StopAutoAttack();
-                if (CursorInteractionComponent)
-                    CursorInteractionComponent->SetVisualLock(LockedTarget, EInteractableType::MOB_Harvestable);
-            }
-            else if (!IsValid(LockedTarget))
-            {
-                // Target completely gone вЂ” release the lock.
-                ClearLockedTarget();
-            }
-            // else: bIsAutoAttacking=false but target still alive (manual skill mid-swing) вЂ” keep lock.
-        });
-    }
-    else
-    {
-        // No AnimInstance пїЅ retry by simple timer as fallback
-        GetWorld()->GetTimerManager().SetTimer(AutoAttackRetryTimerHandle,
-            this, &ABasicPlayer::DoAutoAttack, 1.5f, false);
-    }
-
-    AttackTarget(MobId, CurrentSkillName, 3);
-
-    // Fallback safety timer: if the server never responds (cooldown desync, packet loss)
-    // the OnAttackEnded lambda will never fire and the chain would silently die.
-    // Set a generous timeout here; the lambda overwrites it with a shorter delay on success.
+    const float RetryDelay = bSent ? 5.0f : 0.15f;
     GetWorld()->GetTimerManager().SetTimer(
-        AutoAttackRetryTimerHandle, this, &ABasicPlayer::DoAutoAttack, 3.0f, false);
+        AutoAttackRetryTimerHandle, this, &ABasicPlayer::DoAutoAttack, RetryDelay, false);
+}
+
+void ABasicPlayer::HandleSkillInitiatedForAutoAttack(const FString& SkillSlug, int32 CooldownMs)
+{
+    if (!bIsAutoAttacking) return;
+    if (!SkillSlug.Equals(CurrentSkillName, ESearchCase::IgnoreCase)) return;
+
+    GetWorld()->GetTimerManager().ClearTimer(AutoAttackRetryTimerHandle);
+
+    if (!IsValid(LockedTarget) || LockedTarget->GetMOBIsDead())
+    {
+        StopAutoAttack();
+        return;
+    }
+
+    const float Delay = (CooldownMs > 0)
+        ? (static_cast<float>(CooldownMs) / 1000.0f + AutoAttackSwingDelay)
+        : AutoAttackSwingDelay;
+
+    GetWorld()->GetTimerManager().SetTimer(
+        AutoAttackRetryTimerHandle, this, &ABasicPlayer::DoAutoAttack, Delay, false);
 }
 
 void ABasicPlayer::OnTabTargetInput()
@@ -1416,7 +1400,14 @@ Super::BeginPlay();
 					}
 					
 					// Get SkillManager from GameInstance
-					UPlayerSkillManager* SkillManager = MyGameInstance ? MyGameInstance->GetPlayerSkillManager() : nullptr;
+                    UPlayerSkillManager* SkillManager = MyGameInstance ? MyGameInstance->GetPlayerSkillManager() : nullptr;
+
+                    // Auto-attack: when the server confirms a skill initiation, schedule
+                    // the next swing based on the server-assigned cooldown (not animation).
+                    if (SkillManager)
+                    {
+                        SkillManager->OnSkillCastConfirmed.AddDynamic(this, &ABasicPlayer::HandleSkillInitiatedForAutoAttack);
+                    }
 					
 					// Initialize UIManager with all managers
 					UIManager->Initialize(InventoryManager, HarvestManager, ExperienceManager, SkillManager);
@@ -1635,11 +1626,25 @@ void ABasicPlayer::HandleEffectTickFCT(const FEffectTickData& TickData)
     // Only process ticks that belong to this specific player actor.
     if (TickData.characterId != playerData.characterData.characterId) return;
 
-    // Heal-over-time → show green "+N" via the normal healing path
-    // (ShowHealingEffect_Implementation handles FCT + optional skill sounds/VFX).
-    if (TickData.effectTypeSlug == TEXT("hot") && TickData.value > 0)
+    if (!UIManager) return;
+    UFloatingCombatTextManager* FCT = UIManager->GetFCTManager();
+    if (!FCT) return;
+
+    const FVector Pos = GetCombatPosition_Implementation();
+
+    if (TickData.bIsHeal && TickData.value > 0)
     {
+        // Heal-over-time → green "+N"
         ShowHealingEffect_Implementation(TickData.value, TickData.effectSlug);
+    }
+    else if (!TickData.bIsHeal && TickData.value > 0)
+    {
+        // Damage-over-time → damage-coloured number
+        EDamageType DmgType = EDamageType::Physical;
+        if      (TickData.effectTypeSlug.Contains(TEXT("poison"))) DmgType = EDamageType::Poison;
+        else if (TickData.effectTypeSlug.Contains(TEXT("fire")) || TickData.effectTypeSlug.Contains(TEXT("burn"))) DmgType = EDamageType::Fire;
+        else if (TickData.effectTypeSlug.Contains(TEXT("ice"))  || TickData.effectTypeSlug.Contains(TEXT("frost"))) DmgType = EDamageType::Ice;
+        FCT->ShowDamage(Pos, static_cast<float>(TickData.value), false, DmgType, true);
     }
 }
 
@@ -1750,9 +1755,11 @@ FText ABasicPlayer::GetInteractableDisplayName() const
 
 bool ABasicPlayer::IsUIBlockingInteraction() const
 {
-    // Use HasUIWindowOpen() вЂ” not ShouldShowCursor() вЂ” so that cursor world interaction
-    // is never blocked by bAltCursorActive (which is true whenever the cursor is shown).
-    return UIManager && UIManager->HasUIWindowOpen();
+	// World interaction is never blocked by open UI windows.
+	// UMG hit-testing handles click-through naturally: clicks on widgets are
+	// consumed by the widget, clicks on transparent/empty areas pass through
+	// to the game world. Set root panels to SelfHitTestInvisible in Blueprint.
+	return false;
 }
 
 float ABasicPlayer::GetInteractionRange() const
@@ -1764,10 +1771,6 @@ void ABasicPlayer::DispatchCursorSelect(AActor* Target, EInteractableType Type)
 {
     if (!Target)
     {
-        // Click on empty ground в†’ clear all locks
-        ClearLockedTarget();
-        if (CursorInteractionComponent)
-            CursorInteractionComponent->SetVisualLock(nullptr, EInteractableType::None);
         return;
     }
 
@@ -1929,6 +1932,7 @@ void ABasicPlayer::DispatchPendingInteraction()
     const EPendingInteraction Pending = PendingInteraction;
     PendingInteraction       = EPendingInteraction::None;
     PendingInteractionTarget = nullptr;
+    PendingSkillSlug.Empty();
 
     if (!Target) return;
 
@@ -2291,7 +2295,7 @@ void ABasicPlayer::OnLeftMouseReleased()
     }
 
     // Click confirmed: short press with no meaningful drag and no UI window blocking input.
-    if (!bLMBDragActive && CursorInteractionComponent && !IsUIBlockingInteraction())
+    if (!bLMBDragActive && CursorInteractionComponent && !IsUIBlockingInteraction() && !bIsCasting)
     {
         CursorInteractionComponent->HandleConfirmedClick();
     }
@@ -3362,38 +3366,18 @@ void ABasicPlayer::CheckForMOB()
         }
     }
 
-    // Auto-clear locked target when mob dies
+    // Stop attacking dead mob but keep the lock for harvesting.
+    // Do NOT clear the target — other paths (DoAutoAttack, UpdateApproach,
+    // TryCastSkillWithApproach) also preserve it for this purpose.
     if (LockedTarget && LockedTarget->GetMOBIsDead())
     {
-        ClearLockedTarget();
+        StopAutoAttack();
+        if (CursorInteractionComponent)
+            CursorInteractionComponent->SetVisualLock(LockedTarget, EInteractableType::MOB_Harvestable);
     }
 
-    // Auto-clear locked target when mob enters RETURNING state (deaggro / returning to spawn zone)
-    if (LockedTarget && LockedTarget->MOBMovementComponent)
-    {
-        const int32 MobCombatState = LockedTarget->MOBMovementComponent->GetCombatState();
-        if (MobCombatState == 5) // RETURNING
-        {
-            ClearLockedTarget();
-        }
-    }
-
-    // Auto-clear locked target when player runs too far away (leash)
-    const float MaxLeashDistance = 3000.0f;
-    if (LockedTarget && !bIsAutoAttacking && !bIsApproachingTarget)
-    {
-        if (FVector::Dist(GetActorLocation(), LockedTarget->GetActorLocation()) > MaxLeashDistance)
-        {
-            ClearLockedTarget();
-        }
-    }
-    if (LockedPlayerTarget && !bIsApproachingTarget)
-    {
-        if (FVector::Dist(GetActorLocation(), LockedPlayerTarget->GetActorLocation()) > MaxLeashDistance)
-        {
-            ClearLockedTarget();
-        }
-    }
+    // No auto-clear for RETURNING state, leash distance, or any other reason.
+    // The player controls when to release the target (Tab, click on empty ground, etc.).
 
     // Effective target: hard lock takes priority over soft target
     ABasicMOB* EffectiveTarget = LockedTarget ? LockedTarget : SoftTarget;
@@ -3456,68 +3440,26 @@ void ABasicPlayer::CheckForMOB()
 }
 
 
-void ABasicPlayer::AttackTarget(int32 TargetID, const FString& SkillSlug, int32 TargetTypeId)
+bool ABasicPlayer::AttackTarget(int32 TargetID, const FString& SkillSlug, int32 TargetTypeId)
 {
-    if (!MyGameInstance)
-    {
-        UE_LOG(LogTemp, Error, TEXT("Cannot attack: MyGameInstance not found"));
-        return;
-    }
+	if (!MyGameInstance || TargetID <= 0) return false;
 
-    // Get combat system manager from game instance
-    UCombatSystemManager* CombatManager = MyGameInstance->GetCombatSystemManager();
-    if (!CombatManager)
-    {
-        UE_LOG(LogTemp, Error, TEXT("Cannot attack: CombatSystemManager not found"));
-        return;
-    }
+	const ECasterType TargetType = (TargetTypeId == 2) ? ECasterType::Player : ECasterType::Mob;
 
-    // Get skill system manager
-    USkillSystemManager* SkillManager = MyGameInstance->GetSkillSystemManager();
-    if (!SkillManager)
-    {
-        UE_LOG(LogTemp, Error, TEXT("Cannot attack: SkillSystemManager not found"));
-        return;
-    }
-
-    if (TargetID <= 0)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Cannot attack: Invalid target ID"));
-        return;
-    }
-
-    // Check if we can cast the skill
-    if (!SkillManager->CanCastSkill(GetActorId_Implementation(), SkillSlug))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Cannot cast skill %s"), *SkillSlug);
-        return;
-    }
-
-    // Convert TargetTypeId to ECasterType using real server protocol: PLAYER=2, MOB=3
-    ECasterType TargetType = ECasterType::Mob; // Default
-    switch (TargetTypeId)
-    {
-        case 2:
-            TargetType = ECasterType::Player;
-            break;
-        case 3:
-            TargetType = ECasterType::Mob;
-            break;
-        default:
-            TargetType = ECasterType::Mob;
-            break;
-    }
-
-    // Use skill system to cast the skill
-    if (SkillManager->CastSkill(GetActorId_Implementation(), TargetID, SkillSlug, TargetType))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Player %d attacking target ID: %d with skill: %s, target type id: %d"), 
-            GetActorId_Implementation(), TargetID, *SkillSlug, TargetTypeId);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Failed to cast skill %s on target %d"), *SkillSlug, TargetID);
-    }
+	// Route through PlayerSkillManager::TryCastSkill so every guard (GCD, CD,
+	// animation lock, server-confirmation round-trip) is active.  This single
+	// call replaces the old SkillSystemManager::CanCastSkill + CastSkill path
+	// which had no per-player gating and allowed duplicate attack requests.
+	if (UPlayerSkillManager* PSM = MyGameInstance->GetPlayerSkillManager())
+	{
+		if (PSM->TryCastSkill(SkillSlug, TargetID, TargetType))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: %d attacking target %d with %s"),
+				GetActorId_Implementation(), TargetID, *SkillSlug);
+			return true;
+		}
+	}
+	return false;
 }
 
 // Called when the actor is being destroyed
@@ -3624,6 +3566,20 @@ void ABasicPlayer::SetDead_Implementation(bool bNewDead)
     {
         UE_LOG(LogTemp, Warning, TEXT("Player %d has died"), GetActorId_Implementation());
         OnDeath_Implementation();
+
+        // Immediately flush any pending skill results so queued damage/healing
+        // applies now instead of waiting for the 12-second safety timeout.
+        // This keeps the mob's state in sync with the server instead of having
+        // damage numbers appear long after the player has died.
+        if (!playerData.isOtherClient && MyGameInstance)
+        {
+            if (UCombatSystemManager* CSM = MyGameInstance->GetCombatSystemManager())
+            {
+                UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Flushing pending skill results on death (caster=%d)"),
+                    GetActorId_Implementation());
+                CSM->FlushAllPendingForCaster(GetActorId_Implementation());
+            }
+        }
     }
     else
     {
@@ -4130,7 +4086,7 @@ void ABasicPlayer::ShowHealingEffect_Implementation(int32 Healing, const FString
     {
         if (UFloatingCombatTextManager* FCT = UIManager->GetFCTManager())
         {
-            FCT->ShowDamage(GetCombatPosition_Implementation(), static_cast<float>(Healing), false, EDamageType::Heal);
+            FCT->ShowDamage(GetCombatPosition_Implementation(), static_cast<float>(Healing), false, EDamageType::Heal, true);
         }
 
         // Screen flash only for local players
@@ -4151,7 +4107,7 @@ void ABasicPlayer::ShowManaRestoreEffect_Implementation(int32 ManaRestored)
     {
         if (UFloatingCombatTextManager* FCT = UIManager->GetFCTManager())
         {
-            FCT->ShowDamage(GetCombatPosition_Implementation(), static_cast<float>(ManaRestored), false, EDamageType::ManaRegen);
+            FCT->ShowDamage(GetCombatPosition_Implementation(), static_cast<float>(ManaRestored), false, EDamageType::ManaRegen, true);
         }
     }
 }
@@ -4385,6 +4341,12 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 	// Capture old level BEFORE UpdatePlayerStats overwrites characterData
 	const int32 OldLevel = playerData.characterData.characterLevel;
 
+	// Capture pre-update HP/MP so HandleStatsManagerUpdate can compute accurate deltas.
+	// Without this, the first handler (ProcessStatsUpdate) overwrites characterCurrentHealth
+	// before HandleStatsManagerUpdate fires, making OldHP == NewHP every time → gain=0.
+	LastPreUpdateHP = playerData.characterData.characterCurrentHealth;
+	LastPreUpdateMP = playerData.characterData.characterCurrentMana;
+
 	// Update HP/MP/level on the character data
 	UpdatePlayerStats(StatsUpdate);
 
@@ -4486,31 +4448,40 @@ void ABasicPlayer::HandleStatsManagerUpdate(const FPlayerStatsUpdateStruct& NewS
 	if (playerData.isOtherClient) return;
 	if (NewStats.characterId != playerData.characterData.characterId) return;
 
-	// Capture current vitals before the update so we can compute regen deltas.
-	const int32 OldHP = playerData.characterData.characterCurrentHealth;
-	const int32 OldMP = playerData.characterData.characterCurrentMana;
+	// Capture current vitals before the update so we can compute deltas.
+	// Use LastPreUpdate values when available (saved by ProcessStatsUpdate before
+	// it overwrote characterData). Consume them so the second broadcast from
+	// PlayerStatsNetworkHandler doesn't duplicate the floating numbers.
+	const int32 OldHP = (LastPreUpdateHP >= 0) ? LastPreUpdateHP : playerData.characterData.characterCurrentHealth;
+	const int32 OldMP = (LastPreUpdateMP >= 0) ? LastPreUpdateMP : playerData.characterData.characterCurrentMana;
+	LastPreUpdateHP = -1;
+	LastPreUpdateMP = -1;
+	const int32 NewHP = NewStats.healthCurrent;
+	const int32 NewMP = NewStats.manaCurrent;
 
 	// Use the authoritative parser so that max_health / max_mana attributes in
 	// playerData are always kept in sync alongside the current vitals.
-	// Previously only healthCurrent/manaCurrent were updated here, which meant
-	// RefreshHUD could never find the max values and never drew the bars.
 	PlayerAttributeParser::UpdateCharacterDataFromStatsUpdate(playerData.characterData, NewStats);
 
 	RefreshHUD();
 
-	// For passive regen ticks the server tags the update with source="regen".
-	// Show floating combat text for the HP/MP gain so the player can see the numbers.
-	if (NewStats.updateSource == TEXT("regen") && UIManager)
+	// Show floating combat text for any positive HP/MP delta, excluding direct damage.
+	if (UIManager)
 	{
 		if (UFloatingCombatTextManager* FCT = UIManager->GetFCTManager())
 		{
-			const int32 HPGain = playerData.characterData.characterCurrentHealth - OldHP;
-			const int32 MPGain = playerData.characterData.characterCurrentMana - OldMP;
+			const int32 HPGain = NewHP - OldHP;
+			const int32 MPGain = NewMP - OldMP;
 
-			if (HPGain > 0)
-				FCT->ShowDamage(GetCombatPosition_Implementation(), static_cast<float>(HPGain), false, EDamageType::Heal);
-			if (MPGain > 0)
-				FCT->ShowDamage(GetCombatPosition_Implementation(), static_cast<float>(MPGain), false, EDamageType::ManaRegen);
+			UE_LOG(LogTemp, Log, TEXT("[REGEN] source=%s oldHP=%d newHP=%d gain=%d oldMP=%d newMP=%d gain=%d"),
+				*NewStats.updateSource, OldHP, NewHP, HPGain, OldMP, NewMP, MPGain);
+
+			const bool bIsDamage = NewStats.updateSource == TEXT("damage");
+
+			if (HPGain > 0 && !bIsDamage)
+				FCT->ShowDamage(GetCombatPosition_Implementation(), static_cast<float>(HPGain), false, EDamageType::Heal, true);
+			if (MPGain > 0 && !bIsDamage)
+				FCT->ShowDamage(GetCombatPosition_Implementation(), static_cast<float>(MPGain), false, EDamageType::ManaRegen, true);
 		}
 	}
 
@@ -4574,6 +4545,12 @@ void ABasicPlayer::RefreshHUD()
 	if (MaxHP > 0.f)
 	{
 		PlayerHUD->SetHP(static_cast<float>(playerData.characterData.characterCurrentHealth), MaxHP);
+
+		if (UIManager)
+		{
+			const float HPRatio = static_cast<float>(playerData.characterData.characterCurrentHealth) / MaxHP;
+			UIManager->SetLowHealthWarning(HPRatio > 0.0f && HPRatio <= 0.3f);
+		}
 	}
 
 	if (MaxMP >= 0.f && (MaxHP > 0.f || MaxMP > 0.f))

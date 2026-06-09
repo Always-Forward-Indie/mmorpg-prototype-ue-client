@@ -3,6 +3,7 @@
 #include "Gameplay/UI/FloatingCombatTextManager.h"
 #include "UI/UIManager.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Players/BasicPlayer.h"
 
 UDamageEffectHandler::UDamageEffectHandler()
 {
@@ -28,11 +29,15 @@ void UDamageEffectHandler::ProcessSkillResult_Implementation(const FSkillResultD
         ICombatable::Execute_GetCurrentHealth(TargetObject), SkillResult.finalTargetHealth,
         SkillResult.targetDied ? TEXT("YES") : TEXT("NO"));
 
-    // Применить здоровье/ману от сервера
-    ICombatable::Execute_SetCurrentHealth(TargetObject, SkillResult.finalTargetHealth);
-    ICombatable::Execute_SetCurrentMana(TargetObject, SkillResult.finalTargetMana);
+    // Apply HP/Mana changes for hits and blocks вЂ” skip only for misses
+    // (server doesn't send finalTargetHealth for error/miss results)
+    if (!SkillResult.isMissed)
+    {
+        ICombatable::Execute_SetCurrentHealth(TargetObject, SkillResult.finalTargetHealth);
+        ICombatable::Execute_SetCurrentMana(TargetObject, SkillResult.finalTargetMana);
+    }
 
-    // Показать визуальные эффекты в зависимости от результата атаки
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
     if (SkillResult.isMissed)
     {
         ShowMissedEffect(SkillResult, Target);
@@ -46,13 +51,13 @@ void UDamageEffectHandler::ProcessSkillResult_Implementation(const FSkillResultD
         ShowNormalDamageEffect(SkillResult, Target);
     }
 
-    // Обработка критических ударов
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
     if (SkillResult.isCritical && !SkillResult.isMissed)
     {
         ProcessCriticalHit(SkillResult, TargetObject);
     }
 
-    // Death check — use server-authoritative targetDied flag as primary source,
+    // Death check пїЅ use server-authoritative targetDied flag as primary source,
     // with a fallback check on HP for safety.
     if (!ICombatable::Execute_IsDead(TargetObject))
     {
@@ -60,7 +65,7 @@ void UDamageEffectHandler::ProcessSkillResult_Implementation(const FSkillResultD
         {
             UE_LOG(LogTemp, Warning, TEXT("DamageEffectHandler: Target %s is DEAD - calling SetDead(true)"), 
                 *GetNameSafe(TargetObject));
-            // SetDead(true) already calls OnDeath internally — do NOT call OnDeath separately.
+            // SetDead(true) already calls OnDeath internally пїЅ do NOT call OnDeath separately.
             ICombatable::Execute_SetDead(TargetObject, true);
         }
     }
@@ -77,10 +82,10 @@ void UDamageEffectHandler::ShowNormalDamageEffect(const FSkillResultData& SkillR
 
     UObject* TargetObject = Target.GetObject();
 
-    // Показать урон через ICombatable интерфейс (для анимаций, звуков и т.д.)
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ ICombatable пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅ.пїЅ.)
     ICombatable::Execute_ShowDamageEffect(TargetObject, SkillResult.damage, SkillResult.isCritical, SkillResult.skillSchool, false, false, SkillResult.skillSlug);
 
-    // Показать floating combat text
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ floating combat text
     ShowFloatingDamageText(SkillResult, Target);
 
     UE_LOG(LogTemp, Log, TEXT("DamageEffectHandler: Showed normal damage effect: %d damage"), SkillResult.damage);
@@ -95,16 +100,16 @@ void UDamageEffectHandler::ShowBlockedDamageEffect(const FSkillResultData& Skill
 
     UObject* TargetObject = Target.GetObject();
 
-    // Показать эффекты блокировки через ICombatable
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ ICombatable
     ICombatable::Execute_ShowDamageEffect(TargetObject, SkillResult.damage, SkillResult.isCritical, SkillResult.skillSchool, false, true, SkillResult.skillSlug);
 
-    // Показать "BLOCKED" текст через FloatingCombatTextManager
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ "BLOCKED" пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ FloatingCombatTextManager
     if (UFloatingCombatTextManager* FCTManager = GetFCTManager(TargetObject))
     {
         FVector CombatPosition = ICombatable::Execute_GetCombatPosition(TargetObject);
         FCTManager->ShowBlockedText(CombatPosition);
 
-        // Показать числа урона, если урон был нанесен несмотря на блок
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅ
         if (SkillResult.damage > 0)
         {
             ShowFloatingDamageText(SkillResult, Target);
@@ -123,7 +128,7 @@ void UDamageEffectHandler::ShowMissedEffect(const FSkillResultData& SkillResult,
 
     UObject* TargetObject = Target.GetObject();
 
-    // Показать "MISSED" текст
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ "MISSED" пїЅпїЅпїЅпїЅпїЅ
     if (UFloatingCombatTextManager* FCTManager = GetFCTManager(TargetObject))
     {
         FVector CombatPosition = ICombatable::Execute_GetCombatPosition(TargetObject);
@@ -146,10 +151,18 @@ void UDamageEffectHandler::ShowFloatingDamageText(const FSkillResultData& SkillR
     {
         FVector CombatPosition = ICombatable::Execute_GetCombatPosition(TargetObject);
 
-        // Конвертировать ESkillSchool в EDamageType
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ ESkillSchool пїЅ EDamageType
         EDamageType DamageType = ConvertSkillSchoolToDamageType(SkillResult.skillSchool);
 
-        FCTManager->ShowDamage(CombatPosition, SkillResult.damage, SkillResult.isCritical, DamageType);
+        // Detect whether the target is the local player so damage-on-self numbers
+        // render with a larger, more prominent style.
+        bool bOnLocalPlayer = false;
+        if (ABasicPlayer* Player = Cast<ABasicPlayer>(TargetObject))
+        {
+            bOnLocalPlayer = !Player->GetIsOtherClient();
+        }
+
+        FCTManager->ShowDamage(CombatPosition, SkillResult.damage, SkillResult.isCritical, DamageType, bOnLocalPlayer);
     }
 }
 
@@ -161,7 +174,7 @@ UFloatingCombatTextManager* UDamageEffectHandler::GetFCTManager(UObject* TargetO
         return nullptr;
     }
 
-    AActor* Actor = static_cast<AActor*>(TargetObject); // дёшево и без RTTI
+    AActor* Actor = static_cast<AActor*>(TargetObject); // пїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅ RTTI
     UWorld* World = Actor->GetWorld();
     if (!World)
     {
@@ -213,8 +226,8 @@ void UDamageEffectHandler::ProcessCriticalHit(const FSkillResultData& SkillResul
 {
     UE_LOG(LogTemp, Log, TEXT("DamageEffectHandler: Processing critical hit for %d damage"), SkillResult.damage);
 
-    // Дополнительные эффекты для критических ударов
-    // Например, специальные звуки, частицы и т.д.
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅ.пїЅ.
 }
 
 void UDamageEffectHandler::ProcessDamageOverTime(const FSkillResultData& SkillResult, UObject* TargetObject)

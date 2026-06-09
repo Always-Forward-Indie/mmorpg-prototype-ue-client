@@ -263,6 +263,11 @@ void UVendorShopWidget::RefreshBuyCartDisplay()
         NewSlot->SetAffordability(GetCartEntryAffordability(TotalCartCost));
         BuyCartSlots.Add(NewSlot);
     }
+
+    // Keep the confirm button in sync with cart content and affordability
+    if (Buy_Confirm_Button)
+        Buy_Confirm_Button->SetIsEnabled(BuyCart.Num() > 0 && TotalCartCost <= CachedInventory.gold);
+
     UpdateBuyTotalText();
     UpdatePlayerGoldText();
 }
@@ -606,44 +611,52 @@ void UVendorShopWidget::HandleVendorShopOpened(const FVendorShopData& ShopData)
 
 void UVendorShopWidget::HandleBuyItemResult(const FBuyItemResultData& Result)
 {
-    if (!Result.errorCode.IsEmpty())
-        ShowStatus(FString::Printf(TEXT("Buy failed: %s"), *Result.errorCode));
-    else
-        ShowStatus(FString::Printf(TEXT("Bought x%d  (-%d g)"), Result.quantity, Result.totalPrice));
-    RefreshShopDisplay();
+	if (!Result.errorCode.IsEmpty())
+	{
+		const FText Friendly = GetVendorErrorText(Result.errorCode);
+		ShowStatus(FString::Printf(TEXT("Buy failed: %s"), *Friendly.ToString()));
+	}
+	else
+		ShowStatus(FString::Printf(TEXT("Bought x%d  (-%d g)"), Result.quantity, Result.totalPrice));
+	RefreshShopDisplay();
 }
 
 void UVendorShopWidget::HandleSellItemResult(const FSellItemResultData& Result)
 {
-    if (!Result.errorCode.IsEmpty())
-        ShowStatus(FString::Printf(TEXT("Sell failed: %s"), *Result.errorCode));
-    else
-        ShowStatus(FString::Printf(TEXT("Sold  (+%d g)"), Result.goldReceived));
-    RefreshInventoryDisplay();
+	if (!Result.errorCode.IsEmpty())
+	{
+		const FText Friendly = GetVendorErrorText(Result.errorCode);
+		ShowStatus(FString::Printf(TEXT("Sell failed: %s"), *Friendly.ToString()));
+	}
+	else
+		ShowStatus(FString::Printf(TEXT("Sold  (+%d g)"), Result.goldReceived));
+	RefreshInventoryDisplay();
 }
 
 void UVendorShopWidget::HandleBuyItemBatchResult(const FBuyItemBatchResultData& Result)
 {
-    if (Buy_Confirm_Button) Buy_Confirm_Button->SetIsEnabled(true);
-    if (!Result.errorCode.IsEmpty())
-    {
-        ShowStatus(FString::Printf(TEXT("Buy failed: %s"), *Result.errorCode));
-        return;
-    }
-    ShowStatus(FString::Printf(TEXT("Bought %d items  (-%d g)"), Result.items.Num(), Result.totalGoldSpent));
-    BuyCart.Reset();
-    RefreshBuyCartDisplay();
-    RefreshShopDisplay(); // stock may have changed
+	if (Buy_Confirm_Button) Buy_Confirm_Button->SetIsEnabled(true);
+	if (!Result.errorCode.IsEmpty())
+	{
+		const FText Friendly = GetVendorErrorText(Result.errorCode);
+		ShowStatus(FString::Printf(TEXT("Buy failed: %s"), *Friendly.ToString()));
+		return;
+	}
+	ShowStatus(FString::Printf(TEXT("Bought %d items  (-%d g)"), Result.items.Num(), Result.totalGoldSpent));
+	BuyCart.Reset();
+	RefreshBuyCartDisplay();
+	RefreshShopDisplay(); // stock may have changed
 }
 
 void UVendorShopWidget::HandleSellItemBatchResult(const FSellItemBatchResultData& Result)
 {
-    if (Sell_Confirm_Button) Sell_Confirm_Button->SetIsEnabled(true);
-    if (!Result.errorCode.IsEmpty())
-    {
-        ShowStatus(FString::Printf(TEXT("Sell failed: %s"), *Result.errorCode));
-        return;
-    }
+	if (Sell_Confirm_Button) Sell_Confirm_Button->SetIsEnabled(true);
+	if (!Result.errorCode.IsEmpty())
+	{
+		const FText Friendly = GetVendorErrorText(Result.errorCode);
+		ShowStatus(FString::Printf(TEXT("Sell failed: %s"), *Friendly.ToString()));
+		return;
+	}
     ShowStatus(FString::Printf(TEXT("Sold %d items  (+%d g)"), Result.items.Num(), Result.totalGoldReceived));
 
     // Update CachedInventory quantities based on what was actually sold
@@ -948,5 +961,20 @@ void UVendorShopWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPo
     Pos.Y = FMath::Clamp(Pos.Y, 0.f, FMath::Max(0.f, VP.Y - Size.Y));
     CurrentViewportPosition = Pos;
     SetPositionInViewport(Pos, false);
+}
+
+FText UVendorShopWidget::GetVendorErrorText(const FString& ErrorCode) const
+{
+    if (const UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (const ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            return Loc->GetVendorErrorText(ErrorCode);
+        }
+    }
+    FString Friendly = ErrorCode.Replace(TEXT("_"), TEXT(" "));
+    if (!Friendly.IsEmpty())
+        Friendly = Friendly.Left(1).ToUpper() + Friendly.Mid(1).ToLower();
+    return FText::FromString(Friendly);
 }
 

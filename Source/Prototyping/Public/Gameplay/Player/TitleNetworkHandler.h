@@ -58,8 +58,8 @@ private:
     /** Handle PLAYER_TITLE_CHANGED — update a remote player's nameplate title. */
     void HandleRemoteTitleChanged(const TSharedPtr<FJsonObject>& Root);
 
-    FPlayerTitlesState ParseTitlesState(const TSharedPtr<FJsonObject>& Body) const;
-    static FTitleEntry ParseTitleEntry (const TSharedPtr<FJsonObject>& Obj);
+    FPlayerTitlesState ParseTitlesState(const TSharedPtr<FJsonObject>& Body);
+    FTitleEntry         ParseTitleEntry (const TSharedPtr<FJsonObject>& Obj);
 
     UPROPERTY()
     UTitleManager* Manager = nullptr;

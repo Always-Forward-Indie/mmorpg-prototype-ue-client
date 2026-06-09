@@ -38,6 +38,9 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Character Data", meta = (AllowPrivateAccess = "true"))
 	FMessageDataStruct messageData;
 
+	int32 LastPreUpdateHP = -1;
+	int32 LastPreUpdateMP = -1;
+
 	UPROPERTY()
 	UMyGameInstance* MyGameInstance;
 
@@ -401,7 +404,7 @@ public:
 
 	// Battle system functions
 	UFUNCTION(BlueprintCallable, Category = "Combat")
-	void AttackTarget(int32 TargetID, const FString& SkillSlug, int32 TargetTypeId = 3);
+	bool AttackTarget(int32 TargetID, const FString& SkillSlug, int32 TargetTypeId = 3);
 
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
@@ -660,6 +663,9 @@ public:
 			UFUNCTION()
 			void HandleStatsManagerUpdate(const FPlayerStatsUpdateStruct& NewStats);
 
+			UFUNCTION()
+			void HandleSkillInitiatedForAutoAttack(const FString& SkillSlug, int32 CooldownMs);
+
 		protected:
 			UFUNCTION()
 			void OnPickupInput();
@@ -813,7 +819,7 @@ public:
 	 * - NPC                  → visual lock + show nameplate
 	 * - DroppedItem          → visual lock
 	 * - RemotePlayer         → visual lock
-	 * - null (empty ground)  → ClearLockedTarget
+     * - null (empty ground)  → no-op (target is preserved; cleared via Esc or distance only)
 	 */
 	UFUNCTION()
 	void DispatchCursorSelect(AActor* Target, EInteractableType Type);

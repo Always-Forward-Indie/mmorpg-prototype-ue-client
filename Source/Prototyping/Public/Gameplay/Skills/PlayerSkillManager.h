@@ -17,6 +17,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSkillsInitialized, const TArray<F
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSkillCooldownStarted, const FString&, SkillSlug);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSkillReady, const FString&, SkillSlug);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSkillSlotChanged, int32, SlotIndex, const FSkillSlotData&, SlotData);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSkillCastConfirmed, const FString&, SkillSlug, int32, CooldownMs);
 
 /**
  * Main player skill management system
@@ -79,6 +80,9 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Player Skill Manager")
     FOnSkillSlotChanged OnSkillSlotChanged;
 
+    UPROPERTY(BlueprintAssignable, Category = "Player Skill Manager")
+    FOnSkillCastConfirmed OnSkillCastConfirmed;
+
     // Utils
     UFUNCTION(BlueprintCallable, Category = "Player Skill Manager")
     void UpdateCooldowns(float DeltaTime);
@@ -126,6 +130,14 @@ public:
     // Use to block player rotation input during the animation.
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Skill Manager")
     bool IsSkillAnimationPlaying() const;
+
+    // Computes the dynamic confirmation timeout based on network RTT.
+    // Result is clamped to [MinConfirmationTimeoutSec, MaxConfirmationTimeoutSec].
+    // Falls back to MinConfirmationTimeoutSec when TimeSyncService is unavailable.
+    double GetConfirmationTimeout() const;
+
+    // Returns true when TimeSyncService has enough samples for reliable timing.
+    bool HasReliableTimeSync() const;
 
 protected:
     // Get world for time calculations
@@ -185,14 +197,14 @@ private:
     // auto-expires after this many seconds so the player is never permanently blocked.
     static constexpr double AnimationLockTimeoutSec = 6.0;
 
-    // ── Server-confirmation guard ────────────────────────────────────────────
-    // Set to true by TryCastSkill right before the request is sent.
-    // Cleared by HandleSkillInitiation when the server-confirmed combatInitiation
-    // arrives. Prevents a second skill request from being sent during the network
-    // round-trip (~100 ms) before the first confirmation (and its cooldown) arrives.
-    bool   bAwaitingServerConfirmation     = false;
-    double ConfirmationRequestWorldTime    = 0.0;
-    // Auto-expire if the server never responds (packet loss / rejection with no
-    // combatInitiation reply).  2 s is generous enough for high-latency connections.
-    static constexpr double ConfirmationTimeoutSec = 2.0;
+    // ── Server-confirmation guard (per-skill) ───────────────────────────────
+    // Per-skill map: skillSlug → world-time when request was sent.
+    // TryCastSkill adds an entry, HandleSkillInitiation removes it.
+    // CanCastSkill checks the entry for the specific skill, not globally.
+    // This allows different skills to be cast during each other's round-trip.
+    TMap<FString, double> PendingConfirmations;
+    // Auto-expire bounds: the effective timeout is computed dynamically from RTT
+    // via GetConfirmationTimeout() and clamped to this range.
+    static constexpr double MinConfirmationTimeoutSec = 2.0;
+    static constexpr double MaxConfirmationTimeoutSec = 5.0;
 };

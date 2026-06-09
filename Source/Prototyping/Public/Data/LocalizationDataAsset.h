@@ -80,6 +80,12 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|NPCs")
     TSoftObjectPtr<UDataTable> NPCLocale;
 
+    // -- Titles ----------------------------------------------------------------
+
+    // Maps title slug -> FTitleLocaleDefinition  (display name + description)
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Titles")
+    TSoftObjectPtr<UDataTable> TitleLocale;
+
     // -- World Notifications -------------------------------------------------
 
     // Maps notificationType -> FNotificationLocaleDefinition  (text template + icon + sound)

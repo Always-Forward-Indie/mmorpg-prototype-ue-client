@@ -12,6 +12,7 @@
 #include "Gameplay/UI/NameplateCanvasWidget.h"
 #include "Gameplay/UI/CastBarWidget.h"
 #include "Gameplay/UI/CastBarWidget.h"
+#include "UI/ItemQuickBarWidget.h"
 #include "PlayerInterfaceWidget.generated.h"
 
 // Forward declarations
@@ -85,6 +86,9 @@ protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Player Interface")
     UCastBarWidget* CastBarWidget = nullptr;
 
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Player Interface")
+    UItemQuickBarWidget* ItemQuickBar = nullptr;
+
     // Widget classes for dynamic creation
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Interface")
     TSubclassOf<USkillBarWidget> SkillBarWidgetClass;
@@ -106,6 +110,7 @@ protected:
     virtual void NativeDestruct() override;
     virtual void NativePreConstruct() override;
     virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+    virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 private:
     UPROPERTY()
@@ -153,6 +158,10 @@ public:
     /** Returns the cast bar widget, if available (may be nullptr). */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Interface")
     UCastBarWidget* GetCastBarWidget() const { return CastBarWidget; }
+
+    /** Returns the item quickbar widget, if available (may be nullptr). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Interface")
+    UItemQuickBarWidget* GetItemQuickBar() const { return ItemQuickBar; }
 
 private:
 };

@@ -3,6 +3,7 @@
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Services/LocalizationSubsystem.h"
 #include "Utils/JSONParser.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
@@ -138,8 +139,17 @@ void UTitleNetworkHandler::HandleRemoteTitleChanged(const TSharedPtr<FJsonObject
     (*BodyPtr)->TryGetStringField(TEXT("equippedTitleSlug"),       TitleSlug);
     (*BodyPtr)->TryGetStringField(TEXT("equippedTitleDisplayName"), TitleDisplayName);
 
-    // Prefer display name; fall back to slug so the nameplate always shows something.
-    const FString TitleText = TitleDisplayName.IsEmpty() ? TitleSlug : TitleDisplayName;
+    // Prefer display name; fall back to localized name, then slug so the nameplate always shows something.
+    FString TitleText = TitleDisplayName;
+    if (TitleText.IsEmpty() && !TitleSlug.IsEmpty())
+    {
+        if (const ULocalizationSubsystem* Loc = GameInstance->GetSubsystem<ULocalizationSubsystem>())
+        {
+            TitleText = Loc->GetTitleDisplayName(TitleSlug).ToString();
+        }
+    }
+    if (TitleText.IsEmpty())
+        TitleText = TitleSlug;
 
     ABasicPlayer* RemotePlayer = GameInstance->GetPlayerByCharacterId(CharacterId);
     if (!RemotePlayer || !IsValid(RemotePlayer)) return;
@@ -159,6 +169,15 @@ FTitleEntry UTitleNetworkHandler::ParseTitleEntry(const TSharedPtr<FJsonObject>&
     Obj->TryGetStringField(TEXT("description"),   Entry.description);
     Obj->TryGetStringField(TEXT("earnCondition"), Entry.earnCondition);
 
+    // Fall back to localized display name if server didn't provide one
+    if (Entry.displayName.IsEmpty() && !Entry.slug.IsEmpty() && GameInstance)
+    {
+        if (const ULocalizationSubsystem* Loc = GameInstance->GetSubsystem<ULocalizationSubsystem>())
+        {
+            Entry.displayName = Loc->GetTitleDisplayName(Entry.slug).ToString();
+        }
+    }
+
     const TArray<TSharedPtr<FJsonValue>>* BonusesArr = nullptr;
     if (Obj->TryGetArrayField(TEXT("bonuses"), BonusesArr))
     {
@@ -176,7 +195,7 @@ FTitleEntry UTitleNetworkHandler::ParseTitleEntry(const TSharedPtr<FJsonObject>&
     return Entry;
 }
 
-FPlayerTitlesState UTitleNetworkHandler::ParseTitlesState(const TSharedPtr<FJsonObject>& Body) const
+FPlayerTitlesState UTitleNetworkHandler::ParseTitlesState(const TSharedPtr<FJsonObject>& Body)
 {
     FPlayerTitlesState State;
     Body->TryGetNumberField(TEXT("characterId"), State.characterId);

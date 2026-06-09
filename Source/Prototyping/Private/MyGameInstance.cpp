@@ -85,6 +85,45 @@
 #include "EditorViewportClient.h"
 #endif
 
+#include "Framework/Application/IInputProcessor.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Gameplay/Players/BasicPlayer.h"
+#include "Kismet/GameplayStatics.h"
+
+// ============================================================================
+// PIE Escape-key preprocessor — intercepts ESC before the editor, preventing
+// PIE session from being stopped when the player opens the game menu.
+// ============================================================================
+class FPIEInputPreprocessor : public IInputProcessor, public TSharedFromThis<FPIEInputPreprocessor>
+{
+public:
+	explicit FPIEInputPreprocessor(UMyGameInstance* InGI) : GI(InGI) {}
+
+	virtual void Tick(const float DeltaTime, FSlateApplication& SlateApp, TSharedRef<ICursor> Cursor) override {}
+
+	virtual bool HandleKeyDownEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override
+	{
+		if (InKeyEvent.GetKey() == EKeys::Escape)
+		{
+			if (GI && GI->GetWorld())
+			{
+				APawn* LocalPawn = UGameplayStatics::GetPlayerPawn(GI->GetWorld(), 0);
+				if (ABasicPlayer* Player = Cast<ABasicPlayer>(LocalPawn))
+				{
+					Player->ClearLockedTarget();
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+private:
+	UMyGameInstance* GI;
+};
+
+static TSharedPtr<FPIEInputPreprocessor> GPIEInputPreprocessor;
+
 UMyGameInstance::UMyGameInstance(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
@@ -264,6 +303,13 @@ void UMyGameInstance::OnStart()
 	{
 		FSlateApplication::Get().SetAllUserFocusToGameViewport();
 		UE_LOG(LogTemp, Log, TEXT("GameInstance: OnStart — viewport focus set, custom cursor active."));
+
+		if (!GPIEInputPreprocessor.IsValid())
+		{
+			GPIEInputPreprocessor = MakeShared<FPIEInputPreprocessor>(this);
+			FSlateApplication::Get().RegisterInputPreProcessor(GPIEInputPreprocessor);
+			UE_LOG(LogTemp, Log, TEXT("GameInstance: PIE Escape preprocessor registered."));
+		}
 	}
 }
 
@@ -796,6 +842,14 @@ void UMyGameInstance::PreloadWorldInteractionCursors()
 
 void UMyGameInstance::Shutdown()
 {
+	if (GPIEInputPreprocessor.IsValid())
+	{
+		if (FSlateApplication::IsInitialized())
+			FSlateApplication::Get().UnregisterInputPreProcessor(GPIEInputPreprocessor);
+		GPIEInputPreprocessor.Reset();
+		UE_LOG(LogTemp, Log, TEXT("GameInstance: PIE Escape preprocessor unregistered."));
+	}
+
 	if (PreLoadMapDelegateHandle.IsValid())
 	{
 		FCoreUObjectDelegates::PreLoadMap.Remove(PreLoadMapDelegateHandle);

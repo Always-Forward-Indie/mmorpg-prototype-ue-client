@@ -16,9 +16,9 @@ class PROTOTYPING_API UDamageTextWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	void Init(float Damage, bool bCrit, EDamageType Type);
+	void Init(float Damage, bool bCrit, EDamageType Type, bool bIsSelfTarget = false);
 	void InitSpecialText(const FString& Text, FLinearColor Color);
-	void SetPendingDamage(float Damage, bool bCrit, EDamageType Type);
+	void SetPendingDamage(float Damage, bool bCrit, EDamageType Type, bool bIsSelfTarget = false);
 	void SetPendingSpecialText(const FString& Text, FLinearColor Color);
 	void PlayDamageAnimation();
 	void SetOwningManager(UFloatingCombatTextManager* Manager);
@@ -39,6 +39,7 @@ protected:
 	bool bPendingInit = false;
 	float PendingDamage = 0.f;
 	bool PendingCrit = false;
+	bool PendingSelfTarget = false;
 	EDamageType PendingType = EDamageType::Physical;
 
 	// For special text (MISSED, BLOCKED, etc.)

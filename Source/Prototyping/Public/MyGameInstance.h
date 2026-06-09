@@ -1097,6 +1097,10 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Data")
 	UDataTable* GetNPCDefinitionTable() const { return NPCDefinitionTable; }
+
+	/** Serialised state for the item quickbar. Saved across map loads. */
+	UPROPERTY()
+	TArray<struct FItemQuickSlotData> QuickBarSlots;
 };
 
 // Forward declarations

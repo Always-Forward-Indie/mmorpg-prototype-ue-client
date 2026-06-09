@@ -81,8 +81,8 @@ void UCombatNetworkHandler::HandleSkillInitiation(const FString& JsonData)
     
     if (!SkillData.success)
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatNetworkHandler: Skill initiation failed for skill %s"), 
-            *SkillData.skillName);
+        UE_LOG(LogTemp, Warning, TEXT("CombatNetworkHandler: Skill initiation failed for skill %s (caster=%d, reason: %s)"), 
+            *SkillData.skillName, SkillData.casterId, *SkillData.errorReason);
         return;
     }
 
@@ -105,11 +105,13 @@ void UCombatNetworkHandler::HandleSkillResult(const FString& JsonData)
 {
     FSkillResultData SkillResult = JSONParser::DeserializeSkillResult(JsonData);
     
+    // Don't filter non-success results — they carry meaningful data (miss, out-of-range, etc.)
+    // that must be shown to the player as floating text or handled by effect handlers.
     if (!SkillResult.success)
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatNetworkHandler: Skill result failed for skill %s"), 
-            *SkillResult.skillName);
-        return;
+        UE_LOG(LogTemp, Warning, TEXT("CombatNetworkHandler: Skill result failed for skill %s (reason: %s)"), 
+            *SkillResult.skillName, *SkillResult.errorReason);
+        // Continue processing — fall through to ProcessSkillResult below
     }
 
     LogNetworkEvent("Skill Result", 

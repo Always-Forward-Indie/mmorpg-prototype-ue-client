@@ -210,6 +210,20 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|WorldObjects")
     bool GetWIOLocaleDefinition(const FString& NameKey, FWIOLocaleDefinition& OutDefinition) const;
 
+    // -- Titles ----------------------------------------------------------------
+
+    /** Localised title display name. Key = title slug (e.g. "wolf_slayer"). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Titles")
+    FText GetTitleDisplayName(const FString& TitleSlug) const;
+
+    /** Localised title description. Key = title slug. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Titles")
+    FText GetTitleDescription(const FString& TitleSlug) const;
+
+    /** Full row. Returns false if not found. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Titles")
+    bool GetTitleLocaleDefinition(const FString& TitleSlug, FTitleLocaleDefinition& OutDefinition) const;
+
 private:
     UPROPERTY()
     ULocalizationDataAsset* LocalizationData = nullptr;
@@ -226,6 +240,7 @@ private:
     UPROPERTY() mutable UDataTable* CachedNotificationLocaleTable = nullptr;
     UPROPERTY() mutable UDataTable* CachedAmbientSpeechTable      = nullptr;
     UPROPERTY() mutable UDataTable* CachedWIOLocaleTable          = nullptr;
+    UPROPERTY() mutable UDataTable* CachedTitleLocaleTable        = nullptr;
 
     UDataTable* GetQuestTable()              const;
     UDataTable* GetQuestStepTable()          const;
@@ -239,6 +254,7 @@ private:
     UDataTable* GetNotificationLocaleTable() const;
     UDataTable* GetAmbientSpeechTable()      const;
     UDataTable* GetWIOLocaleTable()          const;
+    UDataTable* GetTitleLocaleTable()        const;
 
     static FText FallbackText(const FString& Key);
 };

@@ -200,7 +200,7 @@ public:
     /** Maximum distance for the cursor hover line-trace in cm. */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction|Ranges",
         meta = (ClampMin = "100", Units = "cm"))
-    float HoverTraceRange = 2000.f;
+    float HoverTraceRange = 5000.f;
 
     /**
      * Auto-approach stops this many cm away from the center of the target actor

@@ -17,7 +17,7 @@ void UFloatingCombatTextManager::Init(UCanvasPanel* InCanvas, APlayerController*
 	UE_LOG(LogTemp, Log, TEXT("FCTManager::Init - DamageTextClass set to %s"), *GetNameSafe(DamageTextClass));
 }
 
-void UFloatingCombatTextManager::ShowDamage(const FVector& WorldLocation, float Damage, bool bIsCrit, EDamageType DamageType)
+void UFloatingCombatTextManager::ShowDamage(const FVector& WorldLocation, float Damage, bool bIsCrit, EDamageType DamageType, bool bOnLocalPlayer)
 {
 	UE_LOG(LogTemp, Warning, TEXT("FCTManager::ShowDamage - starting, damage: %f, location: %s"), Damage, *WorldLocation.ToString());
 
@@ -34,15 +34,20 @@ void UFloatingCombatTextManager::ShowDamage(const FVector& WorldLocation, float 
 	FVector2D ScreenPos;
 
 	if (!UWidgetLayoutLibrary::ProjectWorldLocationToWidgetPosition(
-		PlayerController,    // контроллер
-		WorldLocation,       // мир-координаты
-		ScreenPos,           // out: в координатах Canvas
-		false                // не относительно игрового окна
+		PlayerController,    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+		WorldLocation,       // пїЅпїЅпїЅ-пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+		ScreenPos,           // out: пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ Canvas
+		false                // пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
 	))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Failed to project world location to widget position"));
 		return;
 	}
+
+	// Spread numbers so concurrent hits don't overlap.
+	// Random horizontal offset and slight vertical variation.
+	ScreenPos.X += FMath::FRandRange(-50.0f, 50.0f);
+	ScreenPos.Y += FMath::FRandRange(-15.0f, 5.0f);
 
 	UDamageTextWidget* Widget = GetOrCreateWidget();
 	
@@ -70,7 +75,7 @@ void UFloatingCombatTextManager::ShowDamage(const FVector& WorldLocation, float 
 	UE_LOG(LogTemp, Warning, TEXT("ScreenPos: X=%f Y=%f"), ScreenPos.X, ScreenPos.Y);
 
 	// Set pending data first, before adding to canvas
-	Widget->SetPendingDamage(Damage, bIsCrit, DamageType);
+	Widget->SetPendingDamage(Damage, bIsCrit, DamageType, bOnLocalPlayer);
 
 	// Get or create canvas slot
 	UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Widget->Slot);
@@ -106,7 +111,7 @@ void UFloatingCombatTextManager::ShowDamage(const FVector& WorldLocation, float 
 		FVector2D AdjustedPos = ScreenPos - WidgetSize * 0.5f;
 		CanvasSlot->SetPosition(AdjustedPos);
 
-		UE_LOG(LogTemp, Warning, TEXT("ShowDamage – slot position set to X=%f Y=%f, widget size: %s"), 
+		UE_LOG(LogTemp, Warning, TEXT("ShowDamage пїЅ slot position set to X=%f Y=%f, widget size: %s"), 
 			AdjustedPos.X, AdjustedPos.Y, *WidgetSize.ToString());
 	}
 
@@ -212,7 +217,7 @@ void UFloatingCombatTextManager::ShowSpecialText(const FVector& WorldLocation, c
 		FVector2D AdjustedPos = ScreenPos - WidgetSize * 0.5f;
 		CanvasSlot->SetPosition(AdjustedPos);
 
-		UE_LOG(LogTemp, Warning, TEXT("ShowSpecialText – slot position set to %s"), *AdjustedPos.ToString());
+		UE_LOG(LogTemp, Warning, TEXT("ShowSpecialText пїЅ slot position set to %s"), *AdjustedPos.ToString());
 	}
 
 	// Make sure the widget is visible
@@ -227,7 +232,7 @@ UDamageTextWidget* UFloatingCombatTextManager::GetOrCreateWidget()
 {
 	UE_LOG(LogTemp, Warning, TEXT("GetOrCreateWidget - pool size before cleaning: %d"), WidgetPool.Num());
 
-	// 1) Удаляем все «стёртые» объекты из пула
+	// 1) пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅ
 	WidgetPool.RemoveAll([](const TWeakObjectPtr<UDamageTextWidget>& WPtr)
 		{
 			return !WPtr.IsValid();
@@ -235,7 +240,7 @@ UDamageTextWidget* UFloatingCombatTextManager::GetOrCreateWidget()
 
 	UE_LOG(LogTemp, Warning, TEXT("GetOrCreateWidget - pool size after RemoveInvalid: %d"), WidgetPool.Num());
 
-	// 2) Ищем первый свободный виджет (не находящийся в viewport и не проигрывающий анимацию)
+	// 2) пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ viewport пїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
 	for (auto& WPtr : WidgetPool)
 	{
 		if (WPtr.IsValid())
@@ -247,7 +252,7 @@ UDamageTextWidget* UFloatingCombatTextManager::GetOrCreateWidget()
 			UE_LOG(LogTemp, Warning, TEXT("  Checking widget %s - InViewport: %s, PlayingAnim: %s"), 
 				*Widget->GetName(), bInViewport ? TEXT("true") : TEXT("false"), bPlayingAnim ? TEXT("true") : TEXT("false"));
 			
-			// Виджет свободен если он не в viewport и не проигрывает анимацию
+			// пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅ пїЅ viewport пїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 			if (!bInViewport && !bPlayingAnim)
 			{
 				UE_LOG(LogTemp, Warning, TEXT("  Reusing widget %s"), *Widget->GetName());
@@ -262,14 +267,14 @@ UDamageTextWidget* UFloatingCombatTextManager::GetOrCreateWidget()
 		}
 	}
 
-	// 3) Если не нашли — создаём новый
+	// 3) пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 	UE_LOG(LogTemp, Warning, TEXT("  Creating new widget"));
 	if (DamageTextClass && PlayerController)
 	{
 		if (UDamageTextWidget* NewW = CreateWidget<UDamageTextWidget>(PlayerController, DamageTextClass))
 		{
 			NewW->SetOwningManager(this);
-			WidgetPool.Add(NewW);  // TWeakObjectPtr автоматически конструируется из raw ptr
+			WidgetPool.Add(NewW);  // TWeakObjectPtr пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ raw ptr
 			UE_LOG(LogTemp, Warning, TEXT("  Created new widget %s"), *NewW->GetName());
 			return NewW;
 		}

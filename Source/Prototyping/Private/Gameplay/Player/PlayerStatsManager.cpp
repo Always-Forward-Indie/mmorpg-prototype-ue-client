@@ -26,6 +26,7 @@ void UPlayerStatsManager::ApplyStatsUpdate(const FPlayerStatsUpdateStruct& InSta
     CachedStats.healthMax     = InStats.healthMax > 0 ? InStats.healthMax : CachedStats.healthMax;
     CachedStats.manaCurrent   = InStats.manaCurrent;
     CachedStats.manaMax       = InStats.manaMax > 0   ? InStats.manaMax   : CachedStats.manaMax;
+    CachedStats.updateSource  = InStats.updateSource;
 
     if (bHasLevel)
         CachedStats.level = InStats.level;

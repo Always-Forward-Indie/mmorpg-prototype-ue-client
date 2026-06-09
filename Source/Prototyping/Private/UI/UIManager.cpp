@@ -865,6 +865,18 @@ void UUIManager::HandlePlayerInterfaceReady()
 	}
 
 	OnUIManagerInitialized.Broadcast();
+
+	// Initialize item quickbar if the widget is present in the PlayerInterface
+	if (PlayerInterfaceWidget && InventoryManager)
+	{
+		if (UItemQuickBarWidget* QuickBar = PlayerInterfaceWidget->GetItemQuickBar())
+		{
+			QuickBar->InitQuickBar(InventoryManager);
+			InventoryManager->OnInventoryUpdated.AddDynamic(QuickBar, &UItemQuickBarWidget::HandleInventoryUpdated);
+			UE_LOG(LogTemp, Warning, TEXT("UIManager: ItemQuickBar initialized"));
+		}
+	}
+
 	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] HandlePlayerInterfaceReady: OnUIManagerInitialized broadcast"));
 }
 
@@ -1017,11 +1029,19 @@ bool UUIManager::HasUIWindowOpen() const
 	// True only when an actual panel window is open and consuming cursor input.
 	// Intentionally excludes bAltCursorActive so world interaction is never blocked
 	// just because the cursor is always shown.
-	return bInventoryVisible || bSkillsPanelVisible || bHarvestLootVisible
-		|| bDialogueVisible || bQuestJournalVisible
-		|| bVendorShopVisible || bRepairShopVisible || bSkillShopVisible || bTradeVisible || bEquipmentVisible
-		|| bPlayerStatsVisible || bBestiaryVisible || bTitlesVisible || bReputationVisible || bEmoteListVisible
-		|| bGameMenuVisible;
+    return bInventoryVisible || bSkillsPanelVisible || bHarvestLootVisible
+        || bDialogueVisible || bQuestJournalVisible
+        || bVendorShopVisible || bRepairShopVisible || bSkillShopVisible || bTradeVisible || bEquipmentVisible
+        || bPlayerStatsVisible || bBestiaryVisible || bTitlesVisible || bReputationVisible || bEmoteListVisible;
+}
+
+bool UUIManager::HasModalWindowOpen() const
+{
+	// Only windows that should fully block world interaction.
+	// Non-modal windows (inventory, stats, skills, etc.) let UMG hit-testing
+	// handle click-through: clicks on UI elements are consumed, clicks on
+	// transparent/empty areas pass through to the game world.
+    return bDialogueVisible || bTradeVisible || bHarvestLootVisible;
 }
 
 int32 UUIManager::GetActiveInteractionNpcId() const
@@ -1126,107 +1146,24 @@ void UUIManager::ToggleGameMenu()
 		GameMenuWidget ? TEXT("Valid") : TEXT("NULL"),
 		(GameMenuWidget && GameMenuWidget->IsMenuOpen()) ? TEXT("true") : TEXT("false"));
 
-	// If the game menu itself is open, close it (Resume behaviour)
-	if (GameMenuWidget && GameMenuWidget->IsMenuOpen())
-	{
-		GameMenuWidget->CloseMenu();
-		bGameMenuVisible = false;
-		UpdateCursorAndInputMode();
-		return;
-	}
-
-	// Close any other open UI panels first (WoW-style: Escape dismisses topmost panel)
-	bool bClosedSomething = false;
-
-	if (bInventoryVisible && InventoryManager)
-	{
-		InventoryManager->ToggleInventoryUI();
-		bInventoryVisible = false;
-		bClosedSomething = true;
-	}
-	if (bSkillsPanelVisible && AvailableSkillsWidget)
-	{
-		AvailableSkillsWidget->HideWidget();
-		bClosedSomething = true;
-	}
-	if (bEquipmentVisible && EquipmentWidget)
-	{
-		EquipmentWidget->ToggleEquipment();
-		bClosedSomething = true;
-	}
-	if (bQuestJournalVisible && QuestJournalWidget)
-	{
-		QuestJournalWidget->ToggleJournal();
-		bClosedSomething = true;
-	}
-	if (bPlayerStatsVisible && PlayerStatsWidget)
-	{
-		PlayerStatsWidget->CloseStats();
-		bClosedSomething = true;
-	}
-	if (bBestiaryVisible && BestiaryWidget)
-	{
-		BestiaryWidget->CloseBestiary();
-		bClosedSomething = true;
-	}
-	if (bTitlesVisible && TitlesWidget)
-	{
-		TitlesWidget->CloseTitles();
-		bClosedSomething = true;
-	}
-	if (bReputationVisible && ReputationWidget)
-	{
-		ReputationWidget->CloseReputation();
-		bClosedSomething = true;
-	}
-	if (bVendorShopVisible && VendorShopWidget)
-	{
-		VendorShopWidget->SetVisibility(ESlateVisibility::Collapsed);
-		bVendorShopVisible = false;
-		bClosedSomething = true;
-	}
-	if (bRepairShopVisible && RepairShopWidget)
-	{
-		RepairShopWidget->SetVisibility(ESlateVisibility::Collapsed);
-		bRepairShopVisible = false;
-		bClosedSomething = true;
-	}
-	if (bSkillShopVisible && SkillShopWidget)
-	{
-		SkillShopWidget->CloseShop();
-		bSkillShopVisible = false;
-		bClosedSomething = true;
-	}
-	if (bTradeVisible && TradeWidget)
-	{
-		TradeWidget->SetVisibility(ESlateVisibility::Collapsed);
-		bTradeVisible = false;
-		bClosedSomething = true;
-	}
-	// Note: bAltCursorActive is intentionally NOT treated as "something to close" here.
-	// Alt-cursor is a passive state and should not block the game menu from opening.
-
-	if (bClosedSomething)
-	{
-		UpdateCursorAndInputMode();
-		// Bug 6 fix: do NOT return here — fall through to open the game menu.
-		// WoW-style behaviour: Escape closes open panels AND opens the menu in one press.
-	}
-
-	// Nothing was open - open the game menu
+	// Toggle the game menu only — do not close other windows.
 	if (GameMenuWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::ToggleGameMenu - Opening GameMenuWidget (Visibility was: %d)"),
-			(int32)GameMenuWidget->GetVisibility());
-		GameMenuWidget->OpenMenu();
-		bGameMenuVisible = true;
+		if (GameMenuWidget->IsMenuOpen())
+		{
+			GameMenuWidget->CloseMenu();
+			bGameMenuVisible = false;
+		}
+		else
+		{
+			GameMenuWidget->OpenMenu();
+			bGameMenuVisible = true;
+		}
 		UpdateCursorAndInputMode();
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::ToggleGameMenu - GameMenuWidget opened (Visibility now: %d)"),
-			(int32)GameMenuWidget->GetVisibility());
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager::ToggleGameMenu - GameMenuWidget is NULL! Check GameMenuWidgetClass is set in Blueprint."));
+		UE_LOG(LogTemp, Error, TEXT("UIManager::ToggleGameMenu - GameMenuWidget is NULL!"));
 	}
 }
 
@@ -2067,6 +2004,15 @@ void UUIManager::ShowDamageScreenFlash()
 	}
 }
 
+void UUIManager::SetLowHealthWarning(bool bActive)
+{
+	EnsureFlashWidget();
+	if (CombatScreenFlashWidget)
+	{
+		CombatScreenFlashWidget->SetLowHealthWarning(bActive);
+	}
+}
+
 void UUIManager::EnsureFlashWidget()
 {
 	if (CombatScreenFlashWidget && CombatScreenFlashWidget->IsInViewport()) return;
@@ -2082,8 +2028,8 @@ void UUIManager::EnsureFlashWidget()
 	CombatScreenFlashWidget = CreateWidget<UCombatScreenFlashWidget>(PC, WidgetClass);
 	if (CombatScreenFlashWidget)
 	{
-		// ZOrder 200 keeps it above HUD but below modal popups (death screen etc.)
-		CombatScreenFlashWidget->AddToViewport(200);
+		// ZOrder 5 keeps it behind all HUD/UI elements (lowest HUD is PlayerInterface at 10)
+		CombatScreenFlashWidget->AddToViewport(5);
 	}
 }
 

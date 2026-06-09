@@ -2,6 +2,8 @@
 #include "MyGameInstance.h"
 #include "Components/OverlaySlot.h"
 #include "Gameplay/Player/ExperienceManager.h"
+#include "Gameplay/Players/BasicPlayer.h"
+#include "Kismet/GameplayStatics.h"
 
 void UPlayerInterfaceWidget::NativePreConstruct()
 {
@@ -41,8 +43,22 @@ void UPlayerInterfaceWidget::NativeTick(const FGeometry& MyGeometry, float InDel
 
     bReadySignalSent = true;
 
-    UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] PlayerInterfaceWidget: all child widgets valid — broadcasting OnPlayerInterfaceReady"));
+    UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] PlayerInterfaceWidget: all child widgets valid ï¿½ broadcasting OnPlayerInterfaceReady"));
     OnPlayerInterfaceReady.Broadcast();
+}
+
+FReply UPlayerInterfaceWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+{
+    if (InKeyEvent.GetKey() == EKeys::Escape)
+    {
+        APawn* LocalPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+        if (ABasicPlayer* Player = Cast<ABasicPlayer>(LocalPawn))
+        {
+            Player->ClearLockedTarget();
+        }
+        return FReply::Handled();
+    }
+    return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }
 
 void UPlayerInterfaceWidget::InterfaceInitialize(UMyGameInstance* InGameInstance)

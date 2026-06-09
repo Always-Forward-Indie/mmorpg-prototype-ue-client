@@ -218,11 +218,12 @@ void URepairShopWidget::HandleRepairShopOpened(const FRepairShopData& ShopData)
 
 void URepairShopWidget::HandleRepairItemResult(const FRepairItemResultData& Result)
 {
-    if (!Result.errorCode.IsEmpty())
-    {
-        ShowStatus(FString::Printf(TEXT("Repair failed: %s"), *Result.errorCode));
-        return;
-    }
+	if (!Result.errorCode.IsEmpty())
+	{
+		const FText Friendly = GetVendorErrorText(Result.errorCode);
+		ShowStatus(FString::Printf(TEXT("Repair failed: %s"), *Friendly.ToString()));
+		return;
+	}
     ShowStatus(FString::Printf(TEXT("Repaired  (-%d g)"), Result.goldSpent));
 
     // Update gold balance immediately (server also sends a follow-up repairShop
@@ -250,11 +251,12 @@ void URepairShopWidget::HandleRepairItemResult(const FRepairItemResultData& Resu
 
 void URepairShopWidget::HandleRepairAllResult(const FRepairAllResultData& Result)
 {
-    if (!Result.errorCode.IsEmpty())
-    {
-        ShowStatus(FString::Printf(TEXT("Repair all failed: %s"), *Result.errorCode));
-        return;
-    }
+	if (!Result.errorCode.IsEmpty())
+	{
+		const FText Friendly = GetVendorErrorText(Result.errorCode);
+		ShowStatus(FString::Printf(TEXT("Repair all failed: %s"), *Friendly.ToString()));
+		return;
+	}
 
     const int32 TotalSpent = Result.goldSpent > 0 ? Result.goldSpent : Result.totalGoldSpent;
     ShowStatus(FString::Printf(TEXT("All repaired  (-%d g)"), TotalSpent));
@@ -375,4 +377,19 @@ void URepairShopWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPo
     Pos.Y = FMath::Clamp(Pos.Y, 0.f, FMath::Max(0.f, VP.Y - Size.Y));
     CurrentViewportPosition = Pos;
     SetPositionInViewport(Pos, false);
+}
+
+FText URepairShopWidget::GetVendorErrorText(const FString& ErrorCode) const
+{
+    if (const UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (const ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            return Loc->GetVendorErrorText(ErrorCode);
+        }
+    }
+    FString Friendly = ErrorCode.Replace(TEXT("_"), TEXT(" "));
+    if (!Friendly.IsEmpty())
+        Friendly = Friendly.Left(1).ToUpper() + Friendly.Mid(1).ToLower();
+    return FText::FromString(Friendly);
 }

@@ -103,6 +103,7 @@ private:
 
     void ShowStatus(const FString& Msg);
     void UpdateGoldText();
+    FText GetVendorErrorText(const FString& ErrorCode) const;
 
     bool      bDragging = false;
     FVector2D DragOffset = FVector2D::ZeroVector;

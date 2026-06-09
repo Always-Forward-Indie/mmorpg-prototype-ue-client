@@ -102,6 +102,14 @@ public:
      *  Flushes all pending results for the caster, including projectile-waiting ones. */
     void NotifyProjectileImpact(int32 CasterId);
 
+    /** Immediately apply all pending skill results for a caster.
+     *  Called on player death to prevent damage appearing 12 seconds later.
+     *  Flushes everything, including projectile-waiting results. */
+    void FlushAllPendingForCaster(int32 CasterId);
+
+    /** Returns true if the caster has pending skill results still waiting for hit-point or projectile impact. */
+    bool HasPendingResults(int32 CasterId) const;
+
 protected:
     // Find the appropriate effect handler for the skill type
     TScriptInterface<ISkillEffectHandler> FindEffectHandler(ESkillEffectType EffectType);

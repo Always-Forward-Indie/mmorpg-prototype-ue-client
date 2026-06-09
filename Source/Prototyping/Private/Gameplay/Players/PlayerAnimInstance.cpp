@@ -98,15 +98,36 @@ void UPlayerAnimInstance::StartAttack(const FSkillInitiationData& SkillData)
 {
     if (bIsDead) return;
 
-    // Reject re-entrant call: if a montage is already playing, don't restart it.
-    // The upstream bIsCasting lock should prevent this, but guard here as a
-    // safety net (e.g. broadcast packets arriving slightly out of order).
+    // A new combatInitiation arrived while an animation is still playing.
+    // Flush the current animation's pending results now (HitPoint will never fire)
+    // and stop the old montage so the new one can start cleanly.
     if (bIsAttacking)
     {
         UE_LOG(LogTemp, Warning,
-            TEXT("[PlayerAnim] StartAttack ignored � already attacking (slot='%s')"),
-            *CurrentAttackSlot.ToString());
-        return;
+            TEXT("[PlayerAnim] StartAttack superseding current animation (slot='%s' -> '%s')"),
+            *CurrentAttackSlot.ToString(), *SkillData.animationName);
+
+        // Flush pending results for the superseded animation's caster
+        if (CurrentCasterId > 0)
+        {
+            OnHitPoint.Broadcast(CurrentCasterId);
+        }
+
+        // Stop the old montage
+        if (UWorld* World = GetWorld())
+        {
+            World->GetTimerManager().ClearTimer(HitPointTimerHandle);
+            World->GetTimerManager().ClearTimer(CastReleaseTimerHandle);
+        }
+        if (ActiveCastMontage.IsValid())
+        {
+            Montage_Stop(0.0f, ActiveCastMontage.Get());
+            ActiveCastMontage = nullptr;
+        }
+
+        bIsAttacking      = false;
+        CurrentAttackSlot = NAME_None;
+        CurrentCasterId   = 0;
     }
 
     bIsAttacking      = true;
@@ -509,8 +530,18 @@ float UPlayerAnimInstance::CalcHitDelay(const UAnimMontage* Montage, float PlayR
     return ActualDuration * DefaultHitRatio;
 }
 
-void UPlayerAnimInstance::OnAttackMontageEnded(UAnimMontage* /*Montage*/, bool /*bInterrupted*/)
+void UPlayerAnimInstance::OnAttackMontageEnded(UAnimMontage* /*Montage*/, bool bInterrupted)
 {
+    // If the montage was interrupted but a new attack is already in progress
+    // (StartAttack set bIsAttacking=true before Montage_Play triggered this callback),
+    // do NOT reset state — the new attack owns it now.
+    if (bInterrupted && bIsAttacking)
+    {
+        return;
+    }
+
+    const int32 EndedCasterId = CurrentCasterId;
+
     bIsAttacking      = false;
     CurrentAttackSlot = NAME_None;
     CurrentCasterId   = 0;
@@ -521,6 +552,13 @@ void UPlayerAnimInstance::OnAttackMontageEnded(UAnimMontage* /*Montage*/, bool /
     {
         World->GetTimerManager().ClearTimer(HitPointTimerHandle);
         World->GetTimerManager().ClearTimer(CastReleaseTimerHandle);
+    }
+
+    // If the montage was interrupted (e.g. by death or new skill) and the hit-point
+    // never fired, flush any pending results now so damage doesn't wait 12 seconds.
+    if (bInterrupted && EndedCasterId > 0)
+    {
+        OnHitPoint.Broadcast(EndedCasterId);
     }
 
     // Notify listeners (e.g. PlayerSkillManager) that the animation is done

@@ -275,8 +275,8 @@ void ABasicMOB::OnReceiveEffectTick(const FEffectTickData& EffectData)
 	SetMOBCurrentMana(EffectData.newMana);
 	ForceUpdateUI();
 
-	// Heal-over-time tick: show green floating number above the mob.
-	if (EffectData.effectTypeSlug == TEXT("hot") && EffectData.value > 0)
+	// Show floating combat text for both heal and damage ticks.
+	if (EffectData.value > 0)
 	{
 		APawn* LocalPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 		if (LocalPawn)
@@ -285,17 +285,27 @@ void ABasicMOB::OnReceiveEffectTick(const FEffectTickData& EffectData)
 			{
 				if (UFloatingCombatTextManager* FCT = UIM->GetFCTManager())
 				{
-					FCT->ShowDamage(GetCombatPosition_Implementation(),
-						static_cast<float>(EffectData.value),
-						/*bIsCrit=*/ false,
-						EDamageType::Heal);
+					const FVector Pos = GetCombatPosition_Implementation();
+
+					if (EffectData.bIsHeal)
+					{
+						FCT->ShowDamage(Pos, static_cast<float>(EffectData.value), false, EDamageType::Heal);
+					}
+					else
+					{
+						EDamageType DmgType = EDamageType::Physical;
+						if      (EffectData.effectTypeSlug.Contains(TEXT("poison"))) DmgType = EDamageType::Poison;
+						else if (EffectData.effectTypeSlug.Contains(TEXT("fire")) || EffectData.effectTypeSlug.Contains(TEXT("burn"))) DmgType = EDamageType::Fire;
+						else if (EffectData.effectTypeSlug.Contains(TEXT("ice"))  || EffectData.effectTypeSlug.Contains(TEXT("frost"))) DmgType = EDamageType::Ice;
+						FCT->ShowDamage(Pos, static_cast<float>(EffectData.value), false, DmgType);
+					}
 				}
 			}
 		}
 	}
 
-	// Damage-over-time: flag as damaged for visual feedback
-	if (EffectData.value > 0 && EffectData.effectTypeSlug.Contains(TEXT("damage")))
+	// Flag as damaged for visual feedback on non-heal ticks.
+	if (!EffectData.bIsHeal && EffectData.value > 0)
 	{
 		SetMobIsDamaged(true);
 	}
@@ -1839,8 +1849,6 @@ void ABasicMOB::ForceUpdateUI()
 		if (HeadWidget)
 		{
 			HeadWidget->SetWidgetScale(widgetScaleFactor);
-			// Widget hidden by default - BasicPlayer controls visibility via ShowWidget()
-			MobHeadInfo->SetVisibility(false);
 		}
 	}
 }

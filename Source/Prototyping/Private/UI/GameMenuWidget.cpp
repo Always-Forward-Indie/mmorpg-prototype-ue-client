@@ -33,7 +33,7 @@ void UGameMenuWidget::OpenMenu()
 {
 	if (bIsOpen) { return; }
 	bIsOpen = true;
-	SetVisibility(ESlateVisibility::Visible);
+	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 }
 
 void UGameMenuWidget::CloseMenu()

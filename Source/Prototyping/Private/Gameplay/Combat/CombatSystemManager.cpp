@@ -222,6 +222,12 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
             SkillData.targetId, *SkillData.targetTypeString,
             SkillData.cooldownMs, SkillData.gcdMs));
 
+    // Flush any pending results from a previous cast BEFORE processing this new
+    // initiation. This applies the old damage at the correct time (now, since the
+    // old animation is being superseded) instead of losing it or having two results
+    // queued that would both fire at the same HitPoint (double damage).
+    FlushAllPendingForCaster(SkillData.casterId);
+
     // Handle skill initiation in PlayerSkillManager for cooldown + GCD management
     if (GameInstance)
     {
@@ -296,41 +302,51 @@ ECasterType UCombatSystemManager::MapNetCasterType(int32 Net, const FString& Str
 void UCombatSystemManager::ProcessSkillResult(const FSkillResultData& SkillResult)
 {
     LogCombatEvent("Skill Result (DEFERRED)", 
-        FString::Printf(TEXT("Skill: %s, Caster: %d, Target: %d (%s), Effect: %s, Damage: %d"), 
+        FString::Printf(TEXT("Skill: %s, Caster: %d, Target: %d (%s), Effect: %s, Damage: %d, Success: %s"), 
             *SkillResult.skillName, SkillResult.casterId, SkillResult.targetId, *SkillResult.targetTypeString,
             *UEnum::GetValueAsString(SkillResult.skillEffectType),
-            SkillResult.damage));
+            SkillResult.damage,
+            SkillResult.success ? TEXT("true") : TEXT("false")));
+
+    // Treat failed results with "out of range" as a miss — the projectile hit
+    // but the target was too far at execution time. Show "Miss" floating text.
+    FSkillResultData Result = SkillResult;
+    if (!Result.success && Result.errorReason.Contains(TEXT("out of range")))
+    {
+        Result.isMissed = true;
+        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Skill %s failed (out of range) — treating as miss"), *Result.skillName);
+    }
 
     // --- Update caster mana immediately (UI responsiveness) ---
-    if (SkillResult.finalCasterMana >= 0 && GameInstance)
+    if (Result.finalCasterMana >= 0 && GameInstance)
     {
-        ECasterType CasterCombatType = MapNetCasterType(SkillResult.casterType, SkillResult.casterTypeString);
-        TScriptInterface<ICombatable> Caster = FindCombatableById(SkillResult.casterId, CasterCombatType);
+        ECasterType CasterCombatType = MapNetCasterType(Result.casterType, Result.casterTypeString);
+        TScriptInterface<ICombatable> Caster = FindCombatableById(Result.casterId, CasterCombatType);
         if (Caster.GetInterface() && Caster.GetObject() && IsValid(Caster.GetObject()))
         {
-            ICombatable::Execute_SetCurrentMana(Caster.GetObject(), SkillResult.finalCasterMana);
+            ICombatable::Execute_SetCurrentMana(Caster.GetObject(), Result.finalCasterMana);
         }
     }
 
     // --- Heal results from item use (potions/elixirs) have no attack animation to sync with.
     // Apply them immediately so the floating text appears right away instead of after the
     // 12-second safety timeout or the next swing's hit-point notify.
-    if (SkillResult.skillEffectType == ESkillEffectType::Healing && GameInstance)
+    if (Result.skillEffectType == ESkillEffectType::Healing && GameInstance)
     {
         if (USkillDefinitionRepository* Repo = GameInstance->GetSkillDefinitionRepository())
         {
-            const FString& LookupKey = SkillResult.skillSlug.IsEmpty() ? SkillResult.skillName : SkillResult.skillSlug;
+            const FString& LookupKey = Result.skillSlug.IsEmpty() ? Result.skillName : Result.skillSlug;
             if (!Repo->HasDefinition(LookupKey))
             {
                 // Slug not in the skill DataTable → this is an item-based heal, not a cast spell.
                 // Find the target and apply effects without queueing.
-                ECasterType TargetCombatType = MapNetCasterType(SkillResult.targetType, SkillResult.targetTypeString);
-                TScriptInterface<ICombatable> Target = FindCombatableById(SkillResult.targetId, TargetCombatType);
+                ECasterType TargetCombatType = MapNetCasterType(Result.targetType, Result.targetTypeString);
+                TScriptInterface<ICombatable> Target = FindCombatableById(Result.targetId, TargetCombatType);
                 if (Target.GetInterface() && Target.GetObject() && IsValid(Target.GetObject()))
                 {
                     UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Applying item heal for '%s' immediately (no anim sync needed)"), *LookupKey);
-                    ApplySkillEffects(SkillResult, Target);
-                    OnSkillCompleted.Broadcast(SkillResult);
+                    ApplySkillEffects(Result, Target);
+                    OnSkillCompleted.Broadcast(Result);
                 }
                 return;
             }
@@ -339,7 +355,7 @@ void UCombatSystemManager::ProcessSkillResult(const FSkillResultData& SkillResul
 
     // --- Store the result for deferred application at the animation hit-point ---
     FPendingResult Pending;
-    Pending.ResultData         = SkillResult;
+    Pending.ResultData         = Result;
     Pending.StoredAtWorldTime  = WorldContext ? WorldContext->GetTimeSeconds() : 0.0;
 
     // Mark results for projectile skills so that ordinary animation hit-point notifies
@@ -349,37 +365,37 @@ void UCombatSystemManager::ProcessSkillResult(const FSkillResultData& SkillResul
     {
         if (USkillDefinitionRepository* Repo = GameInstance->GetSkillDefinitionRepository())
         {
-            const FString& LookupKey = SkillResult.skillSlug.IsEmpty() ? SkillResult.skillName : SkillResult.skillSlug;
+            const FString& LookupKey = Result.skillSlug.IsEmpty() ? Result.skillName : Result.skillSlug;
             Pending.bWaitsForProjectile = !Repo->GetDefinition(LookupKey).projectileClass.IsNull();
             if (Pending.bWaitsForProjectile)
             {
                 UE_LOG(LogTemp, Warning,
                     TEXT("CombatSystemManager: Marking result for caster %d skill '%s' as bWaitsForProjectile"),
-                    SkillResult.casterId, *LookupKey);
+                    Result.casterId, *LookupKey);
             }
         }
     }
 
-    TArray<FPendingResult>& Queue = PendingSkillResults.FindOrAdd(SkillResult.casterId);
+    TArray<FPendingResult>& Queue = PendingSkillResults.FindOrAdd(Result.casterId);
     Queue.Add(MoveTemp(Pending));
 
     UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Queued pending result for caster %d (%d in queue)"),
-        SkillResult.casterId, Queue.Num());
+        Result.casterId, Queue.Num());
 
     // Check if the projectile already landed before this result arrived (server was slow).
     // In that case apply immediately and clear the early-impact marker.
     if (Pending.bWaitsForProjectile)
     {
-        if (const double* ImpactTime = EarlyProjectileImpacts.Find(SkillResult.casterId))
+        if (const double* ImpactTime = EarlyProjectileImpacts.Find(Result.casterId))
         {
             const double NowTime = WorldContext ? WorldContext->GetTimeSeconds() : 0.0;
             if ((NowTime - *ImpactTime) < EarlyImpactWindowSeconds)
             {
                 UE_LOG(LogTemp, Warning,
                     TEXT("CombatSystemManager: Early-impact marker found for caster %d (%.3fs ago) - flushing immediately"),
-                    SkillResult.casterId, NowTime - *ImpactTime);
-                EarlyProjectileImpacts.Remove(SkillResult.casterId);
-                FlushPendingResults(SkillResult.casterId, /*bSkipProjectileWaiters=*/false);
+                    Result.casterId, NowTime - *ImpactTime);
+                EarlyProjectileImpacts.Remove(Result.casterId);
+                FlushPendingResults(Result.casterId, /*bSkipProjectileWaiters=*/false);
                 return;
             }
             else
@@ -387,14 +403,14 @@ void UCombatSystemManager::ProcessSkillResult(const FSkillResultData& SkillResul
                 // Stale marker (shouldn't happen in practice), clean it up
                 UE_LOG(LogTemp, Warning,
                     TEXT("CombatSystemManager: Stale early-impact marker for caster %d (%.3fs ago) - ignoring"),
-                    SkillResult.casterId, NowTime - *ImpactTime);
-                EarlyProjectileImpacts.Remove(SkillResult.casterId);
+                    Result.casterId, NowTime - *ImpactTime);
+                EarlyProjectileImpacts.Remove(Result.casterId);
             }
         }
     }
 
     // Start a safety-timeout so results are applied even if the anim notify never fires
-    StartPendingResultTimeout(SkillResult.casterId);
+    StartPendingResultTimeout(Result.casterId);
 }
 
 TScriptInterface<ICombatable> UCombatSystemManager::FindCombatableById(int32 ActorId, ECasterType ActorType)
@@ -635,6 +651,20 @@ void UCombatSystemManager::NotifyProjectileImpact(int32 CasterId)
     }
 }
 
+void UCombatSystemManager::FlushAllPendingForCaster(int32 CasterId)
+{
+    FlushPendingResults(CasterId, false);
+}
+
+bool UCombatSystemManager::HasPendingResults(int32 CasterId) const
+{
+    if (const TArray<FPendingResult>* Queue = PendingSkillResults.Find(CasterId))
+    {
+        return Queue->Num() > 0;
+    }
+    return false;
+}
+
 void UCombatSystemManager::FlushPendingResults(int32 CasterId, bool bSkipProjectileWaiters)
 {
     TArray<FPendingResult>* Queue = PendingSkillResults.Find(CasterId);
@@ -685,6 +715,12 @@ void UCombatSystemManager::FlushPendingResults(int32 CasterId, bool bSkipProject
         UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: All %d pending result(s) for caster %d are waiting for projectile impact - not flushing"),
             ResultsToRequeue.Num(), CasterId);
         return;
+    }
+
+    if (ResultsToApply.Num() > 1)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Flushing %d pending results for caster %d - possible double-attack detected, applying all to avoid lost damage"),
+            ResultsToApply.Num(), CasterId);
     }
 
     UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Flushing %d pending result(s) for caster %d (%d requeued as projectile-waiters)"),

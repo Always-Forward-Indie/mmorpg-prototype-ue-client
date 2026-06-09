@@ -292,6 +292,15 @@ public:
 	bool HasUIWindowOpen() const;
 
 	/**
+	 * Returns true only when a modal window is open that should fully block world interaction
+	 * (dialogue, trade, harvest loot, game menu). Non-modal windows like inventory, stats,
+	 * skills, etc. do NOT block world interaction — UMG hit-testing handles click-through
+	 * for transparent areas naturally.
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	bool HasModalWindowOpen() const;
+
+	/**
 	 * Returns the NPC id of the currently-open NPC interaction window
 	 * (dialogue, vendor shop, repair shop, or skill shop). Returns 0 if none.
 	 */
@@ -343,6 +352,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void ShowDamageScreenFlash();
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void SetLowHealthWarning(bool bActive);
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UNameplateManager* GetNameplateManager() const { return NameplateManager; }

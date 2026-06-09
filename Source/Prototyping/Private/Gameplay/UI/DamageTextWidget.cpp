@@ -30,7 +30,7 @@ void UDamageTextWidget::NativeConstruct()
 		}
 		else
 		{
-			Init(PendingDamage, PendingCrit, PendingType);
+			Init(PendingDamage, PendingCrit, PendingType, PendingSelfTarget);
 		}
 		UE_LOG(LogTemp, Warning, TEXT("DamageTextWidget::NativeConstruct - Applied pending initialization"));
 	}
@@ -53,26 +53,22 @@ void UDamageTextWidget::NativeConstruct()
 		(int32)GetVisibility(), GetRenderOpacity());
 }
 
-void UDamageTextWidget::SetPendingDamage(float Damage, bool bCrit, EDamageType Type)
+void UDamageTextWidget::SetPendingDamage(float Damage, bool bCrit, EDamageType Type, bool bIsSelfTarget)
 {
 	PendingDamage = Damage;
 	PendingCrit = bCrit;
 	PendingType = Type;
+	PendingSelfTarget = bIsSelfTarget;
 	bIsSpecialText = false;
-
-	UE_LOG(LogTemp, Warning, TEXT("DamageTextWidget::SetPendingDamage - Damage: %f, Crit: %s, Constructed: %s"), 
-		Damage, bCrit ? TEXT("true") : TEXT("false"), bIsConstructed ? TEXT("true") : TEXT("false"));
 
 	if (bIsConstructed)
 	{
 		bPendingInit = false;
-		Init(Damage, bCrit, Type);
-		UE_LOG(LogTemp, Warning, TEXT("DamageTextWidget::SetPendingDamage - Immediate initialization complete"));
+		Init(Damage, bCrit, Type, bIsSelfTarget);
 	}
 	else
 	{
 		bPendingInit = true;
-		UE_LOG(LogTemp, Warning, TEXT("DamageTextWidget::SetPendingDamage - Marked for pending initialization"));
 	}
 }
 
@@ -93,26 +89,19 @@ void UDamageTextWidget::SetPendingSpecialText(const FString& Text, FLinearColor 
 	}
 }
 
-void UDamageTextWidget::Init(float Damage, bool bCrit, EDamageType Type)
+void UDamageTextWidget::Init(float Damage, bool bCrit, EDamageType Type, bool bIsSelfTarget)
 {
-	UE_LOG(LogTemp, Warning, TEXT("DamageTextWidget::Init called - Damage: %f, DamageText valid: %s"), 
-		Damage, IsValid(DamageText) ? TEXT("true") : TEXT("false"));
-
-	if (!IsValid(DamageText))
-	{
-		UE_LOG(LogTemp, Error, TEXT("DamageText is NULL in widget %s (probably failed to bind after minimize)"), *GetName());
-		return;
-	}
+	if (!IsValid(DamageText)) return;
 
 	FString Text;
 	const bool bIsHealType = (Type == EDamageType::Heal || Type == EDamageType::ManaRegen);
 	if (bCrit)
 	{
-		Text = bIsHealType ? FString::Printf(TEXT("CRIT: +%.0f"), Damage) : FString::Printf(TEXT("CRIT: %.0f"), Damage);
+		Text = bIsHealType ? FString::Printf(TEXT("CRIT: +%.0f"), Damage) : FString::Printf(TEXT("CRIT: -%.0f"), Damage);
 	}
 	else
 	{
-		Text = bIsHealType ? FString::Printf(TEXT("+%.0f"), Damage) : FString::Printf(TEXT("%.0f"), Damage);
+		Text = bIsHealType ? FString::Printf(TEXT("+%.0f"), Damage) : FString::Printf(TEXT("-%.0f"), Damage);
 	}
 	DamageText->SetText(FText::FromString(Text));
 
@@ -122,23 +111,28 @@ void UDamageTextWidget::Init(float Damage, bool bCrit, EDamageType Type)
 	case EDamageType::Fire:      Color = FLinearColor::Red; break;
 	case EDamageType::Ice:       Color = FLinearColor::Blue; break;
 	case EDamageType::Poison:    Color = FLinearColor::Green; break;
-	case EDamageType::Heal:      Color = FLinearColor(0.1f, 1.0f, 0.3f, 1.0f); break;  // Bright green
-	case EDamageType::ManaRegen: Color = FLinearColor(0.2f, 0.6f, 1.0f, 1.0f); break;  // Cyan-blue
+	case EDamageType::Heal:      Color = FLinearColor(0.1f, 1.0f, 0.3f, 1.0f); break;
+	case EDamageType::ManaRegen: Color = FLinearColor(0.2f, 0.6f, 1.0f, 1.0f); break;
 	default: break;
 	}
+
+	// When the number appears over the local player, make it more prominent
+	// so the player can instantly distinguish "damage to me" from "damage to mob".
+	const float Scale = bIsSelfTarget ? 1.25f : 1.0f;
+	if (bIsSelfTarget && !bIsHealType && !bCrit)
+	{
+		Color = FLinearColor(1.0f, 0.2f, 0.15f, 1.0f);  // bright orange-red for own damage
+	}
+
 	DamageText->SetColorAndOpacity(Color);
 
-	// Scale-up crit numbers for visual impact
-	FWidgetTransform CritTransform;
-	CritTransform.Scale = bCrit ? FVector2D(1.5f, 1.5f) : FVector2D(1.0f, 1.0f);
-	DamageText->SetRenderTransform(CritTransform);
+	FWidgetTransform Transform;
+	Transform.Scale = FVector2D(Scale, Scale);
+	if (bCrit) Transform.Scale = FVector2D(1.5f * Scale, 1.5f * Scale);
+	DamageText->SetRenderTransform(Transform);
 
-	// Force text visibility
 	DamageText->SetVisibility(ESlateVisibility::Visible);
 	DamageText->SetRenderOpacity(1.0f);
-
-	UE_LOG(LogTemp, Warning, TEXT("DamageTextWidget::Init - Set text: '%s', Color: %s, Text visible: %s"), 
-		*Text, *Color.ToString(), DamageText->GetVisibility() == ESlateVisibility::Visible ? TEXT("true") : TEXT("false"));
 }
 
 void UDamageTextWidget::InitSpecialText(const FString& Text, FLinearColor Color)

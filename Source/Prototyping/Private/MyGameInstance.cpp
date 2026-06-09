@@ -264,10 +264,14 @@ void UMyGameInstance::Init()
 
 	UE_LOG(LogTemp, Warning, TEXT("GameInstance Init called"));
 
-	// Load the LoginLevel after some delay to prevent issue with the loading screen not showing up as viewport is not yet created
-	const float Delay = 0.1f; // Adjust to your needs
+	// Register PostLoadMapWithWorld — fires after EVERY OpenLevel completes.
+	// Replaces the old OnLoginLevelLoaded streaming callback with a single
+	// handler that covers Login, DevMode, and return-to-login.
+	PostLoadMapWorldHandle = FCoreUObjectDelegates::PostLoadMapWithWorld.AddUObject(
+		this, &UMyGameInstance::OnPostLoginLevelLoaded);
 
-	// Schedule the level load after a delay
+	// Load the initial level after a brief delay so the viewport widget is created
+	const float Delay = 0.1f;
 	if (GetWorld())
 	{
 		GetWorld()->GetTimerManager().SetTimer(LoadLoginLevelTimerHandle, this, &UMyGameInstance::LoadLoginLevel, Delay, false);
@@ -275,7 +279,6 @@ void UMyGameInstance::Init()
 	else
 	{
 		UE_LOG(LogTemp, Warning, TEXT("GetWorld() returned nullptr, level load delayed."));
-		// Consider an alternative approach to delay the level loading
 	}
 
 	// Start Ping for servers
@@ -311,6 +314,7 @@ void UMyGameInstance::OnStart()
 			UE_LOG(LogTemp, Log, TEXT("GameInstance: PIE Escape preprocessor registered."));
 		}
 	}
+
 }
 
 // init networking setup
@@ -788,19 +792,75 @@ void UMyGameInstance::LoadLoginLevel()
 	{
 		// DevMode: skip login, go straight to the configured level.
 		// LevelOverride takes priority; fall back to DebugLevelName when not set.
-		const FName DevLevelName = (DevModeConfig.LevelOverride != NAME_None)
+		LevelBeingLoaded = (DevModeConfig.LevelOverride != NAME_None)
 			? DevModeConfig.LevelOverride
 			: DebugLevelName;
-		LoadStreamingLevel(DevLevelName);
 	}
 	else if (bDebug)
 	{
-		LoadStreamingLevel(DebugLevelName);
+		LevelBeingLoaded = DebugLevelName;
 	}
 	else
 	{
-		LoadStreamingLevel(LoginLevelName);
+		LevelBeingLoaded = LoginLevelName;
 	}
+
+	UE_LOG(LogTemp, Log, TEXT("LoadLoginLevel: Opening %s via OpenLevel"), *LevelBeingLoaded.ToString());
+	AddLoadingScreen();
+	UGameplayStatics::OpenLevel(GetWorld(), LevelBeingLoaded, true);
+	// PostLoadMapWithWorld → OnPostLoginLevelLoaded will handle initialization
+}
+
+void UMyGameInstance::ReturnToLoginLevel()
+{
+	if (bReturningToLogin)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ReturnToLoginLevel: Already in progress, ignoring duplicate call"));
+		return;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("ReturnToLoginLevel: Disconnecting from servers and returning to login"));
+
+	// 1. Send disconnect packets to Login Server and Chunk Server.
+	//    The server session is terminated; the client will re-authenticate when
+	//    logging in again.
+	if (ClientData.clientId > 0 && !ClientData.hash.IsEmpty())
+	{
+		if (AuthenticationManager)
+		{
+			AuthenticationManager->SendLeaveGameRequest(ClientData);
+		}
+		if (PlayerManager)
+		{
+			PlayerManager->SendLeaveGameRequest(ClientData);
+		}
+	}
+
+	// 2. Tear down all network connections WITHOUT setting bIsShutDown.
+	//    Disconnect() closes sockets and stops worker threads, but leaves the
+	//    NetworkManager in a state where ConnectLoginServer() can recreate them.
+	if (NetworkManager)
+	{
+		NetworkManager->Disconnect();
+	}
+
+	// 3. Reset game-world state so the next login starts from a clean slate.
+	bJoinGameInProgress = false;
+	bGameWorldReady = false;
+	bTransitioningToGameWorld = false;
+	ReadyFlags = 0;
+	ConnectedPlayers.Empty();
+	SpawnedPlayers.Empty();
+	Player = nullptr;
+
+	// 4. Return to login level via OpenLevel.  PostLoadMapWithWorld fires
+	//    OnPostLoginLevelLoaded which restores world contexts and reconnects.
+	//    AddLoadingScreen() is world-independent (GameViewportClient content)
+	//    and survives the level transition — no black screen between worlds.
+	AddLoadingScreen();
+	bReturningToLogin = true;
+	LevelBeingLoaded = LoginLevelName;
+	UGameplayStatics::OpenLevel(GetWorld(), LoginLevelName, true);
 }
 
 // Process-level counter: tracks how many PIE instances are currently inside
@@ -854,6 +914,12 @@ void UMyGameInstance::Shutdown()
 	{
 		FCoreUObjectDelegates::PreLoadMap.Remove(PreLoadMapDelegateHandle);
 		PreLoadMapDelegateHandle.Reset();
+	}
+
+	if (PostLoadMapWorldHandle.IsValid())
+	{
+		FCoreUObjectDelegates::PostLoadMapWithWorld.Remove(PostLoadMapWorldHandle);
+		PostLoadMapWorldHandle.Reset();
 	}
 
 	// If this instance held the World Partition transition slot and is shutting
@@ -1041,28 +1107,12 @@ TSubclassOf<class ADroppedItemActor> UMyGameInstance::GetDroppedItemActorClass()
 	return DroppedItemActorClass;
 }
 
-void UMyGameInstance::LoadStreamingLevel(const FName& LevelName)
+void UMyGameInstance::LoadLevel(const FName& LevelName)
 {
-	// Store the level name
 	LevelBeingLoaded = LevelName;
-
-	UE_LOG(LogTemp, Warning, TEXT("LoadStreamingLevel: %s (GameInstance: %p)"), *LevelName.ToString(), this);
-
-	// Show loading screen
+	UE_LOG(LogTemp, Log, TEXT("LoadLevel: Opening %s via OpenLevel"), *LevelName.ToString());
 	AddLoadingScreen();
-
-	// Asynchronously load the streaming sub-level
-	FLatentActionInfo LatentInfo;
-	LatentInfo.CallbackTarget = this;
-	LatentInfo.ExecutionFunction = "OnLoginLevelLoaded";
-	LatentInfo.Linkage = 0;
-	LatentInfo.UUID = 1;
-
-	UWorld* TargetWorld = GetWorld();
-	if (TargetWorld)
-	{
-		UGameplayStatics::LoadStreamLevel(TargetWorld, LevelName, true, true, LatentInfo);
-	}
+	UGameplayStatics::OpenLevel(GetWorld(), LevelName, true);
 }
 
 void UMyGameInstance::TransitionToGameWorld()
@@ -1092,6 +1142,10 @@ void UMyGameInstance::TransitionToGameWorld()
 
 	UE_LOG(LogTemp, Warning, TEXT("TransitionToGameWorld: Starting transition to map '%s' (from path '%s')"), 
 		*MapName, *MapAssetPath);
+
+	// Track which level we're opening so PostLoadMapWithWorld can route to the correct handler.
+	// Must be set before DoOpenLevel so OnPostLoginLevelLoaded sees it.
+	LevelBeingLoaded = FName(*MapName);
 
 	bTransitioningToGameWorld = true;
 	bGameWorldReady = false;
@@ -1214,26 +1268,27 @@ void UMyGameInstance::DoOpenLevel()
 	);
 }
 
-// This function is called when a streaming sub-level finishes loading (Login or Debug)
-void UMyGameInstance::OnLoginLevelLoaded()
+// PostLoadMapWithWorld handler — fires after every OpenLevel completes.
+// Replaces the old OnLoginLevelLoaded streaming callback with a unified handler
+// for Login, DevMode/Debug, and return-to-login.
+void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 {
-	UE_LOG(LogTemp, Warning, TEXT("OnLoginLevelLoaded: %s"), *LevelBeingLoaded.ToString());
+	if (!LoadedWorld) return;
 
-	// Handle Login level
+	UE_LOG(LogTemp, Warning, TEXT("OnPostLoginLevelLoaded: %s"), *LevelBeingLoaded.ToString());
+
+	// ---- Login Level ----
 	if (LevelBeingLoaded == LoginLevelName)
 	{
 		AddLoginWidgetToViewport();
 		AddMonitorStatsWidgetToViewport();
 
-		if (GetWorld() && GetWorld()->GetFirstPlayerController())
+		if (LoadedWorld->GetFirstPlayerController())
 		{
-			GetWorld()->GetFirstPlayerController()->bShowMouseCursor = true;
+			LoadedWorld->GetFirstPlayerController()->bShowMouseCursor = true;
 		}
 
-		// Login level is fully loaded and widgets are in the viewport.
-		// 1. Focus the game viewport so Slate routes input (and cursor) to it.
-		// 2. Re-apply SetTypeShape — the slot set in Init() can be reset when the
-		//    viewport widget is created after Init() (PIE viewport init order).
+		// Focus viewport + re-apply custom cursor shape
 		if (FSlateApplication::IsInitialized())
 		{
 			FSlateApplication::Get().SetAllUserFocusToGameViewport();
@@ -1243,19 +1298,13 @@ void UMyGameInstance::OnLoginLevelLoaded()
 				if (PreloadedDefaultCursorHandle)
 				{
 					PlatformCursor->SetTypeShape(EMouseCursor::Default, PreloadedDefaultCursorHandle);
-					UE_LOG(LogTemp, Log, TEXT("GameInstance: OnLoginLevelLoaded — Default cursor slot re-applied (handle=%p)."), PreloadedDefaultCursorHandle);
-				}
-				else
-				{
-					UE_LOG(LogTemp, Warning, TEXT("GameInstance: OnLoginLevelLoaded — PreloadedDefaultCursorHandle is null, custom cursor NOT applied. Check DA_WorldInteractionConfig."));
 				}
 			}
 		}
 
-		// If a LoginLevelSetupActor is placed in the level, read all camera and
-		// character-slot transforms from it — overrides the Blueprint properties.
+		// Read camera/spawn transforms from LoginLevelSetupActor
 		ALoginLevelSetupActor* SetupActor = Cast<ALoginLevelSetupActor>(
-			UGameplayStatics::GetActorOfClass(GetWorld(), ALoginLevelSetupActor::StaticClass()));
+			UGameplayStatics::GetActorOfClass(LoadedWorld, ALoginLevelSetupActor::StaticClass()));
 		if (SetupActor)
 		{
 			LoginLevelCameraLocation = SetupActor->LoginCameraSpot->GetComponentLocation();
@@ -1283,7 +1332,6 @@ void UMyGameInstance::OnLoginLevelLoaded()
 					PodiumSpawnRotations.Add(Slot->GetComponentRotation());
 				}
 			}
-			// Keep legacy fallback for anything that still reads PodiumSpawnRotation.
 			if (SetupActor->PodiumSlots.Num() > 0 && SetupActor->PodiumSlots[0])
 			{
 				PodiumSpawnRotation = SetupActor->PodiumSlots[0]->GetComponentRotation();
@@ -1296,22 +1344,19 @@ void UMyGameInstance::OnLoginLevelLoaded()
 			UE_LOG(LogTemp, Warning, TEXT("LoginLevelSetupActor not found in Login Level — using Blueprint-configured values."));
 		}
 
-		LoginLevelCamera = GetWorld()->SpawnActor<AMyCameraActor>(LoginCameraClass, LoginLevelCameraLocation, LoginLevelCameraRotation);
+		// Spawn login camera
+		LoginLevelCamera = LoadedWorld->SpawnActor<AMyCameraActor>(LoginCameraClass, LoginLevelCameraLocation, LoginLevelCameraRotation);
 		if (LoginLevelCamera)
 		{
-			if (GetWorld()->GetFirstPlayerController())
+			if (LoadedWorld->GetFirstPlayerController())
 			{
-				GetWorld()->GetFirstPlayerController()->SetViewTargetWithBlend(LoginLevelCamera, 0.0f);
+				LoadedWorld->GetFirstPlayerController()->SetViewTargetWithBlend(LoginLevelCamera, 0.0f);
 
-				// Login level is now active: push the SoundMix into the real world and
-				// re-apply cached volume overrides so all volume sliders work immediately.
 				if (AudioManager) { AudioManager->ReapplySoundMix(); }
 
-				// If a dedicated login playlist is configured, play it through AudioManager
-				// so volume sliders work. Otherwise fall back to the legacy MyCameraActor path.
 				if (AudioManager && !AudioManager->LoginPlaylistId.IsEmpty())
 				{
-					AudioManager->PlayPlaylist(AudioManager->LoginPlaylistId, /*bForceRestart=*/true);
+					AudioManager->PlayPlaylist(AudioManager->LoginPlaylistId, true);
 				}
 				else
 				{
@@ -1320,27 +1365,65 @@ void UMyGameInstance::OnLoginLevelLoaded()
 			}
 		}
 
-		InitNetworkingSetup();
+		// Network init: return path vs first load
+		if (bReturningToLogin)
+		{
+			// Return from game world — restore world contexts and reconnect
+			// without re-subscribing delegates (already registered in first InitNetworkingSetup)
+			if (NetworkManager)
+			{
+				NetworkManager->SetWorldContext(LoadedWorld);
+				NetworkManager->SetMessageBoxPopupClass(MessageBoxPopupClass);
+				NetworkManager->ConnectLoginServer();
+				NetworkManager->ConnectGameServer();
+				NetworkManager->ConnectChunkServer();
+				NetworkManager->StartPollingLoginServer();
+				NetworkManager->StartPollingGameServer();
+				NetworkManager->StartPollingChunkServer();
+			}
 
-		// Initialize CharacterPreviewManager for the login level
+			if (PingManager)         { PingManager->SetWorldContext(LoadedWorld); PingManager->RestartPingUpdates(); }
+			if (AuthenticationManager) { AuthenticationManager->SetWorldContext(LoadedWorld); }
+			if (PlayerManager)       { PlayerManager->SetWorldContext(LoadedWorld); }
+			if (MOBManager)          { MOBManager->SetWorldContext(LoadedWorld); MOBManager->ClearWorldState(); }
+			if (SpawnZoneManager)    { SpawnZoneManager->SetWorldContext(LoadedWorld); SpawnZoneManager->ClearWorldState(); }
+			if (ItemManager)         { ItemManager->SetWorldContext(LoadedWorld); }
+			if (InventoryManager)    { InventoryManager->SetWorldContext(LoadedWorld); }
+			if (HarvestManager)      { HarvestManager->SetWorldContext(LoadedWorld); }
+			if (CombatSystemManager) { CombatSystemManager->SetWorldContext(LoadedWorld); }
+			if (NPCManager)          { NPCManager->SetWorldContext(LoadedWorld); }
+			if (WorldObjectManager)  { WorldObjectManager->SetWorldContext(LoadedWorld); WorldObjectManager->ClearWorldState(); }
+			if (TimeSyncService)     { TimeSyncService->SetWorldContext(LoadedWorld); }
+			if (AudioManager)        { AudioManager->ReapplySoundMix(); }
+
+			AddMonitorStatsWidgetToViewport();
+			if (PingManager && IsValid(MonitorStatsWidget))
+			{
+				PingManager->Initialize(NetworkManager, MonitorStatsWidget);
+			}
+
+			bReturningToLogin = false;
+		}
+		else
+		{
+			// First load — full network init with delegate subscriptions
+			InitNetworkingSetup();
+		}
+
+		// Initialize CharacterPreviewManager
 		if (!CharacterPreviewManager)
 		{
 			CharacterPreviewManager = NewObject<UCharacterPreviewManager>(this);
 		}
 		CharacterPreviewManager->Initialize(this);
 
-		// Login UI is now in the viewport. Remove the loading screen after one tick
-		// so the render thread has received the draw command first.
-		if (UWorld* W = GetWorld())
-		{
-		W->GetTimerManager().SetTimer(RemoveLoadingScreenTimerHandle, this, &UMyGameInstance::RemoveLoadingScreen, 1.5f, false);
-		}
+		// Remove loading screen after 1.5s
+		LoadedWorld->GetTimerManager().SetTimer(
+			RemoveLoadingScreenTimerHandle, this,
+			&UMyGameInstance::RemoveLoadingScreen, 1.5f, false);
 	}
 
-	// Handle Debug / DevMode level
-	// This branch fires when:
-	//   a) bDebug is set and LevelBeingLoaded == DebugLevelName, OR
-	//   b) DevModeConfig.bEnabled is set and we loaded to LevelOverride (or DebugLevelName as fallback)
+	// ---- DevMode / Debug Level ----
 	const FName DevModeLevelName = (DevModeConfig.bEnabled && DevModeConfig.LevelOverride != NAME_None)
 		? DevModeConfig.LevelOverride
 		: DebugLevelName;
@@ -1348,16 +1431,15 @@ void UMyGameInstance::OnLoginLevelLoaded()
 	if (LevelBeingLoaded == DevModeLevelName)
 	{
 		RemoveLoginWidgetFromViewport();
-		if (GetWorld() && GetWorld()->GetFirstPlayerController())
+		if (LoadedWorld->GetFirstPlayerController())
 		{
-			GetWorld()->GetFirstPlayerController()->bShowMouseCursor = false;
+			LoadedWorld->GetFirstPlayerController()->bShowMouseCursor = false;
 		}
 
 		FClientDataStruct clientData;
 
 		if (DevModeConfig.bEnabled)
 		{
-			// Instantiate the data provider if not already created
 			if (!DevModeDataProvider)
 			{
 				DevModeDataProvider = NewObject<UDevModeDataProvider>(this);
@@ -1366,7 +1448,6 @@ void UMyGameInstance::OnLoginLevelLoaded()
 
 			if (!DevModeDataProvider->LoadPlayerData(clientData))
 			{
-				// JSON load failed — fall back to minimal stub so the level is still playable
 				UE_LOG(LogTemp, Warning, TEXT("DevMode: LoadPlayerData failed — using stub data. Check Config/DevMode/dev_player.json"));
 				clientData.clientId = 1;
 				clientData.characterData.characterId = 1;
@@ -1377,7 +1458,6 @@ void UMyGameInstance::OnLoginLevelLoaded()
 		}
 		else
 		{
-			// Legacy bDebug path — hardcoded stub
 			clientData.clientId = 1;
 			clientData.characterData.characterId = 1;
 			clientData.characterData.characterPosition.positionX = 0.0f;
@@ -1385,10 +1465,6 @@ void UMyGameInstance::OnLoginLevelLoaded()
 			clientData.characterData.characterPosition.positionZ = 90.0f;
 		}
 
-		// ── "Play from here" ────────────────────────────────────────────────
-		// Override characterPosition with the active editor viewport camera
-		// position so the player spawns where you placed the camera in the editor.
-		// Only runs in editor builds when the flag is set.
 #if WITH_EDITOR
 		if (DevModeConfig.bSpawnAtEditorCameraPosition && GEditor)
 		{
@@ -1396,7 +1472,6 @@ void UMyGameInstance::OnLoginLevelLoaded()
 			FRotator   CamRot  = FRotator::ZeroRotator;
 			bool       bFoundCamera = false;
 
-			// Iterate all level viewports to find the perspective one that PIE was launched from.
 			for (FEditorViewportClient* VC : GEditor->GetAllViewportClients())
 			{
 				if (VC && VC->IsPerspective() && !VC->IsSimulateInEditorViewport())
@@ -1414,21 +1489,12 @@ void UMyGameInstance::OnLoginLevelLoaded()
 				clientData.characterData.characterPosition.positionY = CamLoc.Y;
 				clientData.characterData.characterPosition.positionZ = CamLoc.Z;
 				clientData.characterData.characterPosition.rotationZ  = CamRot.Yaw;
-
-				UE_LOG(LogTemp, Log,
-					TEXT("DevMode: SpawnAtEditorCameraPosition → (%.0f, %.0f, %.0f) Yaw=%.1f"),
-					CamLoc.X, CamLoc.Y, CamLoc.Z, CamRot.Yaw);
-			}
-			else
-			{
-				UE_LOG(LogTemp, Warning, TEXT("DevMode: SpawnAtEditorCameraPosition — no perspective viewport found, using JSON position"));
 			}
 		}
 #endif
 
 		CurrentCharacterID = clientData.characterData.characterId;
 		CurrentClientID = clientData.clientId;
-
 		ClientData = clientData;
 
 		AddPlayerData(clientData.clientId, clientData);
@@ -1436,61 +1502,32 @@ void UMyGameInstance::OnLoginLevelLoaded()
 
 		if (DevModeConfig.bEnabled && DevModeDataProvider)
 		{
-			// Populate test mobs
 			if (DevModeConfig.bSpawnTestMobs && MOBManager)
 			{
 				DevModeDataProvider->PopulateMobs(MOBManager);
 			}
-
-			// Populate test inventory
 			if (DevModeConfig.bPopulateInventory && InventoryManager)
 			{
 				DevModeDataProvider->PopulateInventory(InventoryManager, clientData.characterData.characterId);
 			}
-
-			// Register dev console commands once
 			if (!DevModeConsoleCommands)
 			{
 				DevModeConsoleCommands = NewObject<UDevModeConsoleCommands>(this);
 				DevModeConsoleCommands->RegisterCommands(this);
 			}
-
-			UE_LOG(LogTemp, Log, TEXT("DevMode: Active — player '%s' (clientId=%d, charId=%d)"),
-				*clientData.characterData.characterName,
-				clientData.clientId,
-				clientData.characterData.characterId);
 		}
 
-		UWorld* TargetWorld = GetWorld();
-		if (TargetWorld)
-		{
-			FLatentActionInfo LatentInfo;
-			LatentInfo.CallbackTarget = this;
-			LatentInfo.Linkage = 0;
-			LatentInfo.ExecutionFunction = "OnLevelUnloaded";
-			LatentInfo.UUID = 2;
-
-			UGameplayStatics::UnloadStreamLevel(TargetWorld, LoginLevelName, LatentInfo, false);
-		}
-	}
-
-	// Remove loading screen
-	// NOTE: For the Debug/DevMode level the loading screen is removed here immediately
-	// since there is no full login→world transition flow (no ReadyFlags system).
-	if (LevelBeingLoaded == DevModeLevelName)
-	{
+		// Remove loading screen for DevMode (no ReadyFlags system)
 		if (LoadingScreenWidget)
 		{
-			const float Delay = 0.7f;
-			if (GetWorld())
-			{
-				GetWorld()->GetTimerManager().SetTimer(RemoveLoadingScreenTimerHandle, this, &UMyGameInstance::RemoveLoadingScreen, Delay, false);
-			}
+			LoadedWorld->GetTimerManager().SetTimer(
+				RemoveLoadingScreenTimerHandle, this,
+				&UMyGameInstance::RemoveLoadingScreen, 0.7f, false);
 		}
 	}
-	// For the normal game world transition the loading screen is managed entirely
-	// by CheckGameWorldReady / CheckAllReadyFlags / StartFrameCountdown.
-	// Do NOT remove it here.
+
+	// WorldMapV1 / game world — handled by CheckGameWorldReady polling ticker.
+	// Do nothing here to avoid double-initializing.
 }
 
 void UMyGameInstance::CheckGameWorldReady()
@@ -1748,7 +1785,7 @@ void UMyGameInstance::InvalidateManagerWorldContexts(const FString& /*MapName*/)
 	// reset in OnGameWorldReady(), so it is true exactly during our own
 	// level transition.  The login-level load uses LoadStreamLevel (streaming
 	// sub-level) which does NOT fire PreLoadMap, so no false positives there.
-	if (!bTransitioningToGameWorld)
+	if (!bTransitioningToGameWorld && !bReturningToLogin)
 	{
 		UE_LOG(LogTemp, Log, TEXT("InvalidateManagerWorldContexts: SKIPPED (not transitioning - PreLoadMap from another PIE instance)"));
 		return;
@@ -1849,11 +1886,6 @@ void UMyGameInstance::ProcessPendingSpawns()
 		SpawnPlayerForClient(RemoteData.clientId);
 	}
 	PendingRemotePlayerSpawns.Empty();
-}
-
-void UMyGameInstance::OnLevelUnloaded()
-{
-	UE_LOG(LogTemp, Warning, TEXT("Level unloaded triggered: %s"), *LevelBeingLoaded.ToString());
 }
 
 // add monitor to viewport
@@ -2304,9 +2336,15 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 					if (UCosmeticVisualComponent* CosmeticVis = NewPlayer->GetCosmeticVisualComponent())
 					{
 						CosmeticVis->HandleRemoteEquipmentState(*Cached);
-					}
-				}
-			}
+		}
+	}
+
+	if (bReturningToLogin)
+	{
+		UE_LOG(LogTemp, Log, TEXT("OnStart: Returning to login, loading login level"));
+		LoadLoginLevel();
+	}
+}
 
 			// NOTE: Do NOT call RequestGetEquipment(RemoteCharId) here — the server
 			// resolves getEquipment requests by session character ID (i.e. the LOCAL
@@ -2888,5 +2926,6 @@ void UMyGameInstance::RouteEmoteActionToPlayer(int32 CharacterId, const FString&
     if (TargetPlayer)
     {
         TargetPlayer->PlayEmoteForCharacter(EmoteSlug, AnimationName);
-    }
+	}
 }
+

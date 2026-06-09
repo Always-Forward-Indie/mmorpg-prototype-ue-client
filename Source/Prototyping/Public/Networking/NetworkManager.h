@@ -142,6 +142,7 @@ public:
 	void PollGameServerNetworkData();
 	void PollChunkServerNetworkData();
 	void Shutdown();
+	void Disconnect();
 
     // Process incoming data and extract time sync information
     void ProcessIncomingData(const FString& ReceivedData);

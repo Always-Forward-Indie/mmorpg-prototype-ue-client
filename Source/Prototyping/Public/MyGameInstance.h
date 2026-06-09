@@ -58,13 +58,13 @@ class PROTOTYPING_API UMyGameInstance : public UGameInstance
 	GENERATED_BODY()
 
 private:
-FTimerHandle LoadLoginLevelTimerHandle; // Timer handle for loading the login level
+	FTimerHandle LoadLoginLevelTimerHandle;   // Timer handle for initial level load from Init()
 
 FTimerHandle RemoveLoadingScreenTimerHandle; // Timer handle for loading the game level
 
 FTimerHandle NetworkServersPingTimerHandle; // Timer handle for ping game server
 
-FTimerHandle GameWorldReadyTimerHandle; // Timer handle for polling game world readiness
+	FTimerHandle GameWorldReadyTimerHandle; // Timer handle for polling game world readiness
 
 // ClientData
 FClientDataStruct ClientData;
@@ -99,6 +99,9 @@ FDateTime ReceiveTimeLoginServer;
 
 	// True once the game world (WorldMapV1) is fully loaded and ready for gameplay
 	bool bGameWorldReady = false;
+
+	// True while returning from game world to login level (reverse transition)
+	bool bReturningToLogin = false;
 
 	// True once CheckGameWorldReady has dispatched the pending player spawn.
 	// Prevents SpawnPlayerForClient / RefreshManagerWorldContexts being called
@@ -146,6 +149,9 @@ FDateTime ReceiveTimeLoginServer;
 	// Handle for the FCoreUObjectDelegates::PreLoadMap callback that nulls out
 	// world-dependent pointers before the old world is torn down.
 	FDelegateHandle PreLoadMapDelegateHandle;
+
+	// Handle for PostLoadMapWithWorld — fires after every OpenLevel completes.
+	FDelegateHandle PostLoadMapWorldHandle;
 
 	// Timer used to retry OpenLevel if another PIE instance is already in the
 	// middle of World Partition GenerateStreaming (prevents WorldDataLayers ensure).
@@ -644,21 +650,22 @@ public:
 	// spawn players
 	void SpawnPlayerForClient(int32 ClientID);
 
-	// Load a streaming sub-level (Login, Debug). NOT used for World Partition game maps.
+	// Load a level via OpenLevel (replaces persistent world). Callback handled by PostLoadMapWithWorld.
 	UFUNCTION(BlueprintCallable, Category = "Level")
-	void LoadStreamingLevel(const FName& LevelName);
+	void LoadLevel(const FName& LevelName);
+
+	void LoadLoginLevel();
 
 	// Transition to the game world map (World Partition) via OpenLevel
 	UFUNCTION(BlueprintCallable, Category = "Level")
 	void TransitionToGameWorld();
 
-	void LoadLoginLevel();
-
+	// Disconnect from all servers, clear game state, and return to login level
 	UFUNCTION(BlueprintCallable, Category = "Level")
-	void OnLoginLevelLoaded();
+	void ReturnToLoginLevel();
 
-	UFUNCTION(BlueprintCallable, Category = "Level")
-	void OnLevelUnloaded();
+	// PostLoadMapWithWorld handler — fires after every OpenLevel, replaces OnLoginLevelLoaded
+	void OnPostLoginLevelLoaded(UWorld* LoadedWorld);
 
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void AddMonitorStatsWidgetToViewport();

@@ -590,15 +590,9 @@ void UNetworkManager::PollChunkServerNetworkData()
 	}
 }
 
-void UNetworkManager::Shutdown() {
-
-	if (bIsShutDown)
-	{
-		return;
-	}
-	bIsShutDown = true;
-
-	UE_LOG(LogConnection, Log, TEXT("Shutting down Network Manager..."));
+void UNetworkManager::Disconnect()
+{
+	UE_LOG(LogConnection, Log, TEXT("Disconnecting Network Manager..."));
 
 	// Step 1: Clear all timers so poll callbacks stop firing immediately.
 	// This prevents PollXxxNetworkData() from touching worker pointers while
@@ -614,10 +608,9 @@ void UNetworkManager::Shutdown() {
 	}
 
 	// Step 2: Give sender threads a brief window (~200 ms) to drain any
-	// disconnect packets that were just enqueued by Shutdown() callers
-	// (e.g. SendLeaveGameRequest).  The senders are still running at this
-	// point (bRunThread == true), so they will dequeue and send the data.
-	// Only AFTER this drain window do we signal Stop().
+	// disconnect packets that were just enqueued (e.g. SendLeaveGameRequest).
+	// The senders are still running at this point (bRunThread == true), so
+	// they will dequeue and send the data. Only AFTER this window do we signal Stop().
 	FPlatformProcess::Sleep(0.2f);
 
 	if (SenderLoginServerWorker)  SenderLoginServerWorker->Stop();
@@ -630,7 +623,7 @@ void UNetworkManager::Shutdown() {
 	// Step 3a: Detach socket pointers from all workers BEFORE calling DestroySocket().
 	// DestroySocket() frees the FSocket object and corrupts its vtable.
 	// If a worker thread reads the Socket pointer between Close() and DestroySocket()
-	// it would call a virtual method through a dangling vtable ? crash 0xFFFFFFFFFFFFFFFF.
+	// it would call a virtual method through a dangling vtable &#x2192; crash 0xFFFFFFFFFFFFFFFF.
 	// DetachSocket() atomically nulls the pointer so workers see nullptr and exit cleanly.
 	if (ReceiverLoginServerWorker) ReceiverLoginServerWorker->DetachSocket();
 	if (SenderLoginServerWorker)   SenderLoginServerWorker->DetachSocket();
@@ -639,7 +632,7 @@ void UNetworkManager::Shutdown() {
 	if (ReceiverChunkServerWorker) ReceiverChunkServerWorker->DetachSocket();
 	if (SenderChunkServerWorker)   SenderChunkServerWorker->DetachSocket();
 
-	// Step 3b: Close and destroy sockets � workers already hold nullptr so they
+	// Step 3b: Close and destroy sockets — workers already hold nullptr so they
 	// cannot race against DestroySocket() anymore.
 	if (LoginServerSocket != nullptr)
 	{
@@ -669,7 +662,7 @@ void UNetworkManager::Shutdown() {
 		if (Worker) Worker->Stop();
 		if (Thread)
 		{
-			// 2-second safety timeout � should exit almost immediately after socket close.
+			// 2-second safety timeout — should exit almost immediately after socket close.
 			Thread->WaitForCompletion();
 			delete Thread;
 			Thread = nullptr;
@@ -691,6 +684,19 @@ void UNetworkManager::Shutdown() {
 	delete ReceiverChunkServerWorker; ReceiverChunkServerWorker = nullptr;
 	delete SenderChunkServerWorker;   SenderChunkServerWorker   = nullptr;
 
+	UE_LOG(LogConnection, Log, TEXT("Network Manager disconnected."));
+}
+
+void UNetworkManager::Shutdown()
+{
+	if (bIsShutDown)
+	{
+		return;
+	}
+	bIsShutDown = true;
+
+	UE_LOG(LogConnection, Log, TEXT("Shutting down Network Manager..."));
+	Disconnect();
 	UE_LOG(LogConnection, Log, TEXT("Network Manager shut down complete."));
 }
 

@@ -1785,7 +1785,7 @@ void UUIManager::HandleExitToLoginClicked()
 	UE_LOG(LogTemp, Log, TEXT("UIManager::HandleExitToLoginClicked"));
 	if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetWorld()->GetGameInstance()))
 	{
-		GI->LoadLoginLevel();
+		GI->ReturnToLoginLevel();
 	}
 }
 

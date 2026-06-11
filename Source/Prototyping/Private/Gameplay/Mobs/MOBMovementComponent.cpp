@@ -101,6 +101,8 @@ void UMOBMovementComponent::InitializeFromSpawnData(const FVector& SpawnPos,
 // ---------------------------------------------------------------------------
 void UMOBMovementComponent::OnReceiveServerPacket(const FPositionDataStruct& MOBPosition)
 {
+    if (bFrozen) return;
+
     UWorld* World = GetWorld();
     if (!World || !GetOwner()) return;
 
@@ -154,6 +156,8 @@ void UMOBMovementComponent::OnReceiveMovePacket(const FMobMoveEntryStruct& MoveE
 
     UWorld* World = GetWorld();
     if (!World || !GetOwner()) return;
+
+    if (bFrozen) return;
 
     const float Now = World->GetTimeSeconds();
 
@@ -843,12 +847,31 @@ void UMOBMovementComponent::SnapToGround()
 {
     if (!GetOwner()) return;
 
-    FVector Loc = GetOwner()->GetActorLocation();
-    FVector Ground = TraceGround(Loc);
-    if (!Ground.IsZero())
+    UWorld* World = GetWorld();
+    if (!World) return;
+
+    ACharacter* Character = Cast<ACharacter>(GetOwner());
+    if (!Character) return;
+
+    UCapsuleComponent* Capsule = Character->GetCapsuleComponent();
+    if (!Capsule) return;
+
+    FCollisionQueryParams Params;
+    Params.AddIgnoredActor(Character);
+    Params.bTraceComplex = false;
+
+    FCollisionObjectQueryParams ObjectParams;
+    ObjectParams.AddObjectTypesToQuery(ECC_WorldStatic);
+
+    const FVector Loc = GetOwner()->GetActorLocation();
+    const FVector Start(Loc.X, Loc.Y, 100000.f);
+    const FVector End(Loc.X, Loc.Y, -100000.f);
+    FHitResult Hit;
+
+    if (World->LineTraceSingleByObjectType(Hit, Start, End, ObjectParams, Params))
     {
-        Loc.Z = Ground.Z;
-        GetOwner()->SetActorLocation(Loc);
+        const float DesiredZ = Hit.Location.Z + Capsule->GetScaledCapsuleHalfHeight();
+        GetOwner()->SetActorLocation(FVector(Loc.X, Loc.Y, DesiredZ));
     }
 }
 

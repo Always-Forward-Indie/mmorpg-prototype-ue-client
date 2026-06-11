@@ -12,6 +12,7 @@
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Components/WrapBoxSlot.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Engine/Engine.h"
 
 UInventoryWidget::UInventoryWidget(const FObjectInitializer& ObjectInitializer)
@@ -645,7 +646,6 @@ void UInventoryWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPos
 	const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
 	const FVector2D ViewportSize = FVector2D(W, H) / Scale;
 
-	ForceLayoutPrepass();
 	FVector2D Size = GetDesiredSize();
 	if (Size.IsZero()) Size = FVector2D(400, 300);
 

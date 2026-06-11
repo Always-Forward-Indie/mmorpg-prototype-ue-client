@@ -19,6 +19,7 @@
 #include "CoreMinimal.h"
 #include "UI/FocusableWindowWidget.h"
 #include "UI/AudioSettingsWidget.h"
+#include "UI/GraphicsSettingsWidget.h"
 #include "Components/WidgetSwitcher.h"
 #include "Components/Button.h"
 #include "W_SettingsWidget.generated.h"
@@ -27,7 +28,8 @@
 UENUM(BlueprintType)
 enum class ESettingsTab : uint8
 {
-    Audio   UMETA(DisplayName = "Audio"),
+    Audio    UMETA(DisplayName = "Audio"),
+    Graphics UMETA(DisplayName = "Graphics"),
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSettingsWindowClosed);
@@ -128,6 +130,20 @@ protected:
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
     UAudioSettingsWidget* AudioSettingsPanel;
 
+    /**
+     * Tab button for the Graphics panel.
+     * Place it in the tab-bar row; clicking it calls SwitchToTab(Graphics).
+     */
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+    UButton* Tab_GraphicsButton;
+
+    /**
+     * Graphics settings panel — must be a Blueprint subclass of UGraphicsSettingsWidget.
+     * Place it as the SECOND child (slot 1) of TabContentSwitcher.
+     */
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+    UGraphicsSettingsWidget* GraphicsSettingsPanel;
+
     // ── Optional bound widgets ─────────────────────────────────────────────
 
     /** Closes the settings window. */
@@ -139,5 +155,6 @@ private:
     bool bDelegatesBound   = false;
 
     UFUNCTION() void HandleTabAudio();
+    UFUNCTION() void HandleTabGraphics();
     UFUNCTION() void HandleClose();
 };

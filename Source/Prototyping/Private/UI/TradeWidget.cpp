@@ -8,6 +8,7 @@
 #include "Components/ScrollBox.h"
 #include "Components/EditableTextBox.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
+#include "Components/CanvasPanelSlot.h"
 
 // ---------------------------------------------------------------------------
 // UTradeInvItemRowBinding
@@ -427,7 +428,6 @@ void UTradeWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPos)
     PC->GetViewportSize(W, H);
     const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
     const FVector2D VP = FVector2D(W, H) / Scale;
-    ForceLayoutPrepass();
     FVector2D Size = GetDesiredSize();
     if (Size.IsZero()) Size = FVector2D(600, 600);
     FVector2D Pos = ScreenCursorPos / Scale - DragOffset;

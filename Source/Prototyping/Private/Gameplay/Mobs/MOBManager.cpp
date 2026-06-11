@@ -375,6 +375,7 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 		}
 
 		MOB->Destroy();
+		RemovedCorpseUIDs.Add(CorpseUID);
 	}
 }
 
@@ -488,6 +489,14 @@ void UMOBManager::SpawnMOB(const FMOBStruct& MOBData)
 		return;
 	}
 
+	// Skip spawn if this corpse was already removed by the server
+	const int32 MobUID = FCString::Atoi(*MOBData.mobUniqueID);
+	if (MobUID > 0 && RemovedCorpseUIDs.Contains(MobUID))
+	{
+		UE_LOG(LogTemp, Log, TEXT("MOBManager: Skipping spawn for UID %d — corpse already removed"), MobUID);
+		return;
+	}
+
 
 	// get the game instance
 	if (gameInstance)
@@ -537,6 +546,8 @@ void UMOBManager::SpawnMOB(const FMOBStruct& MOBData)
 								   MOB->GetActorLocation().Z);
 			MOB->MOBMovementComponent->InitializeFromSpawnData(
 				SpawnPos, VelDir, MOBData.mobVelocity.speed, MOBData.mobCombatState);
+
+			MOB->MOBMovementComponent->SnapToGround();
 		}
 	}
 }

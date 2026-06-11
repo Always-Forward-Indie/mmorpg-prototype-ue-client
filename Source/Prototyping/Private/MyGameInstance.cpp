@@ -1893,6 +1893,11 @@ void UMyGameInstance::AddMonitorStatsWidgetToViewport()
 {
 	if (MonitorStatsWidgetClass)
 	{
+		if (IsValid(MonitorStatsWidget))
+		{
+			MonitorStatsWidget->RemoveFromParent();
+			MonitorStatsWidget = nullptr;
+		}
 		MonitorStatsWidget = CreateWidget<UMonitorStatsWidget>(this, MonitorStatsWidgetClass);
 		if (MonitorStatsWidget)
 		{

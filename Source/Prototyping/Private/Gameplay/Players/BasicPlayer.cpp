@@ -2167,7 +2167,7 @@ void ABasicPlayer::Move(const FInputActionValue& Value)
     }
     else
     {
-        // Keyboard-turn mode (no RMB): W/S move by mesh facing, A/D rotate mesh
+        // Strafing mode (no RMB): W/S move by mesh facing, A/D strafe left/right
         if (!FMath::IsNearlyZero(MoveValue.Y))
         {
             const FVector MeshForward = GetActorForwardVector();
@@ -2176,9 +2176,8 @@ void ABasicPlayer::Move(const FInputActionValue& Value)
 
         if (!FMath::IsNearlyZero(MoveValue.X))
         {
-            const float TurnAmount = MoveValue.X * MeshRotationSpeed * GetWorld()->GetDeltaSeconds();
-            DesiredMeshYaw = GetActorRotation().Yaw + TurnAmount;
-            bHasDesiredMeshYaw = true;
+            const FVector MeshRight = GetActorRightVector();
+            AddMovementInput(MeshRight, MoveValue.X);
         }
     }
 }
@@ -4243,6 +4242,12 @@ void ABasicPlayer::ApplyVisualFromDataTable(UDataTable* VisualTable)
 	const FString& ClassSlug  = playerData.characterData.characterClass;
 	const FString& RaceSlug   = playerData.characterData.characterRace;
 	const FString& GenderName = playerData.characterData.characterGender;
+
+	if (GenderName.IsEmpty())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BasicPlayer::ApplyVisualFromDataTable: characterGender is empty for charId=%d — server may not be sending 'gender' in joinGameCharacter. Falling back through visual definition chain."),
+			playerData.characterData.characterId);
+	}
 
 	const FCharacterVisualDefinition* Def = CharacterVisualHelper::FindVisualDefinition(
 		VisualTable, ClassSlug, RaceSlug, GenderName);

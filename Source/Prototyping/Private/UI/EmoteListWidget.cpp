@@ -8,6 +8,7 @@
 #include "Components/TextBlock.h"
 #include "Components/SizeBox.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
+#include "Components/CanvasPanelSlot.h"
 
 // ---------------------------------------------------------------------------
 // Construct / Destruct
@@ -257,7 +258,6 @@ void UEmoteListWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPos
     PC->GetViewportSize(W, H);
     const float Scale      = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
     const FVector2D VPSize = FVector2D(W, H) / Scale;
-    ForceLayoutPrepass();
     FVector2D Size = GetDesiredSize();
     if (Size.IsZero()) Size = FVector2D(400.f, 300.f);
     FVector2D Pos = ScreenCursorPos / Scale - DragOffset;

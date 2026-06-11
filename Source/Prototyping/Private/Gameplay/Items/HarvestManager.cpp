@@ -836,16 +836,24 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 					}
 				}
 
-				// Cancel our harvest if it was on this corpse
-				if (bIsHarvesting && CurrentCorpseUID == RemovedCorpseUID)
-				{
-					bIsHarvesting   = false;
-					CurrentCorpseUID = 0;
-					HarvestStartTime = 0.0f;
-					HarvestDuration  = 0.0f;
-					ServerStartTime  = 0;
-					HideHarvestProgress();
-				}
+			// Cancel our harvest if it was on this corpse
+			if (bIsHarvesting && CurrentCorpseUID == RemovedCorpseUID)
+			{
+				bIsHarvesting   = false;
+				CurrentCorpseUID = 0;
+				HarvestStartTime = 0.0f;
+				HarvestDuration  = 0.0f;
+				ServerStartTime  = 0;
+				HideHarvestProgress();
+			}
+
+			// Hide loot window if it was open for this corpse
+			if (CurrentCorpseUID == RemovedCorpseUID || CurrentAvailableLoot.Num() > 0)
+			{
+				CurrentAvailableLoot.Empty();
+				CurrentCorpseUID = 0;
+				HideLootWindow();
+			}
 			}
 		}
 	}

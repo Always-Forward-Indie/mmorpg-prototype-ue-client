@@ -18,6 +18,7 @@
 #include "Blueprint/DragDropOperation.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Input/Events.h"
 
 void UAvailableSkillsWidget::NativeConstruct()
@@ -256,7 +257,6 @@ void UAvailableSkillsWidget::UpdateWindowDragPosition(const FVector2D& ScreenCur
     const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
     const FVector2D ViewportSize = FVector2D(W, H) / Scale;
 
-    ForceLayoutPrepass();
     FVector2D Size = GetDesiredSize();
     if (Size.IsZero()) Size = FVector2D(400, 300);
 

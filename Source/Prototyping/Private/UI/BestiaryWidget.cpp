@@ -8,6 +8,7 @@
 #include "Components/Button.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
+#include "Components/CanvasPanelSlot.h"
 #include "MyGameInstance.h"
 #include "Services/LocalizationSubsystem.h"
 
@@ -315,7 +316,6 @@ void UBestiaryWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPos)
     PC->GetViewportSize(W, H);
     const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
     const FVector2D VP = FVector2D(W, H) / Scale;
-    ForceLayoutPrepass();
     FVector2D Size = GetDesiredSize();
     if (Size.IsZero()) Size = FVector2D(600, 600);
     FVector2D Pos = ScreenCursorPos / Scale - DragOffset;

@@ -360,7 +360,11 @@ void ULoginFlowWidget::HandleCreateNewClicked()
 
 void ULoginFlowWidget::HandleDeleteClicked()
 {
-	if (SelectedCharacterIndex < 0 || SelectedCharacterIndex >= CachedCharacters.Num()) return;
+	if (SelectedCharacterIndex < 0 || SelectedCharacterIndex >= CachedCharacters.Num())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("HandleDeleteClicked: invalid SelectedCharacterIndex=%d, CachedCharacters.Num=%d"), SelectedCharacterIndex, CachedCharacters.Num());
+		return;
+	}
 
 	PendingDeleteCharacterId   = CachedCharacters[SelectedCharacterIndex].CharacterId;
 	PendingDeleteCharacterName = CachedCharacters[SelectedCharacterIndex].CharacterName;
@@ -634,7 +638,6 @@ void ULoginFlowWidget::OnDeleteCharacterResponse(bool bSuccess, const FString& M
 
 	if (bSuccess)
 	{
-		// Remove from cache
 		CachedCharacters.RemoveAll([CharacterId](const FLoginCharacterEntry& E) { return E.CharacterId == CharacterId; });
 		SelectedCharacterIndex = -1;
 		PopulateCharacterList(CachedCharacters);

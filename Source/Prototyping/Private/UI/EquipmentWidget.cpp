@@ -3,6 +3,7 @@
 #include "Gameplay/Items/InventoryManager.h"
 #include "Components/Button.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
+#include "Components/CanvasPanelSlot.h"
 
 namespace
 {
@@ -291,7 +292,6 @@ void UEquipmentWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPos
     PC->GetViewportSize(W, H);
     const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
     const FVector2D ViewportSize = FVector2D(W, H) / Scale;
-    ForceLayoutPrepass();
     FVector2D Size = GetDesiredSize();
     if (Size.IsZero()) Size = FVector2D(400, 600);
     FVector2D Pos = ScreenCursorPos / Scale - DragOffset;

@@ -473,6 +473,8 @@ public:
 	// Used to keep the nameplate red when a naturally-aggressive mob returns to zone.
 	bool bIsNaturallyAggressive = false;
 
+	bool bHasDied = false;
+
 	// Current skill name set during combat (used for VFX/SFX lookup)
 	FString CurrentSkillName;
 

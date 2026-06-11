@@ -10,6 +10,7 @@
 #include "Engine/Engine.h"
 #include "Gameplay/Items/HarvestManager.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
+#include "Components/CanvasPanelSlot.h"
 
 void UHarvestLootWidget::NativeConstruct()
 {
@@ -187,7 +188,6 @@ void UHarvestLootWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorP
 	const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
 	const FVector2D ViewportSize = FVector2D(W, H) / Scale;
 
-	ForceLayoutPrepass();
 	FVector2D Size = GetDesiredSize();
 	if (Size.IsZero()) Size = FVector2D(400, 300);
 

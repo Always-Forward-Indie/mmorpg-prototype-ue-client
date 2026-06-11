@@ -74,6 +74,7 @@ void UEmoteComponent::PlayEmoteBySlug(const FString& EmoteSlug, const FString& A
         return;
     }
 
+    AnimInst->OnMontageEnded.RemoveDynamic(this, &UEmoteComponent::OnMontageEnded);
     AnimInst->OnMontageEnded.AddDynamic(this, &UEmoteComponent::OnMontageEnded);
 
     // Cache state
@@ -246,17 +247,6 @@ void UEmoteComponent::ExecuteSpawnVFX(const FEmoteTableRow& Row)
 void UEmoteComponent::OnMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 {
     if (Montage != CurrentMontageAsset) { return; }
-
-    // Unbind to avoid stale callbacks
-    ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
-    if (OwnerChar)
-    {
-        UAnimInstance* AnimInst = OwnerChar->GetMesh() ? OwnerChar->GetMesh()->GetAnimInstance() : nullptr;
-        if (AnimInst)
-        {
-            AnimInst->OnMontageEnded.RemoveDynamic(this, &UEmoteComponent::OnMontageEnded);
-        }
-    }
 
     // Destroy any looping VFX
     if (ActiveVFXComponent && IsValid(ActiveVFXComponent))

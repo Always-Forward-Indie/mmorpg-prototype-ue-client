@@ -77,4 +77,7 @@ class PROTOTYPING_API UMOBManager : public UObject
 
 		/** Player registry for target resolution. */
 		TMap<int32, TWeakObjectPtr<class ABasicPlayer>> PlayerRegistry;
+
+		/** UIDs of corpses that have been removed by the server; skip re-spawns. */
+		TSet<int32> RemovedCorpseUIDs;
 };

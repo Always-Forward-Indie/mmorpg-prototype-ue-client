@@ -1875,6 +1875,8 @@ void ABasicMOB::InitializeUIDelayed()
 
 void ABasicMOB::Die()
 {
+	if (bHasDied) return;
+	bHasDied = true;
 	PlaySoundByName("Death");
 
 	// Spawn death VFX if defined in MobDefinitionTable

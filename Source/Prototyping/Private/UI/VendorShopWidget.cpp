@@ -6,6 +6,7 @@
 #include "MyGameInstance.h"
 #include "Services/LocalizationSubsystem.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Components/WrapBox.h"
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "Gameplay/NPCs/NPCManager.h"
@@ -953,7 +954,6 @@ void UVendorShopWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPo
     PC->GetViewportSize(W, H);
     const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
     const FVector2D VP = FVector2D(W, H) / Scale;
-    ForceLayoutPrepass();
     FVector2D Size = GetDesiredSize();
     if (Size.IsZero()) Size = FVector2D(500, 600);
     FVector2D Pos = ScreenCursorPos / Scale - DragOffset;

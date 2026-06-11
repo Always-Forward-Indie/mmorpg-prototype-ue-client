@@ -9,6 +9,7 @@
 #include "Components/RichTextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Services/LocalizationSubsystem.h"
 #include "Engine/GameInstance.h"
 
@@ -410,7 +411,6 @@ void UDialogueWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPos)
     const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
     const FVector2D ViewportSize = FVector2D(W, H) / Scale;
 
-    ForceLayoutPrepass();
     FVector2D Size = GetDesiredSize();
     if (Size.IsZero()) Size = FVector2D(400, 300);
 

@@ -12,6 +12,7 @@
 #include "Components/ScrollBox.h"
 #include "Components/Image.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
+#include "Components/CanvasPanelSlot.h"
 
 // ---------------------------------------------------------------------------
 // USkillShopRowBinding
@@ -368,7 +369,6 @@ void USkillShopWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPos
     PC->GetViewportSize(W, H);
     const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
     const FVector2D VP = FVector2D(W, H) / Scale;
-    ForceLayoutPrepass();
     FVector2D Size = GetDesiredSize();
     if (Size.IsZero()) Size = FVector2D(400.f, 500.f);
     FVector2D Pos = ScreenCursorPos / Scale - DragOffset;

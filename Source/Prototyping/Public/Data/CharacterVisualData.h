@@ -116,15 +116,21 @@ namespace CharacterVisualHelper
 	{
 		if (!Table) return nullptr;
 
-		// Try exact match
-		FName Key = MakeRowKey(ClassSlug, RaceSlug, GenderName);
+		FName Key;
+
+		// If gender is empty, try female first before falling back to male
+		const FString EffectiveGender = GenderName.IsEmpty() ? TEXT("female") : GenderName;
+		Key = MakeRowKey(ClassSlug, RaceSlug, EffectiveGender);
 		if (const FCharacterVisualDefinition* Found = Table->FindRow<FCharacterVisualDefinition>(Key, TEXT("CharVisual")))
 			return Found;
 
-		// Fallback: gender → male
-		Key = MakeRowKey(ClassSlug, RaceSlug, TEXT("male"));
-		if (const FCharacterVisualDefinition* Found = Table->FindRow<FCharacterVisualDefinition>(Key, TEXT("CharVisual")))
-			return Found;
+		// Try male if female not found OR if the original gender was explicitly not empty and not male
+		if (!EffectiveGender.Equals(TEXT("male"), ESearchCase::IgnoreCase))
+		{
+			Key = MakeRowKey(ClassSlug, RaceSlug, TEXT("male"));
+			if (const FCharacterVisualDefinition* Found = Table->FindRow<FCharacterVisualDefinition>(Key, TEXT("CharVisual")))
+				return Found;
+		}
 
 		// Fallback: race → human, gender → male
 		Key = MakeRowKey(ClassSlug, TEXT("human"), TEXT("male"));

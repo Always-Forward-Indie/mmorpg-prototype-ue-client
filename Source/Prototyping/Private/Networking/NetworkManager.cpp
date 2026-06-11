@@ -378,7 +378,7 @@ void UNetworkManager::ShowChunkServerConnectionIssuePopup()
 		FText NoText = FText::FromString(TEXT("No"));
 		MsgBoxChunkServer->SetupMessageBox(TitleMessage, ErrorMessage, YesText, NoText);
 		// ������������� ���� �� �����
-		MsgBoxChunkServer->AddToViewport();
+		MsgBoxChunkServer->AddToViewport(100);
 		// ������������� �� ������� ������
 		MsgBoxChunkServer->OnLeftButtonClicked.AddDynamic(this, &UNetworkManager::OnChunkServerConnectionRetry);
 		MsgBoxChunkServer->OnRightButtonClicked.AddDynamic(this, &UNetworkManager::OnConnectCancel);
@@ -408,7 +408,7 @@ void UNetworkManager::ShowLoginServerConnectionIssuePopup()
 		MsgBoxLoginServer->SetupMessageBox(TitleMessage, ErrorMessage, YesText, NoText);
 
 		// ������������� ���� �� �����
-		MsgBoxLoginServer->AddToViewport();
+		MsgBoxLoginServer->AddToViewport(100);
 
 		// ������������� �� ������� ������
 		MsgBoxLoginServer->OnLeftButtonClicked.AddDynamic(this, &UNetworkManager::OnLoginServerConnectionRetry);
@@ -437,7 +437,7 @@ void UNetworkManager::ShowGameServerConnectionIssuePopup()
 		MsgBoxGameServer->SetupMessageBox(TitleMessage, ErrorMessage, YesText, NoText);
 
 		// ������������� ���� �� �����
-		MsgBoxGameServer->AddToViewport();
+		MsgBoxGameServer->AddToViewport(100);
 
 		// ������������� �� ������� ������
 		MsgBoxGameServer->OnLeftButtonClicked.AddDynamic(this, &UNetworkManager::OnGameServerConnectionRetry);

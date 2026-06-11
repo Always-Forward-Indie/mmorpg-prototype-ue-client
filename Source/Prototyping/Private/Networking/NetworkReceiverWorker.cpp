@@ -92,7 +92,6 @@ FString NetworkReceiverWorker::AddClientReceiveTimestamp(const FString& JsonData
         return JsonData;
     }
 
-    // Parse the JSON to check if it has time sync fields
     TSharedPtr<FJsonObject> JsonObject;
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonData);
 
@@ -101,26 +100,44 @@ FString NetworkReceiverWorker::AddClientReceiveTimestamp(const FString& JsonData
         return JsonData;
     }
 
-    // Check if header exists and has server timing fields
+    bool bHasTimingData = false;
+
     const TSharedPtr<FJsonObject>* HeaderPtr = nullptr;
-    if (!JsonObject->TryGetObjectField(TEXT("header"), HeaderPtr) || !HeaderPtr || !(*HeaderPtr).IsValid())
+    if (JsonObject->TryGetObjectField(TEXT("header"), HeaderPtr) && HeaderPtr && (*HeaderPtr).IsValid())
+    {
+        TSharedPtr<FJsonObject> Header = *HeaderPtr;
+        if (Header->HasField(TEXT("serverRecvMs")) && Header->HasField(TEXT("serverSendMs")))
+        {
+            int64 PreciseClientRecvMs = TimeSyncService.Get()->GetCurrentClientTimeMs();
+            Header->SetNumberField(TEXT("clientRecvMs"), PreciseClientRecvMs);
+            bHasTimingData = true;
+        }
+    }
+
+    const TSharedPtr<FJsonObject>* TimestampsPtr = nullptr;
+    if (!bHasTimingData && JsonObject->TryGetObjectField(TEXT("timestamps"), TimestampsPtr) && TimestampsPtr && (*TimestampsPtr).IsValid())
+    {
+        if ((*TimestampsPtr)->HasField(TEXT("serverRecvMs")) && (*TimestampsPtr)->HasField(TEXT("serverSendMs")))
+        {
+            const TSharedPtr<FJsonObject>* ExistingHeader = nullptr;
+            if (!JsonObject->TryGetObjectField(TEXT("header"), ExistingHeader) || !ExistingHeader || !(*ExistingHeader).IsValid())
+            {
+                JsonObject->SetObjectField(TEXT("header"), MakeShareable(new FJsonObject));
+            }
+            const TSharedPtr<FJsonObject>* HeaderOut = nullptr;
+            JsonObject->TryGetObjectField(TEXT("header"), HeaderOut);
+            TSharedPtr<FJsonObject> Header = *HeaderOut;
+            int64 PreciseClientRecvMs = TimeSyncService.Get()->GetCurrentClientTimeMs();
+            Header->SetNumberField(TEXT("clientRecvMs"), PreciseClientRecvMs);
+            bHasTimingData = true;
+        }
+    }
+
+    if (!bHasTimingData)
     {
         return JsonData;
     }
 
-    TSharedPtr<FJsonObject> Header = *HeaderPtr;
-
-    // Only add clientRecvMs if this is a server response with timing data
-    if (!Header->HasField(TEXT("serverRecvMs")) || !Header->HasField(TEXT("serverSendMs")))
-    {
-        return JsonData;
-    }
-
-
-    int64 PreciseClientRecvMs = TimeSyncService.Get()->GetCurrentClientTimeMs();
-    Header->SetNumberField(TEXT("clientRecvMs"), PreciseClientRecvMs);
-
-    // Rebuild the JSON string
     FString UpdatedJsonString;
     TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer =
         TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&UpdatedJsonString);
@@ -129,10 +146,6 @@ FString NetworkReceiverWorker::AddClientReceiveTimestamp(const FString& JsonData
     {
         UpdatedJsonString.ReplaceInline(TEXT("\n"), TEXT(""));
         UpdatedJsonString.ReplaceInline(TEXT("\r"), TEXT(""));
-
-        UE_LOG(LogTemp, VeryVerbose, TEXT("NetworkReceiverWorker: Added clientRecvMs %lld to packet: %s"),
-            PreciseClientRecvMs, *UpdatedJsonString);
-
         return UpdatedJsonString;
     }
 
@@ -141,11 +154,11 @@ FString NetworkReceiverWorker::AddClientReceiveTimestamp(const FString& JsonData
 
 uint32 NetworkReceiverWorker::Run()
 {
-    // Ждем, пока соединение не установится
+    // пїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     while (bRunThread && Socket && Socket->GetConnectionState() != ESocketConnectionState::SCS_Connected)
     {
         UE_LOG(LogConnection, Verbose, TEXT("Waiting for Receiver socket connection..."));
-        FPlatformProcess::Sleep(0.1f); // Ждем 100 мс
+        FPlatformProcess::Sleep(0.1f); // пїЅпїЅпїЅпїЅ 100 пїЅпїЅ
     }
 
 
@@ -153,14 +166,14 @@ uint32 NetworkReceiverWorker::Run()
     TArray<uint8> ReceiveBuffer;
     ReceiveBuffer.SetNumUninitialized(ReceiveBufferSize);
 
-    TArray<uint8> AccumulatedBuffer; // Буфер для накопления данных
+    TArray<uint8> AccumulatedBuffer; // пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
 
     UE_LOG(LogConnection, Log, TEXT("NetworkReceiverWorker Thread Started"));
 
     while (bRunThread)
     {
         // Guard: DetachSocket() may have been called by NetworkManager::Shutdown()
-        // concurrently. If Socket is null we must not call Recv() — exit cleanly.
+        // concurrently. If Socket is null we must not call Recv() пїЅ exit cleanly.
         FSocket* CurrentSocket = Socket;
         if (!CurrentSocket)
         {
@@ -170,7 +183,7 @@ uint32 NetworkReceiverWorker::Run()
         int32 BytesRead = 0;
         bool bHasData = CurrentSocket->Recv(ReceiveBuffer.GetData(), ReceiveBufferSize, BytesRead);
 
-        // Re-check both bRunThread and Socket after Recv() unblocks — the socket
+        // Re-check both bRunThread and Socket after Recv() unblocks пїЅ the socket
         // may have been closed and destroyed by Shutdown() to wake us up.
         if (!bRunThread || !Socket)
         {
@@ -182,30 +195,30 @@ uint32 NetworkReceiverWorker::Run()
             // Get precise receive timestamp immediately after successful Socket->Recv() (t3)
             //int64 PreciseClientRecvMs = TimeSyncService ? TimeSyncService->GetCurrentClientTimeMs() : 0;
             
-            // Копируем полученные данные в накопительный буфер
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
             AccumulatedBuffer.Append(ReceiveBuffer.GetData(), BytesRead);
 
             int32 DelimiterIndex;
-            // Проверяем, есть ли в накопленных данных символ-разделитель '\n'
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ-пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ '\n'
             while ((DelimiterIndex = AccumulatedBuffer.Find((uint8)'\n')) != INDEX_NONE)
             {
-                // Извлекаем один полный пакет
+                // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
                 TArray<uint8> SinglePacket;
                 SinglePacket.Append(AccumulatedBuffer.GetData(), DelimiterIndex);
 
-                // Убираем пакет и разделитель из буфера
+                // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
                 AccumulatedBuffer.RemoveAt(0, DelimiterIndex + 1);
 
-                // Преобразуем пакет в FString
+                // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅ FString
                 FUTF8ToTCHAR Converter(reinterpret_cast<const ANSICHAR*>(SinglePacket.GetData()), SinglePacket.Num());
                 FString ReceivedString(Converter.Length(), Converter.Get());
 
-                // t3 ДОЛЖЕН сниматься здесь, на каждый пакет:
+                // t3 пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ, пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ:
                 const int64 PerPacketT3 = TimeSyncService.IsValid() ? TimeSyncService.Get()->GetCurrentClientTimeMs() : 0;
                 // Add clientRecvMs timestamp if this is a server response
                 FString TimestampedString = AddClientReceiveTimestamp(ReceivedString, PerPacketT3);
 
-                // Добавляем строку в очередь
+                // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
                 DataQueue.Enqueue(TimestampedString);
             }
         }
@@ -218,8 +231,8 @@ uint32 NetworkReceiverWorker::Run()
 }
 
 
-// Обновлённая функция для преобразования, хотя теперь она может не понадобиться,
-// поскольку мы используем FUTF8ToTCHAR непосредственно в Run()
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ,
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ FUTF8ToTCHAR пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ Run()
 FString NetworkReceiverWorker::StringFromBinaryArray(const uint8* BinaryArray, const int32& ArraySize)
 {
     FUTF8ToTCHAR Converter(reinterpret_cast<const ANSICHAR*>(BinaryArray), ArraySize);

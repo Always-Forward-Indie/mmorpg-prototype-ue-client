@@ -72,84 +72,44 @@ UTimeSyncService* JSONParser::GetTimeSyncService()
     return OutputString;
 }
 
-// New method with explicit TimeSyncService parameter and server type
 FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TMap<FString, TSharedPtr<FJsonValue>>& HeaderData, const TMap<FString, TSharedPtr<FJsonValue>>& BodyData, UTimeSyncService* TimeSyncService, EServerType ServerType)
 {
-    TSharedPtr<FJsonObject> HeaderObject = MakeShareable(new FJsonObject);
-    HeaderObject->SetStringField(TEXT("eventType"), EventType);
+	TSharedPtr<FJsonObject> HeaderObject = MakeShareable(new FJsonObject);
+	HeaderObject->SetStringField(TEXT("eventType"), EventType);
 
-    // Generate request ID and register with TimeSyncService for ALL requests
-    FString RequestId;
-    if (TimeSyncService)
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("JSONParser::SerializeJsonWithTimeSync - TimeSyncService available, calling GenerateAndRegisterSyncRequest for ServerType: %d, EventType: %s"), 
-            static_cast<int32>(ServerType), *EventType);
-            
-        // Generate request ID for every request without restrictions
-        RequestId = TimeSyncService->GenerateAndRegisterSyncRequest(ServerType);
-        
-        UE_LOG(LogTemp, Verbose, TEXT("JSONParser::SerializeJsonWithTimeSync - Generated RequestId: '%s' (IsEmpty: %s)"), 
-            *RequestId, RequestId.IsEmpty() ? TEXT("true") : TEXT("false"));
-        
-        if (!RequestId.IsEmpty())
-        {
-            // Per protocol: create a "timestamps" sub-object in header
-            // with clientSendMsEcho and requestId. NetworkSenderWorker will
-            // update clientSendMsEcho with the precise value right before sending.
-            TSharedPtr<FJsonObject> TimestampsObject = MakeShareable(new FJsonObject);
-            TimestampsObject->SetStringField(TEXT("requestId"), RequestId);
-            TimestampsObject->SetNumberField(TEXT("clientSendMsEcho"), 0); // placeholder, updated by sender
-            HeaderObject->SetObjectField(TEXT("timestamps"), TimestampsObject);
-            
-            UE_LOG(LogTemp, Verbose, TEXT("JSONParser::SerializeJsonWithTimeSync - Added timestamps.requestId: %s (clientSendMsEcho will be set by NetworkSenderWorker)"), 
-                *RequestId);
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("JSONParser::SerializeJsonWithTimeSync - RequestId is empty, not adding timestamps sub-object"));
-        }
-    }
-	else
+	for (const auto& Elem : HeaderData)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("TimeSyncService is null. Cannot add requestId to header."));
+		HeaderObject->SetField(Elem.Key, Elem.Value);
 	}
 
-    for (const auto& Elem : HeaderData)
-    {
-        HeaderObject->SetField(Elem.Key, Elem.Value);
-    }
+	TSharedPtr<FJsonObject> BodyObject = MakeShareable(new FJsonObject);
 
-    TSharedPtr<FJsonObject> BodyObject = MakeShareable(new FJsonObject);
-
-    for (const auto& Elem : BodyData)
-    {
-        BodyObject->SetField(Elem.Key, Elem.Value);
+	for (const auto& Elem : BodyData)
+	{
+		BodyObject->SetField(Elem.Key, Elem.Value);
 	}
 
-    TSharedPtr<FJsonObject> MainJsonObject = MakeShareable(new FJsonObject);
+	TSharedPtr<FJsonObject> MainJsonObject = MakeShareable(new FJsonObject);
 
-    if (HeaderObject->Values.Num() > 0)
-    {
-        MainJsonObject->SetObjectField(TEXT("header"), HeaderObject);
-    }
+	if (HeaderObject->Values.Num() > 0)
+	{
+		MainJsonObject->SetObjectField(TEXT("header"), HeaderObject);
+	}
 
-    if (BodyObject->Values.Num() > 0)
-    {
-        MainJsonObject->SetObjectField(TEXT("body"), BodyObject);
-    }
+	if (BodyObject->Values.Num() > 0)
+	{
+		MainJsonObject->SetObjectField(TEXT("body"), BodyObject);
+	}
 
-    FString OutputString;
+	FString OutputString;
 	TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer =
 		TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&OutputString);
-    FJsonSerializer::Serialize(MainJsonObject.ToSharedRef(), Writer);
+	FJsonSerializer::Serialize(MainJsonObject.ToSharedRef(), Writer);
 
-	// Remove any newline characters
 	OutputString.ReplaceInline(TEXT("\n"), TEXT(""));
 	OutputString.ReplaceInline(TEXT("\r"), TEXT(""));
 
-    UE_LOG(LogTemp, Verbose, TEXT("JSONParser::SerializeJsonWithTimeSync - Final JSON (without clientSendMs): %s"), *OutputString);
-
-    return OutputString;
+	return OutputString;
 }
 
 // Legacy method with automatic server type detection

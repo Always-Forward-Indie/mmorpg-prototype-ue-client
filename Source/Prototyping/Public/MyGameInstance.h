@@ -133,7 +133,13 @@ FDateTime ReceiveTimeLoginServer;
 	// Counted on the render thread via OnEndFrameRT; removal dispatched back to
 	// the game thread so UMG / TimerManager are touched only from GT.
 	TAtomic<int32> RenderedFrameCount{ 0 };
+	// In packaged builds give the renderer more frames to finish PSO warm-up and
+	// flush texture streaming before uncovering the scene. 3 frames is fine in PIE.
+#if WITH_EDITOR
 	static constexpr int32 MinRenderedFramesBeforeHide = 3;
+#else
+	static constexpr int32 MinRenderedFramesBeforeHide = 15;
+#endif
 
 	// Set to true by the render-thread callback once MinRenderedFramesBeforeHide
 	// frames have been seen. The next game-thread Tick reads this and removes

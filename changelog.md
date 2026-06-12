@@ -94,3 +94,5 @@ v0.0.7a
 ===========
 
 Imrpoved and fixed networking and ping logic.
+Fixed and improved character delete logic and UI.
+Improved loading screen logic.

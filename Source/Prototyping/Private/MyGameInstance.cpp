@@ -1,6 +1,8 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
 #include "Components/ArrowComponent.h"
+#include "ShaderCompiler.h"
+#include "ContentStreaming.h"
 #include "DevMode/DevModeDataProvider.h"
 #include "DevMode/DevModeConsoleCommands.h"
 #include "Containers/Ticker.h"
@@ -1611,6 +1613,17 @@ void UMyGameInstance::CheckGameWorldReady()
 		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Gate3 SKIP: no WorldPartitionSubsystem (not a WP map)"));
 	}
 
+	// Gate 4: Shader compilation must be complete (relevant on first run / cold PSO cache
+	// in packaged builds). Skip in Editor where shaders compile in background normally.
+#if !WITH_EDITOR
+	if (GShaderCompilingManager && GShaderCompilingManager->IsCompiling())
+	{
+		UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] Gate4 WAIT: shader compiler still running..."));
+		return;
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Gate4 PASS: shader compiler idle"));
+#endif
+
 	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 5. All gates passed � calling OnGameWorldReady"));
 	OnGameWorldReady();
 }
@@ -1652,6 +1665,20 @@ void UMyGameInstance::OnGameWorldReady()
 			SpawnPlayerForClient(RemoteData.clientId);
 		}
 		PendingRemotePlayerSpawns.Empty();
+	}
+
+	// Kick the texture streaming system to fully stream textures around the player
+	// before the loading screen disappears, preventing mip pop-in on first frame.
+	if (UWorld* StreamWorld = GetWorld())
+	{
+		if (APlayerController* StreamPC = StreamWorld->GetFirstPlayerController())
+		{
+			if (APawn* StreamPawn = StreamPC->GetPawn())
+			{
+				IStreamingManager::Get().AddViewInformation(StreamPawn->GetActorLocation(), 1920, 1920);
+				IStreamingManager::Get().UpdateResourceStreaming(0.0f, true);
+			}
+		}
 	}
 
 	// All Notify* flags may already be accumulated while streaming was running.

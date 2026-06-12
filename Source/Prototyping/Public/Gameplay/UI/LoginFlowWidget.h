@@ -13,6 +13,7 @@
 #include "Components/ComboBoxString.h"
 #include "Components/ListView.h"
 #include "Components/Throbber.h"
+#include "Gameplay/UI/DeleteConfirmWidget.h"
 #include "LoginFlowWidget.generated.h"
 
 class UMyGameInstance;
@@ -44,6 +45,7 @@ public:
 
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 	/** Switch to a specific panel. Safe to call from Blueprint. */
 	UFUNCTION(BlueprintCallable, Category = "Login Flow")
@@ -181,28 +183,20 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	UThrobber* CharCreate_Throbber;
 
-	// ── Delete Confirmation widgets (embedded in CharSelect panel) ───────────
-	// These are optional — if present, they form an inline confirmation dialog.
+	// ── Delete Confirmation ──────────────────────────────────────────────────────
 
-	/** Container for the confirmation UI. Hidden by default, shown on Delete click. */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
-	UWidget* CharSelect_DeleteConfirmContainer;
+	/**
+	 * Blueprint class to use for the delete-confirmation popup.
+	 * Create a child of UDeleteConfirmWidget in the Content Browser,
+	 * add the four required widgets (DeleteConfirm_PromptText, DeleteConfirm_NameInput,
+	 * DeleteConfirm_ConfirmButton, DeleteConfirm_CancelButton), then assign that class here.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Login Flow|Config")
+	TSubclassOf<UDeleteConfirmWidget> DeleteConfirmWidgetClass;
 
-	/** Text prompt: "Type character name to confirm deletion" */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
-	UTextBlock* CharSelect_DeleteConfirmPrompt;
-
-	/** Input where user types the character name. */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
-	UEditableTextBox* CharSelect_DeleteConfirmInput;
-
-	/** Confirm delete button — enabled only when typed name matches. */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
-	UButton* CharSelect_DeleteConfirmButton;
-
-	/** Cancel delete button. */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
-	UButton* CharSelect_DeleteCancelButton;
+	/** Runtime instance — created on demand, destroyed on confirm/cancel. */
+	UPROPERTY()
+	UDeleteConfirmWidget* ActiveDeleteConfirmWidget = nullptr;
 
 	// ── Internal callbacks ───────────────────────────────────────────────────
 
@@ -223,6 +217,10 @@ protected:
 	UFUNCTION() void HandleDeleteConfirmTextChanged(const FText& Text);
 	UFUNCTION() void HandleDeleteConfirmClicked();
 	UFUNCTION() void HandleDeleteCancelClicked();
+
+	// Callbacks wired to the standalone DeleteConfirmWidget delegates
+	UFUNCTION() void OnDeleteConfirmWidgetConfirmed(int32 CharId);
+	UFUNCTION() void OnDeleteConfirmWidgetCancelled();
 
 	// Network response handlers (bound to AuthManager delegates)
 	UFUNCTION() void OnLoginResponse(bool bSuccess, const FString& Message);

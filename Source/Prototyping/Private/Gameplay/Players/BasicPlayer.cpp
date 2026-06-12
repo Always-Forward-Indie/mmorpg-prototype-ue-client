@@ -2949,7 +2949,12 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
         }
     }
 
-    LastReceivedPosition = GetActorLocation();
+// Start the next lerp from the previous target, not the current actor
+	// position. If a packet arrives while the previous lerp is still in-flight
+	// (t < 1), using GetActorLocation() would reset the start point to somewhere
+	// mid-way, causing a visible stutter-step. Using TargetReceivedPosition
+	// guarantees a smooth hand-off regardless of packet timing.
+	LastReceivedPosition = TargetReceivedPosition;
     TargetReceivedPosition = NewTarget;
 
     LastReceivedRotation = GetActorRotation();

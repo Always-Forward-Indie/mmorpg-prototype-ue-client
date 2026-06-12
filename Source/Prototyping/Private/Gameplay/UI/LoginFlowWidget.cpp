@@ -1,6 +1,7 @@
 // Login Flow Widget — Implementation
 
 #include "Gameplay/UI/LoginFlowWidget.h"
+#include "Gameplay/UI/DeleteConfirmWidget.h"
 #include "MyGameInstance.h"
 #include "Authentication/AuthenticationManager.h"
 #include "Authentication/LoginFlowTypes.h"
@@ -11,6 +12,7 @@
 #include "Gameplay/Players/BasicPlayer.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "InputCoreTypes.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lifecycle
@@ -60,10 +62,7 @@ void ULoginFlowWidget::NativeConstruct()
 		CharacterSelectListView->OnItemSelectionChanged().AddUObject(this, &ULoginFlowWidget::HandleCharacterItemSelectionChanged);
 	}
 
-	// Delete confirmation bindings
-	if (CharSelect_DeleteConfirmButton)  CharSelect_DeleteConfirmButton->OnClicked.AddDynamic(this, &ULoginFlowWidget::HandleDeleteConfirmClicked);
-	if (CharSelect_DeleteCancelButton)   CharSelect_DeleteCancelButton->OnClicked.AddDynamic(this, &ULoginFlowWidget::HandleDeleteCancelClicked);
-	if (CharSelect_DeleteConfirmInput)   CharSelect_DeleteConfirmInput->OnTextChanged.AddDynamic(this, &ULoginFlowWidget::HandleDeleteConfirmTextChanged);
+	// Delete confirmation bindings — handled inside UDeleteConfirmWidget now.
 
 	// ── Bind AuthManager delegates ───────────────────────────────────────────
 
@@ -108,6 +107,17 @@ void ULoginFlowWidget::NativeDestruct()
 	}
 
 	Super::NativeDestruct();
+}
+
+FReply ULoginFlowWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+{
+	// Allow Delete key to trigger character deletion when on the CharSelect panel.
+	if (InKeyEvent.GetKey() == EKeys::Delete && GetActivePanel() == ELoginFlowPanel::CharacterSelect)
+	{
+		HandleDeleteClicked();
+		return FReply::Handled();
+	}
+	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }
 
 void ULoginFlowWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -360,9 +370,14 @@ void ULoginFlowWidget::HandleCreateNewClicked()
 
 void ULoginFlowWidget::HandleDeleteClicked()
 {
+	UE_LOG(LogTemp, Warning, TEXT("LoginFlowWidget: HandleDeleteClicked — SelectedIdx=%d, CachedNum=%d, DeleteButton=%s, ConfirmWidgetClass=%s"),
+		SelectedCharacterIndex, CachedCharacters.Num(),
+		CharSelect_DeleteButton ? TEXT("OK") : TEXT("NULL"),
+		DeleteConfirmWidgetClass ? *DeleteConfirmWidgetClass->GetName() : TEXT("NOT SET"));
+
 	if (SelectedCharacterIndex < 0 || SelectedCharacterIndex >= CachedCharacters.Num())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HandleDeleteClicked: invalid SelectedCharacterIndex=%d, CachedCharacters.Num=%d"), SelectedCharacterIndex, CachedCharacters.Num());
+		SetError(CharSelect_ErrorText, NSLOCTEXT("LoginFlow", "NoCharSelected", "Select a character first."));
 		return;
 	}
 
@@ -398,29 +413,33 @@ void ULoginFlowWidget::HandleLogoutClicked()
 	SwitchToPanel(ELoginFlowPanel::Login);
 }
 
-void ULoginFlowWidget::HandleDeleteConfirmTextChanged(const FText& Text)
+void ULoginFlowWidget::HandleDeleteConfirmTextChanged(const FText& /*Text*/)
 {
-	if (CharSelect_DeleteConfirmButton)
-	{
-		const bool bMatch = Text.ToString().Equals(PendingDeleteCharacterName, ESearchCase::IgnoreCase);
-		CharSelect_DeleteConfirmButton->SetIsEnabled(bMatch);
-	}
+	// Handled internally by UDeleteConfirmWidget.
 }
 
 void ULoginFlowWidget::HandleDeleteConfirmClicked()
 {
-	if (bIsBusy || PendingDeleteCharacterId == 0) return;
-
-	SetPanelBusy(ELoginFlowPanel::CharacterSelect, true);
-	HideDeleteConfirmation();
-
-	if (AuthManagerRef)
-	{
-		AuthManagerRef->SendDeleteCharacterRequest(PendingDeleteCharacterId);
-	}
+	// Handled internally by UDeleteConfirmWidget via OnConfirmed delegate.
 }
 
 void ULoginFlowWidget::HandleDeleteCancelClicked()
+{
+	HideDeleteConfirmation();
+}
+
+void ULoginFlowWidget::OnDeleteConfirmWidgetConfirmed(int32 CharId)
+{
+	HideDeleteConfirmation();
+
+	if (!bIsBusy && AuthManagerRef)
+	{
+		SetPanelBusy(ELoginFlowPanel::CharacterSelect, true);
+		AuthManagerRef->SendDeleteCharacterRequest(CharId);
+	}
+}
+
+void ULoginFlowWidget::OnDeleteConfirmWidgetCancelled()
 {
 	HideDeleteConfirmation();
 }
@@ -640,6 +659,11 @@ void ULoginFlowWidget::OnDeleteCharacterResponse(bool bSuccess, const FString& M
 	{
 		CachedCharacters.RemoveAll([CharacterId](const FLoginCharacterEntry& E) { return E.CharacterId == CharacterId; });
 		SelectedCharacterIndex = -1;
+		// Clear the 3D preview actor for the deleted character.
+		if (UCharacterPreviewManager* PM = GetPreviewManager())
+		{
+			PM->ClearSelectPreviews();
+		}
 		PopulateCharacterList(CachedCharacters);
 		SetError(CharSelect_ErrorText, FText::GetEmpty());
 	}
@@ -902,41 +926,36 @@ void ULoginFlowWidget::HideDeleteConfirmation()
 	PendingDeleteCharacterId = 0;
 	PendingDeleteCharacterName.Empty();
 
-	if (CharSelect_DeleteConfirmContainer)
+	if (ActiveDeleteConfirmWidget)
 	{
-		CharSelect_DeleteConfirmContainer->SetVisibility(ESlateVisibility::Collapsed);
-	}
-	if (CharSelect_DeleteConfirmInput)
-	{
-		CharSelect_DeleteConfirmInput->SetText(FText::GetEmpty());
-	}
-	if (CharSelect_DeleteConfirmButton)
-	{
-		CharSelect_DeleteConfirmButton->SetIsEnabled(false);
+		ActiveDeleteConfirmWidget->RemoveFromParent();
+		ActiveDeleteConfirmWidget = nullptr;
 	}
 }
 
 void ULoginFlowWidget::ShowDeleteConfirmation()
 {
-	if (CharSelect_DeleteConfirmContainer)
+	if (!DeleteConfirmWidgetClass)
 	{
-		CharSelect_DeleteConfirmContainer->SetVisibility(ESlateVisibility::Visible);
+		UE_LOG(LogTemp, Error, TEXT("LoginFlowWidget: DeleteConfirmWidgetClass is not set! "
+			"Create a Blueprint child of UDeleteConfirmWidget and assign it in the LoginFlowWidget Blueprint defaults."));
+		return;
 	}
-	if (CharSelect_DeleteConfirmPrompt)
+
+	// Destroy any previous instance first.
+	if (ActiveDeleteConfirmWidget)
 	{
-		const FText Prompt = FText::Format(
-			NSLOCTEXT("LoginFlow", "DeleteConfirmPrompt", "Type \"{0}\" to confirm deletion:"),
-			FText::FromString(PendingDeleteCharacterName));
-		CharSelect_DeleteConfirmPrompt->SetText(Prompt);
+		ActiveDeleteConfirmWidget->RemoveFromParent();
+		ActiveDeleteConfirmWidget = nullptr;
 	}
-	if (CharSelect_DeleteConfirmInput)
-	{
-		CharSelect_DeleteConfirmInput->SetText(FText::GetEmpty());
-	}
-	if (CharSelect_DeleteConfirmButton)
-	{
-		CharSelect_DeleteConfirmButton->SetIsEnabled(false);
-	}
+
+	ActiveDeleteConfirmWidget = CreateWidget<UDeleteConfirmWidget>(GetOwningPlayer(), DeleteConfirmWidgetClass);
+	if (!ActiveDeleteConfirmWidget) { return; }
+
+	ActiveDeleteConfirmWidget->OnConfirmed.AddDynamic(this, &ULoginFlowWidget::OnDeleteConfirmWidgetConfirmed);
+	ActiveDeleteConfirmWidget->OnCancelled.AddDynamic(this, &ULoginFlowWidget::OnDeleteConfirmWidgetCancelled);
+	ActiveDeleteConfirmWidget->Setup(PendingDeleteCharacterId, PendingDeleteCharacterName);
+	ActiveDeleteConfirmWidget->AddToViewport(10);
 }
 
 void ULoginFlowWidget::UpdateCharSelectButtons()

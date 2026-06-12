@@ -140,9 +140,12 @@ float UTimeSyncService::CalculateLagCompensation(int64 ClientActionTimeMs, EServ
     return static_cast<float>(CurrentServerTime - EstimatedServerActionTime);
 }
 
-FString UTimeSyncService::GenerateAndRegisterSyncRequest(EServerType ServerType)
+FString UTimeSyncService::GenerateAndRegisterSyncRequest(EServerType ServerType, int64 InClientSendMs)
 {
-    int64 CurrentTime = GetCurrentClientTimeMs();
+    // Use the provided timestamp (the actual send moment) so that t0 stored in
+    // PendingRequests matches the value embedded in the outgoing JSON header.
+    // Fallback to now() when not provided (e.g. callers that don't need precision).
+    int64 CurrentTime = (InClientSendMs > 0) ? InClientSendMs : GetCurrentClientTimeMs();
     
     // Ensure server sync data exists
     EnsureServerSyncDataExists(ServerType);
@@ -483,7 +486,7 @@ bool UTimeSyncService::IsSampleValid(const FTimeSyncData& SyncData) const
         return false;
     }
 
-    // NEW: Проверка логической последовательности таймстампов
+    // NEW: пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     //if (SyncData.ServerRecvMs < SyncData.ClientSendMs)
     //{
     //    UE_LOG(LogTemp, Warning, TEXT("TimeSyncService: Invalid sample - ServerRecvMs < ClientSendMs"));
@@ -660,7 +663,7 @@ bool UTimeSyncService::RemovePendingRequest(const FString& RequestId)
 //    const FDateTime Now = FDateTime::UtcNow();
 //    const int64 Result = Now.ToUnixTimestamp() * 1000 + Now.GetMillisecond();
 //
-//    //  Диагностика стабильности системного времени
+//    //  пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 //    static int64 LastTime = 0;
 //    static int32 BackwardJumps = 0;
 //    static int32 LargeJumps = 0;
@@ -678,7 +681,7 @@ bool UTimeSyncService::RemovePendingRequest(const FString& RequestId)
 //            UE_LOG(LogTemp, Error, TEXT(" SYSTEM TIME BACKWARDS: %lld ms (jumps: %d/%d calls)"),
 //                TimeDiff, BackwardJumps, CallCount);
 //        }
-//        else if (TimeDiff > 1000) // Больше 1 секунды между вызовами
+//        else if (TimeDiff > 1000) // пїЅпїЅпїЅпїЅпїЅпїЅ 1 пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 //        {
 //            LargeJumps++;
 //            UE_LOG(LogTemp, Warning, TEXT(" SYSTEM TIME LARGE JUMP: %lld ms (jumps: %d/%d calls)"),
@@ -690,7 +693,7 @@ bool UTimeSyncService::RemovePendingRequest(const FString& RequestId)
 //        }
 //    }
 //
-//    // Логируем каждые 1000 вызовов для контроля качества
+//    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ 1000 пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 //    if (CallCount % 1000 == 0)
 //    {
 //        UE_LOG(LogTemp, Log, TEXT(" Time quality stats: %d calls, %d backward jumps, %d large jumps"),

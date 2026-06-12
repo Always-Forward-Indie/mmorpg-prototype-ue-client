@@ -138,6 +138,10 @@ public:
 	void SendDataToChunkServer(const FString& Data);
 	/** Returns true only after the TCP handshake with the login server is done and the sender worker is running. */
 	bool IsLoginServerConnected() const;
+	/** Returns true only after the TCP handshake with the game server is done and the sender worker is running. */
+	bool IsGameServerConnected() const;
+	/** Returns true only after the TCP handshake with the chunk server is done and the sender worker is running. */
+	bool IsChunkServerConnected() const;
 	void PollLoginServerNetworkData();
 	void PollGameServerNetworkData();
 	void PollChunkServerNetworkData();

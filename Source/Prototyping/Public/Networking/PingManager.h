@@ -34,6 +34,12 @@ UTimeSyncService* TimeSyncService;
 	// Timer handle for periodic ping requests
 	FTimerHandle PingRequestTimerHandle;
 
+	// Set to true only after joinGameClient succeeds on the ChunkServer.
+	// The ChunkServer silently drops all pings until the client is registered
+	// (clientId != 0 AND socket registered via joinGameClient). Pinging before
+	// that point only accumulates orphaned PendingRequests.
+	bool bChunkServerGameReady = false;
+
 public:
 	UPingManager(const FObjectInitializer& ObjectInitializer);
 	
@@ -51,6 +57,10 @@ public:
 	
 	// Stop periodic ping updates and requests
 	void StopPingUpdates();
+
+	// Notify PingManager that the ChunkServer has completed joinGameClient and is
+	// now ready to respond to pings. Pass false to re-gate (e.g. on disconnect).
+	void SetChunkServerGameReady(bool bReady);
 
 	// Re-register ping timers after a level transition.
 	// Must be called after SetWorldContext() so timers run in the new world.

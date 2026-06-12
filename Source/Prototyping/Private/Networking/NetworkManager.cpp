@@ -517,6 +517,16 @@ bool UNetworkManager::IsLoginServerConnected() const
 	return SenderLoginServerWorker != nullptr;
 }
 
+bool UNetworkManager::IsGameServerConnected() const
+{
+	return SenderGameServerWorker != nullptr;
+}
+
+bool UNetworkManager::IsChunkServerConnected() const
+{
+	return SenderChunkServerWorker != nullptr;
+}
+
 void UNetworkManager::SendDataToGameServer(const FString& Data) {
 	if (SenderGameServerWorker != nullptr)
 	{

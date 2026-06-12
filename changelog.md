@@ -8,7 +8,7 @@ Fixed issue with widget update on all connected client when new one connecting.
 Fixed correctly update and calculation for exp UI bar.
 ===========
 
-v0.0.3a
+v0.0.6a
 11.06.2026
 ===========
 
@@ -89,3 +89,8 @@ Refactored loading level logic and transitions.
 
 ===========
 
+v0.0.7a
+11.06.2026
+===========
+
+Imrpoved and fixed networking and ping logic.

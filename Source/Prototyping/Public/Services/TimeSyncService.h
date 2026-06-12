@@ -199,9 +199,11 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Time Sync")
     float CalculateLagCompensation(int64 ClientActionTimeMs, EServerType ServerType = EServerType::ChunkServer) const;
 
-    // Generate unique request ID and prepare for time sync
+    // Generate unique request ID and prepare for time sync.
+    // Pass InClientSendMs to pin t0 to the moment the packet is actually sent,
+    // so the NTP formula uses the same t0 that was embedded in the JSON header.
     UFUNCTION(BlueprintCallable, Category = "Time Sync")
-    FString GenerateAndRegisterSyncRequest(EServerType ServerType = EServerType::ChunkServer);
+    FString GenerateAndRegisterSyncRequest(EServerType ServerType = EServerType::ChunkServer, int64 InClientSendMs = 0);
 
     // Update time sync data when receiving server response with specific request ID
     UFUNCTION(BlueprintCallable, Category = "Time Sync")

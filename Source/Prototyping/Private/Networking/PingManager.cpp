@@ -81,6 +81,14 @@ void UPingManager::StopPingUpdates()
 		worldContext->GetTimerManager().ClearTimer(PingRequestTimerHandle);
 		UE_LOG(LogPing, Log, TEXT("PingManager: Stopped ping updates and ping requests"));
 	}
+	bChunkServerGameReady = false;
+}
+
+void UPingManager::SetChunkServerGameReady(bool bReady)
+{
+	bChunkServerGameReady = bReady;
+	UE_LOG(LogPing, Warning, TEXT("PingManager: ChunkServer game-ready = %s"),
+		bReady ? TEXT("true") : TEXT("false"));
 }
 
 void UPingManager::RestartPingUpdates()
@@ -134,8 +142,38 @@ void UPingManager::SendPingRequestToServer(EServerType ServerType)
 		return;
 	}
 
-	// Generate unique request ID for this ping
-	FString RequestId = TimeSyncService->GenerateAndRegisterSyncRequest(ServerType);
+	// Guard: skip registration entirely when the server is not connected so we
+	// don't create orphaned PendingRequests that expire 10 seconds later.
+	bool bConnected = false;
+	switch (ServerType)
+	{
+		case EServerType::LoginServer: bConnected = networkManager->IsLoginServerConnected(); break;
+		case EServerType::GameServer:  bConnected = networkManager->IsGameServerConnected();  break;
+		case EServerType::ChunkServer: bConnected = networkManager->IsChunkServerConnected(); break;
+		default: break;
+	}
+	if (!bConnected)
+	{
+		UE_LOG(LogPing, Warning, TEXT("PingManager: %s not connected, skipping ping request"),
+			*TimeSyncService->GetServerTypeName(ServerType));
+		return;
+	}
+
+	// ChunkServer silently drops all pings until joinGameClient has been processed
+	// (clientId gate + socket registration). Only start pinging once game-ready.
+	if (ServerType == EServerType::ChunkServer && !bChunkServerGameReady)
+	{
+		return;
+	}
+
+	// Capture t0 once here so that:
+	//   a) the value stored in PendingRequests (used in the NTP formula) and
+	//   b) the value embedded in the JSON header (echoed back by the server)
+	// are identical — avoiding a systematic offset error when they differ by 1-5 ms.
+	int64 ClientSendMs = TimeSyncService->GetCurrentClientTimeMs();
+
+	// Generate unique request ID and register pending request using the same t0.
+	FString RequestId = TimeSyncService->GenerateAndRegisterSyncRequest(ServerType, ClientSendMs);
 	
 	// Create the ping request JSON per protocol spec (1.4 pingClient)
 	TSharedPtr<FJsonObject> HeaderObject = MakeShareable(new FJsonObject);
@@ -152,12 +190,8 @@ void UPingManager::SendPingRequestToServer(EServerType ServerType)
 		}
 	}
 	
-	// NTP-style: place clientSendMs (T1) and requestId directly in header root
+	// NTP-style: place clientSendMs (t0) and requestId directly in header root
 	// so that the server's extractClientTimestamp() and parseRequestId() can find them.
-	// The nested "timestamps" sub-object was wrong: server parses header.clientSendMs, not
-	// header.timestamps.clientSendMsEcho. Without these fields at the root, the server echoes
-	// clientSendMsEcho=0 and requestId="", which breaks the entire RTT / clock-offset pipeline.
-	int64 ClientSendMs = TimeSyncService->GetCurrentClientTimeMs();
 	HeaderObject->SetNumberField("clientSendMs", ClientSendMs);
 	HeaderObject->SetStringField("requestId", RequestId);
 
@@ -195,9 +229,12 @@ void UPingManager::SendPingRequestToServer(EServerType ServerType)
 			break;
 			
 		default:
-			UE_LOG(LogPing, Log, TEXT("PingManager: Unknown server type for ping request"));
+			UE_LOG(LogPing, Warning, TEXT("PingManager: Unknown server type for ping request"));
 			break;
 	}
+
+	UE_LOG(LogPing, Warning, TEXT("PingManager: Sent ping request %s to %s (t0=%lld)"),
+		*RequestId, *TimeSyncService->GetServerTypeName(ServerType), ClientSendMs);
 }
 
 void UPingManager::UpdatePingDisplay()

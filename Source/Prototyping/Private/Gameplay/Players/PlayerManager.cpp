@@ -204,6 +204,12 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 				LocalClientData.characterData.characterId = gameInstance->GetCurrentCharacterID();
 				UE_LOG(LogConnection, Log, TEXT("[PHASE 1] joinGameClient OK on ChunkServer, clientId=%d charId=%d -> sending joinGameCharacter"),
 					LocalClientData.clientId, LocalClientData.characterData.characterId);
+				// ChunkServer is now game-ready: it has registered our socket and knows our clientId.
+				// Unlock ChunkServer pings so TimeSyncService can start measuring RTT to ChunkServer.
+				if (UPingManager* PM = gameInstance->GetPingManager())
+				{
+					PM->SetChunkServerGameReady(true);
+				}
 				SendJoinCharacterChunkRequest(LocalClientData);
 			}
 		}

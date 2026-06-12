@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 #include "Networking/NetworkManager.h"
+#include "Networking/PingManager.h"
 #include "Authentication/AuthenticationManager.h"
 #include "Gameplay/Players/PlayerManager.h"
 #include "Gameplay/Mobs/MOBManager.h"
@@ -1013,6 +1014,10 @@ public:
 		// get time sync service
 		UFUNCTION(BlueprintCallable, Category = "Network")
 		UTimeSyncService* GetTimeSyncService();
+
+		// get ping manager
+		UFUNCTION(BlueprintCallable, Category = "Network")
+		UPingManager* GetPingManager();
 
 		// Process time sync data from server responses
 		UFUNCTION(BlueprintCallable, Category = "Network")

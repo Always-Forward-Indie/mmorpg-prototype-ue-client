@@ -2861,6 +2861,11 @@ UTimeSyncService* UMyGameInstance::GetTimeSyncService()
 	return TimeSyncService;
 }
 
+UPingManager* UMyGameInstance::GetPingManager()
+{
+	return PingManager;
+}
+
 void UMyGameInstance::ProcessTimeSyncData(const FMessageDataStruct& MessageData)
 {
 	// Process time sync data from server response

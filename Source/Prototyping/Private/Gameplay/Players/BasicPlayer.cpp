@@ -2491,10 +2491,20 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
 
     // -----------------------------------------------------------------------
     // 2. Rotation interpolation
+    //    Linear lerp with the same LerpFactor as position gives constant
+    //    angular velocity that is synchronized with movement. RInterpTo
+    //    (exponential) caused visible jerking on sharp turns: the first
+    //    frame after a new packet had a huge angular step that immediately
+    //    decelerated, looking non-uniform. FindDeltaAngleDegrees handles
+    //    the +-180 degree wrap-around correctly.
     // -----------------------------------------------------------------------
-    const FRotator NewRotation = FMath::RInterpTo(
-        GetActorRotation(), TargetReceivedRotation, DeltaTime, 15.0f);
-    SetActorRotation(NewRotation);
+    {
+        const float RotDeltaYaw = FMath::FindDeltaAngleDegrees(
+            LastReceivedRotation.Yaw, TargetReceivedRotation.Yaw);
+        const float LerpedYaw = FMath::UnwindDegrees(
+            LastReceivedRotation.Yaw + RotDeltaYaw * LerpFactor);
+        SetActorRotation(FRotator(0.f, LerpedYaw, 0.f));
+    }
 
     // -----------------------------------------------------------------------
     // 3. Animation speed / direction вЂ” EMA smoothing + graceful stop fade-out
@@ -2544,12 +2554,26 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
 
     // Snap to exactly zero to prevent the blend-space from hovering near 0
     // and flickering between idle and walk at very low smoothed values.
-    // Also reset direction to 0 so the blend-space doesn't play a "slow backward"
-    // idle when the player just stopped moving backward (Bug 2 fix).
+    // Direction fades toward 0 gradually instead of snapping, so the blend-space
+    // settles into idle smoothly on both axes simultaneously — prevents the
+    // backward-stop jerk where direction ±180° and speed both snap to 0 at once.
     if (SmoothedRemoteSpeed < 2.0f)
     {
-        SmoothedRemoteSpeed = 0.0f;
-        SmoothedRemoteDirection = 0.0f;
+        if (SmoothedRemoteSpeed < 0.5f)
+        {
+            // Truly negligible — hard-snap both to zero.
+            SmoothedRemoteSpeed = 0.0f;
+            SmoothedRemoteDirection = 0.0f;
+        }
+        else
+        {
+            // Speed is still decaying via the EMA above.
+            // Fade direction toward neutral so the blend-space transitions
+            // to idle without a direction-axis snap.
+            const float DirFadeAlpha = FMath::Clamp(DeltaTime / 0.06f, 0.0f, 1.0f);
+            const float DirDelta = FMath::FindDeltaAngleDegrees(SmoothedRemoteDirection, 0.0f);
+            SmoothedRemoteDirection = FMath::UnwindDegrees(SmoothedRemoteDirection + DirDelta * DirFadeAlpha);
+        }
     }
 
     // Direction: only blend when actually moving so we don't rotate the
@@ -2557,7 +2581,12 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     if (SmoothedRemoteSpeed > 2.0f)
     {
         const float DirAlpha = FMath::Clamp(DeltaTime / 0.10f, 0.0f, 1.0f);  // ~100 ms turn
-        SmoothedRemoteDirection = FMath::Lerp(SmoothedRemoteDirection, RemoteDirection, DirAlpha);
+        // Angle-aware interpolation: avoids the ±180° wrap-around issue where
+        // FMath::Lerp on raw degrees crosses zero instead of staying near ±180,
+        // causing the blend-space to sweep through all directions during
+        // backward movement.
+        const float DeltaAngle = FMath::FindDeltaAngleDegrees(SmoothedRemoteDirection, RemoteDirection);
+        SmoothedRemoteDirection = FMath::UnwindDegrees(SmoothedRemoteDirection + DeltaAngle * DirAlpha);
     }
     // else: keep last known direction so the blend-space doesn't pop to 0 on stop.
 }
@@ -2890,14 +2919,24 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
     // This makes interpolation robust to variable server tick rates and network jitter.
     if (playerData.isOtherClient && TimeSinceLastPositionUpdate > 0.01f)
     {
-        // Clamp to a sane range (50ms вЂ“ 500ms) to ignore the very first packet
-        // and any massive gaps caused by the player standing still.
-        const float MeasuredInterval = FMath::Clamp(TimeSinceLastPositionUpdate, 0.05f, 0.5f);
-        // Exponential moving average: 80% old value, 20% new measurement
-        ServerPositionUpdateInterval = ServerPositionUpdateInterval * 0.8f + MeasuredInterval * 0.2f;
-    }
-
-    // Estimate 2D speed and direction from the XY displacement between consecutive positions.
+        // After a long idle pause (player stood still) reset the adaptive interval
+        // to the expected packet rate. Without this, the first movement packet
+        // inherits a 500ms lerp window (clamped from the idle gap), which makes
+        // the second packet arrive before the lerp completes and causes a
+        // forward micro-snap at the very start of movement.
+        if (TimeSinceLastPositionUpdate > 0.5f)
+        {
+            ServerPositionUpdateInterval = 0.1f;
+        }
+        else
+        {
+            // Clamp to a sane range (50ms - 500ms) to ignore the very first packet
+            // and any massive gaps caused by the player standing still.
+            const float MeasuredInterval = FMath::Clamp(TimeSinceLastPositionUpdate, 0.05f, 0.5f);
+            // Exponential moving average: 80% old value, 20% new measurement
+            ServerPositionUpdateInterval = ServerPositionUpdateInterval * 0.8f + MeasuredInterval * 0.2f;
+        }
+    }    // Estimate 2D speed and direction from the XY displacement between consecutive positions.
     // RemoteSpeed / RemoteDirection are the raw instantaneous values.
     // Smoothing is applied every Tick inside UpdateRemotePlayerMovement.
     if (playerData.isOtherClient && ServerPositionUpdateInterval > 0.0f)
@@ -2935,11 +2974,17 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
 
             const FVector Delta2D = FVector(NewTarget.X - TargetReceivedPosition.X,
                                             NewTarget.Y - TargetReceivedPosition.Y, 0.0f).GetSafeNormal();
-            const FVector ActorForward = GetActorForwardVector();
-            const FVector ActorRight   = GetActorRightVector();
+
+            // Use TargetReceivedRotation (server-authoritative facing) instead of
+            // GetActorForwardVector(). The actor rotation is still mid-interpolation
+            // when a new packet arrives, so GetActorForwardVector() is unstable and
+            // produces wrong direction values near ±180° (backward movement).
+            const FQuat   FacingQuat    = TargetReceivedRotation.Quaternion();
+            const FVector StableForward = FacingQuat.GetForwardVector();
+            const FVector StableRight   = FacingQuat.GetRightVector();
             RemoteDirection = FMath::RadiansToDegrees(
-                FMath::Atan2(FVector::DotProduct(Delta2D, ActorRight),
-                             FVector::DotProduct(Delta2D, ActorForward)));
+                FMath::Atan2(FVector::DotProduct(Delta2D, StableRight),
+                             FVector::DotProduct(Delta2D, StableForward)));
         }
         else
         {
@@ -2949,12 +2994,16 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
         }
     }
 
-// Start the next lerp from the previous target, not the current actor
-	// position. If a packet arrives while the previous lerp is still in-flight
-	// (t < 1), using GetActorLocation() would reset the start point to somewhere
-	// mid-way, causing a visible stutter-step. Using TargetReceivedPosition
-	// guarantees a smooth hand-off regardless of packet timing.
-	LastReceivedPosition = TargetReceivedPosition;
+// Choose lerp start-point based on how complete the previous lerp was.
+	// >= 90% done (steady-state movement): use TargetReceivedPosition for a clean
+	//   hand-off — avoids stutter when consecutive packets arrive quickly.
+	// <  90% done (first packet after long idle, or burst): use GetActorLocation()
+	//   so we don't snap the start point past where the actor currently is,
+	//   which would cause a visible forward jerk at the start of movement.
+	const float LerpProgress = (ServerPositionUpdateInterval > 0.001f)
+		? FMath::Clamp(TimeSinceLastPositionUpdate / ServerPositionUpdateInterval, 0.0f, 1.0f)
+		: 1.0f;
+	LastReceivedPosition = (LerpProgress >= 0.9f) ? TargetReceivedPosition : GetActorLocation();
     TargetReceivedPosition = NewTarget;
 
     LastReceivedRotation = GetActorRotation();

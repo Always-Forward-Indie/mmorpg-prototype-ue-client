@@ -79,8 +79,10 @@ struct FCharacterDataStruct
     FAttributesDataStruct characterAttributes;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
 	bool bIsDead = false;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
 	bool bIsMoving = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
+	bool bIsFalling = false;
     /** Slug of the title equipped by this character, empty if none. Used for nameplate display. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Data Struct")
     FString equippedTitleSlug = "";

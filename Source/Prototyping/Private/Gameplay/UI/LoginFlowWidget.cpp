@@ -42,6 +42,13 @@ void ULoginFlowWidget::NativeConstruct()
 	if (CharCreate_CreateButton)  CharCreate_CreateButton->OnClicked.AddDynamic(this, &ULoginFlowWidget::HandleCharCreateClicked);
 	if (CharCreate_BackButton)    CharCreate_BackButton->OnClicked.AddDynamic(this, &ULoginFlowWidget::HandleCharCreateBackClicked);
 
+	// Enter on text fields triggers login / register
+	if (Login_UsernameInput)    Login_UsernameInput->OnTextCommitted.AddDynamic(this, &ULoginFlowWidget::HandleLoginTextCommitted);
+	if (Login_PasswordInput)    Login_PasswordInput->OnTextCommitted.AddDynamic(this, &ULoginFlowWidget::HandleLoginTextCommitted);
+	if (Register_UsernameInput) Register_UsernameInput->OnTextCommitted.AddDynamic(this, &ULoginFlowWidget::HandleRegisterTextCommitted);
+	if (Register_PasswordInput) Register_PasswordInput->OnTextCommitted.AddDynamic(this, &ULoginFlowWidget::HandleRegisterTextCommitted);
+	if (Register_EmailInput)    Register_EmailInput->OnTextCommitted.AddDynamic(this, &ULoginFlowWidget::HandleRegisterTextCommitted);
+
 	// Combo selection changes → update description + live preview
 	if (CharCreate_ClassComboBox)
 	{
@@ -109,6 +116,17 @@ void ULoginFlowWidget::NativeDestruct()
 	Super::NativeDestruct();
 }
 
+FReply ULoginFlowWidget::NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+{
+	// Enter on CharacterSelect must be intercepted BEFORE the ListView consumes it
+	if (InKeyEvent.GetKey() == EKeys::Enter && GetActivePanel() == ELoginFlowPanel::CharacterSelect)
+	{
+		HandlePlayClicked();
+		return FReply::Handled();
+	}
+	return Super::NativeOnPreviewKeyDown(InGeometry, InKeyEvent);
+}
+
 FReply ULoginFlowWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
 	// Allow Delete key to trigger character deletion when on the CharSelect panel.
@@ -117,6 +135,29 @@ FReply ULoginFlowWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKey
 		HandleDeleteClicked();
 		return FReply::Handled();
 	}
+
+	// Enter triggers the primary action for the current panel
+	if (InKeyEvent.GetKey() == EKeys::Enter)
+	{
+		switch (GetActivePanel())
+		{
+		case ELoginFlowPanel::Login:
+			HandleLoginClicked();
+			return FReply::Handled();
+		case ELoginFlowPanel::Registration:
+			HandleRegisterClicked();
+			return FReply::Handled();
+		case ELoginFlowPanel::CharacterSelect:
+			HandlePlayClicked();
+			return FReply::Handled();
+		case ELoginFlowPanel::CharacterCreate:
+			HandleCharCreateClicked();
+			return FReply::Handled();
+		default:
+			break;
+		}
+	}
+
 	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }
 
@@ -124,7 +165,7 @@ void ULoginFlowWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
 
-	// Click-to-select: only active on the Character Select panel
+	// Click-to-select and Enter: only active on the Character Select panel
 	if (GetActivePanel() != ELoginFlowPanel::CharacterSelect) return;
 
 	// Tick smooth walk animations for podium preview characters.
@@ -135,6 +176,19 @@ void ULoginFlowWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 
 	APlayerController* PC = GetOwningPlayer();
 	if (!PC) return;
+
+	// ── Enter key → Play (checked in Tick because ListView consumes Enter
+	//     before NativeOnKeyDown / NativeOnPreviewKeyDown can fire).
+	const bool bEnterDown = PC->IsInputKeyDown(EKeys::Enter);
+	if (bEnterDown && !bEnterWasDownLastTick && !bIsBusy)
+	{
+		bEnterWasDownLastTick = true;
+		HandlePlayClicked();
+	}
+	else if (!bEnterDown)
+	{
+		bEnterWasDownLastTick = false;
+	}
 
 	const bool bIsLeftMouseDown = PC->IsInputKeyDown(EKeys::LeftMouseButton);
 
@@ -237,11 +291,13 @@ void ULoginFlowWidget::HandleLoginClicked()
 	if (!LoginFlowValidation::IsLoginValid(Username, ValidationError))
 	{
 		SetError(Login_ErrorText, ValidationError);
+		if (Login_UsernameInput) Login_UsernameInput->SetKeyboardFocus();
 		return;
 	}
 	if (!LoginFlowValidation::IsPasswordValid(Password, ValidationError))
 	{
 		SetError(Login_ErrorText, ValidationError);
+		if (Login_PasswordInput) Login_PasswordInput->SetKeyboardFocus();
 		return;
 	}
 
@@ -287,16 +343,19 @@ void ULoginFlowWidget::HandleRegisterClicked()
 	if (!LoginFlowValidation::IsLoginValid(Username, ValidationError))
 	{
 		SetError(Register_ErrorText, ValidationError);
+		if (Register_UsernameInput) Register_UsernameInput->SetKeyboardFocus();
 		return;
 	}
 	if (!LoginFlowValidation::IsPasswordValid(Password, ValidationError))
 	{
 		SetError(Register_ErrorText, ValidationError);
+		if (Register_PasswordInput) Register_PasswordInput->SetKeyboardFocus();
 		return;
 	}
 	if (!LoginFlowValidation::IsEmailValid(Email, ValidationError))
 	{
 		SetError(Register_ErrorText, ValidationError);
+		if (Register_EmailInput) Register_EmailInput->SetKeyboardFocus();
 		return;
 	}
 
@@ -462,6 +521,7 @@ void ULoginFlowWidget::HandleCharCreateClicked()
 	if (!LoginFlowValidation::IsCharacterNameValid(CharName, ValidationError))
 	{
 		SetError(CharCreate_ErrorText, ValidationError);
+		if (CharCreate_NameInput) CharCreate_NameInput->SetKeyboardFocus();
 		return;
 	}
 
@@ -990,4 +1050,14 @@ void ULoginFlowWidget::UpdateCreatePreviewFromCombos()
 	{
 		PM->UpdateCreatePreview(ClassName, RaceName, GenderName);
 	}
+}
+
+void ULoginFlowWidget::HandleLoginTextCommitted(const FText& Text, ETextCommit::Type CommitMethod)
+{
+	if (CommitMethod == ETextCommit::OnEnter) HandleLoginClicked();
+}
+
+void ULoginFlowWidget::HandleRegisterTextCommitted(const FText& Text, ETextCommit::Type CommitMethod)
+{
+	if (CommitMethod == ETextCommit::OnEnter) HandleRegisterClicked();
 }

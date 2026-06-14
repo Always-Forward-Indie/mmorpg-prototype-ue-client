@@ -27,6 +27,7 @@
 #include "Gameplay/UI/DeathScreenWidget.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Vendor/VendorManager.h"
+#include "Framework/Application/SlateApplication.h"
 #include "Gameplay/Repair/RepairManager.h"
 #include "Gameplay/SkillShop/SkillShopManager.h"
 #include "Gameplay/Trade/TradeManager.h"
@@ -1042,6 +1043,59 @@ bool UUIManager::HasModalWindowOpen() const
 	// handle click-through: clicks on UI elements are consumed, clicks on
 	// transparent/empty areas pass through to the game world.
     return bDialogueVisible || bTradeVisible || bHarvestLootVisible;
+}
+
+bool UUIManager::HasCursorOverWindowContent() const
+{
+	const FVector2f MousePos = FSlateApplication::Get().GetCursorPos();
+
+	if (bInventoryVisible    && DoesWidgetTreeHaveHoveredChild(InventoryWidget,    MousePos)) return true;
+	if (bSkillsPanelVisible  && DoesWidgetTreeHaveHoveredChild(AvailableSkillsWidget, MousePos)) return true;
+	if (bHarvestLootVisible  && DoesWidgetTreeHaveHoveredChild(HarvestLootWidget,  MousePos)) return true;
+	if (bDialogueVisible     && DoesWidgetTreeHaveHoveredChild(DialogueWidget,     MousePos)) return true;
+	if (bQuestJournalVisible && DoesWidgetTreeHaveHoveredChild(QuestJournalWidget, MousePos)) return true;
+	if (bVendorShopVisible   && DoesWidgetTreeHaveHoveredChild(VendorShopWidget,   MousePos)) return true;
+	if (bRepairShopVisible   && DoesWidgetTreeHaveHoveredChild(RepairShopWidget,   MousePos)) return true;
+	if (bSkillShopVisible    && DoesWidgetTreeHaveHoveredChild(SkillShopWidget,    MousePos)) return true;
+	if (bTradeVisible        && DoesWidgetTreeHaveHoveredChild(TradeWidget,        MousePos)) return true;
+	if (bEquipmentVisible    && DoesWidgetTreeHaveHoveredChild(EquipmentWidget,    MousePos)) return true;
+	if (bPlayerStatsVisible  && DoesWidgetTreeHaveHoveredChild(PlayerStatsWidget,  MousePos)) return true;
+	if (bBestiaryVisible     && DoesWidgetTreeHaveHoveredChild(BestiaryWidget,     MousePos)) return true;
+	if (bTitlesVisible       && DoesWidgetTreeHaveHoveredChild(TitlesWidget,       MousePos)) return true;
+	if (bReputationVisible   && DoesWidgetTreeHaveHoveredChild(ReputationWidget,   MousePos)) return true;
+	if (bEmoteListVisible    && DoesWidgetTreeHaveHoveredChild(EmoteListWidget,    MousePos)) return true;
+	return false;
+}
+
+bool UUIManager::DoesWidgetTreeHaveHoveredChild(UWidget* Widget, const FVector2f& MousePos)
+{
+	if (!Widget || !Widget->IsVisible()) return false;
+
+	// Only EVisibility::Visible widgets can block — SelfHitTestInvisible pass through
+	if (Widget->GetVisibility() == ESlateVisibility::Visible &&
+		Widget->GetCachedGeometry().IsUnderLocation(FVector2D(MousePos)))
+		return true;
+
+	// Traverse into UUserWidget's widget tree (InventoryWidget, DialogueWidget, etc.)
+	if (UUserWidget* UserW = Cast<UUserWidget>(Widget))
+	{
+		if (UserW->WidgetTree && UserW->WidgetTree->RootWidget)
+		{
+			if (DoesWidgetTreeHaveHoveredChild(UserW->WidgetTree->RootWidget, MousePos))
+				return true;
+		}
+	}
+
+	// Traverse panel children (CanvasPanel, VerticalBox, etc.)
+	if (UPanelWidget* Panel = Cast<UPanelWidget>(Widget))
+	{
+		for (int32 i = 0; i < Panel->GetChildrenCount(); ++i)
+		{
+			if (DoesWidgetTreeHaveHoveredChild(Panel->GetChildAt(i), MousePos))
+				return true;
+		}
+	}
+	return false;
 }
 
 int32 UUIManager::GetActiveInteractionNpcId() const

@@ -97,6 +97,9 @@ private:
 	// Accumulates time since the last packet that contained actual displacement.
 	float RemoteIdleTime = 0.0f;
 
+	// True when the remote player is in the air (jumping/falling), driven by isFalling from server.
+	bool bRemoteIsInAir = false;
+
 	// When true, UpdateRemotePlayerMovement is skipped so CharacterPreviewManager
 	// can drive position and animation directly during character-select podium walks.
 	bool bPreviewMovementActive = false;
@@ -330,6 +333,12 @@ private:
 	UFUNCTION()
 	void OnAttackInput();
 
+	UFUNCTION()
+	void OnJumpPressed();
+
+	UFUNCTION()
+	void OnJumpReleased();
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -454,7 +463,7 @@ public:
 
 	// set player coordinates
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
-	void SetCoordinates(double x, double y, double z, double rotZ);
+	void SetCoordinates(double x, double y, double z, double rotZ, bool bIsFalling = false);
 
 	// set player class
 	UFUNCTION(BlueprintCallable, Category = "Player Data")
@@ -617,6 +626,21 @@ public:
 	FRotator TargetReceivedRotation;
 	float TimeSinceLastPositionUpdate = 0.0f;
 	float ServerPositionUpdateInterval = 0.1f; // server update interval (100 ms)
+
+	// Dead-reckoning velocity (world-space, Unreal units/sec).
+	// Recalculated from consecutive server positions every packet.
+	// Open-loop integration — drift is bounded by the update interval
+	// and reset by each incoming packet.
+	FVector RemoteVelocity = FVector::ZeroVector;
+
+	// Gap-correction strength (0-1).  Each packet adds Gap * (strength / interval)
+	// to the dead-reckoning velocity, closing actor→target lag in ~0.5 s
+	// entirely through speed adjustment — never via SetActorLocation jerking.
+	// Negative gap (jitter overshoot) lowers velocity, no back-step.
+	// Tune via Blueprint.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Configuration",
+		meta = (AllowPrivateAccess = "true"))
+	float PositionBlendStrength = 0.2f;
 
 	// True after the first real server position packet has been applied.
 	// Until then, UpdateRemotePlayerMovement does a hard snap instead of lerp
@@ -916,6 +940,9 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Data")
 	float GetRemoteDirection() const { return SmoothedRemoteDirection; }
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Data")
+	bool GetRemoteIsInAir() const { return bRemoteIsInAir; }
+
 	// ─── Character-select preview movement (CharacterPreviewManager use only) ────
 	/**
 	 * Engage preview-movement mode: suppresses UpdateRemotePlayerMovement so
@@ -1016,4 +1043,7 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* InteractAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* JumpAction;
 };

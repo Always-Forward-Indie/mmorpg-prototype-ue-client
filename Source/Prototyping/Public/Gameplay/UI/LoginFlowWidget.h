@@ -210,6 +210,8 @@ protected:
 	UFUNCTION() void HandleLogoutClicked();
 	UFUNCTION() void HandleCharCreateClicked();
 	UFUNCTION() void HandleCharCreateBackClicked();
+	UFUNCTION() void HandleLoginTextCommitted(const FText& Text, ETextCommit::Type CommitMethod);
+	UFUNCTION() void HandleRegisterTextCommitted(const FText& Text, ETextCommit::Type CommitMethod);
 	UFUNCTION() void HandleClassSelectionChanged(FString SelectedItem, ESelectInfo::Type SelectionType);
 	UFUNCTION() void HandleRaceSelectionChanged(FString SelectedItem, ESelectInfo::Type SelectionType);
 	UFUNCTION() void HandleGenderSelectionChanged(FString SelectedItem, ESelectInfo::Type SelectionType);
@@ -233,6 +235,7 @@ protected:
 
 protected:
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+	virtual FReply NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 private:
 	// ── Helpers ──────────────────────────────────────────────────────────────
@@ -293,6 +296,9 @@ private:
 
 	/** Left-mouse-down state from previous tick — used for click-to-select. */
 	bool bWasLeftMouseDown = false;
+
+	/** Enter-key-down state from previous tick — prevents repeated fires while held. */
+	bool bEnterWasDownLastTick = false;
 
 public:
 	// ── Data-driven error message table ──────────────────────────────────────

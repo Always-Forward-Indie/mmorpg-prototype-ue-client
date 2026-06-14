@@ -34,6 +34,9 @@ class PROTOTYPING_API UMOBManager : public UObject
 		// Check if event is combat-related
 		bool IsCombatEvent(const FString& EventType) const;
 
+		// Clears LockedTarget on every spawned player that has this mob selected
+		void ClearLockedTargetOnAllPlayers(ABasicMOB* Mob);
+
 	public:
 		UMOBManager(const FObjectInitializer& ObjectInitializer);
 		void Initialize(UNetworkManager* NetworkManager);

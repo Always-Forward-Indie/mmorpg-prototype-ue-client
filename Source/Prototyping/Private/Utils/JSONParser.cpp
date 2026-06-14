@@ -234,10 +234,13 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 	 if (CD->HasField(TEXT("attributes")))
 		 Character.characterAttributes.attributesData = JSONParser::DeserializeAttributesArray(CD->GetArrayField(TEXT("attributes")));
 
-	 CD->TryGetStringField(TEXT("equippedTitleSlug"), Character.equippedTitleSlug);
-	 CD->TryGetStringField(TEXT("equippedTitleDisplayName"), Character.equippedTitleDisplayName);
+	if (CD->HasField(TEXT("isFalling")))
+		Character.bIsFalling = CD->GetBoolField(TEXT("isFalling"));
 
-	 return Character;
+	CD->TryGetStringField(TEXT("equippedTitleSlug"), Character.equippedTitleSlug);
+	CD->TryGetStringField(TEXT("equippedTitleDisplayName"), Character.equippedTitleDisplayName);
+
+	return Character;
  }
 
  // Entry point for string-based JSON input

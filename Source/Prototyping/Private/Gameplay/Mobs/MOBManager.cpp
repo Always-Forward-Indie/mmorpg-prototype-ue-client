@@ -80,6 +80,20 @@ bool UMOBManager::IsCombatEvent(const FString& EventType) const
 		   EventType == TEXT("mobTargetLost"); // Add mobTargetLost as combat event
 }
 
+void UMOBManager::ClearLockedTargetOnAllPlayers(ABasicMOB* Mob)
+{
+	if (!gameInstance || !IsValid(Mob)) return;
+
+	for (TPair<int32, ABasicPlayer*>& Pair : gameInstance->SpawnedPlayers)
+	{
+		ABasicPlayer* Player = Pair.Value;
+		if (IsValid(Player) && Player->GetLockedTarget() == Mob)
+		{
+			Player->ClearLockedTarget();
+		}
+	}
+}
+
 // Process game server data
 void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 {
@@ -173,6 +187,8 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 		{
 			MOB->Die();
 		}
+
+		ClearLockedTargetOnAllPlayers(MOB);
 
 		MOB->Destroy();
 	}
@@ -373,6 +389,8 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 		{
 			UE_LOG(LogTemp, Log, TEXT("MOBManager: Removing corpse UID %d (%s)"), CorpseUID, *MOB->GetMobName());
 		}
+
+		ClearLockedTargetOnAllPlayers(MOB);
 
 		MOB->Destroy();
 		RemovedCorpseUIDs.Add(CorpseUID);

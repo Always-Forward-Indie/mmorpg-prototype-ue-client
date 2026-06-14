@@ -36,27 +36,29 @@ void UPlayerAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
     // zero because movement is driven by SetActorLocation() not CMC.
     // Use RemoteSpeed, which is derived from consecutive server position deltas.
     // For the local player CMC velocity is authoritative � use it directly.
-    if (Player->GetIsOtherClient())
-    {
-        Speed     = Player->GetRemoteSpeed();      // already EMA-smoothed in BasicPlayer
-        bIsMoving = Speed > 1.0f;
+	if (Player->GetIsOtherClient())
+	{
+		Speed     = Player->GetRemoteSpeed();      // already EMA-smoothed in BasicPlayer
+		bIsMoving = Speed > 1.0f;
+		bIsInAir  = Player->GetRemoteIsInAir();    // driven by isFalling from server
 
-        // Mirror CMC MaxWalkSpeed so the blend space normalisation works the same
-        // for remote players as for the local player.
-        const UCharacterMovementComponent* MoveComp = Player->GetCharacterMovement();
-        MaxSpeed = (MoveComp && MoveComp->MaxWalkSpeed > 0.0f) ? MoveComp->MaxWalkSpeed : MaxSpeed;
+		// Mirror CMC MaxWalkSpeed so the blend space normalisation works the same
+		// for remote players as for the local player.
+		const UCharacterMovementComponent* MoveComp = Player->GetCharacterMovement();
+		MaxSpeed = (MoveComp && MoveComp->MaxWalkSpeed > 0.0f) ? MoveComp->MaxWalkSpeed : MaxSpeed;
 
-        // Direction is EMA-smoothed in BasicPlayer::UpdateRemotePlayerMovement.
-        // We read it unconditionally � it keeps its last value during the speed
-        // fade-out so the blend-space doesn't snap to 0 while slowing down.
-        Direction = Player->GetRemoteDirection();
-    }
-    else
-    {
-        const UCharacterMovementComponent* MoveComp = Player->GetCharacterMovement();
-        Speed     = MoveComp ? MoveComp->Velocity.Size2D() : 0.0f;
-        bIsMoving = Speed > 1.0f;
-        MaxSpeed  = (MoveComp && MoveComp->MaxWalkSpeed > 0.0f) ? MoveComp->MaxWalkSpeed : MaxSpeed;
+		// Direction is EMA-smoothed in BasicPlayer::UpdateRemotePlayerMovement.
+		// We read it unconditionally — it keeps its last value during the speed
+		// fade-out so the blend-space doesn't snap to 0 while slowing down.
+		Direction = Player->GetRemoteDirection();
+	}
+	else
+	{
+		const UCharacterMovementComponent* MoveComp = Player->GetCharacterMovement();
+		Speed     = MoveComp ? MoveComp->Velocity.Size2D() : 0.0f;
+		bIsMoving = Speed > 1.0f;
+		bIsInAir  = MoveComp ? MoveComp->IsFalling() : false;
+		MaxSpeed  = (MoveComp && MoveComp->MaxWalkSpeed > 0.0f) ? MoveComp->MaxWalkSpeed : MaxSpeed;
 
         // Compute direction angle between actor forward and velocity vector.
         // 0 = forward, -90 = left, +90 = right, �180 = backward.

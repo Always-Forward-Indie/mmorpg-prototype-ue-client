@@ -456,7 +456,7 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 					// before movement is re-enabled by SetDead_Implementation(false).
 					RespawnPlayer->SetActorLocation(FVector(RX, RY, RZ), false, nullptr, ETeleportType::TeleportPhysics);
 					RespawnPlayer->SetActorRotation(FRotator(0.0, RRot, 0.0));
-					RespawnPlayer->SetCoordinates(RX, RY, RZ, RRot);
+					RespawnPlayer->SetCoordinates(RX, RY, RZ, RRot, false);
 				}
 
 				// Revive the player: restores movement mode, hides death screen,
@@ -659,6 +659,7 @@ void UPlayerManager::SendMovePlayerRequest(FClientDataStruct& ClientData)
 	BodyData.Add("posY", MakeShareable(new FJsonValueNumber(ClientData.characterData.characterPosition.positionY)));
 	BodyData.Add("posZ", MakeShareable(new FJsonValueNumber(ClientData.characterData.characterPosition.positionZ)));
 	BodyData.Add("rotZ", MakeShareable(new FJsonValueNumber(ClientData.characterData.characterPosition.rotationZ)));
+	BodyData.Add("isFalling", MakeShareable(new FJsonValueBoolean(ClientData.characterData.bIsFalling)));
 
 	UTimeSyncService* TimeSyncService = gameInstance ? gameInstance->GetTimeSyncService() : nullptr;
 

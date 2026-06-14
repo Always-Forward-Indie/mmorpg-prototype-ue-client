@@ -39,6 +39,7 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 
 	// Bind these in your Blueprint widget
 	UPROPERTY(meta = (BindWidgetOptional))

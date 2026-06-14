@@ -136,6 +136,11 @@ void UMyGameInstance::Init()
 {
 	Super::Init();
 
+	// Show the loading screen immediately so the default map (GameDefaultMap in
+	// DefaultEngine.ini) is never visible.  The widget lives at GameViewportClient
+	// level and survives subsequent OpenLevel calls.
+	AddLoadingScreen();
+
 	// set the network manager
 	NetworkManager = NewObject<UNetworkManager>(this);
 
@@ -808,6 +813,7 @@ void UMyGameInstance::LoadLoginLevel()
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("LoadLoginLevel: Opening %s via OpenLevel"), *LevelBeingLoaded.ToString());
+	// Fallback: ensure loading screen is up (no-op if already created in Init())
 	AddLoadingScreen();
 	UGameplayStatics::OpenLevel(GetWorld(), LevelBeingLoaded, true);
 	// PostLoadMapWithWorld → OnPostLoginLevelLoaded will handle initialization
@@ -862,7 +868,15 @@ void UMyGameInstance::ReturnToLoginLevel()
 	AddLoadingScreen();
 	bReturningToLogin = true;
 	LevelBeingLoaded = LoginLevelName;
-	UGameplayStatics::OpenLevel(GetWorld(), LoginLevelName, true);
+
+	// Defer OpenLevel by one tick so Slate composites the loading screen first.
+	FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateLambda([this](float) -> bool
+		{
+			UGameplayStatics::OpenLevel(GetWorld(), LoginLevelName, true);
+			return false;
+		}),
+		0.0f);
 }
 
 // Process-level counter: tracks how many PIE instances are currently inside
@@ -1114,7 +1128,15 @@ void UMyGameInstance::LoadLevel(const FName& LevelName)
 	LevelBeingLoaded = LevelName;
 	UE_LOG(LogTemp, Log, TEXT("LoadLevel: Opening %s via OpenLevel"), *LevelName.ToString());
 	AddLoadingScreen();
-	UGameplayStatics::OpenLevel(GetWorld(), LevelName, true);
+
+	// Defer OpenLevel by one tick so Slate composites the loading screen first.
+	FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateLambda([this, LevelName](float) -> bool
+		{
+			UGameplayStatics::OpenLevel(GetWorld(), LevelName, true);
+			return false;
+		}),
+		0.0f);
 }
 
 void UMyGameInstance::TransitionToGameWorld()
@@ -1214,7 +1236,15 @@ void UMyGameInstance::TransitionToGameWorld()
 	SpawnedPlayers.Empty();
 	Player = nullptr;
 
-	DoOpenLevel();
+	// Defer DoOpenLevel by one tick so Slate has a full frame to composite the
+	// loading screen before the world begins to tear down.
+	FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateLambda([this](float) -> bool
+		{
+			DoOpenLevel();
+			return false;
+		}),
+		0.0f);
 }
 
 void UMyGameInstance::DoOpenLevel()
@@ -2215,7 +2245,8 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 		PlayerData.characterData.characterPosition.positionX,
 		PlayerData.characterData.characterPosition.positionY,
 		PlayerData.characterData.characterPosition.positionZ,
-		PlayerData.characterData.characterPosition.rotationZ);
+		PlayerData.characterData.characterPosition.rotationZ,
+		PlayerData.characterData.bIsFalling);
 	NewPlayer->SetPlayerName(PlayerData.characterData.characterName);
 	NewPlayer->SetPlayerClass(PlayerData.characterData.characterClass);
 	NewPlayer->SetPlayerRace(PlayerData.characterData.characterRace);
@@ -2566,10 +2597,11 @@ void UMyGameInstance::MovePlayerForClient(const int32 ClientID, const FClientDat
 			FString CurrentTimestamp = MessageData.timestamp;
 
 			//set character coordinates
-			PlayerToMove->SetCoordinates(clientData.characterData.characterPosition.positionX,
-				clientData.characterData.characterPosition.positionY,
-				clientData.characterData.characterPosition.positionZ,
-				clientData.characterData.characterPosition.rotationZ);
+		PlayerToMove->SetCoordinates(clientData.characterData.characterPosition.positionX,
+			clientData.characterData.characterPosition.positionY,
+			clientData.characterData.characterPosition.positionZ,
+			clientData.characterData.characterPosition.rotationZ,
+			clientData.characterData.bIsFalling);
 
 			// Bug 10 fix: if the remote player is still marked dead but is now sending
 			// movement updates, they must have respawned on the server side.

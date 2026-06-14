@@ -292,6 +292,14 @@ public:
 	bool HasUIWindowOpen() const;
 
 	/**
+	 * Returns true when a UI window is open AND the cursor is hovering over
+	 * an interactable child widget (button, slot, input field, etc.).
+	 * Empty/transparent areas of windows (SelfHitTestInvisible) pass through.
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	bool HasCursorOverWindowContent() const;
+
+	/**
 	 * Returns true only when a modal window is open that should fully block world interaction
 	 * (dialogue, trade, harvest loot, game menu). Non-modal windows like inventory, stats,
 	 * skills, etc. do NOT block world interaction — UMG hit-testing handles click-through
@@ -737,4 +745,7 @@ private:
 	/** Live flash widget instance (created lazily). */
 	UPROPERTY()
 	UCombatScreenFlashWidget* CombatScreenFlashWidget = nullptr;
+
+	/** Recursively checks if any child of Widget is under MousePos and Visible. */
+	static bool DoesWidgetTreeHaveHoveredChild(UWidget* Widget, const FVector2f& MousePos);
 };

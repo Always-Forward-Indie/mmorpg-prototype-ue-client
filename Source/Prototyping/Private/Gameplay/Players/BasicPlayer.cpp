@@ -103,6 +103,18 @@ void ABasicPlayer::OnAttackInput()
     DoAutoAttack();
 }
 
+void ABasicPlayer::OnJumpPressed()
+{
+    if (playerData.characterData.bIsDead) return;
+    if (bIsCasting) return;
+    Jump();
+}
+
+void ABasicPlayer::OnJumpReleased()
+{
+    StopJumping();
+}
+
 void ABasicPlayer::SetLockedTarget(ABasicMOB* NewTarget)
 {
     if (LockedTarget == NewTarget) return;
@@ -437,7 +449,7 @@ void ABasicPlayer::UpdateApproach(float DeltaTime)
     }
 
     // Mob died while approaching — stop movement but keep lock for harvesting.
-    if (LockedTarget && LockedTarget->GetMOBIsDead())
+    if (IsValid(LockedTarget) && LockedTarget->GetMOBIsDead())
     {
         bIsApproachingTarget = false;
         PendingSkillSlug.Empty();
@@ -580,7 +592,7 @@ void ABasicPlayer::TryCastSkillWithApproach(const FString& SkillSlug)
     }
 
     // Mob-specific: dead mob handling
-    if (LockedTarget && LockedTarget->GetMOBIsDead())
+    if (IsValid(LockedTarget) && LockedTarget->GetMOBIsDead())
     {
         bIsAutoAttacking   = false; // stop approach but keep lock for harvesting.
         bIsAutoAttacking   = false;
@@ -1149,12 +1161,19 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
             EnhancedInputComponent->BindAction(EmoteListAction, ETriggerEvent::Started, this, &ABasicPlayer::OnEmoteListToggle);
         }
 
-        // Main game menu toggle (Escape)
-        if (GameMenuAction)
-        {
-            EnhancedInputComponent->BindAction(GameMenuAction, ETriggerEvent::Started, this, &ABasicPlayer::OnGameMenuToggle);
-        }
-    }
+		// Main game menu toggle (Escape)
+		if (GameMenuAction)
+		{
+			EnhancedInputComponent->BindAction(GameMenuAction, ETriggerEvent::Started, this, &ABasicPlayer::OnGameMenuToggle);
+		}
+
+		// Jump (Space)
+		if (JumpAction)
+		{
+			EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ABasicPlayer::OnJumpPressed);
+			EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ABasicPlayer::OnJumpReleased);
+		}
+	}
 }
 
 // Sets default values
@@ -1234,7 +1253,10 @@ ABasicPlayer::ABasicPlayer()
         CMC->MaxWalkSpeed = MoveSpeed;
         CMC->bOrientRotationToMovement = false;
         CMC->bUseControllerDesiredRotation = false;
+        CMC->JumpZVelocity = 420.0f;
+        CMC->AirControl = 0.35f;
     }
+    JumpMaxHoldTime = 0.2f;
 }
 
 // Called when the game starts or when spawned
@@ -1755,11 +1777,7 @@ FText ABasicPlayer::GetInteractableDisplayName() const
 
 bool ABasicPlayer::IsUIBlockingInteraction() const
 {
-	// World interaction is never blocked by open UI windows.
-	// UMG hit-testing handles click-through naturally: clicks on widgets are
-	// consumed by the widget, clicks on transparent/empty areas pass through
-	// to the game world. Set root panels to SelfHitTestInvisible in Blueprint.
-	return false;
+	return UIManager && UIManager->HasCursorOverWindowContent();
 }
 
 float ABasicPlayer::GetInteractionRange() const
@@ -2101,7 +2119,7 @@ void ABasicPlayer::Tick(float DeltaTime)
     CheckForNPC();
 
     // Keep the locked-target frame in sync every Tick
-    if (LockedTarget && UIManager && !playerData.isOtherClient)
+    if (IsValid(LockedTarget) && UIManager && !playerData.isOtherClient)
     {
         const int32 CurrentHP = LockedTarget->GetMOBCurrentHealth();
         const int32 MaxHP = LockedTarget->GetMOBAttributes().attributesData.Contains(TEXT("max_health"))
@@ -2187,8 +2205,11 @@ void ABasicPlayer::Look(const FInputActionValue& Value)
     // Only process mouse look when at least one mouse button is held (WoW-style)
     if (!bIsRightMouseDown && !bIsLeftMouseDown) return;
 
-    // Dead players cannot rotate вЂ” the corpse must stay still.
+    // Dead players cannot rotate — the corpse must stay still.
     if (playerData.characterData.bIsDead) return;
+
+    // Do not rotate the camera while the cursor is over a Visible UI element
+    if (IsUIBlockingInteraction()) return;
 
     if (Controller != nullptr)
     {
@@ -2445,13 +2466,14 @@ void ABasicPlayer::UpdateCurrentPlayerMovement(float DeltaTime)
             return;
         }
 
-        // Update player data with current state
-        playerData.characterData.characterPosition.positionX = currentLocation.X;
-        playerData.characterData.characterPosition.positionY = currentLocation.Y;
-        playerData.characterData.characterPosition.positionZ = currentLocation.Z;
+		// Update player data with current state
+		playerData.characterData.characterPosition.positionX = currentLocation.X;
+		playerData.characterData.characterPosition.positionY = currentLocation.Y;
+		playerData.characterData.characterPosition.positionZ = currentLocation.Z;
+		playerData.characterData.bIsFalling = GetCharacterMovement()->IsFalling();
 
-        // Send player movement to the game server
-        MyGameInstance->PlayerManager->SendMovePlayerRequest(playerData);
+		// Send player movement to the game server
+		MyGameInstance->PlayerManager->SendMovePlayerRequest(playerData);
 
         // Update the last sent position and rotation
         LastSentPosition = currentLocation;
@@ -2469,15 +2491,26 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     TimeSinceLastPositionUpdate += DeltaTime;
 
     // -----------------------------------------------------------------------
-    // 1. Position interpolation
-    //    Lerp from the position we were at when the packet arrived toward the
-    //    server-authoritative target over exactly one server tick window.
+    // 1. Position: dead reckoning (open-loop, no correction)
+    //    Velocity is recalculated every packet from consecutive server positions
+    //    and applied every tick.  Drift is bounded to one interval — the next
+    //    packet resets the velocity.  No correction means no back-step.
+    //    Velocity decays when the server stops sending displacement packets.
     // -----------------------------------------------------------------------
-    const float LerpWindow  = FMath::Max(ServerPositionUpdateInterval, 0.05f);
-    const float LerpFactor  = FMath::Clamp(TimeSinceLastPositionUpdate / LerpWindow, 0.f, 1.f);
-    const FVector NewPosition = FMath::Lerp(LastReceivedPosition, TargetReceivedPosition, LerpFactor);
+    const FVector EffectiveVel = bRemoteIsMoving ? RemoteVelocity
+        : FMath::VInterpTo(RemoteVelocity, FVector::ZeroVector, DeltaTime, 3.0f);
+    if (!bRemoteIsMoving)
+    {
+        RemoteVelocity = EffectiveVel;
+    }
 
-    const float DistToTarget = FVector::Dist(GetActorLocation(), TargetReceivedPosition);
+    const FVector CurrentPos   = GetActorLocation();
+    FVector NewPosition        = CurrentPos + EffectiveVel * DeltaTime;
+    // XY is dead reckoning; Z is interpolated toward the server height
+    // so the actor steps onto rocks/stairs naturally.
+    NewPosition.Z = FMath::FInterpTo(CurrentPos.Z, TargetReceivedPosition.Z, DeltaTime, 12.0f);
+
+    const float DistToTarget = FVector::Dist(CurrentPos, TargetReceivedPosition);
 
     if (DistToTarget > 1000.f)
     {
@@ -2491,50 +2524,50 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
 
     // -----------------------------------------------------------------------
     // 2. Rotation interpolation
-    //    Linear lerp with the same LerpFactor as position gives constant
-    //    angular velocity that is synchronized with movement. RInterpTo
-    //    (exponential) caused visible jerking on sharp turns: the first
-    //    frame after a new packet had a huge angular step that immediately
-    //    decelerated, looking non-uniform. FindDeltaAngleDegrees handles
-    //    the +-180 degree wrap-around correctly.
+    //    Linear lerp over the server update interval so angular velocity is
+    //    synchronized with movement.  FindDeltaAngleDegrees handles
+    //    the ±180° wrap-around correctly.
     // -----------------------------------------------------------------------
     {
+        const float RotWindow  = FMath::Max(ServerPositionUpdateInterval, 0.05f);
+        const float RotFactor  = FMath::Clamp(TimeSinceLastPositionUpdate / RotWindow, 0.f, 1.f);
         const float RotDeltaYaw = FMath::FindDeltaAngleDegrees(
             LastReceivedRotation.Yaw, TargetReceivedRotation.Yaw);
         const float LerpedYaw = FMath::UnwindDegrees(
-            LastReceivedRotation.Yaw + RotDeltaYaw * LerpFactor);
+            LastReceivedRotation.Yaw + RotDeltaYaw * RotFactor);
         SetActorRotation(FRotator(0.f, LerpedYaw, 0.f));
     }
 
     // -----------------------------------------------------------------------
-    // 3. Animation speed / direction вЂ” EMA smoothing + graceful stop fade-out
+    // 3. Animation speed / direction — EMA smoothing + graceful stop fade-out
     //
     //    Problems solved:
-    //      a) Raw RemoteSpeed jumps instantly from 0 в†’ full on first packet
-    //         and stays at full until the 3x timeout в†’ causes abrupt start/stop.
-    //      b) RemoteDirection flips instantly between packets в†’ blend-space pops.
+    //      a) Raw RemoteSpeed jumps instantly from 0 → full on first packet
+    //         and stays at full until the 3× timeout → causes abrupt start/stop.
+    //      b) RemoteDirection flips instantly between packets → blend-space pops.
     //
     //    Solution:
-    //      вЂў Track idle time so we know when the server has stopped sending
+    //      • Track idle time so we know when the server has stopped sending
     //        meaningful displacement packets.
-    //      вЂў EMA-smooth speed toward the raw target value each tick.
-    //      вЂў When idle, fade SmoothedRemoteSpeed to 0 with a short decay so the
-    //        walkв†’idle transition in the anim graph is driven by a curve, not
+    //      • EMA-smooth speed toward the raw target value each tick.
+    //      • When idle, fade SmoothedRemoteSpeed to 0 with a short decay so the
+    //        walk→idle transition in the anim graph is driven by a curve, not
     //        a hard zero.
-    //      вЂў Direction is smoothed similarly so the blend-space never pops.
+    //      • Direction is smoothed similarly so the blend-space never pops.
     // -----------------------------------------------------------------------
 
-    // Grace period: one full server interval beyond the lerp window before we
+    // Grace period: one full server interval beyond the update window before we
     // consider the player idle.  This absorbs normal delivery jitter (~10-20 ms)
     // without introducing visible lag.
-    const float GracePeriod = LerpWindow * 1.5f;
+    const float GraceWindow = FMath::Max(ServerPositionUpdateInterval, 0.05f);
+    const float GracePeriod = GraceWindow * 1.5f;
 
     if (bRemoteIsMoving)
     {
         RemoteIdleTime += DeltaTime;
         if (RemoteIdleTime >= GracePeriod)
         {
-            // No displacement in the last packet вЂ” begin fade-out.
+            // No displacement in the last packet — begin fade-out.
             bRemoteIsMoving = false;
         }
     }
@@ -2545,7 +2578,7 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     // EMA speeds: fast blend-in (0.2 weight on new) for startup,
     // slow blend-out (0.05 weight on new target=0) for graceful stop.
     // At 60 fps the fast path reaches ~98% of full speed in ~3 packets (~300 ms).
-    // The slow path decays to near-zero in ~20 frames (~330 ms) вЂ” smooth fade.
+    // The slow path decays to near-zero in ~20 frames (~330 ms) — smooth fade.
     const float BlendIn  = FMath::Clamp(DeltaTime / 0.08f, 0.0f, 1.0f);  // ~80 ms rise
     const float BlendOut = FMath::Clamp(DeltaTime / 0.22f, 0.0f, 1.0f);  // ~220 ms fall
     const float SpeedAlpha = (TargetSpeed > SmoothedRemoteSpeed) ? BlendIn : BlendOut;
@@ -2622,6 +2655,7 @@ void ABasicPlayer::FinishPreviewMovement(const FVector& FinalPos, const FRotator
     TargetReceivedRotation      = FinalRot;
     bHasReceivedFirstPosition   = true;
     TimeSinceLastPositionUpdate = 0.f;
+    RemoteVelocity              = FVector::ZeroVector;
     RemoteSpeed                 = 0.f;
     SmoothedRemoteSpeed         = 0.f;
     RemoteDirection             = 0.f;
@@ -2891,12 +2925,17 @@ void ABasicPlayer::SetPlayerAttributes(TMap<FString, FAttributeDataStruct> Attri
 }
 
 // set player coordinates
-void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
+void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ, bool bIsFalling)
 {
     playerData.characterData.characterPosition.positionX = x;
     playerData.characterData.characterPosition.positionY = y;
     playerData.characterData.characterPosition.positionZ = z;
     playerData.characterData.characterPosition.rotationZ = rotZ;
+
+    if (playerData.isOtherClient)
+    {
+        bRemoteIsInAir = bIsFalling;
+    }
 
     const FVector NewTarget(x, y, z);
 
@@ -2936,12 +2975,14 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
             // Exponential moving average: 80% old value, 20% new measurement
             ServerPositionUpdateInterval = ServerPositionUpdateInterval * 0.8f + MeasuredInterval * 0.2f;
         }
-    }    // Estimate 2D speed and direction from the XY displacement between consecutive positions.
-    // RemoteSpeed / RemoteDirection are the raw instantaneous values.
-    // Smoothing is applied every Tick inside UpdateRemotePlayerMovement.
+    }    // Estimate 2D speed / direction and 3D dead-reckoning velocity from
+    // consecutive server positions.  RemoteSpeed / RemoteDirection are raw
+    // instantaneous values for animation; RemoteVelocity is applied every tick
+    // via open-loop integration.  Smoothing runs in UpdateRemotePlayerMovement.
     if (playerData.isOtherClient && ServerPositionUpdateInterval > 0.0f)
     {
-        const float Dist2D = FVector::Dist2D(TargetReceivedPosition, NewTarget);
+        const FVector Delta3D = NewTarget - TargetReceivedPosition;
+        const float   Dist2D  = Delta3D.Size2D();
 
         // Large displacement (> 500 cm) almost certainly means a server-side teleport
         // (e.g. respawn, warp).  Hard-snap the actor and zero out all animation-speed
@@ -2956,6 +2997,7 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
             TargetReceivedPosition     = NewTarget;
             LastReceivedRotation       = FRotator(0.0, rotZ, 0.0);
             TargetReceivedRotation     = FRotator(0.0, rotZ, 0.0);
+            RemoteVelocity             = FVector::ZeroVector;
             RemoteSpeed                = 0.0f;
             SmoothedRemoteSpeed        = 0.0f;
             RemoteDirection            = 0.0f;
@@ -2965,6 +3007,18 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
             return;
         }
 
+        const FVector ServerVel = Delta3D / ServerPositionUpdateInterval;
+        const FVector Gap       = TargetReceivedPosition - GetActorLocation();
+        FVector GapCorrection   = Gap * (PositionBlendStrength / ServerPositionUpdateInterval);
+        // Cap correction to BlendStrength fraction of base speed so gap-correction
+        // never dominates — prevents forward/backward oscillation on micro-steps.
+        const float MaxCorr = ServerVel.Size() * PositionBlendStrength;
+        if (GapCorrection.SizeSquared() > MaxCorr * MaxCorr)
+        {
+            GapCorrection = GapCorrection.GetClampedToMaxSize(MaxCorr);
+        }
+        RemoteVelocity = ServerVel + GapCorrection;
+        RemoteVelocity.Z = 0.0f;
         RemoteSpeed = Dist2D / ServerPositionUpdateInterval;
 
         if (Dist2D > 1.0f)
@@ -2972,8 +3026,7 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
             bRemoteIsMoving = true;
             RemoteIdleTime  = 0.0f;
 
-            const FVector Delta2D = FVector(NewTarget.X - TargetReceivedPosition.X,
-                                            NewTarget.Y - TargetReceivedPosition.Y, 0.0f).GetSafeNormal();
+            const FVector Delta2D = FVector(Delta3D.X, Delta3D.Y, 0.0f).GetSafeNormal();
 
             // Use TargetReceivedRotation (server-authoritative facing) instead of
             // GetActorForwardVector(). The actor rotation is still mid-interpolation
@@ -2988,22 +3041,17 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ)
         }
         else
         {
-            // Packet arrived but player hasn't moved вЂ” treat as idle.
+            RemoteVelocity  = FVector::ZeroVector;
             RemoteSpeed     = 0.0f;
             RemoteDirection = 0.0f;
         }
     }
 
-// Choose lerp start-point based on how complete the previous lerp was.
-	// >= 90% done (steady-state movement): use TargetReceivedPosition for a clean
-	//   hand-off — avoids stutter when consecutive packets arrive quickly.
-	// <  90% done (first packet after long idle, or burst): use GetActorLocation()
-	//   so we don't snap the start point past where the actor currently is,
-	//   which would cause a visible forward jerk at the start of movement.
-	const float LerpProgress = (ServerPositionUpdateInterval > 0.001f)
-		? FMath::Clamp(TimeSinceLastPositionUpdate / ServerPositionUpdateInterval, 0.0f, 1.0f)
-		: 1.0f;
-	LastReceivedPosition = (LerpProgress >= 0.9f) ? TargetReceivedPosition : GetActorLocation();
+    // Update the server-authoritative target.  Dead reckoning applies the
+    // gap-corrected velocity every tick; the gap term in RemoteVelocity above
+    // closes the one-interval lag in ~0.5 s without per-frame SetActorLocation
+    // jerking.  Gap can be negative (overshoot from jitter) — velocity slightly
+    // decreases, actor slows down, no back-step.
     TargetReceivedPosition = NewTarget;
 
     LastReceivedRotation = GetActorRotation();
@@ -3422,7 +3470,7 @@ void ABasicPlayer::CheckForMOB()
     // Stop attacking dead mob but keep the lock for harvesting.
     // Do NOT clear the target — other paths (DoAutoAttack, UpdateApproach,
     // TryCastSkillWithApproach) also preserve it for this purpose.
-    if (LockedTarget && LockedTarget->GetMOBIsDead())
+    if (IsValid(LockedTarget) && LockedTarget->GetMOBIsDead())
     {
         StopAutoAttack();
         if (CursorInteractionComponent)
@@ -4345,7 +4393,7 @@ void ABasicPlayer::ApplyVisualFromDataTable(UDataTable* VisualTable)
 						float CapsuleRadius = FMath::Max(BoxExtent.X, BoxExtent.Y);
 						float CapsuleHalfHeight = BoxExtent.Z;
 
-						Capsule->SetCapsuleRadius(CapsuleRadius);
+						Capsule->SetCapsuleRadius(CapsuleRadius/2);
 						Capsule->SetCapsuleHalfHeight(CapsuleHalfHeight);
 
 						float MeshBottom = MeshOrigin.Z - BoxExtent.Z;

@@ -61,4 +61,7 @@ private:
 
     int32 LocalCharacterId = 0;
     bool  bIsSubscribed    = false;
+
+    double LastEmoteSendTime = 0.0;
+    static constexpr double EmoteCooldownSeconds = 2.0;
 };

@@ -42,6 +42,10 @@ void UEmoteNetworkHandler::RequestUseEmote(const FString& EmoteSlug)
 {
     if (!NetworkManager || !GameInstance || EmoteSlug.IsEmpty()) return;
 
+    const double Now = FPlatformTime::Seconds();
+    if (Now - LastEmoteSendTime < EmoteCooldownSeconds) return;
+    LastEmoteSendTime = Now;
+
     TMap<FString, TSharedPtr<FJsonValue>> HeaderData;
     TMap<FString, TSharedPtr<FJsonValue>> BodyData;
 

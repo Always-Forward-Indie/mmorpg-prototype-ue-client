@@ -32,6 +32,7 @@ void UDropQuantityPopupWidget::ShowForItem(const FInventoryItemStruct& InItem)
 		QuantityInput->SetText(FText::AsNumber(MaxQuantity));
 	}
 
+	SetAnchorsInViewport(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
 	SetVisibility(ESlateVisibility::Visible);
 
 	if (QuantityInput)
@@ -63,4 +64,10 @@ void UDropQuantityPopupWidget::OnCancelClicked()
 {
 	HidePopup();
 	OnDropQuantityCancelled.Broadcast();
+}
+
+FReply UDropQuantityPopupWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	OnCancelClicked();
+	return FReply::Handled();
 }

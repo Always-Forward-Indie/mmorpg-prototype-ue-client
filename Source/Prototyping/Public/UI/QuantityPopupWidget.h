@@ -27,7 +27,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE          (FOnQuantityCancelled);
  *   IncreaseButton    UButton
  *   MaxButton         UButton         (BindWidgetOptional)
  *   ConfirmButton     UButton
- *   RemoveButton      UButton         (BindWidgetOptional) — shown only in update mode
+ *   RemoveButton      UButton         (BindWidgetOptional) ï¿½ shown only in update mode
  *   CancelButton      UButton
  */
 UCLASS(Abstract, BlueprintType, Blueprintable)
@@ -41,7 +41,7 @@ public:
     void OpenForAdd(int32 InSlotIndex, const FString& InName, int32 InPricePerUnit,
                     int32 InMaxQuantity, int32 InInitialQuantity = 1);
 
-    // Open in "update cart entry" mode — shows Remove button
+    // Open in "update cart entry" mode ï¿½ shows Remove button
     UFUNCTION(BlueprintCallable, Category = "Quantity Popup")
     void OpenForUpdate(int32 InSlotIndex, const FString& InName, int32 InPricePerUnit,
                        int32 InMaxQuantity, int32 InCurrentQuantity);
@@ -53,7 +53,7 @@ public:
     // Events
     // -----------------------------------------------------------------------
 
-    // Fired when Confirm is clicked — carries SlotIndex + chosen quantity
+    // Fired when Confirm is clicked ï¿½ carries SlotIndex + chosen quantity
     UPROPERTY(BlueprintAssignable, Category = "Quantity Popup Events")
     FOnQuantityConfirmed OnQuantityConfirmed;
 
@@ -67,6 +67,7 @@ public:
 
 protected:
     virtual void NativeConstruct() override;
+    virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
     UTextBlock* ItemNameText = nullptr;

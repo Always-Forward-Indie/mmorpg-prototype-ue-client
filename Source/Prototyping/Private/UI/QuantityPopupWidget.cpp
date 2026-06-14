@@ -38,6 +38,7 @@ void UQuantityPopupWidget::OpenForAdd(int32 InSlotIndex, const FString& InName,
         RemoveButton->SetVisibility(ESlateVisibility::Collapsed);
 
     SetQuantity(FMath::Clamp(InInitialQuantity, 1, MaxQuantity));
+    SetAnchorsInViewport(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
     SetVisibility(ESlateVisibility::Visible);
 }
 
@@ -60,6 +61,7 @@ void UQuantityPopupWidget::OpenForUpdate(int32 InSlotIndex, const FString& InNam
         RemoveButton->SetVisibility(ESlateVisibility::Visible);
 
     SetQuantity(FMath::Clamp(InCurrentQuantity, 1, MaxQuantity));
+    SetAnchorsInViewport(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
     SetVisibility(ESlateVisibility::Visible);
 }
 
@@ -142,4 +144,10 @@ void UQuantityPopupWidget::HandleQuantityTextCommitted(const FText& Text, ETextC
         const int32 Parsed = FCString::Atoi(*Text.ToString());
         SetQuantity(Parsed);
     }
+}
+
+FReply UQuantityPopupWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+    HandleCancel();
+    return FReply::Handled();
 }

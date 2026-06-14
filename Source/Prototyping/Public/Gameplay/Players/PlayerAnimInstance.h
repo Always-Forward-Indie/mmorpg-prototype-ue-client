@@ -61,8 +61,11 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Player|Movement")
     float Direction = 0.0f;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Player|Movement")
-    bool bIsMoving = false;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Player|Movement")
+	bool bIsMoving = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Player|Movement")
+	bool bIsInAir = false;
 
     //////////////////////////////////////////////////////////////////////////
     // Combat state

@@ -86,3 +86,4 @@ chunk_debug.txt
 *.xcworkspace
 Platforms
 Prototyping 5.3.code-workspace
+server_config.json

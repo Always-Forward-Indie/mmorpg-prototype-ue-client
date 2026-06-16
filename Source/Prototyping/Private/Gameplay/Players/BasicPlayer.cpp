@@ -1777,7 +1777,7 @@ FText ABasicPlayer::GetInteractableDisplayName() const
 
 bool ABasicPlayer::IsUIBlockingInteraction() const
 {
-	return UIManager && UIManager->HasCursorOverWindowContent();
+	return UIManager && IsValid(UIManager) && UIManager->HasCursorOverWindowContent();
 }
 
 float ABasicPlayer::GetInteractionRange() const

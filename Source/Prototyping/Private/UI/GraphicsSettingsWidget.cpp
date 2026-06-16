@@ -1,6 +1,8 @@
 #include "UI/GraphicsSettingsWidget.h"
 #include "GameFramework/GameUserSettings.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "PCGComponent.h"
+#include "EngineUtils.h"
 
 static const TArray<TPair<FString, EWindowMode::Type>> WindowModeOptions = {
 	{ TEXT("Fullscreen"),         EWindowMode::Fullscreen },
@@ -225,6 +227,28 @@ void UGraphicsSettingsWidget::ApplySettings()
 
 	Settings->ApplySettings(false);
 	Settings->SaveSettings();
+
+	if (UWorld* World = GetWorld())
+	{
+		TWeakObjectPtr<UWorld> WeakWorld(World);
+		FTimerHandle PCGRefreshHandle;
+		World->GetTimerManager().SetTimer(PCGRefreshHandle, [WeakWorld]()
+		{
+			if (!WeakWorld.IsValid()) return;
+			for (TActorIterator<AActor> It(WeakWorld.Get()); It; ++It)
+			{
+				TArray<UPCGComponent*> PCGComps;
+				It->GetComponents<UPCGComponent>(PCGComps);
+				for (UPCGComponent* PCGComp : PCGComps)
+				{
+					if (IsValid(PCGComp))
+					{
+						PCGComp->GenerateLocal(EPCGComponentGenerationTrigger::GenerateAtRuntime, true);
+					}
+				}
+			}
+		}, 0.15f, false);
+	}
 
 	PendingWindowMode = SelectedMode;
 	PendingQuality    = SelectedQual;

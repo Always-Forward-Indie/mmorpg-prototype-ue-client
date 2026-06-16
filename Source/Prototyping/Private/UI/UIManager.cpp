@@ -1047,6 +1047,15 @@ bool UUIManager::HasModalWindowOpen() const
 
 bool UUIManager::HasCursorOverWindowContent() const
 {
+	if (!bInventoryVisible    && !bSkillsPanelVisible && !bHarvestLootVisible &&
+		!bDialogueVisible     && !bQuestJournalVisible && !bVendorShopVisible  &&
+		!bRepairShopVisible   && !bSkillShopVisible    && !bTradeVisible       &&
+		!bEquipmentVisible    && !bPlayerStatsVisible  && !bBestiaryVisible    &&
+		!bTitlesVisible       && !bReputationVisible   && !bEmoteListVisible)
+		return false;
+
+	if (!FSlateApplication::IsInitialized()) return false;
+
 	const FVector2f MousePos = FSlateApplication::Get().GetCursorPos();
 
 	if (bInventoryVisible    && DoesWidgetTreeHaveHoveredChild(InventoryWidget,    MousePos)) return true;

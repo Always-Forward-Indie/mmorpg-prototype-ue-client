@@ -127,3 +127,23 @@ QuantityPopupWidget and DropQuantityPopupWidget: click-outside-closes behavior v
 Capsule size fix: SetCapsuleRadius now uses BoxExtent/2 instead of full BoxExtent.
 GameDefaultMap changed to /Game/Maps/MainGameContainerLevel. Added server_config.json to .gitignore.
 PCG grass assets pruned (LGT_Grass1_Runtime, LGT_Grass_Runtime deleted; PCG_Grass rebuilt). World map cell data updated.
+
+===========
+
+v0.0.9a
+16.06.2026
+===========
+
+2026-06-16
+----------
+Refactored loading screen system: replaced GameViewportClient widget approach with MoviePlayer-based loading screen that survives CleanupWorld/OpenLevel without black frames or flickering.
+Fixed login UI flashing during game world transition by guarding OnPostLoginLevelLoaded with bTransitioningToGameWorld check.
+Added texture streaming gate (Gate 5) to game world readiness checks to prevent mip pop-in.
+Improved loading screen safety timer: now only removes loading screen if world is actually ready.
+Optimized HasCursorOverWindowContent() with early return when no UI windows are open; added SlateApplication validity guard.
+Added IsValid() guard on UIManager in BasicPlayer::IsUIBlockingInteraction().
+Added PCG component auto-regeneration on graphics settings apply to update grass/landscape at new quality.
+Added PCG, MoviePlayer, RenderCore module dependencies to Build.cs.
+Updated server IPs in server_config.json.
+
+===========

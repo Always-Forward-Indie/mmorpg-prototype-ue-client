@@ -24,6 +24,7 @@
 #include "Engine/GameInstance.h"
 #include "EngineUtils.h" 
 #include "Widgets/SWeakWidget.h"
+#include "MoviePlayer.h"
 
 #include "Gameplay/Players/MyCameraActor.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -136,7 +137,7 @@ FDateTime ReceiveTimeLoginServer;
 	// In packaged builds give the renderer more frames to finish PSO warm-up and
 	// flush texture streaming before uncovering the scene. 3 frames is fine in PIE.
 #if WITH_EDITOR
-	static constexpr int32 MinRenderedFramesBeforeHide = 3;
+	static constexpr int32 MinRenderedFramesBeforeHide = 12;
 #else
 	static constexpr int32 MinRenderedFramesBeforeHide = 15;
 #endif
@@ -691,9 +692,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void HideLoginSettings();
 
-	void AddLoadingScreen();
-
 	void RemoveLoadingScreen();
+
+	// Sets up the loading screen via MoviePlayer so it survives world
+	// teardown during OpenLevel.  Must be called BEFORE OpenLevel.
+	// The widget is shown automatically by MoviePlayer during level load
+	// and stays visible until RemoveLoadingScreen() calls Stop().
+	void SetupMoviePlayerLoadingScreen();
+
+	// Used in Init() before the first level transition — adds the widget
+	// directly to the viewport since MoviePlayer only shows during OpenLevel.
+	void ShowInitialLoadingScreen();
 
 	// Starts loading screen background music that persists across ServerTravel.
 	void StartLoadingScreenMusic();
@@ -721,6 +730,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<UUserWidget> LoadingScreenWidgetClass;
 
+	// UMG widget backing the loading screen.  Passed to MoviePlayer via
+	// TakeWidget() so its Slate representation survives world teardown.
 	UPROPERTY()
 	UUserWidget* LoadingScreenWidget;
 
@@ -979,10 +990,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Debug")
 	bool bDebug;
 
-	// Slate handle used to keep the loading-screen widget in the viewport
-	// overlay via UGameViewportClient::AddViewportWidgetContent().
-	// This survives level transitions (OpenLevel) since it is world-independent.
-	TSharedPtr<SWidget> LoadingScreenSlateWidget;
+
 
 	// Audio component for loading screen music.
 	// Owned by the GameInstance so it survives world travel (unlike actors).

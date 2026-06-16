@@ -136,10 +136,10 @@ void UMyGameInstance::Init()
 {
 	Super::Init();
 
-	// Show the loading screen immediately so the default map (GameDefaultMap in
-	// DefaultEngine.ini) is never visible.  The widget lives at GameViewportClient
-	// level and survives subsequent OpenLevel calls.
-	AddLoadingScreen();
+	// Show the loading screen immediately.  MoviePlayer takes over on the
+	// first level transition (LoadLoginLevel) and survives all subsequent
+	// CleanupWorld / OpenLevel calls.
+	ShowInitialLoadingScreen();
 
 	// set the network manager
 	NetworkManager = NewObject<UNetworkManager>(this);
@@ -813,8 +813,8 @@ void UMyGameInstance::LoadLoginLevel()
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("LoadLoginLevel: Opening %s via OpenLevel"), *LevelBeingLoaded.ToString());
-	// Fallback: ensure loading screen is up (no-op if already created in Init())
-	AddLoadingScreen();
+	// Setup MoviePlayer loading screen before OpenLevel — widget survives CleanupWorld.
+	SetupMoviePlayerLoadingScreen();
 	UGameplayStatics::OpenLevel(GetWorld(), LevelBeingLoaded, true);
 	// PostLoadMapWithWorld → OnPostLoginLevelLoaded will handle initialization
 }
@@ -861,11 +861,9 @@ void UMyGameInstance::ReturnToLoginLevel()
 	SpawnedPlayers.Empty();
 	Player = nullptr;
 
-	// 4. Return to login level via OpenLevel.  PostLoadMapWithWorld fires
-	//    OnPostLoginLevelLoaded which restores world contexts and reconnects.
-	//    AddLoadingScreen() is world-independent (GameViewportClient content)
-	//    and survives the level transition — no black screen between worlds.
-	AddLoadingScreen();
+	// 4. Return to login level via OpenLevel.
+	//    MoviePlayer widget survives CleanupWorld → no black screen between worlds.
+	SetupMoviePlayerLoadingScreen();
 	bReturningToLogin = true;
 	LevelBeingLoaded = LoginLevelName;
 
@@ -1127,7 +1125,7 @@ void UMyGameInstance::LoadLevel(const FName& LevelName)
 {
 	LevelBeingLoaded = LevelName;
 	UE_LOG(LogTemp, Log, TEXT("LoadLevel: Opening %s via OpenLevel"), *LevelName.ToString());
-	AddLoadingScreen();
+	SetupMoviePlayerLoadingScreen();
 
 	// Defer OpenLevel by one tick so Slate composites the loading screen first.
 	FTSTicker::GetCoreTicker().AddTicker(
@@ -1218,9 +1216,8 @@ void UMyGameInstance::TransitionToGameWorld()
 	}
 
 	// Show the loading screen before the transition.
-	// AddLoadingScreen uses GameViewportClient::AddViewportWidgetContent,
-	// which is world-independent and survives level transitions (OpenLevel).
-	AddLoadingScreen();
+	// MoviePlayer widget survives CleanupWorld → no black/skybox gap.
+	SetupMoviePlayerLoadingScreen();
 
 	// Also clear the monitor stats widget as it will be recreated later
 	if (MonitorStatsWidget)
@@ -1286,18 +1283,10 @@ void UMyGameInstance::DoOpenLevel()
 	}
 
 	UGameplayStatics::OpenLevel(CurrentWorld, FName(*TravelPath), true);
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 1. OpenLevel('%s') called — ticker polling every 200ms"), *TravelPath);
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 1. OpenLevel('%s') called"), *TravelPath);
 
-	// Poll for the new world to become ready via a core ticker that survives
-	// the current world's TimerManager being torn down by OpenLevel.
-	FTSTicker::GetCoreTicker().AddTicker(
-		FTickerDelegate::CreateLambda([this](float DeltaTime) -> bool
-		{
-			CheckGameWorldReady();
-			return !bGameWorldReady;
-		}),
-		0.2f
-	);
+	// Ticker is started in OnPostLoginLevelLoaded after the new world is
+	// loaded — prevents the ticker from firing on the old world mid-transition.
 }
 
 // PostLoadMapWithWorld handler — fires after every OpenLevel completes.
@@ -1312,6 +1301,16 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 	// ---- Login Level ----
 	if (LevelBeingLoaded == LoginLevelName)
 	{
+		// Guard: if we're in the middle of transitioning to game world, do NOT
+		// add login widgets.  This prevents login UI from flashing on top of
+		// the game world loading screen when PostLoadMapWithWorld fires for an
+		// unexpected intermediate map.
+		if (bTransitioningToGameWorld)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("OnPostLoginLevelLoaded: LoginLevel match but bTransitioningToGameWorld=true — skipping login UI"));
+			return;
+		}
+
 		AddLoginWidgetToViewport();
 		AddMonitorStatsWidgetToViewport();
 
@@ -1558,8 +1557,34 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 		}
 	}
 
-	// WorldMapV1 / game world — handled by CheckGameWorldReady polling ticker.
-	// Do nothing here to avoid double-initializing.
+	// WorldMapV1 / game world — MoviePlayer loading screen was started in
+	// TransitionToGameWorld() before OpenLevel.  MoviePlayer keeps the widget
+	// alive across CleanupWorld — just verify it's still playing and start
+	// polling for game-world readiness.
+	if (bTransitioningToGameWorld)
+	{
+		IGameMoviePlayer* MoviePlayer = GetMoviePlayer();
+		if (!MoviePlayer || !MoviePlayer->IsMovieCurrentlyPlaying())
+		{
+			UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] CRITICAL: loading screen lost after level transition — reconfiguring MoviePlayer"));
+			SetupMoviePlayerLoadingScreen();
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Loading screen survived level transition (MoviePlayer)"));
+		}
+
+		bGameWorldReady = false;
+		CheckGameWorldReady();    // first check immediately
+
+		FTSTicker::GetCoreTicker().AddTicker(
+			FTickerDelegate::CreateLambda([this](float) -> bool
+			{
+				CheckGameWorldReady();
+				return !bGameWorldReady;
+			}),
+			0.033f);
+	}
 }
 
 void UMyGameInstance::CheckGameWorldReady()
@@ -1567,12 +1592,20 @@ void UMyGameInstance::CheckGameWorldReady()
 	UWorld* NewWorld = GetWorld();
 	if (!NewWorld) { return; }
 
-	// Loading screen lives at Slate/GameViewportClient level — it survives
-	// ServerTravel.  No re-creation needed; just verify it is still there.
-	if (!LoadingScreenWidget)
+	// Loading screen lives in MoviePlayer — it survives ServerTravel.
+	// Just verify it is still playing.
+	if (IGameMoviePlayer* MoviePlayer = GetMoviePlayer())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] CheckGameWorldReady: no loading screen widget — re-creating via AddLoadingScreen"));
-		AddLoadingScreen();
+		if (!MoviePlayer->IsMovieCurrentlyPlaying())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] CheckGameWorldReady: MoviePlayer not playing — reconfiguring"));
+			SetupMoviePlayerLoadingScreen();
+		}
+	}
+	else if (!LoadingScreenWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] CheckGameWorldReady: no loading screen widget — re-creating via SetupMoviePlayerLoadingScreen"));
+		SetupMoviePlayerLoadingScreen();
 	}
 
 	// Gate 1: PlayerController must exist before we can do anything.
@@ -1605,14 +1638,28 @@ void UMyGameInstance::CheckGameWorldReady()
 		}
 
 		// Reset ready-flags and arm the safety fallback timer.
+		// If signals (ReadyFlags) never arrive, the loading screen must not hang
+		// forever.  After the timeout, remove it IF the world IS ready — the player
+		// would rather see the loaded world than a stuck loading screen.
 		ReadyFlags = 0;
 		NewWorld->GetTimerManager().SetTimer(
 			LoadingScreenSafetyTimerHandle,
-			this,
-			&UMyGameInstance::RemoveLoadingScreen,
+			FTimerDelegate::CreateLambda([this]()
+			{
+				if (bGameWorldReady)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] SAFETY: world ready but flags stuck (0x%02X/0x%02X) — force-removing loading screen"),
+						ReadyFlags, ReadyFlag_AllRequired);
+					RemoveLoadingScreen();
+				}
+				else
+				{
+					UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] SAFETY: timeout but world NOT ready — keeping loading screen (ReadyFlags=0x%02X req=0x%02X)"),
+						ReadyFlags, ReadyFlag_AllRequired);
+				}
+			}),
 			LoadingScreenSafetyTimeout,
 			false);
-		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Safety timer armed (%.0fs)"), LoadingScreenSafetyTimeout);
 	}
 
 	// Gate 2: Pawn must be possessed � Possess() is called inside SpawnPlayerForClient.
@@ -1654,7 +1701,19 @@ void UMyGameInstance::CheckGameWorldReady()
 	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Gate4 PASS: shader compiler idle"));
 #endif
 
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 5. All gates passed � calling OnGameWorldReady"));
+	// Gate 5: Texture streaming — prevent mip pop-in on first rendered
+	// frames by waiting until all streaming requests are fulfilled.
+	{
+		const int32 PendingStreaming = IStreamingManager::Get().StreamAllResources(0.0f);
+		if (PendingStreaming > 0)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] Gate5 WAIT: %d streaming requests still pending..."), PendingStreaming);
+			return;
+		}
+		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Gate5 PASS: texture streaming complete"));
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 5. All gates passed — calling OnGameWorldReady"));
 	OnGameWorldReady();
 }
 
@@ -1768,6 +1827,10 @@ void UMyGameInstance::CheckAllReadyFlags()
 
 	if ((ReadyFlags & ReadyFlag_AllRequired) != ReadyFlag_AllRequired) { return; }
 	if (!LoadingScreenWidget) { return; }
+	{
+		IGameMoviePlayer* MP = GetMoviePlayer();
+		if (!MP || !MP->IsMovieCurrentlyPlaying()) { return; }
+	}
 	if (EndFrameDelegateHandle.IsValid()) { return; }
 	if (!bGameWorldReady)
 	{
@@ -2109,33 +2172,67 @@ void UMyGameInstance::StartLoadingScreenMusic()
 	}
 }
 
-void UMyGameInstance::AddLoadingScreen()
+void UMyGameInstance::ShowInitialLoadingScreen()
 {
-	if (!LoadingScreenWidgetClass) { return; }
-
-	// Already showing — nothing to do
-	if (LoadingScreenWidget && LoadingScreenSlateWidget.IsValid()) { return; }
-
-	UGameViewportClient* GVC = GetGameViewportClient();
-	if (!GVC)
+	if (!LoadingScreenWidgetClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("AddLoadingScreen: no GameViewportClient"));
+		UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] ShowInitialLoadingScreen: SKIP — no widget class"));
 		return;
 	}
 
-	// Create the UMG widget if needed
+	LoadingScreenWidget = CreateWidget<UUserWidget>(this, LoadingScreenWidgetClass);
 	if (!LoadingScreenWidget)
 	{
-		LoadingScreenWidget = CreateWidget<UUserWidget>(this, LoadingScreenWidgetClass);
+		UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] ShowInitialLoadingScreen: FAIL — CreateWidget returned null"));
+		return;
 	}
-	if (!LoadingScreenWidget) { return; }
 
-	// Take its Slate representation and add directly to the viewport overlay.
-	// This is world-independent — it survives level transitions (OpenLevel).
-	LoadingScreenSlateWidget = LoadingScreenWidget->TakeWidget();
-	GVC->AddViewportWidgetContent(LoadingScreenSlateWidget.ToSharedRef(), MAX_int32);
+	LoadingScreenWidget->AddToViewport(1000);
 
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] AddLoadingScreen: widget added via GameViewportClient (world-independent)"));
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] ShowInitialLoadingScreen: widget added to viewport (Init phase, pre-transition)"));
+}
+
+void UMyGameInstance::SetupMoviePlayerLoadingScreen()
+{
+	if (!LoadingScreenWidgetClass)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] SetupMoviePlayerLoadingScreen: SKIP — no widget class"));
+		return;
+	}
+
+	IGameMoviePlayer* MoviePlayer = GetMoviePlayer();
+	if (!MoviePlayer)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] SetupMoviePlayerLoadingScreen: FAIL — GetMoviePlayer() returned null"));
+		return;
+	}
+
+	// Destroy previous widget if it exists (e.g. from ShowInitialLoadingScreen
+	// or a prior SetupMoviePlayerLoadingScreen call).
+	if (LoadingScreenWidget)
+	{
+		LoadingScreenWidget->RemoveFromParent();
+		LoadingScreenWidget = nullptr;
+	}
+
+	LoadingScreenWidget = CreateWidget<UUserWidget>(this, LoadingScreenWidgetClass);
+	if (!LoadingScreenWidget)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] SetupMoviePlayerLoadingScreen: FAIL — CreateWidget returned null"));
+		return;
+	}
+
+	TSharedRef<SWidget> SlateWidget = LoadingScreenWidget->TakeWidget();
+
+	FLoadingScreenAttributes LoadingScreen;
+	LoadingScreen.bAutoCompleteWhenLoadingCompletes = false;
+	LoadingScreen.bWaitForManualStop = true;
+	LoadingScreen.bAllowEngineTick = false;
+	LoadingScreen.WidgetLoadingScreen = SlateWidget;
+
+	MoviePlayer->SetupLoadingScreen(LoadingScreen);
+
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] SetupMoviePlayerLoadingScreen: MoviePlayer configured (survives CleanupWorld)"));
 
 	StartLoadingScreenMusic();
 }
@@ -2165,14 +2262,11 @@ void UMyGameInstance::RemoveLoadingScreen()
 	}
 	LoadingScreenAudioComponent = nullptr;
 
-	// Remove from GameViewportClient (Slate level — world-independent)
-	if (LoadingScreenSlateWidget.IsValid())
+	// Stop MoviePlayer — this hides the loading screen widget.
+	if (IGameMoviePlayer* MoviePlayer = GetMoviePlayer())
 	{
-		if (UGameViewportClient* GVC = GetGameViewportClient())
-		{
-			GVC->RemoveViewportWidgetContent(LoadingScreenSlateWidget.ToSharedRef());
-		}
-		LoadingScreenSlateWidget.Reset();
+		MoviePlayer->StopMovie();
+		UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] RemoveLoadingScreen: MoviePlayer stopped"));
 	}
 
 	if (LoadingScreenWidget)

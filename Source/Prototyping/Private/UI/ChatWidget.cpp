@@ -1,9 +1,10 @@
 #include "UI/ChatWidget.h"
-#include "UI/ChatWidget.h"
 #include "UI/ChatMessageLineWidget.h"
 #include "Gameplay/Chat/ChatManager.h"
 #include "Components/TextBlock.h"
 #include "Components/ScrollBoxSlot.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Containers/Ticker.h"
 
 void UChatWidget::NativeConstruct()
 {
@@ -152,6 +153,17 @@ void UChatWidget::OnInputTextCommitted(const FText& Text, ETextCommit::Type Comm
     if (CommitMethod == ETextCommit::OnEnter)
     {
         SubmitCurrentInput();
+
+        // Refocus on next tick — OnTextCommitted fires during focus-loss;
+        // the widget will lose keyboard focus after this delegate returns.
+        FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([this](float) -> bool
+        {
+            if (InputTextBox)
+            {
+                InputTextBox->SetKeyboardFocus();
+            }
+            return false;
+        }), 0.0f);
     }
 }
 
@@ -194,4 +206,12 @@ void UChatWidget::SubmitCurrentInput()
 
     ChatManager->SendChatMessage(Channel, Text, Target);
     InputTextBox->SetText(FText::GetEmpty());
+}
+
+void UChatWidget::ReleaseInputFocus()
+{
+    if (InputTextBox && InputTextBox->HasKeyboardFocus())
+    {
+        FSlateApplication::Get().ClearKeyboardFocus(EFocusCause::SetDirectly);
+    }
 }

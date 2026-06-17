@@ -12,6 +12,7 @@
 #include "Gameplay/Players/BasicPlayer.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetSystemLibrary.h"
 #include "InputCoreTypes.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -82,6 +83,7 @@ void ULoginFlowWidget::NativeConstruct()
 		AuthManagerRef->OnCreateCharacterResponse.AddDynamic(this, &ULoginFlowWidget::OnCreateCharacterResponse);
 		AuthManagerRef->OnDeleteCharacterResponse.AddDynamic(this, &ULoginFlowWidget::OnDeleteCharacterResponse);
 		AuthManagerRef->OnSessionExpired.AddDynamic(this, &ULoginFlowWidget::OnSessionExpired);
+		AuthManagerRef->OnVersionMismatch.AddDynamic(this, &ULoginFlowWidget::OnVersionMismatch);
 	}
 
 	// ── Initial state ────────────────────────────────────────────────────────
@@ -111,6 +113,7 @@ void ULoginFlowWidget::NativeDestruct()
 		AuthManagerRef->OnCreateCharacterResponse.RemoveDynamic(this, &ULoginFlowWidget::OnCreateCharacterResponse);
 		AuthManagerRef->OnDeleteCharacterResponse.RemoveDynamic(this, &ULoginFlowWidget::OnDeleteCharacterResponse);
 		AuthManagerRef->OnSessionExpired.RemoveDynamic(this, &ULoginFlowWidget::OnSessionExpired);
+		AuthManagerRef->OnVersionMismatch.RemoveDynamic(this, &ULoginFlowWidget::OnVersionMismatch);
 	}
 
 	Super::NativeDestruct();
@@ -758,6 +761,57 @@ void ULoginFlowWidget::OnSessionExpired()
 	ClearPanelInputs(ELoginFlowPanel::Login);
 	SetError(Login_ErrorText, NSLOCTEXT("LoginFlow", "SessionExpired", "Session expired. Please log in again."));
 	SwitchToPanel(ELoginFlowPanel::Login);
+}
+
+// ── Version Mismatch Popup ────────────────────────────────────────────────────
+
+void ULoginFlowWidget::OnVersionMismatch(const FString& ErrorCode)
+{
+	SetPanelBusy(ELoginFlowPanel::Login, false);
+	SetPanelBusy(ELoginFlowPanel::Registration, false);
+
+	if (!VersionMismatchPopupClass) return;
+	if (ActiveVersionMismatchPopup)
+	{
+		ActiveVersionMismatchPopup->RemoveFromParent();
+		ActiveVersionMismatchPopup = nullptr;
+	}
+
+	ActiveVersionMismatchPopup = CreateWidget<UMessageBoxPopup>(GetOwningPlayer(), VersionMismatchPopupClass);
+	if (!ActiveVersionMismatchPopup) return;
+
+	const FText DisplayMessage = ResolveErrorMessage(ErrorCode);
+	const FText VersionInfo = FText::Format(
+		NSLOCTEXT("LoginFlow", "VersionInfo", "Your version: {0}"),
+		FText::FromString(GameInstanceRef ? GameInstanceRef->ClientVersion : TEXT("?.?.?")));
+
+	ActiveVersionMismatchPopup->SetupMessageBox(
+		NSLOCTEXT("LoginFlow", "VersionMismatchTitle", "Version Mismatch"),
+		FText::Format(NSLOCTEXT("LoginFlow", "VersionMismatchBody", "{0}\n\n{1}"), DisplayMessage, VersionInfo),
+		NSLOCTEXT("LoginFlow", "Quit", "Quit"),
+		NSLOCTEXT("LoginFlow", "Close", "Close"));
+
+	ActiveVersionMismatchPopup->OnLeftButtonClicked.AddDynamic(this, &ULoginFlowWidget::OnVersionMismatchQuitClicked);
+	ActiveVersionMismatchPopup->OnRightButtonClicked.AddDynamic(this, &ULoginFlowWidget::OnVersionMismatchCloseClicked);
+
+	ActiveVersionMismatchPopup->AddToViewport(100);
+}
+
+void ULoginFlowWidget::OnVersionMismatchQuitClicked()
+{
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		UKismetSystemLibrary::QuitGame(GetWorld(), PC, EQuitPreference::Quit, false);
+	}
+}
+
+void ULoginFlowWidget::OnVersionMismatchCloseClicked()
+{
+	if (ActiveVersionMismatchPopup)
+	{
+		ActiveVersionMismatchPopup->RemoveFromParent();
+		ActiveVersionMismatchPopup = nullptr;
+	}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

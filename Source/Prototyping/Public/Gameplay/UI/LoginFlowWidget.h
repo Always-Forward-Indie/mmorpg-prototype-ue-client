@@ -14,6 +14,7 @@
 #include "Components/ListView.h"
 #include "Components/Throbber.h"
 #include "Gameplay/UI/DeleteConfirmWidget.h"
+#include "Gameplay/UI/MessageBoxPopup.h"
 #include "LoginFlowWidget.generated.h"
 
 class UMyGameInstance;
@@ -198,6 +199,19 @@ protected:
 	UPROPERTY()
 	UDeleteConfirmWidget* ActiveDeleteConfirmWidget = nullptr;
 
+	// ── Version Mismatch Popup ───────────────────────────────────────────────
+
+	/**
+	 * Blueprint class to use for the version mismatch popup (reuses UMessageBoxPopup).
+	 * Create a child of UMessageBoxPopup in the Content Browser,
+	 * add TitleText / MessageText / LeftButton / RightButton widgets, then assign that class here.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Login Flow|Config")
+	TSubclassOf<UMessageBoxPopup> VersionMismatchPopupClass;
+
+	UPROPERTY()
+	UMessageBoxPopup* ActiveVersionMismatchPopup = nullptr;
+
 	// ── Internal callbacks ───────────────────────────────────────────────────
 
 	UFUNCTION() void HandleLoginClicked();
@@ -223,6 +237,11 @@ protected:
 	// Callbacks wired to the standalone DeleteConfirmWidget delegates
 	UFUNCTION() void OnDeleteConfirmWidgetConfirmed(int32 CharId);
 	UFUNCTION() void OnDeleteConfirmWidgetCancelled();
+
+	// Version mismatch handlers
+	UFUNCTION() void OnVersionMismatch(const FString& ErrorCode);
+	UFUNCTION() void OnVersionMismatchQuitClicked();
+	UFUNCTION() void OnVersionMismatchCloseClicked();
 
 	// Network response handlers (bound to AuthManager delegates)
 	UFUNCTION() void OnLoginResponse(bool bSuccess, const FString& Message);

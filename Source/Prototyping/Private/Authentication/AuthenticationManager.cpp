@@ -219,6 +219,8 @@ void UAuthenticationManager::SendLoginRequest(const FString& Username, const FSt
 
 	BodyData.Add("login",    MakeShareable(new FJsonValueString(Username)));
 	BodyData.Add("password", MakeShareable(new FJsonValueString(Password)));
+	BodyData.Add("clientVersion", MakeShareable(new FJsonValueString(
+		gameInstance ? gameInstance->ClientVersion : TEXT("0.1.0"))));
 
 	FString JsonString = JSONParser::SerializeJsonWithTimeSync(
 		"authentificationClient", HeaderData, BodyData,
@@ -248,6 +250,8 @@ void UAuthenticationManager::SendRegisterRequest(const FString& Username, const 
 
 	BodyData.Add("login",    MakeShareable(new FJsonValueString(Username)));
 	BodyData.Add("password", MakeShareable(new FJsonValueString(Password)));
+	BodyData.Add("clientVersion", MakeShareable(new FJsonValueString(
+		gameInstance ? gameInstance->ClientVersion : TEXT("0.1.0"))));
 	if (!Email.IsEmpty())
 	{
 		BodyData.Add("email", MakeShareable(new FJsonValueString(Email)));
@@ -379,6 +383,14 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 	if (MessageData.eventType == "authentificationClient")
 	{
 		ClearRequestTimeout(LoginRequestTimeoutHandle);
+
+		if (MessageData.message == TEXT("ERR_VERSION_OUTDATED") || MessageData.message == TEXT("ERR_VERSION_TOO_NEW"))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Version mismatch: %s"), *MessageData.message);
+			OnVersionMismatch.Broadcast(MessageData.message);
+			return;
+		}
+
 		if (MessageData.status == "success" && ClientData.clientId != 0 && !ClientData.hash.IsEmpty())
 		{
 			UE_LOG(LogTemp, Warning, TEXT("Login Success: Client ID: %d, Hash: %s"), ClientData.clientId, *ClientData.hash);
@@ -409,6 +421,14 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 	if (MessageData.eventType == "registerAccount")
 	{
 		ClearRequestTimeout(RegisterRequestTimeoutHandle);
+
+		if (MessageData.message == TEXT("ERR_VERSION_OUTDATED") || MessageData.message == TEXT("ERR_VERSION_TOO_NEW"))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Version mismatch: %s"), *MessageData.message);
+			OnVersionMismatch.Broadcast(MessageData.message);
+			return;
+		}
+
 		if (MessageData.status == "success" && ClientData.clientId != 0 && !ClientData.hash.IsEmpty())
 		{
 			UE_LOG(LogTemp, Warning, TEXT("Registration Success: Client ID: %d"), ClientData.clientId);

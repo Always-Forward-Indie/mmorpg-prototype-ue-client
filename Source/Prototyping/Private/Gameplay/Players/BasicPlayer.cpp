@@ -6,8 +6,10 @@
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
 #include "UI/UIManager.h"
+#include "UI/ChatWidget.h"
 #include "UI/SkillBarWidget.h"
 #include "Gameplay/Items/InventoryManager.h"
+#include "Gameplay/Idle/IdleTimeoutManager.h"
 #include "Gameplay/Items/HarvestManager.h"
 #include "Gameplay/Player/ExperienceManager.h"
 #include "Gameplay/Combat/CombatSystemManager.h"
@@ -1723,6 +1725,16 @@ void ABasicPlayer::HandleUIManagerInitialized()
     if (MyGameInstance)
     {
         MyGameInstance->NotifyUIInitialized();
+
+        // Start idle timeout tracking now that all UI widgets are ready
+        if (MyGameInstance->IdleTimeoutManager)
+        {
+            APlayerController* PC = Cast<APlayerController>(GetController());
+            if (PC)
+            {
+                MyGameInstance->IdleTimeoutManager->StartTracking(PC, UIManager);
+            }
+        }
     }
 
     // Bind cursor interaction delegates now that UI is ready.
@@ -2210,6 +2222,13 @@ void ABasicPlayer::Look(const FInputActionValue& Value)
 
     // Do not rotate the camera while the cursor is over a Visible UI element
     if (IsUIBlockingInteraction()) return;
+
+    // If chat input is focused and player rotates camera, release keyboard
+    // focus back to the game so WASD movement works without clicking away.
+    if (UIManager && UIManager->GetChatWidget())
+    {
+        UIManager->GetChatWidget()->ReleaseInputFocus();
+    }
 
     if (Controller != nullptr)
     {
@@ -3102,6 +3121,15 @@ void ABasicPlayer::PlayEventSound(const TSoftObjectPtr<USoundBase>& SoundRef)
     USoundClass* SFXClass = (MyGameInstance && MyGameInstance->AudioManager)
         ? MyGameInstance->AudioManager->SFXClass : nullptr;
 
+    USoundAttenuation* Attenuation = nullptr;
+    if (const FEntityAudioProfile* Profile = GetAudioProfile())
+    {
+        if (!Profile->DefaultAttenuation.IsNull())
+        {
+            Attenuation = Profile->DefaultAttenuation.LoadSynchronous();
+        }
+    }
+
     if (SFXClass)
     {
         UAudioComponent* AC = UGameplayStatics::SpawnSoundAttached(
@@ -3115,7 +3143,7 @@ void ABasicPlayer::PlayEventSound(const TSoftObjectPtr<USoundBase>& SoundRef)
             /*VolumeMultiplier=*/1.0f,
             /*PitchMultiplier=*/1.0f,
             /*StartTime=*/0.0f,
-            /*AttenuationSettings=*/nullptr,
+            Attenuation,
             /*ConcurrencySettings=*/nullptr,
             /*bAutoActivate=*/false);
         if (AC)
@@ -3127,7 +3155,10 @@ void ABasicPlayer::PlayEventSound(const TSoftObjectPtr<USoundBase>& SoundRef)
     }
     else
     {
-        UGameplayStatics::PlaySoundAtLocation(this, Sound, GetActorLocation());
+        UGameplayStatics::SpawnSoundAttached(
+            Sound, GetRootComponent(), NAME_None,
+            GetActorLocation(), FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition,
+            true, 1.0f, 1.0f, 0.0f, Attenuation, nullptr, true);
     }
 }
 
@@ -3883,7 +3914,13 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
                 {
                     if (USoundBase* Sound = Def.castSound.LoadSynchronous())
                     {
-                        SpawnSFXAttached(this, Sound, GetActorLocation());
+                        USoundAttenuation* Atn = nullptr;
+                        if (const FEntityAudioProfile* Prof = GetAudioProfile())
+                        {
+                            if (!Prof->DefaultAttenuation.IsNull())
+                                Atn = Prof->DefaultAttenuation.LoadSynchronous();
+                        }
+                        SpawnSFXAttached(this, Sound, GetActorLocation(), 1.0f, Atn);
                     }
                 }
 
@@ -4025,7 +4062,13 @@ void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritica
                             int32 Idx = FMath::RandRange(0, ImpactRow->ImpactSounds.Num() - 1);
                             if (USoundBase* ImpactSound = ImpactRow->ImpactSounds[Idx].LoadSynchronous())
                             {
-                                SpawnSFXAttached(this, ImpactSound, GetActorLocation());
+                                USoundAttenuation* Atn = nullptr;
+                                if (const FEntityAudioProfile* Prof = GetAudioProfile())
+                                {
+                                    if (!Prof->DefaultAttenuation.IsNull())
+                                        Atn = Prof->DefaultAttenuation.LoadSynchronous();
+                                }
+                                SpawnSFXAttached(this, ImpactSound, GetActorLocation(), 1.0f, Atn);
                                 bHitSoundPlayed = true;
                             }
                         }
@@ -4052,11 +4095,13 @@ void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritica
             {
                 if (USoundBase* Sound = Def.hitSound.LoadSynchronous())
                 {
-                    UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, Sound, GetActorLocation());
-                    if (AC && MyGameInstance && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
+                    USoundAttenuation* Atn = nullptr;
+                    if (const FEntityAudioProfile* Prof = GetAudioProfile())
                     {
-                        AC->SoundClassOverride = MyGameInstance->AudioManager->SFXClass;
+                        if (!Prof->DefaultAttenuation.IsNull())
+                            Atn = Prof->DefaultAttenuation.LoadSynchronous();
                     }
+                    SpawnSFXAttached(this, Sound, GetActorLocation(), 1.0f, Atn);
                 }
             }
 
@@ -4082,11 +4127,13 @@ void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritica
             {
                 if (USoundBase* CritSnd = Def.critSound.LoadSynchronous())
                 {
-                    UAudioComponent* CritAC = UGameplayStatics::SpawnSoundAtLocation(this, CritSnd, GetActorLocation());
-                    if (CritAC && MyGameInstance && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
+                    USoundAttenuation* Atn = nullptr;
+                    if (const FEntityAudioProfile* Prof = GetAudioProfile())
                     {
-                        CritAC->SoundClassOverride = MyGameInstance->AudioManager->SFXClass;
+                        if (!Prof->DefaultAttenuation.IsNull())
+                            Atn = Prof->DefaultAttenuation.LoadSynchronous();
                     }
+                    SpawnSFXAttached(this, CritSnd, GetActorLocation(), 1.0f, Atn);
                 }
             }
         }
@@ -4232,11 +4279,13 @@ void ABasicPlayer::ShowBuffEffect_Implementation(const FAppliedEffectData& Effec
     {
         if (USoundBase* Snd = Row->ApplySound.LoadSynchronous())
         {
-            UAudioComponent* AC = UGameplayStatics::SpawnSoundAtLocation(this, Snd, GetActorLocation());
-            if (AC && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
+            USoundAttenuation* Atn = nullptr;
+            if (const FEntityAudioProfile* Prof = GetAudioProfile())
             {
-                AC->SoundClassOverride = MyGameInstance->AudioManager->SFXClass;
+                if (!Prof->DefaultAttenuation.IsNull())
+                    Atn = Prof->DefaultAttenuation.LoadSynchronous();
             }
+            SpawnSFXAttached(this, Snd, GetActorLocation(), 1.0f, Atn);
         }
     }
 
@@ -4421,13 +4470,20 @@ void ABasicPlayer::ApplyVisualFromDataTable(UDataTable* VisualTable)
 
 	SetActorScale3D(VisualData.ActorScale);
 
-	// Update audio profile if specified
-	if (VisualData.AudioProfileId != NAME_None)
+	if (Def->AudioProfileId != NAME_None)
 	{
-		AudioProfileId = VisualData.AudioProfileId;
+		AudioProfileId = Def->AudioProfileId;
 	}
 
-	// Initialize default cosmetics (hair, facial hair) from the visual definition.
+	if (const FEntityAudioProfile* Prof = GetAudioProfile())
+	{
+		if (!Prof->FootwearType.IsNone())
+		{
+			FootwearType = Prof->FootwearType;
+		}
+	}
+
+	// Initialize default cosmetics
 	// This must happen after SetActorScale3D so the body component pointer is stable.
 	UE_LOG(LogTemp, Log, TEXT("[Cosmetic] ApplyVisualFromDataTable: CosmeticVisualComponent=%s  MyGameInstance=%s  CosmeticsTable=%s"),
 		CosmeticVisualComponent ? TEXT("OK") : TEXT("NULL — not created in constructor?"),
@@ -4456,6 +4512,11 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 
 	// Update HP/MP/level on the character data
 	UpdatePlayerStats(StatsUpdate);
+
+	if (playerData.isOtherClient && NameplateComponent)
+	{
+		NameplateComponent->UpdateHealth(StatsUpdate.healthCurrent, StatsUpdate.healthMax);
+	}
 
 	// Refresh the HP/MP HUD
 	RefreshHUD();

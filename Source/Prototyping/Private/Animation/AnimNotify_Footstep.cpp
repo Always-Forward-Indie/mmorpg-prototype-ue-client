@@ -1,13 +1,15 @@
 #include "Animation/AnimNotify_Footstep.h"
-#include "Animation/AnimNotify_Footstep.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/AudioComponent.h"
 #include "GameFramework/Actor.h"
 #include "Kismet/GameplayStatics.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include "Engine/DataTable.h"
-#include "Data/DataStructs.h"
+#include "Data/EntityAudioData.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Players/BasicPlayer.h"
+#include "Gameplay/Mobs/BasicMOB.h"
+#include "Gameplay/NPCs/BasicNPC.h"
 #include "CollisionQueryParams.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraSystem.h"
@@ -28,7 +30,6 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 	UWorld* World = Owner->GetWorld();
 	if (!World) return;
 
-	// Determine trace start from the foot socket
 	FVector TraceStart = Owner->GetActorLocation();
 	if (MeshComp->DoesSocketExist(FootSocketName))
 	{
@@ -37,7 +38,6 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 
 	FVector TraceEnd = TraceStart - FVector(0, 0, 50.0f);
 
-	// Line trace to find the physical material
 	FHitResult Hit;
 	FCollisionQueryParams Params;
 	Params.bReturnPhysicalMaterial = true;
@@ -52,7 +52,6 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 		}
 	}
 
-	// Try to look up the footstep DataTable from GameInstance
 	UDataTable* FootstepTable = nullptr;
 	if (UMyGameInstance* GI = Cast<UMyGameInstance>(Owner->GetGameInstance()))
 	{
@@ -62,10 +61,40 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 	USoundBase* SoundToPlay = nullptr;
 	UNiagaraSystem* FootVFX = nullptr;
 	float FinalVolume = VolumeMultiplier;
+	USoundAttenuation* Attenuation = nullptr;
+
+	FName Footwear = NAME_None;
+	if (ABasicPlayer* Player = Cast<ABasicPlayer>(Owner))
+	{
+		Footwear = Player->GetFootwearType();
+	}
+	else if (ABasicMOB* Mob = Cast<ABasicMOB>(Owner))
+	{
+		Footwear = Mob->FootwearType;
+	}
+	else if (ABasicNPC* NPC = Cast<ABasicNPC>(Owner))
+	{
+		Footwear = NPC->GetFootwearType();
+	}
 
 	if (FootstepTable && PhysMatName != NAME_None)
 	{
-		if (FFootstepSoundData* Row = FootstepTable->FindRow<FFootstepSoundData>(PhysMatName, TEXT("Footstep")))
+		FFootstepSoundData* Row = nullptr;
+
+		// Priority 1: surface + footwear composite key
+		if (!Footwear.IsNone())
+		{
+			FName CompositeKey = FName(*(PhysMatName.ToString() + TEXT("_") + Footwear.ToString()));
+			Row = FootstepTable->FindRow<FFootstepSoundData>(CompositeKey, TEXT("Footstep"));
+		}
+
+		// Priority 2: surface only (generic fallback)
+		if (!Row)
+		{
+			Row = FootstepTable->FindRow<FFootstepSoundData>(PhysMatName, TEXT("Footstep"));
+		}
+
+		if (Row)
 		{
 			if (Row->FootstepSounds.Num() > 0)
 			{
@@ -78,46 +107,82 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 			{
 				FootVFX = Row->FootstepVFX.LoadSynchronous();
 			}
+			if (!Row->DefaultAttenuation.IsNull())
+			{
+				Attenuation = Row->DefaultAttenuation.LoadSynchronous();
+			}
 		}
 	}
 
-	// Fallback to default footstep sound
 	if (!SoundToPlay && !DefaultFootstepSound.IsNull())
 	{
 		SoundToPlay = DefaultFootstepSound.LoadSynchronous();
 	}
 
+	if (!SoundToPlay)
+	{
+		if (ABasicPlayer* Player = Cast<ABasicPlayer>(Owner))
+		{
+			if (const FEntityAudioProfile* Profile = Player->GetAudioProfile())
+			{
+				if (Profile->Footsteps.Num() > 0)
+				{
+					SoundToPlay = Profile->Footsteps[FMath::RandRange(0, Profile->Footsteps.Num() - 1)].LoadSynchronous();
+				}
+			}
+		}
+		else if (ABasicMOB* Mob = Cast<ABasicMOB>(Owner))
+		{
+			if (Mob->FootstepSounds.Num() > 0)
+			{
+				SoundToPlay = Mob->FootstepSounds[FMath::RandRange(0, Mob->FootstepSounds.Num() - 1)];
+			}
+		}
+		else if (ABasicNPC* NPC = Cast<ABasicNPC>(Owner))
+		{
+			if (NPC->GetFootstepSounds().Num() > 0)
+			{
+				SoundToPlay = NPC->GetFootstepSounds()[FMath::RandRange(0, NPC->GetFootstepSounds().Num() - 1)];
+			}
+		}
+	}
+
 	if (SoundToPlay)
 	{
-		// Resolve the SFX SoundClass before the component starts playing.
-		// SpawnSoundAtLocation calls Play() internally, so any SoundClassOverride
-		// set on the returned component arrives too late and is ignored by the
-		// audio engine for the current playback.  We must use SpawnSoundAttached
-		// (bAutoActivate = false path) or create the component manually.
 		USoundClass* SFXClass = nullptr;
 		if (UMyGameInstance* GI = Cast<UMyGameInstance>(Owner->GetGameInstance()))
 		{
 			if (GI->AudioManager) { SFXClass = GI->AudioManager->SFXClass; }
 		}
 
+		if (!Attenuation)
+		{
+			if (ABasicPlayer* Player = Cast<ABasicPlayer>(Owner))
+			{
+				if (const FEntityAudioProfile* Profile = Player->GetAudioProfile())
+				{
+					if (!Profile->DefaultAttenuation.IsNull())
+					{
+						Attenuation = Profile->DefaultAttenuation.LoadSynchronous();
+					}
+				}
+			}
+			else if (ABasicMOB* Mob = Cast<ABasicMOB>(Owner))
+			{
+				Attenuation = Mob->DefaultAttenuation;
+			}
+			else if (ABasicNPC* NPC = Cast<ABasicNPC>(Owner))
+			{
+				Attenuation = NPC->DefaultAttenuation;
+			}
+		}
+
 		if (SFXClass)
 		{
-			// Create the component with bAutoDestroy so we don't leak,
-			// set the override BEFORE Play() so the audio engine sees it.
 			UAudioComponent* AC = UGameplayStatics::SpawnSoundAttached(
-				SoundToPlay,
-				Owner->GetRootComponent(),
-				NAME_None,
-				TraceStart,
-				FRotator::ZeroRotator,
-				EAttachLocation::KeepWorldPosition,
-				/*bStopWhenAttachedToDestroyed=*/true,
-				FinalVolume,
-				/*PitchMultiplier=*/1.0f,
-				/*StartTime=*/0.0f,
-				/*AttenuationSettings=*/nullptr,
-				/*ConcurrencySettings=*/nullptr,
-				/*bAutoActivate=*/false);
+				SoundToPlay, Owner->GetRootComponent(), NAME_None,
+				TraceStart, FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition,
+				true, FinalVolume, 1.0f, 0.0f, Attenuation, nullptr, false);
 			if (AC)
 			{
 				AC->SoundClassOverride = SFXClass;
@@ -127,13 +192,13 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 		}
 		else
 		{
-			// No AudioManager yet (e.g. during editor preview) — plain spawn.
-			UGameplayStatics::SpawnSoundAtLocation(Owner, SoundToPlay, TraceStart,
-				FRotator::ZeroRotator, FinalVolume, 1.0f);
+			UGameplayStatics::SpawnSoundAttached(
+				SoundToPlay, Owner->GetRootComponent(), NAME_None,
+				TraceStart, FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition,
+				true, FinalVolume, 1.0f, 0.0f, Attenuation, nullptr, true);
 		}
 	}
 
-	// Spawn footstep VFX (dust puff, splash, etc.)
 	if (FootVFX)
 	{
 		UNiagaraFunctionLibrary::SpawnSystemAtLocation(

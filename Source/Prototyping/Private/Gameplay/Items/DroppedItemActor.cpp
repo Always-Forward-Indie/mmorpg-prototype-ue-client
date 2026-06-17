@@ -22,10 +22,10 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogDropSnap, Log, All);
 
-// Spawn a one-shot SFX with SoundClassOverride set BEFORE Play() пїЅ same pattern
+// Spawn a one-shot SFX with SoundClassOverride set BEFORE Play() — same pattern
 // used across the whole codebase.  SpawnSoundAtLocation/PlaySoundAtLocation call
 // Play() internally so any class override set afterwards is silently ignored.
-static void PlayItemSFX(AActor* Owner, USoundBase* Sound)
+static void PlayItemSFX(AActor* Owner, USoundBase* Sound, USoundAttenuation* Attenuation = nullptr)
 {
 	if (!Owner || !Sound) { return; }
 
@@ -42,7 +42,7 @@ static void PlayItemSFX(AActor* Owner, USoundBase* Sound)
 			Owner->GetActorLocation(), FRotator::ZeroRotator,
 			EAttachLocation::KeepWorldPosition,
 			/*bStopWhenAttachedToDestroyed=*/true,
-			1.0f, 1.0f, 0.0f, nullptr, nullptr,
+			1.0f, 1.0f, 0.0f, Attenuation, nullptr,
 			/*bAutoActivate=*/false);
 		if (AC)
 		{
@@ -53,7 +53,9 @@ static void PlayItemSFX(AActor* Owner, USoundBase* Sound)
 	}
 	else
 	{
-		UGameplayStatics::PlaySoundAtLocation(Owner, Sound, Owner->GetActorLocation());
+		UGameplayStatics::SpawnSoundAttached(Sound, Owner->GetRootComponent(), NAME_None,
+			Owner->GetActorLocation(), FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition,
+			true, 1.0f, 1.0f, 0.0f, Attenuation, nullptr, true);
 	}
 }
 
@@ -489,7 +491,8 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 		{
 			if (USoundCue* Cue = VisualData.DropSound.LoadSynchronous())
 			{
-				PlayItemSFX(this, Cue);
+				USoundAttenuation* Atn = VisualData.DefaultAttenuation.LoadSynchronous();
+				PlayItemSFX(this, Cue, Atn);
 			}
 			else
 			{
@@ -556,7 +559,8 @@ void ADroppedItemActor::PlayPickupEffect()
 	{
 		if (USoundCue* Cue = VisualData.PickupSound.LoadSynchronous())
 		{
-			PlayItemSFX(this, Cue);
+			USoundAttenuation* Atn = VisualData.DefaultAttenuation.LoadSynchronous();
+			PlayItemSFX(this, Cue, Atn);
 		}
 	}
 

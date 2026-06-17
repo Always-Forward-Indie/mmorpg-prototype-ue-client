@@ -66,7 +66,13 @@ void UMOBManager::SubscribeToNetworkManager()
 // Set world context 
 void UMOBManager::SetWorldContext(UWorld* World)
 {
+	const bool bWasNull = (worldContext == nullptr);
 	worldContext = World;
+
+	if (bWasNull && worldContext)
+	{
+		FlushPendingSpawns();
+	}
 }
 
 // Check if event is combat-related and should be handled by CombatNetworkHandler
@@ -496,7 +502,8 @@ void UMOBManager::SpawnMOB(const FMOBStruct& MOBData)
 {
 	if (!worldContext || !worldContext->IsValidLowLevel())
 	{
-		UE_LOG(LogTemp, Error, TEXT("MOBManager: Cannot spawn MOB - no valid world context"));
+		UE_LOG(LogTemp, Warning, TEXT("MOBManager: No valid world context — queuing MOB %s for later spawn"), *MOBData.mobUniqueID);
+		PendingMOBSpawns.Add(MOBData);
 		return;
 	}
 
@@ -631,4 +638,18 @@ void UMOBManager::ClearWorldState()
 {
 	MobActorRegistry.Empty();
 	PlayerRegistry.Empty();
+}
+
+void UMOBManager::FlushPendingSpawns()
+{
+	if (PendingMOBSpawns.Num() == 0) return;
+
+	UE_LOG(LogTemp, Warning, TEXT("MOBManager: Flushing %d pending MOB spawns"), PendingMOBSpawns.Num());
+	TArray<FMOBStruct> Spawns = MoveTemp(PendingMOBSpawns);
+	PendingMOBSpawns.Empty();
+
+	for (const FMOBStruct& MobData : Spawns)
+	{
+		SpawnMOB(MobData);
+	}
 }

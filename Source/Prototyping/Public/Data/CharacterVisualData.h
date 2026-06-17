@@ -38,10 +38,6 @@ struct FCharacterVisualData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
 	TSoftObjectPtr<UTexture2D> PortraitIcon;
 
-	/** Audio profile ID passed to the entity audio system (e.g. "warrior_m"). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
-	FName AudioProfileId = NAME_None;
-
 	/** Optional death VFX. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VFX")
 	TSoftObjectPtr<UNiagaraSystem> DeathVFX;
@@ -72,6 +68,11 @@ struct FCharacterVisualDefinition : public FTableRowBase
 	/** Visual assets for this combination. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visual")
 	FCharacterVisualData Visual;
+
+	/** Row key in DT_EntityAudioProfiles (e.g. "warrior_m", "mage_f").
+	 *  Applied to the player at spawn.  Leave NAME_None for silent entity. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
+	FName AudioProfileId = NAME_None;
 
 	// ─── Default Cosmetics ───────────────────────────────────────────────────
 	// Row name keys into CharacterCosmeticsDataTable (UMyGameInstance::CharacterCosmeticsDataTable).

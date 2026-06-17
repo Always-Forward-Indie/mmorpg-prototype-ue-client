@@ -7,6 +7,7 @@
 #include "NiagaraSystem.h"
 #include "Engine/SkeletalMesh.h"
 #include "Sound/SoundCue.h"
+#include "Sound/SoundAttenuation.h"
 #include "ItemStruct.generated.h"
 
 // Different item types
@@ -109,10 +110,6 @@ struct FItemVisualData : public FTableRowBase
 {
 	GENERATED_BODY()
 
-	// The slug identifier that matches with FItemBaseStruct's slug
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual")
-	FString ItemSlug;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual")
 	TSoftObjectPtr<UTexture2D> Icon;
 
@@ -189,4 +186,23 @@ struct FItemVisualData : public FTableRowBase
 	/** Armor material type for impact sound lookup (e.g. "leather", "plate", "cloth") */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual|Equipped")
 	FName ArmorMaterialType = NAME_None;
+
+	// ---- Audio ----
+
+	/** Sound when this item is equipped onto the character. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual|Audio")
+	TSoftObjectPtr<USoundBase> EquipSound;
+
+	/** Sound when this item is unequipped from the character. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual|Audio")
+	TSoftObjectPtr<USoundBase> UnequipSound;
+
+	/** Sound when this item is used (consumed, activated). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual|Audio")
+	TSoftObjectPtr<USoundBase> UseSound;
+
+	/** Attenuation radius for 3D world sounds: DropSound, PickupSound, EquipSound, UnequipSound, UseSound.
+	 *  Leave empty to rely on the SoundCue asset's own attenuation settings. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Visual|Audio")
+	TSoftObjectPtr<USoundAttenuation> DefaultAttenuation;
 };

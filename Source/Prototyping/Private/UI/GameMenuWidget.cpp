@@ -25,6 +25,9 @@ void UGameMenuWidget::NativeConstruct()
 	if (Btn_ExitToDesktop)
 		Btn_ExitToDesktop->OnClicked.AddDynamic(this, &UGameMenuWidget::HandleExitToDesktopClicked);
 
+	if (Btn_BugReport)
+		Btn_BugReport->OnClicked.AddDynamic(this, &UGameMenuWidget::HandleBugReportClicked);
+
 	// Start hidden
 	SetVisibility(ESlateVisibility::Collapsed);
 }
@@ -67,4 +70,9 @@ void UGameMenuWidget::HandleExitToLoginClicked()
 void UGameMenuWidget::HandleExitToDesktopClicked()
 {
 	OnExitToDesktopClicked.Broadcast();
+}
+
+void UGameMenuWidget::HandleBugReportClicked()
+{
+	OnBugReportClicked.Broadcast();
 }

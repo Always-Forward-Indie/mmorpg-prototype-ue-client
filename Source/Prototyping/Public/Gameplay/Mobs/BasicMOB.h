@@ -11,6 +11,7 @@
 #include "Engine/StreamableManager.h"
 #include "Engine/AssetManager.h"
 #include "Components/AudioComponent.h"
+#include "Sound/SoundAttenuation.h"
 #include <Gameplay/UI/W_MOBHeadInfoWidget.h>
 #include "Gameplay/Mobs/MOBMovementComponent.h"
 #include "Gameplay/Combat/ICombatable.h"
@@ -362,12 +363,7 @@ public:
 		void SetupMobAudio(FName MobSlug);
 
 		void PlayRandomIdleSound();
-
 		void PlaySoundByName(FName SoundName);
-
-		void PlayWalkRandomSound();
-
-		void PlayRunRandomSound();
 
 		UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MOBs Config")
 		UDataTable* MobDefinitionTable;
@@ -386,10 +382,7 @@ public:
 		TArray<USoundBase*> IdleSounds;
 
 		UPROPERTY()
-		TArray<USoundBase*> WalkSounds;
-
-		UPROPERTY()
-		TArray<USoundBase*> RunSounds;
+		TArray<USoundBase*> FootstepSounds;
 
 		UPROPERTY()
 		TArray<USoundBase*> AttackVoiceSounds;
@@ -399,6 +392,12 @@ public:
 
 		UPROPERTY()
 		TArray<USoundBase*> ReleaseVoiceSounds;
+
+		UPROPERTY()
+		TObjectPtr<USoundAttenuation> DefaultAttenuation;
+
+		UPROPERTY()
+		FName FootwearType = NAME_None;
 
 		FTimerHandle IdleSoundTimer;
 

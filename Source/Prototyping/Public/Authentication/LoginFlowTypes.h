@@ -153,6 +153,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnCreateCharacterResponse, bool,
 /** Fired after deleteCharacter response. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnDeleteCharacterResponse, bool, bSuccess, const FString&, Message, int32, CharacterId);
 
+/** Fired when server rejects client version (ERR_VERSION_OUTDATED / ERR_VERSION_TOO_NEW). */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnVersionMismatch, const FString&, ErrorCode);
+
 /** Fired when server returns Unauthorized — UI must return to login. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSessionExpired);
 

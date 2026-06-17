@@ -457,10 +457,9 @@ void UItemManager::LoadItemVisualsDataTable(UDataTable* InItemVisualsTable)
 		{
 			FItemVisualData* VisualData = ItemVisualsDataTable->FindRow<FItemVisualData>(RowName, TEXT("Loading item visuals"));
 
-			if (VisualData && !VisualData->ItemSlug.IsEmpty())
+			if (VisualData)
 			{
-				ItemVisualsCache.Add(VisualData->ItemSlug, *VisualData);
-				UE_LOG(LogTemp, Log, TEXT("Cached visual data for item: %s"), *VisualData->ItemSlug);
+				ItemVisualsCache.Add(RowName.ToString(), *VisualData);
 			}
 		}
 
@@ -512,23 +511,11 @@ FItemVisualData UItemManager::GetItemVisualDataBySlug(const FString& ItemSlug)
 
 	if (ItemVisualsDataTable)
 	{
-		// Row name IS the slug � same convention as FItemLocaleDefinition
 		FItemVisualData* VisualData = ItemVisualsDataTable->FindRow<FItemVisualData>(FName(*ItemSlug), TEXT("GetItemVisualDataBySlug"), false);
 		if (VisualData)
 		{
 			ItemVisualsCache.Add(ItemSlug, *VisualData);
 			return *VisualData;
-		}
-
-		// Fallback: legacy rows where ItemSlug field was used instead of row name
-		for (const FName& RowName : ItemVisualsDataTable->GetRowNames())
-		{
-			FItemVisualData* Row = ItemVisualsDataTable->FindRow<FItemVisualData>(RowName, TEXT("GetItemVisualDataBySlug"), false);
-			if (Row && Row->ItemSlug == ItemSlug)
-			{
-				ItemVisualsCache.Add(ItemSlug, *Row);
-				return *Row;
-			}
 		}
 	}
 

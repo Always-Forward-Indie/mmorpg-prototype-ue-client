@@ -1,10 +1,11 @@
 // Login Screen Overlay Widget — persistent overlay on the login/character-select screen.
-// Contains a Settings button and an Exit Game button.
+// Contains Settings, Bug Report and Exit Game buttons.
 //
 // Blueprint setup (WBP_LoginScreenOverlay):
 //   ─ Root (CanvasPanel or Overlay)
-//       ├─ SettingsButton   (Button)  — name must match exactly
-//       └─ ExitGameButton   (Button)  — name must match exactly
+//       ├─ SettingsButton    (Button)  — name must match exactly
+//       ├─ BugReportButton   (Button)  — optional, opens bug report URL
+//       └─ ExitGameButton    (Button)  — name must match exactly
 //
 // Wire up:
 //   1. Create a Blueprint subclass of this class (e.g. WBP_LoginScreenOverlay).
@@ -24,8 +25,7 @@
  * UW_LoginScreenOverlayWidget
  *
  * Overlay widget intended to live on top of the login / character-select UI.
- * Provides a Settings button (extensible via BP) and an Exit Game button
- * that calls UKismetSystemLibrary::QuitGame immediately.
+ * Provides Settings, Bug Report, and Exit Game buttons.
  */
 UCLASS(BlueprintType, Blueprintable)
 class PROTOTYPING_API UW_LoginScreenOverlayWidget : public UUserWidget
@@ -55,6 +55,10 @@ public:
     void OnExitGameClicked();
     virtual void OnExitGameClicked_Implementation();
 
+    /** URL to open when Bug Report button is clicked. */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Login Overlay")
+    FString BugReportUrl;
+
 protected:
     // ── Bound widgets ──────────────────────────────────────────────────────
 
@@ -66,10 +70,17 @@ protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UButton* ExitGameButton;
 
+    /** Opens the bug report / feedback URL. */
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UButton* BugReportButton;
+
 private:
     UFUNCTION()
     void HandleSettingsClicked();
 
     UFUNCTION()
     void HandleExitGameClicked();
+
+    UFUNCTION()
+    void HandleBugReportClicked();
 };

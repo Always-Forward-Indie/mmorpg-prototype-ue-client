@@ -6,6 +6,9 @@
 #include "UI/InventoryWidget.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Audio/AudioManager.h"
+#include "Gameplay/Items/ItemManager.h"
+#include "Utils/AudioSpawnHelpers.h"
 
 UInventoryManager::UInventoryManager()
 {
@@ -114,6 +117,37 @@ void UInventoryManager::ProcessGameServerData(const FString& ReceivedData)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Item used successfully"));
 		ProcessInventoryUpdate(ReceivedData);
+
+		int32 UsedItemId = 0;
+		TSharedPtr<FJsonObject> Root;
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
+		if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
+		{
+			if (TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body")))
+			{
+				UsedItemId = Body->GetIntegerField(TEXT("itemId"));
+			}
+		}
+
+		if (UsedItemId > 0 && gameInstance)
+		{
+			FInventoryItemStruct Item = GetItemById(UsedItemId);
+			if (!Item.itemSlug.IsEmpty())
+			{
+				FItemVisualData Vis = gameInstance->GetItemManager()->GetItemVisualDataBySlug(Item.itemSlug);
+				if (USoundBase* Snd = Vis.UseSound.LoadSynchronous())
+				{
+					USoundAttenuation* Atn = Vis.DefaultAttenuation.LoadSynchronous();
+					ABasicPlayer* Player = gameInstance->GetPlayerByCharacterId(gameInstance->GetCurrentCharacterID());
+					if (Player)
+						SpawnSFXAttached(Player, Snd, Player->GetActorLocation(), 1.0f, Atn);
+				}
+				else if (gameInstance->AudioManager)
+				{
+					gameInstance->AudioManager->PlayUISound(EUISoundEvent::ItemUse);
+				}
+			}
+		}
 	}
 	// Handle drop item response
 	else if (MessageData.eventType == "dropItem" && MessageData.status == "success")

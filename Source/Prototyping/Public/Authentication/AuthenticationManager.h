@@ -123,4 +123,7 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Network|Auth")
 	FOnSessionExpired OnSessionExpired;
+
+	UPROPERTY(BlueprintAssignable, Category = "Network|Auth")
+	FOnVersionMismatch OnVersionMismatch;
 };

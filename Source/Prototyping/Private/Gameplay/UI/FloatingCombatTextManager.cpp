@@ -14,6 +14,11 @@ void UFloatingCombatTextManager::Init(UCanvasPanel* InCanvas, APlayerController*
 	PlayerController = InPC;
 	DamageTextClass = InDamageTextClass;
 
+	if (InPC)
+	{
+		CachedLocalPawn = InPC->GetPawn();
+	}
+
 	UE_LOG(LogTemp, Log, TEXT("FCTManager::Init - DamageTextClass set to %s"), *GetNameSafe(DamageTextClass));
 }
 
@@ -21,7 +26,6 @@ void UFloatingCombatTextManager::ShowDamage(const FVector& WorldLocation, float 
 {
 	UE_LOG(LogTemp, Warning, TEXT("FCTManager::ShowDamage - starting, damage: %f, location: %s"), Damage, *WorldLocation.ToString());
 
-	// Check if we have valid references BEFORE trying to check their values
 	if (!IsValid(PlayerController) || !DamageTextClass || RootCanvas == nullptr)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("FCTManager::ShowDamage - Invalid references: PC: %s, Class: %s, Canvas: %s"),
@@ -29,6 +33,21 @@ void UFloatingCombatTextManager::ShowDamage(const FVector& WorldLocation, float 
 			DamageTextClass ? TEXT("Valid") : TEXT("NULL"), 
 			RootCanvas ? TEXT("Valid") : TEXT("NULL"));
 		return;
+	}
+
+	if (!bOnLocalPlayer)
+	{
+		APawn* LocalPawn = CachedLocalPawn.Get();
+		if (!LocalPawn && PlayerController)
+		{
+			LocalPawn = PlayerController->GetPawn();
+			CachedLocalPawn = LocalPawn;
+		}
+		if (LocalPawn)
+		{
+			const float Dist = FVector::Dist(LocalPawn->GetActorLocation(), WorldLocation);
+			if (Dist > MaxVisibleDistanceCm) return;
+		}
 	}
 
 	FVector2D ScreenPos;
@@ -165,12 +184,25 @@ void UFloatingCombatTextManager::ShowSpecialText(const FVector& WorldLocation, c
 {
 	UE_LOG(LogTemp, Warning, TEXT("FCTManager::ShowSpecialText - starting, text: %s"), *Text);
 
-	// Check if we have valid references
 	if (!IsValid(PlayerController) || !DamageTextClass || RootCanvas == nullptr)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("FCTManager::ShowSpecialText - Invalid references: PC: %p, Class: %p, Canvas: %p"),
 			PlayerController, DamageTextClass.Get(), RootCanvas);
 		return;
+	}
+
+	{
+		APawn* LocalPawn = CachedLocalPawn.Get();
+		if (!LocalPawn && PlayerController)
+		{
+			LocalPawn = PlayerController->GetPawn();
+			CachedLocalPawn = LocalPawn;
+		}
+		if (LocalPawn)
+		{
+			const float Dist = FVector::Dist(LocalPawn->GetActorLocation(), WorldLocation);
+			if (Dist > MaxVisibleDistanceCm) return;
+		}
 	}
 
 	FVector2D ScreenPos;

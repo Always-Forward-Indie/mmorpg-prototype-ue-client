@@ -3,6 +3,7 @@
 #include "MyGameInstance.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/AudioComponent.h"
+#include "Sound/SoundAttenuation.h"
 
 /**
  * Spawn a one-shot SFX with SoundClassOverride set BEFORE Play() is called.
@@ -13,7 +14,8 @@
  * Declared inline to avoid ODR violations when both TUs end up in the same unity file.
  */
 inline UAudioComponent* SpawnSFXAttached(AActor* Owner, USoundBase* Sound,
-    const FVector& WorldLocation, float VolumeMultiplier = 1.0f)
+    const FVector& WorldLocation, float VolumeMultiplier = 1.0f,
+    USoundAttenuation* AttenuationSettings = nullptr)
 {
     if (!Owner || !Sound) { return nullptr; }
     USoundClass* SFXClass = nullptr;
@@ -23,14 +25,16 @@ inline UAudioComponent* SpawnSFXAttached(AActor* Owner, USoundBase* Sound,
     }
     if (!SFXClass)
     {
-        return UGameplayStatics::SpawnSoundAtLocation(
-            Owner, Sound, WorldLocation, FRotator::ZeroRotator, VolumeMultiplier);
+        return UGameplayStatics::SpawnSoundAttached(
+            Sound, Owner->GetRootComponent(), NAME_None,
+            WorldLocation, FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition,
+            true, VolumeMultiplier, 1.0f, 0.0f, AttenuationSettings, nullptr, true);
     }
     UAudioComponent* AC = UGameplayStatics::SpawnSoundAttached(
         Sound, Owner->GetRootComponent(), NAME_None,
         WorldLocation, FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition,
         /*bStopWhenAttachedToDestroyed=*/true,
-        VolumeMultiplier, 1.0f, 0.0f, nullptr, nullptr,
+        VolumeMultiplier, 1.0f, 0.0f, AttenuationSettings, nullptr,
         /*bAutoActivate=*/false);
     if (AC)
     {

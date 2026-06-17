@@ -30,6 +30,7 @@
 #include "Gameplay/NPCs/AmbientSpeechNetworkHandler.h"
 #include "Gameplay/WorldObjects/WorldObjectManager.h"
 #include "Gameplay/WorldObjects/WIONetworkHandler.h"
+#include "Gameplay/Idle/IdleTimeoutManager.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Data/EntityAudioRepository.h"
@@ -238,6 +239,13 @@ void UMyGameInstance::Init()
 	// Initialize World Interactive Objects system
 	WorldObjectManager = NewObject<UWorldObjectManager>(this);
 	WIONetworkHandler = NewObject<UWIONetworkHandler>(this);
+
+	// Initialize Idle Timeout system
+	IdleTimeoutManager = NewObject<UIdleTimeoutManager>(this);
+	if (IdleTimeoutManager)
+	{
+		IdleTimeoutManager->Configure(this, IdleTimeoutSeconds, IdleWarningSeconds);
+	}
 
 	// Initialize Bestiary system
 	BestiaryNetworkHandler = NewObject<UBestiaryNetworkHandler>(this);
@@ -829,6 +837,13 @@ void UMyGameInstance::ReturnToLoginLevel()
 
 	UE_LOG(LogTemp, Log, TEXT("ReturnToLoginLevel: Disconnecting from servers and returning to login"));
 
+	// Stop idle tracking — unregisters input processor and clears timers
+	// before we tear down the game world and network connections.
+	if (IdleTimeoutManager)
+	{
+		IdleTimeoutManager->StopTracking();
+	}
+
 	// 1. Send disconnect packets to Login Server and Chunk Server.
 	//    The server session is terminated; the client will re-authenticate when
 	//    logging in again.
@@ -1233,6 +1248,13 @@ void UMyGameInstance::TransitionToGameWorld()
 	SpawnedPlayers.Empty();
 	Player = nullptr;
 
+	// Belt-and-suspenders: deactivate PCG on the old world before transition.
+	// Ensures no stale PCG generation survives into the new world's load cycle.
+	if (UWorld* OldWorld = GetWorld())
+	{
+		SuppressPCGComponents(OldWorld);
+	}
+
 	// Defer DoOpenLevel by one tick so Slate has a full frame to composite the
 	// loading screen before the world begins to tear down.
 	FTSTicker::GetCoreTicker().AddTicker(
@@ -1575,6 +1597,33 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 		}
 
 		bGameWorldReady = false;
+
+		// Suppress PCG auto-generation during World Partition streaming.
+		// PCG components in WP cells auto-generate when their cell activates,
+		// but landscape heightfield data may not be fully loaded yet, which
+		// causes an access violation in UnrealEditor-PCG.dll.
+		SuppressPCGComponents(LoadedWorld);
+
+		// Periodic sweep to catch PCG components that appear as new WP cells
+		// stream in. Runs every 100ms until the world is ready.
+		LoadedWorld->GetTimerManager().SetTimer(PCGSuppressionTimerHandle,
+			FTimerDelegate::CreateLambda([this]()
+			{
+				if (bGameWorldReady)
+				{
+					if (UWorld* W = GetWorld())
+					{
+						W->GetTimerManager().ClearTimer(PCGSuppressionTimerHandle);
+					}
+					return;
+				}
+				if (UWorld* W = GetWorld())
+				{
+					SuppressPCGComponents(W);
+				}
+			}),
+			0.1f, true);
+
 		CheckGameWorldReady();    // first check immediately
 
 		FTSTicker::GetCoreTicker().AddTicker(
@@ -1737,6 +1786,22 @@ void UMyGameInstance::OnGameWorldReady()
 		UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] OnGameWorldReady: GetWorld() is null!"));
 		return;
 	}
+
+	// Stop the periodic PCG suppression timer — new cells that stream
+	// in after Gate 3 have fully loaded landscape data and won't crash.
+	GameWorld->GetTimerManager().ClearTimer(PCGSuppressionTimerHandle);
+
+	// Defer PCG activation by 1s to allow landscape heightfield render
+	// resources to finalize on the GPU.  IsAllStreamingCompleted() only
+	// guarantees cells are loaded, not that their GPU data is ready.
+	GameWorld->GetTimerManager().SetTimer(PCGSuppressionTimerHandle,
+		FTimerDelegate::CreateLambda([this, GameWorld]()
+		{
+			UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] Deferred PCG activation: %.1f sec after Gate 3"),
+				GameWorld->GetTimeSeconds());
+			ActivateAllPCGComponents(GameWorld);
+		}),
+		1.0f, false);
 
 	APlayerController* PC = GameWorld->GetFirstPlayerController();
 	if (PC) { PC->bShowMouseCursor = false; }
@@ -2039,6 +2104,16 @@ void UMyGameInstance::AddLoginWidgetToViewport()
 		}
 	}
 
+	// Social links sit between logo (Z=5) and login form (Z=10).
+	if (SocialLinksWidgetClass)
+	{
+		SocialLinksWidget = CreateWidget<USocialLinksWidget>(this, SocialLinksWidgetClass);
+		if (SocialLinksWidget)
+		{
+			SocialLinksWidget->AddToViewport(6);
+		}
+	}
+
 	// Prefer new LoginFlowWidget if configured
 	if (LoginFlowWidgetClass)
 	{
@@ -2081,6 +2156,11 @@ void UMyGameInstance::RemoveLoginWidgetFromViewport()
 	{
 		LoginLogoWidget->RemoveFromParent();
 		LoginLogoWidget = nullptr;
+	}
+	if (SocialLinksWidget)
+	{
+		SocialLinksWidget->RemoveFromParent();
+		SocialLinksWidget = nullptr;
 	}
 	if (LoginFlowWidget)
 	{
@@ -3089,6 +3169,42 @@ void UMyGameInstance::RouteEmoteActionToPlayer(int32 CharacterId, const FString&
     if (TargetPlayer)
     {
         TargetPlayer->PlayEmoteForCharacter(EmoteSlug, AnimationName);
+	}
+}
+
+void UMyGameInstance::SuppressPCGComponents(UWorld* World)
+{
+	if (!World) return;
+
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		TArray<UPCGComponent*> PCGComps;
+		It->GetComponents<UPCGComponent>(PCGComps);
+		for (UPCGComponent* Comp : PCGComps)
+		{
+			if (IsValid(Comp) && Comp->IsGenerating())
+			{
+				Comp->Deactivate();
+			}
+		}
+	}
+}
+
+void UMyGameInstance::ActivateAllPCGComponents(UWorld* World)
+{
+	if (!World) return;
+
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		TArray<UPCGComponent*> PCGComps;
+		It->GetComponents<UPCGComponent>(PCGComps);
+		for (UPCGComponent* Comp : PCGComps)
+		{
+			if (IsValid(Comp))
+			{
+				Comp->GenerateLocal(EPCGComponentGenerationTrigger::GenerateAtRuntime, true);
+			}
+		}
 	}
 }
 

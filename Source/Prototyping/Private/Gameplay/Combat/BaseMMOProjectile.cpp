@@ -13,6 +13,7 @@
 #include "MyGameInstance.h"
 #include "Gameplay/Combat/CombatSystemManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
+#include "Gameplay/Players/BasicPlayer.h"
 #include "Data/DataStructs.h"
 
 ABaseMMOProjectile::ABaseMMOProjectile()
@@ -143,6 +144,14 @@ void ABaseMMOProjectile::SetupProjectile(const FString& InSkillSlug, int32 InCas
     {
         if (USoundBase* FlightSnd = Def.castEndSound.LoadSynchronous())
         {
+            if (ABasicPlayer* P = Cast<ABasicPlayer>(GetInstigator()))
+            {
+                if (const FEntityAudioProfile* Prof = P->GetAudioProfile())
+                {
+                    if (!Prof->DefaultAttenuation.IsNull())
+                        FlightAudio->AttenuationSettings = Prof->DefaultAttenuation.LoadSynchronous();
+                }
+            }
             FlightAudio->SetSound(FlightSnd);
             FlightAudio->Play();
         }
@@ -243,7 +252,18 @@ void ABaseMMOProjectile::OnProjectileImpact(const FVector& ImpactLocation)
             {
                 if (USoundBase* ImpactSnd = Def.hitSound.LoadSynchronous())
                 {
-                    UGameplayStatics::PlaySoundAtLocation(this, ImpactSnd, ImpactLocation);
+                    USoundAttenuation* Atn = nullptr;
+                    if (ABasicPlayer* P = Cast<ABasicPlayer>(GetInstigator()))
+                    {
+                        if (const FEntityAudioProfile* Prof = P->GetAudioProfile())
+                        {
+                            if (!Prof->DefaultAttenuation.IsNull())
+                                Atn = Prof->DefaultAttenuation.LoadSynchronous();
+                        }
+                    }
+                    UGameplayStatics::SpawnSoundAttached(ImpactSnd, GetRootComponent(), NAME_None,
+                        ImpactLocation, FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition,
+                        true, 1.0f, 1.0f, 0.0f, Atn, nullptr, true);
                 }
             }
         }

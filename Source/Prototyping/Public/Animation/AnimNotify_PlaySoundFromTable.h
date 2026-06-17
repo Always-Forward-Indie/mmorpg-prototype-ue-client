@@ -16,17 +16,18 @@
  *   1. Open any shared animation in the Animation Editor.
  *   2. Add Notify ? Play Sound From Table at the desired frame.
  *   3. Set SoundSlotName to one of:
- *        "Idle"        → picks from FMobAudioData::IdleSounds[]
- *        "Walk"        → picks from FMobAudioData::WalkSounds[]
- *        "Run"         → picks from FMobAudioData::RunSounds[]
- *        "Voice"       → picks random from FMobAudioData::AttackVoiceSounds[] (melee swing cry)
- *        "CastVoice"   → picks random from FMobAudioData::CastVoiceSounds[]  (cast-start voice)
- *        "ReleaseVoice"→ picks random from FMobAudioData::ReleaseVoiceSounds[] (cast-release shout)
- *        "Swing"       → uses FMobAudioData::SwingSound (mob-specific weapon/limb whoosh)
- *        "Attack"      → uses FMobAudioData::AttackSound
- *        "Hit"         → uses FMobAudioData::HitSound
- *        "Death"       → uses FMobAudioData::DeathSound
- *        "Aggro"       → uses FMobAudioData::AggroSound
+ *        "Idle"        — picks from IdleSounds[]
+ *        "Voice"       — picks random from AttackVoiceSounds[]
+ *        "CastVoice"   — picks random from CastVoiceSounds[]
+ *        "ReleaseVoice"— picks random from ReleaseVoiceSounds[]
+ *        "Swing"       — uses SwingSound
+ *        "Attack"      — uses AttackSound
+ *        "Hit"         — uses HitSound
+ *        "Death"       — uses DeathSound
+ *        "Aggro"       — uses AggroSound
+ *
+ *   For footsteps, use AnimNotify "Footstep" instead — it supports
+ *   per-surface lookup, FootwearType composite keys, and entity pool fallback.
  *
  * Works on any ABasicMOB. Silently ignored on players or non-mob actors.
  */

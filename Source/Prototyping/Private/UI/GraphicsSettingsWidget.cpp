@@ -3,6 +3,7 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "PCGComponent.h"
 #include "EngineUtils.h"
+#include "MyGameInstance.h"
 
 static const TArray<TPair<FString, EWindowMode::Type>> WindowModeOptions = {
 	{ TEXT("Fullscreen"),         EWindowMode::Fullscreen },
@@ -235,6 +236,17 @@ void UGraphicsSettingsWidget::ApplySettings()
 		World->GetTimerManager().SetTimer(PCGRefreshHandle, [WeakWorld]()
 		{
 			if (!WeakWorld.IsValid()) return;
+
+			// Guard: skip PCG refresh if the game world isn't ready yet
+			// (World Partition still streaming = landscape data may be invalid).
+			if (UMyGameInstance* GI = Cast<UMyGameInstance>(WeakWorld->GetGameInstance()))
+			{
+				if (!GI->IsGameWorldReady())
+				{
+					return;
+				}
+			}
+
 			for (TActorIterator<AActor> It(WeakWorld.Get()); It; ++It)
 			{
 				TArray<UPCGComponent*> PCGComps;

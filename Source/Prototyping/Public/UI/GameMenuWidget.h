@@ -14,6 +14,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameMenuResumeClicked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameMenuSettingsClicked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameMenuExitToLoginClicked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameMenuExitToDesktopClicked);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameMenuBugReportClicked);
 
 /**
  * UGameMenuWidget
@@ -28,6 +29,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameMenuExitToDesktopClicked);
  * Optional UMG widget names (BindWidgetOptional):
  *   Btn_ExitToLogin     — disconnects and returns to the login screen
  *   Btn_ExitToDesktop   — quits the application
+ *   Btn_BugReport       — opens the bug report / feedback URL
  *
  * Create a Blueprint child (e.g. WBP_GameMenu) and lay out those buttons.
  * Bind OnResume / OnSettingsClicked / OnExitToLogin / OnExitToDesktop in UIManager.
@@ -55,6 +57,9 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Game Menu|Events")
 	FOnGameMenuExitToDesktopClicked OnExitToDesktopClicked;
 
+	UPROPERTY(BlueprintAssignable, Category = "Game Menu|Events")
+	FOnGameMenuBugReportClicked OnBugReportClicked;
+
 	// -----------------------------------------------------------------------
 	// UMG bindings
 	// -----------------------------------------------------------------------
@@ -70,6 +75,9 @@ public:
 
 	UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Game Menu")
 	UButton* Btn_ExitToDesktop = nullptr;
+
+	UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Game Menu")
+	UButton* Btn_BugReport = nullptr;
 
 	// -----------------------------------------------------------------------
 	// API
@@ -107,4 +115,7 @@ UFUNCTION()
 
 	UFUNCTION()
 	void HandleExitToDesktopClicked();
+
+	UFUNCTION()
+	void HandleBugReportClicked();
 };

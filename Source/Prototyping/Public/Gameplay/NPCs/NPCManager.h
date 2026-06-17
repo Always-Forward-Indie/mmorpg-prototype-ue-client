@@ -148,7 +148,9 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Manager Settings", meta = (AllowPrivateAccess = "true"))
 	float CleanupInterval = 30.0f;
 
-	// State tracking
+	TArray<FNPCStruct> PendingNPCSpawns;
+	void FlushPendingSpawns();
+
 	bool bIsInitialized = false;
 	FTimerHandle CleanupTimerHandle;
 };

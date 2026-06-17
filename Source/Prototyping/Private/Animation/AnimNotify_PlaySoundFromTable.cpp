@@ -37,65 +37,6 @@ void UAnimNotify_PlaySoundFromTable::Notify(USkeletalMeshComponent* MeshComp,
 			SoundToPlay = Mob->IdleSounds[Idx];
 		}
 	}
-	else if (SlotStr == TEXT("Walk") || SlotStr == TEXT("Run"))
-	{
-		TArray<USoundBase*>& EntityPool = (SlotStr == TEXT("Walk")) ? Mob->WalkSounds : Mob->RunSounds;
-
-		// Surface trace — same PhysMaterial lookup as AnimNotify_Footstep
-		FVector TraceStart = Mob->GetActorLocation();
-		if (MeshComp->DoesSocketExist(FootSocketName))
-		{
-			TraceStart = MeshComp->GetSocketLocation(FootSocketName);
-		}
-		const FVector TraceEnd = TraceStart - FVector(0.f, 0.f, 60.f);
-
-		FName PhysMatName = NAME_None;
-		if (UWorld* World = Mob->GetWorld())
-		{
-			FHitResult Hit;
-			FCollisionQueryParams Params;
-			Params.bReturnPhysicalMaterial = true;
-			Params.AddIgnoredActor(Mob);
-			if (World->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_Visibility, Params))
-			{
-				if (Hit.PhysMaterial.IsValid())
-				{
-					PhysMatName = Hit.PhysMaterial->GetFName();
-				}
-			}
-		}
-
-		// Priority 1: surface-specific sound from FootstepSoundsTable (shared with players)
-		if (PhysMatName != NAME_None)
-		{
-			if (UMyGameInstance* GI = Cast<UMyGameInstance>(Mob->GetGameInstance()))
-			{
-				if (UDataTable* FootstepTable = GI->GetFootstepSoundsTable())
-				{
-					if (FFootstepSoundData* Row = FootstepTable->FindRow<FFootstepSoundData>(
-						PhysMatName, TEXT("MOBFootstep")))
-					{
-						if (Row->FootstepSounds.Num() > 0)
-						{
-							SoundToPlay = Row->FootstepSounds[
-								FMath::RandRange(0, Row->FootstepSounds.Num() - 1)].LoadSynchronous();
-						}
-						FinalVolume *= Row->VolumeMultiplier;
-						if (!Row->FootstepVFX.IsNull())
-						{
-							FootVFX = Row->FootstepVFX.LoadSynchronous();
-						}
-					}
-				}
-			}
-		}
-
-		// Priority 2: mob-specific footstep pool (entity fallback when no surface match)
-		if (!SoundToPlay && EntityPool.Num() > 0)
-		{
-			SoundToPlay = EntityPool[FMath::RandRange(0, EntityPool.Num() - 1)];
-		}
-	}
 	else if (SlotStr == TEXT("Voice"))
 	{
 		if (Mob->AttackVoiceSounds.Num() > 0)
@@ -153,7 +94,7 @@ void UAnimNotify_PlaySoundFromTable::Notify(USkeletalMeshComponent* MeshComp,
 				FinalVolume,
 				/*PitchMultiplier=*/1.0f,
 				/*StartTime=*/0.0f,
-				/*AttenuationSettings=*/nullptr,
+				/*AttenuationSettings=*/Mob->DefaultAttenuation,
 				/*ConcurrencySettings=*/nullptr,
 				/*bAutoActivate=*/false);
 			if (AC)
@@ -165,8 +106,9 @@ void UAnimNotify_PlaySoundFromTable::Notify(USkeletalMeshComponent* MeshComp,
 		}
 		else
 		{
-			UGameplayStatics::SpawnSoundAtLocation(Mob, SoundToPlay, Mob->GetActorLocation(),
-				FRotator::ZeroRotator, FinalVolume, 1.0f);
+			UGameplayStatics::SpawnSoundAttached(SoundToPlay, Mob->GetRootComponent(), NAME_None,
+				Mob->GetActorLocation(), FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition,
+				true, FinalVolume, 1.0f, 0.0f, Mob->DefaultAttenuation, nullptr, true);
 		}
 	}
 

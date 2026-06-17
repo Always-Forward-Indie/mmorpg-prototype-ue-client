@@ -25,6 +25,11 @@ struct FFootstepSoundData : public FTableRowBase
 	          meta = (ClampMin = "0.0", ClampMax = "2.0"))
 	float VolumeMultiplier = 1.0f;
 
+	/** Per-surface attenuation override. When set, takes priority over the entity's
+	 *  DefaultAttenuation from its audio profile. E.g. grass=15m, stone=30m. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Footstep")
+	TSoftObjectPtr<USoundAttenuation> DefaultAttenuation;
+
 	FFootstepSoundData() {}
 };
 
@@ -62,7 +67,7 @@ public:
 		return TEXT("Footstep");
 	}
 
-	/** Which foot this notify is for — determines the line-trace origin socket. */
+	/** Which foot this notify is for ï¿½ determines the line-trace origin socket. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Footstep")
 	FName FootSocketName = TEXT("foot_l");
 

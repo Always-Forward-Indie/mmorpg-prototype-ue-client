@@ -15,6 +15,7 @@
 #include "Audio/AudioManager.h"
 #include "Audio/AudioConfigDataAsset.h"
 #include "DevMode/DevModeDataProvider.h"
+#include "Gameplay/Idle/IdleTimeoutManager.h"
 
 #include <Kismet/GameplayStatics.h>
 #include "Blueprint/UserWidget.h"
@@ -25,6 +26,7 @@
 #include "EngineUtils.h" 
 #include "Widgets/SWeakWidget.h"
 #include "MoviePlayer.h"
+#include "PCGComponent.h"
 
 #include "Gameplay/Players/MyCameraActor.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -32,6 +34,7 @@
 #include "Gameplay/UI/LoginFlowWidget.h"
 #include "Gameplay/UI/W_LoginScreenOverlayWidget.h"
 #include "Gameplay/UI/W_LoginLogoWidget.h"
+#include "Gameplay/UI/SocialLinksWidget.h"
 #include "UI/W_SettingsWidget.h"
 #include "Gameplay/UI/CharacterListItem.h"
 #include "Gameplay/UI/MonitorStatsWidget.h"
@@ -130,6 +133,10 @@ FDateTime ReceiveTimeLoginServer;
 	// Safety fallback timer: removes loading screen even if some signals never arrive
 	FTimerHandle LoadingScreenSafetyTimerHandle;
 
+	// Periodic PCG deactivation during WP streaming to prevent access violations
+	// in UnrealEditor-PCG.dll when landscape data isn't fully loaded yet.
+	FTimerHandle PCGSuppressionTimerHandle;
+
 	// Number of render-thread frames observed since all ReadyFlags were set.
 	// Counted on the render thread via OnEndFrameRT; removal dispatched back to
 	// the game thread so UMG / TimerManager are touched only from GT.
@@ -218,6 +225,13 @@ public:
 	// Returns true if the game world is loaded and ready
 	bool IsGameWorldReady() const { return bGameWorldReady; }
 
+	// Deactivate all PCG components in the world to prevent auto-generation
+	// during World Partition streaming (landscape data may not be ready).
+	void SuppressPCGComponents(UWorld* World);
+
+	// Re-activate all PCG components after World Partition streaming is complete.
+	void ActivateAllPCGComponents(UWorld* World);
+
 	// Called by PlayerManager when the server sends playerReady ACK (Phase 3 complete).
 	void NotifyPlayerReadyAck();
 
@@ -241,6 +255,15 @@ public:
 	// Configurable in Blueprint defaults � no rebuild needed.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI", meta = (ClampMin = "5.0", ClampMax = "30.0"))
 	float LoadingScreenSafetyTimeout = 15.0f;
+
+	// AFK idle timeout (seconds of inactivity before disconnect).
+	// Configurable in Blueprint defaults — no rebuild needed.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gameplay|AFK", meta = (ClampMin = "60.0", ClampMax = "3600.0"))
+	float IdleTimeoutSeconds = 300.0f;
+
+	// Warning shown this many seconds before forced disconnect.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gameplay|AFK", meta = (ClampMin = "10.0", ClampMax = "300.0"))
+	float IdleWarningSeconds = 60.0f;
 
 	UPROPERTY()
 	// Network manager
@@ -485,6 +508,15 @@ public:
 	// World Interactive Objects network handler
 	UPROPERTY()
 	class UWIONetworkHandler* WIONetworkHandler;
+
+	// Idle timeout manager
+	UPROPERTY()
+	class UIdleTimeoutManager* IdleTimeoutManager;
+
+	// Client protocol version — sent to server for compatibility checking.
+	// Format: MAJOR.MINOR.PATCH (SemVer). Change in BP_MyGameInstance defaults.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Version")
+	FString ClientVersion = TEXT("0.1.0");
 
 	// DevMode configuration (editable in Blueprint defaults)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DevMode")
@@ -772,6 +804,14 @@ public:
 
 	UPROPERTY()
 	UW_LoginLogoWidget* LoginLogoWidget;
+
+	/** Social links widget shown on the login screen (Z-order 6, between logo and login form).
+	 *  Assign WBP_SocialLinks (subclass of USocialLinksWidget). Leave empty to disable. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI", meta = (DisplayName = "Social Links Widget Class"))
+	TSubclassOf<USocialLinksWidget> SocialLinksWidgetClass;
+
+	UPROPERTY()
+	USocialLinksWidget* SocialLinksWidget;
 
 	/** Tabbed settings window shown when the player clicks the Settings button
 	 *  on the login screen overlay.

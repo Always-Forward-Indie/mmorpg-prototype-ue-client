@@ -147,3 +147,33 @@ Added PCG, MoviePlayer, RenderCore module dependencies to Build.cs.
 Updated server IPs in server_config.json.
 
 ===========
+
+v0.0.10a
+17.06.2026
+===========
+
+2026-06-17
+----------
+Added Idle Timeout system: UIdleTimeoutManager tracks input inactivity with configurable timeout (default 300s) and warning (60s); auto-disconnects on AFK. IdleWarningWidget (WBP_IdleWarning) shows countdown overlay.
+Added client version checking: ClientVersion field (SemVer) sent in login/register requests; version mismatch popup on ERR_VERSION_OUTDATED / ERR_VERSION_TOO_NEW with Quit option.
+Added Social Links widget (USocialLinksWidget, WBP_SocialLinks) on login screen: Telegram, Website, Twitter, Youtube, Discord buttons.
+Added Bug Report button on game menu (WBP_GameMenu) and login overlay (WBP_LoginScreenOverlay); opens configurable URL.
+Extracted FEntityAudioProfile and FEntitySkillVoiceOverride from DataStructs.h into EntityAudioData.h; added FootwearType, Footsteps (unified array), NPC social sounds (GreetingSound, InteractSound, FarewellSound), DefaultAttenuation.
+Added DefaultAttenuation support across all entity audio: Player, MOB, NPC, projectiles, dropped items, footstep notifies. All sound spawns now use attenuation from entity's audio profile.
+Unified WalkSounds/RunSounds into single FootstepSounds array across MOB, NPC, and FEntityAudioProfile. Footstep surface lookup uses composite key PhysMat_FootwearType (e.g. PM_Stone_boot) with generic fallback.
+Removed Walk/Run slots from AnimNotify_PlaySoundFromTable; footstep logic now handled exclusively by AnimNotify_Footstep with entity pool fallback (Player -> FEntityAudioProfile, MOB/NPC -> FootstepSounds array).
+Added item audio: EquipSound, UnequipSound, UseSound, DefaultAttenuation to FItemVisualData. EquipmentManager plays equip/unequip sounds; InventoryManager plays item use sound; DroppedItemActor uses attenuation on pickup/drop sounds.
+Refactored data structs: removed redundant MobType/NPCType fields (row name is slug); added AudioProfileId to FMobDefinition and FNPCDefinition for entity-level audio profile lookup.
+BasicPlayer: AudioProfileId defaults to None (set from DT_CharacterVisuals at spawn); caches FootwearType from audio profile; other-client nameplate HP updates; chat input focus released on camera rotation.
+BasicMOB: unified FootstepSounds array; removed PlayWalkRandomSound/PlayRunRandomSound; DefaultAttenuation and FootwearType fields from audio profile.
+BasicNPC: AudioProfileId priority chain for audio (Profile -> Legacy FNPCAudioData); unified FootstepSounds; DefaultAttenuation and FootwearType fields; GetFootstepSounds/GetFootwearType accessors.
+Added FCT distance culling: MaxVisibleDistanceCm and FadeStartDistanceCm configurable in UIManager; cached local Pawn for distance checks; ShowDamage/ShowSpecialText skip distant targets.
+Chat widget: auto-refocus input box after Enter submit; ReleaseInputFocus() for returning keyboard control to game.
+Replaced W_Version.uasset with typed WBP_ClientVersion.uasset (UGameVersionWidget C++ backing class).
+Added PCG component suppression during World Partition streaming to prevent UnrealEditor-PCG.dll access violation when landscape data is not fully loaded. Periodic sweep catches newly streamed cells.
+Deferred PCG activation 1s after Gate 3 to allow landscape heightfield GPU resources to finalize. ActivateAllPCGComponents/SuppressPCGComponents on UMyGameInstance.
+Added version field to FMessageDataStruct for protocol versioning. JSONParser deserializes version from network header.
+Updated server IPs to 127.0.0.1 in server_config.json.
+New audio assets: SA_Default, SA_Steps, SFX/ content directory.
+
+===========

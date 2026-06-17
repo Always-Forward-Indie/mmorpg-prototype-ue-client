@@ -143,21 +143,28 @@ private:
 public:
 	UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 
-private:
-	/**
-	 * Row key in DT_EntityAudioProfiles used to drive all audio for this player character.
-	 * Assign a row name (e.g. "warrior_m", "mage_f", "archer_m") in the player Blueprint.
-	 * All individual sound slots (death, revive, hit, heal, voice, etc.) are read from
-	 * the matching FEntityAudioProfile row at runtime.  Leave as NAME_None to play silence
-	 * on all generic events (skill-specific sounds still work via SkillDefinition table).
-	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Audio", meta = (AllowPrivateAccess = "true"))
-	FName AudioProfileId = FName("warrior_m");
-
 	/** Returns the audio profile for this player from the GameInstance repository. 
 	 *  Returns nullptr when AudioProfileId is not set or when the repository is not ready. */
 	const FEntityAudioProfile* GetAudioProfile() const;
 
+private:
+	/**
+	 * Row key in DT_EntityAudioProfiles used to drive all audio for this player character.
+	 * Set by ApplyVisualFromDataTable() from the DT_CharacterVisuals row at spawn time.
+	 * The DataTable is the authoritative source; this CDO default is a fallback.
+	 * Leave as NAME_None — the DataTable override will set the correct profile.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Audio", meta = (AllowPrivateAccess = "true"))
+	FName AudioProfileId = NAME_None;
+
+	/** Cached from audio profile at spawn. Used by footstep surface lookup. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Audio", meta = (AllowPrivateAccess = "true"))
+	FName FootwearType = NAME_None;
+
+public:
+	FName GetFootwearType() const { return FootwearType; }
+
+private:
 	// Nameplate component
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI", meta = (AllowPrivateAccess = "true"))
 	class UPlayerNameplateComponent* NameplateComponent;

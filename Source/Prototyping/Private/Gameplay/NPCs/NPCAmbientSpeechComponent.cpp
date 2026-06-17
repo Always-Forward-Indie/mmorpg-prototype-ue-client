@@ -281,8 +281,9 @@ void UNPCAmbientSpeechComponent::ShowSpeechLine(const FAmbientSpeechLineData& Li
         USoundBase* Sound = Def.SpeechSound.LoadSynchronous();
         if (Sound && GetOwner())
         {
-            UGameplayStatics::PlaySoundAtLocation(GetWorld(), Sound,
-                GetOwner()->GetActorLocation());
+            UGameplayStatics::SpawnSoundAttached(Sound, GetOwner()->GetRootComponent(), NAME_None,
+                GetOwner()->GetActorLocation(), FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition,
+                true, 1.0f, 1.0f, 0.0f, nullptr, nullptr, true);
         }
     }
 }

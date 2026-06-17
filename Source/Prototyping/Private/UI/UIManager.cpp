@@ -25,9 +25,11 @@
 #include "Gameplay/Quest/QuestManager.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "Gameplay/UI/DeathScreenWidget.h"
+#include "Gameplay/UI/GameVersionWidget.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Framework/Application/SlateApplication.h"
+#include "HAL/PlatformProcess.h"
 #include "Gameplay/Repair/RepairManager.h"
 #include "Gameplay/SkillShop/SkillShopManager.h"
 #include "Gameplay/Trade/TradeManager.h"
@@ -70,6 +72,7 @@
 #include "Gameplay/UI/NameplateCanvasWidget.h"
 #include "UI/WIOInteractionPromptWidget.h"
 #include "UI/WIOChannelBarWidget.h"
+#include "UI/IdleWarningWidget.h"
 #include "Gameplay/WorldObjects/WorldObjectManager.h"
 #include "Gameplay/WorldObjects/WorldInteractiveObjectActor.h"
 #include "Services/LocalizationSubsystem.h"
@@ -282,6 +285,8 @@ void UUIManager::InitFTCManager(APlayerController* InPC)
 
 	// Initialize the FCT Manager
 	FCTManager->Init(InDamageCanvasWidget->GetDamageCanvas(), PlayerController, InDamageTextClass);
+	FCTManager->MaxVisibleDistanceCm = FCTMaxVisibleDistanceCm;
+	FCTManager->FadeStartDistanceCm = FCTFadeStartDistanceCm;
 
 	UE_LOG(LogTemp, Warning, TEXT("UIManager: FCT Manager initialized successfully with DamageCanvasWidget"));
 
@@ -329,12 +334,23 @@ void UUIManager::CreateUIWidgets()
 	CreateSkillWidgets();
 
 	// Create game version widget
+	CreateGameVersionWidget();
+
 	// Create game menu bar (always-visible bottom bar)
 	CreateGameMenuBarWidget();
 
 	// Create game menu (opened on Escape)
 	CreateGameMenuWidget();
 	
+	// Create idle warning widget (hidden by default, shown by IdleTimeoutManager)
+	if (IdleWarningWidgetClass)
+	{
+		IdleWarningWidget = CreateWidget<UIdleWarningWidget>(GetWorld(), IdleWarningWidgetClass);
+		if (IdleWarningWidget)
+		{
+			IdleWarningWidget->AddToViewport(70);
+		}
+	}
 	
 	UE_LOG(LogTemp, Warning, TEXT("UIManager: All UI widgets created successfully"));
 	UE_LOG(LogTemp, Warning, TEXT("UIManager: All UI widgets created successfully"));
@@ -552,7 +568,7 @@ void UUIManager::CreateGameVersionWidget()
 		GameVersionWidget = nullptr;
 	}
 	// Create the widget
-	GameVersionWidget = CreateWidget<UUserWidget>(GetWorld(), GameVersionWidgetClass);
+	GameVersionWidget = CreateWidget<UGameVersionWidget>(GetWorld(), GameVersionWidgetClass);
 	if (!GameVersionWidget)
 	{
 		UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create game version widget"));
@@ -629,6 +645,7 @@ void UUIManager::CreateGameMenuWidget()
 	GameMenuWidget->OnSettingsClicked.AddDynamic(this,  &UUIManager::HandleSettingsClicked);
 	GameMenuWidget->OnExitToLoginClicked.AddDynamic(this,   &UUIManager::HandleExitToLoginClicked);
 	GameMenuWidget->OnExitToDesktopClicked.AddDynamic(this, &UUIManager::HandleExitToDesktopClicked);
+	GameMenuWidget->OnBugReportClicked.AddDynamic(this, &UUIManager::HandleBugReportClicked);
 
 	UE_LOG(LogTemp, Warning, TEXT("UIManager: GameMenuWidget created and wired (class: %s)"),
 		*GameMenuWidgetClass->GetName());
@@ -1861,6 +1878,15 @@ void UUIManager::HandleExitToDesktopClicked()
 	}
 }
 
+void UUIManager::HandleBugReportClicked()
+{
+	UE_LOG(LogTemp, Log, TEXT("UIManager::HandleBugReportClicked"));
+	if (!BugReportUrl.IsEmpty())
+	{
+		FPlatformProcess::LaunchURL(*BugReportUrl, nullptr, nullptr);
+	}
+}
+
 // GameMenuBar button handlers
 void UUIManager::OnMenuBarInventoryClicked()    { ToggleInventory(); }
 void UUIManager::OnMenuBarEquipmentClicked()    { ToggleEquipment(); }
@@ -2240,4 +2266,28 @@ void UUIManager::HandleWIOInteractResult(const FWIOInteractResult& Result)
 void UUIManager::HandleWIOChannelCancelled(int32 ObjectId)
 {
 	HideWIOChannelBar();
+}
+
+void UUIManager::ShowIdleWarning(int32 TotalSecondsRemaining)
+{
+	if (IdleWarningWidget)
+	{
+		IdleWarningWidget->ShowIdleWarning(TotalSecondsRemaining);
+	}
+}
+
+void UUIManager::HideIdleWarning()
+{
+	if (IdleWarningWidget)
+	{
+		IdleWarningWidget->HideIdleWarning();
+	}
+}
+
+void UUIManager::UpdateIdleCountdown(int32 SecondsRemaining)
+{
+	if (IdleWarningWidget)
+	{
+		IdleWarningWidget->UpdateCountdown(SecondsRemaining);
+	}
 }

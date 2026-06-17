@@ -6,6 +6,7 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "GameFramework/Pawn.h"
 #include "FloatingCombatTextManager.generated.h"
 
 class UDamageTextWidget;
@@ -25,12 +26,14 @@ public:
 	void ShowMissText(const FVector& WorldLocation);
 	void ShowBlockedText(const FVector& WorldLocation);
 
-	// Per-call counter for spread cycling (avoids pure randomness).
-	int32 SpreadCounter = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FCT|Distance")
+	float MaxVisibleDistanceCm = 4000.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FCT|Distance")
+	float FadeStartDistanceCm = 3000.0f;
 
 	TSubclassOf<UDamageTextWidget> DamageTextClass;
 
-	// Validation getter methods
 	UCanvasPanel* GetRootCanvas() const;
 	APlayerController* GetPlayerController() const;
 	TSubclassOf<UDamageTextWidget> GetDamageTextClass() const;
@@ -40,6 +43,8 @@ private:
 
 	UCanvasPanel* RootCanvas = nullptr;
 	APlayerController* PlayerController = nullptr;
+
+	TWeakObjectPtr<APawn> CachedLocalPawn;
 
 	UDamageTextWidget* GetOrCreateWidget();
 	void ReturnToPool(UDamageTextWidget* Widget);

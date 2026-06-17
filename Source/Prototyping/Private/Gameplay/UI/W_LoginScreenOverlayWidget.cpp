@@ -3,6 +3,7 @@
 #include "Gameplay/UI/W_LoginScreenOverlayWidget.h"
 #include "MyGameInstance.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "HAL/PlatformProcess.h"
 
 void UW_LoginScreenOverlayWidget::NativeConstruct()
 {
@@ -16,6 +17,11 @@ void UW_LoginScreenOverlayWidget::NativeConstruct()
     if (ExitGameButton)
     {
         ExitGameButton->OnClicked.AddDynamic(this, &UW_LoginScreenOverlayWidget::HandleExitGameClicked);
+    }
+
+    if (BugReportButton)
+    {
+        BugReportButton->OnClicked.AddDynamic(this, &UW_LoginScreenOverlayWidget::HandleBugReportClicked);
     }
 }
 
@@ -40,4 +46,12 @@ void UW_LoginScreenOverlayWidget::OnSettingsClicked_Implementation()
 void UW_LoginScreenOverlayWidget::OnExitGameClicked_Implementation()
 {
     UKismetSystemLibrary::QuitGame(this, nullptr, EQuitPreference::Quit, false);
+}
+
+void UW_LoginScreenOverlayWidget::HandleBugReportClicked()
+{
+    if (!BugReportUrl.IsEmpty())
+    {
+        FPlatformProcess::LaunchURL(*BugReportUrl, nullptr, nullptr);
+    }
 }

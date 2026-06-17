@@ -4,6 +4,9 @@
 #include "Gameplay/Items/InventoryManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
+#include "Gameplay/Items/ItemManager.h"
+#include "Utils/AudioSpawnHelpers.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
@@ -142,7 +145,6 @@ void UEquipmentManager::OnEquipmentStateReceived(const FEquipmentStateData& Stat
 
 void UEquipmentManager::OnEquipResultReceived(const FEquipResultData& Result)
 {
-    // Only broadcast equip results for our own character
     if (GameInstance && Result.characterId > 0 &&
         Result.characterId != GameInstance->GetCurrentCharacterID())
     {
@@ -150,8 +152,40 @@ void UEquipmentManager::OnEquipResultReceived(const FEquipResultData& Result)
     }
     OnEquipResultReceivedDelegate.Broadcast(Result);
 
-    // Re-sync so InventoryManager immediately reflects the new equip/unequip state.
-    // EQUIPMENT_STATE usually follows shortly but re-syncing here avoids one-frame lag.
+    if (Result.bSuccess)
+    {
+        USoundBase* Snd = nullptr;
+        USoundAttenuation* Atn = nullptr;
+
+        if (InventoryManager && GameInstance)
+        {
+            FInventoryItemStruct Item = InventoryManager->GetItemById(Result.inventoryItemId);
+            if (!Item.itemSlug.IsEmpty())
+            {
+                FItemVisualData Vis = GameInstance->GetItemManager()->GetItemVisualDataBySlug(Item.itemSlug);
+                if (Result.action == TEXT("equip"))
+                    Snd = Vis.EquipSound.LoadSynchronous();
+                else if (Result.action == TEXT("unequip"))
+                    Snd = Vis.UnequipSound.LoadSynchronous();
+                Atn = Vis.DefaultAttenuation.LoadSynchronous();
+            }
+        }
+
+        if (Snd)
+        {
+            ABasicPlayer* Player = GameInstance->GetPlayerByCharacterId(Result.characterId);
+            if (Player)
+                SpawnSFXAttached(Player, Snd, Player->GetActorLocation(), 1.0f, Atn);
+        }
+        else if (GameInstance && GameInstance->AudioManager)
+        {
+            if (Result.action == TEXT("equip"))
+                GameInstance->AudioManager->PlayUISound(EUISoundEvent::ItemEquip);
+            else if (Result.action == TEXT("unequip"))
+                GameInstance->AudioManager->PlayUISound(EUISoundEvent::ItemUnequip);
+        }
+    }
+
     SyncEquippedFlagsToInventory();
 }
 

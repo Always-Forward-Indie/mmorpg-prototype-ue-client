@@ -52,6 +52,7 @@ class UNotificationZoneBannerWidget;
 class UNotificationScreenCenterWidget;
 class UNotificationAtmosphereWidget;
 class UWorldNotificationManager;
+class UGameVersionWidget;
 class UTitlesWidget;
 class UReputationWidget;
 class UTitleManager;
@@ -60,6 +61,7 @@ class UReputationManager;
 class UWIOInteractionPromptWidget;
 class UWIOChannelBarWidget;
 class UWorldObjectManager;
+class UIdleWarningWidget;
 
 // Delegate for UI Manager initialization completion
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnUIManagerInitialized);
@@ -161,6 +163,16 @@ public:
 	// Hide WIO channel bar
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void HideWIOChannelBar();
+
+	// Idle warning widget control (called by IdleTimeoutManager)
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ShowIdleWarning(int32 TotalSecondsRemaining);
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void HideIdleWarning();
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void UpdateIdleCountdown(int32 SecondsRemaining);
 
 	// Input action handlers
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
@@ -450,7 +462,7 @@ protected:
 	TSubclassOf<UAvailableSkillsWidget> AvailableSkillsWidgetClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
-	TSubclassOf<UUserWidget> GameVersionWidgetClass;
+	TSubclassOf<UGameVersionWidget> GameVersionWidgetClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UDialogueWidget> DialogueWidgetClass;
@@ -503,6 +515,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UGameMenuWidget> GameMenuWidgetClass;
 
+	/** URL opened when the player clicks Bug Report in the game menu. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	FString BugReportUrl;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UAudioSettingsWidget> AudioSettingsWidgetClass;
 
@@ -510,6 +526,9 @@ protected:
 	 *  Opened when the player clicks Settings in the in-game pause menu. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UW_SettingsWidget> GameSettingsWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UIdleWarningWidget> IdleWarningWidgetClass;
 
 	// Notification widget classes (world_notification visual layer)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Notification Widgets")
@@ -558,7 +577,7 @@ protected:
 	UAvailableSkillsWidget* AvailableSkillsWidget;
 
 	UPROPERTY()
-	UUserWidget* GameVersionWidget;
+	UGameVersionWidget* GameVersionWidget;
 
 	UPROPERTY()
 	UDialogueWidget* DialogueWidget;
@@ -633,6 +652,10 @@ protected:
 	UPROPERTY()
 	UWorldNotificationManager* WorldNotificationManager = nullptr;
 
+	// Idle warning widget instance
+	UPROPERTY()
+	UIdleWarningWidget* IdleWarningWidget = nullptr;
+
 	// WIO widget instances
 	UPROPERTY()
 	UWIOInteractionPromptWidget* WIOInteractionPromptWidget = nullptr;
@@ -655,6 +678,12 @@ protected:
 
 	UPROPERTY()
 	UFloatingCombatTextManager* FCTManager;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - FCT|Distance")
+	float FCTMaxVisibleDistanceCm = 4000.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - FCT|Distance")
+	float FCTFadeStartDistanceCm = 3000.0f;
 
 	UPROPERTY()
 	UNameplateManager* NameplateManager = nullptr;
@@ -701,6 +730,7 @@ public:
 	UFUNCTION() void HandleAudioSettingsClosed();
 	UFUNCTION() void HandleExitToLoginClicked();
 	UFUNCTION() void HandleExitToDesktopClicked();
+	UFUNCTION() void HandleBugReportClicked();
 	UFUNCTION() void OnMenuBarInventoryClicked();
 	UFUNCTION() void OnMenuBarEquipmentClicked();
 	UFUNCTION() void OnMenuBarQuestJournalClicked();

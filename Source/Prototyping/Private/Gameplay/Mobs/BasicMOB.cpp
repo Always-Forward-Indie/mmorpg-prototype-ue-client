@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Gameplay/Mobs/BasicMOB.h"
@@ -56,7 +56,7 @@ ABasicMOB::ABasicMOB()
 		CMC->bUseControllerDesiredRotation = false;
 		CMC->RotationRate = FRotator(0.f, 0.f, 0.f);
 		// Disable pawn-vs-pawn physics pushing entirely.
-		// Server is authoritative — client-side push forces only cause jitter.
+		// Server is authoritative � client-side push forces only cause jitter.
 		CMC->bEnablePhysicsInteraction = false;
 	}
 
@@ -97,7 +97,7 @@ ABasicMOB::ABasicMOB()
 
 
 
-	// Добавляем компонент для отображения шкалы здоровья
+	// ��������� ��������� ��� ����������� ����� ��������
 	MobHeadInfo = CreateDefaultSubobject<UMOBHeadInfo>(TEXT("MobHeadInfo"));
 	MobHeadInfo->SetupAttachment(RootComponent);
 	MobHeadInfo->SetWidgetSpace(EWidgetSpace::Screen);
@@ -114,7 +114,7 @@ ABasicMOB::ABasicMOB()
 	AudioComponentSecond->bAutoActivate = false;
 
 	// Cursor target-indicator decal (floor circle).
-	// Managed entirely by UCursorInteractionComponent — no editor setup needed.
+	// Managed entirely by UCursorInteractionComponent � no editor setup needed.
 	TargetDecal = CreateDefaultSubobject<UTargetDecalComponent>(TEXT("TargetDecal"));
 	TargetDecal->SetupAttachment(RootComponent);
 }
@@ -149,7 +149,7 @@ void ABasicMOB::BeginPlay()
 		}
 	}
 
-	// Инициализируем UI с небольшой задержкой, чтобы убедиться, что все данные загружены
+	// �������������� UI � ��������� ���������, ����� ���������, ��� ��� ������ ���������
 	if (GetWorld())
 	{
 		FTimerHandle TimerHandle;
@@ -177,7 +177,7 @@ void ABasicMOB::EndPlay(const EEndPlayReason::Type EndPlayReason)
     {
         if (UCombatSystemManager* CombatManager = GameInstance->GetCombatSystemManager())
         {
-            // Безопасно отписываемся только если объект ещё валиден
+            // ��������� ������������ ������ ���� ������ ��� �������
             if (IsValid(this) && MOBData.mobID > 0)
             {
                 TScriptInterface<ICombatable> CombatableInterface;
@@ -329,7 +329,7 @@ void ABasicMOB::OnReceiveTargetLost()
 
 	// Only flip to yellow if this mob is NOT naturally aggressive.
 	// Naturally-aggressive mobs (wolves, hostile undead, etc.) should stay red
-	// when returning to their zone — they are always hostile and will re-aggro.
+	// when returning to their zone � they are always hostile and will re-aggro.
 	if (!bIsNaturallyAggressive)
 	{
 		SetMOBIsAggressive(false);
@@ -340,7 +340,7 @@ void ABasicMOB::OnReceiveTargetLost()
 	}
 	else
 	{
-		// Naturally-aggressive mob returned to zone — reset runtime flag to match
+		// Naturally-aggressive mob returned to zone � reset runtime flag to match
 		// the base definition (still aggressive = still red).
 		SetMOBIsAggressive(true);
 	}
@@ -371,7 +371,7 @@ void ABasicMOB::OnReceiveMovePacket(const FMobMoveEntryStruct& MoveEntry, int64 
 	// Only states 1 (CHASING) and 2/3/4 (attack cycle) mean the mob is
 	// actively targeting a player and should display as aggressive.
 	// States 5 (RETURNING), 6 (EVADING), 7 (FLEEING) mean the mob already
-	// lost or is disengaging — aggro is cleared via OnReceiveTargetLost.
+	// lost or is disengaging � aggro is cleared via OnReceiveTargetLost.
 	// State 0 (PATROLLING) is neutral.
 	const bool bActivelyEngaging = (MoveEntry.combatState >= 1 && MoveEntry.combatState <= 4);
 	if (bActivelyEngaging)
@@ -418,14 +418,7 @@ void ABasicMOB::Tick(float DeltaTime)
 
 	if (IsValid(AudioComponentSecond))
 	{
-		if (MOBData.bIsMoving)
-		{
-			if (!AudioComponentSecond->IsPlaying())
-			{
-				PlayWalkRandomSound();
-			}
-		}
-		else
+		if (!MOBData.bIsMoving)
 		{
 			if (AudioComponentSecond->IsPlaying())
 			{
@@ -434,7 +427,7 @@ void ABasicMOB::Tick(float DeltaTime)
 		}
 	}
 
-	// Всегда обновляем UI, если есть MobHeadInfo
+	// ������ ��������� UI, ���� ���� MobHeadInfo
 	if (MobHeadInfo)
 	{
 		float MaxHealth = 0.0f;
@@ -500,13 +493,13 @@ void ABasicMOB::UpdateWidgetPosition()
 	UCapsuleComponent* Capsule = GetCapsuleComponent();
 	if (!Capsule) return;
 
-	// Получаем высоту капсулы
+	// �������� ������ �������
 	const float CapsuleHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
 
-	// Базовое смещение — над головой
+	// ������� �������� � ��� �������
 	const float BaseOffset = 40.f;
 
-	// Доп. смещение в зависимости от расстояния
+	// ���. �������� � ����������� �� ����������
 	UWorld* World = GetWorld();
 	if (!World) return;
 
@@ -516,10 +509,10 @@ void ABasicMOB::UpdateWidgetPosition()
 	if (PC && PC->PlayerCameraManager)
 	{
 		const float Distance = FVector::Dist(PC->PlayerCameraManager->GetCameraLocation(), GetActorLocation());
-		DistanceOffset = FMath::Clamp((Distance - 500.f) * 0.05f, 0.f, 40.f); // Тонкая настройка
+		DistanceOffset = FMath::Clamp((Distance - 500.f) * 0.05f, 0.f, 40.f); // ������ ���������
 	}
 
-	// Смещаем над капсулой
+	// ������� ��� ��������
 	const float FinalZ = CapsuleHalfHeight + BaseOffset + DistanceOffset;
 	MobHeadInfo->SetRelativeLocation(FVector(0.f, 0.f, FinalZ));
 }
@@ -600,7 +593,7 @@ void ABasicMOB::SetIsAggressiveState_Implementation(int32 TargetId, ECasterType 
 {
 	SetMOBIsAggressive(bIsAggressive);
 
-	// Explicit aggro event from server — unlock movePacket aggro gate.
+	// Explicit aggro event from server � unlock movePacket aggro gate.
 	if (bIsAggressive)
 	{
 		bAggroLockedOut = false;
@@ -613,7 +606,7 @@ void ABasicMOB::SetIsAggressiveState_Implementation(int32 TargetId, ECasterType 
 		MobHeadInfo->UpdateMobAggressive(bIsAggressive);
 	}
 
-	// Auto-lock: if mob just aggroed a player, set their target lock — but ONLY if
+	// Auto-lock: if mob just aggroed a player, set their target lock � but ONLY if
 	// the mob is actually targeting this client's local player.
 	// Bug 9 fix: previously GetFirstPlayerController() was used unconditionally, which
 	// caused the local player on Client 2 to auto-lock a mob that was attacking Client 1.
@@ -637,7 +630,7 @@ void ABasicMOB::SetIsAggressiveState_Implementation(int32 TargetId, ECasterType 
 						}
 						else if (Player->GetLockedTarget() == this)
 						{
-							// This mob is already locked — refresh the target frame name color
+							// This mob is already locked � refresh the target frame name color
 							if (UUIManager* UIMgr = Player->GetUIManager())
 							{
 								const int32 MaxHP = MOBData.mobAttributes.attributesData.Contains(TEXT("max_health"))
@@ -684,13 +677,13 @@ void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, 
 			{
 				if (USoundBase* Sound = Def.castSound.LoadSynchronous())
 				{
-					SpawnSFXAttached(this, Sound, GetActorLocation());
+					SpawnSFXAttached(this, Sound, GetActorLocation(), 1.0f, DefaultAttenuation);
 					bCastSoundPlayed = true;
 				}
 			}
 
-			// Cast start voice: Priority 1 — skill-specific (same for any entity casting this skill)
-			//                   Priority 2 — mob's own voice pool (CastVoiceSounds)
+			// Cast start voice: Priority 1 � skill-specific (same for any entity casting this skill)
+			//                   Priority 2 � mob's own voice pool (CastVoiceSounds)
 			{
 				USoundBase* VoiceToPlay = nullptr;
 				if (!Def.castStartVoice.IsNull())
@@ -703,7 +696,7 @@ void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, 
 				}
 				if (VoiceToPlay)
 				{
-					SpawnSFXAttached(this, VoiceToPlay, GetActorLocation());
+					SpawnSFXAttached(this, VoiceToPlay, GetActorLocation(), 1.0f, DefaultAttenuation);
 				}
 			}
 
@@ -724,9 +717,9 @@ void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, 
                 }
             }
 
-			// Swing sound: Priority 1 — mob-specific (FMobAudioData::SwingSound via SoundMap["Swing"])
-			// Priority 2 — skill-level generic fallback (FSkillDefinitionData::swingSound)
-			// This mirrors the player: Weapon.EquippedSwingSound → SkillData.swingSound
+			// Swing sound: Priority 1 � mob-specific (FMobAudioData::SwingSound via SoundMap["Swing"])
+			// Priority 2 � skill-level generic fallback (FSkillDefinitionData::swingSound)
+			// This mirrors the player: Weapon.EquippedSwingSound > SkillData.swingSound
 			USoundBase* SwingToPlay = nullptr;
 			if (USoundBase** MobSwing = SoundMap.Find(FName("Swing")))
 			{
@@ -738,12 +731,12 @@ void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, 
 			}
 			if (SwingToPlay)
 			{
-				SpawnSFXAttached(this, SwingToPlay, GetActorLocation());
+				SpawnSFXAttached(this, SwingToPlay, GetActorLocation(), 1.0f, DefaultAttenuation);
 			}
         }
     }
 
-    // Legacy per-type sound fallback — only when DataTable has no castSound assigned
+    // Legacy per-type sound fallback � only when DataTable has no castSound assigned
     if (!bCastSoundPlayed)
     {
         if (AnimationName.Contains(TEXT("attack"), ESearchCase::IgnoreCase))
@@ -815,7 +808,7 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
 				*Def.WeaponImpactType.ToString(),
 				Def.hitSound.IsNull() ? TEXT("NULL") : TEXT("SET"));
 
-			// --- Impact sound: WeaponImpactType × ArmorMaterialType lookup ---
+			// --- Impact sound: WeaponImpactType ? ArmorMaterialType lookup ---
 			if (Def.WeaponImpactType != NAME_None)
 			{
 				UDataTable* ImpactTable = GI->GetImpactSoundsTable();
@@ -859,7 +852,7 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
 								UE_LOG(LogTemp, Warning, TEXT("[MOB HitSFX] ImpactSound[%d]=%s"), Idx, ImpactSound ? TEXT("OK") : TEXT("NULL"));
 								if (ImpactSound)
 									{
-										SpawnSFXAttached(this, ImpactSound, GetActorLocation());
+										SpawnSFXAttached(this, ImpactSound, GetActorLocation(), 1.0f, DefaultAttenuation);
 										bHitSoundPlayed = true;
 									}
 							}
@@ -889,7 +882,7 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
 				UE_LOG(LogTemp, Warning, TEXT("[MOB HitSFX] Fallback hitSound=%s"), Sound ? TEXT("OK") : TEXT("NULL (asset not loaded)"));
 				if (Sound)
 				{
-					SpawnSFXAttached(this, Sound, GetActorLocation());
+					SpawnSFXAttached(this, Sound, GetActorLocation(), 1.0f, DefaultAttenuation);
 					bHitSoundPlayed = true;
 				}
 			}
@@ -916,13 +909,13 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
             {
                 if (USoundBase* CritSnd = Def.critSound.LoadSynchronous())
                 {
-                    SpawnSFXAttached(this, CritSnd, GetActorLocation());
+                    SpawnSFXAttached(this, CritSnd, GetActorLocation(), 1.0f, DefaultAttenuation);
                 }
             }
         }
     }
 
-    // Legacy fallback hit sound — only when DataTable has no hitSound assigned
+    // Legacy fallback hit sound � only when DataTable has no hitSound assigned
     if (!bHitSoundPlayed)
     {
         PlaySoundByName("Hit");
@@ -932,7 +925,7 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
     // to avoid duplicates. Do NOT call FCT->ShowDamage here.
 
 	// --- Hit Stop: freeze this MOB briefly so the impact feels weighty ---
-	// Not on miss — missing doesn't interrupt the actor's flow.
+	// Not on miss � missing doesn't interrupt the actor's flow.
 	if (!bIsMissed)
 	{
 		if (UWorld* W = GetWorld())
@@ -966,7 +959,7 @@ void ABasicMOB::ShowHealingEffect_Implementation(int32 Healing, const FString& S
         {
             if (USoundBase* Snd = Def.healSound.LoadSynchronous())
             {
-                SpawnSFXAttached(this, Snd, GetActorLocation());
+                SpawnSFXAttached(this, Snd, GetActorLocation(), 1.0f, DefaultAttenuation);
             }
         }
 
@@ -1007,7 +1000,7 @@ void ABasicMOB::ShowBuffEffect_Implementation(const FAppliedEffectData& Effect)
     {
         if (USoundBase* Snd = Row->ApplySound.LoadSynchronous())
         {
-            SpawnSFXAttached(this, Snd, GetActorLocation());
+            SpawnSFXAttached(this, Snd, GetActorLocation(), 1.0f, DefaultAttenuation);
         }
     }
 
@@ -1073,13 +1066,13 @@ void ABasicMOB::SetupMobVisual(FName MobSlug)
 					Capsule->SetCapsuleRadius(CapsuleRadius);
 					Capsule->SetCapsuleHalfHeight(CapsuleHalfHeight);
 
-					// Смещение меша вниз
+					// �������� ���� ����
 						float MeshBottom = MeshOrigin.Z - BoxExtent.Z;
 						float CapsuleBottom = -Capsule->GetUnscaledCapsuleHalfHeight();
 						float MeshOffset = CapsuleBottom - MeshBottom;
 						Self->GetMesh()->SetRelativeLocation(FVector(0, 0, MeshOffset));
 						// Align mesh forward (+X of actor == face direction).
-						// UE skeletal meshes are exported facing +Y, so we rotate -90° Yaw
+						// UE skeletal meshes are exported facing +Y, so we rotate -90� Yaw
 						// to make the mesh face +X (the actor's forward axis).
 						Self->GetMesh()->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
 				}
@@ -1088,7 +1081,7 @@ void ABasicMOB::SetupMobVisual(FName MobSlug)
 				if (Capsule && Self->MobHeadInfo && Self->GetCapsuleComponent())
 				{
 					float CapsuleHalfHeight = Capsule->GetUnscaledCapsuleHalfHeight();
-					float WidgetOffset = 40.0f; // Можно подобрать опытным путём
+					float WidgetOffset = 40.0f; // ����� ��������� ������� ����
 					Self->MobHeadInfo->SetRelativeLocation(FVector(0, 0, CapsuleHalfHeight + WidgetOffset));
 				}
 			}
@@ -1120,7 +1113,7 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 	TWeakObjectPtr<ABasicMOB> WeakThis(this);
 
 	// ---------------------------------------------------------------
-	// Priority 1 — Entity Audio Profile (Data-Driven, shareable rows)
+	// Priority 1 � Entity Audio Profile (Data-Driven, shareable rows)
 	// Set AudioProfileId on the FMobDefinition row in the DataTable.
 	// ---------------------------------------------------------------
 	if (!Definition->AudioProfileId.IsNone())
@@ -1137,7 +1130,15 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 
 		if (Profile)
 		{
-			// Single sounds → SoundMap
+			if (!Profile->DefaultAttenuation.IsNull())
+			{
+				DefaultAttenuation = Profile->DefaultAttenuation.LoadSynchronous();
+			}
+			if (!Profile->FootwearType.IsNone())
+			{
+				FootwearType = Profile->FootwearType;
+			}
+
 			TArray<TPair<FName, TSoftObjectPtr<USoundBase>>> SoundsToLoad = {
 				{ "Attack", Profile->AttackGeneric },
 				{ "Aggro",  Profile->Aggro },
@@ -1157,7 +1158,7 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 					});
 			}
 
-			// Array sounds — loaded into respective mob arrays
+			// Array sounds � loaded into respective mob arrays
 			auto LoadArray = [&](const TArray<TSoftObjectPtr<USoundBase>>& Source, TArray<USoundBase*>& Target)
 			{
 				for (const auto& SoundSoft : Source)
@@ -1174,15 +1175,14 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 			};
 
 			LoadArray(Profile->IdleAmbient,       IdleSounds);
-			LoadArray(Profile->FootstepsRun,       RunSounds);
-			LoadArray(Profile->FootstepsWalk,      WalkSounds);
+			LoadArray(Profile->Footsteps,         FootstepSounds);
 			LoadArray(Profile->VoiceAttack,        AttackVoiceSounds);
 			LoadArray(Profile->VoiceCastStart,     CastVoiceSounds);
 			LoadArray(Profile->VoiceCastRelease,   ReleaseVoiceSounds);
 
 			// Idle ambient timer
 			GetWorld()->GetTimerManager().SetTimer(IdleSoundTimer, this, &ABasicMOB::PlayRandomIdleSound, FMath::RandRange(5.f, 15.f), false);
-			return;  // Profile fully loaded — skip legacy FMobAudioData below
+			return;  // Profile fully loaded � skip legacy FMobAudioData below
 		}
 		else
 		{
@@ -1193,12 +1193,12 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 	}
 
 	// ---------------------------------------------------------------
-	// Priority 2 — Legacy inline FMobAudioData (backward-compatible)
+	// Priority 2 � Legacy inline FMobAudioData (backward-compatible)
 	// Migrate rows to AudioProfileId over time; do not add new sounds here.
 	// ---------------------------------------------------------------
 	const FMobAudioData& AudioData = Definition->Audio;
 
-	// Основные звуки
+	// �������� �����
 	TArray<TPair<FName, TSoftObjectPtr<USoundBase>>> SoundsToLoad = {
 		{ "Attack", AudioData.AttackSound },
 		{ "Aggro",  AudioData.AggroSound },
@@ -1219,7 +1219,7 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 			});
 	}
 
-	// Idle звуки
+	// Idle �����
 	for (const auto& SoundSoft : AudioData.IdleSounds)
 	{
 		Streamable.RequestAsyncLoad(SoundSoft.ToSoftObjectPath(), [WeakThis, SoundSoft]()
@@ -1232,33 +1232,21 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 			});
 	}
 
-	// Run звуки
-	for (const auto& SoundSoft : AudioData.RunSounds)
+	// Run �����
+	// Footstep sounds
+	for (const auto& SoundSoft : AudioData.FootstepSounds)
 	{
 		Streamable.RequestAsyncLoad(SoundSoft.ToSoftObjectPath(), [WeakThis, SoundSoft]()
 			{
 				if (!WeakThis.IsValid()) { return; }
 				if (USoundBase* Loaded = SoundSoft.Get())
 				{
-					WeakThis->RunSounds.Add(Loaded);
+					WeakThis->FootstepSounds.Add(Loaded);
 				}
 			});
 	}
 
-	// Walk звуки
-	for (const auto& SoundSoft : AudioData.WalkSounds)
-	{
-		Streamable.RequestAsyncLoad(SoundSoft.ToSoftObjectPath(), [WeakThis, SoundSoft]()
-			{
-				if (!WeakThis.IsValid()) { return; }
-				if (USoundBase* Loaded = SoundSoft.Get())
-				{
-					WeakThis->WalkSounds.Add(Loaded);
-				}
-			});
-	}
-
-	// AttackVoice звуки (рык/крик при атаке)
+	// AttackVoice// AttackVoice ����� (���/���� ��� �����)
 	for (const auto& SoundSoft : AudioData.AttackVoiceSounds)
 	{
 		Streamable.RequestAsyncLoad(SoundSoft.ToSoftObjectPath(), [WeakThis, SoundSoft]()
@@ -1271,7 +1259,7 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 			});
 	}
 
-	// CastVoice звуки (голос при начале каста)
+	// CastVoice ����� (����� ��� ������ �����)
 	for (const auto& SoundSoft : AudioData.CastVoiceSounds)
 	{
 		Streamable.RequestAsyncLoad(SoundSoft.ToSoftObjectPath(), [WeakThis, SoundSoft]()
@@ -1284,7 +1272,7 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 			});
 	}
 
-	// ReleaseVoice звуки (голос при выпуске скилла)
+	// ReleaseVoice ����� (����� ��� ������� ������)
 	for (const auto& SoundSoft : AudioData.ReleaseVoiceSounds)
 	{
 		Streamable.RequestAsyncLoad(SoundSoft.ToSoftObjectPath(), [WeakThis, SoundSoft]()
@@ -1297,7 +1285,7 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 			});
 	}
 
-	// Таймер на idle
+	// ������ �� idle
 	GetWorld()->GetTimerManager().SetTimer(IdleSoundTimer, this, &ABasicMOB::PlayRandomIdleSound, FMath::RandRange(5.f, 15.f), false);
 }
 
@@ -1306,6 +1294,7 @@ void ABasicMOB::PlayRandomIdleSound()
 	if (IdleSounds.Num() > 0 && !MOBData.bIsDead)
 	{
 		int32 Index = FMath::RandRange(0, IdleSounds.Num() - 1);
+		AudioComponentMain->AttenuationSettings = DefaultAttenuation;
 		AudioComponentMain->SetSound(IdleSounds[Index]);
 		AudioComponentMain->Play();
 	}
@@ -1319,6 +1308,7 @@ void ABasicMOB::PlaySoundByName(FName SoundName)
 	{
 		if (*Sound)
 		{
+			AudioComponentMain->AttenuationSettings = DefaultAttenuation;
 			AudioComponentMain->SetSound(*Sound);
 			AudioComponentMain->Play();
 		}
@@ -1326,45 +1316,6 @@ void ABasicMOB::PlaySoundByName(FName SoundName)
 	else
 	{
 		UE_LOG(LogTemp, Warning, TEXT("ABasicMOB::PlaySoundByName - Sound '%s' not found"), *SoundName.ToString());
-	}
-}
-
-//play walk random sound
-void ABasicMOB::PlayWalkRandomSound()
-{
-	//get random sound from WalkSounds
-	if (WalkSounds.Num() > 0)
-	{
-		int32 Index = FMath::RandRange(0, WalkSounds.Num() - 1);
-		USoundBase* WalkSound = WalkSounds[Index];
-		if (WalkSound)
-		{
-			AudioComponentSecond->SetSound(WalkSound);
-			AudioComponentSecond->Play();
-		}
-	}
-	else
-	{
-		// No walk sounds assigned in editor - suppress log to avoid spam
-	}
-}
-
-// play run random sound
-void ABasicMOB::PlayRunRandomSound()
-{
-	if (RunSounds.Num() > 0)
-	{
-		int32 Index = FMath::RandRange(0, RunSounds.Num() - 1);
-		USoundBase* RunSound = RunSounds[Index];
-		if (RunSound)
-		{
-			AudioComponentSecond->SetSound(RunSound);
-			AudioComponentSecond->Play();
-		}
-	}
-	else
-	{
-		// No run sounds assigned in editor - suppress log to avoid spam
 	}
 }
 
@@ -1441,7 +1392,7 @@ void ABasicMOB::SetMOBData(const FMOBStruct& Data)
 			{
 				if (UCombatSystemManager* CombatManager = GameInstance->GetCombatSystemManager())
 				{
-					// Убедимся что объект валиден перед регистрацией
+					// �������� ��� ������ ������� ����� ������������
 					if (IsValid(this) && !IsActorBeingDestroyed())
 					{
 						// Create TScriptInterface for registration
@@ -1465,7 +1416,7 @@ void ABasicMOB::SetMOBData(const FMOBStruct& Data)
 				ActorId, *MOBData.mobUniqueID);
 		}
 
-		// Принудительно обновляем UI при первой установке данных
+		// ������������� ��������� UI ��� ������ ��������� ������
 		ForceUpdateUI();
 	}
 	else
@@ -1563,7 +1514,7 @@ void ABasicMOB::SetMOBAttributes(const FAttributesDataStruct& MOBAttributes)
 {
 	MOBData.mobAttributes = MOBAttributes;
 	
-	// Если UI еще не инициализирован и у нас есть данные, принудительно обновляем UI
+	// ���� UI ��� �� ��������������� � � ��� ���� ������, ������������� ��������� UI
 	if (!bUIInitialized && MOBData.mobID != 0)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("SetMOBAttributes: Force updating UI for MOB %s (ID:%d)"), *MOBData.mobName, MOBData.mobID);
@@ -1575,7 +1526,7 @@ void ABasicMOB::SetMOBAttribute(const FString& AttributeSlug, const FAttributeDa
 {
 	MOBData.mobAttributes.attributesData.Add(AttributeSlug, MOBAttribute);
 	
-	// Если добавляем ключевые атрибуты (здоровье/мана) и UI не инициализирован, обновляем UI
+	// ���� ��������� �������� �������� (��������/����) � UI �� ���������������, ��������� UI
 	if (!bUIInitialized && MOBData.mobID != 0 && (AttributeSlug == TEXT("max_health") || AttributeSlug == TEXT("max_mana")))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("SetMOBAttribute: Force updating UI for MOB %s (ID:%d) after setting %s"), *MOBData.mobName, MOBData.mobID, *AttributeSlug);
@@ -1624,7 +1575,7 @@ void ABasicMOB::SetMobIsDamaged(const bool& bIsDamaged)
 	}
 	else
 	{
-		MOBData.bIsGotDamage = false; // Если моб мертв, то не может быть поврежден
+		MOBData.bIsGotDamage = false; // ���� ��� �����, �� �� ����� ���� ���������
 	}
 }
 
@@ -1771,7 +1722,7 @@ void ABasicMOB::RefreshHarvestableVFX()
 	}
 }
 
-// ─── IWorldInteractable interface ────────────────────────────────────────────
+// --- IWorldInteractable interface --------------------------------------------
 EInteractableType ABasicMOB::GetInteractableType() const
 {
     if (!MOBData.bIsDead)              return EInteractableType::MOB_Alive;
@@ -1841,7 +1792,7 @@ void ABasicMOB::ForceUpdateUI()
 			MOBData.bIsAggressive
 		);
 
-		// Обновляем последние значения и помечаем UI как инициализированный
+		// ��������� ��������� �������� � �������� UI ��� ������������������
 		LastHealth = MOBData.mobCurrentHealth;
 		LastAggressive = MOBData.bIsAggressive;
 		bUIInitialized = true;
@@ -1906,7 +1857,7 @@ void ABasicMOB::Die()
 		MobHeadInfo->UpdateMobAggressive(false);
 	}
 
-	// Notify AnimInstance — triggers death animation, clears all combat states
+	// Notify AnimInstance � triggers death animation, clears all combat states
 	if (UMOBAnimInstance* AnimInst = Cast<UMOBAnimInstance>(GetMesh()->GetAnimInstance()))
 	{
 		AnimInst->NotifyDeath();
@@ -1915,7 +1866,7 @@ void ABasicMOB::Die()
 	UE_LOG(LogTemp, Warning, TEXT("MOB %s (ID:%d) has died."), *MOBData.mobName, MOBData.mobID);
 
 	// Disable mesh physics so the corpse does not block movement or camera.
-	// IMPORTANT: Do NOT call SetActorEnableCollision(false) here — that actor-level flag
+	// IMPORTANT: Do NOT call SetActorEnableCollision(false) here � that actor-level flag
 	// overrides UPrimitiveComponent::GetCollisionEnabled() and makes every query on this
 	// actor return NoCollision, which breaks the ECC_Visibility hover trace on the corpse.
 	if (USkeletalMeshComponent* MobMesh = GetMesh())

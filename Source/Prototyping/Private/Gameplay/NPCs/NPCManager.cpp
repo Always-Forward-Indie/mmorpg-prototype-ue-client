@@ -53,10 +53,15 @@ void UNPCManager::Initialize(UNetworkManager* NetworkManager)
 
 void UNPCManager::SetWorldContext(UWorld* World)
 {
+	const bool bWasNull = (worldContext == nullptr);
 	worldContext = World;
 	UE_LOG(LogTemp, Warning, TEXT("NPCManager: World context set to %s"), World ? TEXT("Valid") : TEXT("NULL"));
 
-	// Re-register the cleanup timer in the new world after a level transition
+	if (bWasNull && worldContext)
+	{
+		FlushPendingSpawns();
+	}
+
 	if (worldContext && bAutoCleanupInvalidNPCs)
 	{
 		CleanupTimerHandle.Invalidate();
@@ -91,15 +96,15 @@ void UNPCManager::SubscribeToNetworkManager()
 
 	UE_LOG(LogTemp, Warning, TEXT("NPCManager: Network Manager found - NPCNetworkHandler will handle network events"));
 
-	// NPCManager больше не подписывается на сетевые события напрямую
-	// Все сетевые события обрабатываются через NPCNetworkHandler
-	// который затем вызывает методы NPCManager
+	// NPCManager пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+	// пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ NPCNetworkHandler
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ NPCManager
 }
 
 void UNPCManager::ProcessGameServerData(const FString& ReceivedData)
 {
-	// Этот метод больше не используется
-	// Вся обработка сетевых данных перенесена в NPCNetworkHandler
+	// пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+	// пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ NPCNetworkHandler
 	UE_LOG(LogTemp, Warning, TEXT("NPCManager::ProcessGameServerData called - this should not happen! Use NPCNetworkHandler instead."));
 }
 
@@ -111,26 +116,28 @@ void UNPCManager::SpawnNPC(const FNPCStruct& NPCData)
 		return;
 	}
 
-	// Check if NPC already exists
+	if (!worldContext)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("NPCManager: No world context вЂ” queuing NPC %d (%s) for later spawn"), NPCData.id, *NPCData.name);
+		PendingNPCSpawns.Add(NPCData);
+		return;
+	}
+
 	if (SpawnedNPCs.Contains(NPCData.id))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("NPCManager: NPC with ID %d already exists"), NPCData.id);
 		return;
 	}
 
-	// Create NPC actor
 	ABasicNPC* SpawnedNPC = CreateNPCActor(NPCData);
 	if (SpawnedNPC)
 	{
-		// Store in map
 		SpawnedNPCs.Add(NPCData.id, SpawnedNPC);
 		
-		// Set NPC data
 		SpawnedNPC->SetNPCData(NPCData);
 		
 		UE_LOG(LogTemp, Warning, TEXT("NPCManager: Successfully spawned NPC %s (ID: %d)"), *NPCData.name, NPCData.id);
 		
-		// Broadcast event
 		OnNPCSpawned.Broadcast(SpawnedNPC);
 	}
 	else
@@ -385,6 +392,20 @@ bool UNPCManager::ValidateNPCData(const FNPCStruct& NPCData) const
 	}
 
 	return true;
+}
+
+void UNPCManager::FlushPendingSpawns()
+{
+	if (PendingNPCSpawns.Num() == 0) return;
+
+	UE_LOG(LogTemp, Warning, TEXT("NPCManager: Flushing %d pending NPC spawns"), PendingNPCSpawns.Num());
+	TArray<FNPCStruct> Spawns = MoveTemp(PendingNPCSpawns);
+	PendingNPCSpawns.Empty();
+
+	for (const FNPCStruct& NPCData : Spawns)
+	{
+		SpawnNPC(NPCData);
+	}
 }
 
 void UNPCManager::CleanupInvalidNPCs()

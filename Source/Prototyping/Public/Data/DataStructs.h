@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataTable.h"
 #include "Animation/AnimMontage.h"
+#include "Data/EntityAudioData.h"
 #include "DataStructs.generated.h"
 
 class UNiagaraSystem;
@@ -131,6 +132,9 @@ struct FMessageDataStruct
     int64 serverSendMs = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Packet Service Data Struct")
     int64 clientSendMsEcho = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Packet Service Data Struct")
+    FString version = "";
 };
 
 // New unified network header structure for all client-server communication
@@ -668,131 +672,30 @@ struct FMobVisualData
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visual")
     TSoftObjectPtr<USkeletalMesh> SkeletalMesh;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visual")
     TSoftClassPtr<UAnimInstance> AnimBPClass;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visual")
     FVector ActorScale = FVector(1.0f);
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visual")
     FName MobName;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visual")
     TSoftObjectPtr<UTexture2D> Icon;
 
-    // Height offset for combat hit effects (socket-based)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
     float CombatHitHeight = 120.0f;
 
-    // Niagara VFX spawned at death (optional)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visual")
     TSoftObjectPtr<UNiagaraSystem> DeathVFX;
 };
 
-// ============================================================
-// Per-entity per-skill voice sound override.
-// Row key format: "{audioProfileId}|{skillSlug}"
-//   Examples: "warrior_m|fireball", "goblin_shaman|frostbolt", "warrior_m|basic_attack"
-//
-// Priority chain for cast-start voice:
-//   P1: FSkillDefinitionData.castStartVoice  — same sound for ALL casters of this skill
-//   P2: DT_EntitySkillVoiceOverrides["warrior_m|fireball"].CastStartVoice  — per-entity per-skill pool
-//   P3: FEntityAudioProfile.VoiceCastStart[]  — per-entity generic fallback pool
-// ============================================================
-USTRUCT(BlueprintType)
-struct PROTOTYPING_API FEntitySkillVoiceOverride : public FTableRowBase
-{
-    GENERATED_BODY()
-
-    /** Random pool played at cast START (AnimNotify CastVoice). */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voice Override")
-    TArray<TSoftObjectPtr<USoundBase>> CastStartVoice;
-
-    /** Random pool played at cast RELEASE (AnimNotify CastRelease). */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voice Override")
-    TArray<TSoftObjectPtr<USoundBase>> CastReleaseVoice;
-
-    /** Random pool: melee swing cry override per skill (AnimNotify VoiceAttack). */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voice Override")
-    TArray<TSoftObjectPtr<USoundBase>> VoiceAttack;
-};
-
-// ============================================================
-// Entity Audio Profile — shared between players and mobs
-// Row key examples:
-//   Players: "warrior_m", "warrior_f", "mage_m", "archer_f"
-//   Mobs:    "wolf", "goblin_grunt", "goblin_shaman", "skeleton_warrior"
-//   Shared:  "giant_humanoid" — multiple mob types, one sound set
-// ============================================================
-USTRUCT(BlueprintType)
-struct FEntityAudioProfile : public FTableRowBase
-{
-    GENERATED_BODY()
-
-    // ---- Voice ------------------------------------------------
-    /** Random pool: melee swing cry ("hiya!", "ha!"). Nofity: VoiceAttack / Voice */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voice")
-    TArray<TSoftObjectPtr<USoundBase>> VoiceAttack;
-
-    /** Random pool: incantation / battle cry at cast START. Notify: CastVoice */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voice")
-    TArray<TSoftObjectPtr<USoundBase>> VoiceCastStart;
-
-    /** Random pool: shout / exhale at cast RELEASE. Notify: CastRelease (fallback) */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voice")
-    TArray<TSoftObjectPtr<USoundBase>> VoiceCastRelease;
-
-    // ---- Combat -----------------------------------------------
-    /** Weapon / limb whoosh during swing. Priority over SkillData.swingSound. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
-    TSoftObjectPtr<USoundBase> SwingSound;
-
-    /** Sound when this entity receives a hit. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
-    TSoftObjectPtr<USoundBase> HitReceived;
-
-    /** Death sound. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
-    TSoftObjectPtr<USoundBase> Death;
-
-    /** Revive / resurrection sound (players only; ignored on mobs). */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
-    TSoftObjectPtr<USoundBase> Revive;
-
-    /** Aggro shout when mob detects a player target. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
-    TSoftObjectPtr<USoundBase> Aggro;
-
-    /** Generic attack sound (mob "Attack" slot; players typically leave this empty). */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
-    TSoftObjectPtr<USoundBase> AttackGeneric;
-
-    // ---- Heal / Progression -----------------------------------
-    /** Generic heal-received fallback (used when SkillData.healSound is empty). */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Healing")
-    TSoftObjectPtr<USoundBase> HealReceived;
-
-    /** Level-up chime (players only). */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Progression")
-    TSoftObjectPtr<USoundBase> LevelUp;
-
-    // ---- Movement / Ambient ----------------------------------
-    /** Random pool: footstep sounds at walk speed. Notify: Walk */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
-    TArray<TSoftObjectPtr<USoundBase>> FootstepsWalk;
-
-    /** Random pool: footstep sounds at run speed. Notify: Run */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
-    TArray<TSoftObjectPtr<USoundBase>> FootstepsRun;
-
-    /** Random pool: ambient idle sounds (muttering, growls). Notify: Idle */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambient")
-    TArray<TSoftObjectPtr<USoundBase>> IdleAmbient;
-};
-
+/* DEPRECATED: Migrate to FMobDefinition.AudioProfileId -> FEntityAudioProfile.
+ * Do not add new fields here. Existing rows will still load. */
 USTRUCT(BlueprintType)
 struct FMobAudioData
 {
@@ -813,11 +716,8 @@ struct FMobAudioData
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     TArray<TSoftObjectPtr<USoundBase>> IdleSounds;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TArray<TSoftObjectPtr<USoundBase>> WalkSounds;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TArray<TSoftObjectPtr<USoundBase>> RunSounds;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<TSoftObjectPtr<USoundBase>> FootstepSounds;
 
     /**
      * Pool of effort/grunt/roar/howl sounds played via AnimNotify_PlaySoundFromTable("Voice")
@@ -860,10 +760,7 @@ struct FMobDefinition : public FTableRowBase
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FName MobType;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visual")
     FMobVisualData Visual;
 
     /**
@@ -884,8 +781,7 @@ struct FMobDefinition : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Legacy (prefer AudioProfileId)")
     FMobAudioData Audio;
 
-    // Armor material type used for impact sound lookup (e.g. "leather", "plate")
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
     FName ArmorMaterialType = NAME_None;
 };
 
@@ -2275,16 +2171,16 @@ struct PROTOTYPING_API FNPCVisualData
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visual")
     TSoftObjectPtr<USkeletalMesh> SkeletalMesh;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visual")
     TSoftClassPtr<UAnimInstance> AnimBPClass;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visual")
     FVector ActorScale = FVector(1.0f);
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visual")
     FName NPCName;
 
     /** Montage played when the player opens dialogue with this NPC ("greet" slot). */
@@ -2327,26 +2223,28 @@ struct PROTOTYPING_API FNPCAudioData
     TArray<TSoftObjectPtr<USoundBase>> IdleSounds;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TArray<TSoftObjectPtr<USoundBase>> WalkSounds;
+    TArray<TSoftObjectPtr<USoundBase>> FootstepSounds;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TArray<TSoftObjectPtr<USoundBase>> RunSounds;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attenuation")
+    TSoftObjectPtr<USoundAttenuation> DefaultAttenuation;
 
     FNPCAudioData() {}
 };
 
+/* DEPRECATED: Migrate to FNPCDefinition.AudioProfileId -> FEntityAudioProfile.
+ * Do not add new fields here. Existing rows will still load. */
 USTRUCT(BlueprintType)
 struct PROTOTYPING_API FNPCDefinition : public FTableRowBase
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FName NPCType;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visual")
     FNPCVisualData Visual;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
+    FName AudioProfileId = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Legacy (prefer AudioProfileId)")
     FNPCAudioData Audio;
 
     FNPCDefinition() {}

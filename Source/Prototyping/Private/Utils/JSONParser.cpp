@@ -340,6 +340,11 @@ FClientDataStruct JSONParser::DeserializeClientData(const FString& JsonString)
 				 MessageData.timestamp = (*HeaderObject)->GetStringField(TEXT("timestamp"));
 			 }
 
+			 if ((*HeaderObject)->HasField(TEXT("version")))
+			 {
+				 MessageData.version = (*HeaderObject)->GetStringField(TEXT("version"));
+			 }
+
              // Parse time sync fields
              if ((*HeaderObject)->HasField(TEXT("clientSendMs")))
              {

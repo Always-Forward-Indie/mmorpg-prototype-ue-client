@@ -6,6 +6,7 @@
 #include "Engine/DataTable.h"
 #include "Engine/AssetManager.h"
 #include "Components/AudioComponent.h"
+#include "Sound/SoundAttenuation.h"
 #include "TimerManager.h"
 #include "Animation/AnimInstance.h"
 #include "Gameplay/Interaction/IWorldInteractable.h"
@@ -242,9 +243,19 @@ protected:
 	// ---- Audio assets ----
 	UPROPERTY() TMap<FName, USoundBase*> SoundMap;
 	UPROPERTY() TArray<USoundBase*> IdleSounds;
-	UPROPERTY() TArray<USoundBase*> WalkSounds;
-	UPROPERTY() TArray<USoundBase*> RunSounds;
+	UPROPERTY() TArray<USoundBase*> FootstepSounds;
 
+public:
+	UPROPERTY()
+	TObjectPtr<USoundAttenuation> DefaultAttenuation;
+
+	UPROPERTY()
+	FName FootwearType = NAME_None;
+
+	FName GetFootwearType() const { return FootwearType; }
+	const TArray<USoundBase*>& GetFootstepSounds() const { return FootstepSounds; }
+
+protected:
 	// ---- Montage assets (loaded from FNPCVisualData in SetupNPCVisual) ----
 	// Stored here so playback via ACharacter::PlayAnimMontage() works regardless
 	// of whether the AnimBlueprint inherits from UNPCAnimInstance.

@@ -40,6 +40,8 @@ enum class EUISoundEvent : uint8
 	WindowClose      UMETA(DisplayName = "Window Close"),
 	ItemPickup       UMETA(DisplayName = "Item Pickup"),
 	ItemEquip        UMETA(DisplayName = "Item Equip"),
+	ItemUnequip      UMETA(DisplayName = "Item Unequip"),
+	ItemUse          UMETA(DisplayName = "Item Use"),
 	ItemDrop         UMETA(DisplayName = "Item Drop"),
 	LevelUp          UMETA(DisplayName = "Level Up"),
 	QuestAccepted    UMETA(DisplayName = "Quest Accepted"),

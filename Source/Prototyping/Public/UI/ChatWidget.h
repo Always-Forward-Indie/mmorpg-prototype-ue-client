@@ -29,7 +29,7 @@ class UChatMessageLineWidget;
  *   - SendButton        (UButton)
  *
  * Optional Blueprint binding:
- *   - WhisperTargetBox  (UEditableTextBox) — shown only for whisper channel
+ *   - WhisperTargetBox  (UEditableTextBox) ï¿½ shown only for whisper channel
  */
 UCLASS(BlueprintType, Blueprintable)
 class PROTOTYPING_API UChatWidget : public UUserWidget
@@ -50,6 +50,10 @@ public:
 
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Chat UI")
     bool IsChatVisible() const;
+
+    /** Release keyboard focus from chat input, returning input to the game. */
+    UFUNCTION(BlueprintCallable, Category = "Chat UI")
+    void ReleaseInputFocus();
 
 protected:
     virtual void NativeConstruct() override;

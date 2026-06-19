@@ -22,7 +22,9 @@ void AMobSpawnZone::BeginPlay()
 	// Bind the overlap events
 	if (BoxComponent)
 	{
+		BoxComponent->OnComponentBeginOverlap.RemoveDynamic(this, &AMobSpawnZone::OnOverlapBegin);
 		BoxComponent->OnComponentBeginOverlap.AddDynamic(this, &AMobSpawnZone::OnOverlapBegin);
+		BoxComponent->OnComponentEndOverlap.RemoveDynamic(this, &AMobSpawnZone::OnOverlapEnd);
 		BoxComponent->OnComponentEndOverlap.AddDynamic(this, &AMobSpawnZone::OnOverlapEnd);
 	}
 }
@@ -44,7 +46,7 @@ void AMobSpawnZone::ChangeSpawnZoneSize()
 		return;
 	}
 
-	// Берём Pos и Size из SpawnZoneData
+	// пїЅпїЅпїЅпїЅ Pos пїЅ Size пїЅпїЅ SpawnZoneData
 	FVector Pos = SpawnZoneData.spawnStartPos;
 	FVector Size = SpawnZoneData.spawnSize;
 
@@ -54,7 +56,7 @@ void AMobSpawnZone::ChangeSpawnZoneSize()
 	BoxComponent->SetBoxExtent(Size / 2);
 	BoxComponent->SetWorldLocation(Pos);
 
-	// Обновляем Bounds
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ Bounds
 	BoxComponent->UpdateBounds();
 }
 

@@ -11,6 +11,9 @@
 #include "Sound/SoundClass.h"
 #include "Sound/SoundAttenuation.h"
 
+TMap<USoundBase*, int32> AAmbientSoundZoneActor::ActiveAmbientRefCount;
+TMap<USoundBase*, UAudioComponent*> AAmbientSoundZoneActor::ActiveAmbientComponents;
+
 AAmbientSoundZoneActor::AAmbientSoundZoneActor()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -36,6 +39,30 @@ void AAmbientSoundZoneActor::OnConstruction(const FTransform& Transform)
 
 void AAmbientSoundZoneActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	// Clean up the static ambient ref-count so we don't leave dangling entries
+	// when a zone is destroyed (e.g. level unload).
+	if (AmbientSound)
+	{
+		int32* Count = ActiveAmbientRefCount.Find(AmbientSound);
+		if (Count && *Count > 0) { (*Count)--; }
+
+		// If this zone's AudioComponent was the active player, remove it
+		UAudioComponent** Stored = ActiveAmbientComponents.Find(AmbientSound);
+		if (Stored && *Stored == AudioComponent)
+		{
+			ActiveAmbientComponents.Remove(AmbientSound);
+		}
+
+		// If no zones left, stop playback and clean up
+		if (Count && *Count == 0)
+		{
+			ActiveAmbientRefCount.Remove(AmbientSound);
+			UAudioComponent** Comp = ActiveAmbientComponents.Find(AmbientSound);
+			if (Comp && IsValid(*Comp)) { (*Comp)->Stop(); }
+			ActiveAmbientComponents.Remove(AmbientSound);
+		}
+	}
+
 	if (AudioComponent)
 	{
 		AudioComponent->Stop();
@@ -129,7 +156,9 @@ void AAmbientSoundZoneActor::BeginPlay()
 		UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' Spatialized=false (2D playback)."), *GetName());
 	}
 
+	TriggerBox->OnComponentBeginOverlap.RemoveDynamic(this, &AAmbientSoundZoneActor::OnBoxBeginOverlap);
 	TriggerBox->OnComponentBeginOverlap.AddDynamic(this, &AAmbientSoundZoneActor::OnBoxBeginOverlap);
+	TriggerBox->OnComponentEndOverlap.RemoveDynamic(this, &AAmbientSoundZoneActor::OnBoxEndOverlap);
 	TriggerBox->OnComponentEndOverlap.AddDynamic(this, &AAmbientSoundZoneActor::OnBoxEndOverlap);
 
 	// If bAutoPlay is set, start immediately (login screen, cinematic levels, etc.)
@@ -235,6 +264,19 @@ void AAmbientSoundZoneActor::StartAmbient()
 		return;
 	}
 
+	// If the same sound is already playing from a neighboring zone, just
+	// increment the ref-count so the audio continues without restarting.
+	int32& Count = ActiveAmbientRefCount.FindOrAdd(AmbientSound, 0);
+	if (Count > 0)
+	{
+		Count++;
+		UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' StartAmbient: Sound='%s' already playing (ref=%d) — skipping restart."),
+			*GetName(), *AmbientSound->GetName(), Count);
+		return;
+	}
+	Count++;
+	ActiveAmbientComponents.Add(AmbientSound, AudioComponent);
+
 	UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' StartAmbient: Sound='%s' FadeIn=%.2f Vol=%.2f SoundClass=%s"),
 		*GetName(), *AmbientSound->GetName(), FadeInTime, VolumeMultiplier,
 		AudioComponent->SoundClassOverride ? *AudioComponent->SoundClassOverride->GetName() : TEXT("None"));
@@ -269,6 +311,19 @@ void AAmbientSoundZoneActor::OnAmbientFinished()
 
 	if (bLoop && bPlayerIsInside)
 	{
+		if (AmbientSound)
+		{
+			int32* Count = ActiveAmbientRefCount.Find(AmbientSound);
+			if (Count && *Count > 0)
+			{
+				(*Count)--;
+				if (*Count <= 0)
+				{
+					ActiveAmbientRefCount.Remove(AmbientSound);
+					ActiveAmbientComponents.Remove(AmbientSound);
+				}
+			}
+		}
 		StartAmbient();
 	}
 }
@@ -277,15 +332,40 @@ void AAmbientSoundZoneActor::StopAmbient()
 {
 	if (!AudioComponent) { return; }
 
-	UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' StopAmbient: FadeOut=%.2f"), *GetName(), FadeOutTime);
-
-	if (FadeOutTime > 0.0f)
+	if (!AmbientSound)
 	{
-		AudioComponent->FadeOut(FadeOutTime, 0.0f);
+		UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' StopAmbient: FadeOut=%.2f (no sound asset — direct stop)"), *GetName(), FadeOutTime);
+		if (FadeOutTime > 0.0f) { AudioComponent->FadeOut(FadeOutTime, 0.0f); }
+		else { AudioComponent->Stop(); }
+		return;
 	}
-	else
+
+	int32* Count = ActiveAmbientRefCount.Find(AmbientSound);
+	if (Count && *Count > 0) { (*Count)--; }
+
+	if (Count && *Count > 0)
 	{
-		AudioComponent->Stop();
+		UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' StopAmbient: Sound='%s' still covered (ref=%d) — keeping audio."),
+			*GetName(), *AmbientSound->GetName(), *Count);
+		return;
+	}
+
+	// No more zones covering this sound — actually stop playback.
+	// Use the cached AudioComponent from the zone that originally started it.
+	ActiveAmbientRefCount.Remove(AmbientSound);
+
+	UAudioComponent** PlayingComp = ActiveAmbientComponents.Find(AmbientSound);
+	UAudioComponent* CompToStop = (PlayingComp && IsValid(*PlayingComp)) ? *PlayingComp : AudioComponent;
+	ActiveAmbientComponents.Remove(AmbientSound);
+
+	UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' StopAmbient: Sound='%s' last zone — stopping. FadeOut=%.2f Comp=%s"),
+		*GetName(), *AmbientSound->GetName(), FadeOutTime,
+		CompToStop->IsPlaying() ? TEXT("playing") : TEXT("idle"));
+
+	if (CompToStop->IsPlaying())
+	{
+		if (FadeOutTime > 0.0f) { CompToStop->FadeOut(FadeOutTime, 0.0f); }
+		else { CompToStop->Stop(); }
 	}
 }
 

@@ -144,52 +144,83 @@ void UAudioManager::ApplyClassVolume(USoundClass* SoundClass, float Volume)
 	if (!MasterSoundMix || !SoundClass || !WorldContextObject) { return; }
 	// Use a tiny non-zero minimum to prevent the audio engine from
 	// deactivating/virtualizing components when volume reaches 0.
-	// This keeps playback alive so raising the slider back up restores sound
-	// immediately without needing to restart the audio source.
-	const float SafeVolume = FMath::Max(FMath::Clamp(Volume, 0.0f, 1.0f), KINDA_SMALL_NUMBER);
-	// bApplyToChildren=true propagates the change to child Sound Classes
-	// so SC_Master volume affects SC_Music / SC_SFX / SC_Ambient / SC_UI.
+	const float SafeVolume = FMath::Max(FMath::Clamp(Volume, 0.0f, 1.0f), 0.005f);
 	UGameplayStatics::SetSoundMixClassOverride(
 		WorldContextObject, MasterSoundMix, SoundClass,
 		SafeVolume, /*Pitch*/ 1.0f, /*FadeInTime*/ 0.0f,
 		/*bApplyToChildren*/ true);
-
-	// Re-push the SoundMix so the audio device immediately re-evaluates
-	// the updated class overrides. Without this, setting volume to 0 and
-	// then raising it back does not restore sound because the audio device
-	// has already deactivated the override internally.
-	UGameplayStatics::PushSoundMixModifier(WorldContextObject, MasterSoundMix);
+	// NOTE: PushSoundMixModifier is called only by the volume setters when
+	// transitioning from 0 to >0 — not on every slider tick, which would
+	// destabilise the audio device's internal modifier stack.
 }
 
 void UAudioManager::SetMasterVolume(float Volume)
 {
+	const float Prev = CachedMasterVolume;
 	CachedMasterVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
 	ApplyClassVolume(MasterClass, CachedMasterVolume);
+	if (Prev <= 0.0f && CachedMasterVolume > 0.0f && WorldContextObject)
+	{
+		UGameplayStatics::PushSoundMixModifier(WorldContextObject, MasterSoundMix);
+	}
 }
 
 void UAudioManager::SetMusicVolume(float Volume)
 {
+	const float Prev = CachedMusicVolume;
 	CachedMusicVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
 	ApplyClassVolume(MusicClass, CachedMusicVolume);
+
+	if (Prev <= 0.0f && CachedMusicVolume > 0.0f)
+	{
+		if (WorldContextObject)
+		{
+			UGameplayStatics::PushSoundMixModifier(WorldContextObject, MasterSoundMix);
+		}
+
+		// Resume playlist if a known one was playing before silence.
+		// ActivePlaylistId may still be set (fade stopped component, not playlist).
+		FString ResumeId = !ActivePlaylistId.IsEmpty() ? ActivePlaylistId : LastActivePlaylistId;
+		if (!ResumeId.IsEmpty())
+		{
+			PlayPlaylist(ResumeId, false);
+			LastActivePlaylistId.Empty();
+		}
+	}
 }
 
 void UAudioManager::SetSFXVolume(float Volume)
 {
+	const float Prev = CachedSFXVolume;
 	CachedSFXVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
 	ApplyClassVolume(SFXClass, CachedSFXVolume);
+	if (Prev <= 0.0f && CachedSFXVolume > 0.0f && WorldContextObject)
+	{
+		UGameplayStatics::PushSoundMixModifier(WorldContextObject, MasterSoundMix);
+	}
 }
 
 void UAudioManager::SetAmbientVolume(float Volume)
 {
+	const float Prev = CachedAmbientVolume;
 	CachedAmbientVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
 	ApplyClassVolume(AmbientClass, CachedAmbientVolume);
+	if (Prev <= 0.0f && CachedAmbientVolume > 0.0f && WorldContextObject)
+	{
+		UGameplayStatics::PushSoundMixModifier(WorldContextObject, MasterSoundMix);
+	}
 }
 
 void UAudioManager::SetUIVolume(float Volume)
 {
+	const float Prev = CachedUIVolume;
 	CachedUIVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
 	USoundClass* Target = UIClass ? UIClass : SFXClass;
 	ApplyClassVolume(Target, CachedUIVolume);
+	if (Prev <= 0.0f && CachedUIVolume > 0.0f && WorldContextObject)
+	{
+		UGameplayStatics::PushSoundMixModifier(WorldContextObject, MasterSoundMix);
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -347,7 +378,13 @@ void UAudioManager::OnTrackNearEnd()
 
 void UAudioManager::PlayPlaylist(const FString& InPlaylistId, bool bForceRestart)
 {
-	if (!bForceRestart && ActivePlaylistId.Equals(InPlaylistId, ESearchCase::IgnoreCase)) { return; }
+	if (!bForceRestart && ActivePlaylistId.Equals(InPlaylistId, ESearchCase::IgnoreCase))
+	{
+		if (bComponentsValid && IsValid(ActiveMusicComponent) && ActiveMusicComponent->IsPlaying())
+		{
+			return;
+		}
+	}
 
 	const FMusicPlaylist* Playlist = FindPlaylist(InPlaylistId);
 	if (!Playlist)
@@ -367,6 +404,7 @@ void UAudioManager::PlayPlaylist(const FString& InPlaylistId, bool bForceRestart
 	if (World) { World->GetTimerManager().ClearTimer(TrackEndTimerHandle); }
 
 	ActivePlaylistId  = InPlaylistId;
+	LastActivePlaylistId.Empty();  // explicitly started a new playlist — clear stale backup
 	CurrentTrackIndex = (Playlist->PlaybackMode == EMusicPlaybackMode::Random)
 		? FMath::RandRange(0, Playlist->Tracks.Num() - 1) : 0;
 
@@ -408,6 +446,12 @@ void UAudioManager::StopMusic(float FadeOutTimeOverride)
 		ActiveMusicComponent->FadeOut(FadeTime, 0.0f);
 	}
 
+	// Preserve the playlist so SetMusicVolume can resume it when volume
+	// is raised back above 0 after being silenced.
+	if (!ActivePlaylistId.IsEmpty())
+	{
+		LastActivePlaylistId = ActivePlaylistId;
+	}
 	ActivePlaylistId.Empty();
 }
 

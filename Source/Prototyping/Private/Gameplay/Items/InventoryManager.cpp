@@ -726,10 +726,17 @@ void UInventoryManager::PickupSpecificItem(ADroppedItemActor* TargetItem)
     APlayerController* PC = worldContext->GetFirstPlayerController();
     if (!PC || !PC->GetPawn()) return;
 
-    FVector PlayerLocation = PC->GetPawn()->GetActorLocation();
+    ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn());
+    if (!Player) return;
+
+    // Guard against starting a new pickup while already picking up —
+    // prevents PendingPickupItemUIDs from filling with items that are
+    // never cleaned up because the second animation fires first.
+    if (Player->IsPickingUp()) return;
+
+    FVector PlayerLocation = Player->GetActorLocation();
 
     // Face the item and lock movement
-    if (ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn()))
     {
         FVector ToItem = TargetItem->GetActorLocation() - PlayerLocation;
         ToItem.Z = 0.f;
@@ -747,10 +754,7 @@ void UInventoryManager::PickupSpecificItem(ADroppedItemActor* TargetItem)
     }
     else
     {
-        if (ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn()))
-        {
-            Player->UnlockMovementAfterPickup();
-        }
+        Player->UnlockMovementAfterPickup();
     }
 
     UE_LOG(LogTemp, Warning, TEXT("InventoryManager: PickupSpecificItem %s - %s"),

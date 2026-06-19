@@ -205,3 +205,25 @@ Config: DefaultEngine.ini — added r.SetRes=1920x1080w and LogCrashDiag=NoLoggi
 New assets: UI click sounds (button_click_v1, small_button_click_v1). Reed foliage meshes (reed_1/2/3). Updated ~120 WorldMapV1 external actor cells, data tables (Items, Footsteps, Skills, Dialogue, Quests), and ~30 UI widget Blueprints.
 
 ===========
+
+v0.1.2
+19.06.2026
+===========
+
+2026-06-19
+----------
+Localization: added multi-language support. ULocalizationSubsystem now reads persisted locale from GameUserSettings.ini on Initialize(), defaults to "en". SetLocale() method switches language DataAsset, persists choice, broadcasts OnLocaleChanged for open widget refresh. Added separate DataAssets for RU (LocalizationDataAssetRU) and EN (LocalizationDataAssetEN) on GameInstance.
+Language Settings: new ULanguageSettingsWidget with ComboBox (en/ru) in the Settings window. ESettingsTab::Language tab added with auto-apply on selection change or Apply button.
+Quest Tracker: added bTracked field to FQuestProgressData (default true). QuestManager: SetQuestTracked(), GetTrackedQuests() for toggle logic. OnQuestUpdated() preserves bTracked from existing data. QuestTrackerWidget now shows only tracked (not all active) quests, hides when none tracked. QuestJournalWidget: new Quest_Row_Track button per row with UQuestTrackBinding helper.
+GameMenuBar: refactored button click handlers into compact inline delegates. Added UHintTooltipWidget — simple tooltip with Hint_Text TextBlock, assigned via native SetToolTip mechanism. SetupButtonHint() creates tooltip for each of 10 bar buttons with configurable HintText properties.
+Free-Look Camera: bAltCursorActive now defaults to false (cursor starts hidden). Look() supports free-look mode when cursor hidden AND no UI window open — camera rotates and character follows yaw without holding RMB. In free-look, character also rotates toward camera facing direction.
+Music Zones: two-layer guard against spurious EndOverlap events during Actor spawn/Possess/capsule resize. Layer 1: if active playlist doesn't match this zone, don't interfere. Layer 2: IsPlayerInAnyMusicZone() — don't stop music if player overlaps ANY other music zone. Physics overlap check via GetOverlappingActors() confirms pawn is genuinely outside. LastActivePlaylistId preserved when StopMusic() is called so SetMusicVolume(0→>0) can resume the playlist.
+Ambient Sound Zones: static ref-count system (ActiveAmbientRefCount TMap<USoundBase*, int32>) tracks concurrent zone coverage. StartAmbient() increments count instead of restarting if sound already playing. StopAmbient() only actually stops when refcount reaches 0 (last zone left). ActiveAmbientComponents TMap tracks which AudioComponent started playback. EndPlay() cleanup for static maps on zone destruction.
+AudioManager: PushSoundMixModifier now called only when transitioning volume 0→>0, not on every slider tick (prevents audio device modifier stack instability). SetMusicVolume(0→>0) resumes playlist via LastActivePlaylistId. PlayPlaylist() restarts if matching playlist's component stopped playing. SafeVolume changed from KINDA_SMALL_NUMBER to 0.005f.
+Item Pickup Queue: PendingPickupItemUID/Item replaced with PendingPickupItemUIDs/Items (TArray). OnPickupPointFired() resolves multiple rapid pickups in one animation fire. PickupSpecificItem(): IsPickingUp() guard prevents overlapping pickup animations from corrupting queues.
+Net Subscription Order: InventoryManager and HarvestManager net subscriptions deferred from InitNetworkingSetup() to BasicPlayer::BeginPlay(), preventing packet processing before OwnerCharacterId is set.
+Overlap Delegates: RemoveDynamic called before AddDynamic on 5 actors (BaseMMOProjectile, MobSpawnZone, WorldInteractiveObjectActor, AAmbientSoundZoneActor, AMusicZoneActor) to prevent double-binding from Blueprint recompilation or repeated BeginPlay.
+QuestJournal: UQuestTrackBinding helper class for tracking toggle button. Blueprint row now includes Quest_Row_Track button visible only for active quests.
+New Blueprint widgets: WBP_LanguageSettingsWidget (language selection combo), WBP_HintTooltipWidget (button hover hints). Updated BP_MyGameInstance (LocalizationDataAssets RU/EN), WBP_Settings (Language tab), WBP_QuestJournalRow (track button), WBP_GameMenuBar (hint tooltips).
+
+===========

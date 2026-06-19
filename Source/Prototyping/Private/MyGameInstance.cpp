@@ -269,10 +269,12 @@ void UMyGameInstance::Init()
 		UE_LOG(LogTemp, Error, TEXT("Failed to create TimeSyncService"));
 	}
 
-	// Initialize localization subsystem with the configured data asset
+	// Initialize localization subsystem with the configured data assets
 	if (ULocalizationSubsystem* LocSys = GetSubsystem<ULocalizationSubsystem>())
 	{
 		LocSys->SetLocalizationData(LocalizationDataAsset);
+		LocSys->SetLocalizationDataRU(LocalizationDataAssetRU ? LocalizationDataAssetRU : LocalizationDataAsset);
+		LocSys->SetLocalizationDataEN(LocalizationDataAssetEN);
 	}
 
 	// Build OS cursor handles from WorldInteractionConfig once, before the login level loads.
@@ -425,8 +427,8 @@ void UMyGameInstance::InitNetworkingSetup()
 		InventoryManager->SetGameInstance(this);
 		// Initialize the inventory manager
 		InventoryManager->Initialize(NetworkManager);
-		// subscribe to the network manager
-		InventoryManager->SubscribeToNetworkManager();
+		// Net subscription is deferred to BasicPlayer::BeginPlay() where
+		// OwnerCharacterId is set — prevents processing unowned packets.
 	}
 
 	if (HarvestManager != nullptr) {
@@ -436,8 +438,8 @@ void UMyGameInstance::InitNetworkingSetup()
 		HarvestManager->SetGameInstance(this);
 		// Initialize the harvest manager
 		HarvestManager->Initialize(NetworkManager);
-		// subscribe to the network manager
-		HarvestManager->SubscribeToNetworkManager();
+		// Net subscription is deferred to BasicPlayer::BeginPlay() where
+		// the local character is available — prevents double-subscription.
 	}
 
 	// Initialize experience system

@@ -35,7 +35,7 @@ class PROTOTYPING_API AMusicZoneActor : public AActor
 public:
 	AMusicZoneActor();
 
-	/** Trigger volume — resize this to define the zone boundary. */
+	/** Trigger volume ï¿½ resize this to define the zone boundary. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Music Zone")
 	UBoxComponent* TriggerBox = nullptr;
 
@@ -69,7 +69,7 @@ private:
 
 	// True while the local pawn is considered inside this zone.
 	// Guards against spurious EndOverlap events that UE generates during
-	// Actor spawn / Possess / capsule resize — these must not stop the music.
+	// Actor spawn / Possess / capsule resize ï¿½ these must not stop the music.
 	bool bIsPlayerInside = false;
 
 	void CheckInitialOverlap();
@@ -82,4 +82,7 @@ private:
 	UFUNCTION()
 	void OnBoxEndOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
 		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
+
+	/** Returns true if the pawn is inside any other MusicZoneActor that has a PlaylistId set. */
+	bool IsPlayerInAnyMusicZone(APawn* LocalPawn) const;
 };

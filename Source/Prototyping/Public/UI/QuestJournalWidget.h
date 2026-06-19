@@ -39,6 +39,27 @@ private:
     int32 QuestId = 0;
 };
 
+/**
+ * Per-row helper for the tracking toggle button.
+ */
+UCLASS()
+class PROTOTYPING_API UQuestTrackBinding : public UObject
+{
+    GENERATED_BODY()
+
+public:
+    void Setup(UQuestJournalWidget* InJournal, int32 InQuestId);
+
+    UFUNCTION()
+    void HandleTrackToggled();
+
+private:
+    UPROPERTY()
+    UQuestJournalWidget* Journal = nullptr;
+
+    int32 QuestId = 0;
+};
+
 // Fired when journal window is shown or hidden (for cursor management)
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnQuestJournalVisibilityChanged, bool, bIsVisible);
 
@@ -81,6 +102,9 @@ public:
 
     // Called by UQuestRowBinding when a row button is clicked
     void DispatchQuestRowClicked(int32 QuestId);
+
+    // Called by UQuestTrackBinding when the track toggle is clicked
+    void DispatchQuestTrackToggled(int32 QuestId);
 
     // Class used to build individual quest list-row widgets
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Journal UI")
@@ -174,6 +198,10 @@ private:
     // Per-row binding objects � keeps them GC-rooted and maps each row button click to a questId
     UPROPERTY()
     TArray<UQuestRowBinding*> RowBindings;
+
+    // Per-row tracking toggle binding objects
+    UPROPERTY()
+    TArray<UQuestTrackBinding*> TrackBindings;
 
     // Drag state
     bool bDragging = false;

@@ -12,12 +12,17 @@ void UW_SettingsWidget::NativeConstruct()
         Tab_AudioButton->OnClicked.AddDynamic(this, &UW_SettingsWidget::HandleTabAudio);
     }
 
-    if (Tab_GraphicsButton)
-    {
-        Tab_GraphicsButton->OnClicked.AddDynamic(this, &UW_SettingsWidget::HandleTabGraphics);
-    }
+	if (Tab_GraphicsButton)
+	{
+		Tab_GraphicsButton->OnClicked.AddDynamic(this, &UW_SettingsWidget::HandleTabGraphics);
+	}
 
-    if (Button_Close)
+	if (Tab_LanguageButton)
+	{
+		Tab_LanguageButton->OnClicked.AddDynamic(this, &UW_SettingsWidget::HandleTabLanguage);
+	}
+
+	if (Button_Close)
     {
         Button_Close->OnClicked.AddDynamic(this, &UW_SettingsWidget::HandleClose);
     }
@@ -74,6 +79,14 @@ void UW_SettingsWidget::SwitchToTab(ESettingsTab Tab)
                 GraphicsSettingsPanel->InitializeSettings();
             }
             break;
+
+        case ESettingsTab::Language:
+            if (LanguageSettingsPanel)
+            {
+                LanguageSettingsPanel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+                LanguageSettingsPanel->InitializeSettings();
+            }
+            break;
     }
 
     OnTabChanged(Tab);
@@ -87,6 +100,11 @@ void UW_SettingsWidget::HandleTabAudio()
 void UW_SettingsWidget::HandleTabGraphics()
 {
     SwitchToTab(ESettingsTab::Graphics);
+}
+
+void UW_SettingsWidget::HandleTabLanguage()
+{
+    SwitchToTab(ESettingsTab::Language);
 }
 
 void UW_SettingsWidget::HandleClose()

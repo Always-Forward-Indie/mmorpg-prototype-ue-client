@@ -148,12 +148,12 @@ private:
 		// Keeps Niagara VFX resident in memory after async preload
 		TSharedPtr<FStreamableHandle> NiagaraPreloadHandle;
 
-		// UID of the dropped item that the server just confirmed as picked up.
-		// Stored here so OnPickupPointFired() knows which actor to destroy.
-		int32 PendingPickupItemUID = -1;
+		// UIDs of dropped items that the server confirmed as picked up.
+		// Queued so rapid multi-pickups are all resolved when the animation fires.
+		TArray<int32> PendingPickupItemUIDs;
 
-		// Item data from the server confirmation, forwarded to inventory after VFX.
-		FItemBaseStruct PendingPickupItem;
+		// Item data from server confirmations, paired by index with PendingPickupItemUIDs.
+		TArray<FItemBaseStruct> PendingPickupItems;
 
 		// Whether OnPickupPoint is already bound for the current session.
 		bool bPickupDelegateBound = false;

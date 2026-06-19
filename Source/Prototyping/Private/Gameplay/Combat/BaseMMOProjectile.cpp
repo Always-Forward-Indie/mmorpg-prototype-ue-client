@@ -70,6 +70,7 @@ void ABaseMMOProjectile::BeginPlay()
     CollisionSphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
     // Wire overlap delegate
+    CollisionSphere->OnComponentBeginOverlap.RemoveDynamic(this, &ABaseMMOProjectile::OnSphereBeginOverlap);
     CollisionSphere->OnComponentBeginOverlap.AddDynamic(this, &ABaseMMOProjectile::OnSphereBeginOverlap);
 
     // Safety lifetime — removes the actor even if target was never hit

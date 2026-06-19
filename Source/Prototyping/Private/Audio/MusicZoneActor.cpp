@@ -3,6 +3,7 @@
 #include "Audio/MusicZoneActor.h"
 #include "Audio/AudioManager.h"
 #include "Components/BoxComponent.h"
+#include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
 #include "MyGameInstance.h"
@@ -23,14 +24,16 @@ void AMusicZoneActor::BeginPlay()
 {
 	Super::BeginPlay();
 
+	TriggerBox->OnComponentBeginOverlap.RemoveDynamic(this, &AMusicZoneActor::OnBoxBeginOverlap);
 	TriggerBox->OnComponentBeginOverlap.AddDynamic(this, &AMusicZoneActor::OnBoxBeginOverlap);
+	TriggerBox->OnComponentEndOverlap.RemoveDynamic(this, &AMusicZoneActor::OnBoxEndOverlap);
 	TriggerBox->OnComponentEndOverlap.AddDynamic(this, &AMusicZoneActor::OnBoxEndOverlap);
 
 	if (PlaylistId.IsEmpty()) { return; }
 
 	if (bTriggerWithoutPawn)
 	{
-		// Login level path: no pawn needed — start the playlist right away.
+		// Login level path: no pawn needed ï¿½ start the playlist right away.
 		UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
 		if (GI && GI->AudioManager)
 		{
@@ -108,31 +111,74 @@ void AMusicZoneActor::OnBoxEndOverlap(UPrimitiveComponent* /*OverlappedComp*/, A
 	APawn* LocalPawn = UGameplayStatics::GetPlayerPawn(this, 0);
 	if (OtherActor != LocalPawn) { return; }
 
-	// Verify the pawn is genuinely outside the box before stopping music.
-	// UE can fire a spurious EndOverlap during Actor spawn, Possess, or capsule
-	// resize even when the pawn never actually left the trigger volume.
+	// Guard against spurious EndOverlap during Actor spawn, Possess,
+	// or capsule resize â€” physics must confirm the pawn is genuinely outside.
 	TArray<AActor*> StillOverlapping;
 	TriggerBox->GetOverlappingActors(StillOverlapping);
 	if (StillOverlapping.Contains(LocalPawn))
 	{
-		// Physics says pawn is still inside — ignore this phantom EndOverlap.
 		return;
 	}
 
 	bIsPlayerInside = false;
 
+	if (PlaylistId.IsEmpty()) { return; }
+
 	UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
-	if (GI && GI->AudioManager)
+	if (!GI || !GI->AudioManager) { return; }
+
+	// Layer 1: If another zone already changed the active playlist, do not
+	// interfere â€” its BeginOverlap handled the transition before our EndOverlap.
+	if (GI->AudioManager->GetActivePlaylistId() != PlaylistId)
 	{
-		GI->AudioManager->StopMusic(FadeOutTimeOverride);
+		return;
 	}
+
+	// Layer 2: If the player is inside ANY other MusicZoneActor with a
+	// playlist set, that zone's BeginOverlap (past or pending) owns the
+	// music decision. We must not stop the music â€” regardless of whether
+	// the other zone's playlist matches ours.
+	if (IsPlayerInAnyMusicZone(LocalPawn))
+	{
+		return;
+	}
+
+	// No other zone covers the player â€” safe to stop with fade-out.
+	GI->AudioManager->StopMusic(FadeOutTimeOverride);
 }
 
 void AMusicZoneActor::OnPlayerSpawned()
 {
-	// Called by GameInstance right after the local pawn is possessed.
-	// Fire the overlap check immediately so we don't have to wait for the
-	// next 0.25 s timer tick — the pawn and its physics overlap are ready now.
 	if (bTriggerWithoutPawn || PlaylistId.IsEmpty()) { return; }
 	CheckInitialOverlap();
+}
+
+bool AMusicZoneActor::IsPlayerInAnyMusicZone(APawn* LocalPawn) const
+{
+	if (!LocalPawn) { return false; }
+
+	TArray<AActor*> Overlapping;
+	LocalPawn->GetOverlappingActors(Overlapping, AMusicZoneActor::StaticClass());
+	for (AActor* A : Overlapping)
+	{
+		AMusicZoneActor* Zone = Cast<AMusicZoneActor>(A);
+		if (Zone && Zone != this && !Zone->PlaylistId.IsEmpty())
+		{
+			return true;
+		}
+	}
+
+	for (TActorIterator<AMusicZoneActor> It(GetWorld()); It; ++It)
+	{
+		AMusicZoneActor* Zone = *It;
+		if (Zone && Zone != this
+			&& !Zone->PlaylistId.IsEmpty()
+			&& Zone->TriggerBox
+			&& Zone->TriggerBox->IsOverlappingActor(LocalPawn))
+		{
+			return true;
+		}
+	}
+
+	return false;
 }

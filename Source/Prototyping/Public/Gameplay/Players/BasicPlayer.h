@@ -837,6 +837,9 @@ public:
 	void LockMovementForPickup();
 	void UnlockMovementAfterPickup();
 
+	/** True while a pickup animation is in progress — prevents overlapping pickups. */
+	bool IsPickingUp() const { return bIsPickingUp; }
+
 	// Set the desired mesh yaw for smooth rotation (used e.g. when facing a pickup target)
 	void SetDesiredFaceYaw(float Yaw)
 	{

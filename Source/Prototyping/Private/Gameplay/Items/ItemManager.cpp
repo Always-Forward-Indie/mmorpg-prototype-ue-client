@@ -177,14 +177,20 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 		}
 
 		// Cache item data from server confirmation
+		FItemBaseStruct PickedItem;
 		if (Body->HasField(TEXT("item")))
 		{
-			PendingPickupItem = JSONParser::DeserializeItemData(Body->GetObjectField(TEXT("item")));
+			PickedItem = JSONParser::DeserializeItemData(Body->GetObjectField(TEXT("item")));
 		}
 
 		// Cache the dropped item UID so OnPickupPointFired knows which actor to destroy
-		PendingPickupItemUID = -1;
-		Body->TryGetNumberField(TEXT("droppedItemUID"), PendingPickupItemUID);
+		int32 NewUID = -1;
+		Body->TryGetNumberField(TEXT("droppedItemUID"), NewUID);
+		if (NewUID > 0)
+		{
+			PendingPickupItemUIDs.Add(NewUID);
+			PendingPickupItems.Add(PickedItem);
+		}
 
 		// Bind the pickup-point delegate once (lazy, first successful pickup)
 		BindPickupPointDelegate();
@@ -240,8 +246,8 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 			}
 		}
 
-		PendingPickupItemUID = -1;
-		PendingPickupItem    = FItemBaseStruct();
+		PendingPickupItemUIDs.Empty();
+		PendingPickupItems.Empty();
 	}
 }
 
@@ -575,23 +581,28 @@ void UItemManager::BindPickupPointDelegate()
 // ---------------------------------------------------------------------------
 void UItemManager::OnPickupPointFired()
 {
-	UE_LOG(LogTemp, Warning, TEXT("ItemManager: OnPickupPointFired uid=%d"), PendingPickupItemUID);
+	UE_LOG(LogTemp, Warning, TEXT("ItemManager: OnPickupPointFired count=%d"), PendingPickupItemUIDs.Num());
 
-	// Destroy the world item and play pickup VFX
-	if (PendingPickupItemUID > 0 && DroppedItemsMap.Contains(PendingPickupItemUID))
+	for (int32 i = 0; i < PendingPickupItemUIDs.Num(); ++i)
 	{
-		ADroppedItemActor* DroppedActor = DroppedItemsMap[PendingPickupItemUID];
-		if (IsValid(DroppedActor))
+		const int32 UID = PendingPickupItemUIDs[i];
+
+		// Destroy the world item and play pickup VFX
+		if (UID > 0 && DroppedItemsMap.Contains(UID))
 		{
-			DroppedActor->PlayPickupEffect();
+			ADroppedItemActor* DroppedActor = DroppedItemsMap[UID];
+			if (IsValid(DroppedActor))
+			{
+				DroppedActor->PlayPickupEffect();
+			}
+			DroppedItemsMap.Remove(UID);
 		}
-		DroppedItemsMap.Remove(PendingPickupItemUID);
-	}
 
-	// Broadcast item to inventory/UI systems
-	if (!PendingPickupItem.name.IsEmpty())
-	{
-		ProcessItemPickup(PendingPickupItem);
+		// Broadcast item to inventory/UI systems
+		if (i < PendingPickupItems.Num() && !PendingPickupItems[i].name.IsEmpty())
+		{
+			ProcessItemPickup(PendingPickupItems[i]);
+		}
 	}
 
 	// Unlock player movement
@@ -613,8 +624,8 @@ void UItemManager::OnPickupPointFired()
 	}
 
 	// Reset pending state
-	PendingPickupItemUID = -1;
-	PendingPickupItem    = FItemBaseStruct();
+	PendingPickupItemUIDs.Empty();
+	PendingPickupItems.Empty();
 }
 
 // ---------------------------------------------------------------------------

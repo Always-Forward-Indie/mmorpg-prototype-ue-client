@@ -8,6 +8,8 @@
 
 class ULocalizationDataAsset;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnLocaleChanged, const FString&, NewLocale);
+
 /**
  * LocalizationSubsystem
  *
@@ -15,15 +17,13 @@ class ULocalizationDataAsset;
  * FText (and optional metadata) by looking up the DataTables configured in
  * ULocalizationDataAsset.
  *
+ * Supports multiple languages by holding separate DataAssets per locale.
+ * The active locale is persisted to GameUserSettings.ini.
+ *
  * Usage:
  *   ULocalizationSubsystem* Loc = GetGameInstance()->GetSubsystem<ULocalizationSubsystem>();
- *   FText Title  = Loc->GetQuestDisplayName("quest.wolf_hunt");
- *   FText Name   = Loc->GetItemDisplayName("iron_sword");
- *   FText Zone   = Loc->GetZoneDisplayName("dead_forest");
- *
- * The asset is assigned via SetLocalizationData() called from MyGameInstance::Init().
- * If a key is not found the raw key string is returned as fallback so the UI
- * never shows blank text during development.
+ *   Loc->SetLocale(TEXT("en"));
+ *   FText Title = Loc->GetQuestDisplayName("quest.wolf_hunt");
  */
 UCLASS()
 class PROTOTYPING_API ULocalizationSubsystem : public UGameInstanceSubsystem
@@ -35,6 +35,24 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Localization")
     void SetLocalizationData(ULocalizationDataAsset* InAsset);
+
+    UFUNCTION(BlueprintCallable, Category = "Localization")
+    void SetLocalizationDataRU(ULocalizationDataAsset* InAsset) { LocalizationDataRU = InAsset; }
+
+    UFUNCTION(BlueprintCallable, Category = "Localization")
+    void SetLocalizationDataEN(ULocalizationDataAsset* InAsset) { LocalizationDataEN = InAsset; }
+
+    /** Set the active locale ("en" or "ru"). Persists to config and broadcasts OnLocaleChanged. */
+    UFUNCTION(BlueprintCallable, Category = "Localization")
+    void SetLocale(const FString& InLocale);
+
+    /** Returns the active locale code, e.g. "en" or "ru". */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization")
+    FString GetCurrentLocale() const { return CurrentLocale; }
+
+    /** Broadcast when the locale changes so open widgets can refresh their text. */
+    UPROPERTY(BlueprintAssignable, Category = "Localization|Events")
+    FOnLocaleChanged OnLocaleChanged;
 
     // ?? Quests ???????????????????????????????????????????????????????????????
 
@@ -227,6 +245,17 @@ public:
 private:
     UPROPERTY()
     ULocalizationDataAsset* LocalizationData = nullptr;
+
+    /** Data asset for Russian locale. Assign in the GameInstance Blueprint defaults. */
+    UPROPERTY()
+    ULocalizationDataAsset* LocalizationDataRU = nullptr;
+
+    /** Data asset for English locale. Assign in the GameInstance Blueprint defaults. */
+    UPROPERTY()
+    ULocalizationDataAsset* LocalizationDataEN = nullptr;
+
+    /** Active locale code, e.g. "en" or "ru". Defaults to system/UE culture on first run. */
+    FString CurrentLocale;
 
     UPROPERTY() mutable UDataTable* CachedQuestTable              = nullptr;
     UPROPERTY() mutable UDataTable* CachedQuestStepTable          = nullptr;

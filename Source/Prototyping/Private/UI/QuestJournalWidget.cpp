@@ -27,6 +27,24 @@ void UQuestRowBinding::HandleClicked()
     }
 }
 
+// ---------------------------------------------------------------------------
+// UQuestTrackBinding
+// ---------------------------------------------------------------------------
+
+void UQuestTrackBinding::Setup(UQuestJournalWidget* InJournal, int32 InQuestId)
+{
+    Journal = InJournal;
+    QuestId = InQuestId;
+}
+
+void UQuestTrackBinding::HandleTrackToggled()
+{
+    if (Journal)
+    {
+        Journal->DispatchQuestTrackToggled(QuestId);
+    }
+}
+
 void UQuestJournalWidget::NativeConstruct()
 {
     Super::NativeConstruct();
@@ -92,6 +110,7 @@ void UQuestJournalWidget::RefreshQuestList()
 
     Quest_List_Box->ClearChildren();
     RowBindings.Reset();
+    TrackBindings.Reset();
 
     TArray<FQuestProgressData> Quests = QuestManager->GetAllQuests();
     ULocalizationSubsystem* LocSys = GetLocSys();
@@ -140,6 +159,32 @@ void UQuestJournalWidget::RefreshQuestList()
                 RowBtn->OnClicked.AddDynamic(Binding, &UQuestRowBinding::HandleClicked);
             }
 
+            // Optional track toggle button — only active quests get one
+            UButton* TrackBtn = Cast<UButton>(Row->GetWidgetFromName(TEXT("Quest_Row_Track")));
+            if (TrackBtn)
+            {
+                if (Quest.state == TEXT("active"))
+                {
+                    UQuestTrackBinding* TrackBinding = NewObject<UQuestTrackBinding>(this);
+                    TrackBinding->Setup(this, Quest.questId);
+                    TrackBindings.Add(TrackBinding);
+                    TrackBtn->OnClicked.AddDynamic(TrackBinding, &UQuestTrackBinding::HandleTrackToggled);
+                    TrackBtn->SetIsEnabled(true);
+                    TrackBtn->SetVisibility(ESlateVisibility::Visible);
+
+                    UTextBlock* TrackLabel = Cast<UTextBlock>(TrackBtn->GetChildAt(0));
+                    if (TrackLabel)
+                    {
+                        TrackLabel->SetText(FText::FromString(Quest.bTracked ? TEXT("Tracking") : TEXT("Track")));
+                    }
+                }
+                else
+                {
+                    TrackBtn->SetIsEnabled(false);
+                    TrackBtn->SetVisibility(ESlateVisibility::Collapsed);
+                }
+            }
+
             Quest_List_Box->AddChild(Row);
         }
         else
@@ -161,6 +206,13 @@ void UQuestJournalWidget::RefreshQuestList()
 void UQuestJournalWidget::DispatchQuestRowClicked(int32 QuestId)
 {
     ShowQuestDetail(QuestId);
+}
+
+void UQuestJournalWidget::DispatchQuestTrackToggled(int32 QuestId)
+{
+    if (!QuestManager) return;
+    FQuestProgressData Data = QuestManager->GetQuestData(QuestId);
+    QuestManager->SetQuestTracked(QuestId, !Data.bTracked);
 }
 
 void UQuestJournalWidget::ShowQuestDetail(int32 QuestId)

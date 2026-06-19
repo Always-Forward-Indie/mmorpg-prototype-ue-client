@@ -33,6 +33,12 @@ void UQuestManager::OnQuestUpdated(const FQuestProgressData& Data)
         Merged.clientQuestKey = Existing->clientQuestKey;
     }
 
+    // Preserve client-side tracking flag — server never sends bTracked
+    if (Existing)
+    {
+        Merged.bTracked = Existing->bTracked;
+    }
+
     QuestJournal.Add(Data.questId, Merged);
 
     UE_LOG(LogTemp, Log, TEXT("QuestManager: Quest %d updated � state=%s step=%d"),
@@ -143,6 +149,30 @@ TArray<FQuestProgressData> UQuestManager::GetCompletedQuests() const
     for (const auto& Pair : QuestJournal)
     {
         if (Pair.Value.state == TEXT("completed") || Pair.Value.state == TEXT("turned_in"))
+        {
+            Out.Add(Pair.Value);
+        }
+    }
+    return Out;
+}
+
+void UQuestManager::SetQuestTracked(int32 QuestId, bool bTracked)
+{
+    FQuestProgressData* Found = QuestJournal.Find(QuestId);
+    if (!Found) return;
+
+    if (Found->bTracked == bTracked) return;
+
+    Found->bTracked = bTracked;
+    OnQuestUpdatedDelegate.Broadcast(*Found);
+}
+
+TArray<FQuestProgressData> UQuestManager::GetTrackedQuests() const
+{
+    TArray<FQuestProgressData> Out;
+    for (const auto& Pair : QuestJournal)
+    {
+        if (Pair.Value.state == TEXT("active") && Pair.Value.bTracked)
         {
             Out.Add(Pair.Value);
         }

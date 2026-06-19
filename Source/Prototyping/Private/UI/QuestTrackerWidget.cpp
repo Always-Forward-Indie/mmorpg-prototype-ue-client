@@ -43,9 +43,17 @@ void UQuestTrackerWidget::RefreshTracker()
 
     Tracker_Box->ClearChildren();
 
-    TArray<FQuestProgressData> ActiveQuests = QuestManager->GetActiveQuests();
+    TArray<FQuestProgressData> TrackedQuests = QuestManager->GetTrackedQuests();
 
-    for (const FQuestProgressData& Quest : ActiveQuests)
+    if (TrackedQuests.Num() == 0)
+    {
+        SetVisibility(ESlateVisibility::Collapsed);
+        return;
+    }
+
+    SetVisibility(ESlateVisibility::HitTestInvisible);
+
+    for (const FQuestProgressData& Quest : TrackedQuests)
     {
         if (QuestRowClass)
         {

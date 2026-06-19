@@ -2216,8 +2216,16 @@ void ABasicPlayer::Move(const FInputActionValue& Value)
 
 void ABasicPlayer::Look(const FInputActionValue& Value)
 {
-    // Only process mouse look when at least one mouse button is held (WoW-style)
-    if (!bIsRightMouseDown && !bIsLeftMouseDown) return;
+    // Determine whether we are in free-look mode (cursor hidden, no UI window).
+    // Free-look rotates the camera AND the character, exactly like RMB-hold.
+    APlayerController* PC = Cast<APlayerController>(GetController());
+    const bool bFreeLook = (!bIsRightMouseDown && !bIsLeftMouseDown)
+        && PC && !PC->bShowMouseCursor
+        && !(UIManager && UIManager->HasUIWindowOpen());
+
+    // Only process mouse look when at least one mouse button is held,
+    // UNLESS the cursor is hidden and no UI window is open (free-look mode).
+    if (!bIsRightMouseDown && !bIsLeftMouseDown && !bFreeLook) return;
 
     // Dead players cannot rotate — the corpse must stay still.
     if (playerData.characterData.bIsDead) return;
@@ -2262,10 +2270,10 @@ void ABasicPlayer::Look(const FInputActionValue& Value)
         {
             AddControllerYawInput(LookValue.X * CameraYawSensitivity);
 
-            // RMB held: character follows camera yaw — but not mid-cast.
+            // RMB held (or free-look): character follows camera yaw — but not mid-cast.
             // The camera itself still rotates freely; only the mesh stays locked
             // toward the target until the animation finishes.
-            if (bIsRightMouseDown)
+            if (bIsRightMouseDown || bFreeLook)
             {
                 const bool bAnimLocked = MyGameInstance && MyGameInstance->GetPlayerSkillManager()
                     && MyGameInstance->GetPlayerSkillManager()->IsSkillAnimationPlaying();

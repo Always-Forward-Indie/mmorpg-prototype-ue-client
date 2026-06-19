@@ -110,6 +110,16 @@ private:
 	 *  Used by OnAmbientFinished to restart the sound when bLoop = true. */
 	bool bPlayerIsInside = false;
 
+	/** Tracks how many zones are currently covering each ambient sound.
+	 *  When entering a zone with the same sound as a neighbor, we increment
+	 *  the counter instead of restarting playback.  Only the last zone to
+	 *  be left actually stops the audio — avoiding gaps and restarts. */
+	static TMap<USoundBase*, int32> ActiveAmbientRefCount;
+
+	/** The AudioComponent that was used to start playback for each sound.
+	 *  May belong to a different zone than the one calling StopAmbient. */
+	static TMap<USoundBase*, UAudioComponent*> ActiveAmbientComponents;
+
 	/** Applies bSpatialized / AttenuationInnerRadius / AttenuationOuterRadius to
 	 *  the AudioComponent. Called from both OnConstruction (editor preview) and
 	 *  BeginPlay (runtime) so the viewport spheres stay in sync with Details edits. */

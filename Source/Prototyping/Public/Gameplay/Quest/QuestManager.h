@@ -72,6 +72,14 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Quest")
     TArray<FQuestProgressData> GetCompletedQuests() const;
 
+    // Toggle whether a quest is shown on the HUD tracker
+    UFUNCTION(BlueprintCallable, Category = "Quest")
+    void SetQuestTracked(int32 QuestId, bool bTracked);
+
+    // Returns only active quests where bTracked == true
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Quest")
+    TArray<FQuestProgressData> GetTrackedQuests() const;
+
     // --- Events ---
 
     UPROPERTY(BlueprintAssignable, Category = "Quest Events")

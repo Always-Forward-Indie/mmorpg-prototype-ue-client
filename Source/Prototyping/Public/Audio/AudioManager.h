@@ -349,6 +349,7 @@ private:
 	UAudioComponent* StingerComponent = nullptr;
 
 	FString ActivePlaylistId;
+	FString LastActivePlaylistId;  // preserved before StopMusic so volume 0→>0 can resume
 	int32   CurrentTrackIndex  = 0;
 	bool    bUseComponentB     = false;
 

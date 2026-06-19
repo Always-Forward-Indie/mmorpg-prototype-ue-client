@@ -20,6 +20,7 @@
 #include "UI/FocusableWindowWidget.h"
 #include "UI/AudioSettingsWidget.h"
 #include "UI/GraphicsSettingsWidget.h"
+#include "UI/LanguageSettingsWidget.h"
 #include "Components/WidgetSwitcher.h"
 #include "Components/Button.h"
 #include "W_SettingsWidget.generated.h"
@@ -30,6 +31,7 @@ enum class ESettingsTab : uint8
 {
     Audio    UMETA(DisplayName = "Audio"),
     Graphics UMETA(DisplayName = "Graphics"),
+    Language UMETA(DisplayName = "Language"),
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSettingsWindowClosed);
@@ -144,6 +146,20 @@ protected:
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
     UGraphicsSettingsWidget* GraphicsSettingsPanel;
 
+    /**
+     * Tab button for the Language panel.
+     * Place it in the tab-bar row; clicking it calls SwitchToTab(Language).
+     */
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+    UButton* Tab_LanguageButton;
+
+    /**
+     * Language settings panel — must be a Blueprint subclass of ULanguageSettingsWidget.
+     * Place it as the THIRD child (slot 2) of TabContentSwitcher.
+     */
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+    ULanguageSettingsWidget* LanguageSettingsPanel;
+
     // ── Optional bound widgets ─────────────────────────────────────────────
 
     /** Closes the settings window. */
@@ -156,5 +172,6 @@ private:
 
     UFUNCTION() void HandleTabAudio();
     UFUNCTION() void HandleTabGraphics();
+    UFUNCTION() void HandleTabLanguage();
     UFUNCTION() void HandleClose();
 };

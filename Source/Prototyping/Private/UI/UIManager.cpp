@@ -125,9 +125,9 @@ UUIManager::UUIManager()
 	bEquipmentVisible = false;
 	bPlayerStatsVisible = false;
 	bBestiaryVisible = false;
-	// bAltCursorActive = true keeps the cursor visible in world interaction mode at all times.
-	// UpdateCursorAndInputMode() uses ShouldShowCursor() which includes this flag.
-	bAltCursorActive = true;
+	// bAltCursorActive = false starts with cursor hidden for free-look camera.
+	// Alt key toggles cursor visibility; UI windows force it visible.
+	bAltCursorActive = false;
 	bGameMenuVisible = false;
 }
 

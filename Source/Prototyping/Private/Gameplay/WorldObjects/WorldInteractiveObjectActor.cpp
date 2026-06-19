@@ -33,7 +33,9 @@ void AWorldInteractiveObjectActor::BeginPlay()
 {
 	Super::BeginPlay();
 
+	InteractionSphere->OnComponentBeginOverlap.RemoveDynamic(this, &AWorldInteractiveObjectActor::OnInteractionSphereBeginOverlap);
 	InteractionSphere->OnComponentBeginOverlap.AddDynamic(this, &AWorldInteractiveObjectActor::OnInteractionSphereBeginOverlap);
+	InteractionSphere->OnComponentEndOverlap.RemoveDynamic(this, &AWorldInteractiveObjectActor::OnInteractionSphereEndOverlap);
 	InteractionSphere->OnComponentEndOverlap.AddDynamic(this, &AWorldInteractiveObjectActor::OnInteractionSphereEndOverlap);
 
 	// Build MIDs from all mesh slots so we can set material parameters at runtime

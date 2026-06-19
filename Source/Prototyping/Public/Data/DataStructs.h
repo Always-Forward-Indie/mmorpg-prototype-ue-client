@@ -3541,6 +3541,10 @@ struct PROTOTYPING_API FQuestProgressData
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
     bool bHasEnrichedStep = false;
 
+    /** If true, this quest is shown on the HUD tracker. Toggled by the player in the journal. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
+    bool bTracked = true;
+
     /** Quest rewards (with isHidden flag respected until turned in). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest Progress")
     TArray<FQuestRewardData> rewards;

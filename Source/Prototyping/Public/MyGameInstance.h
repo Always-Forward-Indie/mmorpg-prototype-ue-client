@@ -1129,6 +1129,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization")
 	class ULocalizationDataAsset* LocalizationDataAsset;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization")
+	class ULocalizationDataAsset* LocalizationDataAssetRU;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization")
+	class ULocalizationDataAsset* LocalizationDataAssetEN;
+
 	// Data tables and configuration
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game Instance Data")
 	class UDataTable* MobDefinitionTable;

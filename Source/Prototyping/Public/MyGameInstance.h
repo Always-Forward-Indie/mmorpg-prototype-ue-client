@@ -133,10 +133,6 @@ FDateTime ReceiveTimeLoginServer;
 	// Safety fallback timer: removes loading screen even if some signals never arrive
 	FTimerHandle LoadingScreenSafetyTimerHandle;
 
-	// Periodic PCG deactivation during WP streaming to prevent access violations
-	// in UnrealEditor-PCG.dll when landscape data isn't fully loaded yet.
-	FTimerHandle PCGSuppressionTimerHandle;
-
 	// Number of render-thread frames observed since all ReadyFlags were set.
 	// Counted on the render thread via OnEndFrameRT; removal dispatched back to
 	// the game thread so UMG / TimerManager are touched only from GT.
@@ -224,13 +220,6 @@ public:
 
 	// Returns true if the game world is loaded and ready
 	bool IsGameWorldReady() const { return bGameWorldReady; }
-
-	// Deactivate all PCG components in the world to prevent auto-generation
-	// during World Partition streaming (landscape data may not be ready).
-	void SuppressPCGComponents(UWorld* World);
-
-	// Re-activate all PCG components after World Partition streaming is complete.
-	void ActivateAllPCGComponents(UWorld* World);
 
 	// Called by PlayerManager when the server sends playerReady ACK (Phase 3 complete).
 	void NotifyPlayerReadyAck();

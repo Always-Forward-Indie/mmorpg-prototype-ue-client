@@ -9,6 +9,7 @@
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "MyGameInstance.h"
 #include "Prototyping.h"
+#include "CrashDiagnostics.h"
 
 
 UPlayerManager::UPlayerManager(const FObjectInitializer& ObjectInitializer)
@@ -91,6 +92,7 @@ void UPlayerManager::SetWorldContext(UWorld* World)
 // Process game server data
 void UPlayerManager::ProcessGameServerData(const FString& ReceivedData)
 {
+	CRASH_GUARD("PlayerManager::ProcessGameServerData");
 
 	// Deserialize the received JSON string to get MessageData struct
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
@@ -128,6 +130,7 @@ void UPlayerManager::ProcessGameServerData(const FString& ReceivedData)
 // Process chunk server data
 void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 {
+	CRASH_GUARD("PlayerManager::ProcessChunkServerData");
 
 	// Проверяем валидность данных перед парсингом
 	if (ReceivedData.IsEmpty())

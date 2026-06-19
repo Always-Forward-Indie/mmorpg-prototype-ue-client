@@ -9,6 +9,7 @@
 #include "Audio/AudioManager.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "Utils/AudioSpawnHelpers.h"
+#include "CrashDiagnostics.h"
 
 UInventoryManager::UInventoryManager()
 {
@@ -91,6 +92,9 @@ void UInventoryManager::SubscribeToNetworkManager()
 
 void UInventoryManager::ProcessGameServerData(const FString& ReceivedData)
 {
+	CRASH_GUARD("InventoryManager::ProcessGameServerData");
+	if (!gameInstance) return;
+
 	// Process time sync data first
 	//if (gameInstance && gameInstance->GetTimeSyncService())
 	//{

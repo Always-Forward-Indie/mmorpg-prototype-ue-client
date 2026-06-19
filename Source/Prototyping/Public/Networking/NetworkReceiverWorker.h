@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Sockets.h"
 #include "SocketSubsystem.h"
+#include <atomic>
 
 // Forward declaration
 class UTimeSyncService;
@@ -15,10 +16,10 @@ class UTimeSyncService;
 class PROTOTYPING_API NetworkReceiverWorker : public FRunnable
 {
 private:
-	FSocket* Socket; // Socket to receive data on
-    bool bRunThread; // Flag to control thread execution
-    TQueue<FString, EQueueMode::Mpsc> DataQueue; // Thread-safe queue for messages
-    TWeakObjectPtr<UTimeSyncService> TimeSyncService; // Weak ref - GC-safe access from worker thread
+	std::atomic<FSocket*> Socket; // Socket to receive data on
+	std::atomic<bool> bRunThread; // Flag to control thread execution
+	TQueue<FString, EQueueMode::Mpsc> DataQueue; // Thread-safe queue for messages
+	TWeakObjectPtr<UTimeSyncService> TimeSyncService; // Weak ref - GC-safe access from worker thread
 
 public:
     // Constructor

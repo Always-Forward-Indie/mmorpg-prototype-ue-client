@@ -4,6 +4,7 @@
 #include "Gameplay/Mobs/MOBManager.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
+#include "CrashDiagnostics.h"
 
 //constructor
 UMOBManager::UMOBManager(const FObjectInitializer& ObjectInitializer)
@@ -103,7 +104,10 @@ void UMOBManager::ClearLockedTargetOnAllPlayers(ABasicMOB* Mob)
 // Process game server data
 void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 {
-	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
+    CRASH_GUARD("MOBManager::ProcessGameServerData");
+    if (!worldContext) return;
+
+    FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
 	UE_LOG(LogTemp, Warning, TEXT("MOBManager: Received event type: %s"), *MessageData.eventType);
 
 	// Check if this is a combat event - if so, let CombatNetworkHandler handle it

@@ -12,6 +12,7 @@
 #include "Engine/Engine.h"
 #include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"
+#include "CrashDiagnostics.h"
 
 UCombatSystemManager::UCombatSystemManager()
 {
@@ -33,6 +34,17 @@ void UCombatSystemManager::Initialize(UMyGameInstance* InGameInstance, UNetworkM
 
 void UCombatSystemManager::SetWorldContext(UWorld* World)
 {
+    // Clear all pending safety-timeout timers before changing worlds.
+    // If the old world is still valid, unregister them from its TimerManager.
+    if (WorldContext && WorldContext != World)
+    {
+        for (auto& Pair : PendingResultTimerHandles)
+        {
+            WorldContext->GetTimerManager().ClearTimer(Pair.Value);
+        }
+    }
+    PendingResultTimerHandles.Empty();
+
     WorldContext = World;
 }
 
@@ -789,6 +801,8 @@ void UCombatSystemManager::StartPendingResultTimeout(int32 CasterId)
     TWeakObjectPtr<UCombatSystemManager> WeakSelf(this);
     World->GetTimerManager().SetTimer(TimerHandle, [WeakSelf, CasterId]()
     {
+        CRASH_GUARD("CombatSystem::TimeoutResult");
+
         if (WeakSelf.IsValid())
         {
             // Clean up the stored handle

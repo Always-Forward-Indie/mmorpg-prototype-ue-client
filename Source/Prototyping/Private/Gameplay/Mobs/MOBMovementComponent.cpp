@@ -8,6 +8,7 @@
 #include <Kismet/GameplayStatics.h>
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "CrashDiagnostics.h"
 
 // ---------------------------------------------------------------------------
 UMOBMovementComponent::UMOBMovementComponent()
@@ -41,6 +42,7 @@ void UMOBMovementComponent::BeginPlay()
 void UMOBMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+    CRASH_GUARD("MOBMovementComponent::Tick");
 
     // Mob is dead — do not move the corpse.
     if (bFrozen) return;

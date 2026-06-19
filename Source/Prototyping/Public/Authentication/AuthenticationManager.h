@@ -25,6 +25,7 @@ class PROTOTYPING_API UAuthenticationManager : public UObject
 {
 	GENERATED_BODY()
 private:
+	UPROPERTY()
 	UWorld* worldContext = nullptr;
 
 	UPROPERTY()

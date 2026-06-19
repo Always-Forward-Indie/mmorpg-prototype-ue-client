@@ -8,6 +8,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
+#include "CrashDiagnostics.h"
 
 static constexpr float FloorInterpSpeed = 15.f;
 
@@ -38,6 +39,7 @@ void UTargetDecalComponent::TickComponent(float DeltaTime, ELevelTick TickType,
                                           FActorComponentTickFunction* ThisTickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+    CRASH_GUARD("TargetDecal::Tick");
 
     if (!DecalComp || !DecalComp->IsVisible() || !KnownConfig)
     {
@@ -103,13 +105,14 @@ void UTargetDecalComponent::EnsureDecalCreated(UMaterialInterface* BaseMaterial)
     if (!Owner) return;
 
     DecalComp = NewObject<UDecalComponent>(Owner, TEXT("TargetDecalVFX"));
-    DecalComp->RegisterComponent();
 
     DecalComp->AttachToComponent(
         Owner->GetRootComponent(),
         FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 
     DecalComp->SetRelativeRotation(FRotator(-90.f, 0.f, 0.f));
+
+    DecalComp->RegisterComponent();
 
     TargetFloorZ = 0.f;
     if (const ACharacter* Char = Cast<ACharacter>(Owner))

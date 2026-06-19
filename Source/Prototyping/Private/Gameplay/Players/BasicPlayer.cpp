@@ -18,6 +18,7 @@
 #include "Gameplay/UI/FloatingCombatTextManager.h"
 #include "Gameplay/UI/DamageTextWidget.h"
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "CrashDiagnostics.h"
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "Gameplay/NPCs/NPCManager.h"
 #include "Gameplay/Items/DroppedItemActor.h"
@@ -2040,6 +2041,7 @@ void ABasicPlayer::UpdateHUD()
 void ABasicPlayer::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
+    CRASH_GUARD("BasicPlayer::Tick");
 
     // First-Tick spawn gate: fires NotifyPlayerSpawned exactly once, only after
     // UIInitTimer has completed (bUIInitDone) and the camera has had at least
@@ -3112,6 +3114,30 @@ const FEntityAudioProfile* ABasicPlayer::GetAudioProfile() const
     return nullptr;
 }
 
+void ABasicPlayer::PreloadFootstepSounds()
+{
+    const FEntityAudioProfile* Profile = GetAudioProfile();
+    if (!Profile || Profile->Footsteps.Num() == 0) return;
+
+    FootstepSounds.Empty(Profile->Footsteps.Num());
+
+    FStreamableManager& Streamable = UAssetManager::GetStreamableManager();
+    TWeakObjectPtr<ABasicPlayer> WeakThis(this);
+
+    for (const TSoftObjectPtr<USoundBase>& SoundSoft : Profile->Footsteps)
+    {
+        Streamable.RequestAsyncLoad(SoundSoft.ToSoftObjectPath(),
+            [WeakThis, SoundSoft]()
+            {
+                if (!WeakThis.IsValid()) return;
+                if (USoundBase* Loaded = SoundSoft.Get())
+                {
+                    WeakThis->FootstepSounds.Add(Loaded);
+                }
+            });
+    }
+}
+
 void ABasicPlayer::PlayEventSound(const TSoftObjectPtr<USoundBase>& SoundRef)
 {
     if (SoundRef.IsNull()) return;
@@ -3729,6 +3755,9 @@ void ABasicPlayer::SetDead_Implementation(bool bNewDead)
         {
             Movement->SetMovementMode(MOVE_Walking);
         }
+        // Record revive timestamp so ProcessStatsUpdate can ignore stale
+        // stats_update(healthCurrent=0) packets queued before the respawn ACK.
+        LastRespawnWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
         HideDeathScreen();
         // Play revive sound
         if (const FEntityAudioProfile* Profile = GetAudioProfile())
@@ -4483,6 +4512,8 @@ void ABasicPlayer::ApplyVisualFromDataTable(UDataTable* VisualTable)
 		}
 	}
 
+	PreloadFootstepSounds();
+
 	// Initialize default cosmetics
 	// This must happen after SetActorScale3D so the body component pointer is stable.
 	UE_LOG(LogTemp, Log, TEXT("[Cosmetic] ApplyVisualFromDataTable: CosmeticVisualComponent=%s  MyGameInstance=%s  CosmeticsTable=%s"),
@@ -4510,8 +4541,16 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 	LastPreUpdateHP = playerData.characterData.characterCurrentHealth;
 	LastPreUpdateMP = playerData.characterData.characterCurrentMana;
 
-	// Update HP/MP/level on the character data
-	UpdatePlayerStats(StatsUpdate);
+	// Guard: if the player is already dead and the incoming packet carries positive HP
+	// (a stale regen or damage snapshot that was queued before the kill was processed),
+	// skip the HP/MP update to prevent the HUD showing rising HP on a corpse.
+	// stats_update(healthCurrent=0) packets must still pass through so combat death
+	// (detected below) and the loading-screen gate (NotifyStatsReceived) can fire.
+	if (!playerData.characterData.bIsDead || StatsUpdate.healthCurrent == 0)
+	{
+		// Update HP/MP/level on the character data
+		UpdatePlayerStats(StatsUpdate);
+	}
 
 	if (playerData.isOtherClient && NameplateComponent)
 	{
@@ -4532,9 +4571,25 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 	// The server signals death via stats_update with health.current == 0.
 	// Transition into dead state only if we are not already dead to avoid
 	// re-triggering sounds / anim notifications on every repeated packet.
+	// Guard: a respawn grace window of 5 s prevents a stale stats_update snapshot
+	// (sent by the server at the moment of death, before it processed the respawn)
+	// from re-killing the player immediately after they stand up.
 	if (StatsUpdate.healthCurrent == 0 && !playerData.characterData.bIsDead)
 	{
-		SetDead_Implementation(true);
+		const float TimeSinceRespawn = GetWorld()
+			? (GetWorld()->GetTimeSeconds() - LastRespawnWorldTime)
+			: 999.f;
+		constexpr float RespawnGraceSeconds = 5.0f;
+		if (TimeSinceRespawn >= RespawnGraceSeconds)
+		{
+			SetDead_Implementation(true);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("BasicPlayer: Ignoring stats_update(HP=0) — within respawn grace window (%.1fs < %.1fs)"),
+				TimeSinceRespawn, RespawnGraceSeconds);
+		}
 	}
 
 	// Sync experience fields only when the packet actually carries them.

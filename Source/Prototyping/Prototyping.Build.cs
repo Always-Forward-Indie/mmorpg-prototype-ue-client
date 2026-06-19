@@ -12,7 +12,7 @@ public class Prototyping : ModuleRules
 
 
 
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "Networking", "Sockets", "Json", "JsonUtilities", "UMG", "Slate", "SlateCore", "Niagara", "ApplicationCore", "AIModule", "NavigationSystem", "PCG", "MoviePlayer", "RenderCore" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "Networking", "Sockets", "Json", "JsonUtilities", "UMG", "Slate", "SlateCore", "Niagara", "ApplicationCore", "AIModule", "NavigationSystem", "PCG", "MoviePlayer", "RenderCore", "Landscape" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "NiagaraCore", "NiagaraShader" });
 

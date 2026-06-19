@@ -13,6 +13,7 @@
 #include "Gameplay/UI/DamageTextWidget.h"
 #include "UI/UIManager.h"
 #include "UObject/ConstructorHelpers.h"
+#include "CrashDiagnostics.h"
 #include "Engine/Engine.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -404,6 +405,7 @@ void ABasicMOB::OnReceiveMobHealthUpdate(const FMobHealthUpdateStruct& HealthUpd
 void ABasicMOB::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	CRASH_GUARD("BasicMOB::Tick");
 
 	// In Tick function, add this check
 	if (MOBMovementComponent && MOBData.mobID != 0)

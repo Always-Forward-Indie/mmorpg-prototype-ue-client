@@ -123,6 +123,14 @@ private:
 		// Called by OnPickupPoint delegate: plays the pickup VFX/SFX and destroys the actor.
 		void OnPickupPointFired();
 
+		// Clear all world-specific state (called before level transition).
+		// Prevents stale DroppedItemsMap / PendingMobDrops entries from
+		// blocking re-spawns after OpenLevel tears down the old world.
+		void ClearWorldState();
+
+		// Flush pending network events that arrived while the world was null.
+		void FlushPendingEvents();
+
 		// Called from BasicMOB::Die() — spawns any drops that were deferred
 		// because the mob was still alive when itemDrop packet arrived.
 		void FlushDropsForMob(int32 MobUID);
@@ -153,4 +161,8 @@ private:
 		// Drops deferred because their mob was still alive when itemDrop arrived.
 		// Key = mobUID (int32). Flushed in BasicMOB::Die() via FlushDropsForMob().
 		TMap<int32, TArray<FDroppedItemStruct>> PendingMobDrops;
+
+		// Network events received while world context was null (level transition).
+		// Flushed via FlushPendingEvents() when world becomes valid again.
+		TArray<FString> PendingNetworkEvents;
 };

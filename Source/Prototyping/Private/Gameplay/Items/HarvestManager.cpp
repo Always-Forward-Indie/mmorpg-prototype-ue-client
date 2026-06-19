@@ -9,6 +9,7 @@
 #include "UI/HarvestProgressWidget.h"
 #include "UI/HarvestLootWidget.h"
 #include "TimerManager.h"
+#include "CrashDiagnostics.h"
 
 UHarvestManager::UHarvestManager()
 {
@@ -44,6 +45,8 @@ void UHarvestManager::BeginPlay()
 
 void UHarvestManager::Tick(float DeltaTime)
 {
+	CRASH_GUARD("HarvestManager::Tick");
+
 	// Update harvest progress if harvesting
 	if (bIsHarvesting)
 	{
@@ -94,13 +97,18 @@ void UHarvestManager::Initialize(UNetworkManager* NetworkManager)
 
 void UHarvestManager::SetWorldContext(UWorld* World)
 {
+	// Always stop ticking and invalidate the handle before changing world,
+	// regardless of whether the new world is valid. This prevents the timer
+	// from firing on a destroyed TimerManager after a level transition.
+	StopTicking();
+	TickTimerHandle.Invalidate();
+
 	worldContext = World;
 	UE_LOG(LogTemp, Warning, TEXT("HarvestManager: World context set to %s"), World ? TEXT("Valid") : TEXT("NULL"));
 
 	// Re-register the tick timer in the new world after a level transition
 	if (worldContext)
 	{
-		TickTimerHandle.Invalidate();
 		StartTicking();
 	}
 }
@@ -529,6 +537,9 @@ void UHarvestManager::HideLootWindow()
 
 void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 {
+	CRASH_GUARD("HarvestManager::ProcessGameServerData");
+	if (!worldContext) return;
+
 	// Process time sync data first
 	//if (gameInstance && gameInstance->GetTimeSyncService())
 	//{

@@ -338,4 +338,10 @@ private:
     // World context for timer management
     UPROPERTY()
     TObjectPtr<UWorld> WorldContext;
+
+    // Thread-safe calibration cache for GetSystemTimeMs().
+    // Called from game thread and up to 6 network worker threads concurrently.
+    mutable FCriticalSection CalibrationCs;
+    mutable int64 AnchorSystemMs = 0;
+    mutable double AnchorPerfSeconds = 0.0;
 };

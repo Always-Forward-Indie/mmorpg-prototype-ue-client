@@ -4,6 +4,7 @@
 #include "PCGComponent.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
+#include "ContentStreaming.h"
 
 static const TArray<TPair<FString, EWindowMode::Type>> WindowModeOptions = {
 	{ TEXT("Fullscreen"),         EWindowMode::Fullscreen },
@@ -226,40 +227,54 @@ void UGraphicsSettingsWidget::ApplySettings()
 		Settings->SetScreenResolution(FIntPoint(ResX, ResY));
 	}
 
-	Settings->ApplySettings(false);
-	Settings->SaveSettings();
-
+	// Defer ApplySettings to a later tick to avoid a crash where the streaming manager's
+	// IncrementalBuild() calls ULandscapeComponent::GetCurrentRuntimeMaterialInstanceCount()
+	// while material instances are in a transitional (null) state mid-rebuild triggered by
+	// scalability/resolution changes. Set* calls above only buffer values — no rebuild yet.
 	if (UWorld* World = GetWorld())
 	{
 		TWeakObjectPtr<UWorld> WeakWorld(World);
-		FTimerHandle PCGRefreshHandle;
-		World->GetTimerManager().SetTimer(PCGRefreshHandle, [WeakWorld]()
+		FTimerHandle ApplyHandle;
+		World->GetTimerManager().SetTimer(ApplyHandle, [WeakWorld]()
 		{
 			if (!WeakWorld.IsValid()) return;
 
-			// Guard: skip PCG refresh if the game world isn't ready yet
-			// (World Partition still streaming = landscape data may be invalid).
-			if (UMyGameInstance* GI = Cast<UMyGameInstance>(WeakWorld->GetGameInstance()))
+			UGameUserSettings* DeferredSettings = UGameUserSettings::GetGameUserSettings();
+			if (DeferredSettings)
 			{
-				if (!GI->IsGameWorldReady())
-				{
-					return;
-				}
+				DeferredSettings->ApplySettings(false);
+				DeferredSettings->SaveSettings();
+
+				// Reset the streaming manager's component registry after the landscape
+				// material rebuild so IncrementalBuild() starts from a clean state and
+				// never reads stale MaterialInstancesDynamic pointers (0x188 crash).
+				IStreamingManager::Get().NotifyLevelChange();
 			}
 
-			for (TActorIterator<AActor> It(WeakWorld.Get()); It; ++It)
+			// PCG refresh — guard against World Partition still streaming
+			UMyGameInstance* GI = Cast<UMyGameInstance>(WeakWorld->GetGameInstance());
+			if (GI && GI->IsGameWorldReady())
 			{
-				TArray<UPCGComponent*> PCGComps;
-				It->GetComponents<UPCGComponent>(PCGComps);
-				for (UPCGComponent* PCGComp : PCGComps)
+				for (TActorIterator<AActor> It(WeakWorld.Get()); It; ++It)
 				{
-					if (IsValid(PCGComp))
+					TArray<UPCGComponent*> PCGComps;
+					It->GetComponents<UPCGComponent>(PCGComps);
+					for (UPCGComponent* PCGComp : PCGComps)
 					{
-						PCGComp->GenerateLocal(EPCGComponentGenerationTrigger::GenerateAtRuntime, true);
+						if (IsValid(PCGComp))
+						{
+							PCGComp->GenerateLocal(true);
+						}
 					}
 				}
 			}
-		}, 0.15f, false);
+		}, 0.1f, false);
+	}
+	else
+	{
+		// Login screen or no landscape — safe to apply immediately
+		Settings->ApplySettings(false);
+		Settings->SaveSettings();
 	}
 
 	PendingWindowMode = SelectedMode;

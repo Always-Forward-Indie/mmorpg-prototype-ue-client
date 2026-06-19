@@ -18,6 +18,13 @@ UAnimNotify_Footstep::UAnimNotify_Footstep()
 {
 }
 
+static int32 GFootstepDebug = 0;
+static FAutoConsoleVariableRef CVarFootstepDebug(
+	TEXT("footstep.Debug"),
+	GFootstepDebug,
+	TEXT("0=Off, 1=Log trace/physmat, 2=Log all lookup attempts"),
+	ECVF_Default);
+
 void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation,
 	const FAnimNotifyEventReference& EventReference)
 {
@@ -36,7 +43,7 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 		TraceStart = MeshComp->GetSocketLocation(FootSocketName);
 	}
 
-	FVector TraceEnd = TraceStart - FVector(0, 0, 50.0f);
+	FVector TraceEnd = TraceStart - FVector(0, 0, 200.0f);
 
 	FHitResult Hit;
 	FCollisionQueryParams Params;
@@ -44,11 +51,31 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 	Params.AddIgnoredActor(Owner);
 
 	FName PhysMatName = NAME_None;
-	if (World->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_Visibility, Params))
+	const bool bHit = World->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_Visibility, Params);
+	if (bHit)
 	{
 		if (Hit.PhysMaterial.IsValid())
 		{
 			PhysMatName = Hit.PhysMaterial->GetFName();
+		}
+	}
+
+	if (GFootstepDebug >= 1)
+	{
+		const FString OwnerName = GetNameSafe(Owner);
+		if (bHit)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[Footstep] %s | %s | HIT actor=%s comp=%s dist=%.1f | PhysMat=%s"),
+				*OwnerName, *FootSocketName.ToString(),
+				*GetNameSafe(Hit.GetActor()), *GetNameSafe(Hit.GetComponent()),
+				Hit.Distance,
+				PhysMatName != NAME_None ? *PhysMatName.ToString() : TEXT("NONE"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[Footstep] %s | %s | MISS | TraceStart=%s TraceEnd=%s"),
+				*OwnerName, *FootSocketName.ToString(),
+				*TraceStart.ToString(), *TraceEnd.ToString());
 		}
 	}
 
@@ -77,6 +104,7 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 		Footwear = NPC->GetFootwearType();
 	}
 
+	int32 ResolvedPriority = 0;
 	if (FootstepTable && PhysMatName != NAME_None)
 	{
 		FFootstepSoundData* Row = nullptr;
@@ -86,16 +114,27 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 		{
 			FName CompositeKey = FName(*(PhysMatName.ToString() + TEXT("_") + Footwear.ToString()));
 			Row = FootstepTable->FindRow<FFootstepSoundData>(CompositeKey, TEXT("Footstep"));
+			if (GFootstepDebug >= 2 && Row)
+			{
+				UE_LOG(LogTemp, Log, TEXT("[Footstep]   Priority 1 HIT: key=%s, sounds=%d"),
+					*CompositeKey.ToString(), Row->FootstepSounds.Num());
+			}
 		}
 
 		// Priority 2: surface only (generic fallback)
 		if (!Row)
 		{
 			Row = FootstepTable->FindRow<FFootstepSoundData>(PhysMatName, TEXT("Footstep"));
+			if (GFootstepDebug >= 2 && Row)
+			{
+				UE_LOG(LogTemp, Log, TEXT("[Footstep]   Priority 2 HIT: key=%s, sounds=%d"),
+					*PhysMatName.ToString(), Row->FootstepSounds.Num());
+			}
 		}
 
 		if (Row)
 		{
+			ResolvedPriority = Footwear.IsNone() ? 2 : 1;
 			if (Row->FootstepSounds.Num() > 0)
 			{
 				int32 Index = FMath::RandRange(0, Row->FootstepSounds.Num() - 1);
@@ -112,29 +151,40 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 				Attenuation = Row->DefaultAttenuation.LoadSynchronous();
 			}
 		}
+		else if (GFootstepDebug >= 1)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[Footstep]   PhysMat=%s NOT found in DataTable (tried: %s%s)"),
+				*PhysMatName.ToString(),
+				!Footwear.IsNone() ? *(PhysMatName.ToString() + TEXT("_") + Footwear.ToString() + TEXT(", ")) : TEXT(""),
+				*PhysMatName.ToString());
+		}
 	}
 
 	if (!SoundToPlay && !DefaultFootstepSound.IsNull())
 	{
+		ResolvedPriority = 3;
 		SoundToPlay = DefaultFootstepSound.LoadSynchronous();
+		if (GFootstepDebug >= 1)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[Footstep]   Priority 3: default notify sound"));
+		}
 	}
 
 	if (!SoundToPlay)
 	{
 		if (ABasicPlayer* Player = Cast<ABasicPlayer>(Owner))
 		{
-			if (const FEntityAudioProfile* Profile = Player->GetAudioProfile())
+			if (Player->GetFootstepSounds().Num() > 0)
 			{
-				if (Profile->Footsteps.Num() > 0)
-				{
-					SoundToPlay = Profile->Footsteps[FMath::RandRange(0, Profile->Footsteps.Num() - 1)].LoadSynchronous();
-				}
+				ResolvedPriority = 4;
+				SoundToPlay = Player->GetFootstepSounds()[FMath::RandRange(0, Player->GetFootstepSounds().Num() - 1)];
 			}
 		}
 		else if (ABasicMOB* Mob = Cast<ABasicMOB>(Owner))
 		{
 			if (Mob->FootstepSounds.Num() > 0)
 			{
+				ResolvedPriority = 5;
 				SoundToPlay = Mob->FootstepSounds[FMath::RandRange(0, Mob->FootstepSounds.Num() - 1)];
 			}
 		}
@@ -142,8 +192,31 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 		{
 			if (NPC->GetFootstepSounds().Num() > 0)
 			{
+				ResolvedPriority = 6;
 				SoundToPlay = NPC->GetFootstepSounds()[FMath::RandRange(0, NPC->GetFootstepSounds().Num() - 1)];
 			}
+		}
+
+		if (GFootstepDebug >= 1 && SoundToPlay)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[Footstep]   Priority %d: entity fallback sounds"), ResolvedPriority);
+		}
+	}
+
+	if (GFootstepDebug >= 1)
+	{
+		if (SoundToPlay)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[Footstep]   RESULT: priority=%d sound=%s volume=%.2f"),
+				ResolvedPriority, *GetNameSafe(SoundToPlay), FinalVolume);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[Footstep]   RESULT: NO SOUND - all priorities exhausted (PhysMat=%s, Table=%s, DefaultSound=%s, Footwear=%s)"),
+				*PhysMatName.ToString(),
+				FootstepTable ? TEXT("yes") : TEXT("no"),
+				DefaultFootstepSound.IsNull() ? TEXT("none") : TEXT("set"),
+				*Footwear.ToString());
 		}
 	}
 

@@ -10,6 +10,7 @@
 #include "MyGameInstance.h"
 #include "Utils/JSONParser.h"
 #include "Prototyping.h"
+#include "CrashDiagnostics.h"
 
 // File-scope counter � atomically incremented for each new UNetworkManager instance.
 // Kept here (not in the header) so UHT never sees it.
@@ -553,7 +554,8 @@ void UNetworkManager::SendDataToChunkServer(const FString& Data)
 
 void UNetworkManager::PollLoginServerNetworkData()
 {
-	//UE_LOG(LogTemp, Warning, TEXT("Polling for Login Server data..."));
+	CRASH_GUARD("NetworkManager::PollLoginServer");
+
 	FString ReceivedData;
 	while (ReceiverLoginServerWorker && ReceiverLoginServerWorker->GetData(ReceivedData))
 	{
@@ -569,7 +571,8 @@ void UNetworkManager::PollLoginServerNetworkData()
 
 void UNetworkManager::PollGameServerNetworkData()
 {
-	//UE_LOG(LogTemp, Warning, TEXT("Polling for Game Server data..."));
+	CRASH_GUARD("NetworkManager::PollGameServer");
+
 	FString ReceivedData;
 	while (ReceiverGameServerWorker && ReceiverGameServerWorker->GetData(ReceivedData))
 	{
@@ -586,7 +589,8 @@ void UNetworkManager::PollGameServerNetworkData()
 // poll data from chunk server
 void UNetworkManager::PollChunkServerNetworkData()
 {
-	//UE_LOG(LogTemp, Warning, TEXT("Polling for Chunk Server data..."));
+	CRASH_GUARD("NetworkManager::PollChunkServer");
+
 	FString ReceivedData;
 	while (ReceiverChunkServerWorker && ReceiverChunkServerWorker->GetData(ReceivedData))
 	{
@@ -619,22 +623,19 @@ void UNetworkManager::Disconnect()
 
 	// Step 2: Give sender threads a brief window (~200 ms) to drain any
 	// disconnect packets that were just enqueued (e.g. SendLeaveGameRequest).
-	// The senders are still running at this point (bRunThread == true), so
-	// they will dequeue and send the data. Only AFTER this window do we signal Stop().
 	FPlatformProcess::Sleep(0.2f);
 
-	if (SenderLoginServerWorker)  SenderLoginServerWorker->Stop();
-	if (SenderGameServerWorker)   SenderGameServerWorker->Stop();
-	if (SenderChunkServerWorker)  SenderChunkServerWorker->Stop();
+	// Stop ALL workers before touching sockets. This sets bRunThread = false
+	// so every Run() loop exits at its next iteration boundary.
+	if (SenderLoginServerWorker)    SenderLoginServerWorker->Stop();
+	if (SenderGameServerWorker)     SenderGameServerWorker->Stop();
+	if (SenderChunkServerWorker)    SenderChunkServerWorker->Stop();
+	if (ReceiverLoginServerWorker)  ReceiverLoginServerWorker->Stop();
+	if (ReceiverGameServerWorker)   ReceiverGameServerWorker->Stop();
+	if (ReceiverChunkServerWorker)  ReceiverChunkServerWorker->Stop();
 
-	// Brief additional sleep so any in-flight send completes before socket close.
-	FPlatformProcess::Sleep(0.05f);
-
-	// Step 3a: Detach socket pointers from all workers BEFORE calling DestroySocket().
-	// DestroySocket() frees the FSocket object and corrupts its vtable.
-	// If a worker thread reads the Socket pointer between Close() and DestroySocket()
-	// it would call a virtual method through a dangling vtable &#x2192; crash 0xFFFFFFFFFFFFFFFF.
-	// DetachSocket() atomically nulls the pointer so workers see nullptr and exit cleanly.
+	// Step 3a: Detach socket pointers from all workers BEFORE calling Close().
+	// DetachSocket() nulls the Socket member so workers see nullptr and break.
 	if (ReceiverLoginServerWorker) ReceiverLoginServerWorker->DetachSocket();
 	if (SenderLoginServerWorker)   SenderLoginServerWorker->DetachSocket();
 	if (ReceiverGameServerWorker)  ReceiverGameServerWorker->DetachSocket();
@@ -642,37 +643,31 @@ void UNetworkManager::Disconnect()
 	if (ReceiverChunkServerWorker) ReceiverChunkServerWorker->DetachSocket();
 	if (SenderChunkServerWorker)   SenderChunkServerWorker->DetachSocket();
 
-	// Step 3b: Close and destroy sockets — workers already hold nullptr so they
-	// cannot race against DestroySocket() anymore.
+	// Step 3b: Close sockets to unblock any worker stuck in Recv().
+	// Do NOT destroy yet — a worker may still hold a captured copy of the
+	// pointer and call a virtual method during its final iteration.
+	// DestroySocket() frees the FSocket vtable; calling a virtual on freed
+	// memory produces the _purecall / EXCEPTION_ACCESS_VIOLATION crash.
 	if (LoginServerSocket != nullptr)
 	{
 		LoginServerSocket->Close();
-		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(LoginServerSocket);
-		LoginServerSocket = nullptr;
 	}
-
 	if (GameServerSocket != nullptr)
 	{
 		GameServerSocket->Close();
-		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(GameServerSocket);
-		GameServerSocket = nullptr;
 	}
-
 	if (ChunkServerSocket != nullptr)
 	{
 		ChunkServerSocket->Close();
-		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ChunkServerSocket);
-		ChunkServerSocket = nullptr;
 	}
 
-	// Step 4: Signal receiver threads to stop (sockets already closed so Recv
-	// will return immediately) and wait for all threads to exit cleanly.
+	// Step 4: Wait for all threads to exit cleanly. With bRunThread == false
+	// and Socket == nullptr every worker will break out of its Run() loop.
+	// Any Recv() that was blocked is now unblocked by Close() above.
 	auto ShutdownThread = [](FRunnable* Worker, FRunnableThread*& Thread)
 	{
-		if (Worker) Worker->Stop();
 		if (Thread)
 		{
-			// 2-second safety timeout — should exit almost immediately after socket close.
 			Thread->WaitForCompletion();
 			delete Thread;
 			Thread = nullptr;
@@ -686,7 +681,25 @@ void UNetworkManager::Disconnect()
 	ShutdownThread(ReceiverChunkServerWorker, ReceiverChunkServerThread);
 	ShutdownThread(SenderChunkServerWorker,   SenderChunkServerThread);
 
-	// Step 5: Delete worker objects only after their threads have fully exited.
+	// Step 5: NOW it is safe to destroy sockets. Every worker thread has
+	// fully exited, so no thread can call a virtual method on the FSocket.
+	if (LoginServerSocket != nullptr)
+	{
+		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(LoginServerSocket);
+		LoginServerSocket = nullptr;
+	}
+	if (GameServerSocket != nullptr)
+	{
+		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(GameServerSocket);
+		GameServerSocket = nullptr;
+	}
+	if (ChunkServerSocket != nullptr)
+	{
+		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ChunkServerSocket);
+		ChunkServerSocket = nullptr;
+	}
+
+	// Step 6: Delete worker objects — all threads have fully exited.
 	delete ReceiverLoginServerWorker; ReceiverLoginServerWorker = nullptr;
 	delete SenderLoginServerWorker;   SenderLoginServerWorker   = nullptr;
 	delete ReceiverGameServerWorker;  ReceiverGameServerWorker  = nullptr;

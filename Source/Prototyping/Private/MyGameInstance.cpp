@@ -34,6 +34,8 @@
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Data/EntityAudioRepository.h"
+#include "Animation/AnimNotify_Footstep.h"
+#include "Engine/StreamableManager.h"
 #include "Gameplay/Skills/PlayerSkillNetworkHandler.h"
 #include "Gameplay/Skills/PlayerSkillSystemFactory.h"
 #include "Gameplay/UI/PlayerInterfaceWidget.h"
@@ -305,6 +307,7 @@ void UMyGameInstance::Init()
 	// when in-flight network packets arrive during level transition.
 	PreLoadMapDelegateHandle = FCoreUObjectDelegates::PreLoadMap.AddUObject(
 		this, &UMyGameInstance::InvalidateManagerWorldContexts);
+
 	InitGameSystems();
 }
 
@@ -530,6 +533,33 @@ void UMyGameInstance::InitNetworkingSetup()
 	{
 	EntityAudioRepositoryRef->Initialize(EntityAudioProfilesTable);
 		EntityAudioRepositoryRef->InitializeSkillVoiceOverrides(EntitySkillVoiceOverridesTable);
+	}
+
+	// Preload all footstep sounds from DT_FootstepsSounds to eliminate LoadSynchronous hitches
+	if (FootstepSoundsTable)
+	{
+		TArray<FFootstepSoundData*> AllRows;
+		FootstepSoundsTable->GetAllRows<FFootstepSoundData>(TEXT("PreloadFootstep"), AllRows);
+		FStreamableManager& Streamable = UAssetManager::GetStreamableManager();
+		for (const FFootstepSoundData* Row : AllRows)
+		{
+			if (!Row) continue;
+			for (const TSoftObjectPtr<USoundBase>& SoundSoft : Row->FootstepSounds)
+			{
+				if (!SoundSoft.IsNull())
+				{
+					Streamable.RequestAsyncLoad(SoundSoft.ToSoftObjectPath());
+				}
+			}
+			if (!Row->FootstepVFX.IsNull())
+			{
+				Streamable.RequestAsyncLoad(Row->FootstepVFX.ToSoftObjectPath());
+			}
+			if (!Row->DefaultAttenuation.IsNull())
+			{
+				Streamable.RequestAsyncLoad(Row->DefaultAttenuation.ToSoftObjectPath());
+			}
+		}
 	}
 
 	// Initialize CombatNetworkHandler centrally AFTER CombatSystemManager
@@ -960,6 +990,19 @@ void UMyGameInstance::Shutdown()
 		UE_LOG(LogTemp, Warning, TEXT("Shutdown: released WP transition slot (shutdown during transition)"));
 	}
 
+	// Clean up loading-screen frame-countdown delegates so they never fire
+	// on the render or game thread after this GameInstance is destroyed.
+	if (EndFrameDelegateHandle.IsValid())
+	{
+		FCoreDelegates::OnEndFrameRT.Remove(EndFrameDelegateHandle);
+		EndFrameDelegateHandle.Reset();
+	}
+	if (GTRemoveTicker.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(GTRemoveTicker);
+		GTRemoveTicker.Reset();
+	}
+
 	// Only send disconnect packets when this PIE instance was actually authenticated.
 	// Guards against: (a) PIE stopped before login, (b) crash before auth completes.
 	// Each PIE instance owns its own UMyGameInstance so ClientData is per-instance.
@@ -1247,13 +1290,6 @@ void UMyGameInstance::TransitionToGameWorld()
 	// game world is ready (ProcessPendingSpawns reads them in OnGameWorldReady).
 	SpawnedPlayers.Empty();
 	Player = nullptr;
-
-	// Belt-and-suspenders: deactivate PCG on the old world before transition.
-	// Ensures no stale PCG generation survives into the new world's load cycle.
-	if (UWorld* OldWorld = GetWorld())
-	{
-		SuppressPCGComponents(OldWorld);
-	}
 
 	// Defer DoOpenLevel by one tick so Slate has a full frame to composite the
 	// loading screen before the world begins to tear down.
@@ -1598,32 +1634,6 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 
 		bGameWorldReady = false;
 
-		// Suppress PCG auto-generation during World Partition streaming.
-		// PCG components in WP cells auto-generate when their cell activates,
-		// but landscape heightfield data may not be fully loaded yet, which
-		// causes an access violation in UnrealEditor-PCG.dll.
-		SuppressPCGComponents(LoadedWorld);
-
-		// Periodic sweep to catch PCG components that appear as new WP cells
-		// stream in. Runs every 100ms until the world is ready.
-		LoadedWorld->GetTimerManager().SetTimer(PCGSuppressionTimerHandle,
-			FTimerDelegate::CreateLambda([this]()
-			{
-				if (bGameWorldReady)
-				{
-					if (UWorld* W = GetWorld())
-					{
-						W->GetTimerManager().ClearTimer(PCGSuppressionTimerHandle);
-					}
-					return;
-				}
-				if (UWorld* W = GetWorld())
-				{
-					SuppressPCGComponents(W);
-				}
-			}),
-			0.1f, true);
-
 		CheckGameWorldReady();    // first check immediately
 
 		FTSTicker::GetCoreTicker().AddTicker(
@@ -1643,6 +1653,17 @@ void UMyGameInstance::CheckGameWorldReady()
 
 	// Loading screen lives in MoviePlayer — it survives ServerTravel.
 	// Just verify it is still playing.
+#if WITH_EDITOR
+	if (GIsEditor)
+	{
+		if (!LoadingScreenWidget)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] CheckGameWorldReady: no loading screen widget — re-creating"));
+			SetupMoviePlayerLoadingScreen();
+		}
+	}
+	else
+#endif
 	if (IGameMoviePlayer* MoviePlayer = GetMoviePlayer())
 	{
 		if (!MoviePlayer->IsMovieCurrentlyPlaying())
@@ -1787,22 +1808,6 @@ void UMyGameInstance::OnGameWorldReady()
 		return;
 	}
 
-	// Stop the periodic PCG suppression timer — new cells that stream
-	// in after Gate 3 have fully loaded landscape data and won't crash.
-	GameWorld->GetTimerManager().ClearTimer(PCGSuppressionTimerHandle);
-
-	// Defer PCG activation by 1s to allow landscape heightfield render
-	// resources to finalize on the GPU.  IsAllStreamingCompleted() only
-	// guarantees cells are loaded, not that their GPU data is ready.
-	GameWorld->GetTimerManager().SetTimer(PCGSuppressionTimerHandle,
-		FTimerDelegate::CreateLambda([this, GameWorld]()
-		{
-			UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] Deferred PCG activation: %.1f sec after Gate 3"),
-				GameWorld->GetTimeSeconds());
-			ActivateAllPCGComponents(GameWorld);
-		}),
-		1.0f, false);
-
 	APlayerController* PC = GameWorld->GetFirstPlayerController();
 	if (PC) { PC->bShowMouseCursor = false; }
 
@@ -1892,6 +1897,9 @@ void UMyGameInstance::CheckAllReadyFlags()
 
 	if ((ReadyFlags & ReadyFlag_AllRequired) != ReadyFlag_AllRequired) { return; }
 	if (!LoadingScreenWidget) { return; }
+#if WITH_EDITOR
+	if (!GIsEditor)
+#endif
 	{
 		IGameMoviePlayer* MP = GetMoviePlayer();
 		if (!MP || !MP->IsMovieCurrentlyPlaying()) { return; }
@@ -1987,11 +1995,11 @@ void UMyGameInstance::InvalidateManagerWorldContexts(const FString& /*MapName*/)
 	if (PlayerManager)       { PlayerManager->SetWorldContext(nullptr); }
 	if (MOBManager)          { MOBManager->SetWorldContext(nullptr); MOBManager->ClearWorldState(); }
 	if (SpawnZoneManager)    { SpawnZoneManager->SetWorldContext(nullptr); SpawnZoneManager->ClearWorldState(); }
-	if (ItemManager)         { ItemManager->SetWorldContext(nullptr); }
+	if (ItemManager)         { ItemManager->SetWorldContext(nullptr); ItemManager->ClearWorldState(); }
 	if (InventoryManager)    { InventoryManager->SetWorldContext(nullptr); }
 	if (HarvestManager)      { HarvestManager->SetWorldContext(nullptr); }
 	if (CombatSystemManager) { CombatSystemManager->SetWorldContext(nullptr); }
-	if (NPCManager)          { NPCManager->SetWorldContext(nullptr); }
+	if (NPCManager)          { NPCManager->SetWorldContext(nullptr); NPCManager->ClearWorldState(); }
 	if (WorldObjectManager)  { WorldObjectManager->SetWorldContext(nullptr); WorldObjectManager->ClearWorldState(); }
 	if (TimeSyncService)     { TimeSyncService->SetWorldContext(nullptr); }
 	// Release audio components that belong to the dying world so CrossfadeToTrack
@@ -2280,6 +2288,29 @@ void UMyGameInstance::SetupMoviePlayerLoadingScreen()
 		return;
 	}
 
+#if WITH_EDITOR
+	if (GIsEditor)
+	{
+		if (LoadingScreenWidget)
+		{
+			LoadingScreenWidget->RemoveFromParent();
+			LoadingScreenWidget = nullptr;
+		}
+
+		LoadingScreenWidget = CreateWidget<UUserWidget>(this, LoadingScreenWidgetClass);
+		if (!LoadingScreenWidget)
+		{
+			UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] SetupMoviePlayerLoadingScreen: FAIL — CreateWidget returned null"));
+			return;
+		}
+
+		LoadingScreenWidget->AddToViewport(1000);
+		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] SetupMoviePlayerLoadingScreen: widget added via AddToViewport (PIE)"));
+		StartLoadingScreenMusic();
+		return;
+	}
+#endif
+
 	IGameMoviePlayer* MoviePlayer = GetMoviePlayer();
 	if (!MoviePlayer)
 	{
@@ -2287,8 +2318,6 @@ void UMyGameInstance::SetupMoviePlayerLoadingScreen()
 		return;
 	}
 
-	// Destroy previous widget if it exists (e.g. from ShowInitialLoadingScreen
-	// or a prior SetupMoviePlayerLoadingScreen call).
 	if (LoadingScreenWidget)
 	{
 		LoadingScreenWidget->RemoveFromParent();
@@ -2753,6 +2782,17 @@ void UMyGameInstance::RemovePlayerData(int32 ClientID)
 					}
 				}
 
+				// Deregister mesh from Nanite/render pipeline before GC destroys the actor.
+				// Without this, the RHI thread can hold a pending Nanite::Readback on the
+				// mesh resources while the game thread frees them — causing a use-after-free
+				// crash in Nanite::Readback / SceneRender.
+				PlayerToRemove->SetActorHiddenInGame(true);
+				PlayerToRemove->SetActorEnableCollision(false);
+				if (USkeletalMeshComponent* Mesh = PlayerToRemove->GetMesh())
+				{
+					Mesh->SetVisibility(false);
+				}
+
 				PlayerToRemove->Destroy();
 			}
 			SpawnedPlayers.Remove(ClientID);
@@ -3169,42 +3209,6 @@ void UMyGameInstance::RouteEmoteActionToPlayer(int32 CharacterId, const FString&
     if (TargetPlayer)
     {
         TargetPlayer->PlayEmoteForCharacter(EmoteSlug, AnimationName);
-	}
-}
-
-void UMyGameInstance::SuppressPCGComponents(UWorld* World)
-{
-	if (!World) return;
-
-	for (TActorIterator<AActor> It(World); It; ++It)
-	{
-		TArray<UPCGComponent*> PCGComps;
-		It->GetComponents<UPCGComponent>(PCGComps);
-		for (UPCGComponent* Comp : PCGComps)
-		{
-			if (IsValid(Comp) && Comp->IsGenerating())
-			{
-				Comp->Deactivate();
-			}
-		}
-	}
-}
-
-void UMyGameInstance::ActivateAllPCGComponents(UWorld* World)
-{
-	if (!World) return;
-
-	for (TActorIterator<AActor> It(World); It; ++It)
-	{
-		TArray<UPCGComponent*> PCGComps;
-		It->GetComponents<UPCGComponent>(PCGComps);
-		for (UPCGComponent* Comp : PCGComps)
-		{
-			if (IsValid(Comp))
-			{
-				Comp->GenerateLocal(EPCGComponentGenerationTrigger::GenerateAtRuntime, true);
-			}
-		}
 	}
 }
 

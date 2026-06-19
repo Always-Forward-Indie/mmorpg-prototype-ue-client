@@ -3,6 +3,7 @@
 
 #include "Gameplay/Mobs/SpawnZoneManager.h"
 #include "MyGameInstance.h"
+#include "CrashDiagnostics.h"
 
 USpawnZoneManager::USpawnZoneManager(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -71,7 +72,10 @@ void USpawnZoneManager::ClearWorldState()
 
 void USpawnZoneManager::ProcessGameServerData(const FString& ReceivedData)
 {
-	//UE_LOG(LogTemp, Warning, TEXT("SpawnZoneManager received data: %s"), *ReceivedData);
+    CRASH_GUARD("SpawnZoneManager::ProcessGameServerData");
+    if (!worldContext) return;
+
+    //UE_LOG(LogTemp, Warning, TEXT("SpawnZoneManager received data: %s"), *ReceivedData);
 
 	// Process time sync data first
 	//if (gameInstance && gameInstance->GetTimeSyncService())

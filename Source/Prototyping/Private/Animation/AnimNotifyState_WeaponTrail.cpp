@@ -54,12 +54,12 @@ void UAnimNotifyState_WeaponTrail::NotifyBegin(USkeletalMeshComponent* MeshComp,
 	// Spawn the Niagara trail attached to the weapon socket
 	UNiagaraComponent* NC = NewObject<UNiagaraComponent>(Owner, TEXT("WeaponTrailVFX"));
 	NC->SetAsset(SwingVFX);
-	NC->RegisterComponent();
 
 	// Attach to the character mesh at the weapon socket so it follows the weapon
 	NC->AttachToComponent(MeshComp,
 		FAttachmentTransformRules::SnapToTargetNotIncludingScale,
 		VisualData.EquipSocketName);
+	NC->RegisterComponent();
 	NC->Activate(true);
 
 	ActiveTrailComponent = NC;

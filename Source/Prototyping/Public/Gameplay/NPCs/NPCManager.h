@@ -56,6 +56,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "NPC Manager")
 	void RemoveAllNPCs();
 
+	// Clear all world-specific state (called before level transition).
+	// Removes all spawned NPCs and clears the pending spawn queue so stale
+	// entries don't block re-spawning in the new world.
+	void ClearWorldState();
+
 	// NPC queries
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "NPC Manager")
 	ABasicNPC* GetNPCById(int32 NPCId) const;

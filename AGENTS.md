@@ -1,4 +1,4 @@
-# AGENTS.md — Prototyping MMORPG Client (UE 5.7)
+# AGENTS.md — Prototyping MMORPG Client (UE 5.8)
 
 ## Architecture
 
@@ -9,7 +9,7 @@
 
 ## Build & Run
 
-- **Engine**: UE 5.7 at `D:\Game Dev\UE\UE_5.7`. Both `.Target.cs` files set `bOverrideBuildEnvironment = true` and `BuildSettingsVersion.Latest`.
+- **Engine**: UE 5.8 at `D:\Game Dev\UE\UE_5.8`. Both `.Target.cs` files set `bOverrideBuildEnvironment = true` and `BuildSettingsVersion.Latest`.
 - **Build module**: `Prototyping` (Game + Editor targets). Editor target pulls `UnrealEd` conditionally.
 - **Multiplayer testing**: `LaunchClients.ps1 -n 3` or `LaunchClients.bat 3` — launches standalone clients via `UnrealEditor.exe -game` (no build needed). Defaults to 2 clients, 960×540, map `/Game/Maps/MainGameContainerLevel` (PS1) or `/Game/Maps/WorldMapV1` (BAT). Hardcoded UE path in both scripts.
 - **Server config** in `server_config.json` — three localhost ports (27014, 27016, 27017). The `mmo servers/` directory contains separate server repos.

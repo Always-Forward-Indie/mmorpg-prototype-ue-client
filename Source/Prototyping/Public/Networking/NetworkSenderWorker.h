@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Sockets.h"
 #include "SocketSubsystem.h"
+#include <atomic>
 
 // Forward declaration
 class UTimeSyncService;
@@ -15,8 +16,8 @@ class UTimeSyncService;
 class PROTOTYPING_API NetworkSenderWorker : public FRunnable
 {
 	private:
-		FSocket* Socket;
-		bool bRunThread;
+		std::atomic<FSocket*> Socket;
+		std::atomic<bool> bRunThread;
 		TQueue<FString, EQueueMode::Mpsc> DataQueue; // Thread-safe queue for messages
 		TWeakObjectPtr<UTimeSyncService> TimeSyncService; // Weak ref - GC-safe access from worker thread
 

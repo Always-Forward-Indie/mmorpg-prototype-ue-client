@@ -8,6 +8,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/AudioComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "CrashDiagnostics.h"
 #include "Engine/Engine.h"
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
@@ -170,6 +171,7 @@ void ABasicNPC::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void ABasicNPC::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	CRASH_GUARD("BasicNPC::Tick");
 
 	// Smoothly rotate toward the player during dialogue
 	if (bIsFacingPlayer)

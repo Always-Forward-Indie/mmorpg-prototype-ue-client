@@ -13,6 +13,7 @@
 #include "Engine/GameViewportClient.h"
 #include "Engine/Texture2D.h"
 #include "GenericPlatform/ICursor.h"
+#include "CrashDiagnostics.h"
 #include "Framework/Application/SlateApplication.h"
 
 UCursorInteractionComponent::UCursorInteractionComponent()
@@ -87,6 +88,7 @@ void UCursorInteractionComponent::TickComponent(float DeltaTime, ELevelTick Tick
     FActorComponentTickFunction* ThisTickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+    CRASH_GUARD("CursorInteraction::Tick");
 
     // ── Lazy cursor init ──────────────────────────────────────────────────────
     // BeginPlay may have run before possession was replicated to this client

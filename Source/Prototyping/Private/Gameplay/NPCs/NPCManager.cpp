@@ -3,6 +3,7 @@
 #include "Engine/World.h"
 #include "TimerManager.h"
 #include "Engine/Engine.h"
+#include "CrashDiagnostics.h"
 
 UNPCManager::UNPCManager(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -54,6 +55,19 @@ void UNPCManager::Initialize(UNetworkManager* NetworkManager)
 void UNPCManager::SetWorldContext(UWorld* World)
 {
 	const bool bWasNull = (worldContext == nullptr);
+
+	// Always invalidate and clear the cleanup timer before changing world,
+	// regardless of whether the new world is valid. This prevents the timer
+	// callback from firing on a null or destroyed world context.
+	if (CleanupTimerHandle.IsValid())
+	{
+		if (worldContext)
+		{
+			worldContext->GetTimerManager().ClearTimer(CleanupTimerHandle);
+		}
+		CleanupTimerHandle.Invalidate();
+	}
+
 	worldContext = World;
 	UE_LOG(LogTemp, Warning, TEXT("NPCManager: World context set to %s"), World ? TEXT("Valid") : TEXT("NULL"));
 
@@ -64,7 +78,6 @@ void UNPCManager::SetWorldContext(UWorld* World)
 
 	if (worldContext && bAutoCleanupInvalidNPCs)
 	{
-		CleanupTimerHandle.Invalidate();
 		worldContext->GetTimerManager().SetTimer(
 			CleanupTimerHandle,
 			this,
@@ -190,6 +203,14 @@ void UNPCManager::RemoveAllNPCs()
 	}
 	
 	UE_LOG(LogTemp, Warning, TEXT("NPCManager: Removed all NPCs"));
+}
+
+void UNPCManager::ClearWorldState()
+{
+	RemoveAllNPCs();
+	PendingNPCSpawns.Empty();
+
+	UE_LOG(LogTemp, Log, TEXT("NPCManager: Cleared world state (spawned NPCs, pending spawns)"));
 }
 
 ABasicNPC* UNPCManager::GetNPCById(int32 NPCId) const
@@ -410,6 +431,13 @@ void UNPCManager::FlushPendingSpawns()
 
 void UNPCManager::CleanupInvalidNPCs()
 {
+	CRASH_GUARD("NPCManager::CleanupInvalidNPCs");
+
+	if (!worldContext)
+	{
+		return;
+	}
+
 	TArray<int32> InvalidNPCIds;
 	
 	for (const auto& NPCPair : SpawnedNPCs)

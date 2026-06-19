@@ -124,6 +124,14 @@ void UAudioManager::InvalidateAudioComponents()
 	bUseComponentB       = false;
 	bComponentsValid     = false;
 	ActivePlaylistId.Empty();
+
+	// Clear the track-end timer so it cannot fire on a destroyed world.
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(TrackEndTimerHandle);
+	}
+	TrackEndTimerHandle.Invalidate();
+
 	UE_LOG(LogTemp, Log, TEXT("UAudioManager::InvalidateAudioComponents: components cleared (pending world transition)"));
 }
 

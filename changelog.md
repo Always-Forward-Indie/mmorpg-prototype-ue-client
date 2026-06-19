@@ -177,3 +177,31 @@ Updated server IPs to 127.0.0.1 in server_config.json.
 New audio assets: SA_Default, SA_Steps, SFX/ content directory.
 
 ===========
+
+v0.1.1
+19.06.2026
+===========
+
+2026-06-19
+----------
+Upgraded engine from UE 5.7 to UE 5.8: .uproject, Build.cs (added Landscape module), LaunchClients.ps1/bat, AGENTS.md. Updated server IPs to remote host (23.88.102.182).
+Added CrashDiagnostics system (CrashDiagnostics.h/.cpp): CRASH_GUARD(Name) macro with RAII global context pointer for crash dump attribution. Wrapped all Tick() and packet-processing entry points in Player, MOB, NPC, Item, Harvest, NetworkManager.
+Networking: fixed disconnect shutdown order — stop workers before DestroySocket to prevent use-after-free purecall crashes. Replaced FSocket* and bRunThread with std::atomic in NetworkReceiverWorker/NetworkSenderWorker for hardware-level thread safety. Added UPOPERTY() on critical members in PingManager, AuthManager, PlayerManager.
+Player: added 5-second respawn grace window — ignores healthCurrent=0 packets arriving shortly after revive. Dead players now reject positive HP updates to prevent corpse HP bars. Footstep sounds preloaded asynchronously via FStreamableManager to eliminate LoadSynchronous hitches.
+Animation/Footstep 2.0: increased trace distance 50→200 for reliable ground detection. Priority chain: physmat+footwear → physmat → default sound → entity fallback pool. Added console variable footstep.Debug for runtime resolution debugging. Fixed AnimNotifyState_WeaponTrail RegisterComponent order (after AttachToComponent).
+NPCs: added ClearWorldState() to NPCManager — removes all spawned NPCs and pending spawn queue on level transition. NPC cleanup timer now invalidated before world pointer change.
+Items: ItemManager buffers network events in PendingNetworkEvents when worldContext is null, replays them via FlushPendingEvents() in the new world. ClearWorldState() flushes all item state on level transition.
+Mobs: added CRASH_GUARD to all Tick() and packet-processing loops. Null-world early-return guards in MOBManager and SpawnZoneManager.
+HarvestManager: StopTicking + TickTimerHandle invalidation now always called before world pointer change.
+DroppedItemActor: PlayPickupEffect() changed Destroy() → Hide+DisableCollision+LifeSpan(0.5s) to prevent use-after-destroy crashes from overlap queries.
+Equipment: RegisterComponent moved after AttachToComponent for both Static and Skeletal mesh paths, fixing one-frame equip position glitch. EquipmentNetworkHandler: fixed dangling reference in slot key iteration.
+GameInstance: removed all PCG suppression/activation code (SuppressPCGComponents, ActivateAllPCGComponents, PCGSuppressionTimerHandle) — no longer needed on UE 5.8. RemovePlayerData() now hides and disables mesh/collision before Destroy to safely deregister from Nanite scene render pipeline. Footstep sound preloading added to Init(). Shutdown cleans up EndFrameDelegateHandle and GTRemoveTicker. Added PIE/editor code paths for loading screen in WITH_EDITOR.
+TimeSync: GetSystemTimeMs() rewritten from thread-unsafe static locals to member variables protected by FCriticalSection with double-checked locking. Eliminates rare timestamp corruption from concurrent game + network threads.
+AudioManager: Invalidated TrackEndTimerHandle before world change to prevent crash on level transition while audio is playing.
+UI: GraphicsSettingsWidget defers ApplySettings via 0.1s timer and calls IStreamingManager::NotifyLevelChange() after apply to prevent landscape material rebuild crash. PCG refresh checks IsGameWorldReady() before regenerating. SkillSlotWidget uses IsValid() in BeginDestroy to avoid calling RemoveDynamic on garbage-collected UObject. FCTManager: added UPOPERTY() on RootCanvas and PlayerController. TargetDecalComponent: fixed RegisterComponent order.
+JSONParser: added HasField() checks before all DeserializeCharacterData() field lookups to prevent crashes on partial/missing server data.
+Bestiary/WorldNotification/DevMode: replaced TMap::Add() with Emplace() for more efficient in-place construction.
+Config: DefaultEngine.ini — added r.SetRes=1920x1080w and LogCrashDiag=NoLogging. DefaultEditor.ini — added editor preview viewport profiles.
+New assets: UI click sounds (button_click_v1, small_button_click_v1). Reed foliage meshes (reed_1/2/3). Updated ~120 WorldMapV1 external actor cells, data tables (Items, Footsteps, Skills, Dialogue, Quests), and ~30 UI widget Blueprints.
+
+===========

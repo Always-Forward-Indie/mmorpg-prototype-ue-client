@@ -10,6 +10,7 @@
 #include "Engine/GameInstance.h"
 #include "Kismet/GameplayStatics.h"
 #include "Math/UnrealMathUtility.h"
+#include "CrashDiagnostics.h"
 
 UNPCAmbientSpeechComponent::UNPCAmbientSpeechComponent()
 {
@@ -32,6 +33,7 @@ void UNPCAmbientSpeechComponent::TickComponent(float DeltaTime, ELevelTick TickT
     FActorComponentTickFunction* ThisTickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+    CRASH_GUARD("NPCAmbientSpeech::Tick");
 
     if (!bHasData || !bHasProximityLines) return;
 

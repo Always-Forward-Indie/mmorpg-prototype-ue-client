@@ -41,7 +41,9 @@ public:
 private:
 	TArray<TWeakObjectPtr<UDamageTextWidget>> WidgetPool;
 
+	UPROPERTY()
 	UCanvasPanel* RootCanvas = nullptr;
+	UPROPERTY()
 	APlayerController* PlayerController = nullptr;
 
 	TWeakObjectPtr<APawn> CachedLocalPawn;

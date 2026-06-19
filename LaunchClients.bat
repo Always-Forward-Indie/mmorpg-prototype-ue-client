@@ -5,14 +5,14 @@
 ::  No PIE artifacts, no shared worlds, no WorldDataLayers conflicts.
 ::
 ::  Usage:
-::    LaunchClients.bat          — launch 2 clients (default)
-::    LaunchClients.bat 3        — launch N clients
+::    LaunchClients.bat          ï¿½ launch 2 clients (default)
+::    LaunchClients.bat 3        ï¿½ launch N clients
 :: ============================================================
 
 setlocal
 
 :: --- Configuration -----------------------------------------------------------
-set UE_EDITOR=D:\Game Dev\UE\UE_5.7\Engine\Binaries\Win64\UnrealEditor.exe
+set UE_EDITOR=D:\Game Dev\UE\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe
 set UPROJECT=%~dp0Prototyping.uproject
 set MAP=/Game/Maps/WorldMapV1
 set COUNT=%~1

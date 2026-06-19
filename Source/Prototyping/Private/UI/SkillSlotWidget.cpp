@@ -773,8 +773,11 @@ void USkillSlotWidget::ForceResetDragState()
 
 void USkillSlotWidget::BeginDestroy()
 {
-    // Unsubscribe from events before destruction
-    if (SkillManager)
+    // Unsubscribe from events before destruction.
+    // IsValid() guards against GC'd / pending-kill SkillManager objects that a
+    // bare pointer check would pass — calling RemoveDynamic on a destroyed
+    // UObject corrupts the delegate and can crash during engine teardown.
+    if (IsValid(SkillManager))
     {
         SkillManager->OnSkillCooldownStarted.RemoveDynamic(this, &USkillSlotWidget::OnSkillCooldownStarted);
         SkillManager->OnSkillReady.RemoveDynamic(this, &USkillSlotWidget::OnSkillReady);

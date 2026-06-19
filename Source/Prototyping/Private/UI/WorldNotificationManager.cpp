@@ -83,7 +83,7 @@ void UWorldNotificationManager::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("WorldNotificationManager: Cannot subscribe — NetworkManager invalid"));
+        UE_LOG(LogTemp, Error, TEXT("WorldNotificationManager: Cannot subscribe ï¿½ NetworkManager invalid"));
         return;
     }
 
@@ -100,7 +100,7 @@ void UWorldNotificationManager::SubscribeToNetworkEvents_Early(UNetworkManager* 
 {
     if (!InNetworkManager || !IsValid(InNetworkManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("WorldNotificationManager: Early subscribe — NetworkManager invalid"));
+        UE_LOG(LogTemp, Error, TEXT("WorldNotificationManager: Early subscribe ï¿½ NetworkManager invalid"));
         return;
     }
 
@@ -131,7 +131,7 @@ void UWorldNotificationManager::HandleChunkServerData(const FString& ReceivedDat
     {
         if (!bIsInitialized)
         {
-            // Widgets not ready yet — buffer for replay after Initialize()
+            // Widgets not ready yet ï¿½ buffer for replay after Initialize()
             PendingRawNotifications.Add(ReceivedData);
             return;
         }
@@ -200,7 +200,7 @@ void UWorldNotificationManager::ProcessWorldNotification(const FString& JsonData
             {
                 Val = Pair.Value->AsBool() ? TEXT("true") : TEXT("false");
             }
-            Notif.dataFields.Add(Pair.Key, Val);
+        Notif.dataFields.Emplace(Pair.Key, Val);
         }
     }
 
@@ -248,7 +248,7 @@ void UWorldNotificationManager::ProcessDialogueActionNotification(const FString&
         {
             continue; // skip arrays/objects (e.g. items array in openVendorShop)
         }
-        Notif.dataFields.Add(Pair.Key, Val);
+        Notif.dataFields.Emplace(Pair.Key, Val);
     }
 
     // Route to toast widget
@@ -283,7 +283,7 @@ void UWorldNotificationManager::DispatchNotification(const FWorldNotificationStr
         const FString MobSlug      = Notification.dataFields.FindRef(TEXT("mobSlug"));
         const FString KillCountStr = Notification.dataFields.FindRef(TEXT("killCount"));
         const int32   KillCount    = KillCountStr.IsEmpty() ? 0 : FCString::Atoi(*KillCountStr);
-        // BestiaryNetworkHandler also subscribes and invalidates its cache — no duplicate needed here.
+        // BestiaryNetworkHandler also subscribes and invalidates its cache ï¿½ no duplicate needed here.
         BestiaryWidget->AddOrUpdateMobEntry(MobSlug, KillCount);
     }
 
@@ -314,12 +314,12 @@ void UWorldNotificationManager::DispatchNotification(const FWorldNotificationStr
     }
     else if (Channel == TEXT("silent"))
     {
-        // Silent notifications update data only — no visual widget
+        // Silent notifications update data only ï¿½ no visual widget
         UE_LOG(LogTemp, Verbose, TEXT("WorldNotification [silent] %s"), *Type);
     }
     else
     {
-        // Unknown channel — graceful fallback to toast if widget available
+        // Unknown channel ï¿½ graceful fallback to toast if widget available
         UE_LOG(LogTemp, Verbose, TEXT("WorldNotificationManager: Unknown channel '%s' for type '%s', fallback to toast"), *Channel, *Type);
         if (ToastWidget)
             ToastWidget->ShowNotification(Notification);

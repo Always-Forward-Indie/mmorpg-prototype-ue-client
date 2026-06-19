@@ -98,7 +98,7 @@ bool UDevModeDataProvider::LoadPlayerData(FClientDataStruct& OutClientData) cons
                 Attr.attributeSlug  = (*AttrEntry)->GetStringField(TEXT("attributeSlug"));
                 Attr.attributeName  = (*AttrEntry)->GetStringField(TEXT("attributeName"));
                 Attr.attributeValue = (*AttrEntry)->GetIntegerField(TEXT("attributeValue"));
-                CD.characterAttributes.attributesData.Add(Pair.Key, Attr);
+                CD.characterAttributes.attributesData.Emplace(Pair.Key, Attr);
             }
         }
     }
@@ -161,7 +161,7 @@ bool UDevModeDataProvider::ParseMobEntry(const TSharedPtr<FJsonObject>& J, FMOBS
                 Attr.attributeSlug  = (*AE)->GetStringField(TEXT("attributeSlug"));
                 Attr.attributeName  = (*AE)->GetStringField(TEXT("attributeName"));
                 Attr.attributeValue = (*AE)->GetIntegerField(TEXT("attributeValue"));
-                M.mobAttributes.attributesData.Add(Pair.Key, Attr);
+                M.mobAttributes.attributesData.Emplace(Pair.Key, Attr);
             }
         }
     }

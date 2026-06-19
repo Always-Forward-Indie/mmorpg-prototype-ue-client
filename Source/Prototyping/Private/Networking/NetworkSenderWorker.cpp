@@ -74,8 +74,13 @@ FString NetworkSenderWorker::UpdateClientSendTimestamp(const FString& JsonData)
 
 uint32 NetworkSenderWorker::Run()
 {
-    while (bRunThread && Socket && Socket->GetConnectionState() != ESocketConnectionState::SCS_Connected)
+    while (bRunThread)
     {
+        FSocket* Sock = Socket.load();
+        if (!Sock || Sock->GetConnectionState() == ESocketConnectionState::SCS_Connected)
+        {
+            break;
+        }
         UE_LOG(LogConnection, Verbose, TEXT("Waiting for Sender socket connection..."));
         FPlatformProcess::Sleep(0.1f);
     }

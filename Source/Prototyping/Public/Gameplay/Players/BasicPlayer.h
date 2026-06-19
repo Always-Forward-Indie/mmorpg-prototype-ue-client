@@ -41,6 +41,11 @@ private:
 	int32 LastPreUpdateHP = -1;
 	int32 LastPreUpdateMP = -1;
 
+	// World time (seconds) when the player last respawned via respawnResult.
+	// Used by ProcessStatsUpdate to ignore stale stats_update(healthCurrent=0)
+	// packets that arrive after a respawn and would otherwise re-kill the player.
+	float LastRespawnWorldTime = -999.f;
+
 	UPROPERTY()
 	UMyGameInstance* MyGameInstance;
 
@@ -147,6 +152,10 @@ public:
 	 *  Returns nullptr when AudioProfileId is not set or when the repository is not ready. */
 	const FEntityAudioProfile* GetAudioProfile() const;
 
+	/** Async-preloads footstep sound assets into FootstepSounds array.
+	 *  Called once during ApplyVisualFromDataTable after AudioProfileId is set. */
+	void PreloadFootstepSounds();
+
 private:
 	/**
 	 * Row key in DT_EntityAudioProfiles used to drive all audio for this player character.
@@ -161,8 +170,13 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Audio", meta = (AllowPrivateAccess = "true"))
 	FName FootwearType = NAME_None;
 
+	/** Preloaded footstep sounds from the entity audio profile. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Audio", meta = (AllowPrivateAccess = "true"))
+	TArray<TObjectPtr<USoundBase>> FootstepSounds;
+
 public:
 	FName GetFootwearType() const { return FootwearType; }
+	const TArray<TObjectPtr<USoundBase>>& GetFootstepSounds() const { return FootstepSounds; }
 
 private:
 	// Nameplate component

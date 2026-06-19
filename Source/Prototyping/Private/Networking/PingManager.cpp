@@ -177,7 +177,7 @@ void UPingManager::SendPingRequestToServer(EServerType ServerType)
 	
 	// Create the ping request JSON per protocol spec (1.4 pingClient)
 	TSharedPtr<FJsonObject> HeaderObject = MakeShareable(new FJsonObject);
-	HeaderObject->SetStringField("eventType", "pingClient");
+	HeaderObject->SetStringField(TEXT("eventType"), TEXT("pingClient"));
 	
 	// Per protocol: header must include clientId and hash
 	if (worldContext)
@@ -185,23 +185,23 @@ void UPingManager::SendPingRequestToServer(EServerType ServerType)
 		UMyGameInstance* MyGI = Cast<UMyGameInstance>(worldContext->GetGameInstance());
 		if (MyGI)
 		{
-			HeaderObject->SetNumberField("clientId", MyGI->GetCurrentClientID());
-			HeaderObject->SetStringField("hash", MyGI->GetCurrentClientHash());
+			HeaderObject->SetNumberField(TEXT("clientId"), MyGI->GetCurrentClientID());
+			HeaderObject->SetStringField(TEXT("hash"), MyGI->GetCurrentClientHash());
 		}
 	}
 	
 	// NTP-style: place clientSendMs (t0) and requestId directly in header root
 	// so that the server's extractClientTimestamp() and parseRequestId() can find them.
-	HeaderObject->SetNumberField("clientSendMs", ClientSendMs);
-	HeaderObject->SetStringField("requestId", RequestId);
+	HeaderObject->SetNumberField(TEXT("clientSendMs"), ClientSendMs);
+	HeaderObject->SetStringField(TEXT("requestId"), RequestId);
 
 	// Create the main JSON object
 	TSharedPtr<FJsonObject> MainJsonObject = MakeShareable(new FJsonObject);
-	MainJsonObject->SetObjectField("header", HeaderObject);
+	MainJsonObject->SetObjectField(TEXT("header"), HeaderObject);
 	
 	// Add empty body
 	TSharedPtr<FJsonObject> BodyObject = MakeShareable(new FJsonObject);
-	MainJsonObject->SetObjectField("body", BodyObject);
+	MainJsonObject->SetObjectField(TEXT("body"), BodyObject);
 
 	// Serialize to string
 	FString OutputString;

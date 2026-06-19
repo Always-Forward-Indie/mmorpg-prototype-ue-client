@@ -230,12 +230,12 @@ USceneComponent* UEquipmentVisualComponent::AttachEquippedMesh(const FString& Sl
         UStaticMeshComponent* SMC = NewObject<UStaticMeshComponent>(GetOwner(),
             *FString::Printf(TEXT("EquipMesh_%s"), *SlotSlug));
         SMC->SetStaticMesh(Mesh);
-        SMC->RegisterComponent();
         SMC->AttachToComponent(CharMesh,
             FAttachmentTransformRules::SnapToTargetNotIncludingScale,
             VisualData.EquipSocketName);
         SMC->SetRelativeTransform(VisualData.EquippedRelativeTransform);
         SMC->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        SMC->RegisterComponent();
         NewComp = SMC;
     }
     else // bHasSkelMesh
@@ -252,12 +252,12 @@ USceneComponent* UEquipmentVisualComponent::AttachEquippedMesh(const FString& Sl
         USkeletalMeshComponent* SkMC = NewObject<USkeletalMeshComponent>(GetOwner(),
             *FString::Printf(TEXT("EquipMesh_%s"), *SlotSlug));
         SkMC->SetSkeletalMesh(Mesh);
-        SkMC->RegisterComponent();
         SkMC->AttachToComponent(CharMesh,
             FAttachmentTransformRules::SnapToTargetNotIncludingScale,
             VisualData.EquipSocketName);
         SkMC->SetRelativeTransform(VisualData.EquippedRelativeTransform);
         SkMC->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        SkMC->RegisterComponent();
         NewComp = SkMC;
     }
 
@@ -342,11 +342,11 @@ void UEquipmentVisualComponent::SpawnEquippedIdleVFX(const FString& SlotSlug,
             UNiagaraComponent* NC = NewObject<UNiagaraComponent>(GetOwner(),
                 *FString::Printf(TEXT("EquipVFX_%s"), *SlotSlug));
             NC->SetAsset(NiagaraSys);
-            NC->RegisterComponent();
             NC->AttachToComponent(CharMesh,
                 FAttachmentTransformRules::SnapToTargetNotIncludingScale,
                 VisualData.EquipSocketName);
             NC->SetRelativeTransform(VisualData.EquippedRelativeTransform);
+            NC->RegisterComponent();
             NC->Activate(true);
 
             SlotVFXComponents.Add(SlotSlug, NC);

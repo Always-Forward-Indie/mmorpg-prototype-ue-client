@@ -22,6 +22,7 @@ private:
 UPROPERTY()
 UNetworkManager* networkManager;
 // World context to get the world time and manage timers
+UPROPERTY()
 UWorld* worldContext = nullptr;
 // Monitor stats widget to update the ping time
 UPROPERTY()

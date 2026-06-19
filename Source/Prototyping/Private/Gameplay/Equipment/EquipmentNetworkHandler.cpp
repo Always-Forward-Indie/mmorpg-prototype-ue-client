@@ -98,7 +98,7 @@ FEquipmentStateData UEquipmentNetworkHandler::ParseEquipmentState(const TSharedP
     const TSharedPtr<FJsonObject>& SlotsObj = *SlotsPtr;
     for (const auto& SlotPair : SlotsObj->Values)
     {
-        const FString& SlugKey = SlotPair.Key;
+        const FString SlugKey(SlotPair.Key);
         FEquipmentSlotData SlotData;
 
         if (SlotPair.Value->IsNull())
@@ -118,7 +118,7 @@ FEquipmentStateData UEquipmentNetworkHandler::ParseEquipmentState(const TSharedP
         SlotObj->TryGetBoolField(TEXT("blockedByTwoHanded"), SlotData.blockedByTwoHanded);
         if (SlotData.blockedByTwoHanded)
         {
-            // off_hand blocked — not occupied by an actual item
+            // off_hand blocked ï¿½ not occupied by an actual item
             State.slots.Add(SlugKey, SlotData);
             continue;
         }

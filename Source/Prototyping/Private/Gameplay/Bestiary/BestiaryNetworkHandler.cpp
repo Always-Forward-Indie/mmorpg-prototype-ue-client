@@ -192,7 +192,7 @@ void UBestiaryNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
                         Pair.Value->TryGetNumber(N);
                         Val = FString::SanitizeFloat(N);
                     }
-                    Notif.dataFields.Add(Pair.Key, Val);
+                    Notif.dataFields.Emplace(Pair.Key, Val);
                 }
             }
 

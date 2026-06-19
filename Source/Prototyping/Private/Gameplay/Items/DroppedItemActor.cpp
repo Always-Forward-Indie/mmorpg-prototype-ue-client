@@ -587,7 +587,9 @@ void ADroppedItemActor::PlayPickupEffect()
 		}
 	}
 
-	Destroy();
+	SetActorHiddenInGame(true);
+	SetActorEnableCollision(false);
+	SetLifeSpan(0.5f);
 }
 
 void ADroppedItemActor::SetupTrajectoryAnimation(const FVector& SourceLocation)

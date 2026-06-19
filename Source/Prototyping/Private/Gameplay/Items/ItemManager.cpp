@@ -11,6 +11,7 @@
 #include "Networking/NetworkManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/AssetManager.h"
+#include "CrashDiagnostics.h"
 
 // Sets default values for this component's properties
 UItemManager::UItemManager()
@@ -46,7 +47,13 @@ void UItemManager::Initialize(UNetworkManager* NetworkManager)
 
 void UItemManager::SetWorldContext(UWorld* World)
 {
+	const bool bWasNull = (worldContext == nullptr);
 	worldContext = World;
+
+	if (bWasNull && worldContext)
+	{
+		FlushPendingEvents();
+	}
 }
 
 void UItemManager::SetGameInstance(UMyGameInstance* GameInstance)
@@ -81,6 +88,14 @@ void UItemManager::SubscribeToNetworkManager()
 
 void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 {
+	CRASH_GUARD("ItemManager::ProcessGameServerData");
+	if (!worldContext)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ItemManager: No world context — queuing network event for later processing"));
+		PendingNetworkEvents.Add(ReceivedData);
+		return;
+	}
+
 	// Process time sync data first
 	//if (gameInstance && gameInstance->GetTimeSyncService())
 	//{
@@ -621,5 +636,29 @@ void UItemManager::FlushDropsForMob(int32 MobUID)
 	for (const FDroppedItemStruct& Drop : ToSpawn)
 	{
 		SpawnDroppedItem(Drop);
+	}
+}
+
+void UItemManager::ClearWorldState()
+{
+	DroppedItemsMap.Empty();
+	PendingMobDrops.Empty();
+	PendingNetworkEvents.Empty();
+
+	UE_LOG(LogTemp, Log, TEXT("ItemManager: Cleared world state (dropped items map, pending mob drops, pending events)"));
+}
+
+void UItemManager::FlushPendingEvents()
+{
+	if (PendingNetworkEvents.Num() == 0) return;
+
+	UE_LOG(LogTemp, Warning, TEXT("ItemManager: Flushing %d pending network events"), PendingNetworkEvents.Num());
+	TArray<FString> Events = MoveTemp(PendingNetworkEvents);
+	PendingNetworkEvents.Empty();
+
+	UWorld* SavedWorld = worldContext;
+	for (const FString& Event : Events)
+	{
+		ProcessGameServerData(Event);
 	}
 }

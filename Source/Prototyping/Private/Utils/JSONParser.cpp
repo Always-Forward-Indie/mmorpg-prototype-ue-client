@@ -26,7 +26,7 @@ UTimeSyncService* JSONParser::GetTimeSyncService()
  FString JSONParser::SerializeJson(const FString& EventType, const TMap<FString, TSharedPtr<FJsonValue>>& HeaderData, const TMap<FString, TSharedPtr<FJsonValue>>& BodyData)
 {
     TSharedPtr<FJsonObject> HeaderObject = MakeShareable(new FJsonObject);
-    HeaderObject->SetStringField("eventType", EventType);
+    HeaderObject->SetStringField(TEXT("eventType"), EventType);
 
     // Automatically add clientSendMs timestamp if TimeSyncService is available
     UTimeSyncService* TimeSyncService = GetTimeSyncService();
@@ -174,14 +174,18 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 	 FCharacterDataStruct Character;
 	 if (!CD.IsValid()) return Character;
 	 Character.characterId = CD->GetIntegerField(TEXT("id"));
-	 Character.characterName = CD->GetStringField(TEXT("name"));
-	 Character.characterClass = CD->GetStringField(TEXT("class"));
-	 Character.characterRace = CD->GetStringField(TEXT("race"));
+	 if (CD->HasField(TEXT("name")))
+		 Character.characterName = CD->GetStringField(TEXT("name"));
+	 if (CD->HasField(TEXT("class")))
+		 Character.characterClass = CD->GetStringField(TEXT("class"));
+	 if (CD->HasField(TEXT("race")))
+		 Character.characterRace = CD->GetStringField(TEXT("race"));
 	 if (CD->HasField(TEXT("gender")))
 	 {
 		 Character.characterGender = CD->GetStringField(TEXT("gender"));
 	 }
-	 Character.characterLevel = CD->GetIntegerField(TEXT("level"));
+	 if (CD->HasField(TEXT("level")))
+		 Character.characterLevel = CD->GetIntegerField(TEXT("level"));
 
 	 //is dead
 	 if (CD->HasField(TEXT("isDead"))) {

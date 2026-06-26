@@ -2,23 +2,11 @@
 #include "Data/LocalizationDataAsset.h"
 #include "Engine/DataTable.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Internationalization/Internationalization.h"
 
 void ULocalizationSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
-
-    FString SavedLocale;
-    GConfig->GetString(TEXT("Localization"), TEXT("Locale"), SavedLocale, GGameUserSettingsIni);
-
-    if (!SavedLocale.IsEmpty())
-    {
-        SetLocale(SavedLocale);
-    }
-    else
-    {
-        // First run: default to English until user selects a language
-        SetLocale(TEXT("en"));
-    }
 }
 
 void ULocalizationSubsystem::SetLocalizationData(ULocalizationDataAsset* InAsset)
@@ -52,12 +40,15 @@ void ULocalizationSubsystem::SetLocale(const FString& InLocale)
 
     if (!Target)
     {
-        UE_LOG(LogTemp, Warning, TEXT("LocalizationSubsystem: no DataAsset for locale '%s'"), *InLocale);
+        UE_LOG(LogTemp, Error, TEXT("LocalizationSubsystem: no DataAsset for locale '%s' — LocalizationData%s is NULL. Check BP_MyGameInstance defaults."),
+            *InLocale, bIsRussian ? TEXT("RU") : TEXT("EN"));
         return;
     }
 
     CurrentLocale = InLocale;
     SetLocalizationData(Target);
+
+    FInternationalization::Get().SetCurrentCulture(InLocale);
 
     // Persist the choice
     GConfig->SetString(TEXT("Localization"), TEXT("Locale"), *InLocale, GGameUserSettingsIni);

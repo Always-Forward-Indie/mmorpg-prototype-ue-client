@@ -120,6 +120,7 @@ public:
 
 protected:
     virtual void NativeConstruct() override;
+    virtual void NativeDestruct() override;
     virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
     // Drag support
@@ -219,5 +220,8 @@ private:
 
     // Build localised target description from enriched step data
     FString BuildTargetText(const FQuestProgressData& Data) const;
+
+    UFUNCTION()
+    void HandleLocaleChanged(const FString& NewLocale);
 };
 

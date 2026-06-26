@@ -18,7 +18,7 @@ class ULocalizationSubsystem;
  * Auto-updates whenever QuestManager broadcasts a change.
  *
  * Blueprint subclass must bind:
- *   Tracker_Box  ? UVerticalBox  (BindWidget)  – rows are added here
+ *   Tracker_Box  ? UVerticalBox  (BindWidget)  ï¿½ rows are added here
  *
  * Optional per-row class (set QuestRowClass in Blueprint defaults):
  *   The row widget must contain:
@@ -47,6 +47,7 @@ public:
 
 protected:
     virtual void NativeConstruct() override;
+    virtual void NativeDestruct() override;
 
     UFUNCTION()
     void HandleQuestUpdated(const FQuestProgressData& Data);
@@ -56,6 +57,9 @@ protected:
 
     UFUNCTION()
     void HandleQuestTurnedIn(const FQuestTurnedInData& Data);
+
+    UFUNCTION()
+    void HandleLocaleChanged(const FString& NewLocale);
 
     // UMG binding
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))

@@ -26,6 +26,7 @@ void UAvailableSkillsWidget::NativeConstruct()
     Super::NativeConstruct();
 
     bIsVisible = false;
+    bIsShowingTooltip = false;
     SkillItemWidgets.Empty();
 
     // Set up for dragging

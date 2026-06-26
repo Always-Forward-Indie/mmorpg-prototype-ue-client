@@ -16,7 +16,7 @@ class UNameplateManager;
  *
  * On BeginPlay resolves UNameplateManager from UIManager and registers.
  * On EndPlay unregisters. All rendering is handled centrally by
- * UNameplateCanvasWidget — no WidgetComponent, no per-actor render target.
+ * UNameplateCanvasWidget ï¿½ no WidgetComponent, no per-actor render target.
  */
 UCLASS(ClassGroup = (UI), meta = (BlueprintSpawnableComponent))
 class PROTOTYPING_API UNPCNameplateComponent : public UActorComponent
@@ -66,5 +66,8 @@ private:
 
     void TryRegister();
     UNameplateManager* ResolveNameplateManager() const;
+
+    UFUNCTION()
+    void HandleLocaleChanged(const FString& NewLocale);
 };
 

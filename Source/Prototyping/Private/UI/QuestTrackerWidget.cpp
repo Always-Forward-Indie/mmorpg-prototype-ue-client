@@ -9,6 +9,20 @@ void UQuestTrackerWidget::NativeConstruct()
 {
     Super::NativeConstruct();
     SetVisibility(ESlateVisibility::HitTestInvisible);
+
+    if (ULocalizationSubsystem* LocSys = GetLocSys())
+    {
+        LocSys->OnLocaleChanged.AddDynamic(this, &UQuestTrackerWidget::HandleLocaleChanged);
+    }
+}
+
+void UQuestTrackerWidget::NativeDestruct()
+{
+    if (ULocalizationSubsystem* LocSys = GetLocSys())
+    {
+        LocSys->OnLocaleChanged.RemoveDynamic(this, &UQuestTrackerWidget::HandleLocaleChanged);
+    }
+    Super::NativeDestruct();
 }
 
 void UQuestTrackerWidget::BindToQuestManager(UQuestManager* InQuestManager)
@@ -186,4 +200,9 @@ ULocalizationSubsystem* UQuestTrackerWidget::GetLocSys() const
 {
     UGameInstance* GI = GetGameInstance();
     return GI ? GI->GetSubsystem<ULocalizationSubsystem>() : nullptr;
+}
+
+void UQuestTrackerWidget::HandleLocaleChanged(const FString& NewLocale)
+{
+    RefreshTracker();
 }

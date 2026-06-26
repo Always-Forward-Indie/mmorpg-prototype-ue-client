@@ -470,7 +470,6 @@ FPlayerSkillData UPlayerSkillManager::CreatePlayerSkillData(const FPlayerSkillNe
         UE_LOG(LogTemp, Error, TEXT("PlayerSkillManager: DefinitionRepository is NULL"));
         
         // Create basic definition if repository is not available
-        SkillData.definitionData.skillSlug = NetworkData.skillSlug;
         SkillData.definitionData.displayName = FText::FromString(NetworkData.skillSlug);
     }
 

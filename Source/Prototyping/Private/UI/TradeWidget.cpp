@@ -57,6 +57,26 @@ void UTradeWidget::NativeConstruct()
     }
 
     SetVisibility(ESlateVisibility::Collapsed);
+
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            LocSys->OnLocaleChanged.AddDynamic(this, &UTradeWidget::HandleLocaleChanged);
+        }
+    }
+}
+
+void UTradeWidget::NativeDestruct()
+{
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            LocSys->OnLocaleChanged.RemoveDynamic(this, &UTradeWidget::HandleLocaleChanged);
+        }
+    }
+    Super::NativeDestruct();
 }
 
 void UTradeWidget::BindToManagers(UTradeManager* InTradeManager, UInventoryManager* InInventoryManager)
@@ -435,4 +455,12 @@ void UTradeWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPos)
     Pos.Y = FMath::Clamp(Pos.Y, 0.f, FMath::Max(0.f, VP.Y - Size.Y));
     CurrentViewportPosition = Pos;
     SetPositionInViewport(Pos, false);
+}
+
+void UTradeWidget::HandleLocaleChanged(const FString& NewLocale)
+{
+    if (GetVisibility() == ESlateVisibility::Visible)
+    {
+        RefreshTradeState();
+    }
 }

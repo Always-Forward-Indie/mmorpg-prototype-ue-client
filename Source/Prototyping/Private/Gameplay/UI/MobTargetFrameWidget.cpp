@@ -10,6 +10,31 @@
 #include "Services/LocalizationSubsystem.h"
 #include "Data/DataStructs.h"
 
+void UMobTargetFrameWidget::NativeConstruct()
+{
+    Super::NativeConstruct();
+
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            LocSys->OnLocaleChanged.AddDynamic(this, &UMobTargetFrameWidget::HandleLocaleChanged);
+        }
+    }
+}
+
+void UMobTargetFrameWidget::NativeDestruct()
+{
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            LocSys->OnLocaleChanged.RemoveDynamic(this, &UMobTargetFrameWidget::HandleLocaleChanged);
+        }
+    }
+    Super::NativeDestruct();
+}
+
 void UMobTargetFrameWidget::SetMobInfo(const FString& MobSlug,
                                         const FString& MobName,
                                         int32 MobLevel,
@@ -17,10 +42,19 @@ void UMobTargetFrameWidget::SetMobInfo(const FString& MobSlug,
                                         bool bIsAggro,
                                         UTexture2D* Icon)
 {
+    // Cache for locale-change refresh
+    CachedMobSlug  = MobSlug;
+    CachedMobName  = MobName;
+    CachedMobLevel = MobLevel;
+    CachedCurrentHP = CurrentHP;
+    CachedMaxHP    = MaxHP;
+    bCachedAggro   = bIsAggro;
+    bHasTarget     = true;
     // --- Portrait icon ---
     // Priority: 1) caller-supplied Icon (CachedIcon from BasicMOB, already in memory)
     //           2) DataTable lookup by MobSlug (async-safe, same pattern as BestiaryMobRowWidget)
-    //           3) DefaultIcon fallback
+    //           3) DefaultIcon fallback (for mob targets only)
+    //           4) Hidden for player/NPC/self targets (no MobSlug and no Icon)
     if (PortraitImage)
     {
         if (Icon)
@@ -30,17 +64,18 @@ void UMobTargetFrameWidget::SetMobInfo(const FString& MobSlug,
         }
         else if (!MobSlug.IsEmpty())
         {
-            // Fetch from MobDefinitionTable — covers the case where CachedIcon is null
+            // Fetch from MobDefinitionTable - covers the case where CachedIcon is null
             // (e.g. mob was locked before SetupMobVisual finished, or Icon not set in DT)
             LoadPortraitFromTable(MobSlug);
         }
-        else if (DefaultIcon)
+        else
         {
-            ApplyPortraitTexture(DefaultIcon);
+            // Player, NPC, or self target - no portrait available, hide the image
+            PortraitImage->SetVisibility(ESlateVisibility::Collapsed);
         }
     }
 
-    // Localized name — fall back to raw MobName if slug lookup fails
+    // Localized name ï¿½ fall back to raw MobName if slug lookup fails
     if (MobNameText)
     {
         FText DisplayName;
@@ -104,6 +139,7 @@ void UMobTargetFrameWidget::UpdateHP(int32 CurrentHP, int32 MaxHP)
 
 void UMobTargetFrameWidget::ClearTarget()
 {
+    bHasTarget = false;
     SetVisibility(ESlateVisibility::Collapsed);
 
     if (MobNameText)   MobNameText->SetText(FText::GetEmpty());
@@ -147,7 +183,7 @@ void UMobTargetFrameWidget::LoadPortraitFromTable(const FString& MobSlug)
     const FMobDefinition* Row = DT->FindRow<FMobDefinition>(FName(*MobSlug), TEXT(""));
     if (!Row)
     {
-        // Slug not found — show default portrait if available
+        // Slug not found ï¿½ show default portrait if available
         if (DefaultIcon) { ApplyPortraitTexture(DefaultIcon); }
         return;
     }
@@ -180,4 +216,10 @@ void UMobTargetFrameWidget::LoadPortraitFromTable(const FString& MobSlug)
             }
         })
     );
+}
+
+void UMobTargetFrameWidget::HandleLocaleChanged(const FString& NewLocale)
+{
+    if (!bHasTarget) return;
+    SetMobInfo(CachedMobSlug, CachedMobName, CachedMobLevel, CachedCurrentHP, CachedMaxHP, bCachedAggro, nullptr);
 }

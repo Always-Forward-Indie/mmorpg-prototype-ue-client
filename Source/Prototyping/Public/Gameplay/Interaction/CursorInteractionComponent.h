@@ -148,6 +148,13 @@ public:
         return Cfg ? Cfg->InteractionRange : 280.f;
     }
 
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "World Interaction")
+    float GetItemPickupRange() const
+    {
+        const UWorldInteractionConfig* Cfg = GetEffectiveConfig();
+        return Cfg ? Cfg->ItemPickupRange : 180.f;
+    }
+
     /** Returns the config asset (may be null if not assigned in BP defaults). */
     UWorldInteractionConfig* GetConfig() const { return Config; }
 

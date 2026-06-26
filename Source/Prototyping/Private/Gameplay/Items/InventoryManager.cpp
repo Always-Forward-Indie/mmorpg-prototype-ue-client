@@ -782,7 +782,7 @@ ADroppedItemActor* UInventoryManager::GetNearestDroppedItem(float MaxDistance) c
 	UGameplayStatics::GetAllActorsOfClass(worldContext, ADroppedItemActor::StaticClass(), FoundItems);
 
 	ADroppedItemActor* ClosestItem = nullptr;
-	float ClosestDistance = MaxDistance;
+	float ClosestDistance = MaxDistance + 1.f;
 
 	// Find the closest item within range
 	for (AActor* Actor : FoundItems)
@@ -792,7 +792,7 @@ ADroppedItemActor* UInventoryManager::GetNearestDroppedItem(float MaxDistance) c
 		{
 			float Distance = FVector::Dist(PlayerLocation, DroppedItem->GetActorLocation());
 
-			if (Distance <= DroppedItem->GetPickupRadius() && Distance < ClosestDistance)
+			if (Distance <= DroppedItem->GetPickupRadius() && Distance <= ClosestDistance)
 			{
 				ClosestDistance = Distance;
 				ClosestItem = DroppedItem;

@@ -137,7 +137,7 @@ protected:
 
 	// Visual settings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Tooltip")
-	FVector2D TooltipOffset = FVector2D(10.0f, -10.0f);
+	FVector2D TooltipOffset = FVector2D(20.0f, 20.0f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Tooltip")
 	float FadeInDuration = 0.2f;

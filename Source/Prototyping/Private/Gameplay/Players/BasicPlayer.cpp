@@ -433,10 +433,24 @@ void ABasicPlayer::UpdateApproach(float DeltaTime)
         DesiredMeshYaw    = PendingDir.Rotation().Yaw;
         bHasDesiredMeshYaw = true;
 
-        if (PendingDist <= GetInteractionRange())
         {
-            bIsApproachingTarget = false;
-            DispatchPendingInteraction();
+            float EffectiveRange = GetInteractionRange();
+            if (PendingInteraction == EPendingInteraction::Harvest)
+            {
+                if (UHarvestManager* HMgr = MyGameInstance ? MyGameInstance->GetHarvestManager() : nullptr)
+                {
+                    EffectiveRange = HMgr->GetMaxHarvestDistance();
+                }
+            }
+            else if (PendingInteraction == EPendingInteraction::PickupItem)
+            {
+                EffectiveRange = CursorInteractionComponent ? CursorInteractionComponent->GetItemPickupRange() : 180.f;
+            }
+            if (PendingDist <= EffectiveRange)
+            {
+                bIsApproachingTarget = false;
+                DispatchPendingInteraction();
+            }
         }
         return;
     }
@@ -454,9 +468,14 @@ void ABasicPlayer::UpdateApproach(float DeltaTime)
     // Mob died while approaching — stop movement but keep lock for harvesting.
     if (IsValid(LockedTarget) && LockedTarget->GetMOBIsDead())
     {
-        bIsApproachingTarget = false;
-        PendingSkillSlug.Empty();
-        StopAutoAttack();
+        const bool bWasNonCombat = (PendingInteraction == EPendingInteraction::Harvest ||
+                                    PendingInteraction == EPendingInteraction::TalkNPC   ||
+                                    PendingInteraction == EPendingInteraction::PickupItem);
+        if (!bWasNonCombat)
+        {
+            bIsApproachingTarget = false;
+            PendingInteraction   = EPendingInteraction::None;
+        }
         if (CursorInteractionComponent)
             CursorInteractionComponent->SetVisualLock(LockedTarget, EInteractableType::MOB_Harvestable);
         return;
@@ -597,10 +616,14 @@ void ABasicPlayer::TryCastSkillWithApproach(const FString& SkillSlug)
     // Mob-specific: dead mob handling
     if (IsValid(LockedTarget) && LockedTarget->GetMOBIsDead())
     {
-        bIsAutoAttacking   = false; // stop approach but keep lock for harvesting.
-        bIsAutoAttacking   = false;
-        bIsApproachingTarget = false;
-        PendingSkillSlug.Empty();
+        const bool bWasNonCombat = (PendingInteraction == EPendingInteraction::Harvest ||
+                                    PendingInteraction == EPendingInteraction::TalkNPC   ||
+                                    PendingInteraction == EPendingInteraction::PickupItem);
+        if (!bWasNonCombat)
+        {
+            bIsApproachingTarget = false;
+            PendingInteraction   = EPendingInteraction::None;
+        }
         if (CursorInteractionComponent)
             CursorInteractionComponent->SetVisualLock(LockedTarget, EInteractableType::MOB_Harvestable);
         return;
@@ -672,7 +695,10 @@ void ABasicPlayer::DoAutoAttack()
 
     if (LockedTarget->GetMOBIsDead())
     {
-        StopAutoAttack();
+        bIsAutoAttacking    = false;
+        bIsApproachingTarget = false;
+        PendingSkillSlug.Empty();
+        GetWorld()->GetTimerManager().ClearTimer(AutoAttackRetryTimerHandle);
         if (CursorInteractionComponent)
             CursorInteractionComponent->SetVisualLock(LockedTarget, EInteractableType::MOB_Harvestable);
         return;
@@ -813,21 +839,6 @@ void ABasicPlayer::UnlockMovementAfterPickup()
     UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Movement unlocked after pickup"));
 }
 
-void ABasicPlayer::OnPickupInput()
-{
-    if (playerData.characterData.bIsDead) return;
-    if (bIsPickingUp) return;
-    UE_LOG(LogTemp, Warning, TEXT("Pickup input pressed"));
-
-    if (!InventoryManager) return;
-
-    // NotifyPickup() + delegate binding + server request are all inside InventoryManager::PickupNearbyItem -> ItemManager::SendPickUpItemRequest.
-    // Calling NotifyPickup() here first and then delaying the request via a
-    // timer caused the montage to be started twice (once here, once inside
-    // SendPickUpItemRequest), which produced the double-animation bug.
-    InventoryManager->PickupNearbyItem();
-}
-
 void ABasicPlayer::OnInventoryToggle()
 {
     UE_LOG(LogTemp, Warning, TEXT("Inventory toggle pressed"));
@@ -839,28 +850,6 @@ void ABasicPlayer::OnInventoryToggle()
     else
     {
         UE_LOG(LogTemp, Warning, TEXT("Inventory manager not found"));
-    }
-}
-
-void ABasicPlayer::OnHarvestInput()
-{
-    if (playerData.characterData.bIsDead) return;
-    UE_LOG(LogTemp, Warning, TEXT("Harvest input pressed"));
-    
-    if (!MyGameInstance)
-    {
-        UE_LOG(LogTemp, Error, TEXT("MyGameInstance not found"));
-        return;
-    }
-    
-    UHarvestManager* HarvestManager = MyGameInstance->GetHarvestManager();
-    if (HarvestManager)
-    {
-        HarvestManager->TryHarvestNearbyCorpse();
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Harvest manager not found"));
     }
 }
 
@@ -1055,23 +1044,12 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
             EnhancedInputComponent->BindAction(TargetSelfAction, ETriggerEvent::Started, this, &ABasicPlayer::OnTargetSelfInput);
         }
 
-        // Pickup item action
-        if (PickupAction)
-        {
-            EnhancedInputComponent->BindAction(PickupAction, ETriggerEvent::Triggered, this, &ABasicPlayer::OnPickupInput);
-        }
-
         // Inventory action
         if (InventoryAction)
         {
             EnhancedInputComponent->BindAction(InventoryAction, ETriggerEvent::Triggered, this, &ABasicPlayer::OnInventoryToggle);
         }
 
-        // Harvest action
-        if (HarvestAction)
-        {
-            EnhancedInputComponent->BindAction(HarvestAction, ETriggerEvent::Triggered, this, &ABasicPlayer::OnHarvestInput);
-        }
 
         // Skills panel action
         if (SkillsPanelAction)
@@ -1745,6 +1723,8 @@ void ABasicPlayer::HandleUIManagerInitialized()
             this, &ABasicPlayer::DispatchCursorSelect);
         CursorInteractionComponent->OnDoubleClicked.AddDynamic(
             this, &ABasicPlayer::DispatchCursorInteract);
+        CursorInteractionComponent->OnHoverChanged.AddDynamic(
+            this, &ABasicPlayer::HandleInteractiveHoverChanged);
     }
 
     // Subscribe to WIO actor spawns so we can track proximity changes
@@ -1883,11 +1863,17 @@ void ABasicPlayer::DispatchCursorInteract(AActor* Target, EInteractableType Type
         if (ABasicMOB* Mob = Cast<ABasicMOB>(Target))
         {
             SetLockedTarget(Mob);
-            if (bInRange)
+
+            float HarvestRange = Range;
+            UHarvestManager* HMgr = MyGameInstance ? MyGameInstance->GetHarvestManager() : nullptr;
+            if (HMgr)
             {
-                UHarvestManager* HMgr = MyGameInstance ? MyGameInstance->GetHarvestManager() : nullptr;
-                if (HMgr)
-                    HMgr->TryHarvestSpecificCorpse(Mob);
+                HarvestRange = HMgr->GetMaxHarvestDistance();
+            }
+
+            if (HMgr && (Dist <= HarvestRange))
+            {
+                HMgr->TryHarvestSpecificCorpse(Mob);
             }
             else
             {
@@ -1929,7 +1915,8 @@ void ABasicPlayer::DispatchCursorInteract(AActor* Target, EInteractableType Type
             if (CursorInteractionComponent)
                 CursorInteractionComponent->SetVisualLock(Target, Type);
 
-            if (bInRange)
+            const float PickupRange = CursorInteractionComponent ? CursorInteractionComponent->GetItemPickupRange() : 180.f;
+            if (Dist <= PickupRange)
             {
                 if (InventoryManager)
                     InventoryManager->PickupSpecificItem(Item);
@@ -1953,6 +1940,119 @@ void ABasicPlayer::DispatchCursorInteract(AActor* Target, EInteractableType Type
     default:
         break;
     }
+}
+
+void ABasicPlayer::HandleInteractiveHoverChanged(AActor* OldTarget, AActor* NewTarget, EInteractableType NewType)
+{
+	if (UIManager)
+	{
+		UIManager->ShowInteractionHint(NewType);
+	}
+}
+
+void ABasicPlayer::UpdateProximityHint()
+{
+	if (!UIManager || !MyGameInstance) return;
+	if (!GetWorld()) return;
+
+	if (CursorInteractionComponent && IsValid(CursorInteractionComponent->GetHoveredActor()))
+	{
+		return;
+	}
+
+	AActor*            Nearest = nullptr;
+	EInteractableType  NearestType = EInteractableType::None;
+	float              NearestDist = TNumericLimits<float>::Max();
+	const FVector      MyLoc = GetActorLocation();
+
+	if (UHarvestManager* HMgr = MyGameInstance->GetHarvestManager())
+	{
+		const float R = HMgr->GetMaxHarvestDistance();
+
+		if (ABasicMOB* M = HMgr->GetNearestHarvestableCorpse(R))
+		{
+			const float D = FVector::Dist(MyLoc, M->GetActorLocation());
+			if (D < NearestDist) { Nearest = M; NearestType = EInteractableType::MOB_Harvestable; NearestDist = D; }
+		}
+	}
+
+	if (InventoryManager)
+	{
+		const float R = CursorInteractionComponent ? CursorInteractionComponent->GetItemPickupRange() : 180.f;
+		if (ADroppedItemActor* Item = InventoryManager->GetNearestDroppedItem(R))
+		{
+			const float D = FVector::Dist(MyLoc, Item->GetActorLocation());
+			if (D < NearestDist)
+			{
+				Nearest = Item; NearestType = EInteractableType::DroppedItem; NearestDist = D;
+			}
+		}
+	}
+
+	if (UHarvestManager* HMgr = MyGameInstance->GetHarvestManager())
+	{
+		const float R = HMgr->GetMaxHarvestDistance();
+		if (ABasicMOB* M = HMgr->GetNearestHarvestedCorpse(R))
+		{
+			const float D = FVector::Dist(MyLoc, M->GetActorLocation());
+			if (D < NearestDist) { Nearest = M; NearestType = EInteractableType::MOB_Harvested; NearestDist = D; }
+		}
+	}
+
+	{
+		const float R = CursorInteractionComponent ? CursorInteractionComponent->GetItemPickupRange() : 180.f;
+		TArray<AActor*> FoundItems;
+		UGameplayStatics::GetAllActorsOfClass(GetWorld(), ADroppedItemActor::StaticClass(), FoundItems);
+		for (AActor* Actor : FoundItems)
+		{
+			ADroppedItemActor* Item = Cast<ADroppedItemActor>(Actor);
+			if (Item && Item->CanBePickedUp())
+			{
+				const float D = FVector::Dist(MyLoc, Item->GetActorLocation());
+				if (D <= Item->GetPickupRadius() && D < NearestDist)
+				{
+					Nearest = Item; NearestType = EInteractableType::DroppedItem; NearestDist = D;
+				}
+			}
+		}
+	}
+
+	{
+		const float R = 250.f;
+		for (TActorIterator<ABasicNPC> It(GetWorld()); It; ++It)
+		{
+			if (ABasicNPC* NPC = *It)
+			{
+				const float D = FVector::Dist(MyLoc, NPC->GetActorLocation());
+				if (D <= R && D < NearestDist)
+				{
+					Nearest = NPC; NearestType = EInteractableType::NPC; NearestDist = D;
+				}
+			}
+		}
+	}
+
+	if (InventoryManager)
+	{
+		const float R = CursorInteractionComponent ? CursorInteractionComponent->GetItemPickupRange() : 180.f;
+		if (ADroppedItemActor* Item = InventoryManager->GetNearestDroppedItem(R))
+		{
+			const float D = FVector::Dist(MyLoc, Item->GetActorLocation());
+			if (D < NearestDist)
+			{
+				Nearest = Item; NearestType = EInteractableType::DroppedItem; NearestDist = D;
+			}
+		}
+	}
+
+	if (Nearest && NearestType != EInteractableType::None)
+	{
+		UIManager->ShowProximityHint(NearestType);
+	}
+	else
+	{
+		UIManager->ClearProximityHint();
+	}
 }
 
 void ABasicPlayer::DispatchPendingInteraction()
@@ -2108,6 +2208,13 @@ void ABasicPlayer::Tick(float DeltaTime)
             NpcDistCheckAccum = 0.0f;
             CheckNPCInteractionDistance();
         }
+
+        ProximityHintAccumulator += DeltaTime;
+        if (ProximityHintAccumulator >= 0.25f)
+        {
+            ProximityHintAccumulator = 0.0f;
+            UpdateProximityHint();
+        }
     }
 
     // Update player movement for remote player
@@ -2166,12 +2273,19 @@ void ABasicPlayer::Move(const FInputActionValue& Value)
     // Cancel WIO channel on any movement input
     CancelWIOChannelIfActive();
 
-    // Manual WASD input interrupts the auto-attack cycle and any approach walk,
-    // but keeps the target lock so the player can reposition during combat.
+    // Manual WASD input interrupts the combat approach (auto-attack) but
+    // allows non-combat approaches (harvest, NPC, pickup) to continue
+    // so the player walks to the corpse/item without being cancelled by held keys.
     if (bIsAutoAttacking || bIsApproachingTarget)
     {
-        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Auto-attack interrupted by manual movement"));
-        StopAutoAttack();
+        const bool bIsNonCombatApproach = (PendingInteraction == EPendingInteraction::Harvest ||
+                                           PendingInteraction == EPendingInteraction::TalkNPC   ||
+                                           PendingInteraction == EPendingInteraction::PickupItem);
+        if (!bIsNonCombatApproach)
+        {
+            UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Auto-attack interrupted by manual movement"));
+            StopAutoAttack();
+        }
     }
 
     const FVector2D MoveValue = Value.Get<FVector2D>(); // NOT normalized пїЅ keep X/Y separate
@@ -2442,7 +2556,13 @@ void ABasicPlayer::HandleMouseButtonsMoveForward()
 
     if (bIsAutoAttacking || bIsApproachingTarget)
     {
-        StopAutoAttack();
+        const bool bIsNonCombatApproach = (PendingInteraction == EPendingInteraction::Harvest ||
+                                           PendingInteraction == EPendingInteraction::TalkNPC   ||
+                                           PendingInteraction == EPendingInteraction::PickupItem);
+        if (!bIsNonCombatApproach)
+        {
+            StopAutoAttack();
+        }
     }
 
     const FRotator ControlYaw(0.0f, Controller->GetControlRotation().Yaw, 0.0f);
@@ -3412,58 +3532,76 @@ void ABasicPlayer::CheckNPCInteractionDistance()
 
 void ABasicPlayer::OnInteractInput()
 {
-    UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: OnInteractInput triggered"));
+	UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: OnInteractInput triggered"));
 
-    if (playerData.characterData.bIsDead) return;
+	if (playerData.characterData.bIsDead) return;
+	if (playerData.isOtherClient) return;
+	if (!MyGameInstance) return;
 
-    if (playerData.isOtherClient)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: OnInteractInput skipped - isOtherClient"));
-        return;
-    }
+	// Priority 1: Harvestable corpse
+	if (UHarvestManager* HMgr = MyGameInstance->GetHarvestManager())
+	{
+		if (!HMgr->IsHarvesting())
+		{
+			if (ABasicMOB* Corpse = HMgr->GetNearestHarvestableCorpse(HMgr->GetMaxHarvestDistance()))
+			{
+				HMgr->TryHarvestSpecificCorpse(Corpse);
+				return;
+			}
+		}
+	}
 
-    if (!TrackedNPC)
-    {
-        // No NPC in range — try World Interactive Object instead
-        TryInteractWithWIO();
-        return;
-    }
-    if (!MyGameInstance)
-    {
-        UE_LOG(LogTemp, Error, TEXT("BasicPlayer: OnInteractInput - MyGameInstance is NULL"));
-        return;
-    }
+	// Priority 2: Dropped item
+	if (InventoryManager)
+	{
+		const float PickupRange = CursorInteractionComponent ? CursorInteractionComponent->GetItemPickupRange() : 180.f;
+		if (ADroppedItemActor* Item = InventoryManager->GetNearestDroppedItem(PickupRange))
+		{
+			InventoryManager->PickupSpecificItem(Item);
+			return;
+		}
+	}
 
-    UDialogueManager* DlgManager = MyGameInstance->GetDialogueManager();
-    if (!DlgManager)
-    {
-        UE_LOG(LogTemp, Error, TEXT("BasicPlayer: DialogueManager not found"));
-        return;
-    }
+	// Priority 3: Already harvested corpse (inspect loot)
+	if (UHarvestManager* HMgr = MyGameInstance->GetHarvestManager())
+	{
+		if (ABasicMOB* Corpse = HMgr->GetNearestHarvestedCorpse(HMgr->GetMaxHarvestDistance()))
+		{
+			const int32 Uid = FCString::Atoi(*Corpse->GetMOBUId());
+			HMgr->InspectCorpseLoot(Uid);
+			return;
+		}
+	}
 
-    if (DlgManager->IsDialogueActive())
-    {
-        // Close running session (and any open shop windows) before opening a new one.
-        UIManager ? UIManager->ForceCloseAllNPCWindows(DlgManager) : DlgManager->CloseDialogue();
-        return;
-    }
+	// Priority 4: NPC dialogue
+	if (TrackedNPC)
+	{
+		UDialogueManager* DlgManager = MyGameInstance->GetDialogueManager();
+		if (DlgManager)
+		{
+			if (DlgManager->IsDialogueActive())
+			{
+				if (UIManager) UIManager->ForceCloseAllNPCWindows(DlgManager);
+				else DlgManager->CloseDialogue();
+				return;
+			}
 
-    // If a shop from a DIFFERENT NPC is still open, close it before starting new dialogue.
-    if (UIManager)
-    {
-        const int32 ActiveNpcId = UIManager->GetActiveInteractionNpcId();
-        if (ActiveNpcId > 0 && ActiveNpcId != TrackedNPC->GetNPCId())
-        {
-            UE_LOG(LogTemp, Log, TEXT("[NPC] Closing windows for NPC %d before opening dialogue with NPC %d"),
-                ActiveNpcId, TrackedNPC->GetNPCId());
-            UIManager->ForceCloseAllNPCWindows(DlgManager);
-        }
-    }
+			if (UIManager)
+			{
+				const int32 ActiveNpcId = UIManager->GetActiveInteractionNpcId();
+				if (ActiveNpcId > 0 && ActiveNpcId != TrackedNPC->GetNPCId())
+				{
+					UIManager->ForceCloseAllNPCWindows(DlgManager);
+				}
+			}
 
-    UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Opening dialogue with NPC %d (%s)"),
-        TrackedNPC->GetNPCId(), *TrackedNPC->GetNPCName());
+			DlgManager->OpenDialogue(TrackedNPC->GetNPCId());
+			return;
+		}
+	}
 
-    DlgManager->OpenDialogue(TrackedNPC->GetNPCId());
+	// Priority 5: World Interactive Object
+	TryInteractWithWIO();
 }
 
 void ABasicPlayer::CheckForMOB()
@@ -3537,7 +3675,23 @@ void ABasicPlayer::CheckForMOB()
     // TryCastSkillWithApproach) also preserve it for this purpose.
     if (IsValid(LockedTarget) && LockedTarget->GetMOBIsDead())
     {
-        StopAutoAttack();
+        const bool bNonCombatApproaching =
+            (PendingInteraction == EPendingInteraction::Harvest ||
+             PendingInteraction == EPendingInteraction::TalkNPC ||
+             PendingInteraction == EPendingInteraction::PickupItem) &&
+            bIsApproachingTarget;
+
+        if (bNonCombatApproaching)
+        {
+            bIsAutoAttacking = false;
+            PendingSkillSlug.Empty();
+            GetWorld()->GetTimerManager().ClearTimer(AutoAttackRetryTimerHandle);
+        }
+        else
+        {
+            StopAutoAttack();
+        }
+
         if (CursorInteractionComponent)
             CursorInteractionComponent->SetVisualLock(LockedTarget, EInteractableType::MOB_Harvestable);
     }

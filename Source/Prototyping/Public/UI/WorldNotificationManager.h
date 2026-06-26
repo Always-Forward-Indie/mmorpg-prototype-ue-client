@@ -71,6 +71,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "World Notification")
     void UnsubscribeFromNetworkEvents();
 
+    /** Access the toast widget for direct enqueuing (e.g. item pickup notifications). */
+    UNotificationToastWidget* GetToastWidget() const { return ToastWidget; }
+
 private:
     UFUNCTION()
     void HandleChunkServerData(const FString& ReceivedData);

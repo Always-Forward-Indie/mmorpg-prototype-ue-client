@@ -165,6 +165,7 @@ void UHarvestProgressWidget::HideWidget()
 	{
 		FSlateApplication::Get().ClearKeyboardFocus(EFocusCause::Cleared);
 	}
+	FSlateApplication::Get().SetAllUserFocusToGameViewport();
 
 	UE_LOG(LogTemp, Warning, TEXT("HarvestProgressWidget: Widget hidden - bIsVisible: %s, Visibility: Hidden"), 
 		bIsVisible ? TEXT("true") : TEXT("false"));

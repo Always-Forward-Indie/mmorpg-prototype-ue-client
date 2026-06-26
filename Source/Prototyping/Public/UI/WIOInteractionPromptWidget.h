@@ -49,9 +49,10 @@ public:
 	FString InteractionKeyName = TEXT("F");
 
 protected:
-	virtual void NativeConstruct() override;
+    virtual void NativeConstruct() override;
+    virtual void NativeDestruct() override;
 
-	// ─── Auto-bound widget members ────────────────────────────────────────
+    // ─── Auto-bound widget members ────────────────────────────────────────
 	// Name these exactly in your WBP canvas.
 
 	/** Displays the localised object name. */
@@ -74,6 +75,9 @@ protected:
 	void OnPromptUpdated(const FWorldObjectData& ObjectData, const FText& DisplayName, const FText& PromptText);
 
 private:
-	TWeakObjectPtr<AWorldInteractiveObjectActor> CurrentActor;
-	bool bIsVisible = false;
+    TWeakObjectPtr<AWorldInteractiveObjectActor> CurrentActor;
+    bool bIsVisible = false;
+
+    UFUNCTION()
+    void HandleLocaleChanged(const FString& NewLocale);
 };

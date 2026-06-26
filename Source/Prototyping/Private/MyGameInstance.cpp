@@ -272,9 +272,21 @@ void UMyGameInstance::Init()
 	// Initialize localization subsystem with the configured data assets
 	if (ULocalizationSubsystem* LocSys = GetSubsystem<ULocalizationSubsystem>())
 	{
+		if (!LocalizationDataAsset && !LocalizationDataAssetRU && !LocalizationDataAssetEN)
+		{
+			UE_LOG(LogTemp, Error, TEXT("Localization: ALL DataAssets are NULL! Assign at least LocalizationDataAsset in BP_MyGameInstance defaults. Locale switching will not work."));
+		}
+
 		LocSys->SetLocalizationData(LocalizationDataAsset);
 		LocSys->SetLocalizationDataRU(LocalizationDataAssetRU ? LocalizationDataAssetRU : LocalizationDataAsset);
-		LocSys->SetLocalizationDataEN(LocalizationDataAssetEN);
+		LocSys->SetLocalizationDataEN(LocalizationDataAssetEN ? LocalizationDataAssetEN : LocalizationDataAsset);
+
+		// Re-initialize locale now that DataAssets are available.
+		// The subsystem's Initialize() runs before this block (and before
+		// DataAssets were assigned), so CurrentLocale was never set.
+		FString SavedLocale;
+		GConfig->GetString(TEXT("Localization"), TEXT("Locale"), SavedLocale, GGameUserSettingsIni);
+		LocSys->SetLocale(SavedLocale.IsEmpty() ? TEXT("en") : SavedLocale);
 	}
 
 	// Build OS cursor handles from WorldInteractionConfig once, before the login level loads.
@@ -1230,6 +1242,23 @@ void UMyGameInstance::TransitionToGameWorld()
 	LevelBeingLoaded = FName(*MapName);
 
 	bTransitioningToGameWorld = true;
+
+	// Force the game window to foreground BEFORE the level transition so the
+	// FTSTicker poller (CheckGameWorldReady) and render-thread frame counter
+	// (StartFrameCountdown) run at full speed. Fixes loading screen stuck
+	// until click in packaged builds launched from a script without focus.
+	if (FSlateApplication::IsInitialized())
+	{
+		if (TSharedPtr<SWindow> ActiveWindow = FSlateApplication::Get().GetActiveTopLevelWindow())
+		{
+			if (TSharedPtr<FGenericWindow> NativeWindow = ActiveWindow->GetNativeWindow())
+			{
+				NativeWindow->BringToFront();
+				NativeWindow->SetWindowFocus();
+			}
+		}
+	}
+
 	bGameWorldReady = false;
 	bPendingSpawnDispatched = false;
 	ReadyFlags = 0;
@@ -1636,6 +1665,19 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 
 		bGameWorldReady = false;
 
+		// Hard safety timer: if the normal gate/flag pipeline stalls for any
+		// reason (e.g. texture streaming never drains, WP never completes),
+		// force-remove the loading screen after a fixed timeout so the player
+		// isn't stuck.  Uses the same pattern as the login-level timer.
+		LoadedWorld->GetTimerManager().SetTimer(
+			RemoveLoadingScreenTimerHandle,
+			FTimerDelegate::CreateLambda([this]()
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] HARD SAFETY: removing loading screen via timeout (gates may have stalled)"));
+				RemoveLoadingScreen();
+			}),
+			8.0f, false);
+
 		CheckGameWorldReady();    // first check immediately
 
 		FTSTicker::GetCoreTicker().AddTicker(
@@ -1904,7 +1946,19 @@ void UMyGameInstance::CheckAllReadyFlags()
 #endif
 	{
 		IGameMoviePlayer* MP = GetMoviePlayer();
-		if (!MP || !MP->IsMovieCurrentlyPlaying()) { return; }
+		if (!MP)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] CheckAllReadyFlags: GetMoviePlayer() returned null — skipping MoviePlayer check"));
+		}
+		else if (!MP->IsMovieCurrentlyPlaying())
+		{
+			// In packaged builds the MoviePlayer may internally transition state
+			// after level load.  Reconfigure it so IsMovieCurrentlyPlaying() is
+			// true on the next call, then wait one tick for it to take effect.
+			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] CheckAllReadyFlags: MoviePlayer not playing — reconfiguring"));
+			SetupMoviePlayerLoadingScreen();
+			return;
+		}
 	}
 	if (EndFrameDelegateHandle.IsValid()) { return; }
 	if (!bGameWorldReady)
@@ -1927,6 +1981,7 @@ void UMyGameInstance::StartFrameCountdown()
 {
 	RenderedFrameCount.Store(0);
 	bLoadingScreenRemovePending.Store(false);
+	const double FrameCountdownStartTime = FPlatformTime::Seconds();
 
 	// Count frames on the RENDER THREAD (OnEndFrameRT) so we are certain the
 	// loading screen has actually been composited by the GPU before we remove it.
@@ -1949,9 +2004,16 @@ void UMyGameInstance::StartFrameCountdown()
 	// Poll the atomic flag on the game thread once per tick.
 	// RemoveLoadingScreen touches UMG and TimerManager � GT only.
 	GTRemoveTicker = FTSTicker::GetCoreTicker().AddTicker(
-		FTickerDelegate::CreateLambda([this](float) -> bool
+		FTickerDelegate::CreateLambda([this, FrameCountdownStartTime](float) -> bool
 		{
-			if (!bLoadingScreenRemovePending.Load()) { return true; }
+			if (!bLoadingScreenRemovePending.Load())
+			{
+				// Wall-clock safety net: if the render thread is stalled (window
+				// unfocused), force-remove after 3 s so the player isn't stuck.
+				if (FPlatformTime::Seconds() - FrameCountdownStartTime < 3.0) { return true; }
+				UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] SAFETY: frame countdown timed out after 3 s � force-removing loading screen"));
+				bLoadingScreenRemovePending.Store(true);
+			}
 
 			if (EndFrameDelegateHandle.IsValid())
 			{
@@ -2338,7 +2400,7 @@ void UMyGameInstance::SetupMoviePlayerLoadingScreen()
 	FLoadingScreenAttributes LoadingScreen;
 	LoadingScreen.bAutoCompleteWhenLoadingCompletes = false;
 	LoadingScreen.bWaitForManualStop = true;
-	LoadingScreen.bAllowEngineTick = false;
+	LoadingScreen.bAllowEngineTick = true;
 	LoadingScreen.WidgetLoadingScreen = SlateWidget;
 
 	MoviePlayer->SetupLoadingScreen(LoadingScreen);
@@ -2378,6 +2440,14 @@ void UMyGameInstance::RemoveLoadingScreen()
 	{
 		MoviePlayer->StopMovie();
 		UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] RemoveLoadingScreen: MoviePlayer stopped"));
+	}
+
+	// Restore viewport focus after loading screen removal so chunk server timers
+	// and engine ticks resume normally. Fixes window-loses-focus-on-enter bug where
+	// chunk server never connects because World TimerManager was starved during load.
+	if (FSlateApplication::IsInitialized())
+	{
+		FSlateApplication::Get().SetAllUserFocusToGameViewport();
 	}
 
 	if (LoadingScreenWidget)

@@ -59,6 +59,13 @@ void UMOBAnimInstance::StartAttack(const FSkillInitiationData& SkillData)
 {
 	if (bIsDead) return;
 
+	// Interrupt any playing hit-react montage so it doesn't overlap with the attack
+	if (HitReactMontage && bIsHit)
+	{
+		bIsHit = false;
+		Montage_Stop(0.0f, HitReactMontage);
+	}
+
 	bIsAttacking      = true;
 	CurrentAttackSlot = FName(*SkillData.animationName);
 	CurrentCasterId   = SkillData.casterId;
@@ -174,9 +181,23 @@ void UMOBAnimInstance::NotifyTargetLost()
 // ---------------------------------------------------------------------------
 void UMOBAnimInstance::NotifyHit()
 {
-	if (bIsDead) return;
-	// Never interrupt an active attack animation with a hit-react.
-	if (bIsAttacking) return;
+	if (bIsDead)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOBAnim] NotifyHit skipped: mob is dead"));
+		return;
+	}
+
+	// Hit-react takes priority — interrupt any active attack
+	if (bIsAttacking)
+	{
+		bIsAttacking = false;
+		CurrentAttackSlot = NAME_None;
+		Montage_StopGroupByName(0.0f, FName("DefaultGroup"));
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(HitPointTimerHandle);
+		}
+	}
 
 	bIsHit = true;
 
@@ -194,7 +215,8 @@ void UMOBAnimInstance::NotifyHit()
 	}
 	else
 	{
-		// No montage � clear after a fixed window
+		UE_LOG(LogTemp, Warning, TEXT("[MOBAnim] NotifyHit: HitReactMontage is null, using 0.3s timer fallback"));
+		// No montage - clear after a fixed window
 		if (UWorld* World = GetWorld())
 		{
 			FTimerHandle Handle;

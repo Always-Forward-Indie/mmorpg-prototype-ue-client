@@ -7,9 +7,29 @@
 
 void UWIOInteractionPromptWidget::NativeConstruct()
 {
-	Super::NativeConstruct();
-	SetVisibility(ESlateVisibility::Collapsed);
-	bIsVisible = false;
+    Super::NativeConstruct();
+    SetVisibility(ESlateVisibility::Collapsed);
+    bIsVisible = false;
+
+    if (UGameInstance* GI = UGameplayStatics::GetGameInstance(this))
+    {
+        if (ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            LocSys->OnLocaleChanged.AddDynamic(this, &UWIOInteractionPromptWidget::HandleLocaleChanged);
+        }
+    }
+}
+
+void UWIOInteractionPromptWidget::NativeDestruct()
+{
+    if (UGameInstance* GI = UGameplayStatics::GetGameInstance(this))
+    {
+        if (ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            LocSys->OnLocaleChanged.RemoveDynamic(this, &UWIOInteractionPromptWidget::HandleLocaleChanged);
+        }
+    }
+    Super::NativeDestruct();
 }
 
 void UWIOInteractionPromptWidget::ShowForObject(AWorldInteractiveObjectActor* InActor)
@@ -78,7 +98,15 @@ void UWIOInteractionPromptWidget::ShowForObject(AWorldInteractiveObjectActor* In
 
 void UWIOInteractionPromptWidget::HidePrompt()
 {
-	CurrentActor = nullptr;
-	bIsVisible   = false;
-	SetVisibility(ESlateVisibility::Collapsed);
+    CurrentActor = nullptr;
+    bIsVisible   = false;
+    SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UWIOInteractionPromptWidget::HandleLocaleChanged(const FString& NewLocale)
+{
+    if (bIsVisible && CurrentActor.IsValid())
+    {
+        ShowForObject(CurrentActor.Get());
+    }
 }

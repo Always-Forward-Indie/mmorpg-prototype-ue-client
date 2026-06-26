@@ -7,6 +7,7 @@
 #include "Gameplay/Mobs/MOBAnimInstance.h"
 #include "Gameplay/Combat/CombatSystemManager.h"
 #include "Gameplay/Items/ItemManager.h"
+#include "Gameplay/Items/HarvestManager.h"
 #include "MyGameInstance.h"
 #include "Services/LocalizationSubsystem.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
@@ -158,6 +159,14 @@ void ABasicMOB::BeginPlay()
 	}
 
 	HeadWidget = Cast<UW_MOBHeadInfoWidget>(MobHeadInfo->GetUserWidgetObject());
+
+	if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+	{
+		if (ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>())
+		{
+			LocSys->OnLocaleChanged.AddDynamic(this, &ABasicMOB::HandleLocaleChanged);
+		}
+	}
 }
 
 // Override EndPlay to unregister from combat system
@@ -170,6 +179,10 @@ void ABasicMOB::EndPlay(const EEndPlayReason::Type EndPlayReason)
         if (GameInstance->MOBManager && Uid > 0)
         {
             GameInstance->MOBManager->UnregisterMob(Uid);
+        }
+        if (UHarvestManager* HM = GameInstance->GetHarvestManager())
+        {
+            HM->RemoveKnownEmptyCorpse(Uid);
         }
     }
 
@@ -188,6 +201,14 @@ void ABasicMOB::EndPlay(const EEndPlayReason::Type EndPlayReason)
                 CombatManager->UnregisterCombatable(CombatableInterface);
                 UE_LOG(LogTemp, Log, TEXT("MOB %d unregistered from combat system"), GetActorId_Implementation());
             }
+        }
+    }
+
+    if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            LocSys->OnLocaleChanged.RemoveDynamic(this, &ABasicMOB::HandleLocaleChanged);
         }
     }
 
@@ -235,7 +256,10 @@ void ABasicMOB::OnReceiveSkillResult(const FSkillResultData& SkillResult)
 	if (SkillResult.targetId == GetActorId_Implementation())
 	{
 		SetMOBCurrentHealth(SkillResult.finalTargetHealth);
-		SetMOBCurrentMana(SkillResult.finalTargetMana);
+		if (SkillResult.finalTargetMana > 0)
+		{
+			SetMOBCurrentMana(SkillResult.finalTargetMana);
+		}
 	ForceUpdateUI();
 
 		if (!SkillResult.isMissed)
@@ -246,7 +270,13 @@ void ABasicMOB::OnReceiveSkillResult(const FSkillResultData& SkillResult)
 
 				if (UMOBAnimInstance* AnimInst = Cast<UMOBAnimInstance>(GetMesh()->GetAnimInstance()))
 				{
+					UE_LOG(LogTemp, Warning, TEXT("[MOB %d] OnReceiveSkillResult: damage=%d, calling NotifyHit"),
+						GetActorId_Implementation(), SkillResult.damage);
 					AnimInst->NotifyHit();
+				}
+				else
+				{
+					UE_LOG(LogTemp, Warning, TEXT("[MOB %d] OnReceiveSkillResult: Cast<UMOBAnimInstance> failed"), GetActorId_Implementation());
 				}
 			}
 		}
@@ -440,10 +470,24 @@ void ABasicMOB::Tick(float DeltaTime)
 
 		if ((LastHealth != MOBData.mobCurrentHealth || MOBData.bIsAggressive != LastAggressive || !bUIInitialized) && MOBData.mobID != 0)
 		{
+			FString DisplayName = MOBData.mobName;
+			if (!MOBData.mobSlug.IsEmpty())
+			{
+				if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+				{
+					if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+					{
+						FText Localized = Loc->GetMobDisplayName(MOBData.mobSlug);
+						if (!Localized.IsEmpty())
+							DisplayName = Localized.ToString();
+					}
+				}
+			}
+
 			MobHeadInfo->UpdateInfo(
 				MOBData.mobCurrentHealth,
 				MaxHealth,
-				MOBData.mobName,
+				DisplayName,
 				MOBData.mobLevel,
 				MOBData.bIsAggressive
 			);
@@ -1804,6 +1848,11 @@ void ABasicMOB::ForceUpdateUI()
 			HeadWidget->SetWidgetScale(widgetScaleFactor);
 		}
 	}
+}
+
+void ABasicMOB::HandleLocaleChanged(const FString& NewLocale)
+{
+	ForceUpdateUI();
 }
 
 

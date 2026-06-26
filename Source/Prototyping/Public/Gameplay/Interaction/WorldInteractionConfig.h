@@ -191,7 +191,7 @@ public:
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction|Timing",
         meta = (ClampMin = "2"))
-    float DragThresholdPixels = 8.f;
+    float DragThresholdPixels = 20.f;
 
     // ─────────────────────────────────────────────────────────────────────────
     // INTERACTION RANGES
@@ -209,6 +209,15 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction|Ranges",
         meta = (ClampMin = "10", Units = "cm"))
     float InteractionRange = 280.f;
+
+    /**
+     * Auto-approach stops this many cm away from dropped items and corpses.
+     * Separated from InteractionRange because harvest/pickup needs to be closer
+     * than NPC dialogue to match server-side validation radii.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction|Ranges",
+        meta = (ClampMin = "10", Units = "cm"))
+    float ItemPickupRange = 180.f;
 
     // ─────────────────────────────────────────────────────────────────────────
     // PERFORMANCE

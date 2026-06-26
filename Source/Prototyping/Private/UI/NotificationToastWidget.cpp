@@ -195,7 +195,8 @@ void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& 
     {
         const FString ItemId   = Notification.dataFields.FindRef(TEXT("itemId"));
         const FString Quantity = Notification.dataFields.FindRef(TEXT("quantity"));
-        const FString ItemSlug = Notification.dataFields.FindRef(TEXT("itemSlug"));
+        FString ItemSlug = Notification.dataFields.FindRef(TEXT("itemSlug"));
+        if (ItemSlug.IsEmpty()) ItemSlug = Notification.dataFields.FindRef(TEXT("item_slug"));
         FText ItemName = FText::GetEmpty();
         if (Loc && !ItemSlug.IsEmpty())
             ItemName = Loc->GetItemDisplayName(ItemSlug);

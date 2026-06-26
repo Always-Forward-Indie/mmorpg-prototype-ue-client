@@ -16,6 +16,8 @@ void ULanguageSettingsWidget::NativeConstruct()
 		PopulateLanguageOptions();
 		Language_Combo->OnSelectionChanged.AddDynamic(this, &ULanguageSettingsWidget::HandleComboChanged);
 	}
+
+	InitializeSettings();
 }
 
 void ULanguageSettingsWidget::InitializeSettings()

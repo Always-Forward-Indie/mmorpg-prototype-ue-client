@@ -51,6 +51,9 @@ public:
     void ClearTarget();
 
 protected:
+    virtual void NativeConstruct() override;
+    virtual void NativeDestruct() override;
+
     // --- Bound widgets (must exist in the Blueprint with matching names) ---
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
@@ -87,5 +90,16 @@ private:
      * falls back to async streaming otherwise (non-blocking).
      */
     void LoadPortraitFromTable(const FString& MobSlug);
+
+    UFUNCTION()
+    void HandleLocaleChanged(const FString& NewLocale);
+
+    FString CachedMobSlug;
+    FString CachedMobName;
+    int32   CachedMobLevel = 0;
+    int32   CachedCurrentHP = 0;
+    int32   CachedMaxHP = 0;
+    bool    bCachedAggro = false;
+    bool    bHasTarget = false;
 };
 

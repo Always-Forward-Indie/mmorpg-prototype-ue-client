@@ -330,7 +330,7 @@ void UCombatSystemManager::ProcessSkillResult(const FSkillResultData& SkillResul
     }
 
     // --- Update caster mana immediately (UI responsiveness) ---
-    if (Result.finalCasterMana >= 0 && GameInstance)
+    if (Result.finalCasterMana > 0 && GameInstance)
     {
         ECasterType CasterCombatType = MapNetCasterType(Result.casterType, Result.casterTypeString);
         TScriptInterface<ICombatable> Caster = FindCombatableById(Result.casterId, CasterCombatType);

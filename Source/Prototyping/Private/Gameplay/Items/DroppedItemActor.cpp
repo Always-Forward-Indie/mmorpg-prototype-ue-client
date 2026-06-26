@@ -515,6 +515,8 @@ bool ADroppedItemActor::AttemptPickup()
 		return false;
 	}
 
+	ItemData.canBePickedUp = false;
+
 	UMyGameInstance* GameInstance = Cast<UMyGameInstance>(UGameplayStatics::GetGameInstance(GetWorld()));
 	if (!GameInstance)
 	{

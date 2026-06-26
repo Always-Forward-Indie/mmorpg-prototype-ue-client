@@ -246,6 +246,11 @@ void USkillShopWidget::UpdateHeaderDisplay()
 
 void USkillShopWidget::PopulateSkillRows()
 {
+    UE_LOG(LogTemp, Warning, TEXT("[SkillShop] PopulateSkillRows called: skills=%d, Skill_List_Box=%s, SkillRowClass=%s"),
+        CachedShop.skills.Num(),
+        Skill_List_Box ? TEXT("valid") : TEXT("NULL"),
+        SkillRowClass ? TEXT("valid") : TEXT("NULL"));
+
     if (!Skill_List_Box || !SkillRowClass) return;
 
     Skill_List_Box->ClearChildren();
@@ -258,6 +263,9 @@ void USkillShopWidget::PopulateSkillRows()
         SkillRepo = GI->GetSkillDefinitionRepository();
     }
 
+    UE_LOG(LogTemp, Warning, TEXT("[SkillShop] PopulateSkillRows: %d skills in shop, SkillRepo=%s"),
+        CachedShop.skills.Num(), SkillRepo ? TEXT("valid") : TEXT("NULL"));
+
     for (const FSkillShopSkillData& Skill : CachedShop.skills)
     {
         USkillShopRowWidget* Row = CreateWidget<USkillShopRowWidget>(GetOwningPlayer(), SkillRowClass);
@@ -267,14 +275,28 @@ void USkillShopWidget::PopulateSkillRows()
         Row->PopulateFromSkillData(Skill);
 
         // --- Icon: load from SkillDefinitionRepository and inject into the typed field ---
-        if (Row->Skill_Icon_Image && SkillRepo)
+        if (SkillRepo)
         {
             FSkillDefinitionData Def = SkillRepo->GetDefinition(Skill.skillSlug);
-            if (Def.skillIcon.IsValid())
+            UE_LOG(LogTemp, Warning, TEXT("[SkillShop] Skill '%s' -> Def.displayName='%s', skillIcon valid=%s"),
+                *Skill.skillSlug, *Def.displayName.ToString(), Def.skillIcon.IsValid() ? TEXT("yes") : TEXT("no"));
+
+            // Override name with localised displayName from definition
+            if (Row->Skill_Name_Text && !Def.displayName.IsEmpty())
+            {
+                Row->Skill_Name_Text->SetText(Def.displayName);
+            }
+
+            if (Row->Skill_Icon_Image && Def.skillIcon.IsValid())
             {
                 if (UTexture2D* IconTex = Def.skillIcon.LoadSynchronous())
                 {
                     Row->Skill_Icon_Image->SetBrushFromTexture(IconTex);
+                    UE_LOG(LogTemp, Warning, TEXT("[SkillShop]   Icon loaded: %s"), *IconTex->GetName());
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("[SkillShop]   Icon LoadSynchronous returned NULL"));
                 }
             }
         }

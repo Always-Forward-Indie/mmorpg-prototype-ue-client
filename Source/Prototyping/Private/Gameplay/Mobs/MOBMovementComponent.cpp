@@ -768,7 +768,8 @@ FVector UMOBMovementComponent::AdjustToGround(const FVector& Location, float Del
     float InterpSpeed;
     if (ZDiff < 0.f)
     {
-        InterpSpeed = GroundInterpSpeedDown * Priority;
+        const float DownFactor = FMath::Clamp(FMath::Abs(ZDiff) / 40.0f, 1.0f, 6.0f);
+        InterpSpeed = GroundInterpSpeedDown * Priority * DownFactor;
     }
     else
     {

@@ -9,6 +9,9 @@
 #include "Utils/JSONParser.h"
 #include "MyGameInstance.h"
 #include "Networking/NetworkManager.h"
+#include "UI/UIManager.h"
+#include "UI/WorldNotificationManager.h"
+#include "UI/NotificationToastWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/AssetManager.h"
 #include "CrashDiagnostics.h"
@@ -227,6 +230,16 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 	}
 	else if (MessageData.eventType == "itemPickup" && MessageData.status != "success")
 	{
+		int32 FailedUID = -1;
+		Body->TryGetNumberField(TEXT("droppedItemUID"), FailedUID);
+		if (FailedUID > 0 && DroppedItemsMap.Contains(FailedUID))
+		{
+			if (ADroppedItemActor* DroppedActor = DroppedItemsMap[FailedUID])
+			{
+				DroppedActor->SetCanBePickedUp(true);
+			}
+		}
+
 		UE_LOG(LogTemp, Warning, TEXT("ItemManager: itemPickup failed � unlocking player movement"));
 
 		// Server rejected the pickup � cancel any pending pickup-point timer and unlock
@@ -446,8 +459,30 @@ void UItemManager::ProcessItemPickup(const FItemBaseStruct& Item)
 {
 	// Broadcast the item pickup event
 	OnItemPickedUp.Broadcast(Item);
-	
+
 	UE_LOG(LogTemp, Warning, TEXT("Picked up item: %s"), *Item.name);
+
+	// Show a toast notification with localised item name
+	if (!Item.slug.IsEmpty())
+	{
+		if (ABasicPlayer* Player = Cast<ABasicPlayer>(GetOwner()))
+		{
+			if (UUIManager* UIMgr = Player->GetUIManager())
+			{
+				if (UWorldNotificationManager* NotifMgr = UIMgr->GetWorldNotificationManager())
+				{
+					if (UNotificationToastWidget* Toast = NotifMgr->GetToastWidget())
+					{
+						TMap<FString, FString> DataFields;
+						DataFields.Add(TEXT("itemSlug"), Item.slug);
+						DataFields.Add(TEXT("itemId"), FString::FromInt(Item.id));
+						DataFields.Add(TEXT("quantity"), TEXT("1"));
+						Toast->EnqueueActionToast(TEXT("item_received"), DataFields);
+					}
+				}
+			}
+		}
+	}
 }
 
 // Called when the game starts

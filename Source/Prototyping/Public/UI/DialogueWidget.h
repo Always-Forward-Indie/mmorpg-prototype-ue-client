@@ -85,6 +85,7 @@ public:
 
 protected:
 virtual void NativeConstruct() override;
+virtual void NativeDestruct() override;
 virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 // Drag support
@@ -156,4 +157,7 @@ private:
     bool bDragging = false;
     FVector2D DragOffset = FVector2D::ZeroVector;
     FVector2D CurrentViewportPosition = FVector2D::ZeroVector;
+
+    UFUNCTION()
+    void HandleLocaleChanged(const FString& NewLocale);
 };

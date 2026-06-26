@@ -38,8 +38,8 @@ void USkillDefinitionRepository::PreloadIconsAsync()
     if (Paths.Num() == 0) return;
 
     FStreamableManager& SM = UAssetManager::GetStreamableManager();
-    // Держим хендл как UPROPERTY(TObjectPtr<UStreamableRenderAsset> не надо) -> UPROPERTY(TSharedPtr<FStreamableHandle>) не получится,
-    // просто сохрани в поле TSharedPtr<FStreamableHandle> PreloadHandle;
+    // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ UPROPERTY(TObjectPtr<UStreamableRenderAsset> пїЅпїЅ пїЅпїЅпїЅпїЅ) -> UPROPERTY(TSharedPtr<FStreamableHandle>) пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ,
+    // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅ TSharedPtr<FStreamableHandle> PreloadHandle;
     PreloadHandle = SM.RequestAsyncLoad(
         Paths,
         FStreamableDelegate::CreateUObject(this, &USkillDefinitionRepository::OnIconsPreloaded),
@@ -173,14 +173,8 @@ void USkillDefinitionRepository::LoadDefinitionsFromTable()
         
         if (RowData)
         {
-            // Use skillSlug as key, or fallback to row name if skillSlug is empty
-            FString SkillSlug = RowData->skillSlug.IsEmpty() ? RowName.ToString() : RowData->skillSlug;
-            
-            // Ensure skillSlug is set
-            if (RowData->skillSlug.IsEmpty())
-            {
-                RowData->skillSlug = SkillSlug;
-            }
+            // Row name is the skill slug
+            const FString SkillSlug = RowName.ToString();
             
             // Debug icon loading
             FString IconPath = RowData->skillIcon.ToSoftObjectPath().ToString();
@@ -206,7 +200,6 @@ void USkillDefinitionRepository::LoadDefinitionsFromTable()
 FSkillDefinitionData USkillDefinitionRepository::GetDefaultDefinition(const FString& SkillSlug) const
 {
     FSkillDefinitionData DefaultDefinition;
-    DefaultDefinition.skillSlug = SkillSlug;
     DefaultDefinition.displayName = FText::FromString(SkillSlug);
     DefaultDefinition.description = FText::FromString(FString::Printf(TEXT("Skill: %s (No definition found)"), *SkillSlug));
     DefaultDefinition.effectType = ESkillEffectType::None;

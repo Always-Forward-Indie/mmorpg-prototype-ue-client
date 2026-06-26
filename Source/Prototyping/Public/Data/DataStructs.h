@@ -1815,9 +1815,6 @@ struct FSkillDefinitionData : public FTableRowBase
     GENERATED_BODY()
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
-    FString skillSlug = "";
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
     FText displayName = FText::GetEmpty();
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition")
@@ -1949,7 +1946,6 @@ struct FSkillDefinitionData : public FTableRowBase
 
     FSkillDefinitionData()
     {
-        skillSlug = "";
         displayName = FText::GetEmpty();
         description = FText::GetEmpty();
         animationName = "";

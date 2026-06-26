@@ -206,6 +206,9 @@ private:
 	// Current loot data
 	TArray<FHarvestItemStruct> CurrentAvailableLoot;
 
+	// UIDs of corpses confirmed empty by the server
+	TSet<int32> KnownEmptyCorpses;
+
 	// Settings
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings", meta = (AllowPrivateAccess = "true"))
 	float MaxHarvestDistance;
@@ -227,4 +230,11 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Harvest")
 	int32 GetCurrentCorpseUID() const { return CurrentCorpseUID; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Harvest")
+	float GetMaxHarvestDistance() const { return MaxHarvestDistance; }
+
+	bool IsCorpseEmpty(int32 CorpseUID) const { return KnownEmptyCorpses.Contains(CorpseUID); }
+
+	void RemoveKnownEmptyCorpse(int32 CorpseUID) { KnownEmptyCorpses.Remove(CorpseUID); }
 };

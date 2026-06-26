@@ -1,5 +1,7 @@
 #include "Gameplay/Combat/DamageEffectHandler.h"
 #include "Gameplay/Combat/ICombatable.h"
+#include "Gameplay/Mobs/BasicMOB.h"
+#include "Gameplay/Mobs/MOBAnimInstance.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
 #include "UI/UIManager.h"
 #include "MyGameInstance.h"
@@ -34,7 +36,10 @@ void UDamageEffectHandler::ProcessSkillResult_Implementation(const FSkillResultD
     if (!SkillResult.isMissed)
     {
         ICombatable::Execute_SetCurrentHealth(TargetObject, SkillResult.finalTargetHealth);
-        ICombatable::Execute_SetCurrentMana(TargetObject, SkillResult.finalTargetMana);
+        if (SkillResult.finalTargetMana > 0)
+        {
+            ICombatable::Execute_SetCurrentMana(TargetObject, SkillResult.finalTargetMana);
+        }
     }
 
     // �������� ���������� ������� � ����������� �� ���������� �����
@@ -49,6 +54,18 @@ void UDamageEffectHandler::ProcessSkillResult_Implementation(const FSkillResultD
     else if (SkillResult.damage > 0)
     {
         ShowNormalDamageEffect(SkillResult, Target);
+    }
+
+    // Trigger hit-react animation on mob targets (only for actual damage, not misses)
+    if (!SkillResult.isMissed && SkillResult.damage > 0)
+    {
+        if (ABasicMOB* Mob = Cast<ABasicMOB>(TargetObject))
+        {
+            if (UMOBAnimInstance* AnimInst = Cast<UMOBAnimInstance>(Mob->GetMesh()->GetAnimInstance()))
+            {
+                AnimInst->NotifyHit();
+            }
+        }
     }
 
     // ��������� ����������� ������

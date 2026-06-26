@@ -3,6 +3,7 @@
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
 #include "UI/HarvestLootWidget.h"
+#include "UI/InteractionHintWidget.h"
 #include "UI/AvailableSkillsWidget.h"
 #include "UI/DialogueWidget.h"
 #include "UI/QuestJournalWidget.h"
@@ -330,6 +331,9 @@ void UUIManager::CreateUIWidgets()
 	// Create harvest widgets
 	CreateHarvestWidgets();
 
+	// Create interaction hint widget
+	CreateInteractionHintWidget();
+
 	// Create skill widgets (now handled by PlayerInterfaceWidget)
 	CreateSkillWidgets();
 
@@ -552,6 +556,67 @@ void UUIManager::CreateHarvestWidgets()
 	{
 		UE_LOG(LogTemp, Warning, TEXT("UIManager: HarvestLootWidgetClass is not set"));
 	}
+}
+
+void UUIManager::CreateInteractionHintWidget()
+{
+	if (InteractionHintWidgetClass)
+	{
+		InteractionHintWidget = CreateWidget<UInteractionHintWidget>(GetWorld(), InteractionHintWidgetClass);
+		if (InteractionHintWidget)
+		{
+			InteractionHintWidget->AddToViewport(5);
+			InteractionHintWidget->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+}
+
+void UUIManager::ShowInteractionHint(EInteractableType Type)
+{
+	if (Type == EInteractableType::None)
+	{
+		HideInteractionHint();
+		return;
+	}
+
+	bHoverHintActive = true;
+	if (InteractionHintWidget)
+	{
+		InteractionHintWidget->ShowHint(Type, false);
+	}
+}
+
+void UUIManager::HideInteractionHint()
+{
+	bHoverHintActive = false;
+	if (bProximityHintActive)
+	{
+		return;
+	}
+	if (InteractionHintWidget)
+	{
+		InteractionHintWidget->HideHint();
+	}
+}
+
+void UUIManager::ShowProximityHint(EInteractableType Type)
+{
+	bProximityHintActive = true;
+	if (bHoverHintActive || !InteractionHintWidget)
+	{
+		return;
+	}
+	InteractionHintWidget->ShowHint(Type);
+}
+
+void UUIManager::ClearProximityHint()
+{
+	bProximityHintActive = false;
+	if (bHoverHintActive || !InteractionHintWidget)
+	{
+		return;
+	}
+	InteractionHintWidget->HideHint();
 }
 
 void UUIManager::CreateGameVersionWidget()

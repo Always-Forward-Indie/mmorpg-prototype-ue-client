@@ -40,40 +40,44 @@ void USkillTooltipWidget::SetSkillData(const FPlayerSkillData& SkillData)
         *SkillData.networkData.skillSlug);
 }
 
-void USkillTooltipWidget::UpdateTooltipPosition(FVector2D ScreenPosition)
+void USkillTooltipWidget::UpdateTooltipPosition(FVector2D /*ScreenPosition*/)
 {
-    if (!bIsVisible) return;
+    APlayerController* PC = GetOwningPlayer();
+    if (!PC) return;
 
-    // Apply offset
-    FVector2D NewPosition = ScreenPosition + TooltipOffset;
-    
-    // Get viewport size to prevent tooltip from going off-screen
-    if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
-    {
-        int32 ViewportWidth = 0, ViewportHeight = 0;
-        PC->GetViewportSize(ViewportWidth, ViewportHeight);
+    // Use viewport-space mouse position (matches SetPositionInViewport coordinate space)
+    const FVector2D MousePos = UWidgetLayoutLibrary::GetMousePositionOnViewport(PC);
 
-        // Force layout to get actual tooltip size
-        ForceLayoutPrepass();
-        FVector2D TooltipSize = GetDesiredSize();
+    // Force layout to get accurate size
+    SetVisibility(ESlateVisibility::HitTestInvisible);
+    ForceLayoutPrepass();
 
-        // Adjust position to keep tooltip on screen
-        if (NewPosition.X + TooltipSize.X > ViewportWidth)
-        {
-            NewPosition.X = ScreenPosition.X - TooltipSize.X - FMath::Abs(TooltipOffset.X);
-        }
-        
-        if (NewPosition.Y + TooltipSize.Y > ViewportHeight)
-        {
-            NewPosition.Y = ScreenPosition.Y - TooltipSize.Y - FMath::Abs(TooltipOffset.Y);
-        }
+    FVector2D Size = GetCachedGeometry().GetLocalSize();
+    if (Size.X <= 1.f || Size.Y <= 1.f)
+        Size = GetDesiredSize();
+    if (Size.IsZero())
+        Size = FVector2D(300, 200);
 
-        // Ensure tooltip doesn't go off the left or top edges
-        NewPosition.X = FMath::Max(0.0f, NewPosition.X);
-        NewPosition.Y = FMath::Max(0.0f, NewPosition.Y);
-    }
+    int32 Wpx = 0, Hpx = 0;
+    PC->GetViewportSize(Wpx, Hpx);
+    const FVector2D View(Wpx, Hpx);
 
-    SetPositionInViewport(NewPosition, false);
+    const float SafePad = 20.f;
+    const FVector2D BaseOffset = TooltipOffset + FVector2D(SafePad, SafePad);
+
+    FVector2D Pos = MousePos + BaseOffset;
+
+    const float EarlyPad = SafePad + 50.f;
+    if (Pos.X + Size.X > View.X - EarlyPad)
+        Pos.X = MousePos.X - Size.X - FMath::Abs(TooltipOffset.X) - SafePad;
+    if (Pos.Y + Size.Y > View.Y - EarlyPad)
+        Pos.Y = MousePos.Y - Size.Y - FMath::Abs(TooltipOffset.Y) - SafePad;
+
+    Pos.X = FMath::Clamp(Pos.X, 0.f, View.X - Size.X);
+    Pos.Y = FMath::Clamp(Pos.Y, 0.f, View.Y - Size.Y);
+
+    SetAlignmentInViewport(FVector2D(0.0f, 0.0f));
+    SetPositionInViewport(Pos, false);
 }
 
 void USkillTooltipWidget::ShowTooltip()
@@ -82,7 +86,8 @@ void USkillTooltipWidget::ShowTooltip()
 
     bIsVisible = true;
     SetVisibility(ESlateVisibility::HitTestInvisible);
-    
+    ForceLayoutPrepass();
+
     // Simple fade in animation (can be expanded with UMG animations)
     SetRenderOpacity(0.0f);
     
@@ -283,7 +288,7 @@ void USkillTooltipWidget::InitializeColors()
     SchoolColors.Add(ESkillSchool::Shadow, FLinearColor(0.3f, 0.1f, 0.5f, 1.0f)); // Dark Purple
     SchoolColors.Add(ESkillSchool::Holy, FLinearColor(1.0f, 1.0f, 0.3f, 1.0f)); // Golden
 
-    // Initialize effect type colors - используем только существующие типы
+    // Initialize effect type colors - пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
     EffectTypeColors.Empty();
     EffectTypeColors.Add(ESkillEffectType::Damage, FLinearColor(1.0f, 0.2f, 0.2f, 1.0f)); // Red
     EffectTypeColors.Add(ESkillEffectType::Healing, FLinearColor(0.2f, 1.0f, 0.2f, 1.0f)); // Green

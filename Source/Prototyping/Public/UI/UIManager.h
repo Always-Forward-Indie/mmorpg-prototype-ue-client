@@ -4,6 +4,7 @@
 #include "Components/ActorComponent.h"
 #include "Data/DataStructs.h"
 #include "Data/WIODataStructs.h"
+#include "Gameplay/Interaction/IWorldInteractable.h"
 #include "InputActionValue.h"
 #include "UI/InventoryWidget.h"
 #include "Camera/CameraShakeBase.h"
@@ -199,6 +200,18 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UHarvestLootWidget* GetHarvestLootWidget() const { return HarvestLootWidget; }
 
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ShowInteractionHint(EInteractableType Type);
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void HideInteractionHint();
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ShowProximityHint(EInteractableType Type);
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ClearProximityHint();
+
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	USkillBarWidget* GetSkillBarWidget() const;
 
@@ -388,6 +401,7 @@ protected:
 	void CreatePlayerInterfaceWidget();
 	void CreateInventoryWidget();
 	void CreateHarvestWidgets();
+	void CreateInteractionHintWidget();
 	void CreateExperienceWidget();
 	void CreateSkillWidgets();
 	void CreateGameVersionWidget();
@@ -457,6 +471,9 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UHarvestLootWidget> HarvestLootWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<class UInteractionHintWidget> InteractionHintWidgetClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UAvailableSkillsWidget> AvailableSkillsWidgetClass;
@@ -572,6 +589,12 @@ protected:
 
 	UPROPERTY()
 	UHarvestLootWidget* HarvestLootWidget;
+
+	UPROPERTY()
+	class UInteractionHintWidget* InteractionHintWidget;
+
+	bool bHoverHintActive     = false;
+	bool bProximityHintActive = false;
 
 	UPROPERTY()
 	UAvailableSkillsWidget* AvailableSkillsWidget;

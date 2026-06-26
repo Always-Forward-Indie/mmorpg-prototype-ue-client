@@ -21,25 +21,25 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTradeWidgetVisibilityChanged, boo
  * TradeWidget
  *
  * Full P2P trade session UI:
- *   Left panel  — my offer (items + gold I'm giving)
- *   Right panel — their offer (items + gold they're giving)
+ *   Left panel  ï¿½ my offer (items + gold I'm giving)
+ *   Right panel ï¿½ their offer (items + gold they're giving)
  *   Confirm / Cancel buttons
- *   Pending invite banner — Accept / Decline
+ *   Pending invite banner ï¿½ Accept / Decline
  *
  * Blueprint subclass must bind:
- *   My_Items_Box       UScrollBox   — my offered items
- *   Their_Items_Box    UScrollBox   — partner's offered items
- *   Inv_Items_Box      UScrollBox   — my inventory (items to add to offer)
- *   My_Gold_Text       UTextBlock   — gold I'm offering
- *   Their_Gold_Text    UTextBlock   — gold partner is offering
- *   My_Confirm_Text    UTextBlock   — "Confirmed" / "Pending"
- *   Their_Confirm_Text UTextBlock   — "Confirmed" / "Pending"
- *   Gold_Input         UEditableTextBox — type gold amount (BindWidgetOptional)
+ *   My_Items_Box       UScrollBox   ï¿½ my offered items
+ *   Their_Items_Box    UScrollBox   ï¿½ partner's offered items
+ *   Inv_Items_Box      UScrollBox   ï¿½ my inventory (items to add to offer)
+ *   My_Gold_Text       UTextBlock   ï¿½ gold I'm offering
+ *   Their_Gold_Text    UTextBlock   ï¿½ gold partner is offering
+ *   My_Confirm_Text    UTextBlock   ï¿½ "Confirmed" / "Pending"
+ *   Their_Confirm_Text UTextBlock   ï¿½ "Confirmed" / "Pending"
+ *   Gold_Input         UEditableTextBox ï¿½ type gold amount (BindWidgetOptional)
  *   Confirm_Btn        UButton
  *   Cancel_Btn         UButton
  *   Close_Button       UButton      (BindWidgetOptional)
  *
- *   Invite_Banner      UWidget      (BindWidgetOptional) — shown on tradeInvite
+ *   Invite_Banner      UWidget      (BindWidgetOptional) ï¿½ shown on tradeInvite
  *   Invite_Name_Text   UTextBlock   (BindWidgetOptional)
  *   Invite_Accept_Btn  UButton      (BindWidgetOptional)
  *   Invite_Decline_Btn UButton      (BindWidgetOptional)
@@ -77,6 +77,7 @@ public:
 
 protected:
     virtual void NativeConstruct() override;
+    virtual void NativeDestruct() override;
     virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
     virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
     virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
@@ -135,6 +136,9 @@ private:
     bool      bDragging = false;
     FVector2D DragOffset = FVector2D::ZeroVector;
     FVector2D CurrentViewportPosition = FVector2D::ZeroVector;
+
+    UFUNCTION()
+    void HandleLocaleChanged(const FString& NewLocale);
 };
 
 // ---------------------------------------------------------------------------

@@ -56,6 +56,26 @@ void URepairShopWidget::NativeConstruct()
     }
 
     SetVisibility(ESlateVisibility::Collapsed);
+
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            LocSys->OnLocaleChanged.AddDynamic(this, &URepairShopWidget::HandleLocaleChanged);
+        }
+    }
+}
+
+void URepairShopWidget::NativeDestruct()
+{
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            LocSys->OnLocaleChanged.RemoveDynamic(this, &URepairShopWidget::HandleLocaleChanged);
+        }
+    }
+    Super::NativeDestruct();
 }
 
 void URepairShopWidget::BindToRepairManager(URepairManager* InRepairManager)
@@ -392,4 +412,12 @@ FText URepairShopWidget::GetVendorErrorText(const FString& ErrorCode) const
     if (!Friendly.IsEmpty())
         Friendly = Friendly.Left(1).ToUpper() + Friendly.Mid(1).ToLower();
     return FText::FromString(Friendly);
+}
+
+void URepairShopWidget::HandleLocaleChanged(const FString& NewLocale)
+{
+    if (GetVisibility() == ESlateVisibility::Visible && CachedShop.npcId > 0)
+    {
+        RefreshDisplay();
+    }
 }

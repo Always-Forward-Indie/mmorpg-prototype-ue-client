@@ -73,6 +73,7 @@ public:
 
 protected:
     virtual void NativeConstruct() override;
+    virtual void NativeDestruct() override;
     virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
     virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
     virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
@@ -108,6 +109,9 @@ private:
     bool      bDragging = false;
     FVector2D DragOffset = FVector2D::ZeroVector;
     FVector2D CurrentViewportPosition = FVector2D::ZeroVector;
+
+    UFUNCTION()
+    void HandleLocaleChanged(const FString& NewLocale);
 };
 
 // ---------------------------------------------------------------------------

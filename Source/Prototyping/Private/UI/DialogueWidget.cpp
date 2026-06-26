@@ -38,6 +38,26 @@ void UDialogueWidget::NativeConstruct()
     }
 
     SetVisibility(ESlateVisibility::Collapsed);
+
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            LocSys->OnLocaleChanged.AddDynamic(this, &UDialogueWidget::HandleLocaleChanged);
+        }
+    }
+}
+
+void UDialogueWidget::NativeDestruct()
+{
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            LocSys->OnLocaleChanged.RemoveDynamic(this, &UDialogueWidget::HandleLocaleChanged);
+        }
+    }
+    Super::NativeDestruct();
 }
 
 void UDialogueWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -440,5 +460,13 @@ void UDialogueWidget::HandleDialogueError(const FDialogueErrorData& /*ErrorData*
     if (GetVisibility() == ESlateVisibility::Visible)
     {
         HideDialogue();
+    }
+}
+
+void UDialogueWidget::HandleLocaleChanged(const FString& NewLocale)
+{
+    if (GetVisibility() == ESlateVisibility::Visible && !CurrentNode.clientNodeKey.IsEmpty())
+    {
+        ShowDialogueNode(CurrentNode);
     }
 }

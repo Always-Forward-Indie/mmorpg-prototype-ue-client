@@ -223,9 +223,18 @@ UPROPERTY() UVendorTooltipWidget* VendorTooltipWidget = nullptr;
     // Returns a localised display name for the item slug, falls back to slug itself
     FString GetLocalizedItemName(const FString& ItemSlug) const;
 
+    // Look up an item in CachedShop by itemId and return its localised name
+    FString ResolveItemNameFromShop(int32 ItemId) const;
+
+    // Look up an item in CachedInventory by inventory item id and return its localised name
+    FString ResolveItemNameFromInventory(int32 InventoryItemId) const;
+
     // Drag
     bool      bDragging               = false;
     FVector2D DragOffset              = FVector2D::ZeroVector;
     FVector2D CurrentViewportPosition = FVector2D::ZeroVector;
+
+    UFUNCTION()
+    void HandleLocaleChanged(const FString& NewLocale);
 };
 

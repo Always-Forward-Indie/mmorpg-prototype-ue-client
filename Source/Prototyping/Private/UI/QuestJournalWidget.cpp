@@ -70,6 +70,20 @@ void UQuestJournalWidget::NativeConstruct()
     }
 
     SetVisibility(ESlateVisibility::Collapsed);
+
+    if (ULocalizationSubsystem* LocSys = GetLocSys())
+    {
+        LocSys->OnLocaleChanged.AddDynamic(this, &UQuestJournalWidget::HandleLocaleChanged);
+    }
+}
+
+void UQuestJournalWidget::NativeDestruct()
+{
+    if (ULocalizationSubsystem* LocSys = GetLocSys())
+    {
+        LocSys->OnLocaleChanged.RemoveDynamic(this, &UQuestJournalWidget::HandleLocaleChanged);
+    }
+    Super::NativeDestruct();
 }
 
 void UQuestJournalWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -598,4 +612,14 @@ void UQuestJournalWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursor
     SetPositionInViewport(Pos, false);
 }
 
-
+void UQuestJournalWidget::HandleLocaleChanged(const FString& NewLocale)
+{
+    if (GetVisibility() == ESlateVisibility::Visible)
+    {
+        RefreshQuestList();
+        if (SelectedQuestId > 0 && QuestManager && QuestManager->HasQuest(SelectedQuestId))
+        {
+            ShowQuestDetail(SelectedQuestId);
+        }
+    }
+}

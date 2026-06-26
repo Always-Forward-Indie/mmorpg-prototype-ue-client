@@ -59,10 +59,26 @@ void UVendorShopWidget::NativeConstruct()
         if (VendorTooltipWidget)
             VendorTooltipWidget->AddToViewport(1000);
     }
+
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            LocSys->OnLocaleChanged.AddDynamic(this, &UVendorShopWidget::HandleLocaleChanged);
+        }
+    }
 }
 
 void UVendorShopWidget::NativeDestruct()
 {
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            LocSys->OnLocaleChanged.RemoveDynamic(this, &UVendorShopWidget::HandleLocaleChanged);
+        }
+    }
+
     if (ActivePopup)
     {
         ActivePopup->ClosePopup();
@@ -533,6 +549,13 @@ void UVendorShopWidget::HandleConfirmSellCart()
     if (!VendorManager || SellCart.IsEmpty()) return;
     if (Sell_Confirm_Button) Sell_Confirm_Button->SetIsEnabled(false);
     VendorManager->RequestSellItemBatch(GetCharacterId(), CachedShop.npcId, SellCart, GetPlayerPosition());
+
+    // Optimistic UI update: clear the cart immediately so the seller sees instant feedback.
+    // The server response (sellItemBatchResult or getPlayerInventory) will correct
+    // CachedInventory to the authoritative state if anything differs.
+    SellCart.Reset();
+    RefreshSellCartDisplay();
+    UpdatePlayerGoldText();
 }
 
 void UVendorShopWidget::HandleClearBuyCart()
@@ -618,7 +641,10 @@ void UVendorShopWidget::HandleBuyItemResult(const FBuyItemResultData& Result)
 		ShowStatus(FString::Printf(TEXT("Buy failed: %s"), *Friendly.ToString()));
 	}
 	else
-		ShowStatus(FString::Printf(TEXT("Bought x%d  (-%d g)"), Result.quantity, Result.totalPrice));
+	{
+		FString ItemName = ResolveItemNameFromShop(Result.itemId);
+		ShowStatus(FString::Printf(TEXT("Bought %s x%d  (-%d g)"), *ItemName, Result.quantity, Result.totalPrice));
+	}
 	RefreshShopDisplay();
 }
 
@@ -630,7 +656,10 @@ void UVendorShopWidget::HandleSellItemResult(const FSellItemResultData& Result)
 		ShowStatus(FString::Printf(TEXT("Sell failed: %s"), *Friendly.ToString()));
 	}
 	else
-		ShowStatus(FString::Printf(TEXT("Sold  (+%d g)"), Result.goldReceived));
+	{
+		FString ItemName = ResolveItemNameFromInventory(Result.inventoryItemId);
+		ShowStatus(FString::Printf(TEXT("Sold %s  (+%d g)"), *ItemName, Result.goldReceived));
+	}
 	RefreshInventoryDisplay();
 }
 
@@ -643,7 +672,13 @@ void UVendorShopWidget::HandleBuyItemBatchResult(const FBuyItemBatchResultData& 
 		ShowStatus(FString::Printf(TEXT("Buy failed: %s"), *Friendly.ToString()));
 		return;
 	}
-	ShowStatus(FString::Printf(TEXT("Bought %d items  (-%d g)"), Result.items.Num(), Result.totalGoldSpent));
+	FString FirstItemName;
+	if (Result.items.Num() > 0)
+		FirstItemName = ResolveItemNameFromShop(Result.items[0].itemId);
+	if (Result.items.Num() <= 1)
+		ShowStatus(FString::Printf(TEXT("Bought %s  (-%d g)"), *FirstItemName, Result.totalGoldSpent));
+	else
+		ShowStatus(FString::Printf(TEXT("Bought %s [+%d more]  (-%d g)"), *FirstItemName, Result.items.Num() - 1, Result.totalGoldSpent));
 	BuyCart.Reset();
 	RefreshBuyCartDisplay();
 	RefreshShopDisplay(); // stock may have changed
@@ -658,9 +693,17 @@ void UVendorShopWidget::HandleSellItemBatchResult(const FSellItemBatchResultData
 		ShowStatus(FString::Printf(TEXT("Sell failed: %s"), *Friendly.ToString()));
 		return;
 	}
-    ShowStatus(FString::Printf(TEXT("Sold %d items  (+%d g)"), Result.items.Num(), Result.totalGoldReceived));
+    FString FirstItemName;
+    if (Result.items.Num() > 0)
+        FirstItemName = ResolveItemNameFromInventory(Result.items[0].inventoryItemId);
+    if (Result.items.Num() <= 1)
+        ShowStatus(FString::Printf(TEXT("Sold %s  (+%d g)"), *FirstItemName, Result.totalGoldReceived));
+    else
+        ShowStatus(FString::Printf(TEXT("Sold %s [+%d more]  (+%d g)"), *FirstItemName, Result.items.Num() - 1, Result.totalGoldReceived));
 
-    // Update CachedInventory quantities based on what was actually sold
+    // Update CachedInventory quantities based on what was actually sold.
+    // Only subtract if the item still exists — getPlayerInventory may have already
+    // replaced CachedInventory with the post-sale state before this result arrived.
     for (const FSellBatchItemResult& SoldItem : Result.items)
     {
         for (int32 i = CachedInventory.items.Num() - 1; i >= 0; --i)
@@ -675,9 +718,14 @@ void UVendorShopWidget::HandleSellItemBatchResult(const FSellItemBatchResultData
         }
     }
 
+    // Server-authoritative gold: credit the player immediately so the UI doesn't
+    // stall waiting for the next getPlayerInventory packet.
+    CachedInventory.gold += Result.totalGoldReceived;
+
     SellCart.Reset();
     RefreshSellCartDisplay();
     RefreshInventoryDisplay();
+    UpdatePlayerGoldText();
 }
 
 void UVendorShopWidget::HandleInventoryUpdated(const FCharacterInventoryStruct& Inventory)
@@ -899,6 +947,26 @@ FString UVendorShopWidget::GetLocalizedItemName(const FString& ItemSlug) const
     return ItemSlug;
 }
 
+FString UVendorShopWidget::ResolveItemNameFromShop(int32 ItemId) const
+{
+    for (const FVendorShopItemData& ShopItem : CachedShop.items)
+    {
+        if (ShopItem.itemId == ItemId)
+            return GetLocalizedItemName(ShopItem.itemSlug);
+    }
+    return TEXT("Item");
+}
+
+FString UVendorShopWidget::ResolveItemNameFromInventory(int32 InventoryItemId) const
+{
+    for (const FInventoryItemStruct& InvItem : CachedInventory.items)
+    {
+        if (InvItem.id == InventoryItemId)
+            return GetLocalizedItemName(InvItem.itemSlug);
+    }
+    return TEXT("Item");
+}
+
 // ---------------------------------------------------------------------------
 // Drag support
 // ---------------------------------------------------------------------------
@@ -976,5 +1044,13 @@ FText UVendorShopWidget::GetVendorErrorText(const FString& ErrorCode) const
     if (!Friendly.IsEmpty())
         Friendly = Friendly.Left(1).ToUpper() + Friendly.Mid(1).ToLower();
     return FText::FromString(Friendly);
+}
+
+void UVendorShopWidget::HandleLocaleChanged(const FString& NewLocale)
+{
+    if (GetVisibility() == ESlateVisibility::Visible && CachedShop.npcId > 0)
+    {
+        RefreshShopDisplay();
+    }
 }
 

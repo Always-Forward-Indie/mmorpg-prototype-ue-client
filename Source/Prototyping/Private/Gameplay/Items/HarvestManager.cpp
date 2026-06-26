@@ -28,7 +28,7 @@ UHarvestManager::UHarvestManager()
 	ServerStartTime = 0;
 
 	// Initialize settings
-	MaxHarvestDistance = 300.0f;
+	MaxHarvestDistance = 180.0f;
 	bAutoShowLootWindow = true;
 
 	// Initialize loot data
@@ -222,6 +222,17 @@ void UHarvestManager::StartHarvest(int32 CorpseUID){
 	if (!networkManager || !gameInstance)
 	{
 		UE_LOG(LogTemp, Error, TEXT("HarvestManager: Cannot start harvest - missing dependencies"));
+		return;
+	}
+
+	if (!networkManager->IsChunkServerConnected())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Chunk server not connected, cannot start harvest"));
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red,
+				TEXT("Cannot harvest: not connected to world server"));
+		}
 		return;
 	}
 
@@ -447,6 +458,10 @@ ABasicMOB* UHarvestManager::GetNearestHarvestedCorpse(float MaxDistance) const
 		ABasicMOB* Mob = Cast<ABasicMOB>(Actor);
 		if (Mob && Mob->GetMOBIsDead() && Mob->HasBeenHarvested())
 		{
+			const int32 MobUID = FCString::Atoi(*Mob->GetMOBUId());
+			if (IsCorpseEmpty(MobUID))
+				continue;
+
 			float Distance = FVector::Dist(PlayerLocation, Mob->GetActorLocation());
 
 			if (Distance <= MaxDistance && Distance < ClosestDistance)
@@ -832,6 +847,8 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 
 				UE_LOG(LogTemp, Warning, TEXT("HarvestManager: corpseRemoved corpseUID=%d"), RemovedCorpseUID);
 
+				KnownEmptyCorpses.Remove(RemovedCorpseUID);
+
 				if (worldContext && RemovedCorpseUID > 0)
 				{
 					TArray<AActor*> FoundMobs;
@@ -1038,6 +1055,11 @@ void UHarvestManager::HandleHarvestComplete(const FHarvestCompleteStruct& Harves
 	CurrentAvailableLoot = HarvestData.availableLoot;
 	CurrentCorpseUID = HarvestData.corpseId;
 
+	if (HarvestData.availableLoot.Num() == 0)
+		KnownEmptyCorpses.Add(HarvestData.corpseId);
+	else
+		KnownEmptyCorpses.Remove(HarvestData.corpseId);
+
 	// Mark the mob as harvested
 	if (worldContext)
 	{
@@ -1105,6 +1127,7 @@ void UHarvestManager::HandleLootPickupResponse(const FCorpseLootPickupResponseSt
 	// Hide loot window if no more loot
 	if (CurrentAvailableLoot.Num() == 0)
 	{
+		KnownEmptyCorpses.Add(CurrentCorpseUID);
 		HideLootWindow();
 		CurrentCorpseUID = 0;
 	}
@@ -1124,6 +1147,11 @@ void UHarvestManager::HandleLootInspectResponse(const FCorpseLootInspectResponse
 	// Store available loot and corpse ID
 	CurrentAvailableLoot = InspectData.availableLoot;
 	CurrentCorpseUID = InspectData.corpseUID;
+
+	if (InspectData.availableLoot.Num() == 0)
+		KnownEmptyCorpses.Add(InspectData.corpseUID);
+	else
+		KnownEmptyCorpses.Remove(InspectData.corpseUID);
 
 	// Show loot window if there's loot available
 	if (InspectData.availableLoot.Num() > 0)

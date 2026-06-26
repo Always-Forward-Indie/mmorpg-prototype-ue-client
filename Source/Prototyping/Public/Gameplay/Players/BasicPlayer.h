@@ -274,6 +274,8 @@ private:
 	EPendingInteraction PendingInteraction = EPendingInteraction::None;
 	TWeakObjectPtr<AActor> PendingInteractionTarget;
 
+	float ProximityHintAccumulator = 0.f;
+
 	// ── LMB click / drag state ───────────────────────────────────────────────
 	// OnLeftMousePressed records press time and position.
 	// Look() accumulates pixel movement; once it exceeds the drag threshold
@@ -596,10 +598,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* InventoryAction;
 
-	// Harvest input action
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	class UInputAction* HarvestAction;
-
 	// Skills input actions
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* SkillsPanelAction;
@@ -677,8 +675,7 @@ public:
 
 
 
-			UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-			class UInputAction* PickupAction;
+	
 
 
 			UFUNCTION(BlueprintCallable, Category = "Player Data")
@@ -712,9 +709,6 @@ public:
 			void HandleSkillInitiatedForAutoAttack(const FString& SkillSlug, int32 CooldownMs);
 
 		protected:
-			UFUNCTION()
-			void OnPickupInput();
-
 			// Handle inventory input
 	UFUNCTION()
 	void OnInventoryToggle();
@@ -727,9 +721,6 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory", meta = (AllowPrivateAccess = "true"))
 	class UInventoryManager* InventoryManager;
 
-	// Handle harvest input
-	UFUNCTION()
-	void OnHarvestInput();
 
 	// Handle skills input
 	UFUNCTION()
@@ -879,6 +870,11 @@ public:
 	 */
 	UFUNCTION()
 	void DispatchCursorInteract(AActor* Target, EInteractableType Type);
+
+	UFUNCTION()
+	void HandleInteractiveHoverChanged(AActor* OldTarget, AActor* NewTarget, EInteractableType NewType);
+
+	void UpdateProximityHint();
 
 	/** Called by UpdateApproach when PendingInteraction is set and the player has arrived. */
 	void DispatchPendingInteraction();

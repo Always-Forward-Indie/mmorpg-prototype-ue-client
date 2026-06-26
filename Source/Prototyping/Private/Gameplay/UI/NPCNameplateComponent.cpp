@@ -21,6 +21,17 @@ void UNPCNameplateComponent::BeginPlay()
 {
     Super::BeginPlay();
 
+    if (UWorld* W = GetWorld())
+    {
+        if (UMyGameInstance* GI = Cast<UMyGameInstance>(W->GetGameInstance()))
+        {
+            if (ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>())
+            {
+                LocSys->OnLocaleChanged.AddDynamic(this, &UNPCNameplateComponent::HandleLocaleChanged);
+            }
+        }
+    }
+
     // If data was set before BeginPlay (via SetNPCData), try to register now.
     // If NameplateManager is not ready yet, schedule a retry.
     if (bInitialised)
@@ -79,6 +90,13 @@ void UNPCNameplateComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
     if (UWorld* World = GetWorld())
     {
         World->GetTimerManager().ClearTimer(RetryTimerHandle);
+        if (UMyGameInstance* GI = Cast<UMyGameInstance>(World->GetGameInstance()))
+        {
+            if (ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>())
+            {
+                LocSys->OnLocaleChanged.RemoveDynamic(this, &UNPCNameplateComponent::HandleLocaleChanged);
+            }
+        }
     }
     if (UNameplateManager* Mgr = ResolveNameplateManager())
     {
@@ -127,5 +145,13 @@ UNameplateManager* UNPCNameplateComponent::ResolveNameplateManager() const
         }
     }
     return nullptr;
+}
+
+void UNPCNameplateComponent::HandleLocaleChanged(const FString& NewLocale)
+{
+    if (bInitialised)
+    {
+        InitialiseFromNPCData(CachedNPCData, true);
+    }
 }
 

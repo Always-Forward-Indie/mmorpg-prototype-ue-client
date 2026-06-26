@@ -294,6 +294,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "MOB")
 	void ForceUpdateUI();
 
+	UFUNCTION()
+	void HandleLocaleChanged(const FString& NewLocale);
+
 	// Initialize UI with delay
 	UFUNCTION()
 	void InitializeUIDelayed();

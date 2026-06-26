@@ -53,6 +53,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Dropped Item")
 	bool CanBePickedUp() const { return ItemData.canBePickedUp; }
 
+	void SetCanBePickedUp(bool bCanPickup) { ItemData.canBePickedUp = bCanPickup; }
+
 	// Get the item name for UI display
 	UFUNCTION(BlueprintCallable, Category = "Dropped Item")
 	FString GetItemName() const { return ItemData.item.name; }
@@ -119,7 +121,7 @@ protected:
 
 	// The radius within which the item can be picked up
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dropped Item")
-	float PickupRadius = 200.0f;
+	float PickupRadius = 180.0f;
 
 	// Drop animation parameters
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")

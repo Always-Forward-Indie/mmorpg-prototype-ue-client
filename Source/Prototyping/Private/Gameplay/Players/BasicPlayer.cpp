@@ -28,6 +28,7 @@
 #include "Gameplay/Equipment/EquipmentVisualComponent.h"
 #include "Gameplay/Players/CosmeticVisualComponent.h"
 #include "Gameplay/Items/ItemManager.h"
+#include "Services/LocalizationSubsystem.h"
 #include "Data/ItemStruct.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Gameplay/Repair/RepairManager.h"
@@ -85,6 +86,7 @@ static EDamageType SchoolToDamageType(ESkillSchool School)
 void ABasicPlayer::OnAttackInput()
 {
     if (playerData.characterData.bIsDead) return;
+    if (bIsCasting || bIsPickingUp) return;
 
     // Toggle off auto-attack if it is already running on the locked target.
     if (LockedTarget && bIsAutoAttacking)
@@ -109,7 +111,7 @@ void ABasicPlayer::OnAttackInput()
 void ABasicPlayer::OnJumpPressed()
 {
     if (playerData.characterData.bIsDead) return;
-    if (bIsCasting) return;
+    if (bIsCasting || bIsPickingUp || bMovementLocked) return;
     Jump();
 }
 
@@ -820,11 +822,15 @@ void ABasicPlayer::LockMovementForPickup()
     // Stop any active approach/auto-attack so the player stands still
     StopAutoAttack();
 
-    if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
-    {
-        MoveComp->DisableMovement();
-    }
+    LockMovement();
     UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Movement locked for pickup"));
+
+    // Safety timeout: unlock movement after 5s even if the pickup chain fails
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().SetTimer(PickupSafetyTimerHandle, this,
+            &ABasicPlayer::UnlockMovementAfterPickup, 5.0f, false);
+    }
 }
 
 void ABasicPlayer::UnlockMovementAfterPickup()
@@ -832,11 +838,45 @@ void ABasicPlayer::UnlockMovementAfterPickup()
     if (!bIsPickingUp) return;
     bIsPickingUp = false;
 
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(PickupSafetyTimerHandle);
+    }
+
+    UnlockMovement();
+    UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Movement unlocked after pickup"));
+}
+
+void ABasicPlayer::LockMovement()
+{
     if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
     {
-        MoveComp->SetMovementMode(MOVE_Walking);
+        SavedMovementMode = MoveComp->MovementMode;
+
+        // Drain pending movement input so no residual acceleration carries over
+        ConsumeMovementInputVector();
+
+        // Zero horizontal velocity to stop any slide/drift immediately,
+        // but preserve Z so gravity-affected falling continues uninterrupted.
+        FVector Vel = MoveComp->Velocity;
+        Vel.X = 0.0f;
+        Vel.Y = 0.0f;
+        MoveComp->Velocity = Vel;
+        MoveComp->UpdateComponentVelocity();
     }
-    UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Movement unlocked after pickup"));
+    bMovementLocked = true;
+}
+
+void ABasicPlayer::UnlockMovement()
+{
+    bMovementLocked = false;
+    if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+    {
+        if (MoveComp->MovementMode != SavedMovementMode)
+        {
+            MoveComp->SetMovementMode(SavedMovementMode);
+        }
+    }
 }
 
 void ABasicPlayer::OnInventoryToggle()
@@ -1020,6 +1060,15 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
             EnhancedInputComponent->BindAction(ScrollAction, ETriggerEvent::Triggered, this, &ABasicPlayer::OnScroll);
         }
 
+        // Alt-cursor toggle.  In Editor/Development builds the Slate pre-input
+        // listener catches Alt first; in Shipping (where that API is unavailable)
+        // this Enhanced Input binding handles it directly.  The GFrameCounter
+        // guard in ToggleAltCursor prevents double-fire when both paths fire.
+        if (AltCursorAction)
+        {
+            EnhancedInputComponent->BindAction(AltCursorAction, ETriggerEvent::Started, this, &ABasicPlayer::OnAltCursorToggle);
+        }
+
         // bind start movement simulation
         EnhancedInputComponent->BindAction(StartMovementSimulationAction, ETriggerEvent::Triggered, this, &ABasicPlayer::StartMovementSimulation);
         // bind stop movement simulation
@@ -1104,12 +1153,6 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
         if (EquipmentAction)
         {
             EnhancedInputComponent->BindAction(EquipmentAction, ETriggerEvent::Started, this, &ABasicPlayer::OnEquipmentToggle);
-        }
-
-        // Alt-cursor: toggle mouse cursor on/off
-        if (AltCursorAction)
-        {
-            EnhancedInputComponent->BindAction(AltCursorAction, ETriggerEvent::Started, this, &ABasicPlayer::OnAltCursorToggle);
         }
 
         // Character stats window toggle
@@ -1315,6 +1358,12 @@ Super::BeginPlay();
 
 	UE_LOG(LogTemp, Warning, TEXT("Player Was Created"));
 
+	// Bind emote-ended delegate so movement unlocks when the emote finishes
+	if (!playerData.isOtherClient && EmoteComponent)
+	{
+		EmoteComponent->OnEmoteEnded.AddDynamic(this, &ABasicPlayer::HandleEmoteEnded);
+	}
+
 	// Initialize inventory manager for local player only
 	if (!playerData.isOtherClient && MyGameInstance)
 	{
@@ -1412,6 +1461,13 @@ Super::BeginPlay();
                         SkillManager->OnSkillCastConfirmed.AddDynamic(this, &ABasicPlayer::HandleSkillInitiatedForAutoAttack);
                     }
 					
+					// Pass input action references for data-driven pre-input handling
+					// Must happen BEFORE Initialize so the listener never sees a null action.
+					UIManager->SetAltCursorAction(AltCursorAction);
+
+					// Register the Slate pre-input listener for Alt key (data-driven via QueryKeysMappedToAction).
+					UIManager->RegisterPreInputListener();
+
 					// Initialize UIManager with all managers
 					UIManager->Initialize(InventoryManager, HarvestManager, ExperienceManager, SkillManager);
 					
@@ -1671,17 +1727,27 @@ void ABasicPlayer::HandleChatMessageForBubble(const FChatMessageStruct& Message)
 void ABasicPlayer::HandleTitlesUpdated(const FPlayerTitlesState& State)
 {
     // Push the currently-equipped title name to this actor's nameplate.
-    // The display name is empty when no title is equipped → nameplate hides the title row.
+    // Resolve the localized FText from the slug first; fall back to server-provided name.
     if (NameplateComponent)
     {
-        NameplateComponent->UpdateTitle(State.equippedTitle.displayName);
+        FText TitleText;
+        if (!State.equippedTitle.slug.IsEmpty() && MyGameInstance)
+        {
+            if (const ULocalizationSubsystem* Loc = MyGameInstance->GetSubsystem<ULocalizationSubsystem>())
+            {
+                TitleText = Loc->GetTitleDisplayName(State.equippedTitle.slug);
+            }
+        }
+        if (TitleText.IsEmpty() && !State.equippedTitle.displayName.IsEmpty())
+        {
+            TitleText = FText::FromString(State.equippedTitle.displayName);
+        }
+        NameplateComponent->UpdateTitle(TitleText);
     }
 }
 
-void ABasicPlayer::SetEquippedTitle(const FString& TitleDisplayName)
+void ABasicPlayer::SetEquippedTitle(const FText& TitleDisplayName)
 {
-    // Called by SpawnPlayerForClient (or a future title-broadcast handler) to set the
-    // initial / updated title for a remote player's nameplate.
     if (NameplateComponent)
     {
         NameplateComponent->UpdateTitle(TitleDisplayName);
@@ -1785,6 +1851,11 @@ void ABasicPlayer::DispatchCursorSelect(AActor* Target, EInteractableType Type)
         return;
     }
 
+    if (playerData.characterData.bIsDead)
+    {
+        return;
+    }
+
     switch (Type)
     {
     case EInteractableType::MOB_Alive:
@@ -1820,6 +1891,11 @@ void ABasicPlayer::DispatchCursorSelect(AActor* Target, EInteractableType Type)
 void ABasicPlayer::DispatchCursorInteract(AActor* Target, EInteractableType Type)
 {
     if (!Target) return;
+
+    if (playerData.characterData.bIsDead)
+    {
+        return;
+    }
 
     const float Range = GetInteractionRange();
 
@@ -2191,6 +2267,11 @@ void ABasicPlayer::Tick(float DeltaTime)
 		UpdateCurrentPlayerMovement(DeltaTime);
         // Smoothly rotate mesh toward DesiredMeshYaw
         UpdateMeshRotation(DeltaTime);
+        // Continuously face the locked target during casting so we track a moving mob
+        if (bIsCasting && LockedTarget && !LockedTarget->GetMOBIsDead())
+        {
+            FaceLockedTarget();
+        }
         // Drive approach movement every frame so CharacterMovementComponent gets
         // AddMovementInput on the same frame it is consumed пїЅ no more 1mm jitter.
         UpdateApproach(DeltaTime);
@@ -2268,7 +2349,34 @@ void ABasicPlayer::Tick(float DeltaTime)
 void ABasicPlayer::Move(const FInputActionValue& Value)
 {
     if (Controller == nullptr) return;
+    if (playerData.characterData.bIsDead) return;
     if (bIsCasting) return;
+    if (bIsPickingUp) return;
+
+    // Block movement input while playing an emote.  NotifyMovementStarted will
+    // interrupt the emote on the first input frame, then UnlockMovement fires
+    // via HandleEmoteEnded on the next frame.
+    if (EmoteComponent && EmoteComponent->IsPlayingEmote())
+    {
+        EmoteComponent->NotifyMovementStarted();
+        return;
+    }
+
+    if (bMovementLocked) return;
+
+    // Block movement while an attack animation is playing.  The current attack
+    // animation must complete before the player can move or start a new action.
+    // Future auto-attack timer is cancelled here so the attack loop does not
+    // restart after this animation finishes and re-lock movement.
+    if (UPlayerAnimInstance* AnimInst = GetPlayerAnimInstance())
+    {
+        if (AnimInst->bIsAttacking)
+        {
+            if (bIsAutoAttacking) StopAutoAttack();
+            bHasDesiredMeshYaw = false;
+            return;
+        }
+    }
 
     // Cancel WIO channel on any movement input
     CancelWIOChannelIfActive();
@@ -2285,15 +2393,26 @@ void ABasicPlayer::Move(const FInputActionValue& Value)
         {
             UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Auto-attack interrupted by manual movement"));
             StopAutoAttack();
+            // Clear combat-facing rotation so the character doesn't run sideways
+            // toward the former locked target when the player moves manually.
+            bHasDesiredMeshYaw = false;
         }
     }
 
     const FVector2D MoveValue = Value.Get<FVector2D>(); // NOT normalized пїЅ keep X/Y separate
     const float CameraYaw = Controller->GetControlRotation().Yaw;
 
-    if (bIsRightMouseDown)
+    // Use camera-relative movement when cursor is hidden (free-look mode),
+    // even without RMB held.  This prevents stutter from mesh rotation lag
+    // when press/release RMB toggles between mesh- and camera-relative modes.
+    APlayerController* MovePC = Cast<APlayerController>(Controller);
+    const bool bFreeLookMove = bIsRightMouseDown
+        || (MovePC && !MovePC->bShowMouseCursor
+            && !(UIManager && UIManager->HasUIWindowOpen()));
+
+    if (bFreeLookMove)
     {
-        // RMB mode: movement is relative to camera (W/S forward/back, A/D strafe)
+        // Camera-relative: W/S forward/back, A/D strafe
         const FRotator ControlYaw(0, CameraYaw, 0);
         const FVector Forward = ControlYaw.RotateVector(FVector::ForwardVector);
         const FVector Right   = ControlYaw.RotateVector(FVector::RightVector);
@@ -2313,7 +2432,7 @@ void ABasicPlayer::Move(const FInputActionValue& Value)
     }
     else
     {
-        // Strafing mode (no RMB): W/S move by mesh facing, A/D strafe left/right
+        // Strafing mode (no RMB, cursor visible): W/S move by mesh facing, A/D strafe left/right
         if (!FMath::IsNearlyZero(MoveValue.Y))
         {
             const FVector MeshForward = GetActorForwardVector();
@@ -2341,8 +2460,23 @@ void ABasicPlayer::Look(const FInputActionValue& Value)
     // UNLESS the cursor is hidden and no UI window is open (free-look mode).
     if (!bIsRightMouseDown && !bIsLeftMouseDown && !bFreeLook) return;
 
-    // Dead players cannot rotate — the corpse must stay still.
-    if (playerData.characterData.bIsDead) return;
+    // Dead players: allow camera look-around but keep the corpse mesh stationary.
+    if (playerData.characterData.bIsDead)
+    {
+        if (Controller != nullptr)
+        {
+            const FVector2D LookValue = Value.Get<FVector2D>();
+            if (!FMath::IsNearlyZero(LookValue.X))
+            {
+                AddControllerYawInput(LookValue.X * CameraYawSensitivity);
+            }
+            if (!FMath::IsNearlyZero(LookValue.Y))
+            {
+                AddControllerPitchInput(LookValue.Y * -CameraPitchSensitivity);
+            }
+        }
+        return;
+    }
 
     // Do not rotate the camera while the cursor is over a Visible UI element
     if (IsUIBlockingInteraction()) return;
@@ -2389,8 +2523,9 @@ void ABasicPlayer::Look(const FInputActionValue& Value)
             // toward the target until the animation finishes.
             if (bIsRightMouseDown || bFreeLook)
             {
-                const bool bAnimLocked = MyGameInstance && MyGameInstance->GetPlayerSkillManager()
-                    && MyGameInstance->GetPlayerSkillManager()->IsSkillAnimationPlaying();
+                const bool bAnimLocked = (MyGameInstance && MyGameInstance->GetPlayerSkillManager()
+                    && MyGameInstance->GetPlayerSkillManager()->IsSkillAnimationPlaying())
+                    || bMovementLocked;  // lock rotation during harvest/pickup/emotes
                 if (!bAnimLocked)
                 {
                     DesiredMeshYaw = Controller->GetControlRotation().Yaw;
@@ -2408,6 +2543,8 @@ void ABasicPlayer::Look(const FInputActionValue& Value)
 
 void ABasicPlayer::OnRightMousePressed()
 {
+    if (playerData.characterData.bIsDead) return;
+
     bIsRightMouseDown = true;
     ApplyMouseCaptureIfNoUIOpen();
 
@@ -2492,29 +2629,52 @@ void ABasicPlayer::OnScroll(const FInputActionValue& Value)
 
 void ABasicPlayer::ApplyMouseCaptureIfNoUIOpen()
 {
-    // Don't capture the mouse if any UI window is open - the player needs
-    // the cursor to interact with inventory, vendor, etc.
     if (UIManager && UIManager->HasUIWindowOpen()) return;
 
     if (APlayerController* PC = Cast<APlayerController>(GetController()))
     {
+        const bool bWasCursorVisible = PC->bShowMouseCursor;
         PC->bShowMouseCursor = false;
-        PC->SetInputMode(FInputModeGameOnly());
+
+        if (bWasCursorVisible && !(UIManager && UIManager->GetAltCursorActive()))
+        {
+            PC->SetInputMode(FInputModeGameOnly());
+        }
     }
 }
 
 void ABasicPlayer::RestoreCursorToUIManager()
 {
-    // Hand cursor and input mode back to UIManager so it re-applies
-    // its own state (show if any window is open, hide otherwise).
-    if (UIManager)
+    APlayerController* PC = Cast<APlayerController>(GetController());
+
+    if (UIManager && PC)
     {
+        // When Alt cursor mode is active and no UI windows are open, the input
+        // mode is already GameAndUI (set when Alt was toggled).  Just show the
+        // cursor without calling UpdateCursorAndInputMode() — a redundant
+        // SetInputMode() triggers Slate focus re-evaluation that drops 1+ frames
+        // of input, causing movement stutter during RMB cycles.
+        if (!UIManager->HasUIWindowOpen() && UIManager->GetAltCursorActive())
+        {
+            PC->bShowMouseCursor = true;
+            return;
+        }
+
+        // Cursor already hidden and should stay hidden (no UI, no Alt active).
+        // Skip UpdateCursorAndInputMode entirely to avoid ClearKeyboardFocus +
+        // SetAllUserFocusToGameViewport spam on every RMB release, which was
+        // causing movement stutter during rapid RMB cycles.
+        if (!PC->bShowMouseCursor && !UIManager->ShouldShowCursor())
+        {
+            return;
+        }
+
         UIManager->UpdateCursorAndInputMode();
         return;
     }
 
     // Fallback if UIManager is not available
-    if (APlayerController* PC = Cast<APlayerController>(GetController()))
+    if (PC)
     {
         PC->bShowMouseCursor = true;
         PC->SetInputMode(FInputModeGameAndUI());
@@ -2523,6 +2683,7 @@ void ABasicPlayer::RestoreCursorToUIManager()
 
 void ABasicPlayer::UpdateMeshRotation(float DeltaTime)
 {
+    if (playerData.characterData.bIsDead) return;
     if (!bHasDesiredMeshYaw) return;
 
     const FRotator Current = GetActorRotation();
@@ -2550,9 +2711,19 @@ void ABasicPlayer::HandleMouseButtonsMoveForward()
 {
     if (!bEnableMouseButtonsMoveForward) return;
     if (!bIsLeftMouseDown || !bIsRightMouseDown) return;
-    if (playerData.characterData.bIsDead || bIsPickingUp || bIsCasting) return;
+    if (playerData.characterData.bIsDead || bIsPickingUp || bIsCasting || bMovementLocked) return;
+    if (EmoteComponent && EmoteComponent->IsPlayingEmote()) return;
     if (UIManager && UIManager->HasUIWindowOpen()) return;
     if (!Controller) return;
+
+    // Blend out of any lingering skill animation (same as Move())
+    if (UPlayerAnimInstance* AnimInst = GetPlayerAnimInstance())
+    {
+        if (AnimInst->bIsAttacking)
+        {
+            AnimInst->StopCurrentAttack(0.15f);
+        }
+    }
 
     if (bIsAutoAttacking || bIsApproachingTarget)
     {
@@ -3545,6 +3716,7 @@ void ABasicPlayer::OnInteractInput()
 		{
 			if (ABasicMOB* Corpse = HMgr->GetNearestHarvestableCorpse(HMgr->GetMaxHarvestDistance()))
 			{
+				SetLockedTarget(Corpse);  // face the corpse before harvesting
 				HMgr->TryHarvestSpecificCorpse(Corpse);
 				return;
 			}
@@ -3945,6 +4117,11 @@ void ABasicPlayer::OnDeath_Implementation()
     bIsPickingUp = false;
     bIsCasting   = false;
 
+    // Stop the cast bar immediately — cancel the timer and hide the widget.
+    // The cast bar widget has its own bIsCasting flag, so just clearing
+    // ABasicPlayer::bIsCasting is insufficient.
+    HideCastBar_Implementation();
+
     // Play death sound
     if (const FEntityAudioProfile* Profile = GetAudioProfile())
     {
@@ -3962,6 +4139,7 @@ void ABasicPlayer::OnDeath_Implementation()
     // is already true, so Look() guards against any stray events as well.
     bIsRightMouseDown = false;
     bIsLeftMouseDown  = false;
+    bHasDesiredMeshYaw = false;
     RestoreCursorToUIManager();
 
     // Drive the AnimBP death state
@@ -4717,6 +4895,7 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 	if (playerData.isOtherClient && NameplateComponent)
 	{
 		NameplateComponent->UpdateHealth(StatsUpdate.healthCurrent, StatsUpdate.healthMax);
+		NameplateComponent->UpdateLevel(StatsUpdate.level);
 	}
 
 	// Refresh the HP/MP HUD
@@ -4832,6 +5011,10 @@ void ABasicPlayer::HandleStatsManagerUpdate(const FPlayerStatsUpdateStruct& NewS
 	// Only handle updates for the local player and for our own character.
 	if (playerData.isOtherClient) return;
 	if (NewStats.characterId != playerData.characterData.characterId) return;
+
+	// If the player is dead, don't update vitals — regen ticks from the server
+	// would show HP refilling on the death screen and break the bIsDead contract.
+	if (playerData.characterData.bIsDead) return;
 
 	// Capture current vitals before the update so we can compute deltas.
 	// Use LastPreUpdate values when available (saved by ProcessStatsUpdate before
@@ -5184,8 +5367,8 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
                     if (IsValid(TargetActor) && SwingSeconds > 0.001f)
                     {
                         const float Dist = FVector::Dist(SpawnLoc, TargetActor->GetActorLocation());
-                        CalcSpeed = Dist / SwingSeconds;
-                        UE_LOG(LogTemp, Log, TEXT("[PlayerAnim] CastRelease: dist=%.0f swing=%.3fs в†’ projectile speed=%.0f"),
+                        CalcSpeed = FMath::Min(Dist / SwingSeconds, 2500.0f);
+                        UE_LOG(LogTemp, Log, TEXT("[PlayerAnim] CastRelease: dist=%.0f swing=%.3fs \xe2\u2020\u2019 projectile speed=%.0f"),
                             Dist, SwingSeconds, CalcSpeed);
                     }
                     Proj->SetupProjectile(ActiveAnimSkillSlug, GetActorId_Implementation(), TargetActor, CalcSpeed);
@@ -5217,12 +5400,9 @@ void ABasicPlayer::ShowCastBar_Implementation(float CastTime, const FString& Ski
 
     // Stop any ongoing approach / auto-attack and freeze the character
     StopAutoAttack();
-    if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
-    {
-        MoveComp->DisableMovement();
-    }
+    LockMovement();
 
-    // Gameplay timer вЂ” unlocks movement after CastTime regardless of UI state.
+    // Gameplay timer �\x80\x94 unlocks movement after CastTime regardless of UI state.
     // This is the authoritative unlock path; HideCastBar_Implementation (called
     // by the server on interrupt/cancel) cancels this timer.
     if (CastTime > 0.0f && GetWorld())
@@ -5260,10 +5440,7 @@ void ABasicPlayer::HideCastBar_Implementation()
     if (bIsCasting)
     {
         bIsCasting = false;
-        if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
-        {
-            MoveComp->SetMovementMode(MOVE_Walking);
-        }
+        UnlockMovement();
     }
 
     if (UIManager)
@@ -5294,7 +5471,19 @@ void ABasicPlayer::PlayEmoteForCharacter(const FString& EmoteSlug, const FString
 {
     if (EmoteComponent)
     {
+        if (!playerData.isOtherClient)
+        {
+            LockMovement();
+        }
         EmoteComponent->PlayEmoteBySlug(EmoteSlug, AnimationName);
+    }
+}
+
+void ABasicPlayer::HandleEmoteEnded(const FString& EmoteSlug)
+{
+    if (!playerData.isOtherClient)
+    {
+        UnlockMovement();
     }
 }
 

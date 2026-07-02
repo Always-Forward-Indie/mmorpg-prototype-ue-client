@@ -131,6 +131,11 @@ void UQuestRewardRowWidget::LoadItemIcon(const FString& ItemSlug)
 
     TWeakObjectPtr<UQuestRewardRowWidget> WeakThis = this;
     TSoftObjectPtr<UTexture2D> IconSoftPtr = VisualData.Icon;
+
+    // Hide the icon while the async load completes — prevents a white flash
+    // when the default empty brush renders before the texture arrives.
+    Reward_Icon->SetVisibility(ESlateVisibility::Collapsed);
+
     AsyncLoad(IconSoftPtr.ToSoftObjectPath(),
         FStreamableDelegate::CreateLambda([WeakThis, IconSoftPtr]()
         {

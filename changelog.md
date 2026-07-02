@@ -256,3 +256,41 @@ Config: server_config.json back to localhost (127.0.0.1). DefaultGame.ini: Prere
 Data assets: DT_Skills expanded (8→26 KB). ItemsData, MobsData, DT_Effects, DT_Emotes updated. BP_MyGameInstance, WBP_LanguageSettingsWidget, WBP_GameMenuBar, WBP_MobTarget, WBP_PlayerNameplate, WBP_EmoteItem, WBP_Emotes, W_SkillSlot Blueprint updates. WorldMapV1 cell data updated.
 
 ===========
+
+v0.1.4
+02.07.2026
+==========
+
+2026-07-02
+----------
+**Harvest animation system:** LockPlayerMovement/UnlockPlayerMovement с серверной длительностью; анимация сбора отображается на всех клиентах (remote players).
+
+**Inventory & Items:** Instance-based id для предметов вместо itemId; сбор трупа блокирует пикап; itemRemove event для серверной очистки устаревших дропов; pickup failure "non-existent" → clean up вместо re-enable.
+
+**Player movement overhaul:** Универсальный LockMovement/UnlockMovement (сохраняет/восстанавливает MovementMode); движение блокируется во время эмоций, атаки, сбора, каста; мёртвые игроки могут вращать камеру; Free-look перемещение при скрытом курсоре; движение лицом к цели во время каста; Enter → чат во время смерти.
+
+**Cooldown system:** Дублирование скилов на панели теперь очищает старый слот; авто-конвертация server-clock кулдаунов в world-time при потере time-sync; GCD переведён на world-time; принудительная конвертация при возврате фокуса окна.
+
+**Combat:** Блокировка harmful скилов по мёртвой цели; heal/buff/teleport пропускаются; grace window 5 сек после респавна (защита от stale death); projectile radius 30→60, homing acceleration = speed×5, proximity force-hit 200u.
+
+**Effects & Stats:** Merge partial effect packets (полные заменяют, частичные мержат по slug); characterId в ExperienceGainEvent; блок реген-тиков для мёртвых игроков; respawnResult обработка ошибок + force-revive при desync.
+
+**Localization 2.0:** Mastery + Effect локализация (новые DataStructs, таблицы, Subsystem методы). Во всех UI виджетах эффекты, мастерство, названия титулов теперь показываются локализованно. Live-refresh на смену языка в PlayerStatsWidget. LocalizationDataAsset: TSoftObjectPtr→TObjectPtr (без LoadSynchronous).
+
+**UI improvements:**
+- Quantity/DropQuantity popup: +/-/Max кнопки, фильтр ввода (только цифры, макс 3 символа), клик вне попапа закрывает.
+- DeathScreen: SelfHitTestInvisible (клики проходят сквозь), Enter→чат, safety timeout на кнопку респавна.
+- ItemActionMenuWidget: поддержка Blueprint-кастомных ActionRowWidget.
+- ItemTooltip: KillCountWidgetClass, AttributeTextWidgetClass теперь UserWidget.
+- BestiaryTierRow: ContentRowClass поддержка.
+- SkillSlot/SkillBar: StuckDragStartTime watchdog, OwnerBar для очистки highlight, ForceResetDragState.
+- DragDrop: никогда не использовать source widget как drag visual (fix flicker).
+- Nameplates: отображение уровня, FText для титулов.
+- Inventory: серверный maxWeight из PlayerStatsManager.
+- QuestRewardRow: скрытие иконки при асинхронной загрузке (fix белой вспышки).
+
+**Infrastructure:** OnApplicationReactivated (принудительный time-sync + конвертация кулдаунов); возврат в лобби очищает skill data; AudioSpawnHelpers с MaxAudibleDistance (3000cm gate); DefaultGame.ini — CulturesToStage, DirectoriesToAlwaysCook; JSONParser camelCase isEquipped; EffectDefinitionTable очищен от текстовых полей (теперь в локализации).
+
+**New assets:** WBP_TierItemDataRow, WBP_ItemActionRow, WBP_ItemDataRow, DT_EffectsLocale, FX (M_Loot_Beam_Sprite, M_Loot_Spark, NS_Corpse_Lootable, NS_Loot_Idle, NS_Loot_Pickup), Mastery/ директория.
+
+==========

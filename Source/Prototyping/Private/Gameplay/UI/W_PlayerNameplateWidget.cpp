@@ -125,7 +125,23 @@ void UW_PlayerNameplateWidget::SetDeadState(bool bNewDead)
     }
 }
 
-void UW_PlayerNameplateWidget::SetTitle(const FString& InTitle)
+void UW_PlayerNameplateWidget::SetPlayerLevel(int32 InLevel)
+{
+    if (!PlayerLevelText) return;
+
+    if (InLevel > 0)
+    {
+        FString LevelLabel = LevelFormat.Replace(TEXT("{0}"), *FString::FromInt(InLevel));
+        PlayerLevelText->SetText(FText::FromString(LevelLabel));
+        PlayerLevelText->SetVisibility(ESlateVisibility::HitTestInvisible);
+    }
+    else
+    {
+        PlayerLevelText->SetVisibility(ESlateVisibility::Collapsed);
+    }
+}
+
+void UW_PlayerNameplateWidget::SetTitle(const FText& InTitle)
 {
     if (!TitleText) return;
 
@@ -135,7 +151,7 @@ void UW_PlayerNameplateWidget::SetTitle(const FString& InTitle)
     }
     else
     {
-        TitleText->SetText(FText::FromString(InTitle));
+        TitleText->SetText(InTitle);
         TitleText->SetVisibility(ESlateVisibility::HitTestInvisible);
     }
 }

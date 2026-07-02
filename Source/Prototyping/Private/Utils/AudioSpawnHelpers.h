@@ -4,6 +4,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Components/AudioComponent.h"
 #include "Sound/SoundAttenuation.h"
+#include "GameFramework/PlayerController.h"
 
 /**
  * Spawn a one-shot SFX with SoundClassOverride set BEFORE Play() is called.
@@ -12,12 +13,34 @@
  *
  * Shared between BasicPlayer.cpp and BasicMOB.cpp.
  * Declared inline to avoid ODR violations when both TUs end up in the same unity file.
+ *
+ * @param MaxAudibleDistance  Sounds beyond this distance from the local player (cm)
+ *                            are silently skipped. 0 = no distance check.
  */
 inline UAudioComponent* SpawnSFXAttached(AActor* Owner, USoundBase* Sound,
     const FVector& WorldLocation, float VolumeMultiplier = 1.0f,
-    USoundAttenuation* AttenuationSettings = nullptr)
+    USoundAttenuation* AttenuationSettings = nullptr,
+    float MaxAudibleDistance = 3000.0f)
 {
     if (!Owner || !Sound) { return nullptr; }
+
+    // Distance gate: skip sounds from actors too far from the local player.
+    // This prevents hearing mob combat audio from across the entire map.
+    if (MaxAudibleDistance > 0.0f && Owner->GetWorld())
+    {
+        if (APlayerController* PC = Owner->GetWorld()->GetFirstPlayerController())
+        {
+            if (APawn* Pawn = PC->GetPawn())
+            {
+                const float Dist = FVector::Dist(Pawn->GetActorLocation(), WorldLocation);
+                if (Dist > MaxAudibleDistance)
+                {
+                    return nullptr;
+                }
+            }
+        }
+    }
+
     USoundClass* SFXClass = nullptr;
     if (UMyGameInstance* GI = Cast<UMyGameInstance>(Owner->GetGameInstance()))
     {

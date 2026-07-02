@@ -5,6 +5,7 @@
 #include "Components/Border.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "UObject/SoftObjectPath.h"
+#include "Services/LocalizationSubsystem.h"
 
 void UEffectSlotWidget::NativeConstruct()
 {
@@ -182,17 +183,35 @@ void UEffectSlotWidget::BuildTooltip()
             if (UTextBlock* TitleText =
                     Cast<UTextBlock>(TooltipWidget->GetWidgetFromName(TEXT("Tooltip_Title"))))
             {
-                TitleText->SetText(bHasDefinition
-                    ? CachedDefinition.DisplayName
-                    : FText::FromString(CachedEffect.slug));
+                FText Title;
+                // 1. LocalizationSubsystem (per-language)
+                if (UGameInstance* GI = GetGameInstance())
+                {
+                    if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+                    {
+                        Title = Loc->GetEffectDisplayName(CachedEffect.slug);
+                    }
+                }
+                // 2. Raw slug fallback
+                if (Title.IsEmpty())
+                    Title = FText::FromString(CachedEffect.slug);
+                TitleText->SetText(Title);
             }
 
             if (UTextBlock* DescText =
                     Cast<UTextBlock>(TooltipWidget->GetWidgetFromName(TEXT("Tooltip_Description"))))
             {
                 FString Desc;
-                if (bHasDefinition && !CachedDefinition.Description.IsEmpty())
-                    Desc = CachedDefinition.Description.ToString();
+                // 1. LocalizationSubsystem (per-language)
+                if (UGameInstance* GI = GetGameInstance())
+                {
+                    if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+                    {
+                        const FText LocDesc = Loc->GetEffectDescription(CachedEffect.slug);
+                        if (!LocDesc.IsEmpty())
+                            Desc = LocDesc.ToString();
+                    }
+                }
 
                 const FString ModStr = BuildModifiersString();
                 if (!ModStr.IsEmpty())
@@ -217,13 +236,27 @@ void UEffectSlotWidget::BuildTooltip()
     else
     {
         // Simple text tooltip as fallback
-        const FText Title = bHasDefinition
-            ? CachedDefinition.DisplayName
-            : FText::FromString(CachedEffect.slug);
+        FText Title;
+        if (UGameInstance* GI = GetGameInstance())
+        {
+            if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+            {
+                Title = Loc->GetEffectDisplayName(CachedEffect.slug);
+            }
+        }
+        if (Title.IsEmpty())
+            Title = FText::FromString(CachedEffect.slug);
 
         FString DescStr;
-        if (bHasDefinition && !CachedDefinition.Description.IsEmpty())
-            DescStr = CachedDefinition.Description.ToString();
+        if (UGameInstance* GI = GetGameInstance())
+        {
+            if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+            {
+                const FText LocDesc = Loc->GetEffectDescription(CachedEffect.slug);
+                if (!LocDesc.IsEmpty())
+                    DescStr = LocDesc.ToString();
+            }
+        }
 
         const FString ModStr = BuildModifiersString();
         if (!ModStr.IsEmpty())

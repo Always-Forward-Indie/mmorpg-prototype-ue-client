@@ -57,12 +57,27 @@ void UPlayerStatsManager::ApplyStatsUpdate(const FPlayerStatsUpdateStruct& InSta
         }
     }
 
-    // Replace effects when a full packet arrives (bHasAttributes) OR when a focused
-    // effects-only packet arrives.  Using "bHasAttributes || bHasEffects" ensures that
-    // an explicit empty activeEffects array (e.g. after removing the last title/buff)
-    // correctly clears the cached list on the next full stats_update.
-    if (bHasAttributes || bHasEffects)
+    // Full packets (bHasAttributes): replace activeEffects entirely. The server's
+    // buildStatsUpdatePacket always reads characterData.activeEffects and includes
+    // ALL effects — mastery milestones, title bonuses, buffs, etc. Replacing here
+    // correctly removes effects that were stripped on the server (e.g. unequipping
+    // a title, expiring a buff).
+    //
+    // Partial packets (bHasEffects only, no attributes): merge by slug so a later
+    // partial update doesn't wipe effects from an earlier, more-complete snapshot.
+    if (bHasAttributes)
+    {
         CachedStats.activeEffects = InStats.activeEffects;
+    }
+    else if (bHasEffects)
+    {
+        TMap<FString, FActiveEffectEntry> Merged;
+        for (const FActiveEffectEntry& E : CachedStats.activeEffects)
+            Merged.FindOrAdd(E.slug, E);
+        for (const FActiveEffectEntry& E : InStats.activeEffects)
+            Merged.FindOrAdd(E.slug) = E;
+        Merged.GenerateValueArray(CachedStats.activeEffects);
+    }
 
     if (bHasWeight)
     {

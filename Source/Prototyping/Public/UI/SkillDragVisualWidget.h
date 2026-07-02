@@ -22,19 +22,24 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Skill Drag Visual")
     void SetSkillData(const FPlayerSkillData& SkillData);
 
+    // Build the widget tree (RootSize -> SkillIcon) immediately, before
+    // NativeConstruct runs. Required when this widget is used as a
+    // UDragDropOperation::DefaultDragVisual: the drag system calls TakeWidget() to
+    // snapshot the Slate widget BEFORE NativeConstruct fires, so a WidgetTree built in
+    // NativeConstruct would be snapshotted as empty and nothing would render under the
+    // cursor. Calling BuildComponentsOnce() right after CreateWidget() ensures the tree
+    // exists at snapshot time. The internal guard prevents double-building if
+    // NativeConstruct subsequently runs (normal AddToViewport use case).
+    UFUNCTION(BlueprintCallable, Category = "Skill Drag Visual")
+    void BuildComponentsOnce();
+
 protected:
     // Native overrides
     virtual void NativeConstruct() override;
 
-    // Widget components (created programmatically in NativeConstruct)
+    // Widget component (created programmatically, fills the 80x80 root)
     UPROPERTY()
     class UImage* SkillIcon;
-
-    UPROPERTY()
-    class UTextBlock* SkillNameText;
-
-    UPROPERTY()
-    class UBorder* DragBorder;
 
 private:
     // Current skill data
@@ -50,4 +55,8 @@ private:
     // Internal methods
     void UpdateVisualDisplay();
     void CreateDragVisualComponents();
+
+    // Guard against double-building the widget tree. BuildComponentsOnce() sets this
+    // to true after the first build; NativeConstruct then skips rebuilding.
+    bool bComponentsCreated = false;
 };

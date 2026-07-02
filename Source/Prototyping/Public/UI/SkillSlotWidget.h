@@ -13,6 +13,7 @@
 // Forward declarations
 class UPlayerSkillManager;
 class USkillDragDropOperation;
+class USkillBarWidget;
 
 // Existing delegate declarations (keep original names)
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FSkillSlotClicked, int32, SlotIndex, const FString&, SkillSlug);
@@ -67,6 +68,18 @@ public:
     // Emergency state reset for stuck highlight issues
     UFUNCTION(BlueprintCallable, Category = "Skill Slot Widget")
     void ForceResetDragState();
+
+    // Set the owning SkillBarWidget so the slot can clear highlights on sibling
+    // slots when it receives DragEnter (prevents dual-slot glow during fast moves).
+    // Defined out-of-line because OwnerBar is a TWeakObjectPtr<USkillBarWidget> and
+    // the assignment requires the full USkillBarWidget definition (only available in
+    // the .cpp, which includes SkillBarWidget.h). Keeping it inline in the header
+    // forces every TU that includes SkillSlotWidget.h to also pull in
+    // SkillBarWidget.h, which is a circular include (SkillBarWidget.h includes this
+    // header), so the out-of-line definition breaks the cycle.
+    void SetOwnerBar(USkillBarWidget* InOwnerBar);
+
+    bool IsDropHighlighted() const { return bIsDropHighlighted; }
 
     // Events
     UPROPERTY(BlueprintAssignable, Category = "Skill Slot Widget")
@@ -186,6 +199,12 @@ private:
     mutable bool bCachedCanAccept = false;
     mutable bool bCacheValid = false;
 
+    // Watchdog: timestamp when bIsDragging was last set to true, used to detect stuck drags
+    float StuckDragStartTime = 0.0f;
+
+    // Weak reference to the owning SkillBarWidget, used to clear sibling highlights.
+    TWeakObjectPtr<USkillBarWidget> OwnerBar;
+
     // Visual settings
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot Widget", meta = (AllowPrivateAccess = "true"))
     UTexture2D* DefaultSkillIcon;
@@ -202,7 +221,7 @@ private:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot Widget", meta = (AllowPrivateAccess = "true"))
     FLinearColor HighlightColor = FLinearColor::Yellow;
 
-    // Color for drop-target highlighting — light cyan so it's clearly readable without being toxic
+    // Color for drop-target highlighting ï¿½ light cyan so it's clearly readable without being toxic
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Slot Widget", meta = (AllowPrivateAccess = "true"))
     FLinearColor DropHighlightColor = FLinearColor(0.2f, 0.85f, 1.0f, 1.0f);
 

@@ -31,9 +31,18 @@ void UDamageEffectHandler::ProcessSkillResult_Implementation(const FSkillResultD
         ICombatable::Execute_GetCurrentHealth(TargetObject), SkillResult.finalTargetHealth,
         SkillResult.targetDied ? TEXT("YES") : TEXT("NO"));
 
+    // Skip HP/MP application when the skill failed with no effect (e.g. PvP blocked).
+    // The server leaves finalTargetHealth at 0 in these cases, which would kill the
+    // target client-side even though no damage was actually dealt.
+    const bool bFailedWithNoEffect = !SkillResult.success && SkillResult.damage == 0 && SkillResult.healing == 0;
+    if (bFailedWithNoEffect)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("DamageEffectHandler: Skipping HP/MP update — skill '%s' failed with no effect (reason: %s)"),
+            *SkillResult.skillName, *SkillResult.errorReason);
+    }
     // Apply HP/Mana changes for hits and blocks — skip only for misses
     // (server doesn't send finalTargetHealth for error/miss results)
-    if (!SkillResult.isMissed)
+    else if (!SkillResult.isMissed)
     {
         ICombatable::Execute_SetCurrentHealth(TargetObject, SkillResult.finalTargetHealth);
         if (SkillResult.finalTargetMana > 0)
@@ -80,6 +89,24 @@ void UDamageEffectHandler::ProcessSkillResult_Implementation(const FSkillResultD
     {
         if (SkillResult.targetDied || ICombatable::Execute_GetCurrentHealth(TargetObject) <= 0)
         {
+            // Grace window for players: ignore death within 5s of respawn to prevent
+            // a stale combatResult from re-killing a just-revived character.
+            if (ABasicPlayer* Player = Cast<ABasicPlayer>(TargetObject))
+            {
+                if (SkillResult.targetDied)
+                {
+                    const float TimeSinceRespawn = Player->GetLastRespawnWorldTime() > 0.f
+                        ? (Player->GetWorld() ? Player->GetWorld()->GetTimeSeconds() - Player->GetLastRespawnWorldTime() : 999.f)
+                        : 999.f;
+                    if (TimeSinceRespawn < 5.0f)
+                    {
+                        UE_LOG(LogTemp, Warning, TEXT("DamageEffectHandler: Ignoring targetDied for player %s - within respawn grace window (%.1fs)"),
+                            *GetNameSafe(TargetObject), TimeSinceRespawn);
+                        return;
+                    }
+                }
+            }
+
             UE_LOG(LogTemp, Warning, TEXT("DamageEffectHandler: Target %s is DEAD - calling SetDead(true)"), 
                 *GetNameSafe(TargetObject));
             // SetDead(true) already calls OnDeath internally � do NOT call OnDeath separately.

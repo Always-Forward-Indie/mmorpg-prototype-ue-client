@@ -22,7 +22,7 @@ ABaseMMOProjectile::ABaseMMOProjectile()
 
     // ---- Collision sphere ------------------------------------------------
     CollisionSphere = CreateDefaultSubobject<USphereComponent>(TEXT("CollisionSphere"));
-    CollisionSphere->InitSphereRadius(30.0f);
+    CollisionSphere->InitSphereRadius(60.0f);
     CollisionSphere->SetCollisionProfileName(TEXT("OverlapAllDynamic"));
     CollisionSphere->SetGenerateOverlapEvents(true);
     RootComponent = CollisionSphere;
@@ -121,6 +121,14 @@ void ABaseMMOProjectile::SetupProjectile(const FString& InSkillSlug, int32 InCas
     ProjectileMovement->InitialSpeed = UseSpeed;
     ProjectileMovement->MaxSpeed     = UseSpeed;
 
+    // Scale homing acceleration with speed so the turn radius stays compact even at
+    // high velocities.  At 2500 u/s the turn radius is 2500²/12500 = 500 units,
+    // well within the 60-unit sphere + target capsule overlap envelope.
+    if (ProjectileMovement->bIsHomingProjectile)
+    {
+        ProjectileMovement->HomingAccelerationMagnitude = FMath::Max(6000.0f, UseSpeed * 5.0f);
+    }
+
     // Look up skill definition for trail + flight sound
     UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
     if (!GI) return;
@@ -162,6 +170,24 @@ void ABaseMMOProjectile::SetupProjectile(const FString& InSkillSlug, int32 InCas
     // Doing this last prevents the frame-0 overlap that would fire
     // if the spawn location is inside a combatable's collision volume.
     CollisionSphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+
+    // Proximity fail-safe: if the projectile gets within 200 units of the target
+    // but the overlap never fires (orbiting / high-speed miss), force impact.
+    if (IsValid(InTarget) && GetWorld())
+    {
+        FTimerHandle ProximityCheckHandle;
+        GetWorld()->GetTimerManager().SetTimer(ProximityCheckHandle, [WeakSelf = TWeakObjectPtr<ABaseMMOProjectile>(this), WeakTarget = TWeakObjectPtr<AActor>(InTarget)]()
+        {
+            if (!WeakSelf.IsValid() || WeakSelf->IsPendingKillPending() || WeakSelf->bHasHit) return;
+            if (!WeakTarget.IsValid()) return;
+            const float Dist = FVector::Dist(WeakSelf->GetActorLocation(), WeakTarget->GetActorLocation());
+            if (Dist < 200.0f)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[Projectile] Proximity force-hit at dist=%.0f"), Dist);
+                WeakSelf->OnProjectileImpact(WeakSelf->GetActorLocation());
+            }
+        }, 0.1f, true);
+    }
 }
 
 void ABaseMMOProjectile::OnSphereBeginOverlap(UPrimitiveComponent* /*OverlappedComponent*/, AActor* OtherActor,

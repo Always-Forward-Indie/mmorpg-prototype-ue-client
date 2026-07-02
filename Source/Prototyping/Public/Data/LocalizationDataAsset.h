@@ -33,64 +33,76 @@ public:
 
     // Maps clientQuestKey ? FQuestDefinition
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Quests")
-    TSoftObjectPtr<UDataTable> QuestDefinitions;
+    TObjectPtr<UDataTable> QuestDefinitions;
 
     // Maps clientStepKey ? FQuestStepDefinition
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Quests")
-    TSoftObjectPtr<UDataTable> QuestStepDefinitions;
+    TObjectPtr<UDataTable> QuestStepDefinitions;
 
     // ?? Dialogue ?????????????????????????????????????????????????????????????
 
     // Maps clientNodeKey ? FDialogueNodeDefinition
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Dialogue")
-    TSoftObjectPtr<UDataTable> DialogueNodes;
+    TObjectPtr<UDataTable> DialogueNodes;
 
     // Maps clientChoiceKey ? FDialogueChoiceDefinition
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Dialogue")
-    TSoftObjectPtr<UDataTable> DialogueChoices;
+    TObjectPtr<UDataTable> DialogueChoices;
 
     // ?? Items ?????????????????????????????????????????????????????????????????
 
     // Maps item slug ? FItemLocaleDefinition  (name + description)
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Items")
-    TSoftObjectPtr<UDataTable> ItemLocale;
+    TObjectPtr<UDataTable> ItemLocale;
 
     // ?? Mobs ??????????????????????????????????????????????????????????????????
 
     // Maps mob slug ? FMobLocaleDefinition  (name + description + lore)
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Mobs")
-    TSoftObjectPtr<UDataTable> MobLocale;
+    TObjectPtr<UDataTable> MobLocale;
 
     // ?? Bestiary ??????????????????????????????????????????????????????????????
 
     // Maps categorySlug ? FBestiaryCategoryDefinition  (tab title + locked hint)
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Bestiary")
-    TSoftObjectPtr<UDataTable> BestiaryCategories;
+    TObjectPtr<UDataTable> BestiaryCategories;
 
     // ?? Zones ?????????????????????????????????????????????????????????????????
 
     // Maps zone slug ? FZoneLocaleDefinition  (zone name + description)
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Zones")
-    TSoftObjectPtr<UDataTable> ZoneLocale;
+    TObjectPtr<UDataTable> ZoneLocale;
 
     // ?? NPCs ???????????????????????????????????????????????????????????????????
 
     // Maps npc slug ? FNPCLocaleDefinition  (name + description)
     // Optional: if not assigned, NPC display names fall back to the raw slug.
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|NPCs")
-    TSoftObjectPtr<UDataTable> NPCLocale;
+    TObjectPtr<UDataTable> NPCLocale;
 
     // -- Titles ----------------------------------------------------------------
 
     // Maps title slug -> FTitleLocaleDefinition  (display name + description)
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Titles")
-    TSoftObjectPtr<UDataTable> TitleLocale;
+    TObjectPtr<UDataTable> TitleLocale;
+
+    // -- Masteries ---------------------------------------------------------------
+
+    // Maps mastery slug -> FMasteryLocaleDefinition  (display name + description)
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Mastery")
+    TObjectPtr<UDataTable> MasteryLocale;
+
+    // -- Effects ---------------------------------------------------------------
+
+    // Maps effect slug -> FEffectLocaleDefinition  (display name + description)
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Effects")
+    TObjectPtr<UDataTable> EffectLocale;
 
     // -- World Notifications -------------------------------------------------
 
     // Maps notificationType -> FNotificationLocaleDefinition  (text template + icon + sound)
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Notifications")
-    TSoftObjectPtr<UDataTable> NotificationLocale;
+    TObjectPtr<UDataTable> NotificationLocale;
 
     // -- NPC Ambient Speech --------------------------------------------------
 
@@ -100,7 +112,7 @@ public:
      * Row name = lineKey exactly as sent by the server in FAmbientSpeechLineData.lineKey.
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|AmbientSpeech")
-    TSoftObjectPtr<UDataTable> AmbientSpeechLines;
+    TObjectPtr<UDataTable> AmbientSpeechLines;
 
     // -- World Interactive Objects --------------------------------------------
 
@@ -110,5 +122,5 @@ public:
      * Row name = nameKey exactly as sent by the server (e.g. "wio.ancient_altar").
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|WorldObjects")
-    TSoftObjectPtr<UDataTable> WorldObjectLocale;
+    TObjectPtr<UDataTable> WorldObjectLocale;
 };

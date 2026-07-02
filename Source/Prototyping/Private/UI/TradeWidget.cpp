@@ -58,6 +58,11 @@ void UTradeWidget::NativeConstruct()
 
     SetVisibility(ESlateVisibility::Collapsed);
 
+    if (Gold_Input)
+    {
+        Gold_Input->OnTextChanged.AddDynamic(this, &UTradeWidget::HandleGoldTextChanged);
+    }
+
     if (UGameInstance* GI = GetGameInstance())
     {
         if (ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>())
@@ -462,5 +467,20 @@ void UTradeWidget::HandleLocaleChanged(const FString& NewLocale)
     if (GetVisibility() == ESlateVisibility::Visible)
     {
         RefreshTradeState();
+    }
+}
+
+void UTradeWidget::HandleGoldTextChanged(const FText& Text)
+{
+    FString Str = Text.ToString();
+    FString Filtered;
+    for (const TCHAR Ch : Str)
+    {
+        if (FChar::IsDigit(Ch))
+            Filtered.AppendChar(Ch);
+    }
+    if (Filtered != Str)
+    {
+        Gold_Input->SetText(FText::FromString(Filtered));
     }
 }

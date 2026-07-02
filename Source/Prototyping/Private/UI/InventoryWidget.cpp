@@ -6,6 +6,7 @@
 #include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Player/PlayerStatsManager.h"
 #include "Components/GridPanel.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
@@ -358,6 +359,9 @@ void UInventoryWidget::ClearSlot(int32 SlotIndex)
 
 void UInventoryWidget::OnSlotClicked(int32 SlotIndex)
 {
+	// Close context menu when clicking on any slot
+	CloseContextMenu();
+
 	// Hide tooltip when slot is clicked
 	HideTooltip();
 	
@@ -541,6 +545,9 @@ FReply UInventoryWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 {
 	if (bIsInventoryVisible && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
+		// Close context menu when clicking outside its action rows
+		CloseContextMenu();
+
 		// Hide tooltip when clicking anywhere in the inventory window
 		HideTooltip();
 		
@@ -693,11 +700,27 @@ void UInventoryWidget::UpdateInventoryStats()
 	if (WeightText)
 	{
 		float CurrentWeight = GetCurrentInventoryWeight();
-		FString WeightString = FString::Printf(TEXT("Weight: %.1f/%.1f"), CurrentWeight, MaxInventoryWeight);
+
+		// Use server-authoritative max weight from PlayerStatsManager.
+		// Falls back to the local default if the stats manager or its data is unavailable.
+		float MaxWeight = MaxInventoryWeight;
+		if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+		{
+			if (UPlayerStatsManager* StatsMgr = GI->GetPlayerStatsManager())
+			{
+				const float ServerMax = StatsMgr->GetCachedStats().weightMax;
+				if (ServerMax > 0.0f)
+				{
+					MaxWeight = ServerMax;
+				}
+			}
+		}
+
+		FString WeightString = FString::Printf(TEXT("Weight: %.1f/%.1f"), CurrentWeight, MaxWeight);
 		WeightText->SetText(FText::FromString(WeightString));
 		
 		// Optional: Change color based on weight percentage
-		float WeightPercentage = MaxInventoryWeight > 0.0f ? (CurrentWeight / MaxInventoryWeight) : 0.0f;
+		float WeightPercentage = MaxWeight > 0.0f ? (CurrentWeight / MaxWeight) : 0.0f;
 		if (WeightPercentage >= 1.0f)
 		{
 			WeightText->SetColorAndOpacity(FLinearColor::Red);

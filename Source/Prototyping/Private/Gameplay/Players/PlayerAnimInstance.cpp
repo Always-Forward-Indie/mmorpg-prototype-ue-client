@@ -317,6 +317,38 @@ void UPlayerAnimInstance::OnCastReleaseTimer()
     Montage_SetPlayRate(Montage, 1.0f);
     CurrentAttackPlayRate = 1.0f;
 }
+
+// ---------------------------------------------------------------------------
+// StopCurrentAttack
+//   Blends out of the active attack montage so the character can transition
+//   to locomotion without foot-sliding.  Called from BasicPlayer::Move() when
+//   the player starts moving after the cast bar has ended but before the
+//   release animation has fully played out.
+// ---------------------------------------------------------------------------
+void UPlayerAnimInstance::StopCurrentAttack(float BlendOutTime)
+{
+    if (!bIsAttacking) return;
+
+    // Clear any pending timers so they don't fire after the blend
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(HitPointTimerHandle);
+        World->GetTimerManager().ClearTimer(CastReleaseTimerHandle);
+    }
+
+    // Blend out of the active montage.
+    // The OnAttackMontageEnded delegate handles the rest: clearing state,
+    // flushing pending results if needed, and broadcasting OnAttackEnded.
+    if (ActiveCastMontage.IsValid())
+    {
+        Montage_Stop(BlendOutTime, ActiveCastMontage.Get());
+    }
+    else
+    {
+        Montage_Stop(BlendOutTime);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // NotifyDeath
 //   Latch bIsDead, stop any active montage, let the State Machine take over.
@@ -436,6 +468,25 @@ float UPlayerAnimInstance::NotifyPickup()
     }
 
     return Duration;
+}
+
+float UPlayerAnimInstance::NotifyHarvest(float DesiredDurationSeconds)
+{
+    if (!HarvestMontage)
+    {
+        return 0.0f;
+    }
+
+    const float MontageLen = HarvestMontage->GetPlayLength();
+    const float PlayRate = (MontageLen > 0.001f && DesiredDurationSeconds > 0.001f)
+        ? FMath::Clamp(MontageLen / DesiredDurationSeconds, 0.5f, 3.0f)
+        : 1.0f;
+
+    UE_LOG(LogTemp, Log, TEXT("[PlayerAnim] NotifyHarvest: playing montage '%s' len=%.3fs desired=%.1fs rate=%.2f"),
+        *HarvestMontage->GetName(), MontageLen, DesiredDurationSeconds, PlayRate);
+
+    Montage_Play(HarvestMontage, PlayRate);
+    return MontageLen / PlayRate;
 }
 
 // ---------------------------------------------------------------------------

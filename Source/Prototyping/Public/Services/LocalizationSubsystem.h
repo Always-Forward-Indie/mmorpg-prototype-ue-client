@@ -242,6 +242,26 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Titles")
     bool GetTitleLocaleDefinition(const FString& TitleSlug, FTitleLocaleDefinition& OutDefinition) const;
 
+    // -- Masteries --------------------------------------------------------------
+
+    /** Localised mastery display name. Key = mastery slug (e.g. "staff"). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Mastery")
+    FText GetMasteryDisplayName(const FString& MasterySlug) const;
+
+    /** Localised mastery description. Key = mastery slug. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Mastery")
+    FText GetMasteryDescription(const FString& MasterySlug) const;
+
+    // -- Effects ---------------------------------------------------------------
+
+    /** Localised effect display name. Key = effect slug. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Effects")
+    FText GetEffectDisplayName(const FString& EffectSlug) const;
+
+    /** Localised effect description. Key = effect slug. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Effects")
+    FText GetEffectDescription(const FString& EffectSlug) const;
+
 private:
     UPROPERTY()
     ULocalizationDataAsset* LocalizationData = nullptr;
@@ -270,6 +290,8 @@ private:
     UPROPERTY() mutable UDataTable* CachedAmbientSpeechTable      = nullptr;
     UPROPERTY() mutable UDataTable* CachedWIOLocaleTable          = nullptr;
     UPROPERTY() mutable UDataTable* CachedTitleLocaleTable        = nullptr;
+    UPROPERTY() mutable UDataTable* CachedMasteryLocaleTable      = nullptr;
+    UPROPERTY() mutable UDataTable* CachedEffectLocaleTable       = nullptr;
 
     UDataTable* GetQuestTable()              const;
     UDataTable* GetQuestStepTable()          const;
@@ -284,6 +306,8 @@ private:
     UDataTable* GetAmbientSpeechTable()      const;
     UDataTable* GetWIOLocaleTable()          const;
     UDataTable* GetTitleLocaleTable()        const;
+    UDataTable* GetMasteryLocaleTable()      const;
+    UDataTable* GetEffectLocaleTable()       const;
 
     static FText FallbackText(const FString& Key);
 };

@@ -77,6 +77,11 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Skill Bar Widget")
     USkillSlotWidget* GetSkillSlot(int32 SlotIndex) const;
 
+    // Called by a SkillSlotWidget when it receives DragEnter. Clears the drop
+    // highlight on all other slots so only one slot glows at a time — prevents
+    // the dual-slot flicker at slot boundaries during fast cursor moves.
+    void ClearHighlightOnOtherSlots(USkillSlotWidget* Except);
+
 protected:
     // Main overlay container for the entire skill bar area
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "Skill Bar Widget")

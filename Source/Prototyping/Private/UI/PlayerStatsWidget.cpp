@@ -2,6 +2,7 @@
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "Gameplay/Player/TitleManager.h"
 #include "Gameplay/Player/MasteryManager.h"
+#include "Services/LocalizationSubsystem.h"
 #include "Components/VerticalBox.h"
 #include "Components/ScrollBox.h"
 #include "Components/TextBlock.h"
@@ -48,6 +49,14 @@ void UPlayerStatsWidget::NativeConstruct()
     }
 
     SetVisibility(ESlateVisibility::Collapsed);
+
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            Loc->OnLocaleChanged.AddDynamic(this, &UPlayerStatsWidget::HandleLocaleChanged);
+        }
+    }
 }
 
 void UPlayerStatsWidget::NativeDestruct()
@@ -60,6 +69,14 @@ void UPlayerStatsWidget::NativeDestruct()
     {
         MasteryManager->OnMasteriesLoaded.RemoveDynamic(this, &UPlayerStatsWidget::HandleMasteriesLoaded);
         MasteryManager->OnMasteryUpdated.RemoveDynamic(this, &UPlayerStatsWidget::HandleMasteryUpdated);
+    }
+
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            Loc->OnLocaleChanged.RemoveDynamic(this, &UPlayerStatsWidget::HandleLocaleChanged);
+        }
     }
 
     Super::NativeDestruct();
@@ -340,14 +357,26 @@ void UPlayerStatsWidget::RefreshEffects(const FPlayerStatsUpdateStruct& Stats)
         // Skip entirely expired effects
         if (Rep.expiresAt > 0 && Rep.expiresAt <= NowSec) continue;
 
-        // Header line: "[debuff] Resurrection Sickness  45s"
+        // Header line: "Resurrection Sickness  45s"
         FString Header;
+        FString DisplayName = Slug;
+        FString Category;
+        {
+            if (UGameInstance* GI = GetGameInstance())
+            {
+                if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+                {
+                    const FText LocName = Loc->GetEffectDisplayName(Slug);
+                    if (!LocName.IsEmpty()) DisplayName = LocName.ToString();
+                }
+            }
+        }
         if (Rep.expiresAt == 0)
-            Header = FString::Printf(TEXT("[%s] %s  permanent"), *Rep.effectTypeSlug, *Slug);
+            Header = FString::Printf(TEXT("[%s] %s  permanent"), *Rep.effectTypeSlug, *DisplayName);
         else
         {
             const int64 SecsLeft = Rep.expiresAt - NowSec;
-            Header = FString::Printf(TEXT("[%s] %s  %ds"), *Rep.effectTypeSlug, *Slug, (int32)SecsLeft);
+            Header = FString::Printf(TEXT("[%s] %s  %ds"), *Rep.effectTypeSlug, *DisplayName, (int32)SecsLeft);
         }
 
         auto AddRow = [&](const FString& Line)
@@ -402,6 +431,12 @@ void UPlayerStatsWidget::HandleMasteryUpdated(const FMasteryUpdateData& /*Update
         RefreshMasteries();
 }
 
+void UPlayerStatsWidget::HandleLocaleChanged(const FString& NewLocale)
+{
+    if (CachedStats.characterId > 0 && GetVisibility() == ESlateVisibility::Visible)
+        RefreshAll(CachedStats);
+}
+
 void UPlayerStatsWidget::RefreshEquippedTitle()
 {
     if (!EquippedTitle_Text) return;
@@ -410,10 +445,29 @@ void UPlayerStatsWidget::RefreshEquippedTitle()
     {
         const FPlayerTitlesState& State = TitleManager->GetCachedState();
         if (State.equippedTitleSlug.IsEmpty())
+        {
             EquippedTitle_Text->SetText(FText::FromString(TEXT("Title: (none)")));
+        }
         else
-            EquippedTitle_Text->SetText(FText::FromString(
-                FString::Printf(TEXT("Title: %s"), *State.equippedTitle.displayName)));
+        {
+            FText TitleDisplayName;
+            if (!State.equippedTitleSlug.IsEmpty())
+            {
+                if (UGameInstance* GI = GetGameInstance())
+                {
+                    if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+                    {
+                        TitleDisplayName = Loc->GetTitleDisplayName(State.equippedTitleSlug);
+                    }
+                }
+            }
+            if (TitleDisplayName.IsEmpty() && !State.equippedTitle.displayName.IsEmpty())
+                TitleDisplayName = FText::FromString(State.equippedTitle.displayName);
+            if (TitleDisplayName.IsEmpty())
+                TitleDisplayName = FText::FromString(State.equippedTitleSlug);
+            EquippedTitle_Text->SetText(FText::Format(
+                FText::FromString(TEXT("Title: {0}")), TitleDisplayName));
+        }
     }
     else
     {
@@ -431,7 +485,15 @@ void UPlayerStatsWidget::RefreshMasteries()
     const TArray<FMasteryEntry> Masteries = MasteryManager->GetAllMasteries();
     for (const FMasteryEntry& M : Masteries)
     {
-        const FString Line = FString::Printf(TEXT("%s: %.1f"), *M.masterySlug, M.value);
+        FString DisplayName = M.masterySlug;
+        if (UGameInstance* GI = GetGameInstance())
+        {
+            if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+            {
+                DisplayName = Loc->GetMasteryDisplayName(M.masterySlug).ToString();
+            }
+        }
+        const FString Line = FString::Printf(TEXT("%s: %.1f"), *DisplayName, M.value);
 
         if (MasteryRowClass)
         {

@@ -3,6 +3,8 @@
 #include "UI/TitleRowWidget.h"
 #include "Gameplay/Player/TitleManager.h"
 #include "Gameplay/Player/TitleNetworkHandler.h"
+#include "MyGameInstance.h"
+#include "Services/LocalizationSubsystem.h"
 #include "Components/ScrollBox.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
@@ -35,12 +37,28 @@ void UTitlesWidget::NativeConstruct()
     }
 
     SetVisibility(ESlateVisibility::Collapsed);
+
+    if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            Loc->OnLocaleChanged.AddDynamic(this, &UTitlesWidget::HandleLocaleChanged);
+        }
+    }
 }
 
 void UTitlesWidget::NativeDestruct()
 {
     if (Manager)
         Manager->OnTitlesUpdated.RemoveDynamic(this, &UTitlesWidget::HandleTitlesUpdated);
+
+    if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            Loc->OnLocaleChanged.RemoveDynamic(this, &UTitlesWidget::HandleLocaleChanged);
+        }
+    }
 
     Super::NativeDestruct();
 }
@@ -116,39 +134,65 @@ void UTitlesWidget::HandleTitlesUpdated(const FPlayerTitlesState& State)
         RefreshAll(State);
 }
 
+void UTitlesWidget::HandleLocaleChanged(const FString& NewLocale)
+{
+    if (CachedState.characterId > 0 && GetVisibility() == ESlateVisibility::Visible)
+        RefreshAll(CachedState);
+}
+
 // ---------------------------------------------------------------------------
 // Refresh logic
 // ---------------------------------------------------------------------------
 
 void UTitlesWidget::RefreshAll(const FPlayerTitlesState& State)
 {
+    // Resolve localization fallback helper
+    auto ResolveName = [this](const FString& Slug, const FString& DisplayName) -> FText
+    {
+        if (!Slug.IsEmpty())
+        {
+            if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+            {
+                if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+                {
+                    const FText LocName = Loc->GetTitleDisplayName(Slug);
+                    if (!LocName.IsEmpty()) return LocName;
+                }
+            }
+        }
+        if (!DisplayName.IsEmpty()) return FText::FromString(DisplayName);
+        return FText::FromString(Slug);
+    };
+
     // Equipped title header
     if (EquippedTitle_Text)
     {
         if (State.equippedTitleSlug.IsEmpty())
             EquippedTitle_Text->SetText(FText::FromString(TEXT("Equipped: (none)")));
         else
-            EquippedTitle_Text->SetText(FText::FromString(
-                FString::Printf(TEXT("Equipped: %s"), *State.equippedTitle.displayName)));
+            EquippedTitle_Text->SetText(FText::Format(
+                FText::FromString(TEXT("Equipped: {0}")),
+                ResolveName(State.equippedTitleSlug, State.equippedTitle.displayName)));
     }
 
     if (!Titles_ScrollBox) return;
     Titles_ScrollBox->ClearChildren();
 
-    for (const FTitleEntry& Entry : State.earnedTitles)
+    for (FTitleEntry Entry : State.earnedTitles)
     {
-        AddTitleRow(Entry, Entry.slug == State.equippedTitleSlug);
+        const FText ResolvedName = ResolveName(Entry.slug, Entry.displayName);
+        AddTitleRow(Entry, Entry.slug == State.equippedTitleSlug, ResolvedName);
     }
 }
 
-void UTitlesWidget::AddTitleRow(const FTitleEntry& Entry, bool bIsEquipped)
+void UTitlesWidget::AddTitleRow(const FTitleEntry& Entry, bool bIsEquipped, const FText& ResolvedName)
 {
     if (!TitleRowClass || !Titles_ScrollBox) return;
 
     UTitleRowWidget* Row = CreateWidget<UTitleRowWidget>(GetOwningPlayer(), TitleRowClass);
     if (!Row) return;
 
-    Row->Populate(Entry, bIsEquipped);
+    Row->Populate(Entry, bIsEquipped, ResolvedName);
     Row->OnEquipRequested.AddDynamic(this, &UTitlesWidget::HandleRowEquipRequested);
 
     Titles_ScrollBox->AddChild(Row);

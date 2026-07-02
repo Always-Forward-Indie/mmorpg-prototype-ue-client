@@ -139,6 +139,13 @@ public:
     // Returns true when TimeSyncService has enough samples for reliable timing.
     bool HasReliableTimeSync() const;
 
+    // Called when time-sync drops out (e.g. window focus loss) to convert all
+    // server-clock cooldowns to world-time equivalents. This prevents skills
+    // from getting permanently stuck when server-epoch endTimes (1.75B) are
+    // compared against world-time fallback values (~70).
+    UFUNCTION(BlueprintCallable, Category = "Player Skill Manager")
+    void ConvertServerClockCooldownsToWorldTime();
+
 protected:
     // Get world for time calculations
     UWorld* GetWorld() const;
@@ -207,4 +214,8 @@ private:
     // via GetConfirmationTimeout() and clamped to this range.
     static constexpr double MinConfirmationTimeoutSec = 2.0;
     static constexpr double MaxConfirmationTimeoutSec = 5.0;
+
+    // Tracks time-sync validity across ticks so UpdateCooldowns can detect
+    // when it drops out and convert server-clock cooldowns to world-time.
+    bool bWasTimeSyncValid = true;
 };

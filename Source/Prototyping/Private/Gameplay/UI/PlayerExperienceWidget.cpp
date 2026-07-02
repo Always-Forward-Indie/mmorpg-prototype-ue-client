@@ -166,7 +166,7 @@ void UPlayerExperienceWidget::RefreshFromStatsUpdate(const FPlayerStatsUpdateStr
     if (Stats.characterId <= 0)
         return;
 
-    // Always update level display — it may change even if XP fields are absent
+    // Always update level display ï¿½ it may change even if XP fields are absent
     // (e.g. partial packets carry level but not XP range).
     const bool bHasExperience = (Stats.experienceNextLevel > 0 || Stats.experienceCurrent > 0);
     if (!bHasExperience)
@@ -232,6 +232,9 @@ void UPlayerExperienceWidget::OnExperienceGained_Implementation(const FExperienc
     if (!bIsInitialized)
         return;
 
+    if (ExperienceEvent.characterId != CurrentCharacterId)
+        return;
+
     UE_LOG(LogTemp, Log, TEXT("PlayerExperienceWidget: Experience gained - %d (%s)"), 
         ExperienceEvent.experienceGained, *ExperienceEvent.reasonText);
 
@@ -248,6 +251,9 @@ void UPlayerExperienceWidget::OnExperienceGained_Implementation(const FExperienc
 void UPlayerExperienceWidget::OnLevelUp_Implementation(int32 OldLevel, int32 NewLevel, int32 NewTotalExperience)
 {
     if (!bIsInitialized)
+        return;
+
+    if (!bLocalProgressionUpdated)
         return;
 
     UE_LOG(LogTemp, Warning, TEXT("PlayerExperienceWidget: Level up! %d -> %d"), OldLevel, NewLevel);
@@ -274,8 +280,11 @@ void UPlayerExperienceWidget::OnProgressionUpdated_Implementation(const FPlayerP
         UE_LOG(LogTemp, Warning, TEXT("PlayerExperienceWidget: Progression update skipped - Initialized: %s, CharacterMatch: %s"), 
             bIsInitialized ? TEXT("True") : TEXT("False"),
             (NewProgression.characterId == CurrentCharacterId) ? TEXT("True") : TEXT("False"));
+        bLocalProgressionUpdated = false;
         return;
     }
+
+    bLocalProgressionUpdated = true;
 
     CurrentProgression = NewProgression;
 

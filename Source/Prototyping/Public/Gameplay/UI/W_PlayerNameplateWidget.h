@@ -70,6 +70,13 @@ public:
     void SetDeadState(bool bNewDead);
 
     /**
+     * Update the level text without recreating the full nameplate.
+     * Call this when a stats_update packet carries a new level value.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Player Nameplate")
+    void SetPlayerLevel(int32 InLevel);
+
+    /**
      * Update the title line under the player name.
      * Pass an empty string to hide the title.
      *
@@ -77,7 +84,7 @@ public:
      *                  or empty string when no title is equipped.
      */
     UFUNCTION(BlueprintCallable, Category = "Player Nameplate")
-    void SetTitle(const FString& InTitle);
+    void SetTitle(const FText& InTitle);
 
     /** Uniform scale applied via RenderTransform (called by UPlayerNameplateComponent). */
     UFUNCTION(BlueprintCallable, Category = "Player Nameplate")

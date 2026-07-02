@@ -215,6 +215,16 @@ private:
 
 	// Pickup lock
 	bool bIsPickingUp = false;
+	FTimerHandle PickupSafetyTimerHandle;
+
+	// Saved movement mode before DisableMovement — restored on unlock
+	// so the player isn't forced into MOVE_Walking while airborne.
+	TEnumAsByte<EMovementMode> SavedMovementMode = MOVE_Walking;
+
+	// True when LockMovement() has been called and not yet unlocked.
+	// Checked by Move()/HandleMouseButtonsMoveForward/OnJumpPressed to
+	// block input across all lock sources (cast, pickup, harvest, emote).
+	bool bMovementLocked = false;
 
 	// Cast lock: true while a skill with cast time is in progress
 	bool bIsCasting = false;
@@ -828,6 +838,11 @@ public:
 	void LockMovementForPickup();
 	void UnlockMovementAfterPickup();
 
+	// Generic movement lock/unlock — saves current MovementMode before DisableMovement
+	// and restores it on unlock so gravity resumes if the player was airborne.
+	void LockMovement();
+	void UnlockMovement();
+
 	/** True while a pickup animation is in progress — prevents overlapping pickups. */
 	bool IsPickingUp() const { return bIsPickingUp; }
 
@@ -908,6 +923,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Emotes")
 	void PlayEmoteForCharacter(const FString& EmoteSlug, const FString& AnimationName);
 
+	/** Unlock movement when the current emote finishes (bound to OnEmoteEnded). */
+	UFUNCTION()
+	void HandleEmoteEnded(const FString& EmoteSlug);
+
 	// Play event sound from soft ref
 	void PlayEventSound(const TSoftObjectPtr<USoundBase>& SoundRef);
 
@@ -987,6 +1006,9 @@ public:
 	UFUNCTION()
 	void OnRespawnClicked();
 
+	/** World time of last respawn — used by grace-window checks to prevent stale death events. */
+	float GetLastRespawnWorldTime() const { return LastRespawnWorldTime; }
+
 	// Level-up handler
 	UFUNCTION()
 	void HandleLevelUp(int32 OldLevel, int32 NewLevel, int32 NewTotalExperience);
@@ -1011,7 +1033,7 @@ public:
 	// Push an equipped title display name to this player's nameplate (called by the server spawn path
 	// for remote players once the server includes title data in the player spawn handshake).
 	UFUNCTION(BlueprintCallable, Category = "Player|Title")
-	void SetEquippedTitle(const FString& TitleDisplayName);
+	void SetEquippedTitle(const FText& TitleDisplayName);
 
 	// Called one tick after PlayerInterfaceWidget->AddToViewport() via UIManager delegate.
 	// This is the authoritative signal that the game UI is visible to the renderer.

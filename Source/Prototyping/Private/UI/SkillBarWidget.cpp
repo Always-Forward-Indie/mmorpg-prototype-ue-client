@@ -62,6 +62,9 @@ void USkillBarWidget::NativeConstruct()
     {
         SkillGridContainer->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
     }
+
+    UE_LOG(LogTemp, Log, TEXT("SkillBarWidget::NativeConstruct — containers set SelfHitTestInvisible, slots=%d eventsSub=%d"),
+        SkillSlots.Num(), bEventsSubscribed ? 1 : 0);
 }
 
 void USkillBarWidget::NativeDestruct()
@@ -368,6 +371,16 @@ void USkillBarWidget::OnSkillSlotDragCleared(int32 SlotIndex)
         return;
     }
 
+    // Force-reset drag state on the source slot so it's immediately re-draggable
+    // even if subsequent drop processing (OnSkillDroppedOnSlot) hasn't run yet.
+    if (SlotIndex >= 0 && SlotIndex < SkillSlots.Num())
+    {
+        if (USkillSlotWidget* SourceSlot = SkillSlots[SlotIndex])
+        {
+            SourceSlot->ForceResetDragState();
+        }
+    }
+
     // Preserve the hotkey binding when clearing the skill
     FSkillSlotData SlotData = SkillManager->GetSkillSlot(SlotIndex);
     FKey BoundKey = SlotData.boundKey;
@@ -384,6 +397,17 @@ void USkillBarWidget::OnSkillSlotDragCleared(int32 SlotIndex)
     }
 
     UE_LOG(LogTemp, Log, TEXT("SkillBarWidget: Cleared slot %d via drag-out"), SlotIndex);
+}
+
+void USkillBarWidget::ClearHighlightOnOtherSlots(USkillSlotWidget* Except)
+{
+    for (USkillSlotWidget* SlotWidget : SkillSlots)
+    {
+        if (SlotWidget && SlotWidget != Except && SlotWidget->IsDropHighlighted())
+        {
+            SlotWidget->SetDropHighlighted(false);
+        }
+    }
 }
 
 void USkillBarWidget::OnPlayerSkillsInitialized(const TArray<FPlayerSkillData>& Skills)
@@ -490,6 +514,7 @@ USkillSlotWidget* USkillBarWidget::CreateSkillSlotWidget(int32 SlotIndex)
     if (SlotWidget)
     {
         SlotWidget->SlotInitialize(SlotIndex, SkillManager);
+        SlotWidget->SetOwnerBar(this);
 
         SlotWidget->OnSkillSlotClicked.AddDynamic(this, &USkillBarWidget::OnSkillSlotClicked);
         SlotWidget->OnSkillSlotRightClicked.AddDynamic(this, &USkillBarWidget::OnSkillSlotRightClicked);

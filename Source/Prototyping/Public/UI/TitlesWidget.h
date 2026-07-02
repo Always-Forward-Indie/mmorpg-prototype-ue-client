@@ -83,12 +83,15 @@ private:
     UFUNCTION()
     void HandleTitlesUpdated(const FPlayerTitlesState& State);
 
+    UFUNCTION()
+    void HandleLocaleChanged(const FString& NewLocale);
+
     /** Called by UTitleRowWidget::OnEquipRequested for each row. */
     UFUNCTION()
     void HandleRowEquipRequested(const FString& TitleSlug);
 
     void RefreshAll(const FPlayerTitlesState& State);
-    void AddTitleRow(const FTitleEntry& Entry, bool bIsEquipped);
+    void AddTitleRow(const FTitleEntry& Entry, bool bIsEquipped, const FText& ResolvedName);
 
     void UpdateWindowDragPosition(const FVector2D& ScreenCursorPos);
 

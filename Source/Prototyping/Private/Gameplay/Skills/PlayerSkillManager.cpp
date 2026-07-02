@@ -281,6 +281,21 @@ void UPlayerSkillManager::SetSkillSlot(int32 SlotIndex, const FString& SkillSlug
         return;
     }
 
+    // Deduplicate: clear any other slot that already has this skill slug,
+    // so the same skill never appears in two bar slots at once.
+    if (!SkillSlug.IsEmpty())
+    {
+        for (auto& Pair : SkillSlots)
+        {
+            if (Pair.Key != SlotIndex && Pair.Value.skillSlug == SkillSlug)
+            {
+                Pair.Value.skillSlug.Empty();
+                Pair.Value.bIsAssigned = false;
+                OnSkillSlotChanged.Broadcast(Pair.Key, Pair.Value);
+            }
+        }
+    }
+
     FSkillSlotData& SlotData = SkillSlots[SlotIndex];
     SlotData.skillSlug = SkillSlug;
     SlotData.boundKey = BoundKey;
@@ -428,6 +443,16 @@ FString UPlayerSkillManager::GetSkillSlugFromSlot(int32 SlotIndex) const
 
 void UPlayerSkillManager::UpdateCooldowns(float DeltaTime)
 {
+    // Detect time-sync loss: when IsTimeSyncValid() transitions from true to false,
+    // server-clock cooldowns (endTime ~1.75B) would be compared against world-time
+    // (~70) causing permanent cooldown. Convert them to world-time immediately.
+    const bool bTimeSyncNowValid = TimeSyncService && TimeSyncService->IsTimeSyncValid();
+    if (bWasTimeSyncValid && !bTimeSyncNowValid)
+    {
+        ConvertServerClockCooldownsToWorldTime();
+    }
+    bWasTimeSyncValid = bTimeSyncNowValid;
+
     for (auto& Pair : PlayerSkills) {
         FPlayerSkillData& S = Pair.Value;
         if (!S.bIsOnCooldown) continue;
@@ -616,9 +641,9 @@ void UPlayerSkillManager::HandleSkillInitiation(const FString& SkillSlug, int32 
 
             if (CooldownSec > 0.0)
             {
-                S->bCooldownUsesServerClock = true;
-                const double Now = GetServerSeconds();
-                S->cooldownEndTime = Now + CooldownSec;
+                const bool bSyncValid = TimeSyncService && TimeSyncService->IsTimeSyncValid();
+                S->bCooldownUsesServerClock = bSyncValid;
+                S->cooldownEndTime = (bSyncValid ? GetServerSeconds() : GetWorldSeconds()) + CooldownSec;
                 S->bIsOnCooldown = true;
                 S->bIsReady = false;
 
@@ -636,8 +661,8 @@ void UPlayerSkillManager::HandleSkillInitiation(const FString& SkillSlug, int32 
     if (GcdMs > 0)
     {
         const double GcdSec = static_cast<double>(GcdMs) / 1000.0;
-        bGCDUsesServerClock = true;
-        GCDEndTime = GetServerSeconds() + GcdSec;
+        bGCDUsesServerClock = false;
+        GCDEndTime = GetWorldSeconds() + GcdSec;
         UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Started GCD %.1fs"), GcdSec);
     }
 }
@@ -649,19 +674,14 @@ void UPlayerSkillManager::NotifyAnimationEnded(){
 
 void UPlayerSkillManager::ApplyServerCooldowns(const TArray<FSkillCooldownEntry>& Cooldowns)
 {
-    // IMPORTANT: bCooldownUsesServerClock must match the time source used to set
-    // cooldownEndTime. If we set endTime = worldTime+X but mark the skill as using
-    // server clock, IsSkillOnCooldown will compare serverTime (~1.7 billion) against
-    // worldTime+X (~67) and always return false — cooldown appears instantly expired.
-    // See also: Bug 8 comment in GetSkillCooldownRemaining.
-    const bool bServerSyncValid = TimeSyncService && TimeSyncService->IsTimeSyncValid();
-    const double Now = bServerSyncValid
-        ? static_cast<double>(TimeSyncService->GetEstimatedServerTimeMs()) / 1000.0
-        : GetWorldSeconds();
+    // Use world time for cooldown restoration.  remainingMs is a relative duration,
+    // so server-epoch anchoring adds no value and creates a clock-mismatch risk when
+    // time sync drops out after relogin (world-time ~67 vs server-epoch ~1.75B).
+    const double Now = GetWorldSeconds();
 
     UE_LOG(LogTemp, Warning,
-        TEXT("PlayerSkillManager: ApplyServerCooldowns — syncValid=%d, now=%.3f, entries=%d"),
-        bServerSyncValid ? 1 : 0, Now, Cooldowns.Num());
+        TEXT("PlayerSkillManager: ApplyServerCooldowns — now=%.3f, entries=%d"),
+        Now, Cooldowns.Num());
 
     int32 Applied = 0;
 
@@ -686,7 +706,7 @@ void UPlayerSkillManager::ApplyServerCooldowns(const TArray<FSkillCooldownEntry>
 
         const double RemainingSec = static_cast<double>(ClampedMs) / 1000.0;
         // Use the same clock that was used to compute Now — keeps set/check consistent.
-        S->bCooldownUsesServerClock = bServerSyncValid;
+        S->bCooldownUsesServerClock = false;
         S->cooldownEndTime          = Now + RemainingSec;
         S->bIsOnCooldown            = true;
         S->bIsReady                 = false;
@@ -694,8 +714,8 @@ void UPlayerSkillManager::ApplyServerCooldowns(const TArray<FSkillCooldownEntry>
         OnSkillCooldownStarted.Broadcast(Entry.skillSlug);
 
         UE_LOG(LogTemp, Warning,
-            TEXT("PlayerSkillManager: Restored cooldown %.1fs for '%s' (clamped from %dms to %dms) endTime=%.3f useSrvClock=%d"),
-            RemainingSec, *Entry.skillSlug, Entry.remainingMs, ClampedMs, S->cooldownEndTime, bServerSyncValid ? 1 : 0);
+            TEXT("PlayerSkillManager: Restored cooldown %.1fs for '%s' (clamped from %dms to %dms) endTime=%.3f"),
+            RemainingSec, *Entry.skillSlug, Entry.remainingMs, ClampedMs, S->cooldownEndTime);
         ++Applied;
     }
 
@@ -766,4 +786,45 @@ float UPlayerSkillManager::GetGCDRemaining() const
     if (Rem <= 0.0) return 0.0f;
     // Bug 8 fix: clamp GCD remaining to a sane maximum (no GCD should exceed 10 s).
     return FMath::Min(static_cast<float>(Rem), 10.0f);
+}
+
+void UPlayerSkillManager::ConvertServerClockCooldownsToWorldTime()
+{
+    const double WorldNow = GetWorldSeconds();
+
+    for (auto& Pair : PlayerSkills)
+    {
+        FPlayerSkillData& S = Pair.Value;
+        if (!S.bIsOnCooldown || !S.bCooldownUsesServerClock) continue;
+
+        // GetServerSeconds() now returns the world-time fallback (time-sync invalid),
+        // so remaining = endTime - worldTime gives a correct relative duration.
+        const double ServerNow = GetServerSeconds();
+        double RemainingSec = S.cooldownEndTime - ServerNow;
+        if (RemainingSec <= 0.0)
+        {
+            RemainingSec = 0.01; // expire next tick
+        }
+
+        S.cooldownEndTime = WorldNow + RemainingSec;
+        S.bCooldownUsesServerClock = false;
+
+        UE_LOG(LogTemp, Warning,
+            TEXT("PlayerSkillManager: Converted cooldown '%s' to world-time — remaining=%.1fs newEnd=%.3f"),
+            *Pair.Key, RemainingSec, S.cooldownEndTime);
+    }
+
+    if (bGCDUsesServerClock)
+    {
+        const double ServerNow = GetServerSeconds();
+        double RemainingSec = GCDEndTime - ServerNow;
+        if (RemainingSec <= 0.0) RemainingSec = 0.01;
+        GCDEndTime = WorldNow + RemainingSec;
+        bGCDUsesServerClock = false;
+
+        UE_LOG(LogTemp, Warning,
+            TEXT("PlayerSkillManager: Converted GCD to world-time — remaining=%.1fs"), RemainingSec);
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Server-clock cooldowns converted to world-time (time-sync lost)"));
 }

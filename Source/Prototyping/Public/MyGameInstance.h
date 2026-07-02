@@ -201,6 +201,9 @@ public:
 
 	void Shutdown();
 
+	/** Force time-sync + ping refresh when the game window regains focus. */
+	void OnApplicationReactivated();
+
 	// Refresh WorldContext on all managers after a level transition
 	void RefreshManagerWorldContexts();
 

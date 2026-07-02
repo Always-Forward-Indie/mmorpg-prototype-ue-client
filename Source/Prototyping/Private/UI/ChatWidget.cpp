@@ -215,3 +215,11 @@ void UChatWidget::ReleaseInputFocus()
         FSlateApplication::Get().ClearKeyboardFocus(EFocusCause::SetDirectly);
     }
 }
+
+void UChatWidget::SetInputFocus()
+{
+    if (InputTextBox)
+    {
+        InputTextBox->SetKeyboardFocus();
+    }
+}

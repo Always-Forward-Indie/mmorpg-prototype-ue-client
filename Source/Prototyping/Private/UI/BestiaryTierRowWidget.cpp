@@ -80,6 +80,19 @@ void UBestiaryTierRowWidget::Setup(const FBestiaryTierStruct& Tier)
 void UBestiaryTierRowWidget::AddLine(const FString& Line)
 {
     if (!Tier_Content_Box) return;
+
+    if (ContentRowClass)
+    {
+        UUserWidget* RowWidget = CreateWidget<UUserWidget>(GetOwningPlayer(), ContentRowClass);
+        if (RowWidget)
+        {
+            if (UTextBlock* RowText = Cast<UTextBlock>(RowWidget->GetWidgetFromName(TEXT("Row_Text"))))
+                RowText->SetText(FText::FromString(Line));
+            Tier_Content_Box->AddChild(RowWidget);
+            return;
+        }
+    }
+
     UTextBlock* Txt = NewObject<UTextBlock>(Tier_Content_Box);
     Txt->SetText(FText::FromString(Line));
     Tier_Content_Box->AddChild(Txt);

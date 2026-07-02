@@ -6,6 +6,7 @@
 #include "Components/TextBlock.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
+#include "Services/LocalizationSubsystem.h"
 
 void UActiveEffectsWidget::NativeConstruct()
 {
@@ -142,7 +143,15 @@ void UActiveEffectsWidget::RebuildSlots()
         const FString TimerStr = Rep.expiresAt > 0
             ? FString::Printf(TEXT("%ds"), (int32)FMath::Max<int64>(Rep.expiresAt - NowSec, 0))
             : TEXT("?");
-        TB->SetText(FText::FromString(FString::Printf(TEXT("[%s] %s"), *Rep.slug, *TimerStr)));
+        FString DisplayName = Rep.slug;
+        if (UGameInstance* GI = GetGameInstance())
+        {
+            if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+            {
+                DisplayName = Loc->GetEffectDisplayName(Rep.slug).ToString();
+            }
+        }
+        TB->SetText(FText::FromString(FString::Printf(TEXT("[%s] %s"), *DisplayName, *TimerStr)));
         Effects_Container->AddChild(TB);
     }
 }

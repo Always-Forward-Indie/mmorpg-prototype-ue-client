@@ -134,6 +134,16 @@ public:
     // Plays PickupMontage and returns its duration in seconds (0 if no montage assigned).
     float NotifyPickup();
 
+    // Montage played when the player harvests a corpse.
+    // Assign a looping "gathering/kneeling" animation in the AnimBP defaults.
+    // If null, no animation plays during harvest.
+    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Player|Montages")
+    UAnimMontage* HarvestMontage = nullptr;
+
+    // Plays HarvestMontage scaled to the server's desired harvest duration.
+    // Returns the actual wall-clock duration (0 if no montage assigned).
+    float NotifyHarvest(float DesiredDurationSeconds);
+
     // Delegate fired when the hit-point frame is reached during an attack montage.
     // Bound by BasicPlayer to forward the event to CombatSystemManager::NotifyHitPoint.
     DECLARE_MULTICAST_DELEGATE_OneParam(FOnHitPoint, int32 /*CasterId*/);
@@ -159,6 +169,12 @@ public:
     // Call this from ItemManager::ResetPickupState() so that a stale timer from
     // a previous pickup attempt never fires into a new one.
     void CancelPickupTimer();
+
+    // Stops the currently playing attack montage with a short blend-out.
+    // Used when the player starts moving after the cast bar has ended but before
+    // the skill animation has fully finished (prevents foot-sliding).
+    // BlendOutTime in seconds (default 0.15 = smooth transition to locomotion).
+    void StopCurrentAttack(float BlendOutTime = 0.15f);
 
     // Called by UAnimNotify_HitPoint (placed on the montage timeline) or by the
     // fallback timer when no notify is present in the montage asset.

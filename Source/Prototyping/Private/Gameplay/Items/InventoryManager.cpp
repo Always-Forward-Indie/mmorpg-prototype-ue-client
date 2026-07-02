@@ -1,6 +1,7 @@
 ﻿#include "Gameplay/Items/InventoryManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Items/HarvestManager.h"
 #include "Utils/JSONParser.h"
 #include "Engine/World.h"
 #include "UI/InventoryWidget.h"
@@ -314,9 +315,24 @@ void UInventoryManager::ProcessInventoryUpdate(const FString& JsonData)
 					ItemObject->TryGetNumberField(TEXT("itemId"), ItemId);
 					ItemObject->TryGetNumberField(TEXT("quantity"), Quantity);
 
-					// Find existing item in current inventory to preserve full data
-					FInventoryItemStruct* ExistingItem = CurrentInventory.items.FindByPredicate(
-						[ItemId](const FInventoryItemStruct& Item) { return Item.itemId == ItemId; });
+					// Read the unique instance id — process each server row independently
+					// to avoid duplicating ids when multiple items share the same itemId.
+					int32 InstanceId = 0;
+					ItemObject->TryGetNumberField(TEXT("id"), InstanceId);
+
+					// Find existing item by unique instance id (not template itemId)
+					FInventoryItemStruct* ExistingItem = nullptr;
+					if (InstanceId > 0)
+					{
+						ExistingItem = CurrentInventory.items.FindByPredicate(
+							[InstanceId](const FInventoryItemStruct& Item) { return Item.id == InstanceId; });
+					}
+					else
+					{
+						// Fallback: no id field — match by itemId (legacy/partial updates)
+						ExistingItem = CurrentInventory.items.FindByPredicate(
+							[ItemId](const FInventoryItemStruct& Item) { return Item.itemId == ItemId; });
+					}
 
 					if (ExistingItem)
 					{
@@ -631,6 +647,12 @@ void UInventoryManager::PickupNearbyItem()
 		return;
 	}
 
+	// Prevent pickup while harvesting
+	if (gameInstance && gameInstance->GetHarvestManager() && gameInstance->GetHarvestManager()->IsHarvesting())
+	{
+		return;
+	}
+
 	// Get the player character
 	APlayerController* PC = worldContext->GetFirstPlayerController();
 	if (!PC || !PC->GetPawn())
@@ -733,6 +755,13 @@ void UInventoryManager::PickupSpecificItem(ADroppedItemActor* TargetItem)
     // prevents PendingPickupItemUIDs from filling with items that are
     // never cleaned up because the second animation fires first.
     if (Player->IsPickingUp()) return;
+
+    // Prevent starting a pickup while harvesting a corpse
+    if (gameInstance && gameInstance->GetHarvestManager() && gameInstance->GetHarvestManager()->IsHarvesting())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("InventoryManager: PickupSpecificItem blocked - player is harvesting"));
+        return;
+    }
 
     FVector PlayerLocation = Player->GetActorLocation();
 

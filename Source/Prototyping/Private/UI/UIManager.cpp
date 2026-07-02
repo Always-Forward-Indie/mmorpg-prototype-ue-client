@@ -30,6 +30,7 @@
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Framework/Application/SlateApplication.h"
+#include "EnhancedInputSubsystems.h"
 #include "HAL/PlatformProcess.h"
 #include "Gameplay/Repair/RepairManager.h"
 #include "Gameplay/SkillShop/SkillShopManager.h"
@@ -130,6 +131,7 @@ UUIManager::UUIManager()
 	// Alt key toggles cursor visibility; UI windows force it visible.
 	bAltCursorActive = false;
 	bGameMenuVisible = false;
+	bDeathScreenVisible = false;
 }
 
 void UUIManager::BeginPlay()
@@ -206,6 +208,15 @@ void UUIManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		}
 	}
 
+	// Unregister Slate pre-input listener (Editor-only API)
+#if !UE_BUILD_SHIPPING
+	if (PreInputKeyDownHandle.IsValid() && FSlateApplication::IsInitialized())
+	{
+		FSlateApplication::Get().OnApplicationPreInputKeyDownListener().Remove(PreInputKeyDownHandle);
+		PreInputKeyDownHandle.Reset();
+	}
+#endif
+
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -235,6 +246,21 @@ void UUIManager::Initialize(UInventoryManager* InInventoryManager, UHarvestManag
 	
 	bIsInitialized = true;
 	UE_LOG(LogTemp, Warning, TEXT("UIManager: Successfully initialized"));
+}
+
+void UUIManager::RegisterPreInputListener()
+{
+#if !UE_BUILD_SHIPPING
+	if (PreInputKeyDownHandle.IsValid()) return;
+
+	if (FSlateApplication::IsInitialized())
+	{
+		PreInputKeyDownHandle = FSlateApplication::Get().OnApplicationPreInputKeyDownListener().AddUObject(this, &UUIManager::OnPreInputKeyDown);
+	}
+#else
+	// Shipping: OnApplicationPreInputKeyDownListener is not available.
+	// Alt key is handled via Enhanced Input binding in BasicPlayer instead.
+#endif
 }
 
 void UUIManager::InitFTCManager(APlayerController* InPC)
@@ -495,7 +521,7 @@ void UUIManager::CreateHarvestWidgets()
 		HarvestProgressWidget = CreateWidget<UHarvestProgressWidget>(GetWorld(), HarvestProgressWidgetClass);
 		if (HarvestProgressWidget)
 		{
-			HarvestProgressWidget->AddToViewport();
+			HarvestProgressWidget->AddToViewport(100);
 			
 			// Ensure widget is hidden initially - force visibility to hidden
 			HarvestProgressWidget->SetVisibility(ESlateVisibility::Hidden);
@@ -531,7 +557,7 @@ void UUIManager::CreateHarvestWidgets()
 		HarvestLootWidget = CreateWidget<UHarvestLootWidget>(GetWorld(), HarvestLootWidgetClass);
 		if (HarvestLootWidget)
 		{
-			HarvestLootWidget->AddToViewport();
+			HarvestLootWidget->AddToViewport(100);
 			
 			// Ensure widget is hidden initially - force visibility to hidden
 			HarvestLootWidget->SetVisibility(ESlateVisibility::Hidden);
@@ -1085,26 +1111,34 @@ void UUIManager::UpdateCursorAndInputMode()
 	}
 
 	bool bShouldShow = ShouldShowCursor();
-	PlayerController->bShowMouseCursor = bShouldShow;
 
-	if (bShouldShow)
+	if (PlayerController->bShowMouseCursor != bShouldShow)
 	{
-		// ���� �������� UI ������� - ���������� ����� Game+UI
-		FInputModeGameAndUI InputMode;
-		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::LockAlways);
-		InputMode.SetHideCursorDuringCapture(false);
-		PlayerController->SetInputMode(InputMode);
-		
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: Cursor shown - Game+UI mode"));
+		PlayerController->bShowMouseCursor = bShouldShow;
+
+		if (bShouldShow)
+		{
+			FInputModeGameAndUI InputMode;
+			InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::LockAlways);
+			InputMode.SetHideCursorDuringCapture(false);
+			PlayerController->SetInputMode(InputMode);
+
+			UE_LOG(LogTemp, Warning, TEXT("UIManager: Cursor shown - Game+UI mode"));
+		}
+		else
+		{
+			FInputModeGameOnly InputMode;
+			PlayerController->SetInputMode(InputMode);
+
+			UE_LOG(LogTemp, Warning, TEXT("UIManager: Cursor hidden - Game only mode"));
+		}
 	}
-	else
-	{
-		// ��� �������� UI �������� - ��������� � ������� �����
-		FInputModeGameOnly InputMode;
-		PlayerController->SetInputMode(InputMode);
-		
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: Cursor hidden - Game only mode"));
-	}
+
+	// Always clear keyboard focus so SpaceBar/Enter don't trigger
+	// focused UI button click handlers instead of game actions.
+	// SetInputMode is guarded above; focus operations alone don't cause stutter.
+	FSlateApplication::Get().ClearKeyboardFocus(EFocusCause::Cleared);
+	FSlateApplication::Get().SetAllUserFocusToGameViewport();
 }
 
 bool UUIManager::HasUIWindowOpen() const
@@ -1239,7 +1273,7 @@ bool UUIManager::ShouldShowCursor() const
 		|| bDialogueVisible || bQuestJournalVisible
 		|| bVendorShopVisible || bRepairShopVisible || bSkillShopVisible || bTradeVisible || bEquipmentVisible
 		|| bPlayerStatsVisible || bBestiaryVisible || bTitlesVisible || bReputationVisible || bEmoteListVisible
-		|| bAltCursorActive || bGameMenuVisible;
+		|| bAltCursorActive || bGameMenuVisible || bDeathScreenVisible;
 	
 	UE_LOG(LogTemp, Verbose, TEXT("UIManager: Cursor check -> Show: %s"),
 		bAnyWidgetVisible ? TEXT("YES") : TEXT("NO"));
@@ -1991,9 +2025,39 @@ void UUIManager::ToggleEquipment()
 
 void UUIManager::ToggleAltCursor()
 {
+	// Guard: allow only one toggle per frame to prevent double-fire when both
+	// OnPreInputKeyDown (Editor) and Enhanced Input (Shipping) trigger in the same frame.
+	if (AltToggledFrame == GFrameCounter) return;
+	AltToggledFrame = GFrameCounter;
+
 	bAltCursorActive = !bAltCursorActive;
 	UpdateCursorAndInputMode();
 	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleAltCursor - %s"), bAltCursorActive ? TEXT("Active") : TEXT("Inactive"));
+}
+
+void UUIManager::OnPreInputKeyDown(const FKeyEvent& InKeyEvent)
+{
+	if (!AltCursorAction || !PlayerController)
+	{
+		return;
+	}
+
+	const ULocalPlayer* LocalPlayer = PlayerController->GetLocalPlayer();
+	if (!LocalPlayer)
+	{
+		return;
+	}
+
+	const UEnhancedInputLocalPlayerSubsystem* Subsystem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>();
+	if (!Subsystem)
+	{
+		return;
+	}
+
+	if (Subsystem->QueryKeysMappedToAction(AltCursorAction).Contains(InKeyEvent.GetKey()))
+	{
+		ToggleAltCursor();
+	}
 }
 
 void UUIManager::TogglePlayerStats()
@@ -2109,6 +2173,8 @@ void UUIManager::ShowDeathScreen(int32 RespawnTimeSec)
 	if (DeathScreenWidget)
 	{
 		DeathScreenWidget->ShowDeathScreen(RespawnTimeSec);
+		bDeathScreenVisible = true;
+		UpdateCursorAndInputMode();
 	}
 	else
 	{
@@ -2123,6 +2189,8 @@ void UUIManager::HideDeathScreen()
 	if (DeathScreenWidget)
 	{
 		DeathScreenWidget->HideDeathScreen();
+		bDeathScreenVisible = false;
+		UpdateCursorAndInputMode();
 	}
 }
 

@@ -572,6 +572,15 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 		{
 			UE_LOG(LogTemp, Warning, TEXT("Character deleted: ID=%d"), DeletedCharId);
 			OnDeleteCharacterResponse.Broadcast(true, MessageData.message, DeletedCharId);
+
+			// Re-request character list to refresh the UI (mirrors createCharacter flow)
+			if (gameInstance)
+			{
+				FClientDataStruct CD;
+				CD.clientId = gameInstance->GetCurrentClientID();
+				CD.hash     = gameInstance->GetCurrentClientHash();
+				SendCharacterListRequest(CD);
+			}
 		}
 		else
 		{

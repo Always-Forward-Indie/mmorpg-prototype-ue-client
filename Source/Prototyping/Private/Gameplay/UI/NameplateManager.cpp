@@ -57,7 +57,15 @@ void UNameplateManager::SetPlayerDeadState(AActor* Actor, bool bDead)
     }
 }
 
-void UNameplateManager::SetPlayerTitle(AActor* Actor, const FString& InTitle)
+void UNameplateManager::SetPlayerLevel(AActor* Actor, int32 NewLevel)
+{
+    if (CanvasWidget)
+    {
+        CanvasWidget->SetPlayerLevel(Actor, NewLevel);
+    }
+}
+
+void UNameplateManager::SetPlayerTitle(AActor* Actor, const FText& InTitle)
 {
     if (CanvasWidget)
     {

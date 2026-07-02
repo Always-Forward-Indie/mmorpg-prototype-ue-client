@@ -41,6 +41,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Player Nameplate")
     void SetDeadState(bool bNewDead);
 
+    UFUNCTION(BlueprintCallable, Category = "Player Nameplate")
+    void UpdateLevel(int32 NewLevel);
+
     /**
      * Push the equipped title display name to the nameplate.
      * Call this whenever UTitleManager::OnTitlesUpdated fires for the local player,
@@ -49,7 +52,7 @@ public:
      * @param InTitle   FTitleEntry::displayName of the equipped title, empty string = no title.
      */
     UFUNCTION(BlueprintCallable, Category = "Player Nameplate")
-    void UpdateTitle(const FString& InTitle);
+    void UpdateTitle(const FText& InTitle);
 
     /**
      * Show a chat speech bubble on this actor's nameplate for the given duration.
@@ -83,7 +86,7 @@ private:
     FTimerHandle RetryTimerHandle;
 
     // Cached so it can be applied after a deferred TryRegister() completes.
-    FString PendingTitle;
+    FText PendingTitle;
 
     void TryRegister();
     UNameplateManager* ResolveNameplateManager() const;

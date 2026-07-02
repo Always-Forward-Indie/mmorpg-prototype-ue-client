@@ -236,8 +236,8 @@ void UVendorShopWidget::RefreshInventoryDisplay()
     int32 VisualIdx = 0;
     for (const FInventoryItemStruct& Item : CachedInventory.items)
     {
-        // Skip non-tradable, quest and currency items
-        if (!Item.isTradable || Item.isQuestItem) continue;
+        // Skip non-tradable, quest, currency, and equipped items
+        if (!Item.isTradable || Item.isQuestItem || Item.is_equipped) continue;
         if (Item.itemTypeSlug.Equals(TEXT("currency"), ESearchCase::IgnoreCase)) continue;
         if (Item.slug.Contains(TEXT("gold"), ESearchCase::IgnoreCase)) continue;
 
@@ -691,6 +691,8 @@ void UVendorShopWidget::HandleSellItemBatchResult(const FSellItemBatchResultData
 	{
 		const FText Friendly = GetVendorErrorText(Result.errorCode);
 		ShowStatus(FString::Printf(TEXT("Sell failed: %s"), *Friendly.ToString()));
+		RefreshSellCartDisplay();
+		RefreshInventoryDisplay();
 		return;
 	}
     FString FirstItemName;
@@ -739,7 +741,7 @@ void UVendorShopWidget::HandleInventoryUpdated(const FCharacterInventoryStruct& 
     {
         const int32 CartInvId = SellCart[i].inventoryItemId;
         const bool bStillExists = CachedInventory.items.ContainsByPredicate(
-            [CartInvId](const FInventoryItemStruct& InvItem){ return InvItem.id == CartInvId; });
+            [CartInvId](const FInventoryItemStruct& InvItem){ return InvItem.id == CartInvId && !InvItem.is_equipped; });
         if (!bStillExists)
             SellCart.RemoveAt(i);
     }

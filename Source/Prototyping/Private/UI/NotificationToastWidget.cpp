@@ -149,8 +149,10 @@ void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& 
     {
         const FString MasterySlug = Notification.dataFields.FindRef(TEXT("masterySlug"));
         const FString TierStr     = Notification.dataFields.FindRef(TEXT("tier"));
+        FText MasteryName = Loc ? Loc->GetMasteryDisplayName(MasterySlug) : FText::FromString(MasterySlug);
         OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Mastery increased"));
-        OutBody  = FText::FromString(FString::Printf(TEXT("%s \u2014 tier %s"), *MasterySlug, *TierStr));
+        OutBody  = FText::FromString(FString::Printf(TEXT("%s \u2014 tier %s"),
+            *MasteryName.ToString(), *TierStr));
     }
     else if (Type == TEXT("champion_spawned"))
     {

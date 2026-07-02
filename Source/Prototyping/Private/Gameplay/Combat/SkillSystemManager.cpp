@@ -196,11 +196,25 @@ bool USkillSystemManager::ValidateSkillCast(int32 CasterId, int32 TargetId, cons
         return false;
     }
 
-    // Additional validation could include:
-    // - Range checking
-    // - Line of sight
-    // - Friendly fire rules
-    // - Target validity (alive, not immune, etc.)
+    // Only block harmful skill types (damage/debuff) against dead targets.
+    // Healing, buff, resource, and teleport skills must be allowed through so
+    // resurrection spells, corpse-targeted heals, and similar mechanics work.
+    const FSkillData SkillDef = GetSkillData(SkillSlug);
+    const bool bIsHarmful = (SkillDef.effectType == ESkillEffectType::Damage ||
+                             SkillDef.effectType == ESkillEffectType::Debuff);
+    if (bIsHarmful && CombatSystemManager)
+    {
+        TScriptInterface<ICombatable> Target = CombatSystemManager->FindCombatableById(TargetId, TargetType);
+        if (Target.GetInterface() && Target.GetObject() && IsValid(Target.GetObject()))
+        {
+            if (ICombatable::Execute_IsDead(Target.GetObject()))
+            {
+                UE_LOG(LogTemp, Warning, TEXT("SkillSystemManager: Cannot cast harmful skill %s on dead target %d (%s)"),
+                    *SkillSlug, TargetId, *UEnum::GetValueAsString(TargetType));
+                return false;
+            }
+        }
+    }
 
     return true;
 }

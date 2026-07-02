@@ -140,16 +140,22 @@ void UTitleNetworkHandler::HandleRemoteTitleChanged(const TSharedPtr<FJsonObject
     (*BodyPtr)->TryGetStringField(TEXT("equippedTitleDisplayName"), TitleDisplayName);
 
     // Prefer display name; fall back to localized name, then slug so the nameplate always shows something.
-    FString TitleText = TitleDisplayName;
-    if (TitleText.IsEmpty() && !TitleSlug.IsEmpty())
+    FText TitleText;
+    if (!TitleDisplayName.IsEmpty())
+    {
+        TitleText = FText::FromString(TitleDisplayName);
+    }
+    else if (!TitleSlug.IsEmpty())
     {
         if (const ULocalizationSubsystem* Loc = GameInstance->GetSubsystem<ULocalizationSubsystem>())
         {
-            TitleText = Loc->GetTitleDisplayName(TitleSlug).ToString();
+            TitleText = Loc->GetTitleDisplayName(TitleSlug);
         }
     }
     if (TitleText.IsEmpty())
-        TitleText = TitleSlug;
+    {
+        TitleText = FText::FromString(TitleSlug);
+    }
 
     ABasicPlayer* RemotePlayer = GameInstance->GetPlayerByCharacterId(CharacterId);
     if (!RemotePlayer || !IsValid(RemotePlayer)) return;

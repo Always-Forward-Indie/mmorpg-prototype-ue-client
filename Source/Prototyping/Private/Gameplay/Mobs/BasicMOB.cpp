@@ -520,7 +520,7 @@ void ABasicMOB::UpdateWidgetScale(float DeltaTime)
 	float TargetScale = FMath::Clamp(Factor, 0.1f, 1.0f) * widgetScaleFactor;
 
 	CurrentWidgetScale = FMath::FInterpConstantTo(CurrentWidgetScale, TargetScale, DeltaTime, 1.f);
-	HeadWidget->SetWidgetScale(TargetScale);
+	HeadWidget->SetWidgetScale(CurrentWidgetScale);
 
 	if (FMath::Abs(LastDisplayedWidgetScale - CurrentWidgetScale) > 0.01f ||
 		FMath::Abs(LastDisplayedWidgetDistance - Distance) > 100.0f ||
@@ -1843,10 +1843,8 @@ void ABasicMOB::ForceUpdateUI()
 		LastAggressive = MOBData.bIsAggressive;
 		bUIInitialized = true;
 		
-		if (HeadWidget)
-		{
-			HeadWidget->SetWidgetScale(widgetScaleFactor);
-		}
+		// Note: widget scale is managed per-tick by UpdateWidgetScale();
+		// do NOT override it here to avoid 1-frame size spikes on combat events.
 	}
 }
 

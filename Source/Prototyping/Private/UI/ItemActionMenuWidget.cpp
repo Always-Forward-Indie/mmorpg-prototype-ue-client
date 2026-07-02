@@ -1,4 +1,5 @@
 #include "UI/ItemActionMenuWidget.h"
+#include "UI/ItemActionRowWidget.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "Components/VerticalBox.h"
@@ -116,7 +117,26 @@ void UItemActionMenuWidget::AddActionRow(const FText& Label, EItemContextAction 
 {
 	if (!ActionList) return;
 
-	// Visual: Border > TextBlock
+	if (ActionRowWidgetClass)
+	{
+		// Custom row widget from Blueprint
+		UItemActionRowWidget* Row = CreateWidget<UItemActionRowWidget>(this, ActionRowWidgetClass);
+		if (Row)
+		{
+			Row->SetActionLabel(Label);
+			Row->SetBoundAction(Action);
+			RowActions.Add(Action);
+
+			if (UVerticalBoxSlot* RowSlot = ActionList->AddChildToVerticalBox(Row))
+			{
+				RowSlot->SetPadding(FMargin(0.f, 1.f));
+				RowSlot->SetHorizontalAlignment(HAlign_Fill);
+			}
+		}
+		return;
+	}
+
+	// Fallback: programmatic Border > TextBlock
 	UBorder* Bg = NewObject<UBorder>(this);
 	Bg->SetBrushColor(FLinearColor(0.05f, 0.05f, 0.05f, 0.9f));
 	Bg->SetPadding(FMargin(12.f, 6.f));
@@ -145,6 +165,15 @@ int32 UItemActionMenuWidget::HitTestRowIndex(const FVector2D& AbsoluteScreenPos)
 		UWidget* Child = ActionList->GetChildAt(i);
 		if (!Child) continue;
 
+		// Custom row widgets expose a dedicated hit-test
+		if (UItemActionRowWidget* Row = Cast<UItemActionRowWidget>(Child))
+		{
+			if (Row->IsPointInside(AbsoluteScreenPos))
+				return i;
+			continue;
+		}
+
+		// Fallback: manual Border > TextBlock rows
 		const FGeometry Geo = Child->GetCachedGeometry();
 		const FVector2D Local = Geo.AbsoluteToLocal(AbsoluteScreenPos);
 		const FVector2D Size  = Geo.GetLocalSize();

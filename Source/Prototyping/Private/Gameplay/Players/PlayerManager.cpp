@@ -421,8 +421,31 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 	}
 
 	// Handle respawnResult - server response to respawnRequest
-	if (MessageData.eventType == "respawnResult" && MessageData.status == "success")
+	if (MessageData.eventType == "respawnResult")
 	{
+		if (MessageData.status != "success")
+		{
+			UE_LOG(LogConnection, Error, TEXT("respawnResult failed: %s"), *MessageData.message);
+
+			int32 RespawnCharId = 0;
+			if (Body.IsValid()) Body->TryGetNumberField(TEXT("characterId"), RespawnCharId);
+			if (RespawnCharId <= 0 && ClientData.clientId > 0)
+			{
+				if (const FClientDataStruct* Stored = gameInstance->ConnectedPlayers.Find(ClientData.clientId))
+					RespawnCharId = Stored->characterData.characterId;
+			}
+			ABasicPlayer* RespawnPlayer = gameInstance->GetPlayerByCharacterId(RespawnCharId);
+			if (RespawnPlayer && IsValid(RespawnPlayer))
+			{
+				// Server says "already alive" — client-server desync. Force-revive to reconcile.
+				if (MessageData.message.Contains(TEXT("not dead")) || MessageData.message.Contains(TEXT("already alive")) || MessageData.message.Contains(TEXT("not_dead")) || MessageData.message.Contains(TEXT("while alive")))
+				{
+					UE_LOG(LogConnection, Warning, TEXT("respawnResult: server says player is already alive — force-reviving client"));
+					RespawnPlayer->SetDead_Implementation(false);
+				}
+			}
+			return;
+		}
 
 		if (gameInstance && IsValid(gameInstance) && Body.IsValid())
 		{
@@ -460,6 +483,10 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 					RespawnPlayer->SetActorLocation(FVector(RX, RY, RZ), false, nullptr, ETeleportType::TeleportPhysics);
 					RespawnPlayer->SetActorRotation(FRotator(0.0, RRot, 0.0));
 					RespawnPlayer->SetCoordinates(RX, RY, RZ, RRot, false);
+				}
+				else
+				{
+					UE_LOG(LogConnection, Warning, TEXT("respawnResult: position field missing or null for charId=%d — reviving in-place"), RespawnCharId);
 				}
 
 				// Revive the player: restores movement mode, hides death screen,

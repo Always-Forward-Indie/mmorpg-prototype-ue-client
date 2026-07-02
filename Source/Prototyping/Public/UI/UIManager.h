@@ -11,6 +11,7 @@
 #include "UIManager.generated.h"
 
 // Forward declarations
+struct FKeyEvent;
 class UCombatScreenFlashWidget;
 class UInventoryManager;
 class UHarvestManager;
@@ -389,6 +390,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void SetLowHealthWarning(bool bActive);
 
+	/** Sets the Alt-cursor toggle action reference for data-driven pre-input handling. */
+	void SetAltCursorAction(class UInputAction* InAction) { AltCursorAction = InAction; }
+
+	/** Returns whether the cursor is visible due to Alt-toggle (not from any UI panel). */
+	bool GetAltCursorActive() const { return bAltCursorActive; }
+
+	/**
+	 * Registers the OnApplicationPreInputKeyDownListener that toggles cursor on Alt press.
+	 * Safe to call multiple times (guards against duplicate registration).
+	 */
+	void RegisterPreInputListener();
+
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UNameplateManager* GetNameplateManager() const { return NameplateManager; }
 
@@ -740,7 +753,9 @@ protected:
 	bool bReputationVisible = false;
 	bool bEmoteListVisible = false;
 	bool bAltCursorActive;
+	uint64 AltToggledFrame = 0;  // GFrameCounter guard for one toggle per frame
 	bool bGameMenuVisible;
+	bool bDeathScreenVisible;
 
 public:
 	// Internal delegate handlers (must be public for AddDynamic)
@@ -801,4 +816,14 @@ private:
 
 	/** Recursively checks if any child of Widget is under MousePos and Visible. */
 	static bool DoesWidgetTreeHaveHoveredChild(UWidget* Widget, const FVector2f& MousePos);
+
+	/** Slate pre-input handler: toggles cursor on Alt press (fallback when Enhanced Input can't reach Alt). */
+	void OnPreInputKeyDown(const FKeyEvent& InKeyEvent);
+
+	/** Handle for the Slate pre-input listener. */
+	FDelegateHandle PreInputKeyDownHandle;
+
+	/** The Alt cursor toggle action, used by OnPreInputKeyDown to look up bound keys via the Enhanced Input subsystem. */
+	UPROPERTY()
+	class UInputAction* AltCursorAction = nullptr;
 };

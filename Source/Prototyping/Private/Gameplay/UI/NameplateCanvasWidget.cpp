@@ -311,7 +311,7 @@ void UNameplateCanvasWidget::RegisterPlayer(AActor*        Actor,
         Nameplate->SetPlayerInfo(Name, Class, Level, bIsDead);
         // Explicitly hide the title row — title arrives later via SetPlayerTitle.
         // Prevents an empty text slot from showing when the player has no title.
-        Nameplate->SetTitle(TEXT(""));
+        Nameplate->SetTitle(FText::GetEmpty());
         UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget::RegisterPlayer - successfully created and initialized nameplate for '%s'"), *Name);
     }
 
@@ -463,7 +463,20 @@ void UNameplateCanvasWidget::SetPlayerDeadState(AActor* Actor, bool bDead)
         Nameplate->SetDeadState(bDead);
     }
 }
-void UNameplateCanvasWidget::SetPlayerTitle(AActor* Actor, const FString& InTitle)
+
+void UNameplateCanvasWidget::SetPlayerLevel(AActor* Actor, int32 NewLevel)
+{
+    FNameplateEntry* Entry = FindEntry(Actor);
+    if (!Entry || Entry->bIsNPC) return;
+
+    UW_PlayerNameplateWidget* Nameplate = Cast<UW_PlayerNameplateWidget>(Entry->Widget);
+    if (Nameplate)
+    {
+        Nameplate->SetPlayerLevel(NewLevel);
+    }
+}
+
+void UNameplateCanvasWidget::SetPlayerTitle(AActor* Actor, const FText& InTitle)
 {
     FNameplateEntry* Entry = FindEntry(Actor);
     if (!Entry || Entry->bIsNPC) return;

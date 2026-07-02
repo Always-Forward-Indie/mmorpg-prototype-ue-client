@@ -9,6 +9,7 @@
 #include "Engine/Texture2D.h"
 #include "Framework/Application/SlateApplication.h"
 #include "UI/SkillDragDropOperation.h"
+#include "UI/SkillBarWidget.h"
 #include "Blueprint/DragDropOperation.h"
 
 USkillSlotWidget::USkillSlotWidget(const FObjectInitializer& ObjectInitializer)
@@ -82,6 +83,28 @@ void USkillSlotWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 {
     Super::NativeTick(MyGeometry, InDeltaTime);
 
+    // Stuck-drag watchdog: if bIsDragging has been true for > 5 seconds,
+    // force-reset it — something went wrong with the Slate event chain.
+    if (bIsDragging)
+    {
+        const float Now = GetCurrentTime();
+        if (StuckDragStartTime <= 0.0f)
+        {
+            StuckDragStartTime = Now;
+        }
+        else if (Now - StuckDragStartTime > 5.0f)
+        {
+            UE_LOG(LogTemp, Error, TEXT("SkillSlotWidget[%d]: STUCK DRAG DETECTED — bIsDragging=true for %.1fs, force-resetting"),
+                SlotIndex, Now - StuckDragStartTime);
+            ForceResetDragState();
+            StuckDragStartTime = 0.0f;
+        }
+    }
+    else
+    {
+        StuckDragStartTime = 0.0f;
+    }
+
     // Update cooldown if skill manager is available
     if (SkillManager && !AssignedSkillSlug.IsEmpty())
     {
@@ -136,15 +159,30 @@ FReply USkillSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 {
     if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
     {
+        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: MouseDown — bIsDragging=%d bMousePressed=%d slug='%s'"),
+            SlotIndex, bIsDragging ? 1 : 0, bMousePressed ? 1 : 0, *AssignedSkillSlug);
+
+        // Safety reset: if bIsDragging is stuck from a prior drag that never
+        // received a matching NativeOnMouseButtonUp or NativeOnDragCancelled,
+        // force-reset it here so the slot remains usable.
+        if (bIsDragging)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: NativeOnMouseButtonDown found stuck bIsDragging=true — force-resetting"),
+                SlotIndex);
+            ForceResetDragState();
+        }
+
         bMousePressed = true;
         OnSkillButtonPressed();
 
         // If a skill is assigned, allow initiating a drag to remove it
         if (!AssignedSkillSlug.IsEmpty())
         {
+            UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: MouseDown — returning DetectDrag for '%s'"), SlotIndex, *AssignedSkillSlug);
             return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
         }
 
+        UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: MouseDown — empty slot, no drag"), SlotIndex);
         return FReply::Handled();
     }
 
@@ -159,6 +197,12 @@ FReply USkillSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 
 FReply USkillSlotWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
+    if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: MouseUp — bIsDragging=%d bMousePressed=%d"),
+            SlotIndex, bIsDragging ? 1 : 0, bMousePressed ? 1 : 0);
+    }
+
     if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && bMousePressed)
     {
         bMousePressed = false;
@@ -176,6 +220,7 @@ FReply USkillSlotWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, cons
         }
 
         bIsDragging = false;
+        UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: NativeOnMouseButtonUp reset bIsDragging=false"), SlotIndex);
         return FReply::Handled();
     }
     return Super::NativeOnMouseButtonUp(InGeometry, InMouseEvent);
@@ -192,6 +237,9 @@ void USkillSlotWidget::NativeOnDragEnter(const FGeometry& G, const FDragDropEven
         return;
     }
 
+    UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: DragEnter op=%p canAccept=%d"),
+        SlotIndex, Op, CanAcceptSkillDrop(SkillOp) ? 1 : 0);
+
     // Always accept the latest op pointer. Slate can re-enter (e.g., cursor moves
     // between child widgets of this UserWidget) producing a new Op wrapper for the
     // same logical drag — the old pointer-based guard was silently swallowing those
@@ -202,7 +250,15 @@ void USkillSlotWidget::NativeOnDragEnter(const FGeometry& G, const FDragDropEven
         ActiveDragOp = Op;
     }
 
+    // CanAcceptSkillDrop now rejects the source slot itself, so the source no
+    // longer glows and steals the highlight from the real drop target.
     SetDropHighlighted(CanAcceptSkillDrop(SkillOp));
+
+    // Clear highlight on sibling slots so only this slot glows.
+    if (OwnerBar.IsValid())
+    {
+        OwnerBar->ClearHighlightOnOtherSlots(this);
+    }
 }
 
 bool USkillSlotWidget::NativeOnDragOver(const FGeometry& Geo, const FDragDropEvent& E, UDragDropOperation* Op)
@@ -221,7 +277,8 @@ bool USkillSlotWidget::NativeOnDragOver(const FGeometry& Geo, const FDragDropEve
         ActiveDragOp = Op;
     }
 
-    // Always restore highlight if it was cleared (e.g., a spurious Leave fired).
+    // Restore highlight if a spurious DragLeave cleared it while the cursor is
+    // still over this slot.
     if (!bIsDropHighlighted)
     {
         SetDropHighlighted(CanAcceptSkillDrop(SkillOp));
@@ -239,9 +296,13 @@ bool USkillSlotWidget::NativeOnDrop(const FGeometry& G, const FDragDropEvent& E,
     auto* SkillOp = Cast<USkillDragDropOperation>(Op);
     if (!SkillOp)
     {
+        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Drop RECEIVED — not a SkillDragDropOperation, rejecting"), SlotIndex);
         ResetDragVisualState();
         return false;
     }
+
+    UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Drop RECEIVED sourceSlot=%d slug='%s'"),
+        SlotIndex, SkillOp->SourceSlotIndex, *SkillOp->SkillData.networkData.skillSlug);
 
     // Validate we have an actual skill to assign.
     const FString& DroppedSlug = SkillOp->SkillData.networkData.skillSlug;
@@ -288,14 +349,17 @@ void USkillSlotWidget::NativeOnDragLeave(const FDragDropEvent& E, UDragDropOpera
 {
     Super::NativeOnDragLeave(E, Op);
 
-    // Reset highlight whenever any SkillDragDropOperation leaves this slot.
-    // We intentionally do NOT guard by ActiveDragOp pointer equality — Slate
-    // may wrap the same logical drag in a new UDragDropOperation instance
-    // between Enter and Leave, causing the old guard to silently skip the reset
-    // and leaving the slot stuck in a highlighted state.
+    UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: DragLeave op=%p highlight=%d"),
+        SlotIndex, Op, bIsDropHighlighted ? 1 : 0);
+
+    // Direct clear. The previous deferred-clear timer was a band-aid for flicker
+    // caused by using the source widget itself as the drag visual (which
+    // reparented the source and made Slate fire spurious 0ms DragLeave cycles on
+    // sibling slots). With a standalone drag visual that root cause is gone, so
+    // a straight clear is correct and avoids stuck highlights from suppressed leaves.
     if (Cast<USkillDragDropOperation>(Op))
     {
-        ResetDragVisualState();
+        SetDropHighlighted(false);
     }
 }
 
@@ -312,12 +376,18 @@ void USkillSlotWidget::NativeOnDragCancelled(const FDragDropEvent& E, UDragDropO
     }
 
     bIsDragging = false;
+    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: NativeOnDragCancelled — bIsDragging=false bMousePressed=%d"),
+        SlotIndex, bMousePressed ? 1 : 0);
 }
 
 void USkillSlotWidget::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation)
 {
+    UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: NativeOnDragDetected ENTERED — slug='%s' bIsDragging=%d bMousePressed=%d"),
+        SlotIndex, *AssignedSkillSlug, bIsDragging ? 1 : 0, bMousePressed ? 1 : 0);
+
     if (AssignedSkillSlug.IsEmpty())
     {
+        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: NativeOnDragDetected — slot is EMPTY, aborting"), SlotIndex);
         OutOperation = nullptr;
         return;
     }
@@ -349,8 +419,12 @@ void USkillSlotWidget::NativeOnDragDetected(const FGeometry& InGeometry, const F
     }
     else
     {
-        // Fallback: use the slot itself as drag visual (not ideal but functional)
-        DragDropOp->DefaultDragVisual = this;
+        // Never use this slot as DefaultDragVisual — UMG would reparent the slot
+        // out of the skill bar for the duration of the drag, corrupting the
+        // layout/hit-testing of every sibling slot (root cause of the slot-to-slot
+        // drag flicker and drop-on-self bug). Proceed with no visual instead.
+        DragDropOp->DefaultDragVisual = nullptr;
+        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: CreateDragVisualWidget returned null — proceeding without drag visual"), SlotIndex);
     }
 
     DragDropOp->Pivot = EDragPivot::MouseDown;
@@ -362,6 +436,11 @@ void USkillSlotWidget::NativeOnDragDetected(const FGeometry& InGeometry, const F
     UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Started dragging skill '%s' from slot"), SlotIndex, *AssignedSkillSlug);
 }
 
+
+void USkillSlotWidget::SetOwnerBar(USkillBarWidget* InOwnerBar)
+{
+    OwnerBar = InOwnerBar;
+}
 
 void USkillSlotWidget::SlotInitialize(int32 InSlotIndex, UPlayerSkillManager* InSkillManager)
 {
@@ -694,6 +773,19 @@ bool USkillSlotWidget::CanAcceptSkillDrop(USkillDragDropOperation* DragDropOp) c
         return bCachedCanAccept;
     }
 
+    // Reject drop on the source slot itself. Reordering onto the origin is a
+    // no-op, and previously the source stayed a valid drop candidate so it kept
+    // glowing and stole the highlight from the real target — which is exactly
+    // why the target slot appeared to flicker / never light up during slot-to-slot
+    // drags.
+    if (DragDropOp->SourceSlotWidget == this && DragDropOp->SourceSlotIndex == SlotIndex)
+    {
+        CachedDragOp = DragDropOp;
+        bCachedCanAccept = false;
+        bCacheValid = true;
+        return false;
+    }
+
     const FString& SkillSlug = DragDropOp->SkillData.networkData.skillSlug;
     if (SkillSlug.IsEmpty())
     {
@@ -761,8 +853,13 @@ float USkillSlotWidget::GetCurrentTime() const
 
 void USkillSlotWidget::ForceResetDragState()
 {
+    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: ForceResetDragState wasDragging=%d wasMousePressed=%d wasHighlighted=%d"),
+        SlotIndex, bIsDragging ? 1 : 0, bMousePressed ? 1 : 0, bIsDropHighlighted ? 1 : 0);
+
     ActiveDragOp.Reset();
     InvalidateDragCache();
+    bIsDragging = false;
+    bMousePressed = false;
 
     if (bIsDropHighlighted)
     {
@@ -782,7 +879,7 @@ void USkillSlotWidget::BeginDestroy()
         SkillManager->OnSkillCooldownStarted.RemoveDynamic(this, &USkillSlotWidget::OnSkillCooldownStarted);
         SkillManager->OnSkillReady.RemoveDynamic(this, &USkillSlotWidget::OnSkillReady);
     }
-    
+
     Super::BeginDestroy();
 }
 

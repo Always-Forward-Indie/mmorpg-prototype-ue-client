@@ -26,6 +26,8 @@ void ULocalizationSubsystem::SetLocalizationData(ULocalizationDataAsset* InAsset
     CachedAmbientSpeechTable      = nullptr;
     CachedWIOLocaleTable          = nullptr;
     CachedTitleLocaleTable        = nullptr;
+    CachedMasteryLocaleTable      = nullptr;
+    CachedEffectLocaleTable       = nullptr;
 
     UE_LOG(LogTemp, Log, TEXT("LocalizationSubsystem: data asset %s"),
         InAsset ? TEXT("assigned") : TEXT("cleared"));
@@ -64,70 +66,70 @@ void ULocalizationSubsystem::SetLocale(const FString& InLocale)
 UDataTable* ULocalizationSubsystem::GetQuestTable() const
 {
     if (!CachedQuestTable && LocalizationData)
-        CachedQuestTable = LocalizationData->QuestDefinitions.LoadSynchronous();
+        CachedQuestTable = LocalizationData->QuestDefinitions.Get();
     return CachedQuestTable;
 }
 
 UDataTable* ULocalizationSubsystem::GetQuestStepTable() const
 {
     if (!CachedQuestStepTable && LocalizationData)
-        CachedQuestStepTable = LocalizationData->QuestStepDefinitions.LoadSynchronous();
+        CachedQuestStepTable = LocalizationData->QuestStepDefinitions.Get();
     return CachedQuestStepTable;
 }
 
 UDataTable* ULocalizationSubsystem::GetDialogueNodeTable() const
 {
     if (!CachedDialogueNodeTable && LocalizationData)
-        CachedDialogueNodeTable = LocalizationData->DialogueNodes.LoadSynchronous();
+        CachedDialogueNodeTable = LocalizationData->DialogueNodes.Get();
     return CachedDialogueNodeTable;
 }
 
 UDataTable* ULocalizationSubsystem::GetDialogueChoiceTable() const
 {
     if (!CachedDialogueChoiceTable && LocalizationData)
-        CachedDialogueChoiceTable = LocalizationData->DialogueChoices.LoadSynchronous();
+        CachedDialogueChoiceTable = LocalizationData->DialogueChoices.Get();
     return CachedDialogueChoiceTable;
 }
 
 UDataTable* ULocalizationSubsystem::GetItemLocaleTable() const
 {
     if (!CachedItemLocaleTable && LocalizationData)
-        CachedItemLocaleTable = LocalizationData->ItemLocale.LoadSynchronous();
+        CachedItemLocaleTable = LocalizationData->ItemLocale.Get();
     return CachedItemLocaleTable;
 }
 
 UDataTable* ULocalizationSubsystem::GetMobLocaleTable() const
 {
     if (!CachedMobLocaleTable && LocalizationData)
-        CachedMobLocaleTable = LocalizationData->MobLocale.LoadSynchronous();
+        CachedMobLocaleTable = LocalizationData->MobLocale.Get();
     return CachedMobLocaleTable;
 }
 
 UDataTable* ULocalizationSubsystem::GetNPCLocaleTable() const
 {
     if (!CachedNPCLocaleTable && LocalizationData)
-        CachedNPCLocaleTable = LocalizationData->NPCLocale.LoadSynchronous();
+        CachedNPCLocaleTable = LocalizationData->NPCLocale.Get();
     return CachedNPCLocaleTable;
 }
 
 UDataTable* ULocalizationSubsystem::GetBestiaryCategoryTable() const
 {
     if (!CachedBestiaryCategoryTable && LocalizationData)
-        CachedBestiaryCategoryTable = LocalizationData->BestiaryCategories.LoadSynchronous();
+        CachedBestiaryCategoryTable = LocalizationData->BestiaryCategories.Get();
     return CachedBestiaryCategoryTable;
 }
 
 UDataTable* ULocalizationSubsystem::GetZoneLocaleTable() const
 {
     if (!CachedZoneLocaleTable && LocalizationData)
-        CachedZoneLocaleTable = LocalizationData->ZoneLocale.LoadSynchronous();
+        CachedZoneLocaleTable = LocalizationData->ZoneLocale.Get();
     return CachedZoneLocaleTable;
 }
 
 UDataTable* ULocalizationSubsystem::GetNotificationLocaleTable() const
 {
     if (!CachedNotificationLocaleTable && LocalizationData)
-        CachedNotificationLocaleTable = LocalizationData->NotificationLocale.LoadSynchronous();
+        CachedNotificationLocaleTable = LocalizationData->NotificationLocale.Get();
     return CachedNotificationLocaleTable;
 }
 
@@ -469,7 +471,7 @@ FText ULocalizationSubsystem::GetItemBrokenText(const FString& ItemSlug) const
 UDataTable* ULocalizationSubsystem::GetAmbientSpeechTable() const
 {
     if (!CachedAmbientSpeechTable && LocalizationData)
-        CachedAmbientSpeechTable = LocalizationData->AmbientSpeechLines.LoadSynchronous();
+        CachedAmbientSpeechTable = LocalizationData->AmbientSpeechLines.Get();
     return CachedAmbientSpeechTable;
 }
 
@@ -499,14 +501,19 @@ bool ULocalizationSubsystem::GetNPCSpeechLineDefinition(const FString& LineKey, 
 UDataTable* ULocalizationSubsystem::GetWIOLocaleTable() const
 {
     if (!CachedWIOLocaleTable && LocalizationData)
-        CachedWIOLocaleTable = LocalizationData->WorldObjectLocale.LoadSynchronous();
+        CachedWIOLocaleTable = LocalizationData->WorldObjectLocale.Get();
     return CachedWIOLocaleTable;
 }
 
 UDataTable* ULocalizationSubsystem::GetTitleLocaleTable() const
 {
     if (!CachedTitleLocaleTable && LocalizationData)
-        CachedTitleLocaleTable = LocalizationData->TitleLocale.LoadSynchronous();
+        CachedTitleLocaleTable = LocalizationData->TitleLocale.Get();
+
+    UE_LOG(LogTemp, Warning, TEXT("[LOCALE] GetTitleLocaleTable: LocalizationData=%s Table=%s"),
+        LocalizationData ? TEXT("valid") : TEXT("NULL"),
+        CachedTitleLocaleTable ? *CachedTitleLocaleTable->GetName() : TEXT("NULL"));
+
     return CachedTitleLocaleTable;
 }
 
@@ -560,7 +567,12 @@ FText ULocalizationSubsystem::GetTitleDisplayName(const FString& TitleSlug) cons
     if (!Table) return FallbackText(TitleSlug);
     const FTitleLocaleDefinition* Row = Table->FindRow<FTitleLocaleDefinition>(
         FName(*TitleSlug), TEXT("GetTitleDisplayName"), false);
-    return (Row && !Row->displayName.IsEmpty()) ? Row->displayName : FallbackText(TitleSlug);
+    const FText Result = (Row && !Row->displayName.IsEmpty()) ? Row->displayName : FallbackText(TitleSlug);
+
+    UE_LOG(LogTemp, Warning, TEXT("[LOCALE] GetTitleDisplayName('%s'): Row=%s Result='%s'"),
+        *TitleSlug, Row ? TEXT("found") : TEXT("NULL"), *Result.ToString());
+
+    return Result;
 }
 
 FText ULocalizationSubsystem::GetTitleDescription(const FString& TitleSlug) const
@@ -583,3 +595,78 @@ bool ULocalizationSubsystem::GetTitleLocaleDefinition(const FString& TitleSlug, 
     if (Row) { OutDefinition = *Row; return true; }
     return false;
 }
+
+UDataTable* ULocalizationSubsystem::GetMasteryLocaleTable() const
+{
+    if (!CachedMasteryLocaleTable && LocalizationData)
+        CachedMasteryLocaleTable = LocalizationData->MasteryLocale.Get();
+
+    UE_LOG(LogTemp, Warning, TEXT("[LOCALE] GetMasteryLocaleTable: LocalizationData=%s Table=%s"),
+        LocalizationData ? TEXT("valid") : TEXT("NULL"),
+        CachedMasteryLocaleTable ? *CachedMasteryLocaleTable->GetName() : TEXT("NULL"));
+
+    return CachedMasteryLocaleTable;
+}
+
+FText ULocalizationSubsystem::GetMasteryDisplayName(const FString& MasterySlug) const
+{
+    if (MasterySlug.IsEmpty()) return FText::GetEmpty();
+    UDataTable* Table = GetMasteryLocaleTable();
+    if (!Table) return FallbackText(MasterySlug);
+    const FMasteryLocaleDefinition* Row = Table->FindRow<FMasteryLocaleDefinition>(
+        FName(*MasterySlug), TEXT("GetMasteryDisplayName"), false);
+    const FText Result = (Row && !Row->displayName.IsEmpty()) ? Row->displayName : FallbackText(MasterySlug);
+
+    UE_LOG(LogTemp, Warning, TEXT("[LOCALE] GetMasteryDisplayName('%s'): Row=%s Result='%s'"),
+        *MasterySlug, Row ? TEXT("found") : TEXT("NULL"), *Result.ToString());
+
+    return Result;
+}
+
+FText ULocalizationSubsystem::GetMasteryDescription(const FString& MasterySlug) const
+{
+    if (MasterySlug.IsEmpty()) return FText::GetEmpty();
+    UDataTable* Table = GetMasteryLocaleTable();
+    if (!Table) return FallbackText(MasterySlug);
+    const FMasteryLocaleDefinition* Row = Table->FindRow<FMasteryLocaleDefinition>(
+        FName(*MasterySlug), TEXT("GetMasteryDescription"), false);
+    return (Row && !Row->description.IsEmpty()) ? Row->description : FText::GetEmpty();
+}
+
+UDataTable* ULocalizationSubsystem::GetEffectLocaleTable() const
+{
+    if (!CachedEffectLocaleTable && LocalizationData)
+        CachedEffectLocaleTable = LocalizationData->EffectLocale.Get();
+
+    UE_LOG(LogTemp, Warning, TEXT("[LOCALE] GetEffectLocaleTable: LocalizationData=%s Table=%s"),
+        LocalizationData ? TEXT("valid") : TEXT("NULL"),
+        CachedEffectLocaleTable ? *CachedEffectLocaleTable->GetName() : TEXT("NULL"));
+
+    return CachedEffectLocaleTable;
+}
+
+FText ULocalizationSubsystem::GetEffectDisplayName(const FString& EffectSlug) const
+{
+    if (EffectSlug.IsEmpty()) return FText::GetEmpty();
+    UDataTable* Table = GetEffectLocaleTable();
+    if (!Table) return FallbackText(EffectSlug);
+    const FEffectLocaleDefinition* Row = Table->FindRow<FEffectLocaleDefinition>(
+        FName(*EffectSlug), TEXT("GetEffectDisplayName"), false);
+    const FText Result = (Row && !Row->displayName.IsEmpty()) ? Row->displayName : FallbackText(EffectSlug);
+
+    UE_LOG(LogTemp, Warning, TEXT("[LOCALE] GetEffectDisplayName('%s'): Row=%s Result='%s'"),
+        *EffectSlug, Row ? TEXT("found") : TEXT("NULL"), *Result.ToString());
+
+    return Result;
+}
+
+FText ULocalizationSubsystem::GetEffectDescription(const FString& EffectSlug) const
+{
+    if (EffectSlug.IsEmpty()) return FText::GetEmpty();
+    UDataTable* Table = GetEffectLocaleTable();
+    if (!Table) return FText::GetEmpty();
+    const FEffectLocaleDefinition* Row = Table->FindRow<FEffectLocaleDefinition>(
+        FName(*EffectSlug), TEXT("GetEffectDescription"), false);
+    return (Row && !Row->description.IsEmpty()) ? Row->description : FText::GetEmpty();
+}
+

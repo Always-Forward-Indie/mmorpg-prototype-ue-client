@@ -1565,6 +1565,9 @@ struct FExperienceGainEventStruct
     int32 experienceGained = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Gain Event")
+    int32 characterId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Gain Event")
     EExperienceReason reason = EExperienceReason::None;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experience Gain Event")
@@ -4393,4 +4396,34 @@ struct PROTOTYPING_API FTitleLocaleDefinition : public FTableRowBase
     FText description;
 
     FTitleLocaleDefinition() {}
+};
+
+/** DataTable row for localised mastery display names and descriptions. */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FMasteryLocaleDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mastery Locale")
+    FText displayName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mastery Locale")
+    FText description;
+
+    FMasteryLocaleDefinition() {}
+};
+
+/** DataTable row for localised effect display names and descriptions. */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FEffectLocaleDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect Locale")
+    FText displayName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect Locale")
+    FText description;
+
+    FEffectLocaleDefinition() {}
 };

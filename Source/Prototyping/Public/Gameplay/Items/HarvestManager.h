@@ -86,8 +86,12 @@ public:
 	void PickupAllLoot();
 
 	// Cancel current harvest
-	UFUNCTION(BlueprintCallable, Category = "Harvest")
-	void CancelHarvest();
+    UFUNCTION(BlueprintCallable, Category = "Harvest")
+    void CancelHarvest();
+
+    // Lock/unlock player movement during harvest to prevent walking while gathering
+    void LockPlayerMovement();
+    void UnlockPlayerMovement();
 
 	// Check if currently harvesting
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Harvest")

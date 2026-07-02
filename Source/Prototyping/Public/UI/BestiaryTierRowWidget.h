@@ -17,10 +17,10 @@ class UWidget;
  * then assign it as TierRowClass on WBP_BestiaryEntryWidget.
  *
  * Blueprint subclass must provide:
- *   Tier_Category_Text  UTextBlock   (BindWidget)           — localized category name
- *   Tier_Content_Box    UVerticalBox (BindWidget)           — filled with data lines when unlocked
- *   Tier_Locked_Text    UTextBlock   (BindWidgetOptional)   — "???" hint when locked
- *   Tier_Status_Icon    UWidget      (BindWidgetOptional)   — checkmark / lock icon
+ *   Tier_Category_Text  UTextBlock   (BindWidget)           ï¿½ localized category name
+ *   Tier_Content_Box    UVerticalBox (BindWidget)           ï¿½ filled with data lines when unlocked
+ *   Tier_Locked_Text    UTextBlock   (BindWidgetOptional)   ï¿½ "???" hint when locked
+ *   Tier_Status_Icon    UWidget      (BindWidgetOptional)   ï¿½ checkmark / lock icon
  */
 UCLASS(Abstract, BlueprintType, Blueprintable)
 class PROTOTYPING_API UBestiaryTierRowWidget : public UUserWidget
@@ -44,7 +44,7 @@ protected:
     void OnSetupComplete(const FBestiaryTierStruct& Tier);
 
     // ------------------------------------------------------------------
-    // Bound widgets — names must match the UMG widget names exactly
+    // Bound widgets ï¿½ names must match the UMG widget names exactly
     // ------------------------------------------------------------------
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "Bestiary|Tier Row")
@@ -58,6 +58,11 @@ protected:
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Bestiary|Tier Row")
     UWidget* Tier_Status_Icon = nullptr;
+
+    /** Widget class for individual content lines inside Tier_Content_Box. When set, expects a
+     *  Blueprint subclass with a child UTextBlock named "Row_Text". Falls back to plain UTextBlock. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bestiary|Tier Row")
+    TSubclassOf<UUserWidget> ContentRowClass;
 
 private:
     /** Append text lines for unlocked tier data into Tier_Content_Box. */

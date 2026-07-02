@@ -58,6 +58,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Nameplate Manager")
     void SetPlayerDeadState(AActor* Actor, bool bDead);
 
+    UFUNCTION(BlueprintCallable, Category = "Nameplate Manager")
+    void SetPlayerLevel(AActor* Actor, int32 NewLevel);
+
     /**
      * Update the title line on a registered player nameplate.
      * Call this from the TitleNetworkHandler whenever a player_titles_update is received.
@@ -66,7 +69,7 @@ public:
      * @param InTitle   FTitleEntry::displayName of the equipped title (empty = hide).
      */
     UFUNCTION(BlueprintCallable, Category = "Nameplate Manager")
-    void SetPlayerTitle(AActor* Actor, const FString& InTitle);
+    void SetPlayerTitle(AActor* Actor, const FText& InTitle);
     /**
      * Show a chat speech bubble above a specific player's nameplate for Duration seconds.
      * No-op if the actor is not currently registered (e.g. local player, or not yet spawned).

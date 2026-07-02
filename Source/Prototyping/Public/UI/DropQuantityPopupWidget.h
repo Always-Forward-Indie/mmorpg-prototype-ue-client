@@ -54,15 +54,45 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	UButton* CancelButton;
 
+	UPROPERTY(meta = (BindWidgetOptional))
+	UButton* MaxButton;
+
+	UPROPERTY(meta = (BindWidget))
+	UButton* DecreaseButton;
+
+	UPROPERTY(meta = (BindWidget))
+	UButton* IncreaseButton;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	UWidget* PopupContent = nullptr;
+
 private:
 	UPROPERTY()
 	FInventoryItemStruct PendingItem;
 
 	int32 MaxQuantity = 1;
+	int32 CurrentQty = 1;
 
 	UFUNCTION()
 	void OnConfirmClicked();
 
 	UFUNCTION()
 	void OnCancelClicked();
+
+	UFUNCTION()
+	void HandleMax();
+
+	UFUNCTION()
+	void HandleDecrease();
+
+	UFUNCTION()
+	void HandleIncrease();
+
+	UFUNCTION()
+	void HandleQuantityTextCommitted(const FText& Text, ETextCommit::Type CommitMethod);
+
+	UFUNCTION()
+	void HandleQuantityTextChanged(const FText& Text);
+
+	void SetQuantity(int32 NewQty);
 };

@@ -232,15 +232,31 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 	{
 		int32 FailedUID = -1;
 		Body->TryGetNumberField(TEXT("droppedItemUID"), FailedUID);
+
+		// Check if the server rejection message indicates the item no longer exists.
+		// If so, clean up the stale client-side actor instead of re-enabling it.
+		FString ErrorMessage;
+		Body->TryGetStringField(TEXT("message"), ErrorMessage);
+		const bool bItemNonExistent = ErrorMessage.Contains(TEXT("non-existent"));
+
 		if (FailedUID > 0 && DroppedItemsMap.Contains(FailedUID))
 		{
 			if (ADroppedItemActor* DroppedActor = DroppedItemsMap[FailedUID])
 			{
-				DroppedActor->SetCanBePickedUp(true);
+				if (bItemNonExistent)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("ItemManager: pickup failed (non-existent) — cleaning up stale UID %d"), FailedUID);
+					DroppedActor->PlayPickupEffect();
+					DroppedItemsMap.Remove(FailedUID);
+				}
+				else
+				{
+					DroppedActor->SetCanBePickedUp(true);
+				}
 			}
 		}
 
-		UE_LOG(LogTemp, Warning, TEXT("ItemManager: itemPickup failed � unlocking player movement"));
+		UE_LOG(LogTemp, Warning, TEXT("ItemManager: itemPickup failed — unlocking player movement"));
 
 		// Server rejected the pickup � cancel any pending pickup-point timer and unlock
 		if (worldContext)
@@ -261,6 +277,27 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 
 		PendingPickupItemUIDs.Empty();
 		PendingPickupItems.Empty();
+	}
+	else if (MessageData.eventType == "itemRemove")
+	{
+		const TArray<TSharedPtr<FJsonValue>>* UidsArray = nullptr;
+		if (Body->TryGetArrayField(TEXT("uids"), UidsArray))
+		{
+			for (const TSharedPtr<FJsonValue>& UidValue : *UidsArray)
+			{
+				int32 RemoveUid = static_cast<int32>(UidValue->AsNumber());
+				if (DroppedItemsMap.Contains(RemoveUid))
+				{
+					ADroppedItemActor* DroppedActor = DroppedItemsMap[RemoveUid];
+					if (IsValid(DroppedActor))
+					{
+						DroppedActor->PlayPickupEffect();
+					}
+					DroppedItemsMap.Remove(RemoveUid);
+					UE_LOG(LogTemp, Log, TEXT("ItemManager: itemRemove cleaned up stale UID %d"), RemoveUid);
+				}
+			}
+		}
 	}
 }
 

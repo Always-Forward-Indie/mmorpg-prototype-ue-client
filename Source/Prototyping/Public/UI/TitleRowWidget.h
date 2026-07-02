@@ -16,11 +16,12 @@ class UButton;
  * as the TitleRowClass on your TitlesWidget Blueprint.
  *
  * Required (BindWidget):
- *   Row_Name_Text    UTextBlock  — title display name (prefixed with "[E] " when equipped)
- *   Row_Equip_Button UButton     — equip button; disabled when title is already equipped
+ *   Row_Name_Text           UTextBlock  ï¿½ title display name (prefixed with "[E] " when equipped)
+ *   Row_Equip_Button        UButton     ï¿½ equip / unequip toggle button
  *
  * Optional (BindWidgetOptional):
- *   Row_Bonus_Text   UTextBlock  — bonus summary e.g. "+2 Physical Attack, +1 Move Speed"
+ *   Row_Bonus_Text          UTextBlock  ï¿½ bonus summary e.g. "+2 Physical Attack, +1 Move Speed"
+ *   Row_Equip_Button_Text   UTextBlock  ï¿½ child text inside the button ("Equip" / "Unequip")
  */
 UCLASS(Abstract, BlueprintType, Blueprintable)
 class PROTOTYPING_API UTitleRowWidget : public UUserWidget
@@ -31,8 +32,9 @@ public:
     /**
      * Populate and wire the row.
      * Called by UTitlesWidget::AddTitleRow().
+     * @param ResolvedName  Localized display name (from LocalizationSubsystem or server override).
      */
-    void Populate(const FTitleEntry& Entry, bool bIsEquipped);
+    void Populate(const FTitleEntry& Entry, bool bIsEquipped, const FText& ResolvedName);
 
     // --- Required bound widgets ---
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "Title Row")
@@ -44,6 +46,9 @@ public:
     // --- Optional bound widgets ---
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Title Row")
     UTextBlock* Row_Bonus_Text = nullptr;
+
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Title Row")
+    UTextBlock* Row_Equip_Button_Text = nullptr;
 
 protected:
     virtual void NativeConstruct() override;

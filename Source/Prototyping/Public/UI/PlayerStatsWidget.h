@@ -168,6 +168,9 @@ private:
     void HandleTitlesUpdated(const FPlayerTitlesState& State);
 
     UFUNCTION()
+    void HandleLocaleChanged(const FString& NewLocale);
+
+    UFUNCTION()
     void HandleMasteriesLoaded(const FPlayerMasteriesState& State);
 
     UFUNCTION()

@@ -289,8 +289,9 @@ void UItemTooltipWidget::HideTooltip()
 
 	bIsVisible = false;
 	
-	// TODO: Implement proper fade-out animation
-	// For now, just hide immediately
+	ClearKillCountWidget();
+	ClearDynamicAttributes();
+
 	SetVisibility(ESlateVisibility::Hidden);
 	SetRenderOpacity(0.0f);
 
@@ -573,6 +574,24 @@ void UItemTooltipWidget::UpdateUseEffects()
 
 void UItemTooltipWidget::UpdateKillCount()
 {
+	ClearKillCountWidget();
+
+	if (KillCountWidgetClass && CurrentItem.killCount > 0)
+	{
+		UUserWidget* RowWidget = CreateWidget<UUserWidget>(GetOwningPlayer(), KillCountWidgetClass);
+		if (RowWidget)
+		{
+			if (UTextBlock* RowText = Cast<UTextBlock>(RowWidget->GetWidgetFromName(TEXT("Row_Text"))))
+			{
+				RowText->SetText(FText::FromString(FString::Printf(TEXT("Kills: %d"), CurrentItem.killCount)));
+			}
+			if (MainContent)
+				MainContent->AddChild(RowWidget);
+			KillCountRowWidget = RowWidget;
+		}
+		return;
+	}
+
 	if (!KillCountText) return;
 
 	if (CurrentItem.killCount > 0)
@@ -584,6 +603,16 @@ void UItemTooltipWidget::UpdateKillCount()
 	else
 	{
 		KillCountText->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+void UItemTooltipWidget::ClearKillCountWidget()
+{
+	if (KillCountRowWidget)
+	{
+		if (MainContent)
+			MainContent->RemoveChild(KillCountRowWidget);
+		KillCountRowWidget = nullptr;
 	}
 }
 
@@ -712,27 +741,7 @@ void UItemTooltipWidget::ClearDynamicAttributes()
 		return;
 	}
 
-	// Remove dynamically created attribute text widgets
-	// Note: This is a simplified approach. In a more complex implementation,
-	// you might want to track created widgets separately.
-	
-	TArray<UWidget*> ChildrenToRemove;
-	
-	for (int32 i = 0; i < AttributesBox->GetChildrenCount(); i++)
-	{
-		UWidget* Child = AttributesBox->GetChildAt(i);
-		if (UTextBlock* TextBlock = Cast<UTextBlock>(Child))
-		{
-			// Check if this is a dynamically created attribute widget
-			// (you could use tags or other identification methods)
-			ChildrenToRemove.Add(Child);
-		}
-	}
-
-	for (UWidget* Child : ChildrenToRemove)
-	{
-		AttributesBox->RemoveChild(Child);
-	}
+	AttributesBox->ClearChildren();
 }
 
 UTextBlock* UItemTooltipWidget::AddAttributeTextWidget(const FString& AttributeName, const FString& AttributeValue)
@@ -742,27 +751,35 @@ UTextBlock* UItemTooltipWidget::AddAttributeTextWidget(const FString& AttributeN
 		return nullptr;
 	}
 
-	// Create new text widget using the widget tree
+	FText FormattedText = FormatAttributeText(AttributeName, AttributeValue);
+
+	if (AttributeTextWidgetClass)
+	{
+		UUserWidget* RowWidget = CreateWidget<UUserWidget>(GetOwningPlayer(), AttributeTextWidgetClass);
+		if (RowWidget)
+		{
+			UTextBlock* RowText = Cast<UTextBlock>(RowWidget->GetWidgetFromName(TEXT("Row_Text")));
+			if (RowText)
+				RowText->SetText(FormattedText);
+			AttributesBox->AddChild(RowWidget);
+			return RowText;
+		}
+	}
+
 	UTextBlock* AttributeTextWidget = NewObject<UTextBlock>(this);
 	if (!AttributeTextWidget)
 	{
 		return nullptr;
 	}
 
-	// Set text content
-	AttributeTextWidget->SetText(FormatAttributeText(AttributeName, AttributeValue));
-	
-	// Style the text (you can customize this)
+	AttributeTextWidget->SetText(FormattedText);
 	AttributeTextWidget->SetColorAndOpacity(FLinearColor(0.9f, 0.9f, 0.9f, 1.0f));
 
-	//set font size
 	FSlateFontInfo FontInfo = AttributeTextWidget->GetFont();
-	FontInfo.Size = 12; // ����� ������ � pt
+	FontInfo.Size = 12;
 	AttributeTextWidget->SetFont(FontInfo);
 
-	// Add to attributes box
 	AttributesBox->AddChild(AttributeTextWidget);
-
 	return AttributeTextWidget;
 }
 

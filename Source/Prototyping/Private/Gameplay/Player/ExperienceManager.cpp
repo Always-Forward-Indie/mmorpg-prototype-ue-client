@@ -101,6 +101,7 @@ void UExperienceManager::ProcessExperienceUpdate(const FExperienceUpdateStruct& 
     // Create experience gain event
     FExperienceGainEventStruct ExperienceEvent;
     ExperienceEvent.experienceGained = ExperienceUpdate.experienceChange;
+    ExperienceEvent.characterId = ExperienceUpdate.characterId;
     ExperienceEvent.reason = ParseExperienceReason(ExperienceUpdate.reason);
     ExperienceEvent.reasonText = ExperienceUpdate.reason;
     ExperienceEvent.sourceId = ExperienceUpdate.sourceId;
@@ -181,7 +182,7 @@ float UExperienceManager::GetExperienceProgressToNextLevel(int32 CharacterId) co
         return 1.0f; // Max level reached
     }
 
-    // Правильный расчет: прогресс внутри текущего уровня
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
     float CurrentLevelStart = static_cast<float>(Progression->expForCurrentLevel);
     float CurrentLevelEnd = static_cast<float>(Progression->expForNextLevel);
     float CurrentExp = static_cast<float>(Progression->currentExperience);

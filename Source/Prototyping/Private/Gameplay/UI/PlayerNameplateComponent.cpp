@@ -111,13 +111,23 @@ void UPlayerNameplateComponent::UpdateHealth(int32 CurrentHP, int32 MaxHP)
 
 void UPlayerNameplateComponent::SetDeadState(bool bNewDead)
 {
+    CachedCharData.bIsDead = bNewDead;
     if (UNameplateManager* Mgr = ResolveNameplateManager())
     {
         Mgr->SetPlayerDeadState(GetOwner(), bNewDead);
     }
 }
 
-void UPlayerNameplateComponent::UpdateTitle(const FString& InTitle)
+void UPlayerNameplateComponent::UpdateLevel(int32 NewLevel)
+{
+    CachedCharData.characterLevel = NewLevel;
+    if (UNameplateManager* Mgr = ResolveNameplateManager())
+    {
+        Mgr->SetPlayerLevel(GetOwner(), NewLevel);
+    }
+}
+
+void UPlayerNameplateComponent::UpdateTitle(const FText& InTitle)
 {
     PendingTitle = InTitle;  // Always cache so post-registration replay works.
     if (UNameplateManager* Mgr = ResolveNameplateManager())

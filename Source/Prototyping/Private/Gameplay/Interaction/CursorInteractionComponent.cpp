@@ -253,10 +253,19 @@ void UCursorInteractionComponent::RunHoverTrace()
         }
     }
 
+    // Suppress hover tracing while cursor is hidden (free-look / RMB-camera mode)
+    // so the player doesn't see hover decals / hints appear behind the cursor.
+    if (!PC->bShowMouseCursor)
+    {
+        ForceHoverClear();
+        return;
+    }
+
     FVector WorldOrigin, WorldDir;
     if (!PC->DeprojectMousePositionToWorld(WorldOrigin, WorldDir)) return;
 
-    const float Range    = Config ? Config->HoverTraceRange : 2000.f;
+    const UWorldInteractionConfig* EffCfg = GetEffectiveConfig();
+    const float Range = EffCfg ? EffCfg->HoverTraceRange : 5000.f;
     const FVector TraceEnd = WorldOrigin + WorldDir * Range;
 
     FCollisionQueryParams Params;

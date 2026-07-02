@@ -99,6 +99,9 @@ protected:
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
     UButton* CancelButton = nullptr;
 
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+    UWidget* PopupContent = nullptr;
+
 private:
     int32 SlotIndex     = -1;
     int32 PricePerUnit  = 0;
@@ -116,4 +119,5 @@ private:
     UFUNCTION() void HandleRemove();
     UFUNCTION() void HandleCancel();
     UFUNCTION() void HandleQuantityTextCommitted(const FText& Text, ETextCommit::Type CommitMethod);
+    UFUNCTION() void HandleQuantityTextChanged(const FText& Text);
 };

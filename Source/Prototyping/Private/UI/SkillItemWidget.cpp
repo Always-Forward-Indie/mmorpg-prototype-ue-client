@@ -77,7 +77,7 @@ FReply USkillItemWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
         // Update visual state to show pressed
         UpdateClickState(true);
         
-        // DetectDrag автоматически вызовет NativeOnDragDetected при достижении порога
+        // DetectDrag пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ NativeOnDragDetected пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
         return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
     }
     
@@ -86,7 +86,7 @@ FReply USkillItemWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 
 FReply USkillItemWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
-    // Просто делегируем родительскому классу
+    // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
     return Super::NativeOnMouseMove(InGeometry, InMouseEvent);
 }
 
@@ -132,7 +132,7 @@ FReply USkillItemWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, cons
     return FReply::Unhandled();
 }
 
-// Правильная реализация NativeOnDragDetected
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ NativeOnDragDetected
 void USkillItemWidget::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation)
 {
     UE_LOG(LogTemp, Warning, TEXT("=== SKILL DRAG DETECTED DEBUG START ==="));
@@ -141,7 +141,7 @@ void USkillItemWidget::NativeOnDragDetected(const FGeometry& InGeometry, const F
     // Hide tooltip when starting drag operation
     OnSkillItemHovered.Broadcast(CurrentSkillData, false);
 
-    // Создаем DragDropOperation
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ DragDropOperation
     USkillDragDropOperation* DragDropOp = NewObject<USkillDragDropOperation>(this, USkillDragDropOperation::StaticClass());
     if (!DragDropOp)
     {
@@ -153,11 +153,11 @@ void USkillItemWidget::NativeOnDragDetected(const FGeometry& InGeometry, const F
 
     UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: ? Created DragDropOperation successfully"));
 
-    // Настраиваем операцию
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     DragDropOp->SetSkillData(CurrentSkillData, this);
     UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: ? Set skill data in DragDropOperation"));
     
-    // НОВОЕ: Передаем класс drag visual из USkillItemWidget в DragDropOperation
+    // пїЅпїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ drag visual пїЅпїЅ USkillItemWidget пїЅ DragDropOperation
     if (DragVisualWidgetClass)
     {
         DragDropOp->DragVisualWidgetClass = DragVisualWidgetClass;
@@ -168,7 +168,7 @@ void USkillItemWidget::NativeOnDragDetected(const FGeometry& InGeometry, const F
         UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: No custom DragVisualWidgetClass set"));
     }
     
-    // Создаем drag visual
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ drag visual
     UUserWidget* DragVisual = DragDropOp->CreateDragVisualWidget();
     if (DragVisual)
     {
@@ -177,12 +177,14 @@ void USkillItemWidget::NativeOnDragDetected(const FGeometry& InGeometry, const F
     }
     else
     {
-        // Fallback - используем clone текущего виджета
-        DragDropOp->DefaultDragVisual = this;
-        UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: Using self as drag visual (fallback)"));
+        // Never use the source widget as the drag visual вЂ” it reparents the
+        // source out of its container and corrupts layout/hit-testing for the
+        // duration of the drag. Proceed without a visual instead.
+        DragDropOp->DefaultDragVisual = nullptr;
+        UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: CreateDragVisualWidget returned null вЂ” proceeding without drag visual"));
     }
     
-    // Настройки визуала
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     DragDropOp->Pivot = EDragPivot::MouseDown;
     DragDropOp->Offset = FVector2D::ZeroVector;
     

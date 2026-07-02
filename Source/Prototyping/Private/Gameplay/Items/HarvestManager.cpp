@@ -4,6 +4,8 @@
 #include "Utils/JSONParser.h"
 #include "Engine/World.h"
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Gameplay/Players/BasicPlayer.h"
+#include "Gameplay/Players/PlayerAnimInstance.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
 #include "UI/HarvestProgressWidget.h"
@@ -240,6 +242,43 @@ void UHarvestManager::StartHarvest(int32 CorpseUID){
 	SendHarvestStartRequest(CorpseUID);
 }
 
+void UHarvestManager::LockPlayerMovement()
+{
+	if (UWorld* World = GetValidWorld())
+	{
+		if (APlayerController* PC = World->GetFirstPlayerController())
+		{
+			if (ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn()))
+			{
+				Player->LockMovement();
+
+				// Play harvest animation scaled to the server's desired duration
+				if (HarvestDuration > 0)
+				{
+					if (UPlayerAnimInstance* AnimInst = Cast<UPlayerAnimInstance>(Player->GetMesh()->GetAnimInstance()))
+					{
+						AnimInst->NotifyHarvest(static_cast<float>(HarvestDuration) / 1000.0f);
+					}
+				}
+			}
+		}
+	}
+}
+
+void UHarvestManager::UnlockPlayerMovement()
+{
+	if (UWorld* World = GetValidWorld())
+	{
+		if (APlayerController* PC = World->GetFirstPlayerController())
+		{
+			if (ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn()))
+			{
+				Player->UnlockMovement();
+			}
+		}
+	}
+}
+
 void UHarvestManager::PickupLootItem(int32 ItemId, int32 Quantity)
 {
 	if (CurrentCorpseUID == 0)
@@ -296,6 +335,7 @@ void UHarvestManager::CancelHarvest()
 	ServerStartTime = 0;
 
 	HideHarvestProgress();
+	UnlockPlayerMovement();
 }
 
 void UHarvestManager::SendHarvestCancelRequest(int32 CorpseUID)
@@ -611,6 +651,7 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 			bIsHarvesting ? TEXT("true") : TEXT("false"), HarvestDuration, HarvestStartTime);
 
 		ShowHarvestProgress();
+		LockPlayerMovement();
 		OnHarvestStarted.Broadcast(HarvestData);
 		
 		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Harvest started event processing completed"));
@@ -729,7 +770,7 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 				UE_LOG(LogTemp, Warning, TEXT("HarvestManager: harvestStartBroadcast charId=%d corpseUID=%d"),
 					HarvesterCharId, BroadcastCorpseUID);
 
-				// Update the corresponding BasidMOB actor's harvesting state
+				// Update the corresponding BasicMOB actor's harvesting state
 				if (worldContext && BroadcastCorpseUID > 0)
 				{
 					TArray<AActor*> FoundMobs;
@@ -741,6 +782,22 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 						{
 							Mob->SetCurrentHarvesterId(HarvesterCharId);
 							break;
+						}
+					}
+				}
+
+				// Play harvest animation on the remote player's actor so all clients see it.
+				if (gameInstance && HarvesterCharId > 0)
+				{
+					if (ABasicPlayer* Harvester = gameInstance->GetPlayerByCharacterId(HarvesterCharId))
+					{
+						if (UPlayerAnimInstance* HarvesterAnim = Cast<UPlayerAnimInstance>(
+							Harvester->GetMesh()->GetAnimInstance()))
+						{
+							// Prefer server-provided duration; default to 3.0s if absent.
+							double DurationMs = 3000.0;
+							(*BodyPtr)->TryGetNumberField(TEXT("durationMs"), DurationMs);
+							HarvesterAnim->NotifyHarvest(static_cast<float>(DurationMs) / 1000.0f);
 						}
 					}
 				}
@@ -757,10 +814,13 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 			const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
 			if (Root->TryGetObjectField(TEXT("body"), BodyPtr))
 			{
+				int32 HarvesterCharId = 0;
 				int32 BroadcastCorpseUID = 0;
+				(*BodyPtr)->TryGetNumberField(TEXT("characterId"), HarvesterCharId);
 				(*BodyPtr)->TryGetNumberField(TEXT("corpseUID"), BroadcastCorpseUID);
 
-				UE_LOG(LogTemp, Warning, TEXT("HarvestManager: harvestCompleteBroadcast corpseUID=%d"), BroadcastCorpseUID);
+				UE_LOG(LogTemp, Warning, TEXT("HarvestManager: harvestCompleteBroadcast charId=%d corpseUID=%d"),
+					HarvesterCharId, BroadcastCorpseUID);
 
 				if (worldContext && BroadcastCorpseUID > 0)
 				{
@@ -774,6 +834,22 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 							Mob->SetCurrentHarvesterId(0);
 							Mob->SetHarvested(true);
 							break;
+						}
+					}
+				}
+
+				// Stop harvest animation on the remote player's actor.
+				if (gameInstance && HarvesterCharId > 0)
+				{
+					if (ABasicPlayer* Harvester = gameInstance->GetPlayerByCharacterId(HarvesterCharId))
+					{
+						if (UPlayerAnimInstance* HarvesterAnim = Cast<UPlayerAnimInstance>(
+							Harvester->GetMesh()->GetAnimInstance()))
+						{
+							if (HarvesterAnim->HarvestMontage)
+							{
+								HarvesterAnim->Montage_Stop(0.2f, HarvesterAnim->HarvestMontage);
+							}
 						}
 					}
 				}
@@ -827,6 +903,22 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 						HarvestDuration  = 0.0f;
 						ServerStartTime  = 0;
 						HideHarvestProgress();
+					}
+				}
+
+				// Stop harvest animation on the remote player whose harvest was cancelled.
+				if (gameInstance && CancelledCharId > 0)
+				{
+					if (ABasicPlayer* CancelledPlayer = gameInstance->GetPlayerByCharacterId(CancelledCharId))
+					{
+						if (UPlayerAnimInstance* AnimInst = Cast<UPlayerAnimInstance>(
+							CancelledPlayer->GetMesh()->GetAnimInstance()))
+						{
+							if (AnimInst->HarvestMontage)
+							{
+								AnimInst->Montage_Stop(0.2f, AnimInst->HarvestMontage);
+							}
+						}
 					}
 				}
 			}
@@ -1050,6 +1142,7 @@ void UHarvestManager::HandleHarvestComplete(const FHarvestCompleteStruct& Harves
 	// End harvest state
 	bIsHarvesting = false;
 	HideHarvestProgress();
+	UnlockPlayerMovement();
 
 	// Store available loot
 	CurrentAvailableLoot = HarvestData.availableLoot;

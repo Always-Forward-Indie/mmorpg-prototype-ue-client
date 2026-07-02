@@ -720,14 +720,11 @@ void ULoginFlowWidget::OnDeleteCharacterResponse(bool bSuccess, const FString& M
 
 	if (bSuccess)
 	{
-		CachedCharacters.RemoveAll([CharacterId](const FLoginCharacterEntry& E) { return E.CharacterId == CharacterId; });
-		SelectedCharacterIndex = -1;
-		// Clear the 3D preview actor for the deleted character.
+		// AuthManager will re-request character list -> OnCharacterListReceived -> rebuild + spawn previews
 		if (UCharacterPreviewManager* PM = GetPreviewManager())
 		{
 			PM->ClearSelectPreviews();
 		}
-		PopulateCharacterList(CachedCharacters);
 		SetError(CharSelect_ErrorText, FText::GetEmpty());
 	}
 	else

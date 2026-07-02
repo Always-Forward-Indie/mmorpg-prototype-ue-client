@@ -1084,8 +1084,8 @@ FInventoryItemStruct JSONParser::DeserializeInventoryItem(const TSharedPtr<FJson
 	if (ItemObj->HasField(TEXT("durabilityCurrent"))) Item.durabilityCurrent = ItemObj->GetIntegerField(TEXT("durabilityCurrent"));
 	if (ItemObj->HasField(TEXT("durabilityMax")))     Item.durabilityMax     = ItemObj->GetIntegerField(TEXT("durabilityMax"));
 
-	// is_equipped flag lives at top-level in some server responses
-	if (ItemObj->HasField(TEXT("is_equipped"))) Item.is_equipped = ItemObj->GetBoolField(TEXT("is_equipped"));
+	// isEquipped flag — server sends camelCase "isEquipped"
+	if (ItemObj->HasField(TEXT("isEquipped"))) Item.is_equipped = ItemObj->GetBoolField(TEXT("isEquipped"));
 
 	// Flat fields (older format or already-flattened responses)
 	ParseItemFields(ItemObj, Item);

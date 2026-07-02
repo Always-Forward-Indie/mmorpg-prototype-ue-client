@@ -11,6 +11,7 @@ void UQuantityPopupWidget::NativeConstruct()
     if (RemoveButton)   RemoveButton->OnClicked.AddDynamic(this, &UQuantityPopupWidget::HandleRemove);
     if (CancelButton)   CancelButton->OnClicked.AddDynamic(this, &UQuantityPopupWidget::HandleCancel);
     if (QuantityInput)  QuantityInput->OnTextCommitted.AddDynamic(this, &UQuantityPopupWidget::HandleQuantityTextCommitted);
+    if (QuantityInput)  QuantityInput->OnTextChanged.AddDynamic(this, &UQuantityPopupWidget::HandleQuantityTextChanged);
 
     SetVisibility(ESlateVisibility::Collapsed);
 }
@@ -137,6 +138,25 @@ void UQuantityPopupWidget::HandleCancel()
     OnQuantityCancelled.Broadcast();
 }
 
+void UQuantityPopupWidget::HandleQuantityTextChanged(const FText& Text)
+{
+    FString Str = Text.ToString();
+    FString Filtered;
+    for (const TCHAR Ch : Str)
+    {
+        if (FChar::IsDigit(Ch))
+            Filtered.AppendChar(Ch);
+    }
+    if (Filtered.Len() > 3)
+    {
+        Filtered.LeftChopInline(Filtered.Len() - 3);
+    }
+    if (Filtered != Str)
+    {
+        QuantityInput->SetText(FText::FromString(Filtered));
+    }
+}
+
 void UQuantityPopupWidget::HandleQuantityTextCommitted(const FText& Text, ETextCommit::Type CommitMethod)
 {
     if (CommitMethod == ETextCommit::OnEnter || CommitMethod == ETextCommit::OnUserMovedFocus)
@@ -148,6 +168,10 @@ void UQuantityPopupWidget::HandleQuantityTextCommitted(const FText& Text, ETextC
 
 FReply UQuantityPopupWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
+    if (PopupContent && PopupContent->GetCachedGeometry().IsUnderLocation(InMouseEvent.GetScreenSpacePosition()))
+    {
+        return FReply::Unhandled();
+    }
     HandleCancel();
     return FReply::Handled();
 }

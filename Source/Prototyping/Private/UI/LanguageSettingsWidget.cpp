@@ -22,8 +22,6 @@ void ULanguageSettingsWidget::NativeConstruct()
 
 void ULanguageSettingsWidget::InitializeSettings()
 {
-	PopulateLanguageOptions();
-
 	ULocalizationSubsystem* LocSys = GetLocSys();
 	if (LocSys && Language_Combo)
 	{

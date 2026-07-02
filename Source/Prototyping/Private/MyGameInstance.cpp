@@ -94,6 +94,7 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Kismet/GameplayStatics.h"
+#include "Misc/CoreDelegates.h"
 
 // ============================================================================
 // PIE Escape-key preprocessor — intercepts ESC before the editor, preventing
@@ -323,6 +324,13 @@ void UMyGameInstance::Init()
 		this, &UMyGameInstance::InvalidateManagerWorldContexts);
 
 	InitGameSystems();
+
+	// Force time-sync refresh when the game window regains focus.
+	// When unfocused, the world FTimerManager is throttled and ping timers
+	// starve, causing IsTimeSyncValid() to drop.  Refresh now so cooldowns
+	// and skills don't get stuck on the server-epoch/world-time mismatch.
+	FCoreDelegates::ApplicationHasReactivatedDelegate.AddUObject(
+		this, &UMyGameInstance::OnApplicationReactivated);
 }
 
 void UMyGameInstance::OnStart()
@@ -909,6 +917,13 @@ void UMyGameInstance::ReturnToLoginLevel()
 	if (NetworkManager)
 	{
 		NetworkManager->Disconnect();
+
+		// Clear skill data so cooldowns from the previous session don't
+		// persist across relogin and get stuck on server-epoch timestamps.
+		if (PlayerSkillManager)
+		{
+			PlayerSkillManager->InitializePlayerSkills(FPlayerSkillsInitializationData());
+		}
 	}
 
 	// 3. Reset game-world state so the next login starts from a clean slate.
@@ -1408,11 +1423,9 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 			LoadedWorld->GetFirstPlayerController()->bShowMouseCursor = true;
 		}
 
-		// Focus viewport + re-apply custom cursor shape
+		// Re-apply custom cursor shape (do NOT steal focus — login UI has text fields)
 		if (FSlateApplication::IsInitialized())
 		{
-			FSlateApplication::Get().SetAllUserFocusToGameViewport();
-
 			if (TSharedPtr<ICursor> PlatformCursor = FSlateApplication::Get().GetPlatformCursor())
 			{
 				if (PreloadedDefaultCursorHandle)
@@ -2445,7 +2458,8 @@ void UMyGameInstance::RemoveLoadingScreen()
 	// Restore viewport focus after loading screen removal so chunk server timers
 	// and engine ticks resume normally. Fixes window-loses-focus-on-enter bug where
 	// chunk server never connects because World TimerManager was starved during load.
-	if (FSlateApplication::IsInitialized())
+	// Skip on login level — the user may be typing in a text field.
+	if (FSlateApplication::IsInitialized() && LevelBeingLoaded != LoginLevelName)
 	{
 		FSlateApplication::Get().SetAllUserFocusToGameViewport();
 	}
@@ -2698,9 +2712,19 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 		// joinGameCharacter/getConnectedCharacters.
 		if (!PlayerData.characterData.equippedTitleSlug.IsEmpty())
 		{
-			const FString& TitleText = PlayerData.characterData.equippedTitleDisplayName.IsEmpty()
-				? PlayerData.characterData.equippedTitleSlug
-				: PlayerData.characterData.equippedTitleDisplayName;
+			FText TitleText;
+			if (const ULocalizationSubsystem* Loc = GetSubsystem<ULocalizationSubsystem>())
+			{
+				TitleText = Loc->GetTitleDisplayName(PlayerData.characterData.equippedTitleSlug);
+			}
+			if (TitleText.IsEmpty() && !PlayerData.characterData.equippedTitleDisplayName.IsEmpty())
+			{
+				TitleText = FText::FromString(PlayerData.characterData.equippedTitleDisplayName);
+			}
+			if (TitleText.IsEmpty())
+			{
+				TitleText = FText::FromString(PlayerData.characterData.equippedTitleSlug);
+			}
 			NewPlayer->SetEquippedTitle(TitleText);
 		}
 	}
@@ -3282,5 +3306,29 @@ void UMyGameInstance::RouteEmoteActionToPlayer(int32 CharacterId, const FString&
     {
         TargetPlayer->PlayEmoteForCharacter(EmoteSlug, AnimationName);
 	}
+}
+
+void UMyGameInstance::OnApplicationReactivated()
+{
+    // When the window regains focus, the world FTimerManager resumes.
+    // Force a fresh ping + time-sync so skills don't get stuck on stale
+    // server-epoch cooldowns from IsTimeSyncValid() having dropped out.
+    if (PingManager)
+    {
+        PingManager->RestartPingUpdates();
+    }
+    if (TimeSyncService)
+    {
+        TimeSyncService->RequestTimeSync();
+    }
+
+    // Defence in depth: immediately convert any server-clock cooldowns to
+    // world-time so skills don't stay stuck even before time-sync recovers.
+    if (UPlayerSkillManager* SkillMgr = GetPlayerSkillManager())
+    {
+        SkillMgr->ConvertServerClockCooldownsToWorldTime();
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("GameInstance: Application reactivated — ping + time sync + cooldown conversion done"));
 }
 

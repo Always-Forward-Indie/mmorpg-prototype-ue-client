@@ -95,6 +95,7 @@ protected:
     UFUNCTION() void HandleCloseButtonClicked();
     UFUNCTION() void HandleInviteAcceptClicked();
     UFUNCTION() void HandleInviteDeclineClicked();
+    UFUNCTION() void HandleGoldTextChanged(const FText& Text);
 
     // --- My offer ---
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget)) UScrollBox* My_Items_Box       = nullptr;

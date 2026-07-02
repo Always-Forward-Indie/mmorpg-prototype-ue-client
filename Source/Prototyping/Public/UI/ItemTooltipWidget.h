@@ -207,9 +207,15 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Tooltip", meta = (EditCondition = "bShowWeightColorCoding"))
 	float HeavyWeightThreshold = 100.0f;
 
-	// Attribute text widget class (for dynamic attributes)
+	// Attribute text widget class (for dynamic attributes). When set, expects a UUserWidget
+	// Blueprint subclass with a child UTextBlock named "Row_Text". Falls back to plain UTextBlock when unset.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Tooltip")
-	TSubclassOf<UTextBlock> AttributeTextWidgetClass;
+	TSubclassOf<UUserWidget> AttributeTextWidgetClass;
+
+	// Kill count row widget class. When set, replaces the plain KillCountText approach.
+	// Expects a UUserWidget Blueprint subclass with a child UTextBlock named "Row_Text".
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Tooltip")
+	TSubclassOf<UUserWidget> KillCountWidgetClass;
 
 private:
 	// Initialize colors
@@ -218,7 +224,10 @@ private:
 	// Clear dynamic attributes
 	void ClearDynamicAttributes();
 
-	// Add attribute text widget
+	// Clear kill count row widget
+	void ClearKillCountWidget();
+
+	// Add attribute text widget (returns inner UTextBlock for styling, or nullptr)
 	UTextBlock* AddAttributeTextWidget(const FString& AttributeName, const FString& AttributeValue);
 
 	// Format attribute name for display
@@ -226,6 +235,10 @@ private:
 
 	// Check if tooltip is currently visible
 	bool bIsVisible = false;
+
+	// Dynamically created kill count row widget (cleaned up on ShowTooltip/HideTooltip)
+	UPROPERTY()
+	UUserWidget* KillCountRowWidget = nullptr;
 
 	/** Handle for async texture loading */
 	TSharedPtr<FStreamableHandle> StreamableHandle;

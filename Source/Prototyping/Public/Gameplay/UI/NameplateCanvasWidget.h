@@ -99,6 +99,7 @@ public:
 
     void UpdatePlayerHealth(AActor* Actor, int32 CurrentHP, int32 MaxHP);
     void SetPlayerDeadState(AActor* Actor, bool bDead);
+    void SetPlayerLevel(AActor* Actor, int32 NewLevel);
     void SetNPCInteractionState(AActor* Actor, ENPCInteractionState NewState);
 
     /**
@@ -106,7 +107,7 @@ public:
      * The canvas finds the FNameplateEntry for this actor and calls
      * UW_PlayerNameplateWidget::SetTitle().
      */
-    void SetPlayerTitle(AActor* Actor, const FString& InTitle);
+    void SetPlayerTitle(AActor* Actor, const FText& InTitle);
 
     /**
      * Show a chat speech bubble on a specific player's nameplate widget.

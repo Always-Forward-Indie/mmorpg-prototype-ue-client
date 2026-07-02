@@ -55,6 +55,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Chat UI")
     void ReleaseInputFocus();
 
+    /** Programmatically set keyboard focus on the chat input text box. */
+    UFUNCTION(BlueprintCallable, Category = "Chat UI")
+    void SetInputFocus();
+
 protected:
     virtual void NativeConstruct() override;
     virtual void NativeDestruct() override;

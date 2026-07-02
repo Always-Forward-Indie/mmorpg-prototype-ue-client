@@ -45,7 +45,7 @@ public:
 
     /**
      * Bind to a PlayerStatsManager so every stats_update packet drives
-     * the XP bar directly — same pattern as PlayerStatsWidget.
+     * the XP bar directly ï¿½ same pattern as PlayerStatsWidget.
      * Call this right after InitializeWidget() (or instead of it).
      */
     UFUNCTION(BlueprintCallable, Category = "Player Experience")
@@ -80,7 +80,7 @@ protected:
     UPROPERTY(meta = (BindWidget))
     UTextBlock* ExperienceGainText;
 
-    // Optional debt bar — BindWidgetOptional so it's not required in Blueprint
+    // Optional debt bar ï¿½ BindWidgetOptional so it's not required in Blueprint
     UPROPERTY(meta = (BindWidgetOptional))
     UProgressBar* DebtProgressBar = nullptr;
 
@@ -127,6 +127,7 @@ private:
     // UI state
     float LastProgressPercent = 0.0f;
     bool bIsInitialized = false;
+    bool bLocalProgressionUpdated = false;
 
     // Configuration
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration", meta = (AllowPrivateAccess = "true"))

@@ -10,6 +10,7 @@
 // Forward declarations
 class UInventoryManager;
 class UEquipmentManager;
+class UItemActionRowWidget;
 
 UENUM(BlueprintType)
 enum class EItemContextAction : uint8
@@ -76,6 +77,12 @@ protected:
 	// Bind this VerticalBox in your Blueprint widget
 	UPROPERTY(meta = (BindWidget))
 	UVerticalBox* ActionList;
+
+	// Widget class for each action row.  Assign a Blueprint subclass of
+	// UItemActionRowWidget in your derived Blueprint to customise the
+	// appearance of every row.  Leave empty to use the default C++ row.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Appearance")
+	TSubclassOf<UItemActionRowWidget> ActionRowWidgetClass;
 
 	// Current item the menu was opened for
 	UPROPERTY(BlueprintReadOnly, Category = "Item Context Menu")

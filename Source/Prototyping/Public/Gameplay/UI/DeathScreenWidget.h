@@ -20,12 +20,12 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnRespawnRequested);
  *
  * Blueprint setup (WBP_DeathScreen):
  *   Required:
- *     - Button     "Respawn_Button"     — the only mandatory interaction
+ *     - Button     "Respawn_Button"     ï¿½ the only mandatory interaction
  *   Optional:
- *     - TextBlock  "DeathTitle_Text"    — e.g. "YOU DIED"
- *     - TextBlock  "DeathHint_Text"     — e.g. "You will respawn at the last bind point"
- *     - TextBlock  "DeathPenalty_Text"  — shows XP debt penalty info
- *     - Image      "DeathOverlay_Image" — dark full-screen overlay image
+ *     - TextBlock  "DeathTitle_Text"    ï¿½ e.g. "YOU DIED"
+ *     - TextBlock  "DeathHint_Text"     ï¿½ e.g. "You will respawn at the last bind point"
+ *     - TextBlock  "DeathPenalty_Text"  ï¿½ shows XP debt penalty info
+ *     - Image      "DeathOverlay_Image" ï¿½ dark full-screen overlay image
  *
  * Flow:
  *   1. Call ShowDeathScreen(ExpDebt) from game code on character death.
@@ -63,11 +63,11 @@ public:
 
     // ?? Blueprint events (override in WBP_DeathScreen) ???????????????????????
 
-    /** Called when ShowDeathScreen() is invoked — play fade-in animation here. */
+    /** Called when ShowDeathScreen() is invoked ï¿½ play fade-in animation here. */
     UFUNCTION(BlueprintImplementableEvent, Category = "Death Screen")
     void PlayDeathScreenAnimation();
 
-    /** Called when HideDeathScreen() is invoked — play fade-out animation here. */
+    /** Called when HideDeathScreen() is invoked ï¿½ play fade-out animation here. */
     UFUNCTION(BlueprintImplementableEvent, Category = "Death Screen")
     void PlayHideAnimation();
 
@@ -90,7 +90,7 @@ public:
 protected:
     // ?? Bound widgets ????????????????????????????????????????????????????????
 
-    /** Mandatory — triggers respawn request. */
+    /** Mandatory ï¿½ triggers respawn request. */
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "Death Screen")
     TObjectPtr<UButton> Respawn_Button;
 
@@ -109,11 +109,17 @@ protected:
     // ?? Lifecycle ????????????????????????????????????????????????????????????
     virtual void NativeConstruct()  override;
     virtual void NativeDestruct()   override;
+    virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 private:
-    /** Button click handler — broadcasts OnRespawnRequested. */
+    /** Button click handler â€” broadcasts OnRespawnRequested. */
     UFUNCTION()
     void HandleRespawnClicked();
 
+    /** Re-enables the respawn button after a timeout â€” server didn't respond. */
+    void OnRespawnTimeout();
+
     void UpdateDebtDisplay(int32 ExperienceDebt);
+
+    FTimerHandle RespawnTimeoutHandle;
 };

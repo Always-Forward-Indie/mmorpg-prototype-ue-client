@@ -8,10 +8,18 @@
 .EXAMPLE
   .\Tools\Contract\run_l3.ps1
   .\Tools\Contract\run_l3.ps1 -PytestArgs @("Tests/Contract/test_quest.py","-x","-q")
+  .\Tools\Contract\run_l3.ps1 -QuestBotIdx 3  # rotate single-shot quest fixture
 #>
 param(
     [string[]]$PytestArgs = @("Tests/Contract/", "-q"),
-    [int]$SeedN = 8
+    [int]$SeedN = 8,
+    # Single-shot fixture rotation (see Tools/Tests/README.md "Bot state
+    # rotation"): quest accept is non-repeatable per bot, repair fixture is
+    # single-shot SQL, corpse-TTL test needs a fresh killer. Defaults match
+    # the test files; pass explicit values to rotate after SKIP-consumption.
+    [int]$QuestBotIdx = 6,
+    [int]$RepairBotIdx = 4,
+    [int]$HandoffBotIdx = 7
 )
 
 $ErrorActionPreference = "Stop"
@@ -57,6 +65,10 @@ $env:MMO2_CLIENT_ID = "$($b2.client_id)"
 $env:MMO2_HASH = "$($b2.hash)"
 $env:MMO2_CHARACTER_ID = "$($b2.character_id)"
 Write-Host ("creds: bot_01 char={0} bot_02 char={1}" -f $env:MMO_CHARACTER_ID, $env:MMO2_CHARACTER_ID)
+$env:QUEST_BOT_IDX = "$QuestBotIdx"
+$env:REPAIR_BOT_IDX = "$RepairBotIdx"
+$env:HANDOFF_BOT_IDX = "$HandoffBotIdx"
+Write-Host ("fixture idx: quest=bot_{0:00} repair=bot_{1:00} handoff=bot_{2:00}" -f $QuestBotIdx, $RepairBotIdx, $HandoffBotIdx)
 
 # 3. Run contracts.
 python -m pytest @PytestArgs

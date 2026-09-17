@@ -91,8 +91,7 @@ Why the bounces: the game server caches player quests in memory (a DB wipe
 alone keeps pushing stale states), the chunk caches progress per session.
 Wipe order matters: DB rows first, then game, then chunk.
 
-## Known-flaky L3 (all timing/geography, none from refactor incr 6-11)
-- `test_handoff.py::test_cell_enter_streams_snapshot`: the old blind +2500x
+## Known-flaky L3 (all timing/geography, none from refactor incr 6-11)- `test_handoff.py::test_cell_enter_streams_snapshot`: the old blind +2500x
   walk from spawn crosses empty terrain (server skips empty cells by
   design) — fixed 2026-09-17 to walk through the nearest known mob cluster.
 - `test_handoff.py::test_corpse_return_within_ttl`: slow kills eat the 60s
@@ -153,3 +152,30 @@ NOT imply a healthy login path; run auth_storm as the login gate.
 Title + type(bug) + `ClientVersion` + WSL server commit + `requestId sync_*` +
 `Saved/Logs` excerpt + replay file if from bots. Search duplicates first.
 New `eventType` on server → new scenario file. Closed TODO bug → `reg_<bug>` case.
+
+## Wave-6 additions (2026-09-17)
+- **combat_storm.py** (C1): synchronized `playerAttack` bursts over N real
+  Bot sessions (login→ready→spread→chase→barrier→taps). Reports outcome mix
+  + RTT (~0.1s poll resolution; precise thinking-time stays with
+  `latency_report.py`). Run after any combat-path change:
+  `python Tools/Tests/combat_storm.py --n 4 --taps 10`.
+- **run_l3 IDX rotation** (C2): `-QuestBotIdx/-RepairBotIdx/-HandoffBotIdx`
+  (defaults 6/4/7, exported as env). Rotate after single-shot SKIP-consumption.
+- **Corpse TTL decision** (C2): KEEP 60s (`corpse.ttl_ms`). Evidence:
+  `test_corpse_return_within_ttl` green in 132s live; skip-past-55s + rerun
+  policy stands. Revisit only with kill-duration distribution data.
+- **Watch-ServerLogs.ps1** (C3): read-only alert scan
+  (`.\Tools\WSL\Watch-ServerLogs.ps1 -Service all -Tail 1000`), exit 1 on
+  FATAL (sanitizers/crashes/CHUNKID_0). Postgres operational noise
+  (restarts/probes) is allow-listed. Run before/after every soak or storm.
+- **reg_* convention** (A6): one `Tests/Contract/test_reg_<area>.py` per
+  closed product decision, built on Bot/pair fixtures (walk into range —
+  initiation checks range before guards; an out-of-range error proves
+  nothing). Shipped: `test_reg_pvp.py` (PvP refusal, 81s live).
+  Backlog (each needs live fixture design, not Blanket-added): vendor
+  discount thresholds (needs rep-200 setup), learn-skill consume (trainer
+  fixture), turn-in rewards (needs completable quest ~18 min), champion
+  zoneId (needs threshold kills + spawn broadcast assert).
+- **UE specs** (A6): no new `MMO.*` specs shipped — engine specs require
+  Session Frontend verification (CLI hangs 25+ min); unverified specs are
+  worse than none. Follow-up with editor access.

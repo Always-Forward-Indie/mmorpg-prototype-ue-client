@@ -1,0 +1,155 @@
+# Testing runbook (dev-only; never against live VPS)
+
+## Host stability (read this if containers/VM keep dying)
+- Proven clean: no Windows reboots (event log: only manual shutdown/boot),
+  no cron/apt/Task-Scheduler culprits, no Docker Desktop, no kernel OOM,
+  disk/RAM fine, no WSL memory cap.
+- Observed: WSL distro takes clean systemd poweroffs every ~1-40 min
+  (journal boot list), dockerd cycles with it; restart policies
+  (`unless-stopped` on all 4 dev services) self-heal containers — verify with
+  `.\Tools\WSL\Preflight.ps1` before any run.
+- NOT the cause: test traffic, rebuilds (capped `-j8`), port checks.
+- Still open (needs host access): antivirus/EDR vs `vmwp.exe`, Hyper-V-Worker
+  admin log, second operator/scripts issuing `wsl --shutdown`, WSL 2.7.14
+  runtime bug. If flapping persists, keep one persistent `wsl` session open
+  and watch `journalctl --list-boots` for new boot IDs.
+- Note: `wsl --list --verbose` uptime and `uptime` inside WSL are unreliable
+  here (stuck at "0 min") — trust journal boot IDs and container `STATUS` age.
+
+## Layers
+- **L1 offline:** enable `FDevModeConfig.bEnabled` on `BP_MyGameInstance`, open entry map.
+  5-minute flow (`Config/DevMode/qa_presets.json`): `devmode.scenario combat` →
+  `devmode.setplayerhp 1` → `devmode.setplayerhp 1000` → `devmode.reloadinventory` →
+  `devmode.scenario reset` → `devmode.listmobs`. Collect `Saved/Logs/*.log` on failure.
+- **L2 engine:** Session Frontend → Automation → `MMO.*` specs (Framing, NtpMath, ClientVersion).
+- **L3 contracts:** `python -m pytest Tests/Contract/test_framing.py` (no server);
+  server-backed need WSL dev up + creds (see below).
+- **L4 bots:** `python Tools/Bots/run_swarm.py --n 8 --scenario patrol` (10 min default);
+  Wave-2: `--scenario kill|harvest|death`, duo `--n 2 --scenario trade`.
+  Seed first: `python Tools/Bots/seed_bots.py --n 8` (writes gitignored `bot_accounts.json`).
+  `--tap` writes `swarm_<scenario>_bot_NN.jsonl` for replay.
+- **L5 replay:** `python Tools/Replay/replay.py --file <jsonl>`.
+- **Smoke UE:** `Tools/WSL/Preflight.ps1`, then `Tools/Smoke/SmokeClients.ps1 -n 2 -WaitSec 120`.
+
+## First run (Windows)
+```
+Copy-Item server_config_dev.json server_config.json   # if missing; never live IP
+.\Tools\WSL\Preflight.ps1
+python -m pytest Tests/Contract/test_framing.py -v
+```
+
+## Servers (WSL Ubuntu, truth: ~/projects/mmorpg-prototype)
+```
+cd ~/projects/mmorpg-prototype/mmorpg-prototype-login-server && docker compose -f docker-compose.dev.yml up -d --build  # db + login first (creates mmo_network)
+cd ../mmorpg-prototype-game-server && docker compose -f docker-compose.dev.yml up -d --build
+cd ../mmorpg-prototype-chunk-server-new && docker compose -f docker-compose.dev.yml up -d --build
+```
+Build hygiene (host protection): Dockerfiles and watch scripts are capped at
+`-j8` (`-j$(nproc)` pegs VmmemWSL: CPU/RAM/disk). Rebuild images only when
+toolchain/Dockerfile changes; otherwise rely on in-container incremental
+rebuilds. Never run image builds in parallel with test runs or the UE build.
+**Never run manual `make` inside a container while watchexec watches —
+parallel makes corrupt the link step (binary vanishes, restart loop).**
+Serial builds only: save, wait for quiet, verify `make` up-to-date, restart.
+Logs: `Tools/WSL/Get-WslServerLogs.ps1 -Service game -Tail 200`.
+Warm-up rule: after any chunk (re)start, wait for readiness instead of a fixed
+sleep — measured 2026-09-15: spawn zones pushed <1s after start
+(`Spawn Zone ID` in chunk log), first respawn task at +10s. Ready when the
+chunk log shows `Spawn Zone ID` lines plus the first `[RESPAWN]`/`[INITIAL_SPAWN]`
+summary (typically ~11s; timeout 90s). The old fixed 5-minute rule was
+over-conservative (dated from cold-DB era); keep 5 min only after a full DB
+wipe + content reload.
+
+## Bot/contract creds (dev only)
+One command (seeds bots, exports creds, runs the suite):
+```
+.\Tools\Contract\run_l3.ps1
+.\Tools\Contract\run_l3.ps1 -PytestArgs @("Tests/Contract/test_quest.py", "-x", "-q")
+```
+Manual equivalent (seed `bot_*` accounts, or capture from a real dev client
+log after login):
+```
+$env:MMO_CLIENT_ID="..."; $env:MMO_HASH="..."; $env:MMO_CHARACTER_ID="..."
+$env:MMO2_CLIENT_ID="..."; $env:MMO2_HASH="..."; $env:MMO2_CHARACTER_ID="..."  # cross-visibility
+python -m pytest Tests/Contract/ -v
+```
+Without creds/servers the tests SKIP (exit 0) — framing tests always run.
+
+## Bot state rotation + resets (dev only)
+Single-shot fixtures are consumed, not reset, by design — the tests SKIP
+loudly instead of failing when spent:
+- quest accept: non-repeatable quest; rotate with `QUEST_BOT_IDX` (default 6).
+- repair flow: SQL fixture single-shot; re-apply `scenarios/repair.py`
+  fixture or set `REPAIR_BOT_IDX`.
+- corpse TTL test: skips past 55s age; fails instead when the kill was slow
+  but under TTL — rerun (timing-flaky, see below).
+Full hermetic reset (quest progress for bot_01..08 + server bounces, ~2 min):
+```
+.\Tools\Bots\reset_bots.ps1
+```
+Why the bounces: the game server caches player quests in memory (a DB wipe
+alone keeps pushing stale states), the chunk caches progress per session.
+Wipe order matters: DB rows first, then game, then chunk.
+
+## Known-flaky L3 (all timing/geography, none from refactor incr 6-11)
+- `test_handoff.py::test_cell_enter_streams_snapshot`: the old blind +2500x
+  walk from spawn crosses empty terrain (server skips empty cells by
+  design) — fixed 2026-09-17 to walk through the nearest known mob cluster.
+- `test_handoff.py::test_corpse_return_within_ttl`: slow kills eat the 60s
+  corpse TTL (skip past 55s; hard fail just under it). Rerun on failure.
+- Quest swarm vs `test_quest.py` share one non-repeatable quest: run
+  `reset_bots.ps1` between them.
+- No `test_reg_*` cases exist yet (tracker-bug template from AGENTS.md was
+  never implemented) — recorded debt, not silently dropped.
+
+## Load probes (dev only, never live VPS)
+`Tools/Tests/auth_storm.py` (register/auth bursts) and `join_storm.py`
+(concurrent `joinGameClient`, tracks `CHUNKID_0` rate). Measured 2026-09-16
+(dev WSL, warm servers):
+- register: 50/200/500/1000 concurrent → 100% success, ~330-500/s wall.
+  Login pool (5 conns) never saturated: no timeouts, no reconnects.
+- auth (8 seeded accounts round-robin): 200 concurrent → 100% success.
+- game join: 200 concurrent → 200 ok, 0 `CHUNKID_0`.
+Verdict: pool sizes (5/5/5) and 5s acquire timeout are plenty for dev and
+small-prod auth/join bursts; re-measure before any launch with real CCU
+targets. A single transient `chunkId: 0` (~2 min, self-healed, cause
+unfound) was seen once — game now logs chunk register/remove/stale events
+(`[ChunkManager]`), watch for them if it recurs.
+
+Measured 2026-09-17 (dev WSL, post-flap, login restarted; phase-4 gates):
+- register: 50/200/500/1000 concurrent → 100% success. Latency is ~1.0s
+  floor (password hash by design): p50 1.05/1.14/1.30/1.50s, p95 ≤1.89s.
+- auth (seeded round-robin): 200 → 100%, 1000 → 1000/1000 (p50 1.80s).
+- game join: 1000 → 1000 ok, 0 `CHUNKID_0` in chunk log.
+- Steady-state RTT (kill taps, 4 bots): playerAttack p50 <1ms / p99 17ms
+  (= 2026-09-16 baseline at 20 online); moveCharacter p50 <1ms / p99 48ms
+  (< 63ms baseline). Server thinking time ~0ms; join flood p50 ~15.6s
+  (scene-load, expected).
+- Soak 62 min (patrol 15 + kill 20 + harvest 15 + death 12, ASan build):
+  22/22 bot-runs green, 0 ASan/UBSan findings, no restarts.
+Note 2026-09-17: a host flap wedged the login server (pool never opened,
+register/auth 100% timeout) — fixed by container restart. Bots with seeded
+sessions kept passing throughout (they skip login), so a green swarm does
+NOT imply a healthy login path; run auth_storm as the login gate.
+
+## Bot protocol rules (learned the hard way, mirror the real client)
+- Heartbeat from the first socket: chunk kills clients idle >30s
+  (`PING_TIMEOUT_SEC`). `MmoClient.start_heartbeat(10)`; never go quiet.
+- `clientVersion` ONLY in login/register bodies (like `UAuthenticationManager`).
+  Gameplay bodies must stay clean — extra fields are ignored, not fatal
+  (verified 2026-09-16: tolerant reader, pinned by `test_tolerant.py`).
+- `getSpawnZones` is a GAME-server call; on CHUNK it is only logged + ignored
+  (verified 2026-09-16, no session death). The real client still sends it to
+  chunk — harmless noise, but client backlog should stop sending it.
+- Chunk HOST always from local config (`127.0.0.1`); only PORT from
+  `chunkServerData` (game advertises Docker-internal `chunk-server`).
+- Pace joins like scene loads (F2/F4 are huge floods); drain fully before
+  talking. `chunk_session_as()` does all of the above; reuse it.
+- Keep-alive sessions: share one session per pytest module; bots hold one
+  session each. Rapid connect/disconnect churn degrades the dev chunk server
+  (stale socket registry) — restart it if sessions go dry for no reason.
+
+## Bug template (tracker: http://23.88.102.182:3005, OpenAPI /api/docs-json, X-API-Key from api_key.env)
+Title + type(bug) + `ClientVersion` + WSL server commit + `requestId sync_*` +
+`Saved/Logs` excerpt + replay file if from bots. Search duplicates first.
+New `eventType` on server → new scenario file. Closed TODO bug → `reg_<bug>` case.

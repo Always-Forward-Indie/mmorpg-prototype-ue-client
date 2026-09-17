@@ -51,6 +51,9 @@ function Get-MatchingContainer($fragment) {
 $exitCode = 0
 # Postgres operational noise that is NOT an app crash (restarts, probes).
 $dbBenign = @("administrator command", "starting up", "does not exist", "checkpoint", "autovacuum")
+# Global false-positive guard: libraries that log the word FATAL for
+# explicitly non-fatal conditions (e.g. login's "[[Error (not fatal)]]").
+$globalBenign = @("not fatal")
 $seen = @{}
 foreach ($frag in $names) {
     $ctr = Get-MatchingContainer $frag
@@ -58,6 +61,7 @@ foreach ($frag in $names) {
     if ($seen.ContainsKey($ctr)) { continue }  # two fragments, one container
     $seen[$ctr] = $true
     $log = wsl -d Ubuntu -- bash -c "docker logs --tail $Tail $ctr 2>&1"
+    $log = @($log | Where-Object { $line = $_; -not ($globalBenign | Where-Object { $line -like "*$_*" }) })
     if ($frag -like "*db*") { $log = @($log | Where-Object { $line = $_; -not ($dbBenign | Where-Object { $line -like "*$_*" }) }) }
     $fatals = @($log | Select-String -Pattern $fatalPatterns)
     $warns = @($log | Select-String -Pattern $warnPatterns | Select-Object -Last 20)

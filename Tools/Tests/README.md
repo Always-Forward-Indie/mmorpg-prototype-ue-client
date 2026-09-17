@@ -179,3 +179,9 @@ New `eventType` on server → new scenario file. Closed TODO bug → `reg_<bug>`
 - **UE specs** (A6): no new `MMO.*` specs shipped — engine specs require
   Session Frontend verification (CLI hangs 25+ min); unverified specs are
   worse than none. Follow-up with editor access.
+
+## Wave-6 gates (2026-09-17, this session)
+- Unit chunk 418/418, TSan fingerprint unchanged (9 Scheduler, 0 new).
+- L3 targeted 18/18 (framing/tolerant/conn/combat/vendor/trade) + reg_pvp.
+- auth_storm 50/50 (p50 1.06s); combat_storm live-verified; kill swarm 8/8.
+- Watch-ServerLogs exit 0 post-soak (db/login noise allow-listed).

@@ -660,11 +660,12 @@ void UPlayerManager::SendGetConnectedPlayersRequest(FClientDataStruct& ClientDat
 	// Get Connected Characters - это ChunkServer
 	FString getConnectedCharacters = JSONParser::SerializeJsonWithTimeSync("getConnectedCharacters", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::ChunkServer);
 
-	// Get spawn zones and spawn mobs - это тоже ChunkServer
-	FString getSpawnZones = JSONParser::SerializeJsonWithTimeSync("getSpawnZones", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::ChunkServer);
+	// NOTE: getSpawnZones is intentionally NOT sent — the chunk server does not
+	// implement it ("Unknown event type", session breaks afterwards) and the
+	// server auto-pushes Phase 4 world-state after playerReady ACK instead.
 
 	// Validate JSON strings before sending
-	if (getConnectedCharacters.IsEmpty() || getSpawnZones.IsEmpty())
+	if (getConnectedCharacters.IsEmpty())
 	{
 		UE_LOG(LogConnection, Error, TEXT("PlayerManager: Failed to serialize JSON data in SendGetConnectedPlayersRequest"));
 		return;
@@ -672,7 +673,6 @@ void UPlayerManager::SendGetConnectedPlayersRequest(FClientDataStruct& ClientDat
 
 	// Send the JSON string to the chunk server
 	networkManager->SendDataToChunkServer(getConnectedCharacters);
-	networkManager->SendDataToChunkServer(getSpawnZones);
 }
 
 void UPlayerManager::SendMovePlayerRequest(FClientDataStruct& ClientData)

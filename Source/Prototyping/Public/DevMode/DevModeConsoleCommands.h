@@ -19,6 +19,7 @@ class UMyGameInstance;
 //   devmode.reloadmobs                 - destroy all dev mobs and re-spawn from JSON
 //   devmode.reloadinventory            - clear and re-populate inventory from JSON
 //   devmode.listmobs                   - print all spawned mobs to log
+//   devmode.scenario <combat|reset>    - one-shot QA flows (teleport/reload presets)
 // ============================================================================
 UCLASS()
 class PROTOTYPING_API UDevModeConsoleCommands : public UObject
@@ -45,6 +46,7 @@ private:
     void Cmd_ReloadMobs(const TArray<FString>& Args) const;
     void Cmd_ReloadInventory(const TArray<FString>& Args) const;
     void Cmd_ListMobs(const TArray<FString>& Args) const;
+    void Cmd_Scenario(const TArray<FString>& Args) const;
 
     // Command names - kept to allow clean unregistration by name
     TArray<FString> RegisteredCommandNames;

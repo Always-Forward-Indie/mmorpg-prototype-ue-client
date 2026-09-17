@@ -508,7 +508,7 @@ public:
 	// Client protocol version — sent to server for compatibility checking.
 	// Format: MAJOR.MINOR.PATCH (SemVer). Change in BP_MyGameInstance defaults.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Version")
-	FString ClientVersion = TEXT("0.1.0");
+	FString ClientVersion = TEXT("0.1.2");
 
 	// DevMode configuration (editable in Blueprint defaults)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DevMode")

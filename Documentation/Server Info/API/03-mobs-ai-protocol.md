@@ -460,7 +460,7 @@ stepSize = min(stepSize, distance − attackRange) // без перелёта в
 | `lootMultiplier` | float | Множитель лута |
 | `isRare` | bool | Редкий моб |
 | `rareSpawnChance` | float | Шанс появления редкого [0..1] |
-| `rareSpawnCondition` | string | `"night"`, `"day"`, `"zone_event"` |
+| `rareSpawnCondition` | string | `"on_kill"` (серия убийств, по данным), `"zone_event"` |
 | `factionSlug` | string | Фракция |
 | `repDeltaPerKill` | int | Дельта репутации за убийство |
 | `biomeSlug` | string | Биом (напр. `"forest"`, `"cave"`) |

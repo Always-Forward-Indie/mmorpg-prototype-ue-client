@@ -132,7 +132,7 @@
 
 ### Серверные действия при level up
 
-1. **+10 HP** и **+5 MP** к максимуму за каждый уровень
+1. **Пересчёт характеристик** по формуле `base + mult × level^exp` из таблицы `class_stat_formula` (не flat-бонус; примеры 1 ур.: воин HP 168 / MP 55, маг HP 88 / MP 225)
 2. Сохранение: `saveCharacterProgress` → game-server
 3. Отправка: `experience_update` (unicast + broadcast) с `levelUp: true`
 4. Отправка: `stats_update` (unicast, только повысившему уровень) с новыми статами
@@ -284,7 +284,7 @@ effective = base
 ### Прогресс при атаке
 
 ```
-base_delta = config.mastery.base_delta   // default: 0.5
+base_delta = config.mastery.base_delta   // 0.02 по данным
 
 levelDiff = targetLevel - charLevel
 if (levelDiff >= 3):  levelFactor = 2.0
@@ -456,8 +456,8 @@ newMp   = min(currentMp + mpGain, maxMp)
 | `regen.hpRegenConCoeff` | 0.3 | CON → HP per tick |
 | `regen.mpRegenWisCoeff` | 0.5 | WIS → MP per tick |
 | `regen.disableInCombatMs` | 8000 | Задержка после боя для начала регена |
-| `mastery.base_delta` | 0.5 | Базовый прирост мастерства |
+| `mastery.base_delta` | 0.02 | Базовый прирост мастерства |
 | `mastery.tier1_value` ... `tier4_value` | 20/50/80/100 | Пороги тиров |
-| `mastery.db_flush_every_hits` | 10 | Интервал сохранения |
+| `mastery.db_flush_every_hits` | 25 | Интервал сохранения |
 | `item_soul.tier1_kills` ... `tier3_kills` | 50/200/500 | Пороги Kill Count |
 | `item_soul.tier1_bonus_flat` ... `tier3_bonus_flat` | 1/2/3 | Бонусы Item Soul |

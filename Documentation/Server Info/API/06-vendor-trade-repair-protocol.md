@@ -45,22 +45,28 @@
 |------|-----|----------|
 | `npcSlug` | string | Slug NPC-продавца |
 | `goldBalance` | int | Текущее золото игрока |
+| `items[]` | object | Полный дамп шаблона + торговые поля (см. ниже) |
 | `items[].itemId` | int | ID шаблона предмета |
-| `items[].quantity` | int | Остаток на складе. **-1 = бесконечный** |
-| `items[].price` | int | Цена покупки (с учётом наценки и скидки за репутацию) |
+| `items[].priceBuy` | int | Цена покупки 1 шт (с наценкой и скидкой за репутацию) |
+| `items[].priceSell` | int | Цена выкупа 1 шт у игрока |
+| `items[].stockCurrent` | int | Остаток на складе. **-1 = бесконечный** |
+| `items[].stockMax` | int | Максимум склада (-1 = бесконечный) |
+
+> Проверено по коду (`VendorManager::buildShopJson`): ключи именно `priceBuy`/`priceSell`/`stockCurrent`/`stockMax`, а не `price`/`quantity`.
 
 #### Валидация
 
 - NPC существует и `isInteractable`
+- Позиция игрока берётся **из тела запроса**: плоские `posX/posY/posZ/rotZ` в приоритете, вложенный `playerPosition{x,y,z}` — только фолбэк (когда все нули). Без позиции — `out_of_range`.
 - Расстояние: `sqrt(dx² + dy² + dz²) <= npc.radius + 2.0`
 
-#### Ошибки
+#### Ошибки (событие `vendorShop`)
 
 | Код | Причина |
 |-----|---------|
-| `vendor_not_found` | NPC не найден |
+| `npc_not_found` | NPC не найден (не `vendor_not_found`!) |
 | `vendor_no_inventory` | У NPC нет товаров |
-| `out_of_range` | Слишком далеко |
+| `out_of_range` | Далеко от NPC |
 
 ---
 
@@ -215,31 +221,37 @@
 #### Покупка (игрок платит)
 
 ```
-base_cost = vendorPriceBuy × quantity
-
 markup = economy.vendor_buy_markup_pct       // default: 0.0
 discount = 0.0
 if (reputation >= reputation.vendor_discount_threshold)  // default: 200
     discount = reputation.vendor_discount_pct            // default: 0.05 (5%)
 
-final_price = base_cost × (1.0 + markup - discount)
+unit_price = priceOverrideBuy > 0 ? priceOverrideBuy
+           : ceil(vendorPriceBuy × (1.0 + markup - discount))  // ceil на ШТУКУ!
+totalPrice = unit_price × quantity
 ```
+
+Успех `buyItem` → событие **`buyItemResult`** `{npcId, npcSlug, itemId, quantity, totalPrice}` **плюс** отдельное уведомление `item_received`. Ошибки → событие **`buyItem`** (не `buyItemResult`!): `invalid_quantity | vendor_not_found | item_not_sold_here | insufficient_stock | item_not_found | insufficient_gold | gold_deduct_failed | inventory_add_failed`.
 
 #### Продажа (игрок получает)
 
 ```
-tax = economy.vendor_sell_tax_pct            // default: 0.0
-effective_tax = max(0, tax - reputation_discount)
-goldReceived = floor(vendorPriceSell × quantity × (1.0 - effective_tax))
+tax = economy.vendor_sell_tax_pct            // default: 0.0, минус скидка за репутацию
+goldReceived = floor(vendorPriceSell × quantity × (1.0 - tax))
 ```
 
-#### Ошибки покупки/продажи
+Экипированное продать нельзя (`item_is_equipped`). Успех → событие **`sellItemResult`** `{npcId, npcSlug, goldReceived}`. Ошибки → событие **`sellItem`**: `invalid_quantity | vendor_not_found | item_not_in_inventory | item_is_equipped | insufficient_quantity | item_not_tradable`.
+
+#### Ошибки покупки/продажи (сводно)
 
 | Код | Причина |
 |-----|---------|
 | `insufficient_gold` | Не хватает золота |
-| `not_tradable` | Предмет нельзя продать (`isTradable == false`) |
-| `vendor_not_found` | NPC не найден |
+| `item_not_tradable` | Предмет нельзя продать (`isTradable == false`) |
+| `item_is_equipped` | Предмет экипирован (продажа) |
+| `item_not_sold_here` | Вендор этим не торгует |
+| `insufficient_stock` | Нет остатка (кроме -1) |
+| `npc_not_found` / `vendor_not_found` | NPC/вендор не найден (open* даёт `npc_not_found`) |
 | `out_of_range` | Далеко от NPC |
 
 ---
@@ -270,11 +282,12 @@ goldReceived = floor(vendorPriceSell × quantity × (1.0 - effective_tax))
   "body": {
     "npcId": 15,
     "npcSlug": "blacksmith_jim",
+    "goldBalance": 5000,
     "items": [
       {
         "inventoryItemId": 5678,
         "itemId": 50,
-        "slug": "iron_sword",
+        "itemName": "iron_sword",
         "durabilityMax": 100,
         "durabilityCurrent": 45,
         "repairCost": 55
@@ -285,7 +298,9 @@ goldReceived = floor(vendorPriceSell × quantity × (1.0 - effective_tax))
 }
 ```
 
-> Показываются только экипированные предметы с `isDurable == true` и `durabilityCurrent < durabilityMax`.
+> Показываются **все** предметы инвентаря с `isDurable == true` и `durabilityCurrent < durabilityMax` (не только экипированные). Поле имени — `itemName` (slug), плюс `goldBalance`.
+>
+> Важно: дистанция для ремонта берётся из **серверной позиции персонажа** (позиция в теле запроса игнорируется — сначала дойди `moveCharacter`). Ошибки → событие `repairShop`: `npc_not_found | out_of_range`.
 
 ---
 
@@ -319,7 +334,7 @@ goldReceived = floor(vendorPriceSell × quantity × (1.0 - effective_tax))
 }
 ```
 
-Ремонт **всегда** восстанавливает до `durabilityMax` (не инкрементально).
+Ремонт **всегда** восстанавливает до `durabilityMax` (не инкрементально). После успеха сервер дополнительно пушит свежий `repairShop` (окно обновляется само). Ошибки → событие `repairItem` (не `repairItemResult`!): `npc_not_found | out_of_range | item_not_found | not_durable | already_full | insufficient_gold | server_error | gold_deduct_failed`.
 
 ---
 
@@ -373,11 +388,13 @@ cost = ceil(100.0 × 30 / 50) = ceil(60.0) = 60 gold
 
 ### Ошибки ремонта
 
+Проверено по коду (`VendorEventHandler::repairOne`, `handleRepair*Event`): проверки типа NPC **нет** — чинит любой NPC (кода `not_a_blacksmith` не существует), экипировка не требуется (кода `item_not_equipped` не существует).
+
 | Код | Причина |
 |-----|---------|
-| `not_a_blacksmith` | NPC не является кузнецом |
-| `out_of_range` | Далеко от NPC |
-| `item_not_equipped` | Предмет не экипирован |
+| `npc_not_found` | NPC не найден |
+| `out_of_range` | Далеко от NPC (по серверной позиции!) |
+| `item_not_found` | Нет такого слота инвентаря |
 | `not_durable` | Предмет не имеет прочности |
 | `already_full` | Прочность уже максимальная |
 | `insufficient_gold` | Не хватает золота |
@@ -389,8 +406,9 @@ cost = ceil(100.0 × 30 / 50) = ceil(60.0) = 60 gold
 ### Жизненный цикл торговой сессии
 
 ```
-1. A → tradeRequest(B)     → B получает tradeInvite
-2. B → tradeAccept          → Создаётся сессия, оба получают tradeState
+1. A → tradeRequest(B)     → B получает tradeInvite (сервер запоминает инвайт, TTL 60с)
+2. B → tradeAccept          → Требуется живой инвайт, иначе `no_pending_invite`;
+   создаётся сессия, оба получают tradeState
 3. A/B → tradeOfferUpdate   → Оба получают обновлённый tradeState
 4. A → tradeConfirm         → confirmedA = true, оба получают tradeState
 5. B → tradeConfirm         → confirmedB = true
@@ -398,6 +416,14 @@ cost = ceil(100.0 × 30 / 50) = ceil(60.0) = 60 gold
    → Финальная валидация FAIL → Оба получают tradeCancelled
 6. A или B → tradeCancel    → Оба получают tradeCancelled
 ```
+
+> **Инвайты (2026-09-13, исправлено в чанке):** `tradeRequest` записывает
+> pending-invite `{from → to, TTL 60с}`; `tradeAccept` без живого инвайта
+> отвечает `no_pending_invite` и НЕ создаёт сессию (раньше слепой accept
+> фабриковал сессию из воздуха и ломал настоящий трейд с `already_in_trade`).
+> `tradeDecline` гасит инвайт. Коды ошибок accept:
+> `invalid_session` (нет fromCharacterId), `initiator_not_found`,
+> `no_pending_invite`.
 
 ### TradeSessionStruct
 
@@ -415,16 +441,18 @@ cost = ceil(100.0 × 30 / 50) = ceil(60.0) = 60 gold
 
 ### tradeRequest — Предложить обмен
 
+> **Исправлено по коду (2026-09-13, сверено с чанком + клиентом):** сервер берёт
+> `characterId` из сессии, позиция — плоскими полями. Старая форма
+> `{characterId, playerPosition:{...}}` больше не описывается.
+
 #### Клиент → Сервер
 
 ```json
 {
   "header": { "eventType": "tradeRequest", "clientId": 7 },
   "body": {
-    "characterId": 101,
     "targetCharacterId": 205,
-    "playerPosition": { "x": 100.0, "y": 100.0, "z": 50.0 },
-    "timestamps": {}
+    "posX": 100.0, "posY": 100.0, "posZ": 50.0, "rotZ": 0.0
   }
 }
 ```
@@ -445,20 +473,21 @@ cost = ceil(100.0 × 30 / 50) = ceil(60.0) = 60 gold
 
 ### tradeAccept / tradeDecline
 
+> **Исправлено по коду (2026-09-13, `EventDispatcher::handleTradeAccept`):
+> сервер читает `body.fromCharacterId` (string с characterId инициатора).
+> Старая форма `{characterId, sessionId}` сервером игнорируется
+> (сессия не создаётся, покрыто негативным тестом `test_trade_accept_doc_shape_rejected`).
+
 #### Клиент → Сервер
 
 ```json
 {
   "header": { "eventType": "tradeAccept", "clientId": 42 },
   "body": {
-    "characterId": 205,
-    "sessionId": "101",
-    "timestamps": {}
+    "fromCharacterId": "101"
   }
 }
 ```
-
-> Поле `sessionId` при accept/decline — это **string** с `characterId` инициатора.
 
 При **accept**: оба получают `tradeState`.
 При **decline**: инициатор получает `tradeDeclined`:

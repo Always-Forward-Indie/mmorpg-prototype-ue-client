@@ -1,0 +1,16 @@
+{
+    "_comment": "QA teleport presets (DevMode). Usage: devmode.teleport <X Y Z>. Coordinates mirror dev_mobs.json / dev_player.json.",
+    "presets": [
+        { "name": "spawn",  "pos": [0, 0, 90],      "note": "DevHero spawn (dev_player.json)" },
+        { "name": "fox",    "pos": [300, 200, 90],  "note": "SmallFox 9901, aggressive lvl5" },
+        { "name": "wolf",   "pos": [-400, 350, 90], "note": "GreyWolf 9902, aggressive lvl12" },
+        { "name": "archer", "pos": [600, -300, 90], "note": "Skeleton Archer 9903, passive lvl8" }
+    ],
+    "flows_5min": [
+        "devmode.scenario combat  (reload mobs + teleport to first mob)",
+        "devmode.setplayerhp 1    (near-death) then devmode.setplayerhp 1000",
+        "devmode.reloadinventory  (re-seed from dev_inventory.json)",
+        "devmode.scenario reset   (mobs + inventory + back to spawn)",
+        "devmode.listmobs         (dump mob uids/states to log)"
+    ]
+}

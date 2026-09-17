@@ -23,7 +23,7 @@
     "id": 7,
     "name": "Аргент",
     "class": "Warrior",
-    "classId": 1,
+    "classId": 2,
     "race": "Human",
     "level": 15,
     "currentExp": 48200,

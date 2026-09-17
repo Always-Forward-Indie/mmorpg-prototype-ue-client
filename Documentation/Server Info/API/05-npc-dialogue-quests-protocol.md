@@ -801,6 +801,12 @@ struct QuestStepStruct {
 | `stepType` | string | Тип текущего шага |
 | `completionMode` | string | Режим завершения |
 | `required` | object | Параметры шага (что нужно сделать) |
+| `currentStepEnriched` | object | Шаг с `target_slug` + текущим счётчиком `current` |
+| `rewards` | array | Награды (скрытые — только после turn-in) |
+
+Проверено по коду (`QuestManager::sendQuestUpdate`): `progress` ключи — `killed` (kill), `have` (collect), `done` (talk/reach). Состояния `state`: `active → completed → turned_in`, `failed`. `QUEST_UPDATE` шлётся при каждом изменении (килл, подбор, ток, turn-in) — клиент должен слушать его всегда, а не опрашивать.
+
+> Важно: `onNPCTalked` срабатывает до выбора диалога (talk-степы могут закрыться самим фактом разговора). Новая `npcInteract` закрывает предыдущую сессию персонажа (`closeSessionByCharacter`). Дистанция — по **серверной** позиции персонажа, позиция из тела запроса игнорируется.
 
 ---
 

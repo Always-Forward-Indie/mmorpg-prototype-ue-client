@@ -147,9 +147,11 @@ struct CorpseLootStruct {
 | Код | Причина |
 |-----|---------|
 | `CORPSE_NOT_FOUND` | Труп не существует или истёк |
+| `CORPSE_NOT_AVAILABLE` | Труп недоступен (фактический код сервера на неизвестный труп, 2026-09-13) |
 | `OUT_OF_RANGE` | Слишком далеко (> 150.0) |
 | `ALREADY_HARVESTED` | Труп уже собран |
 | `ALREADY_BEING_HARVESTED` | Кто-то другой уже собирает |
+| `HARVEST_FAILED` | Старт не удался (напр. contested corpse, см. тело `message`) |
 
 ---
 
@@ -165,7 +167,28 @@ struct CorpseLootStruct {
 
 ### harvestComplete — Завершение
 
-#### Сервер → Broadcast (harvestCompleteBroadcast)
+Проверено по коду: завершение — это **два** события. Ждать надо оба.
+
+#### Сервер → Unicast (harvestComplete, именно harvester'у)
+
+```json
+{
+  "header": { "eventType": "harvestComplete", "status": "success" },
+  "body": {
+    "type": "HARVEST_COMPLETE",
+    "clientId": 7,
+    "playerId": 7,
+    "corpseId": 1234,
+    "success": true,
+    "totalItems": 2,
+    "availableLoot": [ /* как в corpseLootInspect ниже */ ]
+  }
+}
+```
+
+> Лут уже виден прямо здесь в `availableLoot` — отдельный inspect не обязателен, но безвреден.
+
+#### Сервер → Broadcast (harvestCompleteBroadcast, всем рядом)
 
 ```json
 {
@@ -251,17 +274,23 @@ struct CorpseLootStruct {
 {
   "header": { "eventType": "corpseLootInspect", "status": "success" },
   "body": {
+    "success": true,
     "corpseUID": 1234,
-    "items": [
+    "availableLoot": [
       {
         "itemId": 20,
+        "itemSlug": "animal_hide",
         "quantity": 3,
-        "item": { /* ItemDataStruct */ }
+        "name": "animal_hide"
       }
-    ]
+    ],
+    "totalItems": 1,
+    "type": "CORPSE_LOOT_INSPECT"
   }
 }
 ```
+
+> Проверено по коду (`HarvestEventHandler`): список — **`availableLoot`**, не `items`. Ошибки → то же событие `corpseLootInspect` со `status: error`: `SECURITY_VIOLATION | CORPSE_NOT_FOUND | CORPSE_NOT_HARVESTED | NOT_YOUR_HARVEST` (лут чужого трупа смотреть нельзя — только свой `harvestedByCharacterId`).
 
 ---
 
@@ -307,15 +336,26 @@ struct CorpseLootStruct {
   "body": {
     "corpses": [
       {
-        "corpseUID": 1234,
-        "mobTemplateId": 15,
-        "position": { "x": 200.0, "y": 150.0, "z": 0.0 },
-        "hasBeenHarvested": false
+        "id": 1234,
+        "mobId": 15,
+        "positionX": 200.0,
+        "positionY": 150.0,
+        "hasBeenHarvested": false,
+        "harvestedByCharacterId": 0,
+        "currentHarvesterCharacterId": 0,
+        "isBeingHarvested": false
       }
-    ]
+    ],
+    "count": 1
   }
 }
 ```
+
+> **Исправлено по коду (2026-09-13, `HarvestEventHandler::handleGetNearbyCorpses`):**
+> реальные ключи — `id` (= corpseUID = mobUID), `mobId`, плоские `positionX/positionY`,
+> плюс `harvestedByCharacterId/currentHarvesterCharacterId/isBeingHarvested`.
+> Также исправлен резолв персонажа (был `getCharacterById(clientId)` —
+> всегда мимо; теперь из сессии).
 
 ---
 

@@ -13,33 +13,47 @@ All three costs are optional and configured per skill in `class_skill_tree`.
 
 ## Trainers
 
-| NPC | ID | Class | World Position |
+> Источник правды по привязкам — дамп БД (`npc_trainer_class`, `npc_placements`). Функциональный тренер воинов — Эдрик, не Терон (у Терона нет строки в `npc_trainer_class`; у него магазин и ремонт).
+
+| NPC | ID | Class | World Position (zone) |
 |-----|----|-------|----------------|
-| Theron | 4 | Warrior | 1200, -2800, 200 |
-| Sylara | 5 | Mage | -400, 1600, 200 |
+| Edrik | 3 | Warrior | -635, 2160, 200 (village) |
+| Sylara | 5 | Mage | -2416, -2718, 200 (village) |
+
+Theron (ID 4, village) — vendor + repair, not a trainer.
 
 ---
 
 ## Available Skills
 
-### Warrior Skills (learn from Theron)
+> Цены ниже — из `class_skill_tree` дампа. Книга требуется только для Whirlwind и Chain Lightning.
 
-| Skill | Slug | SP Cost | Gold | Requires Book |
-|-------|------|---------|------|---------------|
-| Shield Bash | `shield_bash` | 1 | 50 | No |
-| Whirlwind | `whirlwind` | 2 | 100 | Yes — Tome of Whirlwind |
-| Iron Skin | `iron_skin` | 1 | 75 | No |
-| Constitution Mastery | `constitution_mastery` | 2 | 0 | Yes — Tome of Constitution Mastery |
+### Warrior Skills (learn from Edrik)
+
+| Skill | Slug | Level | SP Cost | Gold | Requires Book |
+|-------|------|-------|---------|------|---------------|
+| Power Slash | `power_slash` | 5 | 1 | 100 | No |
+| Shield Bash | `shield_bash` | 5 | 1 | 150 | No |
+| Iron Skin | `iron_skin` | 5 | 1 | 120 | No |
+| Constitution Mastery | `constitution_mastery` | 8 | 1 | 200 | No (requires Iron Skin) |
+| Whirlwind | `whirlwind` | 10 | 1 | 300 | Yes — Tome of Whirlwind (requires Shield Bash) |
+| Battle Cry | `battle_cry` | 5 | 1 | 100 | No |
+| Blink Home | `blink_home` | 5 | 1 | 80 | No |
+| Swift Feet | `swift_feet` | 5 | 1 | 100 | No |
 
 ### Mage Skills (learn from Sylara)
 
-| Skill | Slug | SP Cost | Gold | Requires Book |
-|-------|------|---------|------|---------------|
-| Frost Bolt | `frost_bolt` | 1 | 50 | No |
-| Arcane Blast | `arcane_blast` | 2 | 100 | Yes — Tome of Arcane Blast |
-| Chain Lightning | `chain_lightning` | 2 | 150 | Yes — Tome of Chain Lightning |
-| Mana Shield | `mana_shield` | 1 | 75 | No |
-| Elemental Mastery | `elemental_mastery` | 2 | 0 | Yes — Tome of Elemental Mastery |
+| Skill | Slug | Level | SP Cost | Gold | Requires Book |
+|-------|------|-------|---------|------|---------------|
+| Fireball | `fireball` | 5 | 1 | 120 | No |
+| Frost Bolt | `frost_bolt` | 5 | 1 | 100 | No |
+| Arcane Blast | `arcane_blast` | 8 | 1 | 200 | No (requires Frost Bolt) |
+| Mana Shield | `mana_shield` | 5 | 1 | 150 | No |
+| Elemental Mastery | `elemental_mastery` | 10 | 1 | 300 | No (requires Mana Shield) |
+| Chain Lightning | `chain_lightning` | 12 | 1 | 400 | Yes — Tome of Chain Lightning (requires Arcane Blast) |
+| Healing Surge | `healing_surge` | 8 | 1 | 150 | No |
+| Blink Home | `blink_home` | 5 | 1 | 80 | No |
+| Swift Feet | `swift_feet` | 5 | 1 | 100 | No |
 
 ---
 
@@ -47,15 +61,15 @@ All three costs are optional and configured per skill in `class_skill_tree`.
 
 | Item Name | Item ID | Drop Only | Unlocks |
 |-----------|---------|-----------|---------|
-| Tome of Whirlwind | 18 | No | `whirlwind` |
-| Tome of Iron Skin | 19 | Yes | `iron_skin` |
-| Tome of Constitution Mastery | 20 | No | `constitution_mastery` |
-| Tome of Frost Bolt | 21 | No | `frost_bolt` |
-| Tome of Arcane Blast | 22 | No | `arcane_blast` |
-| Tome of Chain Lightning | 23 | No | `chain_lightning` |
-| Tome of Mana Shield | 24 | Yes | `mana_shield` |
-| Tome of Elemental Mastery | 25 | No | `elemental_mastery` |
-| Tome of Shield Bash | 26 | No | `shield_bash` |
+| Tome of Shield Bash | 18 | No | `shield_bash` (book not required by tree) |
+| Tome of Whirlwind | 19 | No | `whirlwind` |
+| Tome of Iron Skin | 20 | No | `iron_skin` (book not required by tree) |
+| Tome of Constitution Mastery | 21 | No | `constitution_mastery` (book not required by tree) |
+| Tome of Frost Bolt | 22 | No | `frost_bolt` (book not required by tree) |
+| Tome of Arcane Blast | 23 | No | `arcane_blast` (book not required by tree) |
+| Tome of Chain Lightning | 24 | Yes | `chain_lightning` |
+| Tome of Mana Shield | 25 | No | `mana_shield` (book not required by tree) |
+| Tome of Elemental Mastery | 26 | No | `elemental_mastery` (book not required by tree) |
 
 Drop-only books (`vendor_price_buy = 0`) cannot be purchased from vendors — they must be found as loot.
 
@@ -283,7 +297,7 @@ This means leveling from 1 → 3 grants 2 SP, but SP is never reduced by the lev
 
 ## Trainer Dialogue IDs
 
-| Trainer | Dialogue ID | Start Node | Node Range |
-|---------|-------------|------------|------------|
-| Theron | 4 | 400 | 400–499 |
-| Sylara | 5 | 500 | 500–599 |
+| Trainer | NPC ID | Dialogue | Start Node | Node Range |
+|---------|--------|----------|------------|------------|
+| Edrik | 3 | `edrik_main` (dialogue 3) | 301 | 301+ |
+| Sylara | 5 | `sylara_main` (dialogue 5) | 500 | 500–599 |

@@ -814,20 +814,19 @@ bool updateMobInstance(const MobDataStruct& updated);
 которого нет нигде больше. Это не просто "хороший лут" — это узнаваемое явление мира.
 
 **Три составляющих редкого моба:**
-1. **Условие спавна** — ночь + зона + шанс, или: убито 50+ волков + ночь
+1. **Условие спавна** — серия убийств + зона + шанс (по данным: `AlphaWolf` и `SpiritFox` — `is_rare=t`, шанс 8, условие `on_kill`). Условий «ночь/день» в данных нет — day/night cycle в игре отсутствует.
 2. **Узнаваемость** — особое имя, звук, отличный визуал. Игрок должен узнать его сразу
 3. **Контекстный лут** — уникальный для этого моба. `Призрачный Волк` → `Призрачный Клык`
    который нигде больше не встречается и открывает диалог с NPC (система 3.2)
 
-**Пример: Призрачный Волк**
-- Спавн: ночь (day/night cycle) + зона Тёмный Лес + 2% шанс раз в 10 минут
-- При спавне: broadcast только в зоне `"[Ночь] Призрачная тень промелькнула в лесу..."`
-- Дроп: `Призрачный Клык` (unique, item_id: X) + увеличенный gold
+**Пример: Матёрый волк (по данным)**
+- Спавн: серия убийств (`on_kill`) + шанс 8
+- Дроп: шкуры и трофеи + амулет звериного чутья (7%, очень редкий)
 - Бестиарий: отдельная запись, не смешивается с обычным волком
 
-**Важно:** редкий моб не должен вызывать frustration. Если ночь закончилась — окей, будет следующая.
+**Важно:** редкий моб не должен вызывать frustration. Серия убийств — понятное условие: игрок влияет на шанс своей охотой.
 
-**Precondition:** требует day/night cycle (отдельная задача).
+**Precondition:** отсутствует — условие `on_kill` уже работает на существующих данных, day/night не требуется.
 
 **Groundwork (можно заложить уже сейчас, не реализуя логику):**
 
@@ -836,23 +835,22 @@ bool updateMobInstance(const MobDataStruct& updated);
 ALTER TABLE mob_templates ADD COLUMN is_rare             BOOLEAN DEFAULT FALSE;
 ALTER TABLE mob_templates ADD COLUMN rare_spawn_chance   FLOAT   DEFAULT 0.0;
 ALTER TABLE mob_templates ADD COLUMN rare_spawn_condition VARCHAR(30) DEFAULT NULL;
--- rare_spawn_condition: 'night' | 'day' | 'zone_event' | NULL (любое время)
+-- rare_spawn_condition: 'on_kill' (серия убийств, по данным) | 'zone_event' | NULL (любое время)
 ```
 
 Поле `is_rare` и `rareSpawnChance` добавить в `MobDataStruct` — загружаются из DB,
 передаются на chunk server. Логика спавна (`RareSpawnManager`) — отдельный тикер,
-реализуется после day/night cycle.
+проверяющий условие `on_kill` (day/night cycle в игре нет и не требуется).
 
 **Архитектурная заготовка для RareSpawnManager:**
-- `tickRareSpawns(bool isNight)` — вызывается ChunkServer при смене дня/ночи
-  или периодически с передачей текущего `isNight` флага
+- `tickRareSpawns()` — вызывается ChunkServer периодически
 - Для каждого `SpawnZoneStruct::spawnMobId` с флагом `is_rare`:
   roll `rare_spawn_chance`, проверить `rare_spawn_condition`, если подходит → спавн
 - Инстанс редкого моба регистрируется через ChampionManager (если is_champion_type)
   или напрямую через `MobInstanceManager`
 - Строгое ограничение: 1 редкий моб одного типа в зоне одновременно
 
-**Статус:** ⏳ Зависит от day/night cycle. Groundwork (DB columns) включается в миграцию 038.
+**Статус:** ✅ Данные есть (AlphaWolf, SpiritFox — `on_kill`, шанс 8). Осталась логика тикера.
 
 ---
 
@@ -1321,7 +1319,7 @@ ALTER TABLE items ADD COLUMN IF NOT EXISTS mastery_slug VARCHAR(60) DEFAULT NULL
 ```
 delta = base_delta × level_factor
 
-base_delta = 0.5  (за каждый удар)
+base_delta = 0.02  (за каждый удар, по `game_config mastery.base_delta`)
 
 level_factor (уровень цели vs уровень персонажа):
   target_level - char_level >= +3  → 2.0   (risk/reward)
@@ -1397,7 +1395,7 @@ private:
 };
 ```
 
-**Debounce persist:** писать в БД каждые 10 ударов или при пересечении milestone.
+**Debounce persist:** писать в БД каждые 25 ударов (`mastery.db_flush_every_hits`) или при пересечении milestone.
 Аналогично ItemSoul debounce (проверенный паттерн).
 
 ```cpp
@@ -1414,7 +1412,7 @@ void MasteryManager::onPlayerAttack(int characterId, const std::string& masteryS
 
     checkAndApplyMilestone(characterId, masterySlug, oldValue, val); // без lock!
 
-    if (tierCrossed || hitCounters_[characterId][masterySlug] % 10 == 0)
+    if (tierCrossed || hitCounters_[characterId][masterySlug] % 25 == 0)
         saveCallback_(characterId, masterySlug, val);
 }
 ```
@@ -1755,7 +1753,7 @@ Threshold достигнут в зоне (N убийств волков)
 | 6 | Бестиарий | 2 | ★★★★ | ★★★☆ | Loot data |
 | 7 | Локализация предметов (name_key) | 2 | ★★★☆ | ★★★☆ | Миграция БД |
 | 8 | Threshold Champion | 3 | ★★★★ | ★★★★ | SpawnService, worldNotification |
-| 9 | Редкие мобы (Rare Spawn) | 3 | ★★★★ | ★★★☆ | Day/night cycle, worldNotification |
+| 9 | Редкие мобы (Rare Spawn) | 3 | ★★★★ | ★★★☆ | Данные (`on_kill`), worldNotification |
 | 10 | Timed Spawn Champion | 3 | ★★★★★ | ★★★★ | SpawnService, worldNotification |
 | 11 | Survival Champion | 3 | ★★★☆ | ★★★☆ | SpawnService, worldNotification |
 | 12 | Reputation System | 4 | ★★★★★ | ★★★★☆ | Диалог условия |
@@ -2127,7 +2125,7 @@ ON CONFLICT (slug) DO NOTHING;
 | Threshold Champion | ✅ Реализовано | `ChampionManager::recordMobKill`, `spawnChampion`, счётчик сбрасывается при деспауне/убийстве |
 | Survival Champion | ✅ Реализовано | `ChampionManager::tickSurvivalEvolution` (300s), `evolveSurvivalMob`, `getAllLivingInstances()` |
 | Timed Champion | ✅ Реализовано | `ChampionManager::tickTimedChampions` (30s), preannounce, `sendTimedChampionKilledToGameServer`, migration 038 |
-| Rare Spawn | ⏳ Groundwork | DB columns в migration 038 заложены. Логика — после day/night cycle |
+| Rare Spawn | ⏳ Данные есть | `is_rare`, шанс 8, условие `on_kill` (AlphaWolf, SpiritFox). Осталась логика тикера, day/night не требуется |
 | Reputation System | ✅ Реализовано | §5.1 migration 039, ReputationManager, dialogue + combat integration, guard block (BLOCKED_BY_REPUTATION, rep < −500), vendor discount (−5% buy / +5% sell при rep ≥ 200) |
 | Skill Mastery | ✅ Реализовано | §5.2 migration 039, MasteryManager, crit_chance/parry_chance milestones |
 | Zone Events | ✅ Реализовано | §5.3 migration 039, ZoneEventManager, loot + speed multipliers |
@@ -2216,7 +2214,7 @@ ON CONFLICT (slug) DO NOTHING;
 - [x] Scheduled task в `ChunkServer`: каждые 30 сек вызывать `tickTimedChampions()`
 - [x] Контент: добавить первый `timed_champion_templates` row в БД
 
-**Шаг 4 — Rare Spawn** (§4.3): ⏳ После day/night cycle
+**Шаг 4 — Rare Spawn** (§4.3): ⏳ Тикер под условие `on_kill` (данные есть, day/night не требуется)
 
 #### P4 — Этап 4 (долгосрочный retention) ✅ COMPLETED
 

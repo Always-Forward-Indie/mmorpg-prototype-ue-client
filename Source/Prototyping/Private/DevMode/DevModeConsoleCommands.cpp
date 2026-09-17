@@ -83,6 +83,13 @@ void UDevModeConsoleCommands::RegisterCommands(UMyGameInstance* InGameInstance)
             if (UDevModeConsoleCommands* Cmd = WeakThis.Get()) { Cmd->Cmd_ListMobs(A); }
         }));
 
+    Reg(TEXT("devmode.scenario"),
+        TEXT("DevMode: one-shot QA flows. Usage: devmode.scenario <combat|reset>"),
+        FConsoleCommandWithArgsDelegate::CreateLambda([WeakThis](const TArray<FString>& A)
+        {
+            if (UDevModeConsoleCommands* Cmd = WeakThis.Get()) { Cmd->Cmd_Scenario(A); }
+        }));
+
     UE_LOG(LogTemp, Log, TEXT("DevMode: %d console commands registered"), RegisteredCommandNames.Num());
 }
 
@@ -142,7 +149,7 @@ void UDevModeConsoleCommands::Cmd_SpawnMob(const TArray<FString>& Args) const
     UDevModeDataProvider* Provider = NewObject<UDevModeDataProvider>(GameInstance);
     if (!Provider) return;
 
-    // We need Config — get it from GameInstance
+    // We need Config ï¿½ get it from GameInstance
     Provider->Initialize(GameInstance, GameInstance->DevModeConfig);
 
     // Read JSON manually here to find just one entry
@@ -340,4 +347,64 @@ void UDevModeConsoleCommands::Cmd_ListMobs(const TArray<FString>& Args) const
         ++Count;
     }
     UE_LOG(LogTemp, Log, TEXT("devmode.listmobs: Total %d mobs"), Count);
+}
+
+// ============================================================================
+// devmode.scenario <combat|reset>
+// One-shot QA flows for testers/players (no server needed).
+//   combat - reload mobs, teleport player near the first mob
+//   reset  - reload mobs + inventory, teleport player back to dev spawn
+// ============================================================================
+void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
+{
+    if (Args.Num() < 1)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.scenario <combat|reset>"));
+        return;
+    }
+    if (!GameInstance) return;
+
+    const FString Name = Args[0].ToLower();
+    TArray<FString> NoArgs;
+
+    if (Name == TEXT("combat"))
+    {
+        Cmd_ReloadMobs(NoArgs);
+
+        UWorld* World = GameInstance->GetWorld();
+        ABasicMOB* First = nullptr;
+        if (World)
+        {
+            for (TActorIterator<ABasicMOB> It(World); It; ++It)
+            {
+                First = *It;
+                break;
+            }
+        }
+        if (First && GameInstance->Player)
+        {
+            const FVector At = First->GetActorLocation() + FVector(-300.0f, 0.0f, 0.0f);
+            GameInstance->Player->SetActorLocation(At);
+            UE_LOG(LogTemp, Log, TEXT("devmode.scenario combat: near '%s' at (%.0f,%.0f,%.0f)"),
+                *First->GetMobName(), At.X, At.Y, At.Z);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("devmode.scenario combat: no mob/player found"));
+        }
+    }
+    else if (Name == TEXT("reset"))
+    {
+        Cmd_ReloadMobs(NoArgs);
+        Cmd_ReloadInventory(NoArgs);
+        if (GameInstance->Player)
+        {
+            GameInstance->Player->SetActorLocation(FVector(0.0f, 0.0f, 90.0f));
+        }
+        UE_LOG(LogTemp, Log, TEXT("devmode.scenario reset: world re-seeded, player at spawn"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("devmode.scenario: unknown '%s' (use combat|reset)"), *Args[0]);
+    }
 }

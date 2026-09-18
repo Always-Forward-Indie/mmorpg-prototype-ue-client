@@ -176,6 +176,13 @@ New `eventType` on server → new scenario file. Closed TODO bug → `reg_<bug>`
   discount thresholds (needs rep-200 setup), learn-skill consume (trainer
   fixture), turn-in rewards (needs completable quest ~18 min), champion
   zoneId (needs threshold kills + spawn broadcast assert).
+  Shipped 2026-09-18: test_reg_pvp.py (PvP refusal), test_reg_learn.py
+  (insufficient_level/already_learned guards; success path blocked — max
+  bot level 3 < req 5, stays unit-pinned), test_reg_discount.py (475 vs
+  500 differential at sylara; vendor range uses PACKET playerPosition —
+  omitting it reads (0,0,0), unlike dialogue which uses stored position).
+  Deferred with data: turn-in (18-min chain, wrap quest.py post-farm),
+  champion (prod threshold is 100 kills — needs farming scenario).
 - **UE specs** (A6): no new `MMO.*` specs shipped — engine specs require
   Session Frontend verification (CLI hangs 25+ min); unverified specs are
   worse than none. Follow-up with editor access.

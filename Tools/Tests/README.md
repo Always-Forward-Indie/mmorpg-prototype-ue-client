@@ -180,9 +180,12 @@ New `eventType` on server → new scenario file. Closed TODO bug → `reg_<bug>`
   (insufficient_level/already_learned guards; success path blocked — max
   bot level 3 < req 5, stays unit-pinned), test_reg_discount.py (475 vs
   500 differential at sylara; vendor range uses PACKET playerPosition —
-  omitting it reads (0,0,0), unlike dialogue which uses stored position).
-  Deferred with data: turn-in (18-min chain, wrap quest.py post-farm),
-  champion (prod threshold is 100 kills — needs farming scenario).
+  omitting it reads (0,0,0), unlike dialogue which uses stored position),
+  test_reg_turnin.py (full fox chain GREEN 22:36 after fixing dead pickup
+  code + ghost hunting in quest.py — see SERVER_BUGS #9).
+  Deferred with data: champion (prod threshold 100, sparse 5-8km ring,
+  no invasion events, timed uninitialised — effectively unreachable;
+  filed as content finding in SERVER_BUGS #8, tracker key expired).
 - **UE specs** (A6): no new `MMO.*` specs shipped — engine specs require
   Session Frontend verification (CLI hangs 25+ min); unverified specs are
   worse than none. Follow-up with editor access.

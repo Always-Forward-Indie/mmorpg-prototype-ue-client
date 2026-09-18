@@ -52,8 +52,10 @@ $exitCode = 0
 # Postgres operational noise that is NOT an app crash (restarts, probes).
 $dbBenign = @("administrator command", "starting up", "does not exist", "checkpoint", "autovacuum")
 # Global false-positive guard: libraries that log the word FATAL for
-# explicitly non-fatal conditions (e.g. login's "[[Error (not fatal)]]").
-$globalBenign = @("not fatal")
+# explicitly non-fatal conditions (e.g. login's "[[Error (not fatal)]]",
+# postgres "starting up" quoted inside the login/game retry loop — the
+# retry itself is the recovery, logged separately on persistent failure).
+$globalBenign = @("not fatal", "is starting up")
 $seen = @{}
 foreach ($frag in $names) {
     $ctr = Get-MatchingContainer $frag

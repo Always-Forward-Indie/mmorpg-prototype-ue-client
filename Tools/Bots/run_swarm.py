@@ -8,11 +8,11 @@ import traceback
 
 sys.path.insert(0, os.path.dirname(__file__))
 from bot import Bot, BotContested, CheckFailed  # noqa: E402
-from scenarios import patrol, combat_sweep, chat_mesh, kill, harvest, trade, death, vendor, repair, quest  # noqa: E402
+from scenarios import patrol, combat_sweep, chat_mesh, kill, harvest, trade, death, vendor, repair, quest, champion_farm  # noqa: E402
 
 SCENARIOS = {"patrol": patrol.run, "combat_sweep": combat_sweep.run, "chat_mesh": chat_mesh.run,
              "kill": kill.run, "harvest": harvest.run, "death": death.run, "vendor": vendor.run,
-             "repair": repair.run, "quest": quest.run}
+             "repair": repair.run, "quest": quest.run, "champion_farm": champion_farm.run}
 DUO_SCENARIOS = {"trade": trade.run_duo}
 
 

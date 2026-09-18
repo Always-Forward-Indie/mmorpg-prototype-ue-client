@@ -46,6 +46,17 @@ Write-Host "bouncing chunk-server (fresh static push)..."
 wsl -d Ubuntu -- bash -lc "docker restart mmorpg-prototype-chunk-server-new-chunk-server-1"
 Start-Sleep -Seconds 45
 
-$ready = wsl -d Ubuntu -- bash -lc "docker logs mmorpg-prototype-chunk-server-new-chunk-server-1 --since 2m 2>&1 | grep -cE 'MOB_HEALTH_UPDATE|stepMultiplier'"
-if ([int]$ready -lt 1) { throw "chunk-server does not look ready after bounce (no mob activity)" }
+$ready = 0
+for ($i = 1; $i -le 9; $i++) {
+    Start-Sleep -Seconds 10
+    # Warm-up rule (Tools/Tests/README.md): the static push completes in
+    # seconds; the "Active clients" heartbeat every 10s proves the sim loop
+    # is alive. NOTE: no --since filter: container/host clock skew makes
+    # time-windowed log reads unreliable. --tail is skew-proof.
+    $log = wsl -d Ubuntu -- bash -lc "docker logs --tail 60 mmorpg-prototype-chunk-server-new-chunk-server-1 2>&1"
+    $zones = @($log | Select-String -Pattern "Spawn Zone ID").Count
+    $heartbeat = @($log | Select-String -Pattern "Active clients").Count
+    if ($zones -gt 0 -or $heartbeat -gt 0) { $ready = 1; break }
+}
+if ($ready -lt 1) { throw "chunk-server does not look ready after bounce (no spawn zones / heartbeat)" }
 Write-Host "reset complete: quest rows wiped, game+chunk bounced and simulating."

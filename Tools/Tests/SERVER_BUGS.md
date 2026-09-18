@@ -15,6 +15,41 @@ Repro: `Tests/Contract/` + `Tools/Bots/` against WSL dev servers
 (`docker-compose.dev.yml`, login→game→chunk-server-new). Evidence = chunk/game
 container logs + packet taps (`run_swarm.py --tap`).
 
+## 8. Threshold champions unreachable in prod + interest ghosts (2026-09-18)
+- **Threshold 100 unreachable**: all prod zones (`village/fields/ruins/forest`)
+  have `champion_threshold_kills=100`, but the Fox Glade spawn zone is an
+  ANNULUS (inner R 5608, outer R 8172 around (-434,-973)) holding 25 foxes
+  over ~111M u². Measured bot kill rate in the ring: ~1 kill/45 min per
+  4-bot farm (foxes flee faster than bots close). 100 same-(zone,template)
+  kills is effectively unreachable; no invasion events configured
+  (`has_invasion_wave=false` everywhere); timed templates (4h/6h) have NULL
+  `next_spawn_at` (skipped). Threshold logic itself is unit-pinned
+  (`test_champion.cpp`); the LIVE path has never fired. Content-balance
+  decision needed (lower thresholds? denser spawns? invasion events?).
+- **Interest ghosts**: culled mobs freeze client-side with no eviction —
+  47 tracked foxes vs 25 spawned. Bots chased ghosts (walk 30s + attack 45s
+  per ghost, all `out_of_range`). Fixed bot-side (fresh-only ≤30s hunting +
+  navigate-by-ghosts `_seek`, walk-to-corpse before query, restored
+  inspect+pickup dead code in quest.py which froze `have` at its seeded 1).
+  UE client likely affected the same way (stale nameplates/targets) —
+  needs client-side verification.
+- Tracker filing blocked 2026-09-18: `X-API-Key` returns 401
+  (requestId ba3b1cd7) — needs key rotation, then file both items.
+
+## 9. Quest farm stall root-caused: dead pickup code, not loot RNG (2026-09-18)
+- `test_reg_turnin` failed 3x identically (`have` frozen at exactly 1 over
+  16-19 kills). Loot path proven healthy the whole time (server-wide hide
+  rate 48% vs configured 45%; focused probe 2/5).
+- Root cause (test design, NOT product): `quest.py::_harvest_corpse` had
+  its inspect+pickup block stranded after a `return` (dead code) —
+  harvest completion only GENERATES loot (`addedToInventory=false`), so
+  `have` could never advance past its seeded 1. Restored via
+  `_pickup_corpse_loot` (inspect + pickup-all). reg_turnin GREEN 22:36.
+- Same class of ghost bug as #8 (now fixed in quest.py +
+  champion_farm.py): culled mobs freeze client-side, bots chased ghosts.
+  Fix: fresh-only (≤30s) hunting + `_seek` navigation-by-ghosts +
+  walk-to-corpse before query.
+
 ## 1. `getSpawnZones` unknown on chunk — client send removed, server path SAFE
 - Chunk logs `Unknown event type: getSpawnZones` and ignores it (log-only,
   verified by bisect: clean `getSpawnZones` does NOT break sessions).

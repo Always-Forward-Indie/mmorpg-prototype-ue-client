@@ -169,6 +169,13 @@ def _to_quest_hub(bot, state, session, node):
 def _harvest_try(bot, state, uid):
     """One harvest attempt. Returns True on harvestComplete, False on
     contested corpse (caller tries another), raises on real errors."""
+    # Walk to the last-known fox position FIRST: foxes flee while dying, so
+    # the corpse can land outside the 300u getNearbyCorpses radius around
+    # the bot's attack position. (A player does the same — walks to where
+    # it fell.) Only then query.
+    m = bot.mobs.get(uid)
+    if m is not None and "pos" in m:
+        bot.walk_to(m["pos"][0], m["pos"][1], m["pos"][2], timeout=45.0)
     bot.chunk.send_event("getNearbyCorpses",
                          {"characterId": bot.character_id,
                           "playerId": bot.character_id})
@@ -196,20 +203,13 @@ def _harvest_try(bot, state, uid):
     return False
 
 
-def _harvest_corpse(bot, state, uid):
-    """Try to harvest uid (+one alternate). Returns True on harvestComplete,
-    False when contested/unavailable (caller moves on). Raises on real errors."""
-    if _harvest_try(bot, state, uid):
-        return True
-    # One alternate corpse before giving up (swarm contention).
-    bot.chunk.send_event("getNearbyCorpses",
-                         {"characterId": bot.character_id,
-                          "playerId": bot.character_id})
-    _drain_track(bot, state, secs=4.0)
-    alts = [c for c in bot.corpses if c != uid]
-    if not alts:
-        return False
-    return _harvest_try(bot, state, alts[0])
+def _pickup_corpse_loot(bot, state, uid):
+    """Inspect a harvested corpse and pick up ALL its loot.
+
+    Harvest completion only GENERATES loot (addedToInventory=false) — the
+    pickup is a separate step. This block once sat after a `return` and was
+    dead code, which froze collect progress (`have`) at its seeded value.
+    """
     bot.chunk.send_event("corpseLootInspect", {
         "characterId": bot.character_id, "playerId": bot.character_id,
         "corpseUID": uid})
@@ -227,6 +227,26 @@ def _harvest_corpse(bot, state, uid):
             "requestedItems": [{"itemId": i.get("itemId"),
                                 "quantity": i.get("quantity", 1)} for i in items]})
         _drain_track(bot, state, secs=4.0)
+
+
+def _harvest_corpse(bot, state, uid):
+    """Try to harvest uid (+one alternate). Returns True on harvestComplete,
+    False when contested/unavailable (caller moves on). Raises on real errors."""
+    if _harvest_try(bot, state, uid):
+        _pickup_corpse_loot(bot, state, uid)
+        return True
+    # One alternate corpse before giving up (swarm contention).
+    bot.chunk.send_event("getNearbyCorpses",
+                         {"characterId": bot.character_id,
+                          "playerId": bot.character_id})
+    _drain_track(bot, state, secs=4.0)
+    alts = [c for c in bot.corpses if c != uid]
+    if not alts:
+        return False
+    if _harvest_try(bot, state, alts[0]):
+        _pickup_corpse_loot(bot, state, alts[0])
+        return True
+    return False
 
 
 def run(bot, minutes):
@@ -287,34 +307,45 @@ def run(bot, minutes):
         import time as _tt
         now = _tt.monotonic()
         out = []
-        stale = []
         for u, m in bot.mobs.items():
             if not m.get("alive", True):
                 continue
             if u in state.get("dead", set()):
                 continue
-            if m.get("slug") == FOX_SLAY:
-                (out if now - m.get("seen", 0.0) <= 120.0 else stale).append(
-                    (u, m["pos"]))
-        if out:
-            return out
-        # No fresh foxes: fall back to stale ones (sparse/culled area) — the
-        # watchlist keeps the chosen target's updates flowing once attacked.
-        return stale
-        # Fallback: slug rides only spawn lists; move-update-only mobs near
-        # the glade are foxes with overwhelming probability (25 foxes here).
-        near = []
-        for u, m in bot.mobs.items():
-            if not m.get("alive", True):
+            # Fresh = streamed within 30s (move updates flow at ~100-500ms
+            # while subscribed; anything older is culled/free ghost).
+            if m.get("slug") == FOX_SLAY and now - m.get("seen", 0.0) <= 30.0:
+                out.append((u, m["pos"]))
+        # NO stale fallback: interest culling freezes unsubscribed mobs in
+        # client state (ghosts with long-dead positions). Hunting ghosts
+        # burns walk+attack budgets for zero kills. Empty list drives the
+        # caller to navigate (stale positions are fine for DIRECTION) which
+        # resubscribes and refreshes.
+        return out
+
+    def _seek(bot, state, budget=120.0):
+        """Navigate toward the nearest tracked fox until fresh ones stream.
+
+        Stale positions are direction hints, never attack baselines: walking
+        there resubscribes the cell and refreshes. Returns True once fresh
+        foxes are tracked.
+        """
+        end = _t.monotonic() + budget
+        while _t.monotonic() < end:
+            if _foxes():
+                return True
+            cands = [(u, m["pos"]) for u, m in bot.mobs.items()
+                     if m.get("alive", True) and m.get("slug") == FOX_SLAY
+                     and u not in state.get("dead", set())]
+            if not cands:
+                _drain_track(bot, state, secs=4.0)
                 continue
-            if u in state.get("dead", set()):
-                continue
-            dx, dy = m["pos"][0] - GLADE_X, m["pos"][1] - GLADE_Y
-            if dx * dx + dy * dy <= 2000.0 * 2000.0:
-                near.append((u, m["pos"]))
-        if near:
-            state["fox_fallback"] = True
-        return near
+            uid0 = min(cands, key=lambda e: bot._dist2(bot.pos, e[1]))[0]
+            m0 = bot.mobs.get(uid0)
+            if m0 is not None:
+                bot.walk_to(m0["pos"][0], m0["pos"][1], m0["pos"][2], timeout=30.0)
+            _drain_track(bot, state, secs=4.0)
+        return bool(_foxes())
 
     # 3. Hunt foxes until step0 done (QUEST_UPDATE step>=1).
     # Spread swarm bots around the glade so they don't all pull one fox.
@@ -325,7 +356,12 @@ def run(bot, minutes):
         check(bot.walk_to(_gx, _gy, 90.0, timeout=180.0),
               "%s: could not reach Fox Glade" % bot.name)
         _drain_track(bot, state, secs=4.0)
-        check(_foxes(), "%s: no foxes tracked after Glade walk" % bot.name,
+        # Initial acquisition: snapshot foxes aged during join+walk, so a
+        # fresh-only check would fail here. _seek navigates toward tracked
+        # foxes (stale positions are fine for DIRECTION) until fresh ones
+        # stream back.
+        check(_seek(bot, state, budget=240.0),
+              "%s: no foxes tracked after Glade walk" % bot.name,
               {"mobs": len(bot.mobs)})
     kills = 0
     hunt_end = min(deadline, _t.monotonic() + 12 * 60.0)  # per-phase budget
@@ -345,9 +381,9 @@ def run(bot, minutes):
         _watch(bot, state)
         foxes = _foxes()
         if not foxes:
-            _drain_track(bot, state, secs=4.0)
-            # Wander toward glade center to discover foxes.
-            bot.walk_to(GLADE_X, GLADE_Y, 90.0, timeout=20.0)
+            # No fresh foxes: navigate (stale = direction hints) instead of
+            # passively waiting in a culled hole. Bounded so phase budget survives.
+            _seek(bot, state, budget=90.0)
             continue
         uid = min(foxes, key=lambda e: bot._dist2(bot.pos, e[1]))[0]
         m = bot.mobs.get(uid)
@@ -414,7 +450,9 @@ def run(bot, minutes):
             _watch(bot, state)
             foxes = _foxes()
             if not foxes:
-                _drain_track(bot, state, secs=4.0)
+                # Dry cell: seek (navigate-by-ghosts) instead of waiting in
+                # a culled hole. Bounded so the farm budget survives.
+                _seek(bot, state, budget=90.0)
                 continue
             uid = min(foxes, key=lambda e: bot._dist2(bot.pos, e[1]))[0]
             m = bot.mobs.get(uid)

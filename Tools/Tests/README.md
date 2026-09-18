@@ -195,3 +195,12 @@ New `eventType` on server → new scenario file. Closed TODO bug → `reg_<bug>`
 - L3 targeted 18/18 (framing/tolerant/conn/combat/vendor/trade) + reg_pvp.
 - auth_storm 50/50 (p50 1.06s); combat_storm live-verified; kill swarm 8/8.
 - Watch-ServerLogs exit 0 post-soak (db/login noise allow-listed).
+
+## 2026-09-18: turnin/champion/soak
+- reg_turnin GREEN 22:36 (quest.py pickup-dead-code + ghost fixes).
+- reg_champion farm measured: ~1 kill/45min per 4-bot farm vs threshold
+  100 (sparse 5-8km ring) — effectively unreachable; recorded in
+  SERVER_BUGS #8, tracker key expired (401, needs rotation).
+- soak_overnight.ps1 (Tools/Soak): 8 segments x repeatable scenarios with
+  preflight + marker-scoped log gates. 2026-09-18: 8/8 green (64 bot-runs,
+  0 FAIL, 0 FATAL). Log: Tools/Bots/soak_overnight.log (gitignored).

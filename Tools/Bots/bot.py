@@ -66,6 +66,7 @@ class Bot:
         self.corpses = {}             # corpseUID -> dict(pos)
         self.peers = {}               # characterId -> dict(pos) from getConnectedCharacters
         self.quest_updates = {}       # questSlug -> {state, step, progress} from QUEST_UPDATE
+        self.dead_mobs = set()          # uids with observed mobDeath (survives mobCellLeft evict)
         self.cell_snapshots = []      # spawnMobsInZone with zoneId == -1 (enter-snapshots)
         self.cell_corpse_snapshots = []  # nearbyCorpsesResponse arrivals (time, corpse uids)
         self.hp = None                # own HP from stats_update
@@ -246,6 +247,8 @@ class Bot:
                     self.mobs[uid]["hp"] = b.get("currentHealth", self.mobs[uid]["hp"])
             elif ev == "mobDeath":
                 uid = b.get("mobUID", b.get("mobUid", 0))
+                if uid:
+                    self.dead_mobs.add(uid)
                 if uid in self.mobs:
                     self.mobs[uid]["alive"] = False
             elif ev == "mobCellLeft":
@@ -443,6 +446,8 @@ class Bot:
         slug = (getattr(self, "skill_slugs", []) or ["basic_attack"])[0]
         end = _t.monotonic() + timeout
         while _t.monotonic() < end:
+            if uid in self.dead_mobs:
+                return True
             if uid in self.mobs and not self.mobs[uid].get("alive", True):
                 return True
             self.chunk.send_event("playerAttack", {
@@ -452,6 +457,8 @@ class Bot:
                 if m.get("header", {}).get("eventType") == "mobDeath" and \
                    m.get("body", {}).get("mobUID", m.get("body", {}).get("mobUid", 0)) == uid:
                     return True
+        if uid in self.dead_mobs:
+            return True
         return uid in self.mobs and not self.mobs.get(uid, {}).get("alive", True)
 
     def snapshot_inventory(self, duration=4.0):

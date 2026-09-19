@@ -313,7 +313,10 @@ def run(bot, minutes):
             if u in state.get("dead", set()):
                 continue
             # Fresh = streamed within 30s (move updates flow at ~100-500ms
-            # while subscribed; anything older is culled/free ghost).
+            # while subscribed; anything older is culled/frozen ghost).
+            # (Kept at 30s: the quest chain is GREEN with this threshold;
+            # tight 10s + movement-delta gating lives in champion_farm.py
+            # where ghosts proved fatal.)
             if m.get("slug") == FOX_SLAY and now - m.get("seen", 0.0) <= 30.0:
                 out.append((u, m["pos"]))
         # NO stale fallback: interest culling freezes unsubscribed mobs in

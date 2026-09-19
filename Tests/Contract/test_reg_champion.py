@@ -1,14 +1,14 @@
 """reg_champion: threshold champion spawns live (Wave champion system).
 
-Slow live test (~30-45 min, marked slow, NOT in the default suite).
-Four bots farm ForestFoxes in the Glade; prod threshold is 100 kills per
-(zone, template). Passes on the first champion_spawned broadcast (uid +
-slug asserted) — this also covers the Phase-0 zoneId fix live (a wrongly
-zoned champion would not stream to glade watchers).
+Slow live test (~10 min, marked slow, NOT in the default suite).
+Two bots farm ForestFoxes in the TEST ARENA (scripts/dev_arena.sql,
+DEV ONLY: dense RECT, threshold 5). Passes on the first champion_spawned
+broadcast (uid + slug asserted) — this covers the Phase-0 zoneId fix live
+(a wrongly zoned champion would not stream to arena watchers).
 
-If a champion is already active when the test starts, the zonal counter
-is suppressed by design; the test then passes-with-note only if that
-champion is observable in mob traffic (else FAIL).
+Design note: prod Fox Glade (5-8km annulus, threshold 100) is unfarmable
+at bot scale — see SERVER_BUGS #8. This test pins the shared server path,
+not prod content numbers.
 """
 import os
 import sys
@@ -23,8 +23,8 @@ from scenarios import champion_farm  # noqa: E402
 
 pytestmark = pytest.mark.slow
 
-FARM_BOTS = (5, 6, 7, 8)
-CAP_MINUTES = 45.0
+FARM_BOTS = (5, 6)
+CAP_MINUTES = 15.0
 
 
 @pytest.mark.skipif(

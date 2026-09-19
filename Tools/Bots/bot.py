@@ -248,6 +248,14 @@ class Bot:
                 uid = b.get("mobUID", b.get("mobUid", 0))
                 if uid in self.mobs:
                     self.mobs[uid]["alive"] = False
+            elif ev == "mobCellLeft":
+                # Interest evict: drop mob entries standing in cells we just
+                # unsubscribed. Without this, culled mobs freeze client-side
+                # with dead positions (ghosts) and bots hunt them forever.
+                # Unknown uids are dropped silently (over-inclusive server).
+                for uid in b.get("uids", []) or []:
+                    self.mobs.pop(uid, None)
+                    self.evicted = getattr(self, "evicted", 0) + 1
             elif ev == "getPlayerInventory":
                 self.inventory = b.get("items", [])
                 self.gold = b.get("gold", self.gold)
@@ -318,6 +326,15 @@ class Bot:
         # slug); keep it once seen so scenarios can filter by mob type.
         if mob.get("slug"):
             e["slug"] = mob["slug"]
+        # Display name (spawn lists only): lets scenarios spot special
+        # mobs (e.g. '[Чемпион] ...') that share a template slug.
+        if mob.get("name"):
+            e["name"] = mob["name"]
+        # Spawn-zone tag (mobToJson.zoneId = spawn zone id): survives move
+        # updates that lack the field. Lets scenarios farm mobs by ORIGIN
+        # (threshold counters attribute by spawn zone, not death position).
+        if "zoneId" in mob and mob["zoneId"]:
+            e["spawnZone"] = mob["zoneId"]
         # Freshness: spawn lists go stale (interest culling skips far mobs),
         # so hunters must prefer recently-updated entries over ghosts.
         import time as _t

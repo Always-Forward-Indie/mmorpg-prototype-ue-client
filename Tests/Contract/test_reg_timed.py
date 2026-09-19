@@ -79,6 +79,11 @@ def _run(bot, minutes, out, lock):
             _drain(bot, state, secs=3.0)
         uid = state.get("champion_uid")
         assert uid, "%s: no timed champion in %.0f min" % (bot.name, minutes)
+        # Close distance first: attacks are range-checked server-side, and
+        # the champion may have spawned up to ~100u away in the arena box.
+        m = bot.mobs.get(uid)
+        if m is not None and "pos" in m:
+            bot.walk_to(m["pos"][0], m["pos"][1], m["pos"][2], timeout=60.0)
         killed = bot.attack_mob(uid, timeout=120.0)
         assert killed or uid in bot.dead_mobs, \
             "%s: timed champion %s did not die" % (bot.name, uid)

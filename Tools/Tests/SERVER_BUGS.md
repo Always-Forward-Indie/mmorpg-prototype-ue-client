@@ -30,21 +30,33 @@ container logs + packet taps (`run_swarm.py --tap`).
   killedAt + 3600`, `last_killed_at` stamped. Pinned by unit
   `TimedKillReportsFakeEpoch` + contract `test_reg_timed.py` (4:17 green).
 
-## 11. skill_learned success notify lost + double charge — OPEN (game/chunk)
-- `requestLearnSkill` success path: chunk validates+consumes (gold/SP gone,
-  `inventoryUpdate` sent), forwards `saveLearnedSkill` to game; game persists
-  (character_skills row + SP decrement proven in DB 3x) — but NO
-  `skill_learned` packet ever reaches the client (60/60/180s silence, empty
-  taps), while `learn_skill_failed` answers arrive instantly. Game logs show
-  nothing (LOG_LEVEL_EVENTS=warn suppresses the handler's info lines).
-- Impact (player-facing: UE SkillShop uses exactly this path): click Learn →
-  gold+SP taken, no confirmation, skill missing from client state; chunk
-  skill cache never refreshes without the notify, so a repeat click consumes
-  AGAIN (proven: SP 5→3, gold −200 over two silent learns).
-- Workaround pinned by `test_reg_learn.py::test_reg_learn_skill_success`
-  (two-session proof: session 2 fresh-joins and must see already_learned;
-  `scripts/dev_learn.sql` re-arms Bot H). Real fix needed server-side:
-  trace `setLearnedSkill` game->chunk->client delivery.
+## 11. skill_learned success notify lost + double charge — FIXED 2026-09-19 (chunk)
+- `requestLearnSkill` success path: chunk validated+consumed (gold/SP gone,
+  `inventoryUpdate` sent), game persisted (character_skills row + SP
+  decrement proven in DB 3x) — but NO `skill_learned` packet ever reached
+  the client (60/60/180s silence, empty taps), while `learn_skill_failed`
+  answers arrived instantly. Repeat click consumed AGAIN (proven SP 5→3,
+  gold −200): chunk skill cache never refreshed without the notify. UE
+  client uses exactly this path (`SkillShopWidget.cpp:115`) and already
+  works around the silence via inventory refresh (see comments in
+  `SkillShopWidget.cpp:131`, `UIManager.cpp:1556`).
+- Forensics (pg `log_statement` per-backend): game runs `save_learned_skill`
+  + `decrement_skill_points` and then goes quiet — no `get_skill_sp_cost` /
+  `get_character_skills`, no `[SKILL]` line, no `setLearnedSkill` ever
+  arriving at chunk (2M-line log grep empty). The game→chunk
+  runtime-response leg is the dark segment (boot pushes work fine).
+- Fix (chunk, optimistic confirm): after validation+consume+queue-to-game,
+  update the in-memory cache (`addCharacterSkill`, dedup-safe) and send
+  `skill_learned` inline from validated state (slug/name/isPassive from the
+  trainer entry, real `newFreeSkillPoints`). UE parser is fully tolerant
+  (TryGet + no-skillData fallback). Game persist stays source of truth at
+  next join; a late `setLearnedSkill` only replaces the same slug.
+  Verified: `test_reg_learn` success GREEN 85s (`ok` first request +
+  same-session `already_learned`, SP 5->4 exactly once).
+- Follow-up (still open): find why game→chunk `setLearnedSkill` never
+  arrives (stale chunk-link socket on game side is the prime suspect —
+  game logged `Attempted write on closed or invalid socket` historically).
+  Any other future game→chunk runtime response will hit the same wall.
 
 ## 8. Threshold champions unreachable in prod + interest ghosts (2026-09-18)
 - **Threshold 100 unreachable**: all prod zones (`village/fields/ruins/forest`)

@@ -70,15 +70,11 @@ def _learn_wait_success(bot, slug, timeout=60.0):
 def test_reg_learn_skill_success():
     """Success path on bot_08 (dev_learn.sql fixture).
 
-    Session 1 requests the learn; session 2 (fresh join reloads the
-    server-side skill list) must then be rejected as already_learned —
-    proving the learn persisted. This shape also covers a known server
-    bug: the skill_learned success notify is lost on the game->chunk->client
-    way back (gold+SP are consumed, the skill persists, but no packet
-    reaches the client; see SERVER_BUGS). If the notify is fixed, session
-    1 returns ok directly — both ways pass.
+    First request must return ok (chunk confirms inline from validated
+    state, SERVER_BUGS #11); repeat on the SAME session must be rejected
+    as already_learned (cache refreshed, no double charge).
     Single-shot per fixture arming (like REG_TURNIN_FRESH): re-apply
-    dev_learn.sql when session 1 already reports already_learned."""
+    dev_learn.sql when it skips."""
     host = os.environ.get("MMO_TARGET_HOST", "127.0.0.1")
 
     def attempt():
@@ -87,18 +83,20 @@ def test_reg_learn_skill_success():
             b.login_join_ready()
             assert b.walk_to(EDRIK_X, EDRIK_Y, EDRIK_Z, timeout=300.0), \
                 "cannot reach edrik"
-            return _learn_wait_success(b, "power_slash", timeout=60.0)
+            first = _learn_wait_success(b, "power_slash", timeout=60.0)
+            if first[0] != "ok":
+                return first, (None, None), True
+            # Notify arrived: repeat on the SAME session must be refused
+            # (in-memory cache refreshed — no double charge, SERVER_BUGS
+            # #11 regression pin).
+            second = _learn_wait_success(b, "power_slash", timeout=60.0)
+            return first, second, False
         finally:
             b.close()
 
-    status, detail = attempt()
-    if status == "ok":
-        return
-    if status == "failed" and detail == "already_learned":
+    first, second, _ = attempt()
+    if first == ("failed", "already_learned"):
         pytest.skip("dev_learn.sql consumed: re-apply it, then re-run")
-    # Notify lost: the learn still persists server-side — a fresh session
-    # reloads skills from DB and must see power_slash as already learned.
-    assert status is None, "unexpected learn outcome: %s %s" % (status, detail)
-    status2, detail2 = attempt()
-    assert (status2, detail2) == ("failed", "already_learned"), \
-        "power_slash not learned: %s %s" % (status2, detail2)
+    assert first[0] == "ok", "power_slash not learned: %s %s" % first
+    assert second == ("failed", "already_learned"), \
+        "repeat learn not rejected: %s %s" % (second,)

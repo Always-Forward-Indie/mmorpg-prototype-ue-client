@@ -204,3 +204,63 @@ New `eventType` on server → new scenario file. Closed TODO bug → `reg_<bug>`
 - soak_overnight.ps1 (Tools/Soak): 8 segments x repeatable scenarios with
   preflight + marker-scoped log gates. 2026-09-18: 8/8 green (64 bot-runs,
   0 FAIL, 0 FATAL). Log: Tools/Bots/soak_overnight.log (gitignored).
+
+## 2026-09-19: Wave-6 phases 1-5 (this session)
+- P0-regress: L3 30 passed + 3 skipped (16:50), soak smoke 2x10 green, Watch
+  exit 0. Kill-swarm flaked first (2/8): harness bug from the evict fix —
+  evicted targets always FAIL in `attack_mob` + 8 uncoordinated bots collide
+  on the same mob. Fixed harness-side only (`dead_mobs` set surviving evict,
+  target claims across swarm threads, 3-attempt retry w/ exclude, peer-kill
+  → CONTESTED): kill stable exit 0. Commit `832e5dc`.
+- Fast mechanics 1: `pytest.ini` budgets (unit s / contract ≤5 min / slow
+  ≤10 min); `scripts/dev_timed.sql` (timed fires in ~3 min, not 4/6 h);
+  **clock seam** in `ChampionManager` (injectable epoch/steady clocks, prod
+  behavior 1-1)   + 4 pins (`TimedSpawn/TimedKillReports/Despawn/
+  SurvivalEvolveViaFakeClock`): chunk unit 426/426 in 443 ms. Found+fixed on
+  the way: timed reschedule type error (SERVER_BUGS #10, game `d78c874b`).
+- C+A content (migration `082_champion_balance.sql`, DEV only): zones 2/6/7
+  → 25 (village 100, code default 100 untouched), timed `next_spawn_at`
+  seeded. Applied on dev, verified (SELECT), timed spawn live (ancient_bear
+  uid 1000142), cadence restored, L3 29+4 no-regress. **Prod apply is an ops
+  action** (live VPS never touched from here) — exact statement is the
+  migration file; `scripts/db.sh` dump appends a NULL-reset, so a fresh
+  deploy re-seeds via 082 by design.
+- Live branches: `test_reg_evict.py` (mobCellLeft asserted live, 44s green —
+  the earlier evictprobe 0 was probe-pattern, server emits fine);
+  chance-gate live (`Threshold reached ... chance roll failed (44.4 >=
+  0.0%)` x2 in chunk log, 24+ kills, 0 spawns); timed kill→DB live
+  (`test_reg_timed.py` 4:17 green, `next_spawn_at = killedAt+3600`).
+  Cap-gate live deferred (unit-pinned + same game_config propagation path
+  as chance, which is now proven). game_config knobs need game+chunk
+  restart (boot-handshake push only — a game-only restart does NOT reach
+  chunk; learned the hard way).
+- Fast mechanics 2 (partial): `scripts/dev_learn.sql` (Bot H → level 5/5 SP,
+  repeatable) + `test_reg_learn.py::test_reg_learn_skill_success` GREEN
+  3:08 (two-session persist proof). Turned up SERVER_BUGS #11 (notify lost
+  + double charge, OPEN). Remaining for next session: `dev_quest_short`
+  content + turnin split (spec below).
+- Tracker #8/#9 skipped (X-API-Key still 401; user files manually).
+
+## Champion balance table (dev-measured 2026-09-19; recompute, don't re-farm)
+- `time_to_threshold = threshold / kill_rate(density, dps, flee)`.
+- Arena (dense RECT, threshold 5): 2 bots ≈ 4 min → kill_rate ≈ 1.25/min →
+  threshold 25 at arena density ≈ 20 min.
+- Prod Glade (25 foxes / ~111M u²): ≈ 1 kill/45 min per 4-bot farm →
+  threshold 25 ≈ 19 bot-hours; threshold 100 ≈ 75 bot-hours (still
+  aspirational solo — timed is the reliable source by design).
+- Timed cadence = `interval_hours`; re-arm = `killedAt + interval` (live).
+- Cap 3 / chance 100 / despawn 30 min (code defaults; DB-overridable via
+  `game_config`, game+chunk restart to propagate).
+- Calibrate `kill_rate` from INFO threshold-window telemetry
+  (`[Champion] threshold window zone=... count=4/5` in chunk log).
+
+## dev_quest_short spec (next session; ~3-min fast chain)
+- New DEV-ONLY quest `dev_short_chain` (ids 9000+): giver = new dev NPC
+  near village (avoid Varan dialogue surgery); steps: kill 2x arena fox →
+  collect 1x hide → turnin; rewards 1x potion + 5g.
+- Needs: `quest` + `quest_step` + `dialogue_node/edge` + `quest_reward` +
+  `npc` + `npc_placements` rows in a `scripts/dev_quest_short.sql`
+  (idempotent, 9000+ range, by analogy with `dev_arena.sql`).
+- Client: `test_reg_turnin_short.py` mirroring `quest.py` flow against the
+  new slug; keep `test_reg_turnin.py` as the slow acceptance (nightly).
+- Acceptance: ≤5 min green + reward deltas asserted + fixture re-runnable.

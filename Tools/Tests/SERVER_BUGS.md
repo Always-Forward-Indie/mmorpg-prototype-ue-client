@@ -15,6 +15,37 @@ Repro: `Tests/Contract/` + `Tools/Bots/` against WSL dev servers
 (`docker-compose.dev.yml`, login→game→chunk-server-new). Evidence = chunk/game
 container logs + packet taps (`run_swarm.py --tap`).
 
+## 10. Timed reschedule type error — FIXED 2026-09-19 (game)
+- `update_timed_champion_next_spawn` used `SET next_spawn_at =
+  to_timestamp($2)` on a BIGINT column (unix seconds): every timed kill would
+  fail with `column next_spawn_at is of type bigint but expression is of type
+  timestamp with time zone`, txn rollback, schedule stuck in the past.
+  (Latent until now: prod timed rows are NULL, so the path never fired.)
+- Fix (game `d78c874b`): `$2::bigint` + pass int64 epoch (was
+  `static_cast<double>`, which stringifies with decimals and would break the
+  cast). The sibling `to_timestamp` uses (effects/cooldowns) target real
+  timestamptz columns — correct, untouched.
+- Verified live on dev: `dev_timed_fox` (scripts/dev_timed.sql) armed +120s →
+  spawned (uid 1000142 class) → farm bots killed it → `next_spawn_at =
+  killedAt + 3600`, `last_killed_at` stamped. Pinned by unit
+  `TimedKillReportsFakeEpoch` + contract `test_reg_timed.py` (4:17 green).
+
+## 11. skill_learned success notify lost + double charge — OPEN (game/chunk)
+- `requestLearnSkill` success path: chunk validates+consumes (gold/SP gone,
+  `inventoryUpdate` sent), forwards `saveLearnedSkill` to game; game persists
+  (character_skills row + SP decrement proven in DB 3x) — but NO
+  `skill_learned` packet ever reaches the client (60/60/180s silence, empty
+  taps), while `learn_skill_failed` answers arrive instantly. Game logs show
+  nothing (LOG_LEVEL_EVENTS=warn suppresses the handler's info lines).
+- Impact (player-facing: UE SkillShop uses exactly this path): click Learn →
+  gold+SP taken, no confirmation, skill missing from client state; chunk
+  skill cache never refreshes without the notify, so a repeat click consumes
+  AGAIN (proven: SP 5→3, gold −200 over two silent learns).
+- Workaround pinned by `test_reg_learn.py::test_reg_learn_skill_success`
+  (two-session proof: session 2 fresh-joins and must see already_learned;
+  `scripts/dev_learn.sql` re-arms Bot H). Real fix needed server-side:
+  trace `setLearnedSkill` game->chunk->client delivery.
+
 ## 8. Threshold champions unreachable in prod + interest ghosts (2026-09-18)
 - **Threshold 100 unreachable**: all prod zones (`village/fields/ruins/forest`)
   have `champion_threshold_kills=100`, but the Fox Glade spawn zone is an

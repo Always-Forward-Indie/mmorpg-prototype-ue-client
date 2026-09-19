@@ -35,6 +35,16 @@ container logs + packet taps (`run_swarm.py --tap`).
   needs client-side verification.
 - Tracker filing blocked 2026-09-18: `X-API-Key` returns 401
   (requestId ba3b1cd7) — needs key rotation, then file both items.
+- **2026-09-19: LIVE path proven, `reg_champion` GREEN (3:48).** Dev arena
+  (`scripts/dev_arena.sql`, threshold 5): threshold crossed 4x, 3 champions
+  spawned AND killed by farm bots (uids 1000150/1000157/1000165). Fixes on
+  the way: origin attribution (`resolveGameZone` validate-then-contain,
+  chunk) + per-spawn-zone `gameZoneId` push (game `9f4ba351`) +
+  `mobCellLeft` interest evict (chunk, bots consume in `bot.py`) +
+  harness-side origin filter (`spawnZone` tag) and `world_notification`
+  envelope detection. What REMAINS prod-side is pure content balance:
+  threshold 100 in the 5-8km Glade annulus is still unreachable at any
+  realistic farm rate — needs a design decision, not code.
 
 ## 9. Quest farm stall root-caused: dead pickup code, not loot RNG (2026-09-18)
 - `test_reg_turnin` failed 3x identically (`have` frozen at exactly 1 over

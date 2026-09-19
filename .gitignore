@@ -94,3 +94,7 @@ api_key.env
 Tools/Bots/bot_accounts.json
 swarm_*.jsonl
 Saved/Replays/
+Tools/Bots/*.log
+Tools/Bots/soak_overnight.log
+Tools/Tests/*.log
+**/__pycache__/

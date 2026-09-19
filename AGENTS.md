@@ -28,10 +28,11 @@ Single `Prototyping` runtime module. No Unreal replication — custom TCP + JSON
 
 ## Automated tests (see Tools/Tests/README.md)
 
-- `Tests/Contract/` (pytest, no engine): `mmo_proto.py` TCP+`\n` client, `test_framing.py` (no server), `test_conn/test_combat/test_cross_visibility/test_harvest/test_trade.py` (need WSL dev servers + `MMO_*`/`MMO2_*` creds, skip cleanly otherwise).
+- `Tests/Contract/` (pytest, no engine): `mmo_proto.py` TCP+`\n` client, `test_framing.py` (no server), `test_conn/test_combat/test_cross_visibility/test_harvest/test_trade.py` (need WSL dev servers + `MMO_*`/`MMO2_*` creds, skip cleanly otherwise). `test_reg_evict/test_reg_timed/test_reg_learn.py` need DEV fixtures (`scripts/dev_arena.sql`, `dev_timed.sql`, `dev_learn.sql`) + single-shot re-arming, see README.
 - `Tools/Bots/run_swarm.py --n 8 --scenario patrol|combat_sweep|chat_mesh|kill|harvest|death` + `--scenario trade` (duo pairs, even --n) + `seed_bots.py` (bot_* accounts) + `--tap` for `Tools/Replay/replay.py`.
 - `Tools/WSL/Preflight.ps1` (WSL→containers→ports→dev config), `Tools/Smoke/SmokeClients.ps1 -n 2` (real UE clients + log scan).
 - `Source/Prototyping/Private/Tests/` (`MMO.*` Automation specs) + `devmode.scenario combat|reset` + `Config/DevMode/qa_presets.json` for offline QA.
+- DEV-only test content rule: ids 9000+, only `scripts/dev_*.sql` (login-server repo), NEVER migrations/dump. `game_config` knob probes need game+chunk restart (boot-handshake push only). Preflight assert: no 9000+ rows before any prod apply.
 
 ## DevMode (offline, no servers)
 

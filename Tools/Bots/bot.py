@@ -441,23 +441,42 @@ class Bot:
         return False
 
     def attack_mob(self, uid, timeout=30.0):
-        """Attack until mobDeath(uid) or timeout. Returns True on kill."""
+        """Attack until mobDeath(uid) or timeout. Returns True on kill.
+
+        mobDeath broadcasts are positional and can be culled at the kill
+        instant, so a kill is also counted when successful hits are followed
+        by persistent "Target is dead" rejects (the server refusing attacks
+        on a corpse). Immediate dead-errors with zero hits = ghost/reaped
+        from the start (returns False).
+        """
         import time as _t
         slug = (getattr(self, "skill_slugs", []) or ["basic_attack"])[0]
         end = _t.monotonic() + timeout
+        hits, dead_errs = 0, 0
         while _t.monotonic() < end:
             if uid in self.dead_mobs:
                 return True
             if uid in self.mobs and not self.mobs[uid].get("alive", True):
                 return True
+            if hits > 0 and dead_errs > 0:
+                return True
             self.chunk.send_event("playerAttack", {
                 "attackerId": self.character_id, "targetId": uid,
                 "skillSlug": slug, "targetType": 3})
             for m in self.drain(secs=2.0):
-                if m.get("header", {}).get("eventType") == "mobDeath" and \
-                   m.get("body", {}).get("mobUID", m.get("body", {}).get("mobUid", 0)) == uid:
+                ev = m.get("header", {}).get("eventType")
+                b = m.get("body", {}) or {}
+                if ev == "mobDeath" and \
+                   b.get("mobUID", b.get("mobUid", 0)) == uid:
                     return True
+                inner = b.get("skillInitiation", b.get("skillResult", {})) or {}
+                if isinstance(inner, dict) and inner.get("errorReason") == "Target is dead":
+                    dead_errs += 1
+                elif ev in ("combatResult", "skillResult"):
+                    hits += 1
         if uid in self.dead_mobs:
+            return True
+        if hits > 0 and dead_errs > 0:
             return True
         return uid in self.mobs and not self.mobs.get(uid, {}).get("alive", True)
 

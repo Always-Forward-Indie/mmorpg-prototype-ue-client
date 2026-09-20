@@ -1,5 +1,26 @@
 # Server bugs found by bot/contract testing (dev env, 2026-09-12..13)
 
+## 13. Timed champions respawned every minute (heartbeat catalog storm) — FIXED 2026-09-20
+- Chunk heartbeat re-sends full `chunkServerConnection` handshake every 60s;
+  game answered with the whole 25-dispatch boot catalog (templates incl.),
+  and chunk's `loadTimedChampions` wiped runtime state (`spawned`,
+  `preAnnounceSent`). Past-due schedules refired on every reload: +3 timed
+  champions/minute, unbounded until the 30-min despawn (steady state ~90
+  live champions). Found live: golem+bear+fox triplets at 09:58:08,
+  09:59:06, 10:00:03. Would have hit prod as soon as 082 seeds timed rows.
+- Fix, three layers (chunk `1d51988a`, game `06d2183e`): (a) game skips the
+  24 boot dispatches on same-socket heartbeat re-assert (new socket or
+  unknown id still gets the full push — fast recovery, no FIN dependence);
+  (b) chunk merges templates by slug preserving runtime state (a pin caught
+  a field-order swap in the first version); (c) spawn advances in-memory
+  `nextSpawnAt` by `intervalHours` (DB still moves on kill).
+- Verified: unit pins (`TimedReloadPreservesSpawnedState`,
+  `TimedKillWaitsForNextCycle`; chunk 433/433), 3-min live silence (no
+  reload lines, no respawn bursts), preflight READY. `test_reg_timed`
+  hardened alongside (fox-only materialization, arrival state reset, arena
+  patrol, kill rounds with re-approach, single bot, prod-row isolation in
+  the docstring) — GREEN 94s with reschedule `killedAt+3600` re-verified.
+
 ## 12. Seam rework fallout, batch 2026-09-20 — FIXED (tests only, no bots)
 - **SP never credited in chunk memory on level-up**: `ExperienceManager`
   updated HP/mana/exp/level but not `freeSkillPoints` (game granted it in DB

@@ -235,7 +235,6 @@ Traffic classes (see AGENTS.md):
 - **Observability**: every failure point logs error-level; Watch SEAM
   patterns are counters — any hit = investigate like FATAL (proven live:
   caught the two historical `saveCurrencyTransaction` drops).
-
 ## 2026-09-20: seam rework session (tests only, no bots)
 - Return channel: `ChunkManager::resolveLiveSocket` (game) + applied to
   `setLearnedSkill`, `setCharacterAttributesRefresh`, `inventoryItemIdSync`
@@ -253,6 +252,22 @@ Traffic classes (see AGENTS.md):
 - Chunk unit 431/431 (443→475 ms). SQL idempotency probes (SP SET,
   reputation add) with cleanup. Watch SEAM section proven live (caught the
   2 historical currency drops). Live e2e (bots) deferred to Phase 6.
+
+## 2026-09-20 (cont.): coverage sweep — WIO + progression + chaos
+- WIO was dead on arrival: game pushed `setWorldObjects`, chunk had NO
+  worker branch (fell into `Unknown event type`). Fixed: chunk
+  `parseWorldObjectsList` + `GameServerWorker` branch (unit pin) +
+  `scripts/dev_wio.sql` (9001 huge-radius examine, 9002 far tiny-radius).
+  `test_wio.py` GREEN (guards + examine success + TOO_FAR). Chunk 434/434.
+- Progression live: `test_reg_progression.py` (bestiary_kill_update per
+  kill, GREEN). Mastery live blocked: needs EQUIPPED weapon with
+  masterySlug, but `class_starter_items` is EMPTY — no character ever holds
+  a weapon without vendor-buy + equip flow (no scenario equips today).
+  Titles content-gated (tier 3-6 / level 10-25), quest rep (+50 merchants)
+  rides the slow chain, regen stays unit-only (timing-flaky). All
+  documented in the test docstring.
+- Chaos: `test_reg_restart.py` (docker restart chunk mid-test → fresh login
+  streams mobs again), GREEN 76s.
 
 ## 2026-09-19: Wave-6 phases 1-5 (this session)
 - P0-regress: L3 30 passed + 3 skipped (16:50), soak smoke 2x10 green, Watch

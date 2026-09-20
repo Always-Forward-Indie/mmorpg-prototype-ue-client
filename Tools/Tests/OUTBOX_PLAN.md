@@ -47,6 +47,16 @@ delivery; loss self-evident within bounded time.
 - Remaining (Phases B–D): per-character seq keys are assigned but
   high-watermark persist not yet done; handshake reconcile not built;
   live e2e (bots) deferred.
+
+## Follow-up fix 2026-09-20 (correctness hole in shipped v1)
+- Keys were `{char}:{type}:{seq}` with seq restarting at boot → post-restart
+  facts collided with pre-restart keys in `fact_keys_applied` and got
+  falsely deduped (LOSS). Fixed: `bootId` (random per process) in every
+  key + `BootIdsDifferAcrossInstances` pin (chunk `49645910`).
+- Allowlist narrowed to the 3 wired handlers (learn/rep/inventory):
+  untracked facts would otherwise retry forever into DLQ noise since no
+  ACK ever comes for them. Widen strictly together with wiring the game
+  handler (comment in code). Chunk 441/441.
 - **A. Infra**: migration 083; header-only chunk `Outbox` (enqueue/flush/
   retry/backoff/counters); splice into ~22 seam lambdas (behavior 1-1);
   game `factAck` + applied-keys helper in save handlers. Accept: builds,

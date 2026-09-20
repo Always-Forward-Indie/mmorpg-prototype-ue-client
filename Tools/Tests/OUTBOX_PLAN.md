@@ -30,7 +30,6 @@ delivery; loss self-evident within bounded time.
   (vendor buy) is a separate concern, not this plan.
 
 ## Status 2026-09-20 (Phase A shipped, pilot-3 game side)
-
 - A1 DONE: migration `083_fact_keys_applied` applied on dev + committed.
 - A2 DONE: header-only `FactOutbox` (chunk) + worker integration (key
   stamping, immediate send, 5s strand-bound flush, ACK branch, DLQ expiry
@@ -47,6 +46,21 @@ delivery; loss self-evident within bounded time.
 - Remaining (Phases B–D): per-character seq keys are assigned but
   high-watermark persist not yet done; handshake reconcile not built;
   live e2e (bots) deferred.
+
+## Status 2026-09-20 evening (all save handlers wired + loop proven live)
+- All 17 json-body save handlers wired with claim/ack (3 pilot + 14 batch:
+  durability/currency/equipment/debt/activeEffect/killCount/pity/bestiary/
+  timedKilled/mastery/skillbar/titles/cooldown/analytics). Legacy keyless
+  senders + typed-vector handlers (positions/HP/progress) + quest/flag/
+  playtime/markOnline (delegated managers) stay on the legacy path.
+- Fixed live: `claim_fact_key` prepare returned bare key while readers do
+  `.as<int>()` ("Unexpected text after integer" → silent rollback of every
+  keyed fact). Now `WITH ins ... SELECT COUNT(*)` (1/0/-1 protocol).
+- Live proof: learn test green, power_slash row + 16 fact keys in DB,
+  `Outbox game: pending=0 sent=108 acked=12→14 expired=0`.
+- Reputation 60s absolute snapshot task (chunk `f5d03492`) bounds delta
+  loss on chunk crash; bootId keys prevent post-restart false dedup.
+- Commits: chunk `fbfb8866`-`f5d03492`, game `cb864168`+`79f5e78c`.
 
 ## Follow-up fix 2026-09-20 (correctness hole in shipped v1)
 - Keys were `{char}:{type}:{seq}` with seq restarting at boot → post-restart

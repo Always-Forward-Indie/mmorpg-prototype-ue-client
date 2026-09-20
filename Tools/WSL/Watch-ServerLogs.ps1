@@ -42,6 +42,13 @@ $warnPatterns = @(
     "queue.*overflow", "dropped", "writeQueue", "gcWriteQueues",
     "MOVE_VALIDATE", "Target is dead", "PvP is not available"
 )
+# SEAM = inter-server contract breaches (chunk<->game). Any hit here means a
+# cross-server fact/response was lost: investigate like a FATAL (the next
+# "ghost" will surface exactly in these lines). Counts are the seam counters.
+$seamPatterns = @(
+    "no live chunk socket", "socket not available", "Unknown event type",
+    "unexpected data type", "invalid params", "parse error"
+)
 
 function Get-MatchingContainer($fragment) {
     $hit = wsl -d Ubuntu -- bash -c "docker ps --format '{{.Names}}'" | Where-Object { $_ -like "*$fragment*" } | Select-Object -First 1
@@ -67,7 +74,16 @@ foreach ($frag in $names) {
     if ($frag -like "*db*") { $log = @($log | Where-Object { $line = $_; -not ($dbBenign | Where-Object { $line -like "*$_*" }) }) }
     $fatals = @($log | Select-String -Pattern $fatalPatterns)
     $warns = @($log | Select-String -Pattern $warnPatterns | Select-Object -Last 20)
+    $seams = @($log | Select-String -Pattern $seamPatterns)
     foreach ($m in $fatals) { Write-Host "[$ctr] FATAL: $($m.Line)" }
+    if ($warns.Count -gt 0) {
+        Write-Host "[$ctr] warn/hint lines (last $($warns.Count)):"
+        foreach ($m in $warns) { Write-Host "[$ctr]   $($m.Line)" }
+    }
+    if ($seams.Count -gt 0) {
+        Write-Host "[$ctr] SEAM contract breaches (last $($seams.Count), investigate like FATAL):"
+        foreach ($m in ($seams | Select-Object -Last 10)) { Write-Host "[$ctr]   $($m.Line)" }
+    }
     if ($warns.Count -gt 0) {
         Write-Host "[$ctr] warn/hint lines (last $($warns.Count)):"
         foreach ($m in $warns) { Write-Host "[$ctr]   $($m.Line)" }

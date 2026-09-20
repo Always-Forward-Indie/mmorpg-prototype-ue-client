@@ -22,9 +22,17 @@ Single `Prototyping` runtime module. No Unreal replication — custom TCP + JSON
 
 ## Task tracker (own, no MCP — use docs link)
 
-- Base `http://23.88.102.182:3005`, OpenAPI `/api/docs-json`. Auth: `X-API-Key` from `api_key.env` (gitignored, never commit), scoped per project.
+- Base `http://23.88.102.182:3005`, OpenAPI `/api/docs-json`. Auth: `X-API-Key` from `api_key.env` (gitignored, never commit), scoped per project. Project `mirenhold`.
 - Tasks = `items`: `GET|POST /api/v1/projects/{projectSlug}/items`, `.../items/{sequenceNum|id}`, plus `.../comments`, `.../attachments`, `.../search`. Create requires `[title, typeId]`.
 - Bug template: title + `ClientVersion` + WSL server commit + `requestId (sync_*)` + `Saved/Logs` excerpt + `Saved/Replays/*.jsonl` when from bots. Flow: search duplicates → create → attach.
+
+## Inter-server seams (chunk↔game contract)
+
+- Traffic is facts + boot snapshots only. No synchronous cross-server questions on the player path; no response may gate a client-visible action (confirm inline from validated state instead — see skill learn).
+- Single owner per resource: chunk decides in-session (validate/spend/confirm), game persists the sent facts as-is (absolute values, idempotent upserts). No independent business arithmetic on game for chunk-decided facts (no second decrement, no additive re-apply).
+- Every seam failure point logs error-level (never info/debug — those are level-gated). `Tools/WSL/Watch-ServerLogs.ps1` SEAM patterns (`no live chunk socket`, `socket not available`, `Unknown event type`, `unexpected data type`, `invalid params`, `parse error`) are counters: any hit = investigate like FATAL.
+- Runtime game→chunk responses go on the live socket resolved at send time (`ChunkManager::resolveLiveSocket`), never a captured one.
+- DEV-only test content rule: ids 9000+, only `scripts/dev_*.sql` (login-server repo), NEVER migrations/dump. `game_config` knob probes need game+chunk restart (boot-handshake push only). Preflight assert: no 9000+ rows before any prod apply.
 
 ## Automated tests (see Tools/Tests/README.md)
 
@@ -32,7 +40,6 @@ Single `Prototyping` runtime module. No Unreal replication — custom TCP + JSON
 - `Tools/Bots/run_swarm.py --n 8 --scenario patrol|combat_sweep|chat_mesh|kill|harvest|death` + `--scenario trade` (duo pairs, even --n) + `seed_bots.py` (bot_* accounts) + `--tap` for `Tools/Replay/replay.py`.
 - `Tools/WSL/Preflight.ps1` (WSL→containers→ports→dev config), `Tools/Smoke/SmokeClients.ps1 -n 2` (real UE clients + log scan).
 - `Source/Prototyping/Private/Tests/` (`MMO.*` Automation specs) + `devmode.scenario combat|reset` + `Config/DevMode/qa_presets.json` for offline QA.
-- DEV-only test content rule: ids 9000+, only `scripts/dev_*.sql` (login-server repo), NEVER migrations/dump. `game_config` knob probes need game+chunk restart (boot-handshake push only). Preflight assert: no 9000+ rows before any prod apply.
 
 ## DevMode (offline, no servers)
 

@@ -205,6 +205,55 @@ New `eventType` on server → new scenario file. Closed TODO bug → `reg_<bug>`
   preflight + marker-scoped log gates. 2026-09-18: 8/8 green (64 bot-runs,
   0 FAIL, 0 FATAL). Log: Tools/Bots/soak_overnight.log (gitignored).
 
+## Inter-server seam contract (chunk↔game, verified 2026-09-19/20)
+
+Traffic classes (see AGENTS.md):
+- **Facts** chunk→game (~22 families, all fire-and-forget, none block):
+  `savePositions/saveHpMana/savePlayTime/saveCharacterProgress/
+  saveExperienceDebt/saveInventoryChange/nullifyItemOwner/
+  deleteInventoryItem/transferInventoryItem/saveDurabilityChange/
+  saveItemKillCount/saveEquipmentChange/saveActiveEffect/
+  saveCurrencyTransaction (wired 2026-09-20, was `Unknown event type`)/
+  saveSkillBarSlot/saveSkillCooldown/updatePlayerQuestProgress/
+  updatePlayerFlag/savePityCounter/saveBestiaryKill/timedChampionKilled/
+  saveReputation/saveMastery/savePlayerTitle/saveLearnedSkill/
+  saveExperienceDebt/analyticsEvent`.
+- **Boot snapshots** game→chunk (25 pushes on `chunkServerConnection`
+  handshake): config, templates, vendors, zones, tables. Chunk issues no
+  static pulls. **Config reload = game+chunk restart** (push only).
+- **Runtime request→response** (async, never blocking): 13 join-time pulls
+  (quests/flags/effects/cooldowns/inventory/pity/bestiary/rep/mastery/
+  titles/emotes/attributes) + `saveLearnedSkill→setLearnedSkill` +
+  `getCharacterAttributes→setCharacterAttributesRefresh`. **Rule: answers
+  go on the live socket resolved at send time**
+  (`ChunkManager::resolveLiveSocket`), never a captured one — writes into
+  half-open stale sockets fail silently (SERVER_BUGS #11 ghost).
+- **Ownership**: chunk decides in-session, game persists facts as-is
+  (absolute SETs, idempotent upserts). Reputation is delta-additive
+  (`add_reputation`); SP learn fact carries authoritative post-deduct value
+  (`set_free_skill_points`, legacy cost-decrement fallback kept).
+- **Observability**: every failure point logs error-level; Watch SEAM
+  patterns are counters — any hit = investigate like FATAL (proven live:
+  caught the two historical `saveCurrencyTransaction` drops).
+
+## 2026-09-20: seam rework session (tests only, no bots)
+- Return channel: `ChunkManager::resolveLiveSocket` (game) + applied to
+  `setLearnedSkill`, `setCharacterAttributesRefresh`, `inventoryItemIdSync`
+  + error-logs. Pins: 3 new game unit tests (reconnect/fallback/null).
+  Game unit 40/40.
+- Twin check: attributes path symmetric (same helper), live check deferred.
+- Single SP owner: chunk credits +1/level in memory (was stale till relog),
+  game persists absolute SP fact (legacy decrement fallback kept);
+  dialogue-learn inserts into chunk cache (was missing till relog).
+  Pins: level-up SP credit x2, skill dedup, all green.
+- Second echelon: reputation delta-atomic (`add_reputation`, SQL-proven
+  5+3=8 with cleanup) + packet carries delta (unit pin); mastery unload
+  flush, quiet (unit pin); currency wire mapped (was `Unknown event type`);
+  `getSpawnZones` dead branch left alone (player path by design).
+- Chunk unit 431/431 (443→475 ms). SQL idempotency probes (SP SET,
+  reputation add) with cleanup. Watch SEAM section proven live (caught the
+  2 historical currency drops). Live e2e (bots) deferred to Phase 6.
+
 ## 2026-09-19: Wave-6 phases 1-5 (this session)
 - P0-regress: L3 30 passed + 3 skipped (16:50), soak smoke 2x10 green, Watch
   exit 0. Kill-swarm flaked first (2/8): harness bug from the evict fix —

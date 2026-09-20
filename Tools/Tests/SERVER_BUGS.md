@@ -1,5 +1,43 @@
 # Server bugs found by bot/contract testing (dev env, 2026-09-12..13)
 
+## 12. Seam rework fallout, batch 2026-09-20 — FIXED (tests only, no bots)
+- **SP never credited in chunk memory on level-up**: `ExperienceManager`
+  updated HP/mana/exp/level but not `freeSkillPoints` (game granted it in DB
+  via `set_character_exp_level`), so chunk refused learns with false
+  `insufficient_sp` until relog. Fix: +1 SP per level on the local copy
+  before `loadCharacterData` (a manager-side touch would be wiped by the
+  stale-copy overwrite — caught by the new pin). Verified: 2 unit pins.
+- **SP double-write**: chunk deducted in memory AND game decremented in DB
+  independently. Fix: chunk sends authoritative post-deduct value in the
+  `saveLearnedSkill` fact; game `SET`s it (`set_free_skill_points`,
+  idempotent; legacy cost-decrement fallback kept for old senders).
+  Verified: SQL idempotency probe + live binaries rebuilt.
+- **Dialogue-learned skills missing till relog**: `DialogueActionExecutor`
+  updated only `ctx.learnedSkillSlugs`, never chunk cache. Fix: sparse
+  `addCharacterSkill` insert (dedup-safe replace on late full data).
+- **Reputation LWW race**: chunk sent absolutes, game `SET` them — concurrent
+  changes lost updates. Fix: packet carries `delta`, game applies
+  `add_reputation` atomically (`INSERT ... ON CONFLICT DO UPDATE SET value
+  = value + EXCLUDED`). Verified: SQL probe 5+3=8 with cleanup + packet
+  unit pin. Note: identical retries would double-add — needs idempotency
+  keys when the outbox (Phase 5 plan) lands.
+- **Mastery logout loss**: `unloadCharacterMasteries` erased without flush
+  (periodic persist runs every N hits). Fix: quiet flush-all on unload (no
+  client notify — session is going away). Verified: unit pin (2 saves, 0
+  notifies).
+- **Currency audit black hole**: chunk sent `saveCurrencyTransaction`, game
+  dispatcher had NO wire mapping → every vendor/repair purchase logged
+  `Unknown event type` and lost its audit row. Fix: mapping + parse fn
+  wired to the existing `handleSaveCurrencyTransactionEvent`. (Left alone:
+  `getSpawnZones` dead internal branch — player path by design.)
+- **Return channel** (`setLearnedSkill` + `setCharacterAttributesRefresh` +
+  `inventoryItemIdSync`): all three now resolve the live chunk socket at
+  send time (`ChunkManager::resolveLiveSocket`, game) + error-log on null.
+  Pinned by 3 game unit tests. Live e2e deferred (no bots this session).
+- Commits: chunk `7a01b2d9`, game `f5ebfd64`; game unit 40/40, chunk unit
+  431/431; Watch SEAM section added and proven live (caught the 2
+  historical currency drops).
+
 ## 0. Blind tradeAccept fabricated sessions — FIXED {#trade-invite}
 - `handleTradeAcceptEvent` created a session WITHOUT checking for a pending
   invite: a blind accept built `trade_{a}_{b}_{ts}` from thin air, and the real

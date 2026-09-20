@@ -51,6 +51,10 @@ rebuilds. Never run image builds in parallel with test runs or the UE build.
 **Never run manual `make` inside a container while watchexec watches —
 parallel makes corrupt the link step (binary vanishes, restart loop).**
 Serial builds only: save, wait for quiet, verify `make` up-to-date, restart.
+**Fresh/recreated containers have NO build dir: `watch_and_run.sh` exits
+(`binary not found`) instead of building — recover with
+`docker compose -f docker-compose.dev.yml up -d --build` in the service
+repo (full build ~15-25 min), never bare `docker restart` in that state.**
 Logs: `Tools/WSL/Get-WslServerLogs.ps1 -Service game -Tail 200`.
 Warm-up rule: after any chunk (re)start, wait for readiness instead of a fixed
 sleep — measured 2026-09-15: spawn zones pushed <1s after start

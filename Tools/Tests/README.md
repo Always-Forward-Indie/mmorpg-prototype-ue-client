@@ -239,6 +239,18 @@ Traffic classes (see AGENTS.md):
 - **Observability**: every failure point logs error-level; Watch SEAM
   patterns are counters — any hit = investigate like FATAL (proven live:
   caught the two historical `saveCurrencyTransaction` drops).
+## Test-level policy (atoms → chains → soak)
+- **Level 1 — atoms** (one action each: walk, kill, pickup, dialogue…):
+  state is set by admin-RPC (teleport/spawn/grant), never farmed. Fast.
+- **Level 2 — chains** (quests, farm loops): composed from proven atoms +
+  dev-short content. A red chain over green atoms blames the chain
+  (order/state/economy), never the mechanics.
+- **Level 3 — soak** (live bots, nightly): endurance, not logic.
+- Spawning tests spawning, killing tests killing — never mix the two in one
+  verdict. Walking on foot happens only in the locomotion test and in soak;
+  everything else teleports.
+- No new mechanic is accepted without its atom test.
+
 ## 2026-09-20: seam rework session (tests only, no bots)
 - Return channel: `ChunkManager::resolveLiveSocket` (game) + applied to
   `setLearnedSkill`, `setCharacterAttributesRefresh`, `inventoryItemIdSync`

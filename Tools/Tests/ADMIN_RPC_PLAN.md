@@ -1,5 +1,42 @@
 # ADMIN-RPC PLAN: instant test-state setup (teleport/spawn/grant/read)
 
+## Status 2026-09-21 (Phase B+C shipped, proof live)
+- Measured (DEV): smoke 3/3 ~65-96s; learn 2/2 ~60s (was 3:08); timed
+  ~121-156s, 2 cycles, reschedule proven, zero DB reads (was 4:17 + manual
+  re-arm); champion ~130-149s (was ~15 min farm); short chain ~301-310s
+  (new; slow chain stays nightly). Chunk unit 453/453. Fast batch 25+1skip
+  (12:33), slow batch 15+2skip (16:52), Watch exit 0, ADMIN audit verified.
+- New since Phase A: skipTime/grantLevel-fix/spawnMob/killMob/resetWorld
+  (queued events with snapshot reuse), ephemeral bots (no more single-shot
+  SKIP), dev_short_chain content, run_fast/run_slow + JUnit. Hard rules:
+  ring-spread spawns, arena-origin targeting, zone-local movement, fresh
+  corpses (60s TTL), harvest-all sweep (mobDeath culled), escalating timed
+  skips (time-travel debt), server-table grantLevel, one AdminClient/thread.
+- Remaining lever: parallel batch processes (shared-state isolation) toward
+  8-10 min wall; adm_* janitor SQL; brief-join only if measured join share
+  dominates.
+
+## Status 2026-09-21 evening (Phase C done, both batches green twice)
+- Fast 25+1skip (12:09, exit 0), slow 15+2skip (16:32, exit 0); unit
+  453/453; Watch exit 0. Measured realities: brief-join ≈ 5% (joins are
+  rounds+settles, not bytes); parallel wall ≈ slow batch ≈ 17 min (no
+  shared fixtures between batches). grant_level now uses the server table.
+  Evict hermetic (boundary-straddling start). Janitor SQL shipped.
+  Slow full chain stays nightly; soak stays nightly.
+- Shipped: teleport/getState/grantXP/grantLevel/grantItem/setHP + gates +
+  harness + smoke + learn rewrite. Measured: smoke 3/3 in 96s, learn 2/2
+  in 60s (was 3:08 success alone). Chunk unit 446/446 (5 new AdminGate
+  pins), Watch exit 0, ADMIN audit verified (served→warn, rejected→error).
+- Deviations from §2 (deliberate, recorded): role layer = `admin.gm_client_ids`
+  allowlist, not `users.is_gm` column (chunk has no DB; `users.role>=1` stays
+  source of truth, allowlist enforced in chunk; A2 may push role via
+  handshake) — no schema change needed. Handler = direct-response in
+  `EventDispatcher` (like `handleGetCharacterExperience`), not a queued
+  `AdminEventHandler` — fewer moving parts, same manager reuse; event-queue
+  variant only if dispatcher-thread safety ever demands it. `resetWorld`
+  deferred to Phase B (needs in-memory clearing, not a stub).
+- Next: Phase B (spawn/kill/skipTime/resetWorld + champion/timed rewrites).
+
 ## 1. Why (numbers)
 
 Tests currently spend time acquiring state, not asserting it:

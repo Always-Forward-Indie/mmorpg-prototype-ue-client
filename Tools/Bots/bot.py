@@ -74,14 +74,14 @@ class Bot:
         self.dead = False
         self._last_move_ok = True
 
-    def login_join_ready(self, attempts=3):
+    def login_join_ready(self, attempts=3, brief=False):
         import time
         check(self.client_id and self.hash and self.character_id,
               "%s: missing creds (BOT{i}_* or MMO_*)" % self.name)
         last = None
         for _ in range(attempts):
             try:
-                self._login_join_ready_once()
+                self._login_join_ready_once(brief=brief)
                 return
             except CheckFailed as e:
                 last = e
@@ -95,7 +95,7 @@ class Bot:
                                        tag="chunk")
         raise last
 
-    def _login_join_ready_once(self):
+    def _login_join_ready_once(self, brief=False):
         # Game pre-step -> chunk endpoint (API 01 §1.0).
         self.game.connect()
         if self._tap:
@@ -139,7 +139,12 @@ class Bot:
                     if not s.get("isPassive") and s.get("skillSlug"):
                         self.skill_slugs.append(s["skillSlug"])
         self.chunk.recv_all(duration=5.0)  # settle: scene-load beat (real client sends nothing here)
-        self.chunk.send_event("playerReady", {"characterId": self.character_id})
+        # Brief join (teleport flows): trim the F4 mob/NPC flood — teleport
+        # snapshots re-add what's needed. Body stays clean otherwise.
+        ready_body = {"characterId": self.character_id}
+        if brief:
+            ready_body["brief"] = True
+        self.chunk.send_event("playerReady", ready_body)
         f4 = self._settle_flood()
         got = {m.get("header", {}).get("eventType") for m in f4}
         check("playerReady" in got, "%s: no playerReady ack" % self.name)

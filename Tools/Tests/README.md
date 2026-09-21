@@ -251,6 +251,109 @@ Traffic classes (see AGENTS.md):
   everything else teleports.
 - No new mechanic is accepted without its atom test.
 
+## 2026-09-20: admin-RPC Phase A shipped (DEV only, never live VPS)
+- **What**: chunk `adminCommand` (teleport/getState/grantXP/grantLevel/
+  grantItem/setHP) behind 4 layers: `admin.gm_client_ids` allowlist (chunk
+  has no DB — allowlist IS the role layer; bot accounts never listed) +
+  `game_config admin.enabled` (default false) + `#ifdef ADMIN_RPC` (no such
+  code in prod builds) + audit (served at warn `ADMIN char= op=`, rejected
+  at error). Unknown `adminCommand` on prod builds → `forbidden`, session
+  survives. ADMIN warn/error lines are EXPECTED on DEV (tests exercise
+  rejections); Watch stays green (not FATAL patterns).
+- **Files**: chunk `include/services/AdminGate.hpp` (pure gates, unit pins
+  `tests/test_admin.cpp` 5/5) + `EventDispatcher::handleAdminCommand`
+  (direct-response, reuses managers: teleport writes `lastValidated` with
+  srvMs=0 like respawn) + `CMakeLists option(ADMIN_RPC)` (DEV
+  `Dockerfile.dev`/`watch_and_run.sh` build `-DADMIN_RPC=ON`, prod
+  `Dockerfile` untouched) + login `migrations/084_admin_rpc_config.sql`.
+  Harness `Tools/Bots/admin.py` (separate GM session on arbitrary
+  characterIds) + `Tests/Contract/test_admin_smoke.py` (teleport round-trip
+  + getState + grantXP/setHP + lastValidated pin, non-GM reject + session
+  survives, invalid-params matrix).
+- **Setup (once per DEV db)**: apply 084 → `seed_bots.py --n 1 --prefix gm`
+  → `UPDATE users SET role=1 WHERE login='gm_01'` → set
+  `admin.enabled=true` + `admin.gm_client_ids=<gm clientId>` → restart
+  game, then chunk (knobs push on handshake; expect `received 81` entries).
+  Preflight asserts prod stays closed (flag off + zero role>=1).
+- **Measured**: smoke 3/3 in 96s; `test_reg_learn` rewritten via teleport
+  (no walking) 2/2 in 60s (was 3:08 success alone). Learn range checks use
+  stored position — teleport works.
+- **Rule**: new mechanic ships with its admin command first (atom test via
+  admin-RPC). `adminKillMob` (Phase B) must NEVER pass a kill test — kills
+  are proven via `playerAttack`; admin-kill is setup-only (corpse/harvest).
+- **Next (Phase B)**: `adminSpawnMob/adminKillMob/adminSkipTime/
+  adminResetWorld` (in-memory caches included, <10s, replaces SQL re-arm) →
+  champion/timed rewrites; `brief` join only if join-share still dominates
+  (measure first); hand-made parallel batches (shared-state isolation).
+
+## 2026-09-21: admin-RPC Phase B+C shipped (DEV only)
+- **Commands**: + `skipTime` (ChampionManager injected clocks + immediate
+  ticks; wall-clock untouched), `spawnMob`/`killMob` (queued events:
+  spawn registers + pushes a real spawn list to subscribers, kill runs the
+  genuine pipeline via CombatSystem::adminKillMob), `resetWorld[champion]`
+  (counters + active champions + timed re-arm + arena cull; per-character
+  state solved by ephemeral bots, never scrubbed). Teleport also queued
+  (full move path: validation + resubscribe WITH snapshots + evict +
+  savePositions + broadcast); harness polls getState.
+- **Why queued**: thin mob deltas carry no slug/name — dispatcher-side
+  register left tests blind (only opportunistic respawn broadcasts
+  delivered). Server-spawned mobs (timed/threshold) had the same gap:
+  ChampionManager::spawnNotifyCallback now pushes a spawn list to
+  subscribers (wired in EventHandler, same sender as admin spawn).
+- **Rules learned hard**: (1) spawn spread on a ring (stacking breaks mob
+  movement/STUCK-GUARD + poisons tracking); (2) target arena-ORIGIN foxes
+  (spawnZone tag — global ghosts pull the bot across the map); (3) movement
+  stays in the test zone (interest anchor follows movement — seeking global
+  ghosts unsubscribes the arena); (4) harvest corpses FRESH (60s TTL):
+  short bursts + immediate sweep, never 45s rounds + late harvest;
+  (5) mobDeath is often culled at kill instant — harvest ALL nearby corpses,
+  don't tie harvest to observed deaths; (6) skipped time contaminates
+  persisted next_spawn_at (kill reports fake killedAt) — timed cycle 1 uses
+  escalating skips [300, 3600, 21600]; (7) grant_level uses the SERVER exp
+  table (static formula under-delivers: L8 ~= L3); (8) one AdminClient per
+  thread (sockets not thread-safe); stop-event on first pass (wall = first,
+  not cap).
+- **Ephemeral bots** (`admin.ephemeral_bot`, idx 900+, register-only, no
+  auth fallback): fresh quest/XP/inventory per run — single-shot SKIP era
+  over for smoke/champion/timed/short. gm_bot stays separate (role=1).
+  DEV login DB accumulates adm_* — janitor SQL deferred.
+- **Content**: `dev_quest_short.sql` (quest 9000 dev_short_chain: kill 2
+  arena fox -> 1 hide -> turnin, potion + 5g; giver NPC 9000, minimal
+  dialogue) + `test_reg_turnin_short.py` (genuine kills via credit, genuine
+  harvest attempts, grant fallback via the real onItemObtained hook).
+- **Measured (DEV, 2026-09-21)**: chunk unit 453/453; fast batch 25+1skip
+  (12:33, JUnit fast.xml); slow batch 15+2skip (16:52, JUnit slow.xml):
+  champion 149s, timed 121-156s (2 cycles, reschedule proven, zero DB
+  reads), short 301-310s, learn 60-61s, smoke 65-96s. Slow full chain stays
+  nightly. Parallel batches (separate processes) are the remaining lever
+  toward 8-10 min wall.
+- **Wrappers**: `Tools/Contract/run_fast.ps1` (atoms) + `run_slow.ps1`
+  (chains, serial). Prod stays closed (prod Dockerfile has no ADMIN_RPC,
+  CMake default OFF).
+
+## 2026-09-21 (evening): Phase C + fixes (DEV only)
+- **Evict goes hermetic**: shared bot_05/06 drifted to the arena (past
+  teleports persist via savePositions), so spread legs never crossed a cell
+  border — 0 evictions. Now ephemeral bots + teleport to a
+  boundary-straddling start (1400, 0; >=1 of 2 golden-angle legs always
+  crosses past the 225u margin). 45s green.
+- **Brief join** (`playerReady{brief:true}` → Phase 4 trims mob/NPC flood,
+  sends one empty spawnMobsInZone to keep shape checks green; teleport
+  snapshots re-add what's needed). Server: `CharacterDataStruct.briefJoin`
+  parsed in the dispatcher, honored in handlePlayerReadyEvent. Harness:
+  `Bot.login_join_ready(brief=True)` in teleport-flow tests (smoke/learn/
+  champion/timed/short/evict); join-path tests (conn/handoff) stay full.
+  Measured: ~5% (joins are protocol rounds + settles, not bytes — the big
+  lever remains parallel batches, not trimming).
+- **grant_level fixed**: used the static exp formula (L8 landed L3) — now
+  the server table via getExperienceForLevelFromGameServer.
+- **Janitor**: `Tools/Bots/janitor.sql` (adm_* + role=0 + older than 7d;
+  characters CASCADE; gm_bot/bot_* never match). Verified no-op on fresh DB.
+- **Final numbers**: fast 25+1skip (12:09, exit 0), slow 15+2skip (16:32,
+  exit 0), chunk unit 453/453, Watch exit 0. Serial ≈ 29 min; parallel wall
+  ≈ slow batch ≈ 17 min (batches share no fixtures: run both wrappers at
+  once). Slow full chain (`test_reg_turnin`) stays nightly.
+
 ## 2026-09-20: seam rework session (tests only, no bots)
 - Return channel: `ChunkManager::resolveLiveSocket` (game) + applied to
   `setLearnedSkill`, `setCharacterAttributesRefresh`, `inventoryItemIdSync`

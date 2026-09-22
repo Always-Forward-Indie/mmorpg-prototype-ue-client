@@ -16,6 +16,7 @@
 | 09 | [Смерть и респавн](09-death-respawn-protocol.md) | Смерть, штрафы, респавн, воскрешение |
 | 10 | [Бестиарий](10-bestiary-protocol.md) | Тиры бестиария, отслеживание убийств |
 | 11 | [Чат и уведомления](11-chat-notifications-protocol.md) | Система чата, мировые уведомления |
+| 12 | [Admin-RPC (DEV ONLY)](12-admin-rpc-protocol.md) | Тестовый крюк: teleport/spawn/grant/read, защита, brief-join |
 
 ---
 

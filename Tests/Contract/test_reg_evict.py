@@ -57,20 +57,28 @@ def test_mob_cell_left_emitted_live():
     seen, lock = {}, threading.Lock()
 
     def worker():
-        bot = ephemeral_bot(host)  # hermetic: position can't drift between runs
+        bot = ephemeral_bot(host, tap=True)  # hermetic: position can't drift between runs
         adm = AdminClient(host)  # one admin session per thread (sockets aren't thread-safe)
         try:
             bot.login_join_ready(brief=True)
             rsp = adm.teleport_to(bot.character_id, EVICT_START_X, EVICT_START_Y,
                                   EVICT_START_Z)
             assert rsp["header"].get("status") == "success", rsp
-            bot.spread_out()  # 700u legs cross subscription cells
-            bot.drain(secs=5.0)
-            evicted = getattr(bot, "evicted", 0)
-            tap_hits = sum(
-                1 for _d, _t, p, _v in bot.all_taps()
-                if isinstance(p, dict)
-                and p.get("header", {}).get("eventType") == "mobCellLeft")
+            # Walk until the server actually emits eviction: under parallel
+            # load legs stall, so verify crossing (evict counter + tap) and
+            # keep walking instead of trusting one blind 700u leg.
+            end = time.monotonic() + 240.0
+            while time.monotonic() < end:
+                bot.spread_out()  # 700u legs; at least one worker always
+                # crosses a border past the margin (see note above)
+                bot.drain(secs=5.0)
+                evicted = getattr(bot, "evicted", 0)
+                tap_hits = sum(
+                    1 for _d, _t, p, _v in bot.all_taps()
+                    if isinstance(p, dict)
+                    and p.get("header", {}).get("eventType") == "mobCellLeft")
+                if evicted + tap_hits > 0:
+                    break
             with lock:
                 seen[bot.name] = (evicted, tap_hits)
         finally:

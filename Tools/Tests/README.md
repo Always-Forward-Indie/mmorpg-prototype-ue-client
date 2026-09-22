@@ -351,8 +351,14 @@ Traffic classes (see AGENTS.md):
   characters CASCADE; gm_bot/bot_* never match). Verified no-op on fresh DB.
 - **Final numbers**: fast 25+1skip (12:09, exit 0), slow 15+2skip (16:32,
   exit 0), chunk unit 453/453, Watch exit 0. Serial ≈ 29 min; parallel wall
-  ≈ slow batch ≈ 17 min (batches share no fixtures: run both wrappers at
-  once). Slow full chain (`test_reg_turnin`) stays nightly.
+  ≈ 17-20 min (batches share no fixtures: run both wrappers at once;
+  measured 19:32 with contention, evict needed a load-robust retry loop —
+  see below). Slow full chain (`test_reg_turnin`) stays nightly.
+- **Evict goes parallel-safe**: one blind 700u leg starves under parallel
+  load — now walks until eviction actually arrives (240s budget, tap
+  restored via ephemeral_bot(tap=True)). Plus the deterministic
+  boundary-straddling start above (shared-bot position drift was the first
+  cause).
 
 ## 2026-09-20: seam rework session (tests only, no bots)
 - Return channel: `ChunkManager::resolveLiveSocket` (game) + applied to

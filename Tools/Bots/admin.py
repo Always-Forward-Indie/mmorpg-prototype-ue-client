@@ -162,7 +162,7 @@ class AdminClient:
 _EPHEMERAL_IDX = [900]  # swarm seeds bot_01..200 at most; 900+ never collides
 
 
-def ephemeral_bot(host=None, prefix="adm"):
+def ephemeral_bot(host=None, prefix="adm", tap=False):
     """Fresh DEV account + character (industry hermetic fixture).
 
     Register-only (no auth fallback: a taken login retries with a new
@@ -222,7 +222,7 @@ def ephemeral_bot(host=None, prefix="adm"):
             os.environ["BOT%d_CLIENT_ID" % idx] = str(cid)
             os.environ["BOT%d_HASH" % idx] = hh
             os.environ["BOT%d_CHARACTER_ID" % idx] = str(char)
-            bot = Bot(idx, host)
+            bot = Bot(idx, host, tap=tap)
             bot.name = login
             return bot
         except RuntimeError as e:

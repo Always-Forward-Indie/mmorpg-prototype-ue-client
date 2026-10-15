@@ -473,6 +473,16 @@ void UItemTooltipWidget::UpdateItemDurability()
 
 		DurabilityText->SetText(FText::FromString(
 			FString::Printf(TEXT("Durability: %d / %d"), CurrentItem.durabilityCurrent, CurrentItem.durabilityMax)));
+if (CurrentItem.durabilityMax > 0)
+{
+const float DurRatio = static_cast<float>(CurrentItem.durabilityCurrent) / static_cast<float>(CurrentItem.durabilityMax);
+FString TierNote;
+if (DurRatio < 0.25f) TierNote = TEXT(" - broken tier: -30% stats, repair soon!");
+else if (DurRatio < 0.50f) TierNote = TEXT(" (-15% stats)");
+else if (DurRatio < 0.75f) TierNote = TEXT(" (-5% stats)");
+if (!TierNote.IsEmpty())
+DurabilityText->SetText(FText::FromString(DurabilityText->GetText().ToString() + TierNote));
+}
 		DurabilityText->SetColorAndOpacity(DurColor);
 		DurabilityText->SetVisibility(ESlateVisibility::Visible);
 	}
@@ -492,6 +502,10 @@ void UItemTooltipWidget::UpdateEquipInfo()
 		SlotText = SlotText.Left(1).ToUpper() + SlotText.Mid(1);
 		if (CurrentItem.isTwoHanded)
 			SlotText += TEXT(" (Two-Handed)");
+if (CurrentItem.equipSlotSlug.Equals(TEXT("off_hand"), ESearchCase::IgnoreCase))
+SlotText += TEXT(" - attacks at 50%");
+if (!CurrentItem.setSlug.IsEmpty())
+SlotText += FString::Printf(TEXT(" | Set: %s (bonuses apply automatically to stats)"), *CurrentItem.setSlug);
 		EquipSlotText->SetText(FText::FromString(SlotText));
 		EquipSlotText->SetColorAndOpacity(FLinearColor(0.9f, 0.8f, 0.5f, 1.0f));
 		EquipSlotText->SetVisibility(ESlateVisibility::Visible);

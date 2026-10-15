@@ -137,6 +137,11 @@ private:
 	// Timer for deferred UI initialization in BeginPlay
 	FTimerHandle UIInitTimerHandle;
 
+	// Fallback: fires HandleUIManagerInitialized directly if the Slate
+	// NativeTick broadcast never arrives (e.g. throttled window while the
+	// loading screen is up). Guarded by bUIInitDone so a double-fire is a no-op.
+	FTimerHandle UIInitFallbackTimerHandle;
+
 	// True once NotifyPlayerSpawned has been sent to GameInstance so we don't
 	// fire it more than once per spawn even if Tick runs before the flag is acked.
 	bool bSpawnNotified = false;
@@ -363,9 +368,6 @@ private:
 	void AttackActor(AActor* TargetActor, const FString& SkillSlug);
 
 	class UPlayerAnimInstance* GetPlayerAnimInstance() const;
-
-	UFUNCTION()
-	void OnAttackInput();
 
 	UFUNCTION()
 	void OnJumpPressed();
@@ -814,6 +816,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void DoAutoAttack();
 
+	// Starts the real auto-attack loop on the locked target (same entry as the
+	// attack key; also used by the DevMode action bot to drive real combat).
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void OnAttackInput();
+
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void FaceLockedTarget();
 
@@ -1022,6 +1029,8 @@ public:
 	// Weight status handler
 	UFUNCTION()
 	void HandleWeightStatusChanged(const FWeightStatusData& WeightStatus);
+// Last overweight flag — toasts fire only on transitions, not on every WEIGHT_STATUS.
+bool bCachedOverweight = false;
 
 	// Handles effectTick broadcast from PlayerStatsNetworkHandler.
 	// Shows floating "+N" numbers above this player when a HoT tick lands.

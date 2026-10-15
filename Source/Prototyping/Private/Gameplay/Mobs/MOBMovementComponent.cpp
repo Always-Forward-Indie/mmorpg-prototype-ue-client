@@ -625,6 +625,20 @@ FVector UMOBMovementComponent::TraceGround(const FVector& Location) const
     UWorld* World = GetWorld();
     if (!World) return FVector::ZeroVector;
 
+    // AAA guard: a non-finite location (NaN/Inf from a bad spawn packet or
+    // interpolation state) turns the Chaos traversal below into an unbounded
+    // loop that wedges the game thread forever. Skip instead.
+    if (!FMath::IsFinite(Location.X) || !FMath::IsFinite(Location.Y) || !FMath::IsFinite(Location.Z))
+    {
+        static bool bLoggedTrace = false;
+        if (!bLoggedTrace)
+        {
+            bLoggedTrace = true;
+            UE_LOG(LogTemp, Warning, TEXT("[MOB] TraceGround: non-finite location (%.1f,%.1f,%.1f) — skipping ground trace"), Location.X, Location.Y, Location.Z);
+        }
+        return FVector::ZeroVector;
+    }
+
     ACharacter* Character = Cast<ACharacter>(GetOwner());
     if (!Character) return FVector::ZeroVector;
 
@@ -657,6 +671,22 @@ FVector UMOBMovementComponent::AdjustToGround(const FVector& Location, float Del
     FVector AdjustedLocation = Location;
     UWorld* World = GetWorld();
     if (!World) return AdjustedLocation;
+
+    // AAA guard: a non-finite location (NaN/Inf from a bad spawn packet or
+    // interpolation state) turns the Chaos traversal below into an unbounded
+    // loop that wedges the game thread forever. Skip instead.
+    if (!FMath::IsFinite(Location.X) || !FMath::IsFinite(Location.Y) || !FMath::IsFinite(Location.Z))
+    {
+        static bool bLoggedAdjust = false;
+        if (!bLoggedAdjust)
+        {
+            bLoggedAdjust = true;
+            AActor* Owner = GetOwner();
+            UE_LOG(LogTemp, Warning, TEXT("[MOB] AdjustToGround: non-finite location (%.1f,%.1f,%.1f) on '%s' — skipping ground adjustment"),
+                Location.X, Location.Y, Location.Z, Owner ? *Owner->GetName() : TEXT("null-owner"));
+        }
+        return AdjustedLocation;
+    }
 
     ACharacter* Character = Cast<ACharacter>(GetOwner());
     if (!Character) return AdjustedLocation;

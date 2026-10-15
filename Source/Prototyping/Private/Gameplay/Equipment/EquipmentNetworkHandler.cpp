@@ -41,7 +41,7 @@ void UEquipmentNetworkHandler::HandleChunkServerData(const FString& ReceivedData
     static const TArray<FString> HandledEvents = {
         TEXT("EQUIPMENT_STATE"), TEXT("EQUIP_RESULT"),
         TEXT("WEIGHT_STATUS"),   TEXT("charAttributesUpdate"),
-        TEXT("PLAYER_EQUIPMENT_UPDATE")
+        TEXT("PLAYER_EQUIPMENT_UPDATE"), TEXT("useItem")
     };
     if (!HandledEvents.Contains(EventType)) return;
 
@@ -65,6 +65,25 @@ void UEquipmentNetworkHandler::HandleChunkServerData(const FString& ReceivedData
     else if (EventType == TEXT("EQUIP_RESULT"))
     {
         EquipmentManager->OnEquipResultReceived(ParseEquipResult(Root, Body, Message));
+    }
+    else if (EventType == TEXT("useItem"))
+    {
+        // InventoryManager owns useItem success; surface only errors here
+        // (e.g. body.reason == "cooldown") so they are not silently dropped.
+        if (Msg.status.Equals(TEXT("error"), ESearchCase::IgnoreCase))
+        {
+            FString UseReason;
+            Body->TryGetStringField(TEXT("reason"), UseReason);
+            if (UseReason.IsEmpty())
+            {
+                UseReason = JSONParser::ResolveErrorCode(Root);
+            }
+            UE_LOG(LogTemp, Warning, TEXT("EquipmentNetworkHandler: useItem failed reason='%s'"), *UseReason);
+            FEquipResultData UseItemError;
+            UseItemError.bSuccess = false;
+            UseItemError.errorCode = UseReason;
+            EquipmentManager->OnEquipResultReceived(UseItemError);
+        }
     }
     else if (EventType == TEXT("WEIGHT_STATUS"))
     {
@@ -143,12 +162,35 @@ FEquipResultData UEquipmentNetworkHandler::ParseEquipResult(
     const FString& Message) const
 {
     FEquipResultData Result;
+    Result.bSuccess = false;
 
-    if (Message != TEXT("success"))
+    // Success is authoritative via header.status (success packets carry no header.message).
+    FString Status;
+    const TSharedPtr<FJsonObject>* EquipHeaderPtr = nullptr;
+    if (Root->TryGetObjectField(TEXT("header"), EquipHeaderPtr) && EquipHeaderPtr)
     {
-        Result.errorCode = Message;
+        (*EquipHeaderPtr)->TryGetStringField(TEXT("status"), Status);
+    }
+    const bool bIsSuccess = Status.Equals(TEXT("success"), ESearchCase::IgnoreCase)
+        || Message.Equals(TEXT("success"), ESearchCase::IgnoreCase);
+
+    if (!bIsSuccess)
+    {
+        // Machine-readable code: body.reason (protocol) wins, then body.errorCode/header.message.
+        FString Reason;
+        Body->TryGetStringField(TEXT("reason"), Reason);
+        if (Reason.IsEmpty())
+        {
+            Reason = JSONParser::ResolveErrorCode(Root);
+        }
+        if (Reason.IsEmpty())
+        {
+            Reason = Message;
+        }
+        Result.errorCode = Reason;
         return Result;
     }
+    Result.bSuccess = true;
 
     // Body contains either "equip" or "unequip" sub-object
     const TSharedPtr<FJsonObject>* ActionObjPtr = nullptr;

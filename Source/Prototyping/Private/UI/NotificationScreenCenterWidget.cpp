@@ -46,8 +46,39 @@ void UNotificationScreenCenterWidget::ShowScreenCenter(const FWorldNotificationS
         ULocalizationSubsystem* Loc = nullptr;
         if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
             Loc = GI->GetSubsystem<ULocalizationSubsystem>();
-        Title = Loc ? Loc->GetNotificationTextTemplate(Type) : FText::FromString(Type);
-        Sub   = FText::GetEmpty();
+        if (Type == TEXT("champion_spawned") || Type == TEXT("champion_spawned_soon") || Type == TEXT("rare_mob_spawned"))
+{
+FString MobSlug = Notification.dataFields.FindRef(TEXT("mobSlug"));
+if (MobSlug.IsEmpty()) MobSlug = Notification.dataFields.FindRef(TEXT("slug"));
+if (UMyGameInstance* ChampionGI = Cast<UMyGameInstance>(GetGameInstance()))
+{
+if (ULocalizationSubsystem* ChampionLoc = ChampionGI->GetSubsystem<ULocalizationSubsystem>())
+{
+const FText MobName = ChampionLoc->GetMobDisplayName(MobSlug);
+if (!MobName.IsEmpty()) MobSlug = MobName.ToString();
+}
+}
+if (Type == TEXT("rare_mob_spawned"))
+{
+Title = FText::FromString(TEXT("RARE MOB!"));
+Sub = FText::FromString(MobSlug);
+}
+else
+{
+const FString TrophySlug = Notification.dataFields.FindRef(TEXT("trophySlug"));
+FString TrophyLine = MobSlug;
+if (!TrophySlug.IsEmpty()) TrophyLine += FString::Printf(TEXT(" - Trophy: %s"), *TrophySlug);
+Title = FText::FromString(Type == TEXT("champion_spawned_soon") ? TEXT("CHAMPION APPROACHING!") : TEXT("CHAMPION!"));
+Sub = FText::FromString(TrophyLine);
+}
+Loc = nullptr;
+}
+else
+{
+Title = Loc ? Loc->GetNotificationTextTemplate(Type) : FText::FromString(Type);
+}
+        if (Type != TEXT("champion_spawned") && Type != TEXT("champion_spawned_soon") && Type != TEXT("rare_mob_spawned"))
+Sub   = FText::GetEmpty();
     }
 
     if (Center_Title_Text) Center_Title_Text->SetText(Title);

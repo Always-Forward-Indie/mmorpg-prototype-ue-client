@@ -6,6 +6,7 @@
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
 #include "UI/UIManager.h"
+#include "UI/NotificationToastWidget.h"
 #include "UI/ChatWidget.h"
 #include "UI/SkillBarWidget.h"
 #include "Gameplay/Items/InventoryManager.h"
@@ -1657,6 +1658,16 @@ Super::BeginPlay();
 				// the loading-screen countdown to start.
 				UIManager->OnUIManagerInitialized.AddDynamic(this, &ABasicPlayer::HandleUIManagerInitialized);
 				UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] UIInitTimer: subscribed to OnUIManagerInitialized"));
+
+				// Fallback: if the Slate NativeTick broadcast never arrives (window
+				// throttled while the loading screen is up), drive the gate directly.
+				// HandleUIManagerInitialized is once-guarded, so a race is harmless.
+				GetWorld()->GetTimerManager().SetTimer(UIInitFallbackTimerHandle, [this]()
+				{
+					if (playerData.isOtherClient || bUIInitDone) { return; }
+					UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] UIInitFallback: NativeTick signal missing — firing HandleUIManagerInitialized directly"));
+					HandleUIManagerInitialized();
+				}, 3.0f, false);
                 
 			}, 0.5f, false);
 		}
@@ -1756,7 +1767,10 @@ void ABasicPlayer::SetEquippedTitle(const FText& TitleDisplayName)
 
 void ABasicPlayer::HandleUIManagerInitialized()
 {
-    // Unsubscribe immediately вЂ” this must fire exactly once per spawn.
+    // Must fire exactly once per spawn: the fallback timer can race the Slate
+    // NativeTick broadcast, and without this guard cursor delegates would bind
+    // twice (double click dispatch).
+    if (bUIInitDone) { return; }
     if (UIManager)
     {
         UIManager->OnUIManagerInitialized.RemoveDynamic(this, &ABasicPlayer::HandleUIManagerInitialized);
@@ -2180,6 +2194,22 @@ void ABasicPlayer::DispatchPendingInteraction()
 }
 
 void ABasicPlayer::HandleWeightStatusChanged(const FWeightStatusData& WeightStatus){
+if (WeightStatus.isOverweight != bCachedOverweight)
+{
+bCachedOverweight = WeightStatus.isOverweight;
+if (UIManager)
+{
+if (UNotificationToastWidget* Toast = UIManager->GetNotificationToastWidget())
+{
+FWorldNotificationStruct OverNotif;
+OverNotif.notificationType = bCachedOverweight ? TEXT("overweight_started") : TEXT("overweight_ended");
+OverNotif.channel = TEXT("toast");
+OverNotif.dataFields.Emplace(TEXT("currentWeight"), FString::SanitizeFloat(WeightStatus.currentWeight));
+OverNotif.dataFields.Emplace(TEXT("weightLimit"), FString::SanitizeFloat(WeightStatus.weightLimit));
+Toast->ShowNotification(OverNotif);
+}
+}
+}
     // Weight status is informational only (used by UI weight bar).
     // Movement speed is fully server-authoritative and arrives via move_speed in stats_update.
     // No client-side speed penalty is applied here.
@@ -3961,6 +3991,7 @@ void ABasicPlayer::EndPlay(const EEndPlayReason::Type EndPlayReason)
     if (GetWorld())
     {
         GetWorld()->GetTimerManager().ClearTimer(UIInitTimerHandle);
+        GetWorld()->GetTimerManager().ClearTimer(UIInitFallbackTimerHandle);
         GetWorld()->GetTimerManager().ClearTimer(AutoAttackRetryTimerHandle);
         GetWorld()->GetTimerManager().ClearTimer(HitPointTimerHandle);
         GetWorld()->GetTimerManager().ClearTimer(CastBarTimerHandle);

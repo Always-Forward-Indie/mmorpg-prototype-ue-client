@@ -33,6 +33,11 @@ public:
     static FMessageDataStruct DeserializeMessageData(const FString& JsonString);
     static FString DeserializeEventTypeData(const FString& JsonString);
 
+    // Central error-code resolution: prefers body.errorCode, falls back to header.message.
+    // Returns "" on success packets. Never match logic on human-readable message text.
+    static FString ResolveErrorCode(const FString& JsonString);
+    static FString ResolveErrorCode(const TSharedPtr<FJsonObject>& Root);
+
     // New method to deserialize network header with time sync data
     static FNetworkHeaderStruct DeserializeNetworkHeader(const FString& JsonString);
 

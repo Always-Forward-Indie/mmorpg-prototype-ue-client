@@ -129,7 +129,7 @@ protected:
 
     // Durability warning threshold (0..1)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Slot")
-    float DurabilityWarningThreshold = 0.25f;
+    float DurabilityWarningThreshold = 0.30f;
 
     // Colors
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Slot")

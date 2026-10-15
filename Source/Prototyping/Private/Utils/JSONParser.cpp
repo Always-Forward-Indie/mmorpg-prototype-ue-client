@@ -398,8 +398,59 @@ FClientDataStruct JSONParser::DeserializeClientData(const FString& JsonString)
 		 }
 	 }
 
-	 return MessageData;
+	 // Central errorCode: body.errorCode mirrors header.message on status:error.
+const TSharedPtr<FJsonObject>* BodyObject = nullptr;
+if (JsonObject->TryGetObjectField(TEXT("body"), BodyObject) && BodyObject != nullptr)
+{
+FString BodyError;
+if ((*BodyObject)->TryGetStringField(TEXT("errorCode"), BodyError) && !BodyError.IsEmpty())
+{
+MessageData.errorCode = BodyError;
+}
+(*BodyObject)->TryGetStringField(TEXT("serverVersion"), MessageData.serverVersion);
+(*BodyObject)->TryGetStringField(TEXT("minClientVersion"), MessageData.minClientVersion);
+(*BodyObject)->TryGetStringField(TEXT("maxClientVersion"), MessageData.maxClientVersion);
+(*BodyObject)->TryGetStringField(TEXT("banReason"), MessageData.banReason);
+(*BodyObject)->TryGetStringField(TEXT("banExpiresAt"), MessageData.banExpiresAt);
+}
+if (MessageData.errorCode.IsEmpty())
+{
+MessageData.errorCode = MessageData.message;
+}
+return MessageData;
  }
+
+FString JSONParser::ResolveErrorCode(const TSharedPtr<FJsonObject>& Root)
+{
+if (!Root.IsValid()) return FString();
+FString HeaderMsg;
+const TSharedPtr<FJsonObject>* HeaderPtr = nullptr;
+if (Root->TryGetObjectField(TEXT("header"), HeaderPtr) && HeaderPtr)
+{
+(*HeaderPtr)->TryGetStringField(TEXT("message"), HeaderMsg);
+}
+const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+if (Root->TryGetObjectField(TEXT("body"), BodyPtr) && BodyPtr)
+{
+FString BodyCode;
+if ((*BodyPtr)->TryGetStringField(TEXT("errorCode"), BodyCode) && !BodyCode.IsEmpty())
+{
+return BodyCode;
+}
+}
+return HeaderMsg;
+}
+
+FString JSONParser::ResolveErrorCode(const FString& JsonString)
+{
+TSharedPtr<FJsonObject> Root;
+TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+{
+return FString();
+}
+return ResolveErrorCode(Root);
+}
 
 // deserialize EventType from a json string
  FString JSONParser::DeserializeEventTypeData(const FString& JsonString)
@@ -552,9 +603,21 @@ FSpawnZoneStruct JSONParser::DeserializeSpawnZoneData(const TSharedPtr<FJsonObje
 TArray<FMOBStruct> JSONParser::DeserializeMobsList(const TSharedPtr<FJsonObject>& Body)
 {
 	TArray<FMOBStruct> MobsList;
-	const TArray<TSharedPtr<FJsonValue>>* MobsArray;
+	if (!Body.IsValid()) return MobsList;
 
-	if (Body->TryGetArrayField(TEXT("mobs"), MobsArray))
+	const TArray<TSharedPtr<FJsonValue>>* MobsArray = nullptr;
+	if (!Body->TryGetArrayField(TEXT("mobs"), MobsArray) || MobsArray == nullptr)
+	{
+		// Fallback: legacy nested spawnZone format (body.spawnZone.mobs).
+		// Current flat format is body.zoneId + body.mobs[].
+		const TSharedPtr<FJsonObject>* SpawnZonePtr = nullptr;
+		if (Body->TryGetObjectField(TEXT("spawnZone"), SpawnZonePtr) && SpawnZonePtr != nullptr && (*SpawnZonePtr).IsValid())
+		{
+			(*SpawnZonePtr)->TryGetArrayField(TEXT("mobs"), MobsArray);
+		}
+	}
+
+	if (MobsArray != nullptr)
 	{
 		for (const TSharedPtr<FJsonValue>& MobValue : *MobsArray)
 		{
@@ -1104,9 +1167,11 @@ FInventoryItemStruct JSONParser::DeserializeInventoryItem(const TSharedPtr<FJson
 			Item.itemId = NestedItem->GetIntegerField(TEXT("id"));
 	}
 
-	// Ensure durabilityCurrent has a sane default
-	if (Item.durabilityCurrent == 0 && Item.durabilityMax > 0 && Item.isDurable)
-		Item.durabilityCurrent = Item.durabilityMax;
+	// Ensure durabilityCurrent has a sane default, but never mask an explicit 0:
+// 0 from the server means broken. Fall back to max only when nobody sent the field.
+const bool bDurabilitySent = ItemObj->HasField(TEXT("durabilityCurrent")) || (NestedItemPtr && (*NestedItemPtr).IsValid() && (*NestedItemPtr)->HasField(TEXT("durabilityCurrent")));
+if (!bDurabilitySent && Item.durabilityCurrent == 0 && Item.durabilityMax > 0 && Item.isDurable)
+Item.durabilityCurrent = Item.durabilityMax;
 
 	return Item;
 }
@@ -1708,6 +1773,14 @@ FSkillInitiationData JSONParser::DeserializeSkillInitiation(const TSharedPtr<FJs
 
 	if (InitiationObj->HasField(TEXT("errorReason")))
 		SkillData.errorReason = InitiationObj->GetStringField(TEXT("errorReason"));
+if (InitiationObj->HasField(TEXT("errorCode")))
+{
+InitiationObj->TryGetStringField(TEXT("errorCode"), SkillData.errorCode);
+}
+else
+{
+SkillData.errorCode = SkillData.errorReason;
+}
 
 	return SkillData;
 }
@@ -1717,15 +1790,15 @@ FSkillInitiationData JSONParser::DeserializeSkillInitiation(const FString& JsonS
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
-		return FSkillInitiationData();
+		{ FSkillInitiationData FailedInit; FailedInit.success = false; FailedInit.errorCode = JSONParser::ResolveErrorCode(Root); FailedInit.errorReason = FailedInit.errorCode; return FailedInit; }
 
 	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 	if (!Body.IsValid())
-		return FSkillInitiationData();
+		{ FSkillInitiationData FailedInit; FailedInit.success = false; FailedInit.errorCode = JSONParser::ResolveErrorCode(Root); FailedInit.errorReason = FailedInit.errorCode; return FailedInit; }
 
-	TSharedPtr<FJsonObject> SkillInitiation = Body->GetObjectField(TEXT("skillInitiation"));
+	TSharedPtr<FJsonObject> SkillInitiation; const TSharedPtr<FJsonObject>* SkillInitPtr = nullptr; if (Body->TryGetObjectField(TEXT("skillInitiation"), SkillInitPtr) && SkillInitPtr) SkillInitiation = *SkillInitPtr;
 	if (!SkillInitiation.IsValid())
-		return FSkillInitiationData();
+		{ FSkillInitiationData FailedInit; FailedInit.success = false; FailedInit.errorCode = JSONParser::ResolveErrorCode(Root); FailedInit.errorReason = FailedInit.errorCode; return FailedInit; }
 
 	return JSONParser::DeserializeSkillInitiation(SkillInitiation);
 }
@@ -1822,6 +1895,35 @@ FSkillResultData JSONParser::DeserializeSkillResult(const TSharedPtr<FJsonObject
 			SkillResult.appliedEffects = JSONParser::DeserializeAppliedEffects(*EffectsArray);
 		}
 	}
+if (ResultObj->HasField(TEXT("errorCode")))
+{
+ResultObj->TryGetStringField(TEXT("errorCode"), SkillResult.errorCode);
+}
+// combatAoeResult batch: body.aoeResult.targets[] (per-target damage/flags).
+const TSharedPtr<FJsonObject>* AoeObj = nullptr;
+if (ResultObj->TryGetObjectField(TEXT("aoeResult"), AoeObj) && AoeObj && *AoeObj)
+{
+const TArray<TSharedPtr<FJsonValue>>* TargetsArray = nullptr;
+if ((*AoeObj)->TryGetArrayField(TEXT("targets"), TargetsArray) && TargetsArray)
+{
+for (const TSharedPtr<FJsonValue>& V : *TargetsArray)
+{
+TSharedPtr<FJsonObject> O = V->AsObject();
+if (!O.IsValid()) continue;
+FAoeTargetResultData T;
+O->TryGetNumberField(TEXT("targetId"), T.targetId);
+O->TryGetNumberField(TEXT("damage"), T.damage);
+O->TryGetNumberField(TEXT("healing"), T.healing);
+O->TryGetBoolField(TEXT("isCritical"), T.isCritical);
+O->TryGetBoolField(TEXT("isBlocked"), T.isBlocked);
+O->TryGetBoolField(TEXT("isMissed"), T.isMissed);
+O->TryGetBoolField(TEXT("targetDied"), T.targetDied);
+O->TryGetNumberField(TEXT("finalTargetHealth"), T.finalTargetHealth);
+O->TryGetNumberField(TEXT("finalTargetMana"), T.finalTargetMana);
+SkillResult.aoeTargets.Add(MoveTemp(T));
+}
+}
+}
 
 	return SkillResult;
 }
@@ -1831,14 +1933,14 @@ FSkillResultData JSONParser::DeserializeSkillResult(const FString& JsonString)
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
-		return FSkillResultData();
+		{ FSkillResultData FailedRes; FailedRes.success = false; FailedRes.errorCode = JSONParser::ResolveErrorCode(Root); FailedRes.errorReason = FailedRes.errorCode; return FailedRes; }
 
 	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 	if (!Body.IsValid())
-		return FSkillResultData();
+		{ FSkillResultData FailedRes; FailedRes.success = false; FailedRes.errorCode = JSONParser::ResolveErrorCode(Root); FailedRes.errorReason = FailedRes.errorCode; return FailedRes; }
 
 	// Try nested skillResult object first (combatResult / healingResult format)
-	TSharedPtr<FJsonObject> SkillResult = Body->GetObjectField(TEXT("skillResult"));
+	TSharedPtr<FJsonObject> SkillResult; const TSharedPtr<FJsonObject>* SkillResPtr = nullptr; if (Body->TryGetObjectField(TEXT("skillResult"), SkillResPtr) && SkillResPtr) SkillResult = *SkillResPtr;
 	if (SkillResult.IsValid())
 	{
 		return JSONParser::DeserializeSkillResult(SkillResult);
@@ -1848,16 +1950,20 @@ FSkillResultData JSONParser::DeserializeSkillResult(const FString& JsonString)
 	FSkillResultData Result = JSONParser::DeserializeSkillResult(Body);
 
 	// skillExecutionResult wraps success in the header, not in body
-	if (!Body->HasField(TEXT("success")))
-	{
-		TSharedPtr<FJsonObject> Header = Root->GetObjectField(TEXT("header"));
-		if (Header.IsValid() && Header->HasField(TEXT("status")))
-		{
-			Result.success = Header->GetStringField(TEXT("status")).Equals(TEXT("success"), ESearchCase::IgnoreCase);
-		}
-	}
+if (!Body->HasField(TEXT("success")))
+{
+TSharedPtr<FJsonObject> Header = Root->GetObjectField(TEXT("header"));
+if (Header.IsValid() && Header->HasField(TEXT("status")))
+{
+Result.success = Header->GetStringField(TEXT("status")).Equals(TEXT("success"), ESearchCase::IgnoreCase);
+}
+}
+if (Result.errorCode.IsEmpty())
+{
+Result.errorCode = JSONParser::ResolveErrorCode(Root);
+}
 
-	return Result;
+return Result;
 }
 
 // Deserialize network header with time sync data

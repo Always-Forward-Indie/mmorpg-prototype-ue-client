@@ -11,9 +11,9 @@ namespace
     {
         static const TArray<FString> Slugs = {
             TEXT("head"), TEXT("chest"), TEXT("legs"),      TEXT("feet"),
-            TEXT("hands"), TEXT("waist"), TEXT("necklace"),
-            TEXT("ring_1"), TEXT("ring_2"),
-            TEXT("main_hand"), TEXT("off_hand"), TEXT("cloak")
+            TEXT("hands"), TEXT("trinket"), TEXT("neck"),
+            TEXT("ring"), TEXT("ring_2"),
+            TEXT("main_hand"), TEXT("off_hand"), TEXT("two_hand")
         };
         return Slugs;
     }
@@ -27,13 +27,13 @@ FString UEquipmentWidget::GetSlotDisplayName(const FString& Slug)
         { TEXT("legs"),      TEXT("Legs") },
         { TEXT("feet"),      TEXT("Feet") },
         { TEXT("hands"),     TEXT("Hands") },
-        { TEXT("waist"),     TEXT("Waist") },
-        { TEXT("necklace"),  TEXT("Necklace") },
-        { TEXT("ring_1"),    TEXT("Ring 1") },
+        { TEXT("trinket"),    TEXT("Trinket") },
+        { TEXT("neck"),      TEXT("Neck") },
+        { TEXT("ring"),      TEXT("Ring") },
         { TEXT("ring_2"),    TEXT("Ring 2") },
         { TEXT("main_hand"), TEXT("Main Hand") },
         { TEXT("off_hand"),  TEXT("Off Hand") },
-        { TEXT("cloak"),     TEXT("Cloak") },
+        { TEXT("two_hand"),  TEXT("Two Hand") },
     };
     const FString* Found = Names.Find(Slug);
     return Found ? *Found : Slug;
@@ -73,13 +73,13 @@ void UEquipmentWidget::InitializeSlots()
         { TEXT("legs"),      Slot_Legs      },
         { TEXT("feet"),      Slot_Feet      },
         { TEXT("hands"),     Slot_Hands     },
-        { TEXT("waist"),     Slot_Waist     },
-        { TEXT("necklace"),  Slot_Necklace  },
-        { TEXT("ring_1"),    Slot_Ring1     },
+        { TEXT("trinket"),  Slot_Waist     },
+        { TEXT("neck"),      Slot_Necklace  },
+        { TEXT("ring"),      Slot_Ring1     },
         { TEXT("ring_2"),    Slot_Ring2     },
         { TEXT("main_hand"), Slot_MainHand  },
         { TEXT("off_hand"),  Slot_OffHand   },
-        { TEXT("cloak"),     Slot_Cloak     },
+        { TEXT("two_hand"),  Slot_Cloak     },
     };
 
     for (const FString& Slug : GetAllSlotSlugs())
@@ -132,13 +132,13 @@ void UEquipmentWidget::RefreshEquipmentDisplay()
         { TEXT("legs"),      Slot_Legs      },
         { TEXT("feet"),      Slot_Feet      },
         { TEXT("hands"),     Slot_Hands     },
-        { TEXT("waist"),     Slot_Waist     },
-        { TEXT("necklace"),  Slot_Necklace  },
-        { TEXT("ring_1"),    Slot_Ring1     },
+        { TEXT("trinket"),  Slot_Waist     },
+        { TEXT("neck"),      Slot_Necklace  },
+        { TEXT("ring"),      Slot_Ring1     },
         { TEXT("ring_2"),    Slot_Ring2     },
         { TEXT("main_hand"), Slot_MainHand  },
         { TEXT("off_hand"),  Slot_OffHand   },
-        { TEXT("cloak"),     Slot_Cloak     },
+        { TEXT("two_hand"),  Slot_Cloak     },
     };
 
     for (const FString& Slug : GetAllSlotSlugs())
@@ -151,7 +151,14 @@ void UEquipmentWidget::RefreshEquipmentDisplay()
             (*WidgetPtr)->SetSlotData(*SlotData);
         else
             (*WidgetPtr)->ClearSlot();
-    }
+}
+// Legacy second ring: server ships a single "ring" slot. Collapse the Ring2
+// widget unless a legacy "ring_2" entry is actually present in the state.
+if (Slot_Ring2)
+{
+const bool bHasLegacyRing2 = CachedState.slots.Contains(TEXT("ring_2"));
+Slot_Ring2->SetVisibility(bHasLegacyRing2 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+}
 }
 
 void UEquipmentWidget::ToggleEquipment()

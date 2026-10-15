@@ -160,11 +160,58 @@ void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& 
         FText MobName = Loc ? Loc->GetMobDisplayName(MobSlug) : FText::FromString(MobSlug);
         OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Champion appeared!"));
         OutBody  = MobName;
+        const FString TrophySlug = Notification.dataFields.FindRef(TEXT("trophySlug"));
+        const FString TrophyPrice = Notification.dataFields.FindRef(TEXT("trophyPrice"));
+        if (!TrophySlug.IsEmpty())
+        {
+            FString TrophyText = TrophySlug;
+            if (!TrophyPrice.IsEmpty())
+            {
+                TrophyText += FString::Printf(TEXT(" (%s)"), *TrophyPrice);
+            }
+            OutBody = FText::FromString(FString::Printf(TEXT("%s \u2014 Trophy: %s"), *MobName.ToString(), *TrophyText));
+        }
+    }
+    else if (Type == TEXT("champion_spawned_soon"))
+    {
+        FString MobSlugSoon = Notification.dataFields.FindRef(TEXT("mobSlug"));
+        if (MobSlugSoon.IsEmpty()) MobSlugSoon = Notification.dataFields.FindRef(TEXT("slug"));
+        FText MobNameSoon = Loc ? Loc->GetMobDisplayName(MobSlugSoon) : FText::FromString(MobSlugSoon);
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Champion approaching!"));
+        OutBody  = MobNameSoon;
+        const FString TrophySlugSoon = Notification.dataFields.FindRef(TEXT("trophySlug"));
+        const FString TrophyPriceSoon = Notification.dataFields.FindRef(TEXT("trophyPrice"));
+        if (!TrophySlugSoon.IsEmpty())
+        {
+            FString TrophyTextSoon = TrophySlugSoon;
+            if (!TrophyPriceSoon.IsEmpty())
+            {
+                TrophyTextSoon += FString::Printf(TEXT(" (%s)"), *TrophyPriceSoon);
+            }
+            OutBody = FText::FromString(FString::Printf(TEXT("%s \u2014 Trophy: %s"), *MobNameSoon.ToString(), *TrophyTextSoon));
+        }
     }
     else if (Type == TEXT("champion_killed"))
     {
         OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Champion defeated!"));
         OutBody  = FText::GetEmpty();
+    }
+    else if (Type == TEXT("rare_mob_spawned"))
+    {
+        const FString RareSlug = Notification.dataFields.FindRef(TEXT("mobSlug"));
+        FText RareName = Loc ? Loc->GetMobDisplayName(RareSlug) : FText::FromString(RareSlug);
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Rare mob appeared!"));
+        OutBody  = RareName;
+    }
+    else if (Type == TEXT("overweight_started") || Type == TEXT("overweight_ended"))
+    {
+        const bool bStarted = (Type == TEXT("overweight_started"));
+        const FString Carried = Notification.dataFields.FindRef(TEXT("currentWeight"));
+        const FString Limit = Notification.dataFields.FindRef(TEXT("weightLimit"));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(bStarted ? TEXT("Overweight!") : TEXT("Weight OK"));
+        OutBody  = bStarted
+            ? FText::FromString(FString::Printf(TEXT("Carrying %s / %s - movement slowed"), *Carried, *Limit))
+            : FText::GetEmpty();
     }
     // ====================================================================
     // Dialogue action notification types

@@ -291,9 +291,31 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 	}
 
 	// If the data is a response to a get connected players request
-	if (MessageData.eventType == "getConnectedCharacters" && MessageData.status == "success" && ClientData.clientId != 0) {
+	if ((MessageData.eventType == "getConnectedCharacters" || MessageData.eventType == "getConnectedClients") && MessageData.status == "success" && ClientData.clientId != 0) {
 		if (gameInstance && IsValid(gameInstance)) {
-			TArray<FClientDataStruct> ConnectedPlayers = JSONParser::DeserializeCharactersList(Body);
+			const TArray<TSharedPtr<FJsonValue>>* ClientsListEntries = nullptr;
+		const bool bHasClientsList = Body.IsValid() && Body->TryGetArrayField(TEXT("clientsList"), ClientsListEntries) && ClientsListEntries != nullptr;
+		if (bHasClientsList)
+		{
+			// New lightweight format (getConnectedClients): body.clientsList[] = {clientId, characterId, status}.
+			// It carries no character snapshots, so entries are only logged here; full spawns arrive via joinGameCharacter.
+			for (const TSharedPtr<FJsonValue>& ClientValue : *ClientsListEntries)
+			{
+				const TSharedPtr<FJsonObject> ClientObj = ClientValue.IsValid() ? ClientValue->AsObject() : nullptr;
+				if (!ClientObj.IsValid()) continue;
+				int32 ListedClientId = 0;
+				int32 ListedCharacterId = 0;
+				FString ListedStatus;
+				ClientObj->TryGetNumberField(TEXT("clientId"), ListedClientId);
+				ClientObj->TryGetNumberField(TEXT("characterId"), ListedCharacterId);
+				ClientObj->TryGetStringField(TEXT("status"), ListedStatus);
+				if (ListedClientId == 0 || gameInstance->GetCurrentClientID() == ListedClientId) continue;
+				UE_LOG(LogConnection, Log, TEXT("[getConnectedClients] online clientId=%d charId=%d status=%s"), ListedClientId, ListedCharacterId, *ListedStatus);
+			}
+		}
+		else
+		{
+		TArray<FClientDataStruct> ConnectedPlayers = JSONParser::DeserializeCharactersList(Body);
 
 			for (const FClientDataStruct& ConnectedPlayer : ConnectedPlayers) {
 				if (gameInstance->GetCurrentClientID() != ConnectedPlayer.clientId) {
@@ -314,6 +336,7 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 					}
 				}
 			}
+		}
 		}
 		else
 		{

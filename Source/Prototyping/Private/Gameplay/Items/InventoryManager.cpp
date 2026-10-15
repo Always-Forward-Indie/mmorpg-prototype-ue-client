@@ -373,7 +373,7 @@ void UInventoryManager::UpdateLocalInventory(const FCharacterInventoryStruct& Ne
 	for (const FInventoryItemStruct& NewItem : NewInventory.items)
 	{
 		FInventoryItemStruct* OldItem = OldInventory.items.FindByPredicate(
-			[NewItem](const FInventoryItemStruct& Item) { return Item.itemId == NewItem.itemId; });
+			[NewItem](const FInventoryItemStruct& Item) { return (NewItem.id > 0 && Item.id > 0) ? (Item.id == NewItem.id) : (Item.itemId == NewItem.itemId); });
 
 		if (OldItem)
 		{
@@ -403,7 +403,7 @@ void UInventoryManager::UpdateLocalInventory(const FCharacterInventoryStruct& Ne
 	for (const FInventoryItemStruct& OldItem : OldInventory.items)
 	{
 		bool bFoundInNew = NewInventory.items.ContainsByPredicate(
-			[OldItem](const FInventoryItemStruct& Item) { return Item.itemId == OldItem.itemId; });
+			[OldItem](const FInventoryItemStruct& Item) { return (OldItem.id > 0 && Item.id > 0) ? (Item.id == OldItem.id) : (Item.itemId == OldItem.itemId); });
 
 		if (!bFoundInNew)
 		{
@@ -445,7 +445,7 @@ void UInventoryManager::RequestInventoryData(int32 CharacterId)
 	
 	// Add the character ID to the body data
 	TSharedPtr<FJsonValueNumber> CharacterIDValue = MakeShareable(new FJsonValueNumber(CharacterId));
-	BodyData.Add(TEXT("id"), CharacterIDValue);
+	BodyData.Add(TEXT("characterId"), CharacterIDValue);
 	
 	// Use TimeSyncService for automatic clientSendMs with correct server type
 	FString JsonString = JSONParser::SerializeJsonWithTimeSync(TEXT("getPlayerInventory"), HeaderData, BodyData, gameInstance->GetTimeSyncService(), EServerType::ChunkServer);
@@ -574,9 +574,7 @@ void UInventoryManager::SendUseItemRequest(int32 ItemId, int32 Quantity)
 	// Add the item data to the body
 	TSharedPtr<FJsonValueNumber> ItemIDValue = MakeShareable(new FJsonValueNumber(ItemId));
 	BodyData.Add(TEXT("itemId"), ItemIDValue);
-	
-	TSharedPtr<FJsonValueNumber> QuantityValue = MakeShareable(new FJsonValueNumber(Quantity));
-	BodyData.Add(TEXT("quantity"), QuantityValue);
+	// Server always consumes exactly 1 per use — no quantity field.
 	
 	// Use TimeSyncService for automatic clientSendMs with correct server type
 	FString JsonString = JSONParser::SerializeJsonWithTimeSync(TEXT("useItem"), HeaderData, BodyData, gameInstance->GetTimeSyncService(), EServerType::ChunkServer);
@@ -946,9 +944,9 @@ void UInventoryManager::HandleSlotRightClicked(int32 SlotIndex, const FInventory
 
 void UInventoryManager::AddItemToLocalInventory(const FInventoryItemStruct& Item)
 {
-	// Find existing item with same ID
+	// Find existing item by unique instance ID (id); fall back to template itemId only for legacy rows without id
 	FInventoryItemStruct* ExistingItem = CurrentInventory.items.FindByPredicate(
-		[Item](const FInventoryItemStruct& InventoryItem) { return InventoryItem.itemId == Item.itemId; });
+		[Item](const FInventoryItemStruct& InventoryItem) { return (Item.id > 0 && InventoryItem.id > 0) ? (InventoryItem.id == Item.id) : (InventoryItem.itemId == Item.itemId); });
 
 	if (ExistingItem)
 	{

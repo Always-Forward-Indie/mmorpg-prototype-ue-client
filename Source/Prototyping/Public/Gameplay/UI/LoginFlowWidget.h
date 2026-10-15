@@ -240,6 +240,8 @@ protected:
 
 	// Version mismatch handlers
 	UFUNCTION() void OnVersionMismatch(const FString& ErrorCode);
+UFUNCTION() void OnVersionMismatchDetailed(const FString& ErrorCode, const FString& MinClientVersion, const FString& MaxClientVersion, const FString& ServerVersion);
+UFUNCTION() void OnAccountBanned(const FString& ErrorCode, const FString& Reason, const FString& ExpiresAt);
 	UFUNCTION() void OnVersionMismatchQuitClicked();
 	UFUNCTION() void OnVersionMismatchCloseClicked();
 

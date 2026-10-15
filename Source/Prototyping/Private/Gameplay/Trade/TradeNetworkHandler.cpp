@@ -40,7 +40,7 @@ void UTradeNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
 
     static const TArray<FString> HandledEvents = {
         TEXT("tradeInvite"), TEXT("tradeState"),   TEXT("tradeDeclined"),
-        TEXT("tradeCancelled"), TEXT("tradeComplete")
+        TEXT("tradeCancelled"), TEXT("tradeComplete"), TEXT("tradeRequest"), TEXT("tradeAccept"), TEXT("tradeDecline"), TEXT("tradeOfferUpdate"), TEXT("tradeConfirm"), TEXT("tradeCancel")
     };
     if (!HandledEvents.Contains(EventType)) return;
 
@@ -57,6 +57,15 @@ void UTradeNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
     else if (EventType == TEXT("tradeDeclined"))  TradeManager->OnTradeDeclined(ParseTradeDeclined(Body));
     else if (EventType == TEXT("tradeCancelled")) TradeManager->OnTradeCancelled(ParseTradeCancelled(Body));
     else if (EventType == TEXT("tradeComplete"))  TradeManager->OnTradeCompleted(ParseTradeComplete(Body));
+else if (Msg.status.Equals(TEXT("error"), ESearchCase::IgnoreCase))
+{
+// Request-echo errors (e.g. no_pending_invite on tradeAccept): surface as cancel with reason.
+FTradeCancelledData ReqError;
+Body->TryGetStringField(TEXT("sessionId"), ReqError.sessionId);
+ReqError.reason = JSONParser::ResolveErrorCode(Root);
+if (ReqError.reason.IsEmpty()) ReqError.reason = Msg.message;
+TradeManager->OnTradeCancelled(ReqError);
+}
 }
 
 // ---------------------------------------------------------------------------

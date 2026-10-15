@@ -116,9 +116,9 @@ void UAuthenticationManager::FillAuthHeader(TMap<FString, TSharedPtr<FJsonValue>
 	HeaderData.Add("hash",     MakeShareable(new FJsonValueString(gameInstance->GetCurrentClientHash())));
 }
 
-bool UAuthenticationManager::HandleUnauthorized(const FString& Status, const FString& Message)
+bool UAuthenticationManager::HandleUnauthorized(const FString& Status, const FString& Message, const FString& ErrorCode)
 {
-	if (Status == "error" && Message == "Unauthorized")
+	if (Status == "error" && (Message == "Unauthorized" || ErrorCode == "Unauthorized"))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("AuthManager: Session expired (Unauthorized)"));
 		OnSessionExpired.Broadcast();
@@ -372,7 +372,7 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 	FClientDataStruct ClientData   = JSONParser::DeserializeClientData(ReceivedData);
 
 	// ── Global Unauthorized check ────────────────────────────────────────────
-	if (HandleUnauthorized(MessageData.status, MessageData.message))
+	if (HandleUnauthorized(MessageData.status, MessageData.message, MessageData.errorCode))
 	{
 		return;
 	}
@@ -384,10 +384,11 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 	{
 		ClearRequestTimeout(LoginRequestTimeoutHandle);
 
-		if (MessageData.message == TEXT("ERR_VERSION_OUTDATED") || MessageData.message == TEXT("ERR_VERSION_TOO_NEW"))
+		if (MessageData.errorCode == TEXT("ERR_VERSION_OUTDATED") || MessageData.errorCode == TEXT("ERR_VERSION_TOO_NEW"))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Version mismatch: %s"), *MessageData.message);
-			OnVersionMismatch.Broadcast(MessageData.message);
+			UE_LOG(LogTemp, Warning, TEXT("Version mismatch: %s (server=%s min=%s max=%s)"), *MessageData.errorCode, *MessageData.serverVersion, *MessageData.minClientVersion, *MessageData.maxClientVersion);
+			OnVersionMismatch.Broadcast(MessageData.errorCode);
+			OnVersionMismatchDetailed.Broadcast(MessageData.errorCode, MessageData.minClientVersion, MessageData.maxClientVersion, MessageData.serverVersion);
 			return;
 		}
 
@@ -409,8 +410,17 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("Login Error: %s"), *MessageData.message);
-			OnLoginResponse.Broadcast(false, MessageData.message);
+			if (MessageData.errorCode == TEXT("ERR_ACCOUNT_BANNED"))
+			{
+				UE_LOG(LogTemp, Error, TEXT("Account banned: reason=%s expires=%s"), *MessageData.banReason, *MessageData.banExpiresAt);
+				OnAccountBanned.Broadcast(MessageData.errorCode, MessageData.banReason, MessageData.banExpiresAt);
+			}
+			if (MessageData.errorCode == TEXT("ERR_DB"))
+			{
+				UE_LOG(LogTemp, Error, TEXT("Login Error: ERR_DB (transient — advise retry): %s"), *MessageData.message);
+			}
+			UE_LOG(LogTemp, Error, TEXT("Login Error: %s"), *MessageData.errorCode);
+			OnLoginResponse.Broadcast(false, MessageData.errorCode);
 		}
 		return;
 	}
@@ -422,10 +432,11 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 	{
 		ClearRequestTimeout(RegisterRequestTimeoutHandle);
 
-		if (MessageData.message == TEXT("ERR_VERSION_OUTDATED") || MessageData.message == TEXT("ERR_VERSION_TOO_NEW"))
+		if (MessageData.errorCode == TEXT("ERR_VERSION_OUTDATED") || MessageData.errorCode == TEXT("ERR_VERSION_TOO_NEW"))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Version mismatch: %s"), *MessageData.message);
-			OnVersionMismatch.Broadcast(MessageData.message);
+			UE_LOG(LogTemp, Warning, TEXT("Version mismatch: %s (server=%s min=%s max=%s)"), *MessageData.errorCode, *MessageData.serverVersion, *MessageData.minClientVersion, *MessageData.maxClientVersion);
+			OnVersionMismatch.Broadcast(MessageData.errorCode);
+			OnVersionMismatchDetailed.Broadcast(MessageData.errorCode, MessageData.minClientVersion, MessageData.maxClientVersion, MessageData.serverVersion);
 			return;
 		}
 
@@ -447,8 +458,17 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("Registration Error: %s"), *MessageData.message);
-			OnRegisterResponse.Broadcast(false, MessageData.message);
+			if (MessageData.errorCode == TEXT("ERR_ACCOUNT_BANNED"))
+			{
+				UE_LOG(LogTemp, Error, TEXT("Account banned: reason=%s expires=%s"), *MessageData.banReason, *MessageData.banExpiresAt);
+				OnAccountBanned.Broadcast(MessageData.errorCode, MessageData.banReason, MessageData.banExpiresAt);
+			}
+			if (MessageData.errorCode == TEXT("ERR_DB"))
+			{
+				UE_LOG(LogTemp, Error, TEXT("Registration Error: ERR_DB (transient — advise retry): %s"), *MessageData.message);
+			}
+			UE_LOG(LogTemp, Error, TEXT("Registration Error: %s"), *MessageData.errorCode);
+			OnRegisterResponse.Broadcast(false, MessageData.errorCode);
 		}
 		return;
 	}

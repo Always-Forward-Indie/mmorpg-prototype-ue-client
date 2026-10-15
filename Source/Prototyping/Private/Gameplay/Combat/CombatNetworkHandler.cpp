@@ -45,8 +45,8 @@ void UCombatNetworkHandler::ProcessChunkServerData(const FString& ReceivedData)
     LogNetworkEvent("Received", FString::Printf(TEXT("Event: %s, Status: %s"), 
         *MessageData.eventType, *MessageData.status));
 
-    // Only process successful events
-    if (MessageData.status != TEXT("success"))
+    // Only process successful events (combat initiation/result packets always pass: failures carry body.errorCode)
+    if (MessageData.status != TEXT("success") && MessageData.eventType != TEXT("combatInitiation") && MessageData.eventType != TEXT("healingInitiation") && MessageData.eventType != TEXT("buffInitiation") && MessageData.eventType != TEXT("debuffInitiation") && MessageData.eventType != TEXT("skillInitiation") && MessageData.eventType != TEXT("combatResult") && MessageData.eventType != TEXT("healingResult") && MessageData.eventType != TEXT("buffResult") && MessageData.eventType != TEXT("debuffResult") && MessageData.eventType != TEXT("skillResult") && MessageData.eventType != TEXT("skillExecutionResult") && MessageData.eventType != TEXT("combatAoeResult"))
     {
         UE_LOG(LogTemp, Warning, TEXT("CombatNetworkHandler: Received non-success event: %s"), 
             *MessageData.status);
@@ -81,8 +81,26 @@ void UCombatNetworkHandler::HandleSkillInitiation(const FString& JsonData)
     
     if (!SkillData.success)
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatNetworkHandler: Skill initiation failed for skill %s (caster=%d, reason: %s)"), 
-            *SkillData.skillName, SkillData.casterId, *SkillData.errorReason);
+        UE_LOG(LogTemp, Warning, TEXT("CombatNetworkHandler: Skill initiation failed for skill %s (caster=%d, reason: %s, code: %s)"), 
+            *SkillData.skillName, SkillData.casterId, *SkillData.errorReason, *SkillData.errorCode);
+if (CombatSystemManager)
+{
+const FString CcCode = !SkillData.errorCode.IsEmpty() ? SkillData.errorCode : SkillData.errorReason;
+if (CcCode.Contains(TEXT("Stun"), ESearchCase::IgnoreCase) || CcCode.Contains(TEXT("Silence"), ESearchCase::IgnoreCase) || CcCode.Contains(TEXT("Root"), ESearchCase::IgnoreCase))
+{
+// CC rejection: no cast started (no cooldown/animation), but the player must see why.
+// Forward as a failed result so effect handlers render floating text.
+FSkillResultData CcResult;
+CcResult.success = false;
+CcResult.skillName = SkillData.skillName;
+CcResult.skillSlug = SkillData.skillSlug;
+CcResult.casterId = SkillData.casterId;
+CcResult.targetId = SkillData.targetId;
+CcResult.errorReason = CcCode;
+CcResult.errorCode = CcCode;
+CombatSystemManager->ProcessSkillResult(CcResult);
+}
+}
         return;
     }
 
@@ -125,6 +143,22 @@ void UCombatNetworkHandler::HandleSkillResult(const FString& JsonData)
     if (CombatSystemManager)
     {
         CombatSystemManager->ProcessSkillResult(SkillResult);
+// combatAoeResult batch: fan out per-target entries (targets 2..N were dropped before).
+for (const FAoeTargetResultData& AoeTarget : SkillResult.aoeTargets)
+{
+FSkillResultData PerTarget = SkillResult;
+PerTarget.aoeTargets.Empty();
+PerTarget.targetId = AoeTarget.targetId;
+PerTarget.damage = AoeTarget.damage;
+PerTarget.healing = AoeTarget.healing;
+PerTarget.isCritical = AoeTarget.isCritical;
+PerTarget.isBlocked = AoeTarget.isBlocked;
+PerTarget.isMissed = AoeTarget.isMissed;
+PerTarget.targetDied = AoeTarget.targetDied;
+PerTarget.finalTargetHealth = AoeTarget.finalTargetHealth;
+PerTarget.finalTargetMana = AoeTarget.finalTargetMana;
+CombatSystemManager->ProcessSkillResult(PerTarget);
+}
     }
     else
     {

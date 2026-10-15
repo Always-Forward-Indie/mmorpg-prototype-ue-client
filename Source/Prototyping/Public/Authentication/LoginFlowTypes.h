@@ -156,6 +156,12 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnDeleteCharacterResponse, bool,
 /** Fired when server rejects client version (ERR_VERSION_OUTDATED / ERR_VERSION_TOO_NEW). */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnVersionMismatch, const FString&, ErrorCode);
 
+/** Detailed version mismatch: code + accepted range + server version. Old FOnVersionMismatch kept for Blueprint compat. */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnVersionMismatchDetailed, const FString&, ErrorCode, const FString&, MinClientVersion, const FString&, MaxClientVersion, const FString&, ServerVersion);
+
+/** Fired when server rejects login/registration with ERR_ACCOUNT_BANNED. ExpiresAt empty = permanent. */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnAccountBanned, const FString&, ErrorCode, const FString&, Reason, const FString&, ExpiresAt);
+
 /** Fired when server returns Unauthorized — UI must return to login. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSessionExpired);
 

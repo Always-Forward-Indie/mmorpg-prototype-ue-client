@@ -39,7 +39,8 @@ void URepairNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
     const FString& EventType = Msg.eventType;
 
     static const TArray<FString> HandledEvents = {
-        TEXT("openRepairShop"), TEXT("repairShop"), TEXT("repairItemResult"), TEXT("repairAllResult")
+        TEXT("openRepairShop"), TEXT("repairShop"), TEXT("repairItemResult"), TEXT("repairAllResult"),
+        TEXT("repairItem"), TEXT("repairAll")
     };
     if (!HandledEvents.Contains(EventType)) return;
 
@@ -48,11 +49,13 @@ void URepairNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
     if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
 
     FString Message;
-    const TSharedPtr<FJsonObject>* HeaderPtr = nullptr;
-    if (Root->TryGetObjectField(TEXT("header"), HeaderPtr))
-    {
-        (*HeaderPtr)->TryGetStringField(TEXT("message"), Message);
-    }
+    // Centralized error resolution: body.errorCode wins, header.message is the fallback.
+    // Success packets carry neither; normalize those to "success" for the parsers below.
+    // Note: repair errors reuse the request eventType ("repairItem"/"repairAll"/"repairShop").
+    const FString ResolvedCode = JSONParser::ResolveErrorCode(Root);
+    const bool bIsRepairError = Msg.status.Equals(TEXT("error"), ESearchCase::IgnoreCase)
+        || (!ResolvedCode.IsEmpty() && !ResolvedCode.Equals(TEXT("success"), ESearchCase::IgnoreCase));
+    Message = bIsRepairError ? ResolvedCode : TEXT("success");
 
     const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
     if (!Root->TryGetObjectField(TEXT("body"), BodyPtr)) return;
@@ -60,13 +63,19 @@ void URepairNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
 
     if (EventType == TEXT("openRepairShop") || EventType == TEXT("repairShop"))
     {
-        RepairManager->OnRepairShopReceived(ParseRepairShop(Body));
+        FRepairShopData Shop = ParseRepairShop(Body);
+        if (bIsRepairError)
+        {
+            // Open failed (e.g. not_a_blacksmith): surface the code so the UI can show text.
+            Shop.errorCode = ResolvedCode;
+        }
+        RepairManager->OnRepairShopReceived(Shop);
     }
-    else if (EventType == TEXT("repairItemResult"))
+    else if (EventType == TEXT("repairItemResult") || EventType == TEXT("repairItem"))
     {
         RepairManager->OnRepairItemResultReceived(ParseRepairItemResult(Body, Message));
     }
-    else if (EventType == TEXT("repairAllResult"))
+    else if (EventType == TEXT("repairAllResult") || EventType == TEXT("repairAll"))
     {
         RepairManager->OnRepairAllResultReceived(ParseRepairAllResult(Body, Message));
     }
@@ -80,6 +89,7 @@ FRepairShopData URepairNetworkHandler::ParseRepairShop(const TSharedPtr<FJsonObj
 {
     FRepairShopData Shop;
     Body->TryGetNumberField(TEXT("npcId"),        Shop.npcId);
+Body->TryGetStringField(TEXT("npcSlug"), Shop.npcSlug);
     Body->TryGetNumberField(TEXT("goldBalance"),  Shop.goldBalance);
 
     const TArray<TSharedPtr<FJsonValue>>* ItemsArray = nullptr;
@@ -100,6 +110,7 @@ FRepairShopData URepairNetworkHandler::ParseRepairShop(const TSharedPtr<FJsonObj
         Obj->TryGetStringField(TEXT("slug"),     Item.slug);
         Obj->TryGetStringField(TEXT("itemName"), Item.itemName);
         if (Item.slug.IsEmpty()) Item.slug = Item.itemName;
+        if (Item.itemName.IsEmpty()) Item.itemName = Item.slug;
         Obj->TryGetNumberField(TEXT("durabilityMax"),    Item.durabilityMax);
         Obj->TryGetNumberField(TEXT("durabilityCurrent"),Item.durabilityCurrent);
         Obj->TryGetNumberField(TEXT("repairCost"),       Item.repairCost);
@@ -107,41 +118,56 @@ FRepairShopData URepairNetworkHandler::ParseRepairShop(const TSharedPtr<FJsonObj
         Shop.items.Add(Item);
     }
 
-    // Prefer the server-provided total; fall back to sum of item costs
-    if (!Body->TryGetNumberField(TEXT("repairAllCost"), Shop.repairAllCost) || Shop.repairAllCost == 0)
+    // Prefer the server-provided total; fall back to the legacy key, then to sum of item costs
+    if (!Body->TryGetNumberField(TEXT("totalRepairCost"), Shop.totalRepairCost) || Shop.totalRepairCost == 0)
     {
-        Shop.repairAllCost = AccumulatedCost;
+        Body->TryGetNumberField(TEXT("repairAllCost"), Shop.totalRepairCost);
+    }
+    if (Shop.totalRepairCost == 0)
+    {
+        Shop.totalRepairCost = AccumulatedCost;
     }
     // Keep legacy alias in sync
-    Shop.totalRepairCost = Shop.repairAllCost;
+    Shop.repairAllCost = Shop.totalRepairCost;
     return Shop;
 }
 
 FRepairItemResultData URepairNetworkHandler::ParseRepairItemResult(const TSharedPtr<FJsonObject>& Body, const FString& Message) const
 {
     FRepairItemResultData Result;
+    Result.bSuccess = false;
     if (Message != TEXT("success"))
     {
         Result.errorCode = Message;
         return Result;
     }
-    Body->TryGetNumberField(TEXT("inventoryItemId"),  Result.inventoryItemId);
-    Body->TryGetNumberField(TEXT("itemId"),           Result.itemId);
-    Body->TryGetNumberField(TEXT("durabilityMax"),    Result.durabilityMax);
-    Body->TryGetNumberField(TEXT("goldSpent"),        Result.goldSpent);
-    Body->TryGetNumberField(TEXT("newGoldBalance"),   Result.newGoldBalance);
+    Result.bSuccess = true;
+    Body->TryGetNumberField(TEXT("inventoryItemId"),   Result.inventoryItemId);
+    Body->TryGetNumberField(TEXT("itemId"),            Result.itemId);
+    Body->TryGetNumberField(TEXT("durabilityMax"),     Result.durabilityMax);
+    Body->TryGetNumberField(TEXT("durabilityCurrent"), Result.durabilityCurrent);
+    Body->TryGetNumberField(TEXT("goldSpent"),         Result.goldSpent);
+    Body->TryGetNumberField(TEXT("newGoldBalance"),    Result.newGoldBalance);
     return Result;
 }
 
 FRepairAllResultData URepairNetworkHandler::ParseRepairAllResult(const TSharedPtr<FJsonObject>& Body, const FString& Message) const
 {
     FRepairAllResultData Result;
+    Result.bSuccess = false;
     if (Message != TEXT("success"))
     {
         Result.errorCode = Message;
         return Result;
     }
-    Body->TryGetNumberField(TEXT("goldSpent"),      Result.goldSpent);
+    Result.bSuccess = true;
+    Body->TryGetNumberField(TEXT("totalGoldSpent"), Result.totalGoldSpent);
+    if (Result.totalGoldSpent == 0)
+    {
+        Body->TryGetNumberField(TEXT("goldSpent"), Result.totalGoldSpent);
+    }
+    // Keep legacy alias in sync
+    Result.goldSpent = Result.totalGoldSpent;
     Body->TryGetNumberField(TEXT("newGoldBalance"), Result.newGoldBalance);
 
     const TArray<TSharedPtr<FJsonValue>>* ItemsArray = nullptr;
@@ -153,8 +179,17 @@ FRepairAllResultData URepairNetworkHandler::ParseRepairAllResult(const TSharedPt
         if (!Obj.IsValid()) continue;
         FRepairedItemEntry Entry;
         Obj->TryGetNumberField(TEXT("inventoryItemId"), Entry.inventoryItemId);
-        Obj->TryGetNumberField(TEXT("itemId"),          Entry.itemId);
-        Obj->TryGetNumberField(TEXT("durabilityMax"),   Entry.durabilityMax);
+        if (Entry.inventoryItemId == 0)
+        {
+            Obj->TryGetNumberField(TEXT("itemId"), Entry.inventoryItemId);
+        }
+        Obj->TryGetNumberField(TEXT("itemId"), Entry.itemId);
+        Obj->TryGetNumberField(TEXT("durabilityCurrent"), Entry.durabilityCurrent);
+        if (Entry.durabilityCurrent == 0)
+        {
+            Obj->TryGetNumberField(TEXT("durabilityMax"), Entry.durabilityCurrent);
+        }
+        Obj->TryGetNumberField(TEXT("durabilityMax"), Entry.durabilityMax);
         Result.repairedItems.Add(Entry);
     }
     return Result;

@@ -405,6 +405,116 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 		MOB->Destroy();
 		RemovedCorpseUIDs.Add(CorpseUID);
 	}
+	else if (MessageData.eventType == "mobCellLeft")
+	{
+		// Interest v2 evict: server lists UIDs standing in cells we just left.
+		// Over-inclusive by design — unknown UIDs are dropped silently (no crash).
+		if (!worldContext || !worldContext->IsValidLowLevel())
+		{
+			UE_LOG(LogTemp, Error, TEXT("MOBManager: Cannot process mobCellLeft - no valid world context"));
+			return;
+		}
+
+		if (!Body.IsValid())
+		{
+			UE_LOG(LogTemp, Error, TEXT("MOBManager: mobCellLeft packet has no body"));
+			return;
+		}
+
+		const TArray<TSharedPtr<FJsonValue>>* UidsArray = nullptr;
+		if (!Body->TryGetArrayField(TEXT("uids"), UidsArray) || UidsArray == nullptr)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("MOBManager: mobCellLeft - missing uids array"));
+			return;
+		}
+
+		for (const TSharedPtr<FJsonValue>& UidValue : *UidsArray)
+		{
+			int32 EvictUID = 0;
+			if (UidValue.IsValid())
+			{
+				double RawUid = 0.0;
+				if (UidValue->TryGetNumber(RawUid))
+				{
+					EvictUID = static_cast<int32>(RawUid);
+				}
+			}
+			if (EvictUID <= 0) continue;
+
+			TWeakObjectPtr<ABasicMOB>* FoundWeak = MobActorRegistry.Find(EvictUID);
+			if (!FoundWeak || !FoundWeak->IsValid()) continue;
+
+			ABasicMOB* MOB = FoundWeak->Get();
+			if (!IsValid(MOB)) continue;
+
+			UE_LOG(LogTemp, Log, TEXT("MOBManager: mobCellLeft evicting UID %d (%s)"), EvictUID, *MOB->GetMobName());
+
+			ClearLockedTargetOnAllPlayers(MOB);
+
+			MOB->Destroy();
+		}
+	}
+	else if (MessageData.eventType == "world_notification")
+	{
+		// Champion despawn arrives wrapped in world_notification (channel screen_center).
+		// Only the actor removal is handled here; the visual toast is routed by WorldNotificationManager.
+		if (!Body.IsValid()) return;
+
+		FString NotificationType;
+		if (!Body->TryGetStringField(TEXT("notificationType"), NotificationType)) return;
+		if (NotificationType != TEXT("champion_despawned")) return;
+
+		if (!worldContext || !worldContext->IsValidLowLevel()) return;
+
+		int32 ChampionUID = 0;
+		FString ChampionSlug;
+		const TSharedPtr<FJsonObject>* DataPtr = nullptr;
+		if (Body->TryGetObjectField(TEXT("data"), DataPtr) && DataPtr && (*DataPtr).IsValid())
+		{
+			(*DataPtr)->TryGetNumberField(TEXT("uid"), ChampionUID);
+			(*DataPtr)->TryGetStringField(TEXT("mobSlug"), ChampionSlug);
+		}
+
+		ABasicMOB* Target = nullptr;
+		if (ChampionUID > 0)
+		{
+			TWeakObjectPtr<ABasicMOB>* FoundWeak = MobActorRegistry.Find(ChampionUID);
+			if (!FoundWeak || !FoundWeak->IsValid() || !IsValid(FoundWeak->Get()))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("MOBManager: champion_despawned for UID %d - actor not found (already cleaned up?)"), ChampionUID);
+				return;
+			}
+			Target = FoundWeak->Get();
+		}
+		else if (!ChampionSlug.IsEmpty())
+		{
+			for (const auto& Pair : MobActorRegistry)
+			{
+				if (Pair.Value.IsValid() && IsValid(Pair.Value.Get())
+					&& Pair.Value.Get()->GetMOBData().mobSlug == ChampionSlug)
+				{
+					Target = Pair.Value.Get();
+					break;
+				}
+			}
+			if (!Target)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("MOBManager: champion_despawned for slug %s - actor not found (already cleaned up?)"), *ChampionSlug);
+				return;
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("MOBManager: champion_despawned - missing both uid and mobSlug"));
+			return;
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("MOBManager: champion_despawned removing %s (uid=%d)"), *Target->GetMobName(), ChampionUID);
+
+		ClearLockedTargetOnAllPlayers(Target);
+
+		Target->Destroy();
+	}
 }
 
 // Send join game request

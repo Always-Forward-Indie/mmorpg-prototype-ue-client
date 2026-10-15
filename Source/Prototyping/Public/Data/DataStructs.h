@@ -135,6 +135,25 @@ struct FMessageDataStruct
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Packet Service Data Struct")
     FString version = "";
+
+    // Machine-readable error code (body.errorCode mirrors header.message since v0.2.21/v0.2.55).
+    // Always prefer this over message for logic branches.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Packet Service Data Struct")
+    FString errorCode = "";
+
+    // Version-gate hints (login reject body): serverVersion/min/maxClientVersion.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Packet Service Data Struct")
+    FString serverVersion = "";
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Packet Service Data Struct")
+    FString minClientVersion = "";
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Packet Service Data Struct")
+    FString maxClientVersion = "";
+
+    // Ban details (ERR_ACCOUNT_BANNED body): banReason + banExpiresAt ("" = permanent).
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Packet Service Data Struct")
+    FString banReason = "";
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Packet Service Data Struct")
+    FString banExpiresAt = "";
 };
 
 // New unified network header structure for all client-server communication
@@ -459,7 +478,9 @@ struct FSkillInitiationData
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
     FString errorReason;
 
-    FSkillInitiationData()
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Initiation")
+FString errorCode = "";
+FSkillInitiationData()
     {
         skillName = "";
         animationName = "";
@@ -478,16 +499,39 @@ struct FSkillInitiationData
         gcdMs = 0;
         serverTimestamp = 0;
         castStartedAt = 0;
-        errorReason = "";
+        errorReason = ""; errorCode = "";
     }
 };
 
-// Skill Result Data - corresponds to "combatResult" event  
+// Single target entry of a combatAoeResult batch (server docs/api/02).
 USTRUCT(BlueprintType)
+struct FAoeTargetResultData
+{
+GENERATED_BODY()
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AoE Target")
+int32 targetId = 0;
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AoE Target")
+int32 damage = 0;
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AoE Target")
+int32 healing = 0;
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AoE Target")
+bool isCritical = false;
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AoE Target")
+bool isBlocked = false;
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AoE Target")
+bool isMissed = false;
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AoE Target")
+bool targetDied = false;
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AoE Target")
+int32 finalTargetHealth = 0;
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AoE Target")
+int32 finalTargetMana = 0;
+};
+USTRUCT(BlueprintType)
+// Skill Result Data - corresponds to combatResult/combatAoeResult events
 struct FSkillResultData
 {
-    GENERATED_BODY()
-
+GENERATED_BODY()
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
     FString skillName = "";
 
@@ -561,6 +605,12 @@ struct FSkillResultData
     // Applied effects (buffs/debuffs)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
     TArray<FAppliedEffectData> appliedEffects;
+// Batch targets for combatAoeResult (body.aoeResult.targets[]); empty for single-target.
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+TArray<FAoeTargetResultData> aoeTargets;
+// Machine-readable error (body.errorCode); mirrors header message on failures.
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
+FString errorCode = "";
 
     // Final caster mana after skill use
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Result")
@@ -586,7 +636,7 @@ struct FSkillResultData
         targetDied = false;
         success = false;
         serverTimestamp = 0;
-        errorReason = "";
+        errorReason = ""; errorCode = "";
         skillEffectType = ESkillEffectType::None;
         skillSchool = ESkillSchool::None;
         finalCasterMana = 0;
@@ -3005,6 +3055,9 @@ struct PROTOTYPING_API FRepairedItemEntry
     int32 durabilityMax = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repaired Item Entry")
+    int32 durabilityCurrent = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repaired Item Entry")
     int32 goldSpent = 0;
 
     FRepairedItemEntry() {}
@@ -3022,6 +3075,9 @@ struct PROTOTYPING_API FRepairShopData
     FString npcName = "";
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop")
+    FString npcSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop")
     int32 goldBalance = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop")
@@ -3035,6 +3091,10 @@ struct PROTOTYPING_API FRepairShopData
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop")
     TArray<FEquipmentSlotData> repairableItems;
+
+    // Machine-readable open/repair error (e.g. not_a_blacksmith); empty on success.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Shop")
+    FString errorCode = "";
 
     FRepairShopData() {}
 };
@@ -3058,6 +3118,9 @@ struct PROTOTYPING_API FRepairItemResultData
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Item Result")
     int32 durabilityMax = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Item Result")
+    int32 durabilityCurrent = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair Item Result")
     int32 newGoldBalance = 0;

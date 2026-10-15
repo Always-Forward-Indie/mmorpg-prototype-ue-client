@@ -84,6 +84,8 @@ void ULoginFlowWidget::NativeConstruct()
 		AuthManagerRef->OnDeleteCharacterResponse.AddDynamic(this, &ULoginFlowWidget::OnDeleteCharacterResponse);
 		AuthManagerRef->OnSessionExpired.AddDynamic(this, &ULoginFlowWidget::OnSessionExpired);
 		AuthManagerRef->OnVersionMismatch.AddDynamic(this, &ULoginFlowWidget::OnVersionMismatch);
+AuthManagerRef->OnVersionMismatchDetailed.AddDynamic(this, &ULoginFlowWidget::OnVersionMismatchDetailed);
+AuthManagerRef->OnAccountBanned.AddDynamic(this, &ULoginFlowWidget::OnAccountBanned);
 	}
 
 	// ── Initial state ────────────────────────────────────────────────────────
@@ -114,6 +116,8 @@ void ULoginFlowWidget::NativeDestruct()
 		AuthManagerRef->OnDeleteCharacterResponse.RemoveDynamic(this, &ULoginFlowWidget::OnDeleteCharacterResponse);
 		AuthManagerRef->OnSessionExpired.RemoveDynamic(this, &ULoginFlowWidget::OnSessionExpired);
 		AuthManagerRef->OnVersionMismatch.RemoveDynamic(this, &ULoginFlowWidget::OnVersionMismatch);
+AuthManagerRef->OnVersionMismatchDetailed.RemoveDynamic(this, &ULoginFlowWidget::OnVersionMismatchDetailed);
+AuthManagerRef->OnAccountBanned.RemoveDynamic(this, &ULoginFlowWidget::OnAccountBanned);
 	}
 
 	Super::NativeDestruct();
@@ -794,6 +798,54 @@ void ULoginFlowWidget::OnVersionMismatch(const FString& ErrorCode)
 	ActiveVersionMismatchPopup->AddToViewport(100);
 }
 
+void ULoginFlowWidget::OnVersionMismatchDetailed(const FString& ErrorCode, const FString& MinClientVersion, const FString& MaxClientVersion, const FString& ServerVersion)
+{
+SetPanelBusy(ELoginFlowPanel::Login, false);
+SetPanelBusy(ELoginFlowPanel::Registration, false);
+if (!VersionMismatchPopupClass) return;
+if (ActiveVersionMismatchPopup)
+{
+ActiveVersionMismatchPopup->RemoveFromParent();
+ActiveVersionMismatchPopup = nullptr;
+}
+ActiveVersionMismatchPopup = CreateWidget<UMessageBoxPopup>(GetOwningPlayer(), VersionMismatchPopupClass);
+if (!ActiveVersionMismatchPopup)
+{
+// Fall back to the compact popup when the widget class is missing pieces.
+OnVersionMismatch(ErrorCode);
+return;
+}
+const FText DisplayMessage = ResolveErrorMessage(ErrorCode);
+const FText VersionInfo = FText::Format(NSLOCTEXT("LoginFlow", "VersionInfoDetailed", "Your version: {0}\nRequired: {1} - {2}\nServer: {3}"), FText::FromString(GameInstanceRef ? GameInstanceRef->ClientVersion : TEXT("?.?.?")), FText::FromString(MinClientVersion), FText::FromString(MaxClientVersion), FText::FromString(ServerVersion));
+ActiveVersionMismatchPopup->SetupMessageBox(NSLOCTEXT("LoginFlow", "VersionMismatchTitle", "Version Mismatch"), FText::Format(NSLOCTEXT("LoginFlow", "VersionMismatchBody", "{0}\n\n{1}"), DisplayMessage, VersionInfo), NSLOCTEXT("LoginFlow", "Quit", "Quit"), NSLOCTEXT("LoginFlow", "Close", "Close"));
+ActiveVersionMismatchPopup->OnLeftButtonClicked.AddDynamic(this, &ULoginFlowWidget::OnVersionMismatchQuitClicked);
+ActiveVersionMismatchPopup->OnRightButtonClicked.AddDynamic(this, &ULoginFlowWidget::OnVersionMismatchCloseClicked);
+ActiveVersionMismatchPopup->AddToViewport(100);
+}
+void ULoginFlowWidget::OnAccountBanned(const FString& ErrorCode, const FString& Reason, const FString& ExpiresAt)
+{
+SetPanelBusy(ELoginFlowPanel::Login, false);
+SetPanelBusy(ELoginFlowPanel::Registration, false);
+if (!VersionMismatchPopupClass) return;
+if (ActiveVersionMismatchPopup)
+{
+ActiveVersionMismatchPopup->RemoveFromParent();
+ActiveVersionMismatchPopup = nullptr;
+}
+ActiveVersionMismatchPopup = CreateWidget<UMessageBoxPopup>(GetOwningPlayer(), VersionMismatchPopupClass);
+if (!ActiveVersionMismatchPopup) return;
+const FText DisplayMessage = ResolveErrorMessage(ErrorCode);
+FString BanLine = Reason;
+if (!ExpiresAt.IsEmpty())
+{
+BanLine += FString::Printf(TEXT(" (until %s)"), *ExpiresAt);
+}
+const FText BanInfo = FText::FromString(BanLine);
+ActiveVersionMismatchPopup->SetupMessageBox(NSLOCTEXT("LoginFlow", "BannedTitle", "Account Banned"), FText::Format(NSLOCTEXT("LoginFlow", "BannedBody", "{0}\n\n{1}"), DisplayMessage, BanInfo), NSLOCTEXT("LoginFlow", "Quit", "Quit"), NSLOCTEXT("LoginFlow", "Close", "Close"));
+ActiveVersionMismatchPopup->OnLeftButtonClicked.AddDynamic(this, &ULoginFlowWidget::OnVersionMismatchQuitClicked);
+ActiveVersionMismatchPopup->OnRightButtonClicked.AddDynamic(this, &ULoginFlowWidget::OnVersionMismatchCloseClicked);
+ActiveVersionMismatchPopup->AddToViewport(100);
+}
 void ULoginFlowWidget::OnVersionMismatchQuitClicked()
 {
 	if (APlayerController* PC = GetOwningPlayer())
@@ -926,6 +978,30 @@ FText ULoginFlowWidget::ResolveErrorMessage(const FString& ServerMessage) const
 	if (ServerMessage == TEXT("ERR_TIMEOUT"))
 	{
 		return NSLOCTEXT("LoginFlow", "RequestTimeout", "Server did not respond. Please try again.");
+	}
+	if (ServerMessage == TEXT("ERR_VERSION_OUTDATED"))
+	{
+		return NSLOCTEXT("LoginFlow", "VersionOutdated", "Your game version is outdated. Please update to the latest version to continue.");
+	}
+	if (ServerMessage == TEXT("ERR_VERSION_TOO_NEW"))
+	{
+		return NSLOCTEXT("LoginFlow", "VersionTooNew", "Your game version is newer than the server supports. Please wait for a server update or reinstall the current version.");
+	}
+	if (ServerMessage == TEXT("ERR_ACCOUNT_BANNED"))
+	{
+		return NSLOCTEXT("LoginFlow", "AccountBanned", "This account is banned. Please contact support.");
+	}
+	if (ServerMessage == TEXT("ERR_ACCOUNT_LOCKED"))
+	{
+		return NSLOCTEXT("LoginFlow", "AccountLocked", "Account temporarily locked after too many failed logins. Please try again later.");
+	}
+	if (ServerMessage == TEXT("ERR_DB"))
+	{
+		return NSLOCTEXT("LoginFlow", "DatabaseErrorRetry", "Server database is temporarily unavailable. Please retry in a moment.");
+	}
+	if (ServerMessage == TEXT("ERR_INTERNAL"))
+	{
+		return NSLOCTEXT("LoginFlow", "InternalError", "Internal server error. Please try again.");
 	}
 	if (ServerMessage.StartsWith(TEXT("ERR_")))
 	{

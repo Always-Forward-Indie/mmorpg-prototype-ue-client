@@ -1,4 +1,5 @@
 #include "Gameplay/SkillShop/SkillShopManager.h"
+#include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
 #include "Dom/JsonObject.h"
@@ -61,6 +62,21 @@ void USkillShopManager::RequestLearnSkill(int32 NpcId, const FString& SkillSlug)
     Body->SetNumberField(TEXT("npcId"),      NpcId);
     Body->SetStringField(TEXT("skillSlug"),  SkillSlug);
 
+    // Skill levels: first learn is level 1, re-learn requests current+1
+    // (server rejects skips with invalid_level, repeats without progress with already_learned).
+    int32 TargetLevel = 1;
+    if (GameInstance)
+    {
+        if (UPlayerSkillManager* SkillMgr = GameInstance->GetPlayerSkillManager())
+        {
+            if (SkillMgr->HasSkill(SkillSlug))
+            {
+                TargetLevel = SkillMgr->GetSkillData(SkillSlug).networkData.skillLevel + 1;
+            }
+        }
+    }
+    Body->SetNumberField(TEXT("targetLevel"), TargetLevel);
+
     Root->SetObjectField(TEXT("header"), Header);
     Root->SetObjectField(TEXT("body"),   Body);
 
@@ -69,8 +85,8 @@ void USkillShopManager::RequestLearnSkill(int32 NpcId, const FString& SkillSlug)
         TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&Payload);
     FJsonSerializer::Serialize(Root.ToSharedRef(), Writer);
 
-    UE_LOG(LogTemp, Log, TEXT("[SkillShop] >>> requestLearnSkill: npcId=%d skillSlug='%s' "),
-        NpcId, *SkillSlug);
+    UE_LOG(LogTemp, Log, TEXT("[SkillShop] >>> requestLearnSkill: npcId=%d skillSlug='%s' targetLevel=%d"),
+        NpcId, *SkillSlug, TargetLevel);
     UE_LOG(LogTemp, Log, TEXT("[SkillShop] >>> requestLearnSkill payload: %s"), *Payload);
 
     NetworkManager->SendDataToChunkServer(Payload);
@@ -94,8 +110,12 @@ void USkillShopManager::OnSkillLearnedReceived(const FLearnSkillResultData& Resu
     {
         if (Skill.skillSlug.Equals(Result.skillSlug, ESearchCase::IgnoreCase))
         {
-            // Deduct gold cost (server does not send newGoldBalance in skill_learned)
-            CurrentShop.goldBalance = FMath::Max(0, CurrentShop.goldBalance - Skill.goldCost);
+            // Deduct gold cost only on first learn (server does not send newGoldBalance
+            // in skill_learned; book+gold are one-time, level-ups cost SP only).
+            if (!Skill.isLearned)
+            {
+                CurrentShop.goldBalance = FMath::Max(0, CurrentShop.goldBalance - Skill.goldCost);
+            }
             Skill.isLearned = true;
             Skill.canLearn  = false;
             break;

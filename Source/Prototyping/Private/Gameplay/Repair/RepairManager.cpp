@@ -1,9 +1,33 @@
 #include "Gameplay/Repair/RepairManager.h"
+#include "Gameplay/Items/InventoryManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
+
+// Applies the server-confirmed durability to the local inventory snapshot
+// so tooltips/equipment reflect the repair even before the refreshed shop list arrives.
+static void ApplyRepairDurabilityToInventory(UMyGameInstance* GameInstance, int32 InventoryItemId, int32 DurabilityCurrent)
+{
+    if (!GameInstance || InventoryItemId <= 0 || DurabilityCurrent <= 0) return;
+    UInventoryManager* InventoryManager = GameInstance->GetInventoryManager();
+    if (!InventoryManager) return;
+    bool bChanged = false;
+    for (FInventoryItemStruct& Item : InventoryManager->CurrentInventory.items)
+    {
+        if (Item.id == InventoryItemId)
+        {
+            Item.durabilityCurrent = DurabilityCurrent;
+            bChanged = true;
+            break;
+        }
+    }
+    if (bChanged)
+    {
+        InventoryManager->OnInventoryUpdated.Broadcast(InventoryManager->CurrentInventory);
+    }
+}
 
 void URepairManager::Initialize(UNetworkManager* InNetworkManager, UMyGameInstance* InGameInstance)
 {
@@ -126,11 +150,22 @@ void URepairManager::OnRepairShopReceived(const FRepairShopData& ShopData)
 
 void URepairManager::OnRepairItemResultReceived(const FRepairItemResultData& Result)
 {
+    if (Result.errorCode.IsEmpty())
+    {
+        ApplyRepairDurabilityToInventory(GameInstance, Result.inventoryItemId, Result.durabilityCurrent);
+    }
     OnRepairItemResultDelegate.Broadcast(Result);
 }
 
 void URepairManager::OnRepairAllResultReceived(const FRepairAllResultData& Result)
 {
+    if (Result.errorCode.IsEmpty())
+    {
+        for (const FRepairedItemEntry& Entry : Result.repairedItems)
+        {
+            ApplyRepairDurabilityToInventory(GameInstance, Entry.inventoryItemId, Entry.durabilityCurrent);
+        }
+    }
     OnRepairAllResultDelegate.Broadcast(Result);
 }
 

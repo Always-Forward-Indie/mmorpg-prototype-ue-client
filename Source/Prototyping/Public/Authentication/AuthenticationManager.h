@@ -43,7 +43,7 @@ private:
 	void FillAuthHeader(TMap<FString, TSharedPtr<FJsonValue>>& HeaderData) const;
 
 	/** Check for "Unauthorized" and broadcast OnSessionExpired if matched. Returns true if unauthorized. */
-	bool HandleUnauthorized(const FString& Status, const FString& Message);
+	bool HandleUnauthorized(const FString& Status, const FString& Message, const FString& ErrorCode = TEXT(""));
 
 	// ── Request timeout timers ────────────────────────────────────────────────
 
@@ -127,4 +127,10 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Network|Auth")
 	FOnVersionMismatch OnVersionMismatch;
+
+	UPROPERTY(BlueprintAssignable, Category = "Network|Auth")
+	FOnVersionMismatchDetailed OnVersionMismatchDetailed;
+
+	UPROPERTY(BlueprintAssignable, Category = "Network|Auth")
+	FOnAccountBanned OnAccountBanned;
 };

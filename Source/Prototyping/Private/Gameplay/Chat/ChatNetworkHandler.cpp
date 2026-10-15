@@ -76,18 +76,15 @@ FChatMessageStruct UChatNetworkHandler::ParseChatMessage(const TSharedPtr<FJsonO
 {
     FChatMessageStruct Message;
 
-    // Check for a whisper error: body is null but header.message is non-empty
-    const TSharedPtr<FJsonObject>* HeaderPtr;
-    if (Root->TryGetObjectField(TEXT("header"), HeaderPtr))
+    // Whisper errors arrive with header.status=error. New servers put the code in
+    // body.errorCode (body may be null on old servers) — header.message is the fallback.
+    const FString ErrorCode = JSONParser::ResolveErrorCode(Root);
+    if (!ErrorCode.IsEmpty() && !ErrorCode.Equals(TEXT("success"), ESearchCase::IgnoreCase))
     {
-        FString HeaderMessage;
-        if ((*HeaderPtr)->TryGetStringField(TEXT("message"), HeaderMessage) && !HeaderMessage.IsEmpty()
-            && !HeaderMessage.Equals(TEXT("success"), ESearchCase::IgnoreCase))
-        {
-            Message.errorMessage = HeaderMessage;
-            Message.channel      = TEXT("whisper");
-            return Message;
-        }
+        Message.errorMessage = ErrorCode;
+        Message.channel      = TEXT("whisper");
+        Message.bIsError     = true;
+        return Message;
     }
 
     // Normal broadcast

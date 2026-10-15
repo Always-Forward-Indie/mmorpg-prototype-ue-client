@@ -1877,6 +1877,10 @@ void ABasicMOB::Die()
 {
 	if (bHasDied) return;
 	bHasDied = true;
+	// Canonical dead flag (drives GetMOBIsDead/CanBeHarvested/corpse flows).
+	// Must be set here, not only from server packets — offline kills (and any
+	// path that calls Die() directly) would otherwise leave a "living" corpse.
+	MOBData.bIsDead = true;
 	PlaySoundByName("Death");
 
 	// Spawn death VFX if defined in MobDefinitionTable

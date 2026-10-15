@@ -849,6 +849,38 @@ void UMyGameInstance::StartPingLoginServer()
 	}
 }
 
+// Live bot driver (DEV-ONLY): auto-login + join for -bot-live=<scenario>.
+// No-op unless the flag was passed тАФ normal online flow is untouched.
+void UMyGameInstance::MaybeStartLiveBot()
+{
+	if (LiveBotScenario.IsEmpty()) { return; }
+	if (DevModeConfig.bEnabled)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("LiveBot: -bot-live ignored (DevMode is enabled тАФ live runs need the online flow)"));
+		return;
+	}
+	if (!LiveBotScenario.Equals(TEXT("live_patrol_kill"), ESearchCase::IgnoreCase)
+		&& !LiveBotScenario.Equals(TEXT("live_cross_visibility"), ESearchCase::IgnoreCase)
+		&& !LiveBotScenario.Equals(TEXT("live_loot_pickup"), ESearchCase::IgnoreCase)
+		&& !LiveBotScenario.Equals(TEXT("live_death_respawn"), ESearchCase::IgnoreCase))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("LiveBot: unknown scenario '%s' (use live_patrol_kill|live_cross_visibility|live_loot_pickup|live_death_respawn)"), *LiveBotScenario);
+		return;
+	}
+	ULiveBotDriver* Driver = LiveBotDriver;
+	if (Driver && Driver->IsRunning())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("LiveBot: driver already running"));
+		return;
+	}
+	if (!Driver)
+	{
+		Driver = NewObject<ULiveBotDriver>(this);
+		LiveBotDriver = Driver;
+	}
+	Driver->Start(this, LiveBotScenario);
+}
+
 // load LoginLevel
 void UMyGameInstance::LoadLoginLevel()
 {
@@ -1635,6 +1667,13 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 
 		if (DevModeConfig.bEnabled && DevModeDataProvider)
 		{
+			// DevMode boot skips the online login path that normally seeds the
+			// manager world contexts тАФ without this, spawns queue forever.
+			// (InitNetworkingSetup never runs here, so gameInstance is set explicitly.)
+			if (MOBManager && LoadedWorld) { MOBManager->SetWorldContext(LoadedWorld); MOBManager->SetGameInstance(this); }
+			// Phase A bots spawn a stub drop through ItemManager (offline loot
+			// has no server itemDrop) тАФ it needs the same seeding.
+			if (ItemManager && LoadedWorld) { ItemManager->SetWorldContext(LoadedWorld); ItemManager->SetGameInstance(this); }
 			if (DevModeConfig.bSpawnTestMobs && MOBManager)
 			{
 				DevModeDataProvider->PopulateMobs(MOBManager);

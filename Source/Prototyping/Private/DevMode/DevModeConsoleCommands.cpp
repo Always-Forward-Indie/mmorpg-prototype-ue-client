@@ -84,10 +84,56 @@ void UDevModeConsoleCommands::RegisterCommands(UMyGameInstance* InGameInstance)
         }));
 
     Reg(TEXT("devmode.scenario"),
-        TEXT("DevMode: one-shot QA flows. Usage: devmode.scenario <combat|reset>"),
+        TEXT("DevMode: one-shot QA flows. Usage: devmode.scenario <combat|reset|full_sweep|bot_combat_patrol>"),
         FConsoleCommandWithArgsDelegate::CreateLambda([WeakThis](const TArray<FString>& A)
         {
             if (UDevModeConsoleCommands* Cmd = WeakThis.Get()) { Cmd->Cmd_Scenario(A); }
+        }));
+
+    Reg(TEXT("devmode.bot"),
+        TEXT("DevMode: start the L1 action bot. Usage: devmode.bot <combat_patrol|loot_pickup|death_respawn>"),
+        FConsoleCommandWithArgsDelegate::CreateLambda([WeakThis](const TArray<FString>& A)
+        {
+            if (UDevModeConsoleCommands* Cmd = WeakThis.Get())
+            {
+                if (A.Num() < 1
+                    || (!A[0].Equals(TEXT("combat_patrol"), ESearchCase::IgnoreCase)
+                        && !A[0].Equals(TEXT("loot_pickup"), ESearchCase::IgnoreCase)
+                        && !A[0].Equals(TEXT("death_respawn"), ESearchCase::IgnoreCase)))
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.bot <combat_patrol|loot_pickup|death_respawn>"));
+                    return;
+                }
+                Cmd->StartBotBrain(A[0].ToLower());
+            }
+        }));
+
+    Reg(TEXT("devmode.expect"),
+        TEXT("DevMode: assert live state. Usage: devmode.expect <hp|mobs|inv|gold> <eq|ne|gt|lt|ge|le> <Value>"),
+        FConsoleCommandWithArgsDelegate::CreateLambda([WeakThis](const TArray<FString>& A)
+        {
+            if (UDevModeConsoleCommands* Cmd = WeakThis.Get()) { Cmd->Cmd_Expect(A); }
+        }));
+
+    Reg(TEXT("devmode.setmobhp"),
+        TEXT("DevMode: set mob HP (<=0 also runs Die()). Usage: devmode.setmobhp <MobUID> <Value>"),
+        FConsoleCommandWithArgsDelegate::CreateLambda([WeakThis](const TArray<FString>& A)
+        {
+            if (UDevModeConsoleCommands* Cmd = WeakThis.Get()) { Cmd->Cmd_SetMobHP(A); }
+        }));
+
+    Reg(TEXT("devmode.killmob"),
+        TEXT("DevMode: run Die() on a mob. Usage: devmode.killmob [MobUID] (first alive if omitted)"),
+        FConsoleCommandWithArgsDelegate::CreateLambda([WeakThis](const TArray<FString>& A)
+        {
+            if (UDevModeConsoleCommands* Cmd = WeakThis.Get()) { Cmd->Cmd_KillMob(A); }
+        }));
+
+    Reg(TEXT("devmode.clearcorpses"),
+        TEXT("DevMode: destroy all dead mob actors (frees their UID tags for respawn)."),
+        FConsoleCommandWithArgsDelegate::CreateLambda([WeakThis](const TArray<FString>& A)
+        {
+            if (UDevModeConsoleCommands* Cmd = WeakThis.Get()) { Cmd->Cmd_ClearCorpses(A); }
         }));
 
     UE_LOG(LogTemp, Log, TEXT("DevMode: %d console commands registered"), RegisteredCommandNames.Num());
@@ -359,7 +405,7 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
 {
     if (Args.Num() < 1)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.scenario <combat|reset>"));
+        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.scenario <combat|reset|full_sweep|bot_combat_patrol|bot_loot_pickup|bot_death_respawn>"));
         return;
     }
     if (!GameInstance) return;
@@ -403,8 +449,333 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
         }
         UE_LOG(LogTemp, Log, TEXT("devmode.scenario reset: world re-seeded, player at spawn"));
     }
+    else if (Name == TEXT("full_sweep"))
+    {
+        // Golden offline sweep, two phases (see RunSweepPhase1/2).
+        RunSweepPhase1();
+        if (GameInstance)
+        {
+            GameInstance->ScheduleSweepPhase2(1.5f);
+        }
+    }
+    else if (Name == TEXT("bot_combat_patrol")
+        || Name == TEXT("bot_loot_pickup")
+        || Name == TEXT("bot_death_respawn"))
+    {
+        // Auto-run bot names strip the "bot_" prefix (brain scenario names
+        // are loot_pickup / death_respawn / combat_patrol).
+        FString BrainScenario = Name;
+        BrainScenario.RemoveFromStart(TEXT("bot_"));
+        StartBotBrain(BrainScenario);
+    }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("devmode.scenario: unknown '%s' (use combat|reset)"), *Args[0]);
+        UE_LOG(LogTemp, Warning, TEXT("devmode.scenario: unknown '%s' (use combat|reset|full_sweep|bot_combat_patrol|bot_loot_pickup|bot_death_respawn)"), *Args[0]);
     }
+}
+
+void UDevModeConsoleCommands::StartBotBrain(const FString& ScenarioName) const
+{
+    if (!GameInstance) return;
+    if (GameInstance->DevModeBotBrain && GameInstance->DevModeBotBrain->IsRunning())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("devmode.bot: brain already running"));
+        return;
+    }
+    if (!GameInstance->DevModeBotBrain)
+    {
+        GameInstance->DevModeBotBrain = NewObject<UDevModeBotBrain>(GameInstance);
+    }
+    UDevModeBotBrain* Brain = GameInstance->DevModeBotBrain;
+    // Reset to offline defaults, then apply the scenario profile. One brain,
+    // different flags тАФ same rule as the live driver below.
+    Brain->ScenarioName = ScenarioName;
+    Brain->TombstonePrefix = TEXT("DEVMODE_BOT");
+    Brain->bTeleportToSpawn = true;
+    Brain->bStubHits = true;
+    Brain->bAutoQuitAtFinish = false;
+    Brain->bDirectMove = false;
+    Brain->bRendezvousMode = false;
+    Brain->bLootPhase = false;
+    Brain->bStubLoot = true;
+    Brain->bDeathPhase = false;
+    Brain->bStubDeath = true;
+    Brain->bPassiveCombat = false;
+    Brain->TargetKills = 2;
+    Brain->GlobalTimeoutSec = 120.0f;
+    if (ScenarioName.Equals(TEXT("loot_pickup"), ESearchCase::IgnoreCase))
+    {
+        Brain->TargetKills = 1;
+        Brain->bLootPhase = true;
+        Brain->bStubLoot = true;
+    }
+    else if (ScenarioName.Equals(TEXT("death_respawn"), ESearchCase::IgnoreCase))
+    {
+        Brain->TargetKills = 0;
+        Brain->bDeathPhase = true;
+        Brain->bStubDeath = true;
+    }
+    Brain->Start(GameInstance);
+}
+
+void UDevModeConsoleCommands::RunScenario(const FString& ScenarioName) const
+{
+    TArray<FString> Args = { ScenarioName };
+    Cmd_Scenario(Args);
+}
+
+void UDevModeConsoleCommands::RunSweepPhase1() const
+{
+    // Phase 1: reset to seeded state. Actor Destroy() is deferred to end of
+    // frame, so nothing is asserted here тАФ phase 2 runs after cleanup.
+    SweepFailures = 0;
+    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_SWEEP_BEGIN full_sweep"));
+    TArray<FString> NoArgs;
+    Cmd_ReloadMobs(NoArgs);
+    Cmd_ReloadInventory(NoArgs);
+    if (GameInstance && GameInstance->Player)
+    {
+        GameInstance->Player->SetActorLocation(FVector(0.0f, 0.0f, 90.0f));
+        SnapPlayerToGround();
+    }
+    SweepShot(TEXT("phase1-seeded"));
+}
+
+void UDevModeConsoleCommands::RunSweepPhase2() const
+{
+    // Phase 2: the phase-1 destroyed actors are gone, the world matches dev_*.json.
+    // Kills two mobs by explicit UID (mobUniqueID from dev_mobs.json), then
+    // clears the corpses тАФ Destroy() is deferred, so respawns wait for phase 3.
+    TArray<FString> NoArgs;
+    ExpectValue(TEXT("mobs"), TEXT("eq"), 3);
+    ExpectValue(TEXT("inv"), TEXT("ge"), 5);
+
+    TArray<FString> TeleArgs = { TEXT("300"), TEXT("200"), TEXT("90") };
+    Cmd_Teleport(TeleArgs);
+    TArray<FString> KillA = { TEXT("9901") };
+    Cmd_KillMob(KillA);
+    ExpectValue(TEXT("mobs"), TEXT("eq"), 2);
+    TArray<FString> KillB = { TEXT("9902") };
+    Cmd_KillMob(KillB);
+    ExpectValue(TEXT("mobs"), TEXT("eq"), 1);
+    Cmd_ClearCorpses(NoArgs);
+    SweepShot(TEXT("phase2-corpses"));
+
+    if (GameInstance)
+    {
+        GameInstance->ScheduleSweepPhase3(1.5f);
+    }
+}
+
+void UDevModeConsoleCommands::RunSweepPhase3() const
+{
+    // Phase 3: corpses are gone, UID tags are free тАФ respawn and verify.
+    TArray<FString> NoArgs;
+    TArray<FString> SpawnA = { TEXT("1") };
+    Cmd_SpawnMob(SpawnA);
+    TArray<FString> SpawnB = { TEXT("2") };
+    Cmd_SpawnMob(SpawnB);
+    ExpectValue(TEXT("mobs"), TEXT("eq"), 3);
+
+    TArray<FString> LowHP = { TEXT("1") };
+    Cmd_SetPlayerHP(LowHP);
+    ExpectValue(TEXT("hp"), TEXT("eq"), 1);
+    TArray<FString> FullHP = { TEXT("1000") };
+    Cmd_SetPlayerHP(FullHP);
+    ExpectValue(TEXT("hp"), TEXT("eq"), 1000);
+
+    Cmd_ListMobs(NoArgs);
+    SweepShot(TEXT("phase3-result"));
+    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_SWEEP_RESULT %s failures=%d"),
+        SweepFailures == 0 ? TEXT("PASS") : TEXT("FAIL"), SweepFailures);
+}
+
+// ============================================================================
+// devmode.expect <Key> <Op> <Value>  (Keys: hp|mobs|inv|gold; Ops: eq|ne|gt|lt|ge|le)
+// ============================================================================
+void UDevModeConsoleCommands::Cmd_Expect(const TArray<FString>& Args) const
+{
+    if (Args.Num() < 3)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.expect <hp|mobs|inv|gold> <eq|ne|gt|lt|ge|le> <Value>"));
+        return;
+    }
+    ExpectValue(Args[0].ToLower(), Args[1].ToLower(), FCString::Atoi(*Args[2]));
+}
+
+void UDevModeConsoleCommands::ExpectValue(const FString& Key, const FString& Op, int32 Expected) const
+{
+    int32 Actual = -1;
+    UWorld* World = GameInstance ? GameInstance->GetWorld() : nullptr;
+
+    if (Key == TEXT("hp"))
+    {
+        if (GameInstance && GameInstance->Player)
+        {
+            Actual = GameInstance->Player->GetPlayerCurrentHPPoints();
+        }
+    }
+    else if (Key == TEXT("mobs"))
+    {
+        if (World)
+        {
+            Actual = 0;
+            for (TActorIterator<ABasicMOB> It(World); It; ++It)
+            {
+                if (!(*It)->GetMOBIsDead())
+                {
+                    ++Actual;
+                }
+            }
+        }
+    }
+    else if (Key == TEXT("inv"))
+    {
+        if (GameInstance && GameInstance->InventoryManager)
+        {
+            Actual = GameInstance->InventoryManager->GetInventory().items.Num();
+        }
+    }
+    else if (Key == TEXT("gold"))
+    {
+        if (GameInstance && GameInstance->InventoryManager)
+        {
+            Actual = GameInstance->InventoryManager->GetInventory().gold;
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_ASSERT FAIL unknown-key '%s'"), *Key);
+        ++SweepFailures;
+        return;
+    }
+
+    bool bPass = false;
+    if (Op == TEXT("eq")) bPass = (Actual == Expected);
+    else if (Op == TEXT("ne")) bPass = (Actual != Expected);
+    else if (Op == TEXT("gt")) bPass = (Actual > Expected);
+    else if (Op == TEXT("lt")) bPass = (Actual < Expected);
+    else if (Op == TEXT("ge")) bPass = (Actual >= Expected);
+    else if (Op == TEXT("le")) bPass = (Actual <= Expected);
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_ASSERT FAIL unknown-op '%s'"), *Op);
+        ++SweepFailures;
+        return;
+    }
+
+    if (bPass)
+    {
+        UE_LOG(LogTemp, Log, TEXT("DEVMODE_ASSERT PASS %s %s %d actual=%d"), *Key, *Op, Expected, Actual);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_ASSERT FAIL %s %s %d actual=%d"), *Key, *Op, Expected, Actual);
+        ++SweepFailures;
+    }
+}
+
+// ============================================================================
+// devmode.setmobhp <MobUID> <Value>  (<=0 also runs Die())
+// ============================================================================
+void UDevModeConsoleCommands::Cmd_SetMobHP(const TArray<FString>& Args) const
+{
+    if (Args.Num() < 2)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.setmobhp <MobUID> <Value>"));
+        return;
+    }
+    if (!GameInstance || !GameInstance->MOBManager) return;
+
+    AActor* MobActor = GameInstance->MOBManager->FindMobActor(FCString::Atoi(*Args[0]));
+    ABasicMOB* Mob = Cast<ABasicMOB>(MobActor);
+    if (!Mob)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("devmode.setmobhp: Mob UID=%s not found"), *Args[0]);
+        return;
+    }
+
+    const int32 NewHP = FCString::Atoi(*Args[1]);
+    Mob->SetMOBCurrentHealth(NewHP);
+    if (NewHP <= 0)
+    {
+        Mob->Die();
+    }
+    UE_LOG(LogTemp, Log, TEXT("devmode.setmobhp: Mob UID=%s HP set to %d"), *Args[0], NewHP);
+}
+
+// ============================================================================
+// devmode.killmob [MobUID]  (first alive mob when omitted)
+// ============================================================================
+void UDevModeConsoleCommands::Cmd_KillMob(const TArray<FString>& Args) const
+{
+    if (!GameInstance || !GameInstance->MOBManager) return;
+
+    ABasicMOB* Target = nullptr;
+    if (Args.Num() >= 1)
+    {
+        Target = Cast<ABasicMOB>(GameInstance->MOBManager->FindMobActor(FCString::Atoi(*Args[0])));
+    }
+    else
+    {
+        UWorld* World = GameInstance->GetWorld();
+        if (World)
+        {
+            for (TActorIterator<ABasicMOB> It(World); It; ++It)
+            {
+                if (!(*It)->GetMOBIsDead())
+                {
+                    Target = *It;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!Target)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("devmode.killmob: no living mob found"));
+        return;
+    }
+    Target->Die();
+    UE_LOG(LogTemp, Log, TEXT("devmode.killmob: mob '%s' killed"), *Target->GetMobName());
+}
+
+// ============================================================================
+// devmode.clearcorpses тАФ destroy dead mob actors so their UID tags free up.
+// ============================================================================
+void UDevModeConsoleCommands::Cmd_ClearCorpses(const TArray<FString>& Args) const
+{
+    UWorld* World = GameInstance ? GameInstance->GetWorld() : nullptr;
+    if (!World)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("devmode.clearcorpses: No world"));
+        return;
+    }
+    int32 Removed = 0;
+    TArray<AActor*> ToDestroy;
+    for (TActorIterator<ABasicMOB> It(World); It; ++It)
+    {
+        if ((*It)->GetMOBIsDead())
+        {
+            ToDestroy.Add(*It);
+        }
+    }
+    for (AActor* A : ToDestroy)
+    {
+        A->Destroy();
+        ++Removed;
+    }
+    UE_LOG(LogTemp, Log, TEXT("devmode.clearcorpses: destroyed %d corpses"), Removed);
+}
+
+void UDevModeConsoleCommands::SweepShot(const FString& Tag) const
+{
+    // Screenshots only make sense with a renderer; nightly nullrhi runs skip them.
+    if (!FParse::Param(FCommandLine::Get(), TEXT("devmode-shots")))
+    {
+        return;
+    }
+    FScreenshotRequest::RequestScreenshot(FString::Printf(TEXT("DevSweep_%s"), *Tag), true, true);
+    UE_LOG(LogTemp, Log, TEXT("DEVMODE_SWEEP_SHOT %s"), *Tag);
 }

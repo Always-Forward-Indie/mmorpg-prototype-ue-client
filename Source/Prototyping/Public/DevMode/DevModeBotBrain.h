@@ -1,0 +1,259 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "UObject/NoExportTypes.h"
+#include "DevModeBotBrain.generated.h"
+
+class UMyGameInstance;
+class ABasicPlayer;
+class ABasicMOB;
+
+// ============================================================================
+// UDevModeBotBrain — L1 offline action bot (no servers).
+//
+// Drives the REAL local player through REAL game code: CharacterMovement
+// steering via AddMovementInput, target lock via SetLockedTarget, the attack
+// loop via OnAttackInput (approach/face/cooldown path). Mob HP is
+// server-authoritative, so offline the killing blow is applied through the
+// same SetMOBCurrentHealth+Die path as devmode.setmobhp — an honest stub of
+// the server hit, logged as BOT_HIT_STUB. Everything else is real.
+//
+// Lifecycle: Start() teleports to spawn and begins patrol; BrainTick runs on
+// the run world's TimerManager (0.1s). Every step has a timeout and there is a
+// global timeout — the bot always ends with DEVMODE_BOT_RESULT PASS/FAIL and
+// quits the client, never hangs CI. Held by a UPROPERTY member on the
+// GameInstance (LoadMap force-collects unreferenced UObjects).
+// Tombstone for log scan: "DEVMODE_BOT_RESULT <scenario> <PASS|FAIL> ...".
+// ============================================================================
+UCLASS()
+class PROTOTYPING_API UDevModeBotBrain : public UObject
+{
+    GENERATED_BODY()
+
+public:
+    // Begins the run. World is passed EXPLICITLY (never GameInstance->
+    // GetWorld() here): across travels the GI world context may be stale
+    // (dead TimerManager = silently dead bot). Pass nullptr only on flows
+    // with no travel after Start (DevMode), where GI->GetWorld() is used.
+    void Start(UMyGameInstance* InGameInstance, UWorld* InWorld = nullptr);
+
+    // Aborts the run (clears timers). Safe to call when not running.
+    void Stop();
+
+    bool IsRunning() const { return bRunning; }
+
+    // ---- Live mode (set before Start; defaults = offline DevMode) ----
+    // Tombstone identity.
+    FString ScenarioName = TEXT("combat_patrol");
+    FString TombstonePrefix = TEXT("DEVMODE_BOT");
+    // Offline: teleport to the dev spawn at start. Live: start where the
+    // character actually spawned (no godmode jumps on a live run).
+    bool bTeleportToSpawn = true;
+    // Offline: mob HP is server-authoritative, so the killing blow is an
+    // honest stub via setmobhp path. Live: wait for the real server hit.
+    bool bStubHits = true;
+    // Quit the client when done (auto-run paths). Manual runs stay in world.
+    bool bAutoQuitAtFinish = false;
+    // Live only: give up waiting for a real server-confirmed kill after this.
+    float CombatKillTimeoutSec = 120.0f;
+    // Rendezvous mode (live_cross_visibility): after the waypoint leg, walk
+    // to RendezvousPoint and assert a remote player actor is visible instead
+    // of fighting. RendezvousPoint default = starter-area ground verified
+    // walkable (qabot spawn); override before Start if needed.
+    bool bRendezvousMode = false;
+    FVector RendezvousPoint = FVector(20404.0f, -19697.0f, 1546.0f);
+    // Budget for reaching rendezvous + seeing the peer (both walk + spawn
+    // propagation). Fails loudly on expiry, never hangs.
+    float RendezvousTimeoutSec = 120.0f;
+    // Live only: steer with swept direct movement instead of AddMovementInput.
+    // Rationale (measured): on live servers the CharacterMovement input
+    // pipeline barely converts (odometer ~2u/s at MaxWalkSpeed 320, cause
+    // still open), while offline the same calls walk full speed. Swept moves
+    // still test geometry/collision/arrival/combat/server-sync honestly;
+    // CharacterMovement itself is proven offline (odometer 243u) and by
+    // manual play. Locomotion proof = odometer either way.
+    bool bDirectMove = false;
+    // ---- Phase A: loot + death/respawn legs (set before Start) ----
+    // loot_pickup: after TargetKills kills, walk to the last corpse, pick up
+    // the drop and assert inv +1. Offline the drop spawn is stubbed through
+    // the real ItemManager::SpawnDroppedItem path (logged BOT_LOOT_STUB);
+    // live waits for the real server itemDrop and sends a real pickup.
+    bool bLootPhase = false;
+    // Offline: spawn the loot drop locally (no server offline). Live: wait
+    // for the server drop and pick it up for real.
+    bool bStubLoot = true;
+    // death_respawn: prove death (death screen) + respawn (alive + HP + pos).
+    // Offline death/revive are stubbed through the real SetDead(true/false)
+    // path (logged BOT_DEATH_STUB / BOT_RESPAWN_STUB); live waits for real
+    // mob damage and sends a real respawn request.
+    bool bDeathPhase = false;
+    // Offline: apply the killing blow via SetDead(true) (same path the
+    // server-driven death takes). Live: stand down near a mob and wait for
+    // real server damage (no attacks — bPassiveCombat).
+    bool bStubDeath = true;
+    // Live death leg: approach but never attack, let the mob hit back.
+    bool bPassiveCombat = false;
+    // Budgets for the new legs (seconds). Live fights/drops are slow.
+    float LootTimeoutSec = 60.0f;
+    float DeathTimeoutSec = 180.0f;
+    float RespawnTimeoutSec = 60.0f;
+    // Global run budget (seconds). Live runs set this higher (slow real fights).
+    float GlobalTimeoutSec = 120.0f;
+    // Kill budget for the combat legs. Scenario profiles (console + live
+    // driver) set this before Start: 2 patrol, 1 loot, 0 death.
+    int32 TargetKills = 2;
+
+private:
+    enum class EBotStep : uint8
+    {
+        GotoWaypoint,
+        GotoTarget,
+        Combat,
+        AssertKill,
+        GotoRendezvous,
+        AssertVisible,
+        GotoCorpse,
+        LootPickup,
+        ExpectDeath,
+        AssertDead,
+        RespawnWait,
+        RecoverRevive,
+    };
+
+    UFUNCTION()
+    void BrainTick();
+    UFUNCTION()
+    void OnGlobalTimeout();
+    // Nearest living mob actor, or nullptr.
+    ABasicMOB* FindNearestAliveMob() const;
+    // Nearest living mob outside the exclusion set (death leg rotates away
+    // from dummies and unreachable picks).
+    ABasicMOB* FindNearestAliveMobExcluding(const TSet<int32>& ExcludeUIDs) const;
+    // Shared steering: real AddMovementInput toward Dest, odometer accounting
+    // (teleport jumps never count), stuck/teleport fallback. Returns true on
+    // arrival within ArriveRadius. Label names the leg in fallback logs.
+    bool SteerToward(ABasicPlayer* Player, const FVector& Dest, float ArriveRadius, double Now, const TCHAR* Label);
+    // Grounded reposition near Dest for the stuck fallback: traces down at a
+    // few lateral candidates and takes the first with ground (never lands
+    // inside rock). Falls back to raw Dest+100Z if nothing hits.
+    FVector FindTeleportSpot(ABasicPlayer* Player, const FVector& Dest) const;
+    // Logs the tombstone, stops timers, quits the client (auto-run path).
+    void Finish(bool bPass, const FString& Reason);
+    // Local assert in DEVMODE_ASSERT format (same as devmode.expect).
+    void BotAssert(bool bPass, const FString& What, int32 Actual, int32 Expected);
+    // Checkpoint screenshot for watchable runs (-devmode-shots flag only;
+    // headless runs skip). Named DevBot_<scenario>_<tag>.
+    void BotShot(const FString& Tag) const;
+    // Phase A helpers. Stubs go through the same game code as the live path
+    // (spawn/resolve/death/revive) and are logged BOT_*_STUB; everything else
+    // about the leg (movement, asserts, timeouts) is identical in both modes.
+    class ADroppedItemActor* FindNearestDroppedItem(float MaxDistance) const;
+    // Live loot corpse: our victim if its actor still stands, else the
+    // nearest (harvestable or harvested) corpse — we stand on our kill.
+    class ABasicMOB* ResolveCorpseActor() const;
+    bool SpawnStubDrop(ABasicPlayer* Player);
+    void ResolveStubLoot(ABasicPlayer* Player);
+    void ApplyStubDeath(ABasicPlayer* Player);
+    void ApplyStubRevive(ABasicPlayer* Player);
+    int32 CountInventoryItems() const;
+    int32 SumInventoryQuantities() const;
+    bool IsDeathScreenVisible() const;
+
+    UPROPERTY()
+    UMyGameInstance* GameInstance = nullptr;
+
+    // The world this run lives on (timers, iteration). Resolved ONCE at Start:
+    // re-querying GameInstance->GetWorld() every tick is unsafe across travels
+    // (stale context → dead TimerManager = silently dead bot).
+    TWeakObjectPtr<UWorld> BrainWorld;
+
+    FTimerHandle BrainTimerHandle;
+    FTimerHandle GlobalTimeoutHandle;
+
+    EBotStep Step = EBotStep::GotoWaypoint;
+    TWeakObjectPtr<ABasicMOB> TargetMob;
+    FVector RunStartPos = FVector::ZeroVector;
+    // Deterministic locomotion proof: first walk to a waypoint 300u away.
+    // Only physically walked distance counts (teleport fallback jumps never
+    // add to the odometer), so a pass always means real movement.
+    FVector Waypoint = FVector::ZeroVector;
+    FVector OdometerAnchor = FVector::ZeroVector;
+    float Odometer = 0.0f;
+    double LastMoveTime = 0.0;
+    double StepStartTime = 0.0;
+    double CombatStartTime = 0.0;
+    FVector LastChasePos = FVector::ZeroVector;
+    double LastChaseProgressTime = 0.0;
+    int32 Kills = 0;
+    int32 InitialAlive = 0;
+    int32 Failures = 0;
+    bool bRunning = false;
+    bool bAttackStarted = false;
+    // ---- Phase A state ----
+    // Where the last counted kill died (loot leg walks back here).
+    FVector LastKillLocation = FVector::ZeroVector;
+    // Offline revive target (= run spawn). Live respawn point is server-side.
+    FVector RespawnPoint = FVector::ZeroVector;
+    // Inventory baseline for the loot assert (count AND quantity: server
+    // snapshots may merge stacks, so either growing counts as proof).
+    int32 InitialInvCount = 0;
+    int32 InitialInvQty = 0;
+    // Stub drop identity (dev range, never collides with seeded ids).
+    int32 LootDropUID = 9001;
+    int32 LootItemTemplateId = 201;
+    // Live loot: the server drop we are walking to / picking up.
+    TWeakObjectPtr<class ADroppedItemActor> LootDropActor;
+    bool bPickupRequested = false;
+    // Live loot follows the real game flow: harvest the victim's corpse,
+    // inspect its loot, pick it all up (world itemDrop packets on the dev
+    // стенд carry empty item lists — corpse loot is the loot path).
+    int32 CorpseUID = 0;
+    bool bHarvestRequested = false;
+    bool bInspectRequested = false;
+    // Death leg guards (the top-of-tick dead check redirects here).
+    bool bDeathAsserted = false;
+    bool bRespawnRequested = false;
+    // Live death watch: rotate away from killers that never aggro. Baseline
+    // HP + last-progress time; a killer dealing zero damage in
+    // KillerDummySec is excluded and the bot walks to the next one.
+    bool bDeathWatchInit = false;
+    int32 DeathWatchHP = 0;
+    double LastDamageTime = 0.0;
+    // Live death rotation: killers that deal no damage (dummies) or cannot
+    // be reached (server reverts off-pace moves) are excluded by UID and
+    // the bot walks to the next one.
+    TSet<int32> ExcludedKillerUIDs;
+    double ChaseCheckTime = 0.0;
+    float ChaseCheckDist = 0.0f;
+    // Last swept-step collision (live diagnostics for STUCK lines).
+    bool bLastMoveBlocked = false;
+    FString LastBlockingActor;
+    // Live death pull: mobs don't aggro a passive player, so the bot lands
+    // ONE honest hit (real server damage, starts retaliation) and then
+    // stops the loop via StopAutoAttack. The killing blows stay server-side.
+    bool bProvoked = false;
+    double ProvokeTime = 0.0;
+    // Leg budgets measured from leg entry (SteerToward rewrites
+    // StepStartTime on teleport fallback, so legs keep their own clocks).
+    double LootLegStartTime = 0.0;
+    double DeathLegStartTime = 0.0;
+    double RespawnLegStartTime = 0.0;
+    // First tick the player is seen alive after respawn. The HP snapshot
+    // (stats_update) lands a beat AFTER the dead flag clears live — the
+    // HP assert waits a grace period instead of reading stale zero.
+    double ReviveSeenTime = 0.0;
+
+    // Step budgets (seconds). Chasing across the small dev area takes seconds;
+    // anything beyond the budget teleports (logged fallback) or fails.
+    static constexpr float GotoTimeoutSec = 25.0f;
+    static constexpr float StuckTimeoutSec = 5.0f;
+    static constexpr float CombatTimeoutSec = 12.0f;
+    static constexpr float ArrivalFraction = 0.8f;
+    // A live killer that deals no damage for this long is a dummy (wrong
+    // faction, leashed, or geometry-separated) — exclude and move on.
+    static constexpr float KillerDummySec = 45.0f;
+    // A live chase making no distance gain for this long is stuck behind
+    // geometry the server won't let us cross — exclude and move on.
+    static constexpr float ChaseStallSec = 30.0f;
+    static constexpr float ChaseMinGain = 200.0f;
+};

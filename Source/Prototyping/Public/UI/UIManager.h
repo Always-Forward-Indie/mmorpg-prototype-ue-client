@@ -378,6 +378,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void HideDeathScreen();
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	bool IsDeathScreenVisible() const { return bDeathScreenVisible; }
+
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void UpdateMobTargetFrameHP(int32 CurrentHP, int32 MaxHP);
 

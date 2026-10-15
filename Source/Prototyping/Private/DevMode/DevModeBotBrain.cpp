@@ -6,6 +6,8 @@
 #include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Items/DroppedItemActor.h"
 #include "Gameplay/Items/HarvestManager.h"
+#include "Gameplay/Vendor/VendorManager.h"
+#include "Gameplay/Repair/RepairManager.h"
 #include "UI/UIManager.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
@@ -106,6 +108,19 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     bPickupRequested = false;
     bLastMoveBlocked = false;
     LastBlockingActor.Empty();
+    ShopLegStartTime = 0.0;
+    bShopRequestSent = false;
+    bVendorShopOpened = false;
+    bSellRequested = false;
+    bRepairShopRequestSent = false;
+    bRepairShopOpened = false;
+    bRepairRequested = false;
+    SellInstanceId = 0;
+    SellStartQty = 0;
+    GoldBeforeSell = 0;
+    RepairInstanceId = 0;
+    RepairMaxDur = 0;
+    GoldBeforeRepair = 0;
     CorpseUID = 0;
     bHarvestRequested = false;
     bInspectRequested = false;
@@ -117,6 +132,7 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     ExcludedKillerUIDs.Empty();
     ChaseCheckTime = 0.0;
     ChaseCheckDist = 0.0f;
+    ChaseTargetUID = 0;
     bProvoked = false;
     ProvokeTime = 0.0;
     LootLegStartTime = 0.0;
@@ -382,7 +398,9 @@ void UDevModeBotBrain::BrainTick()
         }
         else
         {
-            TargetMob = FindNearestAliveMob();
+            // Exclusion set is death-mode-only in practice (empty for
+            // combat runs) — shared helper keeps both honest.
+            TargetMob = FindNearestAliveMobExcluding(ExcludedKillerUIDs);
             if (!TargetMob.IsValid())
             {
                 Finish(Kills >= TargetKills, Kills >= TargetKills ? TEXT("no-targets-left") : TEXT("target-lost"));
@@ -464,7 +482,13 @@ void UDevModeBotBrain::BrainTick()
         if (SteerToward(Player, Waypoint, 60.0f, Now, TEXT("waypoint")))
         {
             BotAssert(Odometer > 50.0f, TEXT("player-walked"), (int32)Odometer, 50);
-            if (bDeathPhase)
+            if (bVendorPhase)
+            {
+                // Economy run: locomotion proven, walk to the vendor next.
+                Step = EBotStep::VendorWalk;
+                ShopLegStartTime = Now;
+            }
+            else if (bDeathPhase)
             {
                 // No combat in the death scenario: prove locomotion, then die.
                 Step = EBotStep::ExpectDeath;
@@ -576,6 +600,21 @@ void UDevModeBotBrain::BrainTick()
                     return;
                 }
             }
+            if (bStubHarvest)
+            {
+                // Offline: no harvest progress server exists. The completion
+                // is stubbed through the real SetHarvested path (same flag
+                // the server-driven harvest sets) before the stub pickup.
+                if (ABasicMOB* Corpse = ResolveCorpseActor())
+                {
+                    if (!Corpse->HasBeenHarvested())
+                    {
+                        Corpse->SetHarvested(true);
+                        UE_LOG(LogTemp, Warning, TEXT("%s_HARVEST_STUB uid=%d marked harvested (offline progress)"),
+                            *TombstonePrefix, CorpseUID);
+                    }
+                }
+            }
             ResolveStubLoot(Player);
             const int32 Have = CountInventoryItems();
             const int32 HaveQty = SumInventoryQuantities();
@@ -628,9 +667,10 @@ void UDevModeBotBrain::BrainTick()
         {
             CorpseUID = FCString::Atoi(*Corpse->GetMOBUId());
         }
-        // Phase 1: harvest the corpse (server progress round-trip). Already-
-        // harvested corpses skip straight to inspect.
-        if (Corpse->CanBeHarvested())
+        // Phase 1 (harvest_run only): harvest the corpse through the real
+        // progress round-trip (server duration). loot_pickup skips straight
+        // to inspect. Already-harvested corpses skip to inspect in both.
+        if (bHarvestPhase && Corpse->CanBeHarvested())
         {
             if (!bHarvestRequested)
             {
@@ -639,7 +679,7 @@ void UDevModeBotBrain::BrainTick()
                 bHarvestRequested = true;
                 UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT harvest requested on corpse uid=%d"), CorpseUID);
             }
-            if (Now - LootLegStartTime > LootTimeoutSec)
+            if (Now - LootLegStartTime > HarvestTimeoutSec)
             {
                 Finish(false, TEXT("harvest-timeout"));
             }
@@ -933,6 +973,171 @@ void UDevModeBotBrain::BrainTick()
         return;
     }
 
+    if (Step == EBotStep::VendorWalk)
+    {
+        // Honest walk to the vendor (server validates range from its
+        // stored position — teleports would fail the shop open).
+        if (SteerToward(Player, VendorPos, 150.0f, Now, TEXT("vendor")))
+        {
+            Step = EBotStep::VendorSell;
+            ShopLegStartTime = Now;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT at vendor npc=%d, opening shop"), VendorNpcId);
+            BotShot(TEXT("vendor"));
+            return;
+        }
+        if (Now - ShopLegStartTime > ShopTimeoutSec)
+        {
+            Finish(false, TEXT("vendor-unreachable"));
+        }
+        return;
+    }
+
+    if (Step == EBotStep::VendorSell)
+    {
+        UVendorManager* Vend = GameInstance->GetVendorManager();
+        UInventoryManager* Inv = GameInstance->GetInventoryManager();
+        if (!Vend || !Inv)
+        {
+            Finish(false, TEXT("no-vendor"));
+            return;
+        }
+        const int32 CharId = GameInstance->GetCurrentCharacterID();
+        if (!bVendorShopOpened)
+        {
+            if (Vend->GetCurrentShop().npcId == VendorNpcId)
+            {
+                bVendorShopOpened = true;
+                BotAssert(true, TEXT("vendor-shop-open"), VendorNpcId, VendorNpcId);
+                GoldBeforeSell = GetGold();
+                SellInstanceId = FindSellableInstanceId(SellStartQty);
+                if (SellInstanceId <= 0)
+                {
+                    Finish(false, TEXT("no-junk"));
+                    return;
+                }
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT shop open (npc=%d) gold=%d, selling instance=%d qty=%d"),
+                    VendorNpcId, GoldBeforeSell, SellInstanceId, SellStartQty);
+            }
+            else
+            {
+                if (!bShopRequestSent)
+                {
+                    Vend->RequestOpenVendorShop(CharId, VendorNpcId, Player->GetActorLocation());
+                    bShopRequestSent = true;
+                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT vendor shop requested npc=%d"), VendorNpcId);
+                }
+                if (Now - ShopLegStartTime > ShopTimeoutSec)
+                {
+                    Finish(false, TEXT("shop-timeout"));
+                }
+            }
+            return;
+        }
+        if (!bSellRequested)
+        {
+            Vend->RequestSellItem(CharId, VendorNpcId, SellInstanceId, 1, Player->GetActorLocation());
+            bSellRequested = true;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT sell requested instance=%d"), SellInstanceId);
+            return;
+        }
+        // Server pushes the post-sale inventory snapshot (same packet the
+        // shop UI reads) — gold up AND stack down by exactly one.
+        if (GetGold() > GoldBeforeSell && GetQtyByInstance(SellInstanceId) == SellStartQty - 1)
+        {
+            BotAssert(true, TEXT("sell-gold-up"), 1, 1);
+            BotAssert(true, TEXT("sell-qty-down"), 1, 1);
+            BotShot(TEXT("sold"));
+            Step = EBotStep::VendorRepair;
+            ShopLegStartTime = Now;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT sold: gold %d -> %d"), GoldBeforeSell, GetGold());
+            return;
+        }
+        if (Now - ShopLegStartTime > ShopTimeoutSec)
+        {
+            BotAssert(false, TEXT("sell-gold-up"), GetGold(), GoldBeforeSell + 1);
+            Finish(false, TEXT("sell-timeout"));
+        }
+        return;
+    }
+
+    if (Step == EBotStep::VendorRepair)
+    {
+        URepairManager* Rep = GameInstance->GetRepairManager();
+        if (!Rep)
+        {
+            Finish(false, TEXT("no-repair"));
+            return;
+        }
+        const int32 CharId = GameInstance->GetCurrentCharacterID();
+        if (!bRepairShopOpened)
+        {
+            if (Rep->GetCurrentShop().npcId == VendorNpcId)
+            {
+                bRepairShopOpened = true;
+                BotAssert(true, TEXT("repair-shop-open"), VendorNpcId, VendorNpcId);
+                GoldBeforeRepair = GetGold();
+                RepairInstanceId = 0;
+                for (const FRepairShopItemData& Item : Rep->GetCurrentShop().items)
+                {
+                    if (Item.durabilityMax > 0 && Item.durabilityCurrent < Item.durabilityMax && Item.repairCost > 0)
+                    {
+                        RepairInstanceId = Item.inventoryItemId;
+                        RepairMaxDur = Item.durabilityMax;
+                        break;
+                    }
+                }
+                if (RepairInstanceId <= 0)
+                {
+                    Finish(false, TEXT("no-damaged"));
+                    return;
+                }
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT repair shop open, target instance=%d maxdur=%d gold=%d"),
+                    RepairInstanceId, RepairMaxDur, GoldBeforeRepair);
+            }
+            else
+            {
+                if (!bRepairShopRequestSent)
+                {
+                    Rep->RequestOpenRepairShop(CharId, VendorNpcId, Player->GetActorLocation());
+                    bRepairShopRequestSent = true;
+                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT repair shop requested npc=%d"), VendorNpcId);
+                }
+                if (Now - ShopLegStartTime > ShopTimeoutSec)
+                {
+                    Finish(false, TEXT("repair-shop-timeout"));
+                }
+            }
+            return;
+        }
+        if (!bRepairRequested)
+        {
+            Rep->RequestRepairItem(CharId, VendorNpcId, RepairInstanceId, Player->GetActorLocation());
+            bRepairRequested = true;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT repair requested instance=%d"), RepairInstanceId);
+            return;
+        }
+        // The repaired row drops OUT of the shop list (only damaged rows
+        // are listed), so durability is read from the server inventory
+        // snapshot + gold must have dropped by the repair cost.
+        const int32 NowDur = GetDurabilityByInstance(RepairInstanceId);
+        if (NowDur == RepairMaxDur && GetGold() < GoldBeforeRepair)
+        {
+            BotAssert(true, TEXT("repair-durability-max"), NowDur, RepairMaxDur);
+            BotAssert(GetGold() < GoldBeforeRepair, TEXT("repair-gold-down"), GetGold(), GoldBeforeRepair);
+            BotShot(TEXT("repaired"));
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT repaired: durability %d, gold %d -> %d"),
+                NowDur, GoldBeforeRepair, GetGold());
+            Finish(Failures == 0, Failures == 0 ? TEXT("vendor-done") : TEXT("assert-failures"));
+            return;
+        }
+        if (Now - ShopLegStartTime > ShopTimeoutSec)
+        {
+            BotAssert(false, TEXT("repair-durability-max"), NowDur, RepairMaxDur);
+            Finish(false, TEXT("repair-timeout"));
+        }
+        return;
+    }
+
     ABasicMOB* Mob = TargetMob.Get();
     // Invariant: live target (repick above guarantees it; AssertKill and
     // GotoWaypoint returned). Defensive recover — never dereference stale.
@@ -949,6 +1154,30 @@ void UDevModeBotBrain::BrainTick()
 
     if (Step == EBotStep::GotoTarget)
     {
+        // Stall sampling (all modes): a chase with no distance gain is
+        // behind geometry the server won't let us cross — exclude the pick
+        // and let the repick above sample the next one.
+        const int32 ChaseUID = FCString::Atoi(*Mob->GetMOBUId());
+        if (ChaseUID != ChaseTargetUID)
+        {
+            ChaseTargetUID = ChaseUID;
+            ChaseCheckTime = Now;
+            ChaseCheckDist = Dist;
+        }
+        else if (Now - ChaseCheckTime > ChaseStallSec)
+        {
+            if (ChaseCheckDist - Dist < ChaseMinGain)
+            {
+                ExcludedKillerUIDs.Add(ChaseUID);
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT chase of '%s' stalled (gain %.0f in %.0fs) — excluding uid=%d"),
+                    *Mob->GetMobName(), ChaseCheckDist - Dist, ChaseStallSec, ChaseUID);
+                TargetMob.Reset();
+                ChaseTargetUID = 0;
+                return;
+            }
+            ChaseCheckTime = Now;
+            ChaseCheckDist = Dist;
+        }
         if (SteerToward(Player, MobAt, Range * ArrivalFraction, Now, *Mob->GetMobName()))
         {
             Player->SetLockedTarget(Mob);
@@ -1266,4 +1495,84 @@ bool UDevModeBotBrain::IsDeathScreenVisible() const
     ABasicPlayer* Player = GameInstance ? GameInstance->Player : nullptr;
     UUIManager* UI = Player ? Player->GetUIManager() : nullptr;
     return UI ? UI->IsDeathScreenVisible() : false;
+}
+
+// ---- Phase B helpers ----
+
+int32 UDevModeBotBrain::GetGold() const
+{
+    if (GameInstance && GameInstance->GetInventoryManager())
+    {
+        return GameInstance->GetInventoryManager()->GetInventory().gold;
+    }
+    return -1;
+}
+
+int32 UDevModeBotBrain::FindSellableInstanceId(int32& OutQty) const
+{
+    OutQty = 0;
+    if (GameInstance && GameInstance->GetInventoryManager())
+    {
+        // Junk = stackable, non-equipped, non-durable, non-quest, non-currency
+        // row. The row survives the sale (qty - 1), so the assert reads qty
+        // exactly. Currency rows (gold_coin, qty == balance) must never be
+        // sold — the server eats the coin without credit (seen live).
+        for (const FInventoryItemStruct& Item : GameInstance->GetInventoryManager()->GetInventory().items)
+        {
+            if (Item.quantity > 1 && !Item.is_equipped && !Item.isDurable && !Item.isQuestItem
+                && !Item.itemTypeSlug.Equals(TEXT("currency"), ESearchCase::IgnoreCase))
+            {
+                OutQty = Item.quantity;
+                return Item.id;
+            }
+        }
+    }
+    return 0;
+}
+
+int32 UDevModeBotBrain::FindDamagedInstanceId(int32& OutMaxDur) const
+{
+    OutMaxDur = 0;
+    if (GameInstance && GameInstance->GetInventoryManager())
+    {
+        for (const FInventoryItemStruct& Item : GameInstance->GetInventoryManager()->GetInventory().items)
+        {
+            if (Item.durabilityMax > 0 && Item.durabilityCurrent < Item.durabilityMax)
+            {
+                OutMaxDur = Item.durabilityMax;
+                return Item.id;
+            }
+        }
+    }
+    return 0;
+}
+
+int32 UDevModeBotBrain::GetQtyByInstance(int32 InstanceId) const
+{
+    if (GameInstance && GameInstance->GetInventoryManager())
+    {
+        for (const FInventoryItemStruct& Item : GameInstance->GetInventoryManager()->GetInventory().items)
+        {
+            if (Item.id == InstanceId)
+            {
+                return Item.quantity;
+            }
+        }
+    }
+    return -1;
+}
+
+int32 UDevModeBotBrain::GetDurabilityByInstance(int32 InstanceId) const
+{
+    if (GameInstance && GameInstance->GetInventoryManager())
+    {
+        for (const FInventoryItemStruct& Item : GameInstance->GetInventoryManager()->GetInventory().items)
+        {
+            if (Item.id == InstanceId)
+            {
+                return Item.durabilityCurrent;
+            }
+        }
+    }
+    return -1;
 }

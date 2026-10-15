@@ -91,7 +91,7 @@ void UDevModeConsoleCommands::RegisterCommands(UMyGameInstance* InGameInstance)
         }));
 
     Reg(TEXT("devmode.bot"),
-        TEXT("DevMode: start the L1 action bot. Usage: devmode.bot <combat_patrol|loot_pickup|death_respawn>"),
+        TEXT("DevMode: start the L1 action bot. Usage: devmode.bot <combat_patrol|loot_pickup|death_respawn|harvest_run>"),
         FConsoleCommandWithArgsDelegate::CreateLambda([WeakThis](const TArray<FString>& A)
         {
             if (UDevModeConsoleCommands* Cmd = WeakThis.Get())
@@ -99,9 +99,10 @@ void UDevModeConsoleCommands::RegisterCommands(UMyGameInstance* InGameInstance)
                 if (A.Num() < 1
                     || (!A[0].Equals(TEXT("combat_patrol"), ESearchCase::IgnoreCase)
                         && !A[0].Equals(TEXT("loot_pickup"), ESearchCase::IgnoreCase)
-                        && !A[0].Equals(TEXT("death_respawn"), ESearchCase::IgnoreCase)))
+                        && !A[0].Equals(TEXT("death_respawn"), ESearchCase::IgnoreCase)
+                        && !A[0].Equals(TEXT("harvest_run"), ESearchCase::IgnoreCase)))
                 {
-                    UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.bot <combat_patrol|loot_pickup|death_respawn>"));
+                    UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.bot <combat_patrol|loot_pickup|death_respawn|harvest_run>"));
                     return;
                 }
                 Cmd->StartBotBrain(A[0].ToLower());
@@ -405,7 +406,7 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
 {
     if (Args.Num() < 1)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.scenario <combat|reset|full_sweep|bot_combat_patrol|bot_loot_pickup|bot_death_respawn>"));
+        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.scenario <combat|reset|full_sweep|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run>"));
         return;
     }
     if (!GameInstance) return;
@@ -460,17 +461,23 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
     }
     else if (Name == TEXT("bot_combat_patrol")
         || Name == TEXT("bot_loot_pickup")
-        || Name == TEXT("bot_death_respawn"))
+        || Name == TEXT("bot_death_respawn")
+        || Name == TEXT("bot_harvest_run"))
     {
         // Auto-run bot names strip the "bot_" prefix (brain scenario names
-        // are loot_pickup / death_respawn / combat_patrol).
+        // are loot_pickup / death_respawn / combat_patrol / harvest_run).
         FString BrainScenario = Name;
         BrainScenario.RemoveFromStart(TEXT("bot_"));
         StartBotBrain(BrainScenario);
     }
+    else if (Name == TEXT("bot_vendor_repair"))
+    {
+        // Economy shops need the server round-trip тАФ live only.
+        UE_LOG(LogTemp, Warning, TEXT("devmode.scenario: bot_vendor_repair is live-only (use -bot-live=live_vendor_repair with dev servers)"));
+    }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("devmode.scenario: unknown '%s' (use combat|reset|full_sweep|bot_combat_patrol|bot_loot_pickup|bot_death_respawn)"), *Args[0]);
+        UE_LOG(LogTemp, Warning, TEXT("devmode.scenario: unknown '%s' (use combat|reset|full_sweep|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run)"), *Args[0]);
     }
 }
 
@@ -501,6 +508,9 @@ void UDevModeConsoleCommands::StartBotBrain(const FString& ScenarioName) const
     Brain->bDeathPhase = false;
     Brain->bStubDeath = true;
     Brain->bPassiveCombat = false;
+    Brain->bHarvestPhase = false;
+    Brain->bStubHarvest = true;
+    Brain->bVendorPhase = false;
     Brain->TargetKills = 2;
     Brain->GlobalTimeoutSec = 120.0f;
     if (ScenarioName.Equals(TEXT("loot_pickup"), ESearchCase::IgnoreCase))
@@ -514,6 +524,14 @@ void UDevModeConsoleCommands::StartBotBrain(const FString& ScenarioName) const
         Brain->TargetKills = 0;
         Brain->bDeathPhase = true;
         Brain->bStubDeath = true;
+    }
+    else if (ScenarioName.Equals(TEXT("harvest_run"), ESearchCase::IgnoreCase))
+    {
+        Brain->TargetKills = 1;
+        Brain->bLootPhase = true;
+        Brain->bStubLoot = true;
+        Brain->bHarvestPhase = true;
+        Brain->bStubHarvest = true;
     }
     Brain->Start(GameInstance);
 }

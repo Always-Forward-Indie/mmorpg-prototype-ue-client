@@ -97,6 +97,22 @@ public:
     float LootTimeoutSec = 60.0f;
     float DeathTimeoutSec = 180.0f;
     float RespawnTimeoutSec = 60.0f;
+    // ---- Phase B: economy (set before Start) ----
+    // harvest_run: after the kill, run the real corpse-harvest progress
+    // (server round-trip with duration) BEFORE inspect/pickup. Offline the
+    // harvest completion is stubbed via the real SetHarvested path
+    // (logged BOT_HARVEST_STUB). live_harvest_run proves the progress bar.
+    bool bHarvestPhase = false;
+    bool bStubHarvest = true;
+    // vendor_repair (LIVE ONLY — no server offline): walk to the vendor,
+    // open the shop, sell one junk stack (+gold), open the repair shop,
+    // repair a damaged durable (durability=max, gold-). Polling-only, no
+    // delegate bindings; inventory re-requested explicitly for determinism.
+    bool bVendorPhase = false;
+    int32 VendorNpcId = 1;
+    FVector VendorPos = FVector(585.0f, -3300.0f, 200.0f);
+    float ShopTimeoutSec = 60.0f;
+    float HarvestTimeoutSec = 90.0f;
     // Global run budget (seconds). Live runs set this higher (slow real fights).
     float GlobalTimeoutSec = 120.0f;
     // Kill budget for the combat legs. Scenario profiles (console + live
@@ -118,6 +134,9 @@ private:
         AssertDead,
         RespawnWait,
         RecoverRevive,
+        VendorWalk,
+        VendorSell,
+        VendorRepair,
     };
 
     UFUNCTION()
@@ -158,6 +177,14 @@ private:
     int32 CountInventoryItems() const;
     int32 SumInventoryQuantities() const;
     bool IsDeathScreenVisible() const;
+    // Phase B helpers (polling-only economy legs).
+    int32 GetGold() const;
+    // First stackable, non-equipped, non-durable, non-quest row (sell junk).
+    int32 FindSellableInstanceId(int32& OutQty) const;
+    // First damaged durable row (repair target).
+    int32 FindDamagedInstanceId(int32& OutMaxDur) const;
+    int32 GetQtyByInstance(int32 InstanceId) const;
+    int32 GetDurabilityByInstance(int32 InstanceId) const;
 
     UPROPERTY()
     UMyGameInstance* GameInstance = nullptr;
@@ -225,9 +252,25 @@ private:
     TSet<int32> ExcludedKillerUIDs;
     double ChaseCheckTime = 0.0;
     float ChaseCheckDist = 0.0f;
+    // Combat chase target the progress baseline belongs to.
+    int32 ChaseTargetUID = 0;
     // Last swept-step collision (live diagnostics for STUCK lines).
     bool bLastMoveBlocked = false;
     FString LastBlockingActor;
+    // ---- Phase B state ----
+    double ShopLegStartTime = 0.0;
+    bool bShopRequestSent = false;
+    bool bVendorShopOpened = false;
+    bool bSellRequested = false;
+    bool bRepairShopRequestSent = false;
+    bool bRepairShopOpened = false;
+    bool bRepairRequested = false;
+    int32 SellInstanceId = 0;
+    int32 SellStartQty = 0;
+    int32 GoldBeforeSell = 0;
+    int32 RepairInstanceId = 0;
+    int32 RepairMaxDur = 0;
+    int32 GoldBeforeRepair = 0;
     // Live death pull: mobs don't aggro a passive player, so the bot lands
     // ONE honest hit (real server damage, starts retaliation) and then
     // stops the loop via StopAutoAttack. The killing blows stay server-side.

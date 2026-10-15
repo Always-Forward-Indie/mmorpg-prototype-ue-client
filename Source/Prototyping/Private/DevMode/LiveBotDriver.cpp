@@ -194,6 +194,9 @@ void ULiveBotDriver::PollTick()
             Brain->bDeathPhase = false;
             Brain->bStubDeath = false;
             Brain->bPassiveCombat = false;
+            Brain->bHarvestPhase = false;
+            Brain->bStubHarvest = false;
+            Brain->bVendorPhase = false;
             if (Scenario.Equals(TEXT("live_loot_pickup"), ESearchCase::IgnoreCase))
             {
                 Brain->TargetKills = 1;
@@ -204,6 +207,17 @@ void ULiveBotDriver::PollTick()
                 Brain->TargetKills = 0;
                 Brain->bDeathPhase = true;
                 Brain->bPassiveCombat = true;
+            }
+            else if (Scenario.Equals(TEXT("live_harvest_run"), ESearchCase::IgnoreCase))
+            {
+                Brain->TargetKills = 1;
+                Brain->bLootPhase = true;
+                Brain->bHarvestPhase = true;
+            }
+            else if (Scenario.Equals(TEXT("live_vendor_repair"), ESearchCase::IgnoreCase))
+            {
+                Brain->TargetKills = 0;
+                Brain->bVendorPhase = true;
             }
             Stop();
             Brain->Start(GameInstance, TrackedWorld);

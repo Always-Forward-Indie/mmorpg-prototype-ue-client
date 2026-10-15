@@ -5,6 +5,7 @@
 #include "DevModeConsoleCommands.generated.h"
 
 class UMyGameInstance;
+class UDevModeBotBrain;
 
 // ============================================================================
 // DevModeConsoleCommands
@@ -26,7 +27,8 @@ class UMyGameInstance;
 //   devmode.bot <combat_patrol|loot_pickup|death_respawn|harvest_run|periphery>      - start the L1 action bot (real movement/combat, see DevModeBotBrain)
 // Assert markers for external log scan: "DEVMODE_ASSERT <PASS|FAIL> ...",
 // sweep tombstones: "DEVMODE_SWEEP_BEGIN <name>", "DEVMODE_SWEEP_RESULT <PASS|FAIL> failures=N",
-// bot tombstones: "DEVMODE_BOT_BEGIN <name>", "DEVMODE_BOT_RESULT <name> <PASS|FAIL> ...".
+// bot tombstones: "DEVMODE_BOT_BEGIN <name>", "DEVMODE_BOT_RESULT <name> <PASS|FAIL> ...",
+// L3 perf marks (soft, log only): "DEVMODE_PERF phase=<sweep-phase> frames=N seconds=F fps=X p95ms=Y".
 // ============================================================================
 UCLASS()
 class PROTOTYPING_API UDevModeConsoleCommands : public UObject
@@ -39,6 +41,21 @@ void RegisterCommands(UMyGameInstance* InGameInstance);
 
 // Remove all registered commands (called from cleanup or GC).
 void UnregisterCommands();
+
+// Scripted entry point for -devmode=<scenario> auto-runs (same path as console).
+void RunScenario(const FString& ScenarioName) const;
+void RunSweepPhase1() const;
+void RunSweepPhase2() const;
+void RunSweepPhase3() const;
+// L4 soak loop (offline churn: sweep kill/respawn/HP cycles + mem log).
+// -devmode=soak [-soak-iters=N] [-soak-period=F]. Manual console call
+// while looping stops the loop.
+void StartSoakLoop() const;
+void RunSoakCycle() const;
+void ScheduleSoakCycle() const;
+// True while more soak cycles are pending (SweepStep3 stays alive instead
+// of auto-quitting). Advances the iteration counter + mem log.
+bool SoakContinue() const;
 
 // Called by GC before the object is destroyed - unregister commands
 // so we never hold dangling IConsoleObject* after the UObject is gone.
@@ -66,14 +83,32 @@ private:
     void SweepShot(const FString& Tag) const;
 
     // L1 action bot (DevModeBotBrain, owned by the GameInstance member so GC
-    // cannot collect it mid-run тАФ LoadMap force-collects unreferenced objects).
+    // cannot collect it mid-run — LoadMap force-collects unreferenced objects).
     void StartBotBrain(const FString& ScenarioName = TEXT("combat_patrol")) const;
 
     // Shared assert core (also used by full_sweep). Logs DEVMODE_ASSERT PASS/FAIL.
     void ExpectValue(const FString& Key, const FString& Op, int32 Expected) const;
+    // Grounded assert for sweep legs (void falls fail loud, never silent).
+    void ExpectGrounded() const;
 
     // Sweep failure counter for the DEVMODE_SWEEP_RESULT tombstone.
     mutable int32 SweepFailures = 0;
+    // L3 perf markers (soft: log only, never fail). The frame-delta sampler
+    // rides the core ticker (world-independent, survives travel); each
+    // sweep phase boundary logs DEVMODE_PERF and restarts the window.
+    void PerfReset() const;
+    void PerfMark(const FString& Phase) const;
+    void PerfStop() const;
+    mutable uint64 PerfFramesStart = 0;
+    mutable double PerfTimeStart = 0.0;
+    mutable TArray<float> PerfSamples;
+    mutable FTSTicker::FDelegateHandle PerfSamplerHandle;
+
+    // L4 soak-loop state (see StartSoakLoop). Mutable: legs run on const paths.
+    mutable bool bSoakLoop = false;
+    mutable int32 SoakIter = 0;
+    mutable int32 SoakMaxIters = 0;
+    mutable float SoakPeriodSec = 5.0f;
 
     // Command names - kept to allow clean unregistration by name
     TArray<FString> RegisteredCommandNames;

@@ -16,6 +16,7 @@
 #include "Engine/World.h"
 #include "HighResScreenshot.h"
 #include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "EngineUtils.h"
 
 // ============================================================================
@@ -87,7 +88,7 @@ void UDevModeConsoleCommands::RegisterCommands(UMyGameInstance* InGameInstance)
         }));
 
     Reg(TEXT("devmode.scenario"),
-        TEXT("DevMode: one-shot QA flows. Usage: devmode.scenario <combat|reset|full_sweep|bot_combat_patrol>"),
+        TEXT("DevMode: one-shot QA flows. Usage: devmode.scenario <combat|reset|full_sweep|soak|bot_combat_patrol>"),
         FConsoleCommandWithArgsDelegate::CreateLambda([WeakThis](const TArray<FString>& A)
         {
             if (UDevModeConsoleCommands* Cmd = WeakThis.Get()) { Cmd->Cmd_Scenario(A); }
@@ -438,7 +439,7 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
 {
     if (Args.Num() < 1)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.scenario <combat|reset|full_sweep|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery>"));
+        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.scenario <combat|reset|full_sweep|soak|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery>"));
         return;
     }
     if (!GameInstance) return;
@@ -491,6 +492,12 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
             GameInstance->ScheduleSweepPhase2(1.5f);
         }
     }
+    else if (Name == TEXT("soak"))
+    {
+        // L4 soak loop: sweep churn cycles + mem log. CLI: -soak-iters=N
+        // (0 = until killed), -soak-period=F (gap seconds between cycles).
+        StartSoakLoop();
+    }
     else if (Name == TEXT("bot_combat_patrol")
         || Name == TEXT("bot_loot_pickup")
         || Name == TEXT("bot_death_respawn")
@@ -511,7 +518,7 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("devmode.scenario: unknown '%s' (use combat|reset|full_sweep|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery)"), *Args[0]);
+        UE_LOG(LogTemp, Warning, TEXT("devmode.scenario: unknown '%s' (use combat|reset|full_sweep|soak|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery)"), *Args[0]);
     }
 }
 
@@ -589,6 +596,7 @@ void UDevModeConsoleCommands::RunSweepPhase1() const
     // Phase 1: reset to seeded state. Actor Destroy() is deferred to end of
     // frame, so nothing is asserted here — phase 2 runs after cleanup.
     SweepFailures = 0;
+    PerfReset();
     UE_LOG(LogTemp, Warning, TEXT("DEVMODE_SWEEP_BEGIN full_sweep"));
     TArray<FString> NoArgs;
     Cmd_ReloadMobs(NoArgs);
@@ -599,11 +607,15 @@ void UDevModeConsoleCommands::RunSweepPhase1() const
         SnapPlayerToGround();
     }
     SweepShot(TEXT("phase1-seeded"));
+    // NOTE: no PerfMark here — reset and mark would land on the same frame
+    // (0 frames / 0.00s window, proven noisy). Real windows are phases 2-3.
 }
 
 void UDevModeConsoleCommands::RunSweepPhase2() const
 {
     // Phase 2: the phase-1 destroyed actors are gone, the world matches dev_*.json.
+    // The phase-1 spawn spot had 1.5s to settle — grounded assert covers it.
+    ExpectGrounded();
     // Kills two mobs by explicit UID (mobUniqueID from dev_mobs.json), then
     // clears the corpses — Destroy() is deferred, so respawns wait for phase 3.
     TArray<FString> NoArgs;
@@ -620,6 +632,7 @@ void UDevModeConsoleCommands::RunSweepPhase2() const
     ExpectValue(TEXT("mobs"), TEXT("eq"), 1);
     Cmd_ClearCorpses(NoArgs);
     SweepShot(TEXT("phase2-corpses"));
+    PerfMark(TEXT("phase2-corpses"));
 
     if (GameInstance)
     {
@@ -630,6 +643,8 @@ void UDevModeConsoleCommands::RunSweepPhase2() const
 void UDevModeConsoleCommands::RunSweepPhase3() const
 {
     // Phase 3: corpses are gone, UID tags are free — respawn and verify.
+    // The phase-2 teleport spot had 1.5s to settle — grounded assert covers it.
+    ExpectGrounded();
     TArray<FString> NoArgs;
     TArray<FString> SpawnA = { TEXT("1") };
     Cmd_SpawnMob(SpawnA);
@@ -646,8 +661,74 @@ void UDevModeConsoleCommands::RunSweepPhase3() const
 
     Cmd_ListMobs(NoArgs);
     SweepShot(TEXT("phase3-result"));
+    PerfMark(TEXT("phase3-result"));
+    PerfStop();
     UE_LOG(LogTemp, Warning, TEXT("DEVMODE_SWEEP_RESULT %s failures=%d"),
         SweepFailures == 0 ? TEXT("PASS") : TEXT("FAIL"), SweepFailures);
+}
+
+void UDevModeConsoleCommands::StartSoakLoop() const
+{
+    // Manual console call while looping stops the loop (clean SOAK_RESULT).
+    if (bSoakLoop)
+    {
+        bSoakLoop = false;
+        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_SOAK_RESULT %s iters=%d"),
+            SweepFailures == 0 ? TEXT("PASS") : TEXT("FAIL"), SoakIter);
+        return;
+    }
+    int32 Iters = 0;
+    float Period = 5.0f;
+    FParse::Value(FCommandLine::Get(), TEXT("soak-iters="), Iters);
+    FParse::Value(FCommandLine::Get(), TEXT("soak-period="), Period);
+    SoakMaxIters = Iters;
+    SoakPeriodSec = (Period > 0.5f) ? Period : 5.0f;
+    SoakIter = 0;
+    SweepFailures = 0;
+    bSoakLoop = true;
+    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_SOAK_BEGIN iters=%d period=%.1fs"),
+        SoakMaxIters, SoakPeriodSec);
+    RunSoakCycle();
+}
+
+void UDevModeConsoleCommands::RunSoakCycle() const
+{
+    if (!bSoakLoop) { return; }
+    // One sweep churn cycle (reset/kill/respawn/HP); phase 3 chains back
+    // here via SweepStep3 -> SoakContinue -> ScheduleSoakCycle.
+    RunSweepPhase1();
+    if (GameInstance)
+    {
+        GameInstance->ScheduleSweepPhase2(1.5f);
+    }
+}
+
+void UDevModeConsoleCommands::ScheduleSoakCycle() const
+{
+    if (GameInstance)
+    {
+        GameInstance->ScheduleSoakCycle(SoakPeriodSec);
+    }
+}
+
+bool UDevModeConsoleCommands::SoakContinue() const
+{
+    if (!bSoakLoop) { return false; }
+    ++SoakIter;
+    // Memory watch: resident + peak (MB). Growth across iters = leak hunt.
+    const FPlatformMemoryStats Mem = FPlatformMemory::GetStats();
+    const double UsedMB = (double)Mem.UsedPhysical / (1024.0 * 1024.0);
+    const double PeakMB = (double)Mem.PeakUsedPhysical / (1024.0 * 1024.0);
+    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_SOAK iter=%d memMB=%.0f peakMB=%.0f"),
+        SoakIter, UsedMB, PeakMB);
+    if (SoakMaxIters > 0 && SoakIter >= SoakMaxIters)
+    {
+        bSoakLoop = false;
+        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_SOAK_RESULT %s iters=%d"),
+            SweepFailures == 0 ? TEXT("PASS") : TEXT("FAIL"), SoakIter);
+        return false;
+    }
+    return true;
 }
 
 // ============================================================================
@@ -827,6 +908,74 @@ void UDevModeConsoleCommands::Cmd_ClearCorpses(const TArray<FString>& Args) cons
         ++Removed;
     }
     UE_LOG(LogTemp, Log, TEXT("devmode.clearcorpses: destroyed %d corpses"), Removed);
+}
+
+void UDevModeConsoleCommands::PerfReset() const
+{
+    // (Re)start the sampling window: core-ticker deltas (cap keeps a long
+    // idle session from growing the buffer) + frame/time anchors.
+    PerfSamples.Reset();
+    PerfFramesStart = GFrameCounter;
+    PerfTimeStart = FPlatformTime::Seconds();
+    FTSTicker::GetCoreTicker().RemoveTicker(PerfSamplerHandle);
+    TWeakObjectPtr<const UDevModeConsoleCommands> WeakThis(this);
+    PerfSamplerHandle = FTSTicker::GetCoreTicker().AddTicker(
+        FTickerDelegate::CreateLambda([WeakThis](float Dt)
+        {
+            const UDevModeConsoleCommands* Self = WeakThis.Get();
+            if (!Self) { return false; }
+            if (Self->PerfSamples.Num() < 7200)
+            {
+                Self->PerfSamples.Add(Dt);
+            }
+            return true;
+        }), 0.0f);
+}
+
+void UDevModeConsoleCommands::PerfMark(const FString& Phase) const
+{
+    const uint64 Frames = (GFrameCounter >= PerfFramesStart) ? (GFrameCounter - PerfFramesStart) : 0;
+    const double Sec = FPlatformTime::Seconds() - PerfTimeStart;
+    const double Fps = (Sec > 0.001 && Frames > 0) ? (double)Frames / Sec : 0.0;
+    // p95 frame time over the window (ms). Sorted copy — windows are small.
+    float P95Ms = 0.0f;
+    if (PerfSamples.Num() > 0)
+    {
+        TArray<float> Sorted = PerfSamples;
+        Sorted.Sort();
+        P95Ms = Sorted[FMath::Clamp(FMath::RoundToInt(Sorted.Num() * 0.95f), 0, Sorted.Num() - 1)] * 1000.0f;
+    }
+    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_PERF phase=%s frames=%llu seconds=%.2f fps=%.1f p95ms=%.1f"),
+        *Phase, Frames, Sec, Fps, P95Ms);
+    // Restart the window for the next phase; the sampler keeps ticking.
+    PerfSamples.Reset();
+    PerfFramesStart = GFrameCounter;
+    PerfTimeStart = FPlatformTime::Seconds();
+}
+
+void UDevModeConsoleCommands::PerfStop() const
+{
+    FTSTicker::GetCoreTicker().RemoveTicker(PerfSamplerHandle);
+    PerfSamplerHandle.Reset();
+}
+
+void UDevModeConsoleCommands::ExpectGrounded() const
+{
+    // Void falls must fail the sweep LOUD (2D asserts would pass mid-air).
+    // Called one phase after each teleport so the drop has time to settle.
+    ABasicPlayer* Player = GameInstance ? GameInstance->Player : nullptr;
+    const UCharacterMovementComponent* MC = Player ? Player->GetCharacterMovement() : nullptr;
+    const bool bGrounded = MC && MC->IsMovingOnGround();
+    if (bGrounded)
+    {
+        UE_LOG(LogTemp, Log, TEXT("DEVMODE_ASSERT PASS grounded eq 1 actual=1"));
+    }
+    else
+    {
+        const FVector At = Player ? Player->GetActorLocation() : FVector::ZeroVector;
+        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_ASSERT FAIL grounded eq 1 actual=0 at (%.0f,%.0f,%.0f)"), At.X, At.Y, At.Z);
+        ++SweepFailures;
+    }
 }
 
 void UDevModeConsoleCommands::SweepShot(const FString& Tag) const

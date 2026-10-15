@@ -71,6 +71,10 @@ FTimerHandle NetworkServersPingTimerHandle; // Timer handle for ping game server
 
 	FTimerHandle GameWorldReadyTimerHandle; // Timer handle for polling game world readiness
 
+	FTimerHandle DevModeSweepTimerHandle; // One-shot delay before -devmode=<scenario> auto-runs
+
+	FTimerHandle DevModeSoakTimerHandle; // Gap between L4 soak cycles
+
 // ClientData
 FClientDataStruct ClientData;
 
@@ -130,8 +134,14 @@ FDateTime ReceiveTimeLoginServer;
 	                                                | ReadyFlag_PlayerSpawned;  // StatsReceived excluded
 	uint8 ReadyFlags = 0;
 
-	// Safety fallback timer: removes loading screen even if some signals never arrive
-	FTimerHandle LoadingScreenSafetyTimerHandle;
+	// Wall-clock moment the safety net was armed (game-world load started).
+	// Logged on hide so slow loads can be measured instead of guessed.
+	double LoadingScreenShownTime = 0.0;
+
+	// Safety fallback timer: removes loading screen even if some signals never arrive.
+	// Runs on the CORE ticker (not the world TimerManager) so it fires even if
+	// the world is paused/not ticking (loading movie, backgrounded window).
+	FTSTicker::FDelegateHandle LoadingScreenSafetyTimerHandle;
 
 	// Number of render-thread frames observed since all ReadyFlags were set.
 	// Counted on the render thread via OnEndFrameRT; removal dispatched back to
@@ -157,6 +167,31 @@ FDateTime ReceiveTimeLoginServer;
 	// and calls RemoveLoadingScreen when the render thread has seen enough frames.
 	FTSTicker::FDelegateHandle GTRemoveTicker;
 
+	// Wall-clock moment the game-world load started (FPlatformTime::Seconds).
+	// Used by the hard watchdog below so the timeout is measured in real time,
+	// not dilated game time (an unfocused window barely ticks).
+	double LoadingScreenWatchdogStartTime = 0.0;
+
+	// Travel measurement: wall-clock + frame counter captured when a level
+	// travel is REQUESTED (TransitionToGameWorld / LoadLoginLevel) and reported
+	// when PostLoadMap arrives. Makes travel crawls (throttled present, RHI
+	// fence waits) visible as numbers instead of "hangs forever".
+	double LoadTravelStartTime = 0.0;
+	uint64 LoadTravelStartFrame = 0;
+
+	// Hard watchdog: unconditional wall-clock removal of the loading screen.
+	// Runs on the CORE ticker (never the world TimerManager) so a throttled
+	// world (window without focus) cannot starve it — it only needs an
+	// occasional game-thread tick to fire. A visible world with pop-in beats
+	// an eternal loading screen.
+	FTSTicker::FDelegateHandle LoadingScreenHardSafetyTickerHandle;
+
+	// Focus keeper: re-asserts OS foreground for our game window while the
+	// game-world loading screen is up. Staggered multi-client launches steal
+	// focus from each other mid-load; the throttled window's timers dilate and
+	// the loading screen hangs until the user clicks it.
+	FTSTicker::FDelegateHandle WindowFocusNudgeTickerHandle;
+
 	// Handle for the FCoreUObjectDelegates::PreLoadMap callback that nulls out
 	// world-dependent pointers before the old world is torn down.
 	FDelegateHandle PreLoadMapDelegateHandle;
@@ -174,6 +209,18 @@ FDateTime ReceiveTimeLoginServer;
 
 	// Begin counting rendered frames; removes loading screen after MinRenderedFramesBeforeHide.
 	void StartFrameCountdown();
+
+	// Brings our game window to the OS foreground (no-op when Slate is down).
+	// Used before the transition and again after the level load completes,
+	// because focus is typically stolen in between (next staggered client).
+	void ForceGameWindowToFront();
+
+	// Arms the focus keeper: while the loading screen is up, periodically
+	// takes foreground back so a throttled (unfocused) window regains full
+	// tick rate. Self-stops once the screen is gone or after 8s. Re-arming
+	// resets the window (RemoveTicker first) — safe to call before the load
+	// and again after it.
+	void StartWindowFocusKeeper();
 
 public:
 	// Client ID of the local player that needs to be spawned once game world is ready
@@ -521,6 +568,39 @@ public:
 	UPROPERTY()
 	class UDevModeConsoleCommands* DevModeConsoleCommands = nullptr;
 
+	// Live bot driver + offline bot brain (UPROPERTY = GC roots; both span
+	// level travels where LoadMap force-collects unreferenced UObjects).
+	UPROPERTY()
+	class ULiveBotDriver* LiveBotDriver = nullptr;
+
+	UPROPERTY()
+	class UDevModeBotBrain* DevModeBotBrain = nullptr;
+
+	// Scenario requested via -devmode=<name> (e.g. -devmode=full_sweep).
+	// Runs once the DevMode world is seeded, then the client quits so the
+	// sweep can gate CI by log scan (DEVMODE_SWEEP_RESULT).
+	FString DevModeAutoScenario;
+	// Live bot scenario via -bot-live=<name> (e.g. -bot-live=live_patrol_kill).
+	// DEV-ONLY test path: auto-login with -botlogin=/-botpass= and drive the
+	// real online flow. Without these flags online flow is unchanged.
+	FString LiveBotScenario;
+	// Starts the live bot driver after the login level is ready (no-op unless
+	// -bot-live= was passed).
+	void MaybeStartLiveBot();
+	// True while a -devmode=<scenario> auto-run is in flight; phase 2 quits
+	// the client when done (manual console runs never quit).
+	bool bDevModeAutoQuit = false;
+	UFUNCTION() void RunDevModeAutoScenario();
+	UFUNCTION() void SweepStep2();
+	UFUNCTION() void SweepStep3();
+	// Schedules RunSweepPhase2 via SweepStep2 after DelaySec (DevMode sweep autograder).
+	void ScheduleSweepPhase2(float DelaySec);
+	// Schedules RunSweepPhase3 via SweepStep3 after DelaySec.
+	void ScheduleSweepPhase3(float DelaySec);
+	// L4 soak: schedules RunSoakCycle via SoakCycleStep after DelaySec.
+	UFUNCTION() void SoakCycleStep();
+	void ScheduleSoakCycle(float DelaySec);
+
 	TMap<int32, FClientDataStruct> ConnectedPlayers;
 
 	UPROPERTY()
@@ -720,9 +800,15 @@ public:
 
 	// Sets up the loading screen via MoviePlayer so it survives world
 	// teardown during OpenLevel.  Must be called BEFORE OpenLevel.
-	// The widget is shown automatically by MoviePlayer during level load
-	// and stays visible until RemoveLoadingScreen() calls Stop().
+	// The movie covers TRAVEL only and auto-exits at load end (it must never
+	// wait for manual stop — that traps the game thread inside LoadMap until
+	// the user clicks). Readiness (gates + flags) is covered by the UMG
+	// overlay (EnsureReadinessOverlay), removed by RemoveLoadingScreen().
 	void SetupMoviePlayerLoadingScreen();
+
+	// Shows the plain-UMG readiness overlay (no-op if already shown). Safe to
+	// call every tick — creation happens once.
+	void EnsureReadinessOverlay();
 
 	// Used in Init() before the first level transition — adds the widget
 	// directly to the viewport since MoviePlayer only shows during OpenLevel.
@@ -758,6 +844,13 @@ public:
 	// TakeWidget() so its Slate representation survives world teardown.
 	UPROPERTY()
 	UUserWidget* LoadingScreenWidget;
+
+	// Plain-UMG overlay covering the READINESS phase (gates + ReadyFlags) after
+	// the MoviePlayer auto-exits at load end. Unlike the movie it never blocks
+	// the game thread, never waits for input/focus, and is removed purely by
+	// RemoveLoadingScreen(). Shown only on the game-world path.
+	UPROPERTY()
+	UUserWidget* LoadingScreenOverlayWidget;
 
 	/** Legacy login widget class (kept for backward compat, prefer LoginFlowWidgetClass). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")

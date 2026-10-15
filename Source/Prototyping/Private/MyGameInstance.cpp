@@ -5,6 +5,7 @@
 #include "ContentStreaming.h"
 #include "DevMode/DevModeDataProvider.h"
 #include "DevMode/DevModeConsoleCommands.h"
+#include "DevMode/LiveBotDriver.h"
 #include "Containers/Ticker.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
 #include "Gameplay/Items/HarvestManager.h"
@@ -144,6 +145,27 @@ void UMyGameInstance::Init()
 	// first level transition (LoadLoginLevel) and survives all subsequent
 	// CleanupWorld / OpenLevel calls.
 	ShowInitialLoadingScreen();
+if (FParse::Param(FCommandLine::Get(), TEXT("devmode")))
+{
+DevModeConfig.bEnabled = true;
+UE_LOG(LogTemp, Warning, TEXT("GameInstance: DevMode force-enabled via -devmode command line (skips login, uses Config/DevMode/*.json)"));
+}
+if (FParse::Value(FCommandLine::Get(), TEXT("devmode="), DevModeAutoScenario) && !DevModeAutoScenario.IsEmpty())
+{
+DevModeConfig.bEnabled = true;
+UE_LOG(LogTemp, Warning, TEXT("GameInstance: DevMode auto-scenario '%s' requested"), *DevModeAutoScenario);
+}
+if (FParse::Value(FCommandLine::Get(), TEXT("bot-live="), LiveBotScenario) && !LiveBotScenario.IsEmpty())
+{
+UE_LOG(LogTemp, Warning, TEXT("GameInstance: live-bot scenario '%s' requested (DEV-ONLY: needs -botlogin= -botpass=, dev servers)"), *LiveBotScenario);
+}
+FString DevModeMapOverride;
+if (FParse::Value(FCommandLine::Get(), TEXT("devmode-map="), DevModeMapOverride) && !DevModeMapOverride.IsEmpty())
+{
+DevModeConfig.bEnabled = true;
+DevModeConfig.LevelOverride = FName(*DevModeMapOverride);
+UE_LOG(LogTemp, Warning, TEXT("GameInstance: DevMode level override '%s'"), *DevModeMapOverride);
+}
 
 	// set the network manager
 	NetworkManager = NewObject<UNetworkManager>(this);
@@ -850,19 +872,19 @@ void UMyGameInstance::StartPingLoginServer()
 }
 
 // Live bot driver (DEV-ONLY): auto-login + join for -bot-live=<scenario>.
-// No-op unless the flag was passed тАФ normal online flow is untouched.
+// No-op unless the flag was passed — normal online flow is untouched.
 void UMyGameInstance::MaybeStartLiveBot()
 {
 	if (LiveBotScenario.IsEmpty()) { return; }
 	if (DevModeConfig.bEnabled)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("LiveBot: -bot-live ignored (DevMode is enabled тАФ live runs need the online flow)"));
+		UE_LOG(LogTemp, Warning, TEXT("LiveBot: -bot-live ignored (DevMode is enabled — live runs need the online flow)"));
 		return;
 	}
 	if (!LiveBotScenario.Equals(TEXT("live_patrol_kill"), ESearchCase::IgnoreCase)
 		&& !LiveBotScenario.Equals(TEXT("live_cross_visibility"), ESearchCase::IgnoreCase)
 		&& !LiveBotScenario.Equals(TEXT("live_loot_pickup"), ESearchCase::IgnoreCase)
-		&& !LiveBotScenario.Equals(TEXT("live_death_respawn"), ESearchCase::IgnoreCase))
+		&& !LiveBotScenario.Equals(TEXT("live_death_respawn"), ESearchCase::IgnoreCase)
 		&& !LiveBotScenario.Equals(TEXT("live_harvest_run"), ESearchCase::IgnoreCase)
 		&& !LiveBotScenario.Equals(TEXT("live_vendor_repair"), ESearchCase::IgnoreCase)
 		&& !LiveBotScenario.Equals(TEXT("live_quest_turnin"), ESearchCase::IgnoreCase)
@@ -914,10 +936,103 @@ void UMyGameInstance::LoadLoginLevel()
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("LoadLoginLevel: Opening %s via OpenLevel"), *LevelBeingLoaded.ToString());
+	// Travel measurement (see TransitionToGameWorld): reported on PostLoadMap.
+	LoadTravelStartTime = FPlatformTime::Seconds();
+	LoadTravelStartFrame = GFrameCounter;
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Travel START: map '%s' (t=%.1fs, frame %llu)"),
+		*LevelBeingLoaded.ToString(), LoadTravelStartTime, LoadTravelStartFrame);
 	// Setup MoviePlayer loading screen before OpenLevel — widget survives CleanupWorld.
 	SetupMoviePlayerLoadingScreen();
+	// Arm the focus keeper before the load: staggered launches steal focus
+	// mid-load and the throttled window crawls (measured ~3-10 fps unfocused).
+	StartWindowFocusKeeper();
 	UGameplayStatics::OpenLevel(GetWorld(), LevelBeingLoaded, true);
 	// PostLoadMapWithWorld → OnPostLoginLevelLoaded will handle initialization
+}
+
+void UMyGameInstance::RunDevModeAutoScenario()
+{
+	if (DevModeAutoScenario.IsEmpty() || !DevModeConsoleCommands)
+	{
+		return;
+	}
+	UE_LOG(LogTemp, Warning, TEXT("GameInstance: running DevMode auto-scenario '%s'"), *DevModeAutoScenario);
+	bDevModeAutoQuit = true;
+	DevModeConsoleCommands->RunScenario(DevModeAutoScenario);
+}
+
+void UMyGameInstance::SweepStep2()
+{
+	if (DevModeConsoleCommands)
+	{
+		DevModeConsoleCommands->RunSweepPhase2();
+	}
+}
+
+void UMyGameInstance::SweepStep3()
+{
+	if (DevModeConsoleCommands)
+	{
+		DevModeConsoleCommands->RunSweepPhase3();
+		// L4 soak loop: more cycles pending — schedule the next one and
+		// stay alive instead of auto-quitting below.
+		if (DevModeConsoleCommands->SoakContinue())
+		{
+			DevModeConsoleCommands->ScheduleSoakCycle();
+			return;
+		}
+	}
+	if (bDevModeAutoQuit)
+	{
+		bDevModeAutoQuit = false;
+		DevModeAutoScenario.Empty();
+		// Phase-2 tombstone is in the log; quit so CI gates on log scan.
+		if (UWorld* World = GetWorld())
+		{
+			if (GEngine)
+			{
+				GEngine->Exec(World, TEXT("quit"));
+			}
+		}
+	}
+}
+
+void UMyGameInstance::ScheduleSweepPhase2(float DelaySec)
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			DevModeSweepTimerHandle, this,
+			&UMyGameInstance::SweepStep2, DelaySec, false);
+	}
+}
+
+void UMyGameInstance::ScheduleSweepPhase3(float DelaySec)
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			DevModeSweepTimerHandle, this,
+			&UMyGameInstance::SweepStep3, DelaySec, false);
+	}
+}
+
+void UMyGameInstance::ScheduleSoakCycle(float DelaySec)
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			DevModeSoakTimerHandle, this,
+			&UMyGameInstance::SoakCycleStep, DelaySec, false);
+	}
+}
+
+void UMyGameInstance::SoakCycleStep()
+{
+	if (DevModeConsoleCommands)
+	{
+		DevModeConsoleCommands->RunSoakCycle();
+	}
 }
 
 void UMyGameInstance::ReturnToLoginLevel()
@@ -1071,6 +1186,16 @@ void UMyGameInstance::Shutdown()
 	{
 		FTSTicker::GetCoreTicker().RemoveTicker(GTRemoveTicker);
 		GTRemoveTicker.Reset();
+	}
+	if (LoadingScreenHardSafetyTickerHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(LoadingScreenHardSafetyTickerHandle);
+		LoadingScreenHardSafetyTickerHandle.Reset();
+	}
+	if (WindowFocusNudgeTickerHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(WindowFocusNudgeTickerHandle);
+		WindowFocusNudgeTickerHandle.Reset();
 	}
 
 	// Only send disconnect packets when this PIE instance was actually authenticated.
@@ -1265,6 +1390,43 @@ void UMyGameInstance::LoadLevel(const FName& LevelName)
 		0.0f);
 }
 
+void UMyGameInstance::ForceGameWindowToFront()
+{
+	if (!FSlateApplication::IsInitialized()) { return; }
+	if (TSharedPtr<SWindow> ActiveWindow = FSlateApplication::Get().GetActiveTopLevelWindow())
+	{
+		if (TSharedPtr<FGenericWindow> NativeWindow = ActiveWindow->GetNativeWindow())
+		{
+			NativeWindow->BringToFront();
+			NativeWindow->SetWindowFocus();
+		}
+	}
+}
+
+void UMyGameInstance::StartWindowFocusKeeper()
+{
+	// Focus keeper: while the loading screen is up, periodically take
+	// foreground back. A subsequently launched client steals OS focus mid-load
+	// (1s stagger); the throttled window crawls at a fraction of its tick rate
+	// and every gate/timer/frame-counter dilates with it. Self-stops once the
+	// screen is gone or after 8s.
+	const double FocusNudgeStartTime = FPlatformTime::Seconds();
+	FTSTicker::GetCoreTicker().RemoveTicker(WindowFocusNudgeTickerHandle);
+	WindowFocusNudgeTickerHandle = FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateLambda([this, FocusNudgeStartTime](float) -> bool
+		{
+			if (!LoadingScreenWidget) { return false; }
+			if (FPlatformTime::Seconds() - FocusNudgeStartTime > 8.0)
+			{
+				UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] Focus keeper: giving up after 8s (screen still up)"));
+				return false;
+			}
+			ForceGameWindowToFront();
+			return true;
+		}),
+		0.5f);
+}
+
 void UMyGameInstance::TransitionToGameWorld()
 {
 	if (GameWorldMap.IsNull())
@@ -1299,21 +1461,23 @@ void UMyGameInstance::TransitionToGameWorld()
 
 	bTransitioningToGameWorld = true;
 
+	// Travel measurement: reported when PostLoadMap arrives (see
+	// OnPostLoginLevelLoaded). If travel crawls (throttled present / RHI fence
+	// waits on an unfocused window), the numbers show it instead of "hangs".
+	LoadTravelStartTime = FPlatformTime::Seconds();
+	LoadTravelStartFrame = GFrameCounter;
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Travel START: map '%s' (t=%.1fs, frame %llu)"),
+		*MapName, LoadTravelStartTime, LoadTravelStartFrame);
+
 	// Force the game window to foreground BEFORE the level transition so the
 	// FTSTicker poller (CheckGameWorldReady) and render-thread frame counter
-	// (StartFrameCountdown) run at full speed. Fixes loading screen stuck
-	// until click in packaged builds launched from a script without focus.
-	if (FSlateApplication::IsInitialized())
-	{
-		if (TSharedPtr<SWindow> ActiveWindow = FSlateApplication::Get().GetActiveTopLevelWindow())
-		{
-			if (TSharedPtr<FGenericWindow> NativeWindow = ActiveWindow->GetNativeWindow())
-			{
-				NativeWindow->BringToFront();
-				NativeWindow->SetWindowFocus();
-			}
-		}
-	}
+	// (StartFrameCountdown) run at full speed. Foreground is re-asserted after
+	// the load completes (see OnPostLoginLevelLoaded) because staggered client
+	// launches steal focus mid-load.
+	ForceGameWindowToFront();
+	// Arm the keeper BEFORE the load: the crawl happens during travel, and a
+	// single pre-load BringToFront does not survive the next client's launch.
+	StartWindowFocusKeeper();
 
 	bGameWorldReady = false;
 	bPendingSpawnDispatched = false;
@@ -1442,6 +1606,20 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 	if (!LoadedWorld) return;
 
 	UE_LOG(LogTemp, Warning, TEXT("OnPostLoginLevelLoaded: %s"), *LevelBeingLoaded.ToString());
+
+	// Travel measurement: how long the travel took in wall-clock and frames.
+	// A crawl here (seconds high, frames low) means the engine travel itself
+	// was throttled (unfocused window / contended GPU) — everything downstream
+	// (gates, flags, safeties) can only start after this point.
+	if (LoadTravelStartTime > 0.0)
+	{
+		const double TravelElapsed = FPlatformTime::Seconds() - LoadTravelStartTime;
+		const uint64 TravelFrames = GFrameCounter - LoadTravelStartFrame;
+		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Travel DONE: map '%s' took %.1fs wall-clock (%llu frames, avg %.1f fps)"),
+			*LevelBeingLoaded.ToString(), TravelElapsed, TravelFrames,
+			TravelElapsed > 0.0 ? (double)TravelFrames / TravelElapsed : 0.0);
+		LoadTravelStartTime = 0.0;
+	}
 
 	// ---- Login Level ----
 	if (LevelBeingLoaded == LoginLevelName)
@@ -1595,6 +1773,9 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 		LoadedWorld->GetTimerManager().SetTimer(
 			RemoveLoadingScreenTimerHandle, this,
 			&UMyGameInstance::RemoveLoadingScreen, 1.5f, false);
+
+		// Live bot (DEV-ONLY): auto-login + join without typing.
+		MaybeStartLiveBot();
 	}
 
 	// ---- DevMode / Debug Level ----
@@ -1677,11 +1858,11 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 		if (DevModeConfig.bEnabled && DevModeDataProvider)
 		{
 			// DevMode boot skips the online login path that normally seeds the
-			// manager world contexts тАФ without this, spawns queue forever.
+			// manager world contexts — without this, spawns queue forever.
 			// (InitNetworkingSetup never runs here, so gameInstance is set explicitly.)
 			if (MOBManager && LoadedWorld) { MOBManager->SetWorldContext(LoadedWorld); MOBManager->SetGameInstance(this); }
 			// Phase A bots spawn a stub drop through ItemManager (offline loot
-			// has no server itemDrop) тАФ it needs the same seeding.
+			// has no server itemDrop) — it needs the same seeding.
 			if (ItemManager && LoadedWorld) { ItemManager->SetWorldContext(LoadedWorld); ItemManager->SetGameInstance(this); }
 			if (DevModeConfig.bSpawnTestMobs && MOBManager)
 			{
@@ -1695,6 +1876,15 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 			{
 				DevModeConsoleCommands = NewObject<UDevModeConsoleCommands>(this);
 				DevModeConsoleCommands->RegisterCommands(this);
+			}
+			if (!DevModeAutoScenario.IsEmpty())
+			{
+				// Let the seeded world settle one tick batch, then run the sweep
+				// and quit so CI can gate on DEVMODE_SWEEP_RESULT in the log.
+				LoadedWorld->GetTimerManager().SetTimer(
+					DevModeSweepTimerHandle, this,
+					&UMyGameInstance::RunDevModeAutoScenario, 3.0f, false);
+				UE_LOG(LogTemp, Warning, TEXT("GameInstance: auto-scenario '%s' scheduled"), *DevModeAutoScenario);
 			}
 		}
 
@@ -1724,20 +1914,42 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Loading screen survived level transition (MoviePlayer)"));
 		}
 
+		// The MoviePlayer covers travel and auto-exits at load end (it must never
+		// wait for manual stop — see SetupMoviePlayerLoadingScreen). Readiness
+		// (gates + flags) is covered by the plain-UMG overlay from here on.
+		EnsureReadinessOverlay();
+
 		bGameWorldReady = false;
 
-		// Hard safety timer: if the normal gate/flag pipeline stalls for any
-		// reason (e.g. texture streaming never drains, WP never completes),
-		// force-remove the loading screen after a fixed timeout so the player
-		// isn't stuck.  Uses the same pattern as the login-level timer.
-		LoadedWorld->GetTimerManager().SetTimer(
-			RemoveLoadingScreenTimerHandle,
-			FTimerDelegate::CreateLambda([this]()
-			{
-				UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] HARD SAFETY: removing loading screen via timeout (gates may have stalled)"));
-				RemoveLoadingScreen();
-			}),
-			8.0f, false);
+		// Re-assert foreground AFTER the load: a subsequently launched client
+		// steals OS focus mid-load (1s stagger), throttling this window until
+		// the user clicks it. (Login level intentionally untouched — the user
+		// may be typing in a text field there.)
+		ForceGameWindowToFront();
+
+		// Re-arm the keeper for the flags/countdown phase (fresh 8s window).
+		StartWindowFocusKeeper();
+
+		// Hard safety watchdog on WALL-CLOCK via the core ticker (never the
+		// world TimerManager): an unfocused window starves world timers, so the
+		// old world-timer safety could never fire exactly when needed — only an
+		// occasional game-thread tick is required. Unconditional: a visible
+		// world with pop-in beats an eternal loading screen.
+		{
+			LoadingScreenWatchdogStartTime = FPlatformTime::Seconds();
+			FTSTicker::GetCoreTicker().RemoveTicker(LoadingScreenHardSafetyTickerHandle);
+			LoadingScreenHardSafetyTickerHandle = FTSTicker::GetCoreTicker().AddTicker(
+				FTickerDelegate::CreateLambda([this](float) -> bool
+				{
+					if (!LoadingScreenWidget) { return false; }
+					const double Elapsed = FPlatformTime::Seconds() - LoadingScreenWatchdogStartTime;
+					if (Elapsed < 8.0) { return true; }
+					UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] HARD SAFETY: %.1fs wall-clock elapsed — force-removing loading screen (gates/flags may have stalled)"), Elapsed);
+					RemoveLoadingScreen();
+					return false;
+				}),
+				0.5f);
+		}
 
 		CheckGameWorldReady();    // first check immediately
 
@@ -1756,32 +1968,11 @@ void UMyGameInstance::CheckGameWorldReady()
 	UWorld* NewWorld = GetWorld();
 	if (!NewWorld) { return; }
 
-	// Loading screen lives in MoviePlayer — it survives ServerTravel.
-	// Just verify it is still playing.
-#if WITH_EDITOR
-	if (GIsEditor)
-	{
-		if (!LoadingScreenWidget)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] CheckGameWorldReady: no loading screen widget — re-creating"));
-			SetupMoviePlayerLoadingScreen();
-		}
-	}
-	else
-#endif
-	if (IGameMoviePlayer* MoviePlayer = GetMoviePlayer())
-	{
-		if (!MoviePlayer->IsMovieCurrentlyPlaying())
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] CheckGameWorldReady: MoviePlayer not playing — reconfiguring"));
-			SetupMoviePlayerLoadingScreen();
-		}
-	}
-	else if (!LoadingScreenWidget)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] CheckGameWorldReady: no loading screen widget — re-creating via SetupMoviePlayerLoadingScreen"));
-		SetupMoviePlayerLoadingScreen();
-	}
+	// The MoviePlayer auto-exits at load end by design (see
+	// SetupMoviePlayerLoadingScreen) — a finished movie is NOT a problem.
+	// What matters is the readiness overlay: re-create it if missing so the
+	// player never stares at an unstreamed world.
+	EnsureReadinessOverlay();
 
 	// Gate 1: PlayerController must exist before we can do anything.
 	APlayerController* PC = NewWorld->GetFirstPlayerController();
@@ -1817,24 +2008,22 @@ void UMyGameInstance::CheckGameWorldReady()
 		// forever.  After the timeout, remove it IF the world IS ready — the player
 		// would rather see the loaded world than a stuck loading screen.
 		ReadyFlags = 0;
-		NewWorld->GetTimerManager().SetTimer(
-			LoadingScreenSafetyTimerHandle,
-			FTimerDelegate::CreateLambda([this]()
+		LoadingScreenShownTime = FPlatformTime::Seconds();
+		FTSTicker::GetCoreTicker().RemoveTicker(LoadingScreenSafetyTimerHandle);
+		LoadingScreenSafetyTimerHandle = FTSTicker::GetCoreTicker().AddTicker(
+			FTickerDelegate::CreateLambda([this](float)
 			{
-				if (bGameWorldReady)
-				{
-					UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] SAFETY: world ready but flags stuck (0x%02X/0x%02X) — force-removing loading screen"),
-						ReadyFlags, ReadyFlag_AllRequired);
-					RemoveLoadingScreen();
-				}
-				else
-				{
-					UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] SAFETY: timeout but world NOT ready — keeping loading screen (ReadyFlags=0x%02X req=0x%02X)"),
-						ReadyFlags, ReadyFlag_AllRequired);
-				}
+				// Unconditional: by now the player must see the world even if some
+				// ReadyFlags never arrived (unfocused window starves the timers and
+				// ticks that produce them). The hard 8s watchdog normally fires first;
+				// this is the second net.
+				const double Elapsed = FPlatformTime::Seconds() - LoadingScreenShownTime;
+				UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] SAFETY: %.1fs elapsed without full flags (0x%02X/0x%02X) — force-removing loading screen"),
+					Elapsed, ReadyFlags, ReadyFlag_AllRequired);
+				RemoveLoadingScreen();
+				return false;
 			}),
-			LoadingScreenSafetyTimeout,
-			false);
+			LoadingScreenSafetyTimeout);
 	}
 
 	// Gate 2: Pawn must be possessed � Possess() is called inside SpawnPlayerForClient.
@@ -2001,26 +2190,17 @@ void UMyGameInstance::CheckAllReadyFlags()
 		ReadyFlags, ReadyFlag_AllRequired, (int)bGameWorldReady, EndFrameDelegateHandle.IsValid() ? 1 : 0);
 
 	if ((ReadyFlags & ReadyFlag_AllRequired) != ReadyFlag_AllRequired) { return; }
-	if (!LoadingScreenWidget) { return; }
-#if WITH_EDITOR
-	if (!GIsEditor)
-#endif
-	{
-		IGameMoviePlayer* MP = GetMoviePlayer();
-		if (!MP)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] CheckAllReadyFlags: GetMoviePlayer() returned null — skipping MoviePlayer check"));
-		}
-		else if (!MP->IsMovieCurrentlyPlaying())
-		{
-			// In packaged builds the MoviePlayer may internally transition state
-			// after level load.  Reconfigure it so IsMovieCurrentlyPlaying() is
-			// true on the next call, then wait one tick for it to take effect.
-			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] CheckAllReadyFlags: MoviePlayer not playing — reconfiguring"));
-			SetupMoviePlayerLoadingScreen();
-			return;
-		}
-	}
+	// One-shot per screen: after RemoveLoadingScreen both widgets are null, so
+	// late Notify* calls (e.g. the 4s stats_update beat) must NOT restart the
+	// countdown — without this the screen is "removed" every few seconds and
+	// any gate on the removal marker misfires. A fresh transition recreates
+	// the widgets, re-arming the path automatically.
+	if (!LoadingScreenWidget && !LoadingScreenOverlayWidget) { return; }
+	// NOTE: dismissal must never depend on MoviePlayer state. The movie covers
+	// travel and auto-exits at load end; waiting on IsMovieCurrentlyPlaying()
+	// here (plus re-setup loops) stalled removal whenever the presenter state
+	// lagged. StopMovie() in RemoveLoadingScreen handles the movie side.
+	EnsureReadinessOverlay();
 	if (EndFrameDelegateHandle.IsValid()) { return; }
 	if (!bGameWorldReady)
 	{
@@ -2030,7 +2210,7 @@ void UMyGameInstance::CheckAllReadyFlags()
 
 	if (UWorld* W = GetWorld())
 	{
-		W->GetTimerManager().ClearTimer(LoadingScreenSafetyTimerHandle);
+		FTSTicker::GetCoreTicker().RemoveTicker(LoadingScreenSafetyTimerHandle);
 		W->GetTimerManager().ClearTimer(RemoveLoadingScreenTimerHandle);
 	}
 
@@ -2405,6 +2585,29 @@ void UMyGameInstance::ShowInitialLoadingScreen()
 	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] ShowInitialLoadingScreen: widget added to viewport (Init phase, pre-transition)"));
 }
 
+void UMyGameInstance::EnsureReadinessOverlay()
+{
+	if (LoadingScreenOverlayWidget)
+	{
+		return;
+	}
+	if (!LoadingScreenWidgetClass)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] EnsureReadinessOverlay: SKIP — no widget class"));
+		return;
+	}
+
+	LoadingScreenOverlayWidget = CreateWidget<UUserWidget>(this, LoadingScreenWidgetClass);
+	if (!LoadingScreenOverlayWidget)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] EnsureReadinessOverlay: FAIL — CreateWidget returned null"));
+		return;
+	}
+
+	LoadingScreenOverlayWidget->AddToViewport(1001);
+	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] EnsureReadinessOverlay: readiness overlay shown (movie auto-exited at load end)"));
+}
+
 void UMyGameInstance::SetupMoviePlayerLoadingScreen()
 {
 	if (!LoadingScreenWidgetClass)
@@ -2459,9 +2662,20 @@ void UMyGameInstance::SetupMoviePlayerLoadingScreen()
 	TSharedRef<SWidget> SlateWidget = LoadingScreenWidget->TakeWidget();
 
 	FLoadingScreenAttributes LoadingScreen;
-	LoadingScreen.bAutoCompleteWhenLoadingCompletes = false;
-	LoadingScreen.bWaitForManualStop = true;
-	LoadingScreen.bAllowEngineTick = true;
+	// Auto-exit at load end: with bWaitForManualStop the game thread is trapped
+	// inside LoadMap's movie pump (WaitForMovieToFinish spins on
+	// bUserCalledFinish, engine does not tick) until the user clicks the
+	// screen (OnAnyDown) — eternal "hang until click". Auto-complete lets
+	// LoadMap return; readiness is covered by the UMG overlay instead.
+	LoadingScreen.bAutoCompleteWhenLoadingCompletes = true;
+	LoadingScreen.bWaitForManualStop = false;
+	// NOTE: bAllowEngineTick must stay FALSE (engine default). TRUE keeps the
+	// world rendering behind the movie, which double-ticks the RT geometry
+	// manager in one render frame and asserts in RayTracingGeometryManager
+	// (all rendered clients died on first frames after load). Poll timers do
+	// not need engine tick during load: RestartPolling re-registers them
+	// post-load (see RefreshManagerWorldContexts flow).
+	LoadingScreen.bAllowEngineTick = false;
 	LoadingScreen.WidgetLoadingScreen = SlateWidget;
 
 	MoviePlayer->SetupLoadingScreen(LoadingScreen);
@@ -2473,6 +2687,11 @@ void UMyGameInstance::SetupMoviePlayerLoadingScreen()
 
 void UMyGameInstance::RemoveLoadingScreen()
 {
+	if (LoadingScreenShownTime > 0.0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] loading screen was up for %.1fs"), FPlatformTime::Seconds() - LoadingScreenShownTime);
+		LoadingScreenShownTime = 0.0;
+	}
 	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 9. RemoveLoadingScreen called � loading screen going away NOW"));
 
 	// Clean up render-thread and GT ticker if safety timer fired before countdown finished.
@@ -2485,6 +2704,16 @@ void UMyGameInstance::RemoveLoadingScreen()
 	{
 		FTSTicker::GetCoreTicker().RemoveTicker(GTRemoveTicker);
 		GTRemoveTicker.Reset();
+	}
+	if (LoadingScreenHardSafetyTickerHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(LoadingScreenHardSafetyTickerHandle);
+		LoadingScreenHardSafetyTickerHandle.Reset();
+	}
+	if (WindowFocusNudgeTickerHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(WindowFocusNudgeTickerHandle);
+		WindowFocusNudgeTickerHandle.Reset();
 	}
 	bLoadingScreenRemovePending.Store(false);
 
@@ -2516,6 +2745,12 @@ void UMyGameInstance::RemoveLoadingScreen()
 	{
 		LoadingScreenWidget->RemoveFromParent();
 		LoadingScreenWidget = nullptr;
+	}
+
+	if (LoadingScreenOverlayWidget)
+	{
+		LoadingScreenOverlayWidget->RemoveFromParent();
+		LoadingScreenOverlayWidget = nullptr;
 	}
 }
 

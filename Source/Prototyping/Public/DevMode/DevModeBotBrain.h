@@ -166,6 +166,9 @@ public:
 private:
     enum class EBotStep : uint8
     {
+        // Loud pre-flight: the spawn must have ground under it (void falls
+        // used to pass every 2D assert silently). Fails in 5s if never grounded.
+        ExpectGround,
         GotoWaypoint,
         GotoTarget,
         Combat,
@@ -216,6 +219,14 @@ private:
     // (teleport jumps never count), stuck/teleport fallback. Returns true on
     // arrival within ArriveRadius. Label names the leg in fallback logs.
     bool SteerToward(ABasicPlayer* Player, const FVector& Dest, float ArriveRadius, double Now, const TCHAR* Label);
+    // Per-frame movement pump: BrainTick runs at 10Hz but CharacterMovement
+    // consumes AddMovementInput EVERY rendered frame, so input applied only
+    // in BrainTick moves the pawn at (frame_rate/10Hz) duty — ~20u/s at
+    // 300fps instead of walk speed (fps-dependent crawl, leg timeouts fire
+    // on fast machines). The state machine publishes intent in SteerToward;
+    // this core ticker (world-independent, survives travel) reapplies the
+    // input each frame from the live position until the intent goes stale.
+    bool SteerTick(float);
     // Grounded reposition near Dest for the stuck fallback: traces down at a
     // few lateral candidates and takes the first with ground (never lands
     // inside rock). Falls back to raw Dest+100Z if nothing hits.
@@ -293,6 +304,13 @@ private:
     // world timers above).
     FDelegateHandle PostLoadMapLoginHandle;
     FTSTicker::FDelegateHandle LoginWatchdogHandle;
+    // Current steering intent (published by SteerToward at 10Hz, consumed
+    // per-frame by SteerTick). Stale intents (>0.3s) stop applying so no
+    // input leaks across legs or travels.
+    FTSTicker::FDelegateHandle SteerTickerHandle;
+    FVector SteerDest = FVector::ZeroVector;
+    double LastSteerTime = 0.0;
+    bool bSteerIntent = false;
 
     EBotStep Step = EBotStep::GotoWaypoint;
     TWeakObjectPtr<ABasicMOB> TargetMob;
@@ -449,7 +467,14 @@ private:
 
     // Step budgets (seconds). Chasing across the small dev area takes seconds;
     // anything beyond the budget teleports (logged fallback) or fails.
-    static constexpr float GotoTimeoutSec = 25.0f;
+    // GotoTimeoutSec must stay ABOVE ChaseStallSec: the stall safeguard
+    // (exclude the pick, repick, fresh clock) samples every ChaseStallSec,
+    // so a shorter leg budget would time out first and the safeguard could
+    // never fire (seen live: 25s leg vs 30s stall window — obstacle slides
+    // always failed instead of repicking). Clean 600u chase takes ~6s;
+    // 45s leaves headroom to round obstacles while the 120s global watchdog
+    // still bounds the scenario.
+    static constexpr float GotoTimeoutSec = 45.0f;
     static constexpr float StuckTimeoutSec = 5.0f;
     static constexpr float CombatTimeoutSec = 12.0f;
     static constexpr float ArrivalFraction = 0.8f;

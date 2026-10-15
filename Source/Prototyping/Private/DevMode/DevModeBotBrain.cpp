@@ -89,6 +89,8 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
         Player->SetActorLocation(FVector(0.0f, 0.0f, 90.0f));
     }
     RunStartPos = Player->GetActorLocation();
+    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT spawn at (%.0f,%.0f,%.0f)"),
+        RunStartPos.X, RunStartPos.Y, RunStartPos.Z);
     // Offline revive target: the run spawn. Live respawn point is
     // server-authoritative (asserted as alive + HP, not position).
     RespawnPoint = RunStartPos;
@@ -116,7 +118,7 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     Failures = 0;
     Odometer = 0.0f;
     LastMoveTime = FPlatformTime::Seconds();
-    Step = EBotStep::GotoWaypoint;
+    Step = EBotStep::ExpectGround;
     StepStartTime = FPlatformTime::Seconds();
     // Phase A baselines: loot asserts inv growth, revive returns here.
     InitialInvCount = CountInventoryItems();
@@ -225,6 +227,13 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
 
     World->GetTimerManager().SetTimer(BrainTimerHandle, this, &UDevModeBotBrain::BrainTick, 0.1f, true);
     World->GetTimerManager().SetTimer(GlobalTimeoutHandle, this, &UDevModeBotBrain::OnGlobalTimeout, GlobalTimeoutSec, false);
+    // Per-frame input pump (see SteerTick): intent published by SteerToward,
+    // applied every frame so speed is fps-independent.
+    bSteerIntent = false;
+    LastSteerTime = 0.0;
+    FTSTicker::GetCoreTicker().RemoveTicker(SteerTickerHandle);
+    SteerTickerHandle = FTSTicker::GetCoreTicker().AddTicker(
+        FTickerDelegate::CreateUObject(this, &UDevModeBotBrain::SteerTick), 0.0f);
 
     UE_LOG(LogTemp, Warning, TEXT("%s_BEGIN %s target-kills=%d"), *TombstonePrefix, *ScenarioName, TargetKills);
 }
@@ -256,6 +265,9 @@ void UDevModeBotBrain::Stop()
     }
     FTSTicker::GetCoreTicker().RemoveTicker(LoginWatchdogHandle);
     LoginWatchdogHandle.Reset();
+    FTSTicker::GetCoreTicker().RemoveTicker(SteerTickerHandle);
+    SteerTickerHandle.Reset();
+    bSteerIntent = false;
     bRunning = false;
     TargetMob.Reset();
 }
@@ -375,9 +387,16 @@ bool UDevModeBotBrain::SteerToward(ABasicPlayer* Player, const FVector& Dest, fl
     else
     {
         // Real steering through CharacterMovementComponent (physics, collision).
+        // Intent is published here and pumped per-frame by SteerTick: input
+        // applied only in this 10Hz tick would crawl at high fps (input is
+        // consumed every rendered frame). Immediate apply keeps this tick's
+        // behavior identical; the ticker sustains it between ticks.
         FVector Dir = Dest - PlayerAt;
         Dir.Z = 0.0f;
         if (!Dir.Normalize()) { return true; }
+        SteerDest = Dest;
+        LastSteerTime = Now;
+        bSteerIntent = true;
         Player->AddMovementInput(Dir, 1.0f);
     }
 
@@ -433,6 +452,33 @@ bool UDevModeBotBrain::SteerToward(ABasicPlayer* Player, const FVector& Dest, fl
         }
     }
     return false;
+}
+
+bool UDevModeBotBrain::SteerTick(float)
+{
+    if (!bRunning || !bSteerIntent)
+    {
+        return bRunning;
+    }
+    // Intent older than 3 BrainTicks with no SteerToward refresh: the leg
+    // moved on (arrival, step change) or the world traveled — stop pushing.
+    if (FPlatformTime::Seconds() - LastSteerTime > 0.3)
+    {
+        bSteerIntent = false;
+        return true;
+    }
+    ABasicPlayer* Player = GameInstance ? GameInstance->Player : nullptr;
+    if (!Player || Player->IsActorBeingDestroyed())
+    {
+        return true;
+    }
+    FVector Dir = SteerDest - Player->GetActorLocation();
+    Dir.Z = 0.0f;
+    if (Dir.Normalize())
+    {
+        Player->AddMovementInput(Dir, 1.0f);
+    }
+    return true;
 }
 
 void UDevModeBotBrain::BrainTick()
@@ -496,6 +542,29 @@ void UDevModeBotBrain::BrainTick()
     }
 
     const FVector PlayerAt = Player->GetActorLocation();
+
+    if (Step == EBotStep::ExpectGround)
+    {
+        // Grounded pre-flight: void falls must fail LOUD here, never slide
+        // through the 2D asserts below. 5s grace for the drop+land to settle.
+        const UCharacterMovementComponent* MoveComp = Player->GetCharacterMovement();
+        const bool bGrounded = MoveComp && MoveComp->IsMovingOnGround();
+        if (bGrounded)
+        {
+            BotAssert(true, TEXT("spawn-grounded"), 1, 1);
+            Step = EBotStep::GotoWaypoint;
+            StepStartTime = Now;
+            LastChasePos = PlayerAt;
+            LastChaseProgressTime = Now;
+            return;
+        }
+        if (Now - StepStartTime > 5.0)
+        {
+            BotAssert(false, TEXT("spawn-grounded"), 0, 1);
+            Finish(false, TEXT("no-ground"));
+        }
+        return;
+    }
 
     if (Step == EBotStep::AssertKill)
     {

@@ -2,9 +2,9 @@
     "_comment": "QA teleport presets (DevMode). Usage: devmode.teleport <X Y Z>. Coordinates mirror dev_mobs.json / dev_player.json.",
     "presets": [
         { "name": "spawn",  "pos": [0, 0, 90],      "note": "DevHero spawn (dev_player.json)" },
-        { "name": "fox",    "pos": [300, 200, 90],  "note": "SmallFox 9901, aggressive lvl5" },
-        { "name": "wolf",   "pos": [-400, 350, 90], "note": "GreyWolf 9902, aggressive lvl12" },
-        { "name": "archer", "pos": [600, -300, 90], "note": "Skeleton Archer 9903, passive lvl8" }
+        { "name": "fox",    "pos": [300, 200, 90],  "note": "SmallFox mobID 1, check dev_mobs.json for stats" },
+        { "name": "wolf",   "pos": [-400, 350, 90], "note": "GreyWolf mobID 2, check dev_mobs.json for stats" },
+        { "name": "archer", "pos": [600, -300, 90], "note": "Skeleton Archer mobID 3, check dev_mobs.json for stats" }
     ],
     "flows_5min": [
         "devmode.scenario combat  (reload mobs + teleport to first mob)",
@@ -12,5 +12,14 @@
         "devmode.reloadinventory  (re-seed from dev_inventory.json)",
         "devmode.scenario reset   (mobs + inventory + back to spawn)",
         "devmode.listmobs         (dump mob uids/states to log)"
+    ],
+    "full_sweep": [
+        "devmode.scenario full_sweep  (golden offline sweep with asserts, no servers needed)",
+        "steps: reset -> expect mobs eq 3, inv ge 5 -> teleport fox -> kill 9901/9902",
+        "  -> expect 2/1 alive -> clearcorpses -> spawnmob 1/2 -> expect mobs eq 3",
+        "  -> setplayerhp 1/1000 round-trip with expects -> listmobs",
+        "markers for log scan: DEVMODE_SWEEP_BEGIN, DEVMODE_ASSERT PASS|FAIL, DEVMODE_SWEEP_RESULT PASS|FAIL",
+        "extra asserts: devmode.expect <hp|mobs|inv|gold> <eq|ne|gt|lt|ge|le> <Value>",
+        "extra actions: devmode.setmobhp <UID> <HP> (<=0 runs Die), devmode.killmob [UID]"
     ]
 }

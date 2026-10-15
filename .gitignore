@@ -89,12 +89,6 @@ Prototyping 5.3.code-workspace
 server_config.json
 Content/Audio/SFX/
 Content/Audio/UI/
-# Test secrets & artifacts (dev-only, never commit)
+# Client secret (dev-only, never commit)
 api_key.env
-Tools/Bots/bot_accounts.json
-swarm_*.jsonl
-Saved/Replays/
-Tools/Bots/*.log
-Tools/Bots/soak_overnight.log
-Tools/Tests/*.log
 **/__pycache__/

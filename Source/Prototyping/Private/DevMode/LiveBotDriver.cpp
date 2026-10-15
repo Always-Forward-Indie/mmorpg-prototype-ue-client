@@ -203,6 +203,9 @@ void ULiveBotDriver::PollTick()
             Brain->bEquipPhase = false;
             Brain->bLevelPhase = false;
             Brain->bTitleEmotePhase = false;
+            Brain->bPeripheryPhase = false;
+            Brain->bCharFlowPhase = false;
+            Brain->bBackToLoginPhase = false;
             // Cross runs talk after meeting (plan Phase C): both sides send
             // one local message and assert the peer's arrival + bubble.
             // (Set after the resets above, which clear it.)
@@ -259,6 +262,16 @@ void ULiveBotDriver::PollTick()
             {
                 Brain->TargetKills = 0;
                 Brain->bTitleEmotePhase = true;
+            }
+            else if (Scenario.Equals(TEXT("live_char_create_delete"), ESearchCase::IgnoreCase))
+            {
+                Brain->TargetKills = 0;
+                Brain->bCharFlowPhase = true;
+            }
+            else if (Scenario.Equals(TEXT("live_back_to_login"), ESearchCase::IgnoreCase))
+            {
+                Brain->TargetKills = 0;
+                Brain->bBackToLoginPhase = true;
             }
             Stop();
             Brain->Start(GameInstance, TrackedWorld);

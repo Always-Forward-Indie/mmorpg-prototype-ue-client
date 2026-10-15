@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
+#include "Authentication/LoginFlowTypes.h"
 #include "DevModeBotBrain.generated.h"
 
 class UMyGameInstance;
@@ -145,6 +146,17 @@ public:
     // live_titles_emotes: equip earned title -> play emote (own actor).
     bool bTitleEmotePhase = false;
     float CharTimeoutSec = 90.0f;
+    // ---- Phase E: flows + periphery ----
+    // bot_periphery (OFFLINE): locale RU/EN toggle, music zone switch,
+    // camera zoom in/out/clamp. No server needed.
+    bool bPeripheryPhase = false;
+    // live_char_create_delete: list -> create (unique letter name) ->
+    // list contains -> delete -> list clean.
+    bool bCharFlowPhase = false;
+    // live_back_to_login: return to login, assert map, tombstone + quit
+    // from the PostLoadMap callback (world timers die at travel).
+    bool bBackToLoginPhase = false;
+    float FlowTimeoutSec = 60.0f;
     // Global run budget (seconds). Live runs set this higher (slow real fights).
     float GlobalTimeoutSec = 120.0f;
     // Kill budget for the combat legs. Scenario profiles (console + live
@@ -182,6 +194,13 @@ private:
         LevelWait,
         TitleLeg,
         EmoteLeg,
+        LocaleLeg,
+        MusicLeg,
+        CameraLeg,
+        CharList,
+        CharCreate,
+        CharDelete,
+        BackToLogin,
     };
 
     UFUNCTION()
@@ -244,6 +263,16 @@ private:
     // Quest loot checkpoint (called after each corpse resolve): all kills
     // looted -> turn in; otherwise hunt the next victim.
     void QuestLootDone(double Now);
+    // Phase E auth-flow handlers (bound only during the char legs).
+    UFUNCTION()
+    void HandleCharListReceived(const TArray<FLoginCharacterEntry>& Characters);
+    UFUNCTION()
+    void HandleCreateResponse(bool bSuccess, const FString& Message, int32 CharacterId);
+    UFUNCTION()
+    void HandleDeleteResponse(bool bSuccess, const FString& Message, int32 CharacterId);
+    // PostLoadMap callback for the back-to-login leg (world timers are
+    // dead after travel — the tombstone fires here, not in BrainTick).
+    void HandlePostLoadMapLogin(UWorld* LoadedWorld);
     // Phase D helpers.
     bool HasActiveEffect(const FString& Slug) const;
     int32 FindEquippableMainHand(FString& OutSlug) const;
@@ -260,6 +289,10 @@ private:
 
     FTimerHandle BrainTimerHandle;
     FTimerHandle GlobalTimeoutHandle;
+    // Back-to-login leg tracking (survives the travel that kills the
+    // world timers above).
+    FDelegateHandle PostLoadMapLoginHandle;
+    FTSTicker::FDelegateHandle LoginWatchdogHandle;
 
     EBotStep Step = EBotStep::GotoWaypoint;
     TWeakObjectPtr<ABasicMOB> TargetMob;
@@ -377,6 +410,21 @@ private:
     // Owned emote actually played (first row of the server player_emotes
     // snapshot — never assume a slug is unlocked).
     FString EmoteSlug;
+    // ---- Phase E state ----
+    double FlowLegStartTime = 0.0;
+    FString SavedLocale;
+    int32 MusicStage = 0;
+    int32 ZoomStage = 0;
+    bool bListReqSent = false;
+    bool bCreateSent = false;
+    bool bDeleteSent = false;
+    FString CharName;
+    int32 NewCharId = 0;
+    int32 NameLetterIdx = 0;
+    TArray<FLoginCharacterEntry> CharListCache;
+    FString CreateError;
+    FString DeleteError;
+    bool bLoginTravelSent = false;
     bool bShopReqSent = false;
     bool bUnequipSent = false;
     FString LastLearnSlug;

@@ -1,4 +1,5 @@
 #include "DevMode/DevModeConsoleCommands.h"
+#include "DevMode/DevModeBotBrain.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Mobs/MOBManager.h"
 #include "Gameplay/Mobs/BasicMOB.h"
@@ -13,6 +14,8 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Engine/World.h"
+#include "HighResScreenshot.h"
+#include "Components/CapsuleComponent.h"
 #include "EngineUtils.h"
 
 // ============================================================================
@@ -91,7 +94,7 @@ void UDevModeConsoleCommands::RegisterCommands(UMyGameInstance* InGameInstance)
         }));
 
     Reg(TEXT("devmode.bot"),
-        TEXT("DevMode: start the L1 action bot. Usage: devmode.bot <combat_patrol|loot_pickup|death_respawn|harvest_run>"),
+        TEXT("DevMode: start the L1 action bot. Usage: devmode.bot <combat_patrol|loot_pickup|death_respawn|harvest_run|periphery>"),
         FConsoleCommandWithArgsDelegate::CreateLambda([WeakThis](const TArray<FString>& A)
         {
             if (UDevModeConsoleCommands* Cmd = WeakThis.Get())
@@ -100,9 +103,10 @@ void UDevModeConsoleCommands::RegisterCommands(UMyGameInstance* InGameInstance)
                     || (!A[0].Equals(TEXT("combat_patrol"), ESearchCase::IgnoreCase)
                         && !A[0].Equals(TEXT("loot_pickup"), ESearchCase::IgnoreCase)
                         && !A[0].Equals(TEXT("death_respawn"), ESearchCase::IgnoreCase)
-                        && !A[0].Equals(TEXT("harvest_run"), ESearchCase::IgnoreCase)))
+                        && !A[0].Equals(TEXT("harvest_run"), ESearchCase::IgnoreCase)
+                        && !A[0].Equals(TEXT("periphery"), ESearchCase::IgnoreCase)))
                 {
-                    UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.bot <combat_patrol|loot_pickup|death_respawn|harvest_run>"));
+                    UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.bot <combat_patrol|loot_pickup|death_respawn|harvest_run|periphery>"));
                     return;
                 }
                 Cmd->StartBotBrain(A[0].ToLower());
@@ -303,6 +307,34 @@ void UDevModeConsoleCommands::Cmd_Teleport(const TArray<FString>& Args) const
 
     GameInstance->Player->SetActorLocation(FVector(X, Y, Z));
     UE_LOG(LogTemp, Log, TEXT("devmode.teleport: Player teleported to (%.0f, %.0f, %.0f)"), X, Y, Z);
+    SnapPlayerToGround();
+}
+
+void UDevModeConsoleCommands::SnapPlayerToGround() const
+{
+    if (!GameInstance || !GameInstance->Player) return;
+    UWorld* World = GameInstance->GetWorld();
+    ABasicPlayer* Player = GameInstance->Player;
+    if (!World || !Player) return;
+
+    const FVector From = Player->GetActorLocation() + FVector(0.0f, 0.0f, 2000.0f);
+    const FVector To = Player->GetActorLocation() - FVector(0.0f, 0.0f, 5000.0f);
+    FHitResult Hit;
+    FCollisionQueryParams Params(SCENE_QUERY_STAT(DevModeSnapToGround), false, Player);
+    if (World->LineTraceSingleByChannel(Hit, From, To, ECC_WorldStatic, Params) && Hit.bBlockingHit)
+    {
+        float HalfHeight = 90.0f;
+        if (const UCapsuleComponent* Capsule = Player->GetCapsuleComponent())
+        {
+            HalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+        }
+        Player->SetActorLocation(Hit.Location + FVector(0.0f, 0.0f, HalfHeight + 2.0f));
+        UE_LOG(LogTemp, Log, TEXT("devmode: player snapped to ground Z=%.0f"), Hit.Location.Z);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("devmode: no ground under player, keeping position"));
+    }
 }
 
 // ============================================================================
@@ -406,7 +438,7 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
 {
     if (Args.Num() < 1)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.scenario <combat|reset|full_sweep|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run>"));
+        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.scenario <combat|reset|full_sweep|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery>"));
         return;
     }
     if (!GameInstance) return;
@@ -462,22 +494,24 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
     else if (Name == TEXT("bot_combat_patrol")
         || Name == TEXT("bot_loot_pickup")
         || Name == TEXT("bot_death_respawn")
-        || Name == TEXT("bot_harvest_run"))
+        || Name == TEXT("bot_harvest_run")
+        || Name == TEXT("bot_periphery"))
     {
         // Auto-run bot names strip the "bot_" prefix (brain scenario names
-        // are loot_pickup / death_respawn / combat_patrol / harvest_run).
+        // are loot_pickup / death_respawn / combat_patrol / harvest_run /
+        // periphery).
         FString BrainScenario = Name;
         BrainScenario.RemoveFromStart(TEXT("bot_"));
         StartBotBrain(BrainScenario);
     }
     else if (Name == TEXT("bot_vendor_repair"))
     {
-        // Economy shops need the server round-trip тАФ live only.
+        // Economy shops need the server round-trip — live only.
         UE_LOG(LogTemp, Warning, TEXT("devmode.scenario: bot_vendor_repair is live-only (use -bot-live=live_vendor_repair with dev servers)"));
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("devmode.scenario: unknown '%s' (use combat|reset|full_sweep|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run)"), *Args[0]);
+        UE_LOG(LogTemp, Warning, TEXT("devmode.scenario: unknown '%s' (use combat|reset|full_sweep|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery)"), *Args[0]);
     }
 }
 
@@ -495,7 +529,7 @@ void UDevModeConsoleCommands::StartBotBrain(const FString& ScenarioName) const
     }
     UDevModeBotBrain* Brain = GameInstance->DevModeBotBrain;
     // Reset to offline defaults, then apply the scenario profile. One brain,
-    // different flags тАФ same rule as the live driver below.
+    // different flags — same rule as the live driver below.
     Brain->ScenarioName = ScenarioName;
     Brain->TombstonePrefix = TEXT("DEVMODE_BOT");
     Brain->bTeleportToSpawn = true;
@@ -511,6 +545,9 @@ void UDevModeConsoleCommands::StartBotBrain(const FString& ScenarioName) const
     Brain->bHarvestPhase = false;
     Brain->bStubHarvest = true;
     Brain->bVendorPhase = false;
+    Brain->bPeripheryPhase = false;
+    Brain->bCharFlowPhase = false;
+    Brain->bBackToLoginPhase = false;
     Brain->TargetKills = 2;
     Brain->GlobalTimeoutSec = 120.0f;
     if (ScenarioName.Equals(TEXT("loot_pickup"), ESearchCase::IgnoreCase))
@@ -533,6 +570,11 @@ void UDevModeConsoleCommands::StartBotBrain(const FString& ScenarioName) const
         Brain->bHarvestPhase = true;
         Brain->bStubHarvest = true;
     }
+    else if (ScenarioName.Equals(TEXT("periphery"), ESearchCase::IgnoreCase))
+    {
+        Brain->TargetKills = 0;
+        Brain->bPeripheryPhase = true;
+    }
     Brain->Start(GameInstance);
 }
 
@@ -545,7 +587,7 @@ void UDevModeConsoleCommands::RunScenario(const FString& ScenarioName) const
 void UDevModeConsoleCommands::RunSweepPhase1() const
 {
     // Phase 1: reset to seeded state. Actor Destroy() is deferred to end of
-    // frame, so nothing is asserted here тАФ phase 2 runs after cleanup.
+    // frame, so nothing is asserted here — phase 2 runs after cleanup.
     SweepFailures = 0;
     UE_LOG(LogTemp, Warning, TEXT("DEVMODE_SWEEP_BEGIN full_sweep"));
     TArray<FString> NoArgs;
@@ -563,7 +605,7 @@ void UDevModeConsoleCommands::RunSweepPhase2() const
 {
     // Phase 2: the phase-1 destroyed actors are gone, the world matches dev_*.json.
     // Kills two mobs by explicit UID (mobUniqueID from dev_mobs.json), then
-    // clears the corpses тАФ Destroy() is deferred, so respawns wait for phase 3.
+    // clears the corpses — Destroy() is deferred, so respawns wait for phase 3.
     TArray<FString> NoArgs;
     ExpectValue(TEXT("mobs"), TEXT("eq"), 3);
     ExpectValue(TEXT("inv"), TEXT("ge"), 5);
@@ -587,7 +629,7 @@ void UDevModeConsoleCommands::RunSweepPhase2() const
 
 void UDevModeConsoleCommands::RunSweepPhase3() const
 {
-    // Phase 3: corpses are gone, UID tags are free тАФ respawn and verify.
+    // Phase 3: corpses are gone, UID tags are free — respawn and verify.
     TArray<FString> NoArgs;
     TArray<FString> SpawnA = { TEXT("1") };
     Cmd_SpawnMob(SpawnA);
@@ -760,7 +802,7 @@ void UDevModeConsoleCommands::Cmd_KillMob(const TArray<FString>& Args) const
 }
 
 // ============================================================================
-// devmode.clearcorpses тАФ destroy dead mob actors so their UID tags free up.
+// devmode.clearcorpses — destroy dead mob actors so their UID tags free up.
 // ============================================================================
 void UDevModeConsoleCommands::Cmd_ClearCorpses(const TArray<FString>& Args) const
 {

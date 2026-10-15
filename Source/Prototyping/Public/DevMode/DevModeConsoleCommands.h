@@ -22,8 +22,8 @@ class UMyGameInstance;
 //   devmode.reloadmobs                 - destroy all dev mobs and re-spawn from JSON
 //   devmode.reloadinventory            - clear and re-populate inventory from JSON
 //   devmode.listmobs                   - print all spawned mobs to log
-//   devmode.scenario <combat|reset|full_sweep|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run> - one-shot QA flows (teleport/reload presets)
-//   devmode.bot <combat_patrol|loot_pickup|death_respawn|harvest_run>      - start the L1 action bot (real movement/combat, see DevModeBotBrain)
+//   devmode.scenario <combat|reset|full_sweep|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery> - one-shot QA flows (teleport/reload presets)
+//   devmode.bot <combat_patrol|loot_pickup|death_respawn|harvest_run|periphery>      - start the L1 action bot (real movement/combat, see DevModeBotBrain)
 // Assert markers for external log scan: "DEVMODE_ASSERT <PASS|FAIL> ...",
 // sweep tombstones: "DEVMODE_SWEEP_BEGIN <name>", "DEVMODE_SWEEP_RESULT <PASS|FAIL> failures=N",
 // bot tombstones: "DEVMODE_BOT_BEGIN <name>", "DEVMODE_BOT_RESULT <name> <PASS|FAIL> ...".

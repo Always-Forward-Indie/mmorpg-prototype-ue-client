@@ -22,6 +22,9 @@
 #include "Gameplay/Emotes/EmoteNetworkHandler.h"
 #include "Gameplay/Emotes/EmoteManager.h"
 #include "Gameplay/Emotes/EmoteComponent.h"
+#include "Services/LocalizationSubsystem.h"
+#include "Audio/AudioManager.h"
+#include "Authentication/AuthenticationManager.h"
 #include "Gameplay/UI/PlayerNameplateComponent.h"
 #include "UI/UIManager.h"
 #include "Engine/World.h"
@@ -169,6 +172,20 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     LastLearnSlug.Empty();
     bWasPreEquipped = false;
     bRestorePass = false;
+    FlowLegStartTime = 0.0;
+    SavedLocale.Empty();
+    MusicStage = 0;
+    ZoomStage = 0;
+    bListReqSent = false;
+    bCreateSent = false;
+    bDeleteSent = false;
+    CharName.Empty();
+    NewCharId = 0;
+    NameLetterIdx = 0;
+    CharListCache.Empty();
+    CreateError.Empty();
+    DeleteError.Empty();
+    bLoginTravelSent = false;
     CorpseUID = 0;
     bHarvestRequested = false;
     bInspectRequested = false;
@@ -224,6 +241,21 @@ void UDevModeBotBrain::Stop()
         BrainTimerHandle.Invalidate();
         GlobalTimeoutHandle.Invalidate();
     }
+    // Phase E legs that outlive world timers (delegates + core ticker).
+    if (GameInstance && GameInstance->GetAuthenticationManager())
+    {
+        UAuthenticationManager* Auth = GameInstance->GetAuthenticationManager();
+        Auth->OnCharacterListReceived.RemoveDynamic(this, &UDevModeBotBrain::HandleCharListReceived);
+        Auth->OnCreateCharacterResponse.RemoveDynamic(this, &UDevModeBotBrain::HandleCreateResponse);
+        Auth->OnDeleteCharacterResponse.RemoveDynamic(this, &UDevModeBotBrain::HandleDeleteResponse);
+    }
+    if (PostLoadMapLoginHandle.IsValid())
+    {
+        FCoreUObjectDelegates::PostLoadMapWithWorld.Remove(PostLoadMapLoginHandle);
+        PostLoadMapLoginHandle.Reset();
+    }
+    FTSTicker::GetCoreTicker().RemoveTicker(LoginWatchdogHandle);
+    LoginWatchdogHandle.Reset();
     bRunning = false;
     TargetMob.Reset();
 }
@@ -553,6 +585,21 @@ void UDevModeBotBrain::BrainTick()
             {
                 Step = EBotStep::TitleLeg;
                 CharLegStartTime = Now;
+            }
+            else if (bPeripheryPhase)
+            {
+                Step = EBotStep::LocaleLeg;
+                FlowLegStartTime = Now;
+            }
+            else if (bCharFlowPhase)
+            {
+                Step = EBotStep::CharList;
+                FlowLegStartTime = Now;
+            }
+            else if (bBackToLoginPhase)
+            {
+                Step = EBotStep::BackToLogin;
+                FlowLegStartTime = Now;
             }
             else if (bQuestPhase)
             {
@@ -1926,6 +1973,309 @@ void UDevModeBotBrain::BrainTick()
         return;
     }
 
+    if (Step == EBotStep::LocaleLeg)
+    {
+        ULocalizationSubsystem* Loc = GameInstance->GetSubsystem<ULocalizationSubsystem>();
+        if (!Loc)
+        {
+            Finish(false, TEXT("no-locale"));
+            return;
+        }
+        SavedLocale = Loc->GetCurrentLocale();
+        Loc->SetLocale(TEXT("ru"));
+        const FText NameRu = Loc->GetItemDisplayName(TEXT("health_potion"));
+        Loc->SetLocale(TEXT("en"));
+        const FText NameEn = Loc->GetItemDisplayName(TEXT("health_potion"));
+        BotAssert(!NameRu.IsEmpty(), TEXT("locale-ru"), 1, 1);
+        BotAssert(!NameEn.IsEmpty(), TEXT("locale-en"), 1, 1);
+        BotAssert(Loc->GetCurrentLocale() == TEXT("en"), TEXT("locale-switch"), 1, 1);
+        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT locale ru='%s' en='%s'"),
+            *NameRu.ToString(), *NameEn.ToString());
+        Loc->SetLocale(SavedLocale);
+        BotAssert(Loc->GetCurrentLocale() == SavedLocale, TEXT("locale-restore"), 1, 1);
+        BotShot(TEXT("locale"));
+        // Camera before music: music needs designer BP content that may be
+        // absent (loud FAIL below) — camera must still get verified.
+        Step = EBotStep::CameraLeg;
+        FlowLegStartTime = FPlatformTime::Seconds();
+        return;
+    }
+
+    if (Step == EBotStep::MusicLeg)
+    {
+        UAudioManager* Audio = GameInstance->GetAudioManager();
+        if (!Audio)
+        {
+            Finish(false, TEXT("no-audio"));
+            return;
+        }
+        if (Audio->ZoneMusicMap.Num() < 2)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT music zones mapped: %d (need 2)"), Audio->ZoneMusicMap.Num());
+            Finish(false, TEXT("no-music-zones"));
+            return;
+        }
+        const FString ZoneA = Audio->ZoneMusicMap[0].ZoneName;
+        const FString ListA = Audio->ZoneMusicMap[0].PlaylistId;
+        const FString ZoneB = Audio->ZoneMusicMap[1].ZoneName;
+        const FString ListB = Audio->ZoneMusicMap[1].PlaylistId;
+        if (MusicStage == 0)
+        {
+            Audio->PlayMusicForZone(ZoneA);
+            MusicStage = 1;
+            return;
+        }
+        if (MusicStage == 1 && Audio->GetActivePlaylistId() == ListA)
+        {
+            BotAssert(true, TEXT("music-zone-a"), 1, 1);
+            Audio->PlayMusicForZone(ZoneB);
+            MusicStage = 2;
+            return;
+        }
+        if (MusicStage == 2 && Audio->GetActivePlaylistId() == ListB)
+        {
+            BotAssert(true, TEXT("music-zone-b"), 1, 1);
+            BotShot(TEXT("music"));
+            Finish(Failures == 0, Failures == 0 ? TEXT("periphery-done") : TEXT("assert-failures"));
+            return;
+        }
+        if (FPlatformTime::Seconds() - FlowLegStartTime > FlowTimeoutSec)
+        {
+            BotAssert(false, TEXT("music-switch"), 0, 1);
+            Finish(false, TEXT("music-timeout"));
+        }
+        return;
+    }
+
+    if (Step == EBotStep::CameraLeg)
+    {
+        // Zoom through the real input path (OnScroll), assert clamp ends
+        // and boom convergence. No server involved.
+        const float ZoomMin = Player->GetZoomMin();
+        const float ZoomMax = Player->GetZoomMax();
+        if (ZoomStage == 0)
+        {
+            Player->OnScroll(FInputActionValue(100.0f));
+            if (Player->GetDesiredZoom() <= ZoomMin + 1.0f)
+            {
+                BotAssert(true, TEXT("zoom-min"), 1, 1);
+                ZoomStage = 1;
+            }
+            return;
+        }
+        if (ZoomStage == 1)
+        {
+            Player->OnScroll(FInputActionValue(-100.0f));
+            if (Player->GetDesiredZoom() >= ZoomMax - 1.0f)
+            {
+                BotAssert(true, TEXT("zoom-max"), 1, 1);
+                ZoomStage = 2;
+            }
+            return;
+        }
+        // Boom converges to the target length via Tick interp.
+        if (FMath::Abs(Player->GetCameraArmLength() - ZoomMax) < 15.0f)
+        {
+            BotAssert(true, TEXT("zoom-converge"), 1, 1);
+            BotShot(TEXT("camera"));
+            Step = EBotStep::MusicLeg;
+            FlowLegStartTime = FPlatformTime::Seconds();
+            return;
+        }
+        if (FPlatformTime::Seconds() - FlowLegStartTime > FlowTimeoutSec)
+        {
+            BotAssert(false, TEXT("zoom-converge"), 0, 1);
+            Finish(false, TEXT("camera-timeout"));
+        }
+        return;
+    }
+
+    if (Step == EBotStep::CharList)
+    {
+        UAuthenticationManager* Auth = GameInstance->GetAuthenticationManager();
+        if (!Auth)
+        {
+            Finish(false, TEXT("no-auth"));
+            return;
+        }
+        if (!bListReqSent)
+        {
+            Auth->OnCharacterListReceived.AddDynamic(this, &UDevModeBotBrain::HandleCharListReceived);
+            Auth->OnCreateCharacterResponse.AddDynamic(this, &UDevModeBotBrain::HandleCreateResponse);
+            Auth->OnDeleteCharacterResponse.AddDynamic(this, &UDevModeBotBrain::HandleDeleteResponse);
+            FClientDataStruct ClientData = GameInstance->GetCurrentClientData();
+            Auth->SendCharacterListRequest(ClientData);
+            bListReqSent = true;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT character list requested"));
+            return;
+        }
+        if (CharListCache.Num() > 0)
+        {
+            const int32 OwnId = GameInstance->GetCurrentCharacterID();
+            bool bFound = false;
+            for (const FLoginCharacterEntry& E : CharListCache)
+            {
+                if (E.CharacterId == OwnId) { bFound = true; break; }
+            }
+            BotAssert(bFound, TEXT("char-list-self"), bFound ? 1 : 0, 1);
+            Step = EBotStep::CharCreate;
+            FlowLegStartTime = Now;
+            return;
+        }
+        if (Now - FlowLegStartTime > FlowTimeoutSec)
+        {
+            Finish(false, TEXT("char-list-timeout"));
+        }
+        return;
+    }
+
+    if (Step == EBotStep::CharCreate)
+    {
+        UAuthenticationManager* Auth = GameInstance->GetAuthenticationManager();
+        if (!Auth)
+        {
+            Finish(false, TEXT("no-auth"));
+            return;
+        }
+        if (!CreateError.IsEmpty())
+        {
+            BotAssert(false, TEXT("char-created"), 0, 1);
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT create failed: %s"), *CreateError);
+            Finish(false, TEXT("create-failed"));
+            return;
+        }
+        if (NewCharId > 0)
+        {
+            // Verify the newcomer shows up in a fresh list.
+            if (!bListReqSent)
+            {
+                FClientDataStruct ClientData = GameInstance->GetCurrentClientData();
+                Auth->SendCharacterListRequest(ClientData);
+                bListReqSent = true;
+                return;
+            }
+            for (const FLoginCharacterEntry& E : CharListCache)
+            {
+                if (E.CharacterId == NewCharId)
+                {
+                    BotAssert(true, TEXT("char-created"), NewCharId, NewCharId);
+                    BotShot(TEXT("created"));
+                    Step = EBotStep::CharDelete;
+                    FlowLegStartTime = Now;
+                    return;
+                }
+            }
+            if (Now - FlowLegStartTime > FlowTimeoutSec)
+            {
+                BotAssert(false, TEXT("char-created"), 0, NewCharId);
+                Finish(false, TEXT("create-verify-timeout"));
+            }
+            return;
+        }
+        if (CharName.IsEmpty())
+        {
+            if (NameLetterIdx > 4)
+            {
+                Finish(false, TEXT("names-exhausted"));
+                return;
+            }
+            CharName = FString::Printf(TEXT("Test %c"), TCHAR('V' + NameLetterIdx));
+        }
+        if (!bCreateSent)
+        {
+            Auth->SendCreateCharacterRequest(CharName, TEXT("warrior"), TEXT("human"), TEXT("male"));
+            bCreateSent = true;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT create requested '%s'"), *CharName);
+        }
+        if (Now - FlowLegStartTime > FlowTimeoutSec)
+        {
+            Finish(false, TEXT("create-timeout"));
+        }
+        return;
+    }
+
+    if (Step == EBotStep::CharDelete)
+    {
+        UAuthenticationManager* Auth = GameInstance->GetAuthenticationManager();
+        if (!Auth)
+        {
+            Finish(false, TEXT("no-auth"));
+            return;
+        }
+        if (!DeleteError.IsEmpty())
+        {
+            BotAssert(false, TEXT("char-deleted"), 0, 1);
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT delete failed: %s"), *DeleteError);
+            Finish(false, TEXT("delete-failed"));
+            return;
+        }
+        if (!bDeleteSent)
+        {
+            Auth->SendDeleteCharacterRequest(NewCharId);
+            bDeleteSent = true;
+            bListReqSent = false;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT delete requested id=%d"), NewCharId);
+            return;
+        }
+        if (!bListReqSent)
+        {
+            FClientDataStruct ClientData = GameInstance->GetCurrentClientData();
+            Auth->SendCharacterListRequest(ClientData);
+            bListReqSent = true;
+            return;
+        }
+        for (const FLoginCharacterEntry& E : CharListCache)
+        {
+            if (E.CharacterId == NewCharId)
+            {
+                if (Now - FlowLegStartTime > FlowTimeoutSec)
+                {
+                    BotAssert(false, TEXT("char-deleted"), 1, 0);
+                    Finish(false, TEXT("delete-timeout"));
+                }
+                return;
+            }
+        }
+        BotAssert(true, TEXT("char-deleted"), 1, 1);
+        BotShot(TEXT("deleted"));
+        Finish(Failures == 0, Failures == 0 ? TEXT("char-done") : TEXT("assert-failures"));
+        return;
+    }
+
+    if (Step == EBotStep::BackToLogin)
+    {
+        // World timers die in the travel below: arm the PostLoadMap hook
+        // and a core-ticker watchdog, then travel. The tombstone fires in
+        // the callback, never in BrainTick.
+        if (!PostLoadMapLoginHandle.IsValid())
+        {
+            PostLoadMapLoginHandle = FCoreUObjectDelegates::PostLoadMapWithWorld.AddUObject(
+                this, &UDevModeBotBrain::HandlePostLoadMapLogin);
+        }
+        if (!bLoginTravelSent)
+        {
+            GameInstance->ReturnToLoginLevel();
+            bLoginTravelSent = true;
+            UE_LOG(LogTemp, Warning, TEXT("%s returning to login"), *TombstonePrefix);
+            TWeakObjectPtr<UDevModeBotBrain> WeakThis(this);
+            const double WatchStart = FPlatformTime::Seconds();
+            FTSTicker::GetCoreTicker().RemoveTicker(LoginWatchdogHandle);
+            LoginWatchdogHandle = FTSTicker::GetCoreTicker().AddTicker(
+                FTickerDelegate::CreateLambda([WeakThis, WatchStart](float)
+                {
+                    UDevModeBotBrain* Self = WeakThis.Get();
+                    if (!Self || !Self->IsRunning()) { return false; }
+                    if (FPlatformTime::Seconds() - WatchStart > 120.0)
+                    {
+                        Self->Finish(false, TEXT("login-travel-timeout"));
+                    }
+                    return Self->IsRunning();
+                }),
+                1.0f);
+        }
+        return;
+    }
+
     ABasicMOB* Mob = TargetMob.Get();
     // Invariant: live target (repick above guarantees it; AssertKill and
     // GotoWaypoint returned). Defensive recover — never dereference stale.
@@ -2453,6 +2803,70 @@ int32 UDevModeBotBrain::GetProgressionExp() const
             ->GetCharacterProgression(GameInstance->GetCurrentCharacterID()).totalExperience;
     }
     return 0;
+}
+
+// ---- Phase E handlers ----
+
+void UDevModeBotBrain::HandleCharListReceived(const TArray<FLoginCharacterEntry>& Characters)
+{
+    CharListCache = Characters;
+    UE_LOG(LogTemp, Log, TEXT("DEVMODE_BOT char list: %d entries"), Characters.Num());
+}
+
+void UDevModeBotBrain::HandleCreateResponse(bool bSuccess, const FString& Message, int32 CharacterId)
+{
+    if (bSuccess)
+    {
+        NewCharId = CharacterId;
+        bListReqSent = false;
+        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT created id=%d"), CharacterId);
+        return;
+    }
+    // Name taken (a previous run's leftover): rotate to the next letter.
+    if (Message.Contains(TEXT("taken"), ESearchCase::IgnoreCase)
+        || Message.Contains(TEXT("exists"), ESearchCase::IgnoreCase))
+    {
+        ++NameLetterIdx;
+        CharName.Empty();
+        bCreateSent = false;
+        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT name taken, rotating (%s)"), *Message);
+        return;
+    }
+    CreateError = Message;
+}
+
+void UDevModeBotBrain::HandleDeleteResponse(bool bSuccess, const FString& Message, int32 CharacterId)
+{
+    if (!bSuccess)
+    {
+        DeleteError = Message;
+        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT delete failed id=%d: %s"), CharacterId, *Message);
+    }
+}
+
+void UDevModeBotBrain::HandlePostLoadMapLogin(UWorld* LoadedWorld)
+{
+    if (!bRunning)
+    {
+        return;
+    }
+    const FString MapName = LoadedWorld ? LoadedWorld->GetMapName() : TEXT("null");
+    UE_LOG(LogTemp, Warning, TEXT("%s post-travel map: %s"), *TombstonePrefix, *MapName);
+    if (MapName.Contains(TEXT("Login")))
+    {
+        BotAssert(true, TEXT("back-to-login"), 1, 1);
+        BotShot(TEXT("login"));
+        Finish(true, TEXT("back-to-login-done"));
+        // Finish quits via the (here torn-down) run world: quit explicitly
+        // from the freshly loaded login world instead.
+        if (LoadedWorld && GEngine)
+        {
+            GEngine->Exec(LoadedWorld, TEXT("quit"));
+        }
+        return;
+    }
+    // Some other map (boot/world again): keep waiting for the login one;
+    // the core-ticker watchdog bounds the wait.
 }
 
 bool UDevModeBotBrain::EnsureDialogueOpen(int32 NpcId, double Now)

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Data/DataStructs.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/SpringArmComponent.h"
 #include "EnhancedInputComponent.h"
 #include "InputActionValue.h"
 #include "EnhancedInputSubsystems.h"
@@ -859,6 +860,11 @@ public:
 	void OnLeftMousePressed();
 	void OnLeftMouseReleased();
 	void OnScroll(const FInputActionValue& Value);
+	// Test-visible camera state (bots drive OnScroll, the real input path).
+	float GetDesiredZoom() const { return DesiredZoom; }
+	float GetZoomMin() const { return ZoomMin; }
+	float GetZoomMax() const { return ZoomMax; }
+	float GetCameraArmLength() const { return CameraBoom ? CameraBoom->TargetArmLength : -1.0f; }
 	void ApplyMouseCaptureIfNoUIOpen();
 	void RestoreCursorToUIManager();
 	void UpdateMeshRotation(float DeltaTime);

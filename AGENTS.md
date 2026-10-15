@@ -30,16 +30,15 @@ Single `Prototyping` runtime module. No Unreal replication — custom TCP + JSON
 
 - Traffic is facts + boot snapshots only. No synchronous cross-server questions on the player path; no response may gate a client-visible action (confirm inline from validated state instead — see skill learn).
 - Single owner per resource: chunk decides in-session (validate/spend/confirm), game persists the sent facts as-is (absolute values, idempotent upserts). No independent business arithmetic on game for chunk-decided facts (no second decrement, no additive re-apply).
-- Every seam failure point logs error-level (never info/debug — those are level-gated). `Tools/WSL/Watch-ServerLogs.ps1` SEAM patterns (`no live chunk socket`, `socket not available`, `Unknown event type`, `unexpected data type`, `invalid params`, `parse error`) are counters: any hit = investigate like FATAL.
+- Every seam failure point logs error-level (never info/debug — those are level-gated). `bin/watch_logs.sh` (integration-tests repo) SEAM patterns (`no live chunk socket`, `socket not available`, `Unknown event type`, `unexpected data type`, `invalid params`, `parse error`) are counters: any hit = investigate like FATAL.
 - Runtime game→chunk responses go on the live socket resolved at send time (`ChunkManager::resolveLiveSocket`), never a captured one.
 - DEV-only test content rule: ids 9000+, only `scripts/dev_*.sql` (login-server repo), NEVER migrations/dump. `game_config` knob probes need game+chunk restart (boot-handshake push only). Preflight assert: no 9000+ rows before any prod apply.
 
 ## Automated tests (see Tools/Tests/README.md)
 
-- `Tests/Contract/` (pytest, no engine): `mmo_proto.py` TCP+`\n` client, `test_framing.py` (no server), `test_conn/test_combat/test_cross_visibility/test_harvest/test_trade.py` (need WSL dev servers + `MMO_*`/`MMO2_*` creds, skip cleanly otherwise). `test_reg_evict/test_reg_timed/test_reg_learn.py` need DEV fixtures (`scripts/dev_arena.sql`, `dev_timed.sql`, `dev_learn.sql`) + single-shot re-arming, see README.
-- Admin-RPC (DEV only): chunk `adminCommand` (teleport/spawn/grant/read) + `Tools/Bots/admin.py` (separate `gm_bot`, never bot accounts). New mechanic ships with its admin command first (atom test via admin-RPC; locomotion tested once, everything else teleports). Prod builds contain no such code (`ADMIN_RPC` off + flag off + zero GM accounts).
-- `Tools/Bots/run_swarm.py --n 8 --scenario patrol|combat_sweep|chat_mesh|kill|harvest|death` + `--scenario trade` (duo pairs, even --n) + `seed_bots.py` (bot_* accounts) + `--tap` for `Tools/Replay/replay.py`.
-- `Tools/WSL/Preflight.ps1` (WSL→containers→ports→dev config), `Tools/Smoke/SmokeClients.ps1 -n 2` (real UE clients + log scan).
+- Integration (WSL repo `~/projects/mmorpg-prototype/mmorpg-prototype-integration-tests/`, runbook in its `README.md`): `bin/run_fast.sh` (atoms) / `bin/run_slow.sh` (chains, serial) / `bots/run_swarm.py --n 8 --scenario ...` + `seed_bots.py` / `replay/` / load probes / `bin/soak.sh` / `bin/watch_logs.sh` gates. `Tests/Contract/` + `Tools/Bots|Replay|Contract|Soak|WSL` removed from this repo 2026-09-22 — do not recreate here.
+- Admin-RPC (DEV only): chunk `adminCommand` (teleport/spawn/grant/read) + `bots/admin.py` in the integration repo (separate `gm_bot`, never bot accounts). New mechanic ships with its admin command first (atom test via admin-RPC; locomotion tested once, everything else teleports). Prod builds contain no such code (`ADMIN_RPC` off + flag off + zero GM accounts).
+- `Tools/Smoke/SmokeClients.ps1 -n 2` (real UE clients + log scan).
 - `Source/Prototyping/Private/Tests/` (`MMO.*` Automation specs) + `devmode.scenario combat|reset` + `Config/DevMode/qa_presets.json` for offline QA.
 
 ## DevMode (offline, no servers)

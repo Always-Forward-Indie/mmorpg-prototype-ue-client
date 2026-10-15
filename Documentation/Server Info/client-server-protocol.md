@@ -1,5 +1,12 @@
 # MMORPG Network Protocol Reference
 
+> **SUPERSEDED (2026-09-24).** Этот монолит устарел и не поддерживается:
+> нет `factKey/factAck`, `body.errorCode`, `interest.*`, `scheduler.*`,
+> `adminCommand`, новых save-семейств. Актуальный источник wire-протокола —
+> `mmorpg-prototype-integration-tests/docs/protocol/00–13` (+ `docs/api/`
+> здесь — их зеркало), геймплейные детали — в остальных файлах `docs/`.
+> Оставлен как история.
+
 Документ описывает полный сетевой протокол проекта на основе текущего кода:
 - Login Server ↔ Client
 - Chunk Server ↔ Client
@@ -42,49 +49,98 @@
 ### Полная последовательность входа в игру
 
 ```
-Клиент                          Chunk Server                   Game Server
-  │                                  │                               │
-  │──── TCP connect ─────────────────►│                               │
-  │                                  │  (присваивает clientId)        │
-  │──── joinGameClient ──────────────►│                               │
-  │                                  │  (проверка hash, loadClientData)
-  │◄─── joinGameClient (broadcast) ───│  ← все клиенты видят
-  │                                  │                               │
-  │──── joinGameCharacter ───────────►│                               │
-  │                                  │──── getPlayerQuests/Flags ────►│
-  │                                  │──── getPlayerInventory ────────►│
-  │                                  │──── getPlayerActiveEffects ─────►│
-  │                                  │──── getPlayerPityData ──────────►│
-  │                                  │──── getPlayerBestiaryData ──────►│
-  │                                  │──── getPlayerReputationsData ───►│
-  │                                  │──── getPlayerMasteriesData ─────►│
-  │◄─── joinGameCharacter (broadcast) │  ← все клиенты видят нового персонажа
-  │◄─── initializePlayerSkills ───────│  ← только вошедшему
-  │◄─── spawnNPCs ────────────────────│  ← только вошедшему
-  │◄─── itemDrop (snapshot) ──────────│  ← только вошедшему (наземные предметы)
-  │◄─── spawnMobsInZone (×N зон) ─────│  ← только вошедшему (мобы всех зон, server-push)
-  │◄─── world_notification zone_entered│  ← только вошедшему (текущая игровая зона)
-  │◄─── stats_update ─────────────────│  ← только вошедшему (полные статы + инвентарь завершён)
-  │◄─── getPlayerInventory ───────────│  ← только вошедшему
-  │◄─── equipmentState ───────────────│  ← только вошедшему
+Клиент                     Game Server                  Chunk Server
+  │                          │                               │
+  │  ── PRE-PHASE: Game Server ───────────────────────────────────────────
+  │──── joinGameClient ──────►│ header: {clientId, hash}  │
+  │     body: {characterId}  │                               │
+  │                          ├──── loadCharacter(DB) ────────►│ setCharacterData push
+  │◄─── joinGameClient ───────┤ body: {chunkServerData}    │  (server-to-server, async)
+  │                          │                               │
+  │  ──────────────────────────────────────────────────────────────────────
+  │──── TCP connect (Chunk) ────────────────────────────────►│
+  │──── joinGameClient ─────────────────────────────────────►│ header: {clientId, hash}
+  │     body: {}             │                               │ (clientId уже назначен)
+  │◄─── joinGameClient (broadcast) ─────────────────────────│ ← все клиенты видят
+  │                          │                               │
+  │──── joinGameCharacter ───────────────────────────────────►│
+  │                          │◄─── getPlayerQuests/Flags ────│
+  │                          │◄─── getPlayerInventory ────────│
+  │                          │◄─── getPlayerActiveEffects ────│
+  │                          │◄─── getPlayerPityData ─────────│
+  │                          │◄─── getPlayerBestiaryData ──────│
+  │                          │◄─── getPlayerReputationsData ───│
+  │                          │◄─── getPlayerMasteriesData ─────│
+  │◄─── joinGameCharacter (broadcast) ──────────────────────│ ← все клиенты видят нового персонажа
+  │◄─── initializePlayerSkills ─────────────────────────────│ ← только вошедшему
+  │◄─── асинхронные ассеты (inv / quests / flags / ...) ────│ ← только вошедшему
+  │                          │                               │
+  │──── playerReady ─────────────────────────────────────────►│ сцена загружена
+  │◄─── spawnNPCs + spawnMobsInZone + nearbyItems + equipments│ ← только вошедшему
 ```
 
-### 1.1 Регистрация сессии — `joinGameClient`
+### 1.1 Регистрация сессии — `joinGameClient` (предварительный шаг — Game Server)
 
-**Направление клиент → сервер:**
+**Клиент → Game Server:**
 
 ```json
 {
   "header": {
     "eventType": "joinGameClient",
-    "clientId": 0,
+    "clientId": 3,
+    "hash": "abc123"
+  },
+  "body": {
+    "characterId": 3
+  }
+}
+```
+
+`clientId` и `hash` — получены с Login Server. `characterId` — выбранный персонаж из списка.
+
+**Game Server → Клиент:**
+
+```json
+{
+  "header": {
+    "eventType": "joinGameClient",
+    "clientId": 3,
+    "hash": "abc123",
+    "status": "success",
+    "message": "Authentication success for user!"
+  },
+  "body": {
+    "chunkServerData": {
+      "chunkId": 1,
+      "chunkIp": "192.168.50.50",
+      "chunkPort": 27017,
+      "chunkPosX": 0.0, "chunkPosY": 0.0, "chunkPosZ": 0.0,
+      "chunkSizeX": 0.0, "chunkSizeY": 0.0, "chunkSizeZ": 0.0
+    }
+  }
+}
+```
+
+После получения ответа: подключиться по `chunkIp:chunkPort` и отправить `joinGameClient` уже на Chunk Server.
+
+> **Параллельно**: Game Server загружает данные персонажа из БД и отправляет `setCharacterData` на Chunk Server (server-to-server, не видимо клиенту). По этой причине `joinGameCharacter` на Chunk Server работает без повторного запроса в БД.
+
+### 1.1' Регистрация сессии — `joinGameClient` (на Chunk Server)
+
+**Клиент → Chunk Server:**
+
+```json
+{
+  "header": {
+    "eventType": "joinGameClient",
+    "clientId": 3,
     "hash": "abc123"
   },
   "body": {}
 }
 ```
 
-`hash` — токен авторизации, полученный с Login Server.
+`clientId` уже назначен с Login Server — не 0.
 
 **Ответ сервера → broadcast (все клиенты):**
 
@@ -92,7 +148,7 @@
 {
   "header": {
     "eventType": "joinGameClient",
-    "clientId": 42,
+    "clientId": 3,
     "hash": "abc123",
     "message": "Authentication success for user!"
   },
@@ -104,7 +160,7 @@
 
 ### 1.2 Вход персонажа — `joinGameCharacter`
 
-**Направление клиент → сервер:**
+**Клиент → Chunk Server:**
 
 ```json
 {
@@ -114,10 +170,12 @@
     "hash": "abc123"
   },
   "body": {
-    "characterId": 7
+    "id": 7
   }
 }
 ```
+
+> **Важно**: поле называется `body.id`, не `body.characterId` — сервер читает именно `body["id"]`.
 
 **Ответ сервера → broadcast (все клиенты):**
 
@@ -145,15 +203,20 @@
         "mana":   { "current": 100, "max": 100 }
       },
       "position": { "x": 100.5, "y": 200.3, "z": 0.0, "rotationZ": 1.57 },
-      "isDead": false
+      "isDead": false,
+      "equippedTitleSlug": "wolf_slayer"
     }
   }
 }
 ```
 
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `equippedTitleSlug` | string | Slug активного тайтла (пустая строка — нет тайтла). Может быть `""` если тайтл ещё не загрузился — в этом случае последует пакет `PLAYER_TITLE_CHANGED`. |
+
 > **Важно:** `character` в `joinGameCharacter` содержит только базовые поля для отображения nameplate у других игроков. Полные статы (атрибуты, эффекты) получает только **сам вошедший** через `stats_update`.
 
-**Обработка другими клиентами:** При получении `joinGameCharacter` — создать/обновить nameplate для `character.id` с именем, уровнем, расой, классом и позицией.
+**Обработка другими клиентами:** При получении `joinGameCharacter` — создать/обновить nameplate для `character.id` с именем, уровнем, расой, классом, позицией и `equippedTitleSlug` (отобразить над именем).
 
 ### 1.3 Отключение персонажа — `disconnectClient`
 
@@ -174,7 +237,38 @@
 
 Удалить персонажа `characterId` из отображаемого мира.
 
-### 1.4 Список предметов мира — `getItemsList` (внутренний)
+### 1.4 Смена тайтла игроком — `PLAYER_TITLE_CHANGED` (broadcast)
+
+Рассылается **всем клиентам зоны, кроме владельца** в двух случаях:
+1. Игрок экипировал/снял тайтл (`equipTitle`).
+2. Данные тайтлов пришли от Game Server уже после того, как персонаж стал world-ready (догоняющий broadcast).
+
+**Направление:** Chunk Server → все клиенты зоны (кроме владельца)  
+**eventType:** `PLAYER_TITLE_CHANGED`
+
+```json
+{
+  "header": {
+    "eventType": "PLAYER_TITLE_CHANGED",
+    "message": "success"
+  },
+  "body": {
+    "characterId": 7,
+    "equippedTitleSlug": "wolf_slayer"
+  }
+}
+```
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `characterId` | int | ID персонажа, сменившего тайтл |
+| `equippedTitleSlug` | string | Новый активный тайтл; пустая строка `""` означает снятие тайтла |
+
+**Обработка клиентом:** Найти персонажа `characterId` в сцене и обновить отображение тайтла над nameplate. Пустой `equippedTitleSlug` — скрыть строку тайтла.
+
+---
+
+### 1.5 Список предметов мира — `getItemsList` (внутренний)
 
 Чанк-сервер получает каталог всех предметов от Game Server при запуске. Клиент этот пакет не получает — предметы всегда приходят с полными данными в инвентарных пакетах.
 
@@ -283,7 +377,7 @@
         "quantity":         3,
         "isEquipped":       false,
         "durabilityCurrent": 80,
-        "slug":             "iron_sword",
+        "slug":             "sharp_sword",
         "isQuestItem":      false,
         "itemType":         2,
         "itemTypeName":     "Weapon",
@@ -363,13 +457,11 @@
 | `legs` | Ноги |
 | `feet` | Обувь |
 | `hands` | Перчатки |
-| `waist` | Пояс |
-| `necklace` | Ожерелье |
-| `ring_1` | Кольцо 1 |
-| `ring_2` | Кольцо 2 |
+| `neck` | Ожерелье |
+| `ring` | Кольцо (один слот) |
 | `main_hand` | Основная рука |
 | `off_hand` | Вспомогательная рука |
-| `cloak` | Плащ |
+| `trinket` | Безделушка |
 
 ### 3.1 Надеть предмет — клиент → сервер
 
@@ -485,7 +577,7 @@
       "main_hand": {
         "inventoryItemId":  101,
         "itemId":           5,
-        "itemSlug":         "iron_sword",
+        "itemSlug":         "sharp_sword",
         "durabilityCurrent": 80,
         "durabilityMax":    100,
         "isDurabilityWarning": false,
@@ -495,11 +587,9 @@
       "legs":      null,
       "feet":      null,
       "hands":     null,
-      "waist":     null,
-      "necklace":  null,
-      "ring_1":    null,
-      "ring_2":    null,
-      "cloak":     null
+      "neck":      null,
+      "ring":      null,
+      "trinket":   null
     }
   }
 }
@@ -585,11 +675,22 @@ weightLimit = carry_weight.base + strength * carry_weight.per_strength
 
 Значения по умолчанию: `weapon_loss_per_hit = 1`, `armor_loss_per_hit = 1`, `death_penalty_pct = 0.05`.
 
-### Порог предупреждения
+### Пороги предупреждений (3-тировая модель)
 
-Когда прочность пересекает порог `durability.warning_threshold_pct` (по умолчанию 30%) — сервер переотправляет `EQUIPMENT_STATE`, где `isDurabilityWarning = true` для затронутого слота. Все атрибуты пересчитываются с учётом штрафа `durability.warning_penalty_pct` (по умолчанию 15%).
+Когда прочность пересекает один из трёх нисходящих порогов, сервер:
+1. Отправляет `world_notification` типа `durability_warning` с полями `severity` и `severityLabel`.
+2. Запрашивает у Game Server пересчёт атрибутов — клиент получает `charAttributesUpdate` с уже учтённым штрафом.
 
-Клиент получает свежий `EQUIPMENT_STATE` и `charAttributesUpdate` автоматически.
+| Порог (`durabilityCurrent / durabilityMax`) | `severity` | `severityLabel` | Штраф к атаке/защите |
+|------|------|------------|----------|
+| ≥ 75% → < 75% | 1 | `"low"` | −5% |
+| ≥ 50% → < 50% | 2 | `"medium"` | −15% |
+| ≥ 25% → < 25% | 3 | `"high"` | −30% |
+| > 0 → 0 (сломан) | 4 | `"broken"` | −30% (полный штраф) |
+
+Поле `isDurabilityWarning` в `EQUIPMENT_STATE` (и при ответах `repairShop`) становится `true` при `durabilityCurrent / durabilityMax < durability.warning_threshold_pct` (по умолчанию 30%) — используется только для визуального выделения слота.
+
+Клиент получает `charAttributesUpdate` автоматически после пересечения порога — `EQUIPMENT_STATE` не переотправляется.
 
 ---
 
@@ -619,7 +720,7 @@ weightLimit = carry_weight.base + strength * carry_weight.per_strength
       {
         "inventoryItemId": 101,
         "itemId":          5,
-        "name":            "Iron Sword",
+        "name":            "Острый меч",
         "durabilityMax":   100,
         "durabilityCurrent": 45,
         "repairCost":      75
@@ -723,7 +824,7 @@ weightLimit = carry_weight.base + strength * carry_weight.per_strength
       {
         "itemId":       5,
         "name":         "Iron Sword",
-        "slug":         "iron_sword",
+        "slug":         "sharp_sword",
         "itemTypeSlug": "weapon",
         "raritySlug":   "common",
         "stackMax":     1,
@@ -907,7 +1008,7 @@ weightLimit = carry_weight.base + strength * carry_weight.per_strength
       "myConfirmed":   false,
       "theirConfirmed": false,
       "myItems": [
-        { "inventoryItemId": 101, "itemId": 5, "quantity": 1, "name": "Iron Sword", "slug": "iron_sword" }
+        { "inventoryItemId": 101, "itemId": 5, "quantity": 1, "name": "Iron Sword", "slug": "sharp_sword" }
       ],
       "theirItems": []
     }
@@ -1452,11 +1553,13 @@ weightLimit = carry_weight.base + strength * carry_weight.per_strength
 - `getBestiaryEntry`
 - `getBestiaryOverview`
 - `chatMessage`
+- `equipTitle`
+- `useEmote`
 
 ### 15.3 Chunk/Game межсерверные (основные)
 
 - Инициализация/справочники: `chunkServerConnection`, `setChunkData`, `setSpawnZonesList`, `setMobsList`, `setMobsAttributes`, `setMobsSkills`, `setNPCsList`, `setNPCsAttributes`, `getItemsList`, `getMobLootInfo`, `setMobWeaknessesResistances`, `getExpLevelTable`, `setDialoguesData`, `setNPCDialogueMappings`, `setQuestsData`, `setGameConfig`, `setVendorData`, `setStatusEffectTemplates`, `setGameZonesList`, `setZoneEventTemplatesList`, `setRespawnZonesList`, `setTimedChampionTemplatesList`.
-- Персонаж/прогресс: `setCharacterData`, `setCharacterAttributes`, `setCharacterAttributesRefresh`, `setPlayerQuestsData`, `setPlayerFlagsData`, `setPlayerActiveEffects`, `setPlayerInventoryData`, `setPlayerPityData`, `setPlayerBestiaryData`, `setPlayerReputationsData`, `setPlayerMasteriesData`, `setLearnedSkill`, `inventoryItemIdSync`.
+- Персонаж/прогресс: `setCharacterData`, `setCharacterAttributes`, `setCharacterAttributesRefresh`, `setPlayerQuestsData`, `setPlayerFlagsData`, `setPlayerActiveEffects`, `setPlayerInventoryData`, `setPlayerPityData`, `setPlayerBestiaryData`, `setPlayerReputationsData`, `setPlayerMasteriesData`, `setLearnedSkill`, `inventoryItemIdSync`, `setPlayerTitlesData`, `setPlayerEmotesData`, `setTitleDefinitionsData`, `setEmoteDefinitionsData`.
 - Persist от chunk: `savePositions`, `saveHpMana`, `saveCharacterProgress`, `saveInventoryChange`, `saveEquipmentChange`, `saveDurabilityChange`, `saveItemKillCount`, `saveExperienceDebt`, `saveActiveEffect`, `transferInventoryItem`, `nullifyItemOwner`, `deleteInventoryItem`, `updatePlayerQuestProgress`, `updatePlayerFlag`, `savePityCounter`, `saveBestiaryKill`, `timedChampionKilled`, `saveReputation`, `saveMastery`, `saveLearnedSkill`.
 
 ### 15.4 Совместимость клиента (обязательно)

@@ -6,7 +6,8 @@
 - Проверка владельца (`characterId == playerId`)
 - Проверка существования предмета
 - Проверка стаков, веса, уровня
-- Моментальная персистентность в БД через game-server
+- Моментальная персистентность в БД через game-server (chunk→game факты
+  с `factKey` → `factAck`, см. [13](13-reliability-delivery.md))
 
 ---
 
@@ -53,7 +54,7 @@
         "durabilityMax": 100,
         "item": {
           "id": 5,
-          "slug": "iron_sword",
+          "slug": "sharp_sword",
           "itemTypeSlug": "weapon",
           "raritySlug": "common",
           "weight": 3.5,
@@ -336,13 +337,16 @@
 
 ### Серверная обработка
 
-1. Проверяет `isUsable` на предмете
-2. Проверяет кулдаун (`cooldownSeconds`)
-3. Применяет каждый `useEffects[]` из `ItemDataStruct`
-4. Если `isInstant`: мгновенное восстановление HP/MP
-5. Если не `isInstant`: создаёт `ActiveEffectStruct` с длительностью
-6. Убирает 1 из стака (или удаляет предмет при `quantity == 1`)
-7. Отправляет обновление инвентаря и хил-результат
+1. Персонаж должен быть жив
+2. Персонаж должен иметь предмет в инвентаре
+3. Проверяет `isUsable = true` и `useEffects` не пустой
+4. Проверяет и устанавливает per-character кулдаун (`cooldownSeconds`)
+5. Убирает 1 из стака (или удаляет предмет при `quantity == 1`)
+6. Для каждого `useEffect`:
+   - `isInstant = true, attributeSlug = "hp"` → `applyHealToCharacter()`, бродкаст `healingResult`
+   - `isInstant = true, attributeSlug = "mp"` → `restoreManaToCharacter()`
+   - `isInstant = false` → создаёт `ActiveEffectStruct` (`sourceType = "item"`) и добавляет в `CharacterManager`; персистирует в `player_active_effect` через game server (переживает реконнект)
+7. Отправляет `stats_update` владельцу
 
 ### Сервер → Broadcast (healingResult для HP/MP предметов)
 
@@ -436,6 +440,8 @@
 }
 ```
 
+Перегруз замедляет, но не останавливает: множитель скорости `max(0.3, limit/carried)` (линейно от 1.0 на лимите до пола 0.3).
+
 ---
 
 ## Экипировка
@@ -444,19 +450,17 @@
 
 | Код | Slug | Описание |
 |-----|------|----------|
-| 0 | `none` | Нет |
 | 1 | `head` | Голова |
 | 2 | `chest` | Грудь |
 | 3 | `legs` | Ноги |
 | 4 | `feet` | Ступни |
 | 5 | `hands` | Руки |
-| 6 | `waist` | Пояс |
-| 7 | `necklace` | Ожерелье |
-| 8 | `ring_1` | Кольцо 1 |
-| 9 | `ring_2` | Кольцо 2 |
-| 10 | `main_hand` | Основная рука |
-| 11 | `off_hand` | Вторая рука |
-| 12 | `cloak` | Плащ |
+| 6 | `main_hand` | Основная рука |
+| 7 | `off_hand` | Вторая рука (атака `physical/magical_attack` оттуда считается 50% — бонус второй руки, не вторая атака; защита и прочие статы — полностью) |
+| 8 | `two_hand` | Двуручное |
+| 9 | `ring` | Кольцо (один слот) |
+| 10 | `neck` | Ожерелье |
+| 11 | `trinket` | Безделушка |
 
 ---
 
@@ -627,7 +631,7 @@
       "main_hand": {
         "inventoryItemId": 101,
         "itemId": 5,
-        "itemSlug": "iron_sword",
+        "itemSlug": "sharp_sword",
         "durabilityCurrent": 85,
         "durabilityMax": 100,
         "isDurabilityWarning": false,
@@ -687,18 +691,30 @@
 
 ## Система прочности (Durability)
 
-- При атаке оружием: `-1` прочность за удар
-- При получении урона: `-1` прочность на случайном элементе экипировки
-- При смерти: `-5%` от `durabilityMax` на всех экипированных предметах
+Износ 3-tier progressive (пороги/штрафы — `game_config`: `durability.tier{1,2,3}_threshold_pct`
+= 75/50/25%, штрафы эффективности −5/−15/−30%):
+- При атаке оружием: износ за удар
+- При получении урона: износ на случайном элементе экипировки
+- При смерти: flat `-5%` от `durabilityMax` (`durability.death_penalty_pct`) на всех экипированных предметах
 - При `durabilityCurrent == 0`: предмет **не ломается**, но перестаёт давать бонусы
+- `isDurabilityWarning` + `durability_warning{severity/severityLabel}` с 30% (`durability.warning_threshold_pct`)
 - Ремонт через NPC-кузнеца (см. документ 06)
 
 ### Item Soul (Kill Count)
 
-Оружие отслеживает количество убийств (`killCount`). Сохраняется каждые 5 убийств или при достижении тира.
+Оружие отслеживает количество убийств (`killCount`). Флаш в БД каждые 5 убийств (`item_soul.db_flush_every_kills`) или при достижении тира (таблица тиров `ItemSoulTiers` — single source).
 
 ---
 
 ## Валюта (золото)
 
 Золото хранится как специальный предмет с slug `"gold_coin"` в инвентаре. Поле `gold` в ответе `getPlayerInventory` — это суммарное количество `gold_coin` в инвентаре для удобства.
+
+---
+
+## Сетовые бонусы (item sets)
+
+Надето N вещей из набора → бонусы набора (`set_bonus` CTE в `get_character_attributes`:
+считает надетые вещи по `item_set_members`, сверяет `pieces_required`).
+Первый набор: **Wayfarer garb** (`worn_old_sword` + `leather_chestguard` + `leather_boots`):
+2 вещи → +3 `physical_attack`, 3 вещи → +2 `crit_chance`.

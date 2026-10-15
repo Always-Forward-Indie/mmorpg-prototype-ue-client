@@ -10,8 +10,8 @@
 
 Отправляется в следующих случаях:
 - **При `joinGameCharacter`** — unicast новому клиенту, все зоны с их мобами
-- **Respawn-задача (каждые 30 сек)** — всем подключённым клиентам, когда в зоне появились новые мобы
-- **Safety spawn-задача (каждые 5 мин)** — всем подключённым клиентам, защита от нехватки мобов
+- **Respawn-задача** (`scheduler.respawn_ms`, default 30 сек) — всем подключённым клиентам, когда в зоне появились новые мобы
+- **Safety spawn-задача** (`scheduler.spawn_safety_ms`, default 5 мин) — всем подключённым клиентам, защита от нехватки мобов
 
 ### Сервер → Unicast
 
@@ -24,31 +24,15 @@
     "eventType": "spawnMobsInZone"
   },
   "body": {
-    "spawnZone": {
-      "id": 1,
-      "name": "Forest Clearing",
-      "bounds": {
-        "minX": 0.0,
-        "maxX": 2000.0,
-        "minY": 0.0,
-        "maxY": 2000.0,
-        "minZ": 0.0,
-        "maxZ": 100.0
-      },
-      "spawnMobId": 5,
-      "maxSpawnCount": 10,
-      "spawnedMobsCount": 8,
-      "respawnTime": 30,
-      "spawnEnabled": true
-    },
+    "zoneId": 1,
     "mobs": [
       {
         "id": 5,
         "uid": 1001,
         "zoneId": 1,
-        "name": "Forest Wolf",
-        "slug": "forest_wolf",
-        "race": "Beast",
+        "name": "Простой волк",
+        "slug": "ForestWolf",
+        "race": "Animal",
         "level": 3,
         "isAggressive": true,
         "isDead": false,
@@ -100,23 +84,38 @@
 | `attributes` | array | Массив атрибутов |
 | `combatState` | int | Состояние AI (см. ниже) |
 
-### Поля зоны спавна
+### Поля зоны спавна (внутренняя модель; в клиентский пакет не входят — клиент получает только `body.zoneId` + `body.mobs[]`)
+
+На проводе GS→chunk синк плоский: `id, name, minX…maxZ / centerX…, inner/outerRadius, shape, mobEntries[{mobId, maxCount, respawnTimeSec}]`. Здесь — та же семантика в структурированном виде:
 
 | Поле | Тип | Описание |
 |------|-----|----------|
 | `id` | int | ID зоны |
 | `name` | string | Имя зоны |
-| `bounds` | object | AABB границы (minX, maxX, minY, maxY, minZ, maxZ) |
-| `spawnMobId` | int | Шаблон моба для спавна |
-| `maxSpawnCount` | int | Макс. число мобов |
-| `spawnedMobsCount` | int | Текущее число живых |
-| `respawnTime` | int | Интервал респавна (сек) |
+| `shape` | string | Форма зоны: `"RECT"` / `"CIRCLE"` / `"ANNULUS"` |
+| `bounds` | object | AABB границы (minX, maxX, minY, maxY, minZ, maxZ). Для RECT — фактические границы; для CIRCLE/ANNULUS — описывающий прямоугольник |
+| `center` | object | Центр зоны `{x, y}`. Для CIRCLE/ANNULUS — реальный центр; для RECT — геометрический центр AABB |
+| `innerRadius` | float | Внутренний радиус (только ANNULUS). Спавн запрещён ближе этого радиуса к центру |
+| `outerRadius` | float | Внешний радиус (CIRCLE и ANNULUS) |
+| `mobEntries` | array | Конфигурация мобов зоны (один элемент = одна строка spawn_zone_mobs) |
+| `mobEntries[].mobId` | int | Шаблонный ID моба |
+| `mobEntries[].maxCount` | int | Макс. число мобов этого типа в зоне |
+| `totalSpawnCount` | int | Суммарный лимит мобов (сумма `mobEntries[].maxCount`) |
+| `spawnedMobsCount` | int | Текущее число живых мобов всех типов |
+| `respawnTimeSec` | int | Минимальный интервал респавна среди всех типов (сек) |
 | `spawnEnabled` | bool | Спавн активен |
+
+#### Формы зон (shape)
+
+| shape | Границы | Алгоритм выбора позиции |
+|-------|---------|------------------------|
+| `RECT` | `bounds.minX/maxX/minY/maxY` | Равномерный случайный в прямоугольнике |
+| `CIRCLE` | `center` + `outerRadius` | `r = R·√u`, `θ = uniform [0, 2π)` |
+| `ANNULUS` | `center` + `innerRadius` + `outerRadius` | `r = √(r_in² + u·(r_out² - r_in²))`, `θ = uniform [0, 2π)` — кольцевая зона вокруг деревни/ориентира |
 
 ---
 
 ## 3.2. mobMoveUpdate — Обновление позиции мобов
-
 Пакетируется — один пакет содержит обновления всех мобов, у которых сработал rate limit в данном тике.
 
 **Частота отправки (server-side rate limiting per mob):**
@@ -223,6 +222,33 @@ predictedY = position.y + velocity.dirY × velocity.speed × deltaTime
 3. Применить позицию через blend за **100–150 мс**, чтобы избежать телепортации
 
 > `rotationZ` в пакете — значение в **градусах**, вычисленное на сервере как `atan2(dirY, dirX) × (180/π)`. При входе в `PREPARING_ATTACK` повёрнут к цели.
+
+---
+
+## 3.2b. mobCellLeft — Evict мобов покинутых клеток (interest v2)
+
+Когда клиент движением выходит из interest-клеток, сервер unicast-ом присылает UID мобов, стоящих в покинутых клетках. Клиент **обязан удалить** эти записи — иначе отписанные мобы замирают с мертвыми позициями навсегда (призраки: боты трекали 47 лис вместо 25 живых).
+
+### Сервер → Unicast
+
+```json
+{
+  "header": {
+    "eventType": "mobCellLeft",
+    "status": "success"
+  },
+  "body": {
+    "uids": [1000156, 1000157]
+  }
+}
+```
+
+Правила:
+- Список over-inclusive by design (без per-client known-set): незнакомые UID клиент дропает молча.
+- Watched-мобы (активная цель атаки) исключены — иначе таргет мигнет на один тик.
+- Пустой diff / выключенный interest — пакета нет.
+- Трупы не затрагиваются (отдельный corpse-поток).
+- Отправляется только покинувшему клиенту (не broadcast).
 
 ---
 
@@ -374,7 +400,7 @@ CHASING / PREPARING_ATTACK / ATTACKING → [HP < fleeHpThreshold] → FLEEING (�
 |---------|---------------------|
 | Расстояние до цели > `aggroRange × chaseMultiplier` | ≈ 800 ед. ||
 | Дистанция выхода за край спавн-зоны > `maxChaseFromZoneEdge` | 1500 ед. |
-| Время преследования > `chaseDuration` (per-mob) | 30 сек |
+| Время преследования > `chaseDuration` (per-mob) | 10 сек (дефолт; в БД `mob.chase_duration`) |
 
 ### Melee slot queuing (crowding prevention)
 
@@ -459,8 +485,9 @@ stepSize = min(stepSize, distance − attackRange) // без перелёта в
 | `canEvolve` | bool | Может эволюционировать |
 | `lootMultiplier` | float | Множитель лута |
 | `isRare` | bool | Редкий моб |
-| `rareSpawnChance` | float | Шанс появления редкого [0..1] |
-| `rareSpawnCondition` | string | `"on_kill"` (серия убийств, по данным), `"zone_event"` |
+| `rareSpawnChance` | float | Шанс замены в процентах (8 = 8%) — ролл при каждом респауне семейной записи |
+| `rareSpawnCondition` | string | Пока не используется (будущее: `"night"`, `"day"`, `"zone_event"`) |
+| `rareOfMobId` | int | ID обычного шаблона, который этот редкий заменяет (0 = не редкий; миграция 108) |
 | `factionSlug` | string | Фракция |
 | `repDeltaPerKill` | int | Дельта репутации за убийство |
 | `biomeSlug` | string | Биом (напр. `"forest"`, `"cave"`) |

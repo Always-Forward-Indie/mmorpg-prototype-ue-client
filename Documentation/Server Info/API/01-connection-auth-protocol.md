@@ -4,8 +4,6 @@
 
 Вход в игру разделён на **предварительный этап (Game Server)** и **4 фазы на Chunk Server**. Фазы 1–2 происходят пока клиент грузит карту; фаза 4 — только после того, как сцена полностью загружена (ACK от клиента).
 
-> **Game↔Chunk хендшейк (server-to-server, проверено по коду):** чанк при старте коннектится к гейму и шлёт `chunkServerConnection{id, ip:publicHost, port}` → гейм отвечает пачкой `set*` (персонажи, мобы, диалоги, квесты, вендоры...) → чанк подтверждает инициализацию one-way пакетом `chunkServerData` (`Init success/failed for chunk!`, `header.chunkId`). Гейм его принимает и логгирует (`handleChunkInitAck`, без изменения состояния — онлайн/сокет уже заведены хендшейком). Обрыв линка чанк переживает сам (экспоненциальный бэкофф, очередь сейвов сбрасывается, данные перетягиваются).
-
 > **Важно:** перед подключением к Chunk Server клиент обязан пройти через **Game Server** — получить адрес чанк-сервера и запустить предварительную загрузку данных персонажа.
 
 ```
@@ -32,8 +30,14 @@
   │◄── zone_entered ───────────────────────────────┤ зона (уведомление)
   │◄── getPlayerInventory ─────────────────────────┤ инвентарь (async от DB)
   │◄── equipmentState ─────────────────────────────┤ экипировка
+  │◄── EQUIPMENT_STATE ────────────────────────────┤ экипировка (снапшот)
+  │◄── WEIGHT_STATUS ──────────────────────────────┤ нагрузка
   │◄── stats_update ───────────────────────────────┤ полные статы
-  │◄── questUpdate / flagsUpdate ──────────────────┤ квесты, флаги (async)
+  │◄── QUEST_UPDATE ───────────────────────────────┤ квесты (upper-case!)
+  │◄── skillBarState ──────────────────────────────┤ панель скиллов
+  │◄── getBestiaryOverview ────────────────────────┤ бестиарий (обзор)
+  │◄── NPC_AMBIENT_POOLS ──────────────────────────┤ ambient-пулы NPC
+  │◄── spawnWorldObjects ──────────────────────────┤ объекты мира
   │◄── reputations / masteries ────────────────────┤ репутация, мастерство
   │                                                 │
   │  ── ФАЗА 3: ACK от клиента ────────────────────────────────
@@ -103,8 +107,7 @@
   "body": {
     "chunkServerData": {
       "chunkId": 1,
-      "chunkIp": "192.168.50.50",
-      "chunkPort": 27017,
+      "chunkIp": "192.168.50.50",      "chunkPort": 27017,
       "chunkPosX": 0.0,
       "chunkPosY": 0.0,
       "chunkPosZ": 0.0,
@@ -116,16 +119,14 @@
 }
 ```
 
+> `chunkIp` берется из `CHUNK_PUBLIC_HOST` (env, дефолт = `SERVER_HOST`) — game отдает публичный адрес чанка, а не внутренний `db`-хост.
+
 **Серверная логика (Game Server):**
-1. Валидация `clientId` и `hash`
-2. Получение адреса Chunk Server из `ChunkManager` по `chunkId=1`
+1. Валидация `clientId != 0` и непустого `hash`, затем проверка login-сессии по БД: `search_user(hash)` (живая строка `user_sessions`: `revoked_at IS NULL AND expires_at > now()`) + привязка сессии к account (`users.id == clientId`; следом `get_character` дополнительно сверяет `owner_id`). Неизвестная/протухшая/чуждая сессия → `status:error` + `body.errorCode=ERR_SESSION_INVALID`; обрыв БД → `ERR_DB` (fail-closed, никогда не висит).
+2. Роутинг чанка: `selectChunkForNewClient()` — детерминированно lowest-id (позиции на этом шаге ещё нет); позиционный `selectChunkForPosition(x,y)` по боксам `pos/size` — для будущих хэндоффов. Топология деплоя: single-chunk (routing helpers готовы, межчанковой миграции сессии нет).
 3. Загрузка данных персонажа из БД по `characterId`
 4. Отправка `setCharacterData` на Chunk Server (server-to-server push, асинхронно)
 5. Ответ клиенту с `chunkServerData`
-
-> **chunkIp для клиентов (2026-09-13):** game отдает `CHUNK_PUBLIC_HOST`
-> (dev = `127.0.0.1`), а не внутренний `CHUNK_SERVER_HOST` — клиенты за
-> пределами Docker-сети обязаны использовать его (порт — из ответа).
 
 > **Race condition**: `setCharacterData` может прийти на Chunk Server **после** `joinGameCharacter` от клиента. Chunk Server обрабатывает это через `pendingJoinRequests` — запрос ставится в очередь и выполняется, когда данные персонажа поступают.
 
@@ -322,7 +323,12 @@ OnWorldReady / BeginPlay / LoadingScreenFinished → send playerReady
 
 ---
 
-## 1.4. pingClient / pongClient — Keep-alive
+## 1.4. pingClient — Keep-alive
+
+Ответ приходит с **тем же** `eventType: "pingClient"` (не `pongClient`!) и
+`header.message == "Pong!"`. Клиент шлёт пинг каждые 10с; сервер считает
+клиента мёртвым после 30с тишины (`PING_TIMEOUT_SEC=30`, свип каждые 15с).
+Клиенты, ещё не приславшие `playerReady` (льётся F4-flood), не режутся.
 
 ### Клиент → Сервер
 
@@ -346,7 +352,8 @@ OnWorldReady / BeginPlay / LoadingScreenFinished → send playerReady
 ```json
 {
   "header": {
-    "eventType": "pongClient",
+    "eventType": "pingClient",
+    "message": "Pong!",
     "clientId": 42,
     "status": "success"
   },
@@ -466,6 +473,7 @@ if (actualDist > maxAllowedDist) → positionCorrection
 ## 1.6. disconnectClient — Отключение клиента
 
 Триггерится при закрытии сокета клиентом. Нет отдельного запроса от клиента.
+Тело broadcast'а **пустое** (`body{"":""}`) — ушедшего в списке уже нет.
 
 ### Сервер → Broadcast
 
@@ -477,8 +485,7 @@ if (actualDist > maxAllowedDist) → positionCorrection
     "message": "Client disconnected"
   },
   "body": {
-    "clientId": 42,
-    "characterId": 7
+    "": ""
   }
 }
 ```
@@ -511,38 +518,51 @@ if (actualDist > maxAllowedDist) → positionCorrection
 
 ### Сервер → Unicast
 
+Ответ приходит с **другим** именем: `eventType: "getConnectedClients"`
+(запрос называется `getConnectedCharacters`):
+
 ```json
 {
   "header": {
-    "eventType": "getConnectedCharacters",
+    "eventType": "getConnectedClients",
     "status": "success",
     "clientId": 42
   },
   "body": {
-    "characters": [
-      {
-        "clientId": 42,
-        "character": {
-          "id": 7,
-          "name": "Aragorn",
-          "class": "Warrior",
-          "race": "Human",
-          "level": 5,
-          "position": { "x": 143.5, "y": 88.2, "z": 0.0, "rotationZ": 1.57 }
-        }
-      },
-      {
-        "clientId": 43,
-        "character": {
-          "id": 8,
-          "name": "Legolas",
-          "class": "Ranger",
-          "race": "Elf",
-          "level": 5,
-          "position": { "x": 150.0, "y": 95.0, "z": 0.0, "rotationZ": 0.0 }
-        }
-      }
+    "clientsList": [
+      { "clientId": 42, "characterId": 7, "status": "connected" },
+      { "clientId": 43, "characterId": 8, "status": "connected" }
     ]
   }
 }
 ```
+
+---
+
+## 1.8. Game ↔ Chunk: JOIN-каталог и setGameConfig (server-to-server)
+
+Wire хендшейка (проверено по коду `GameServerWorker::buildHandshakeMessage`):
+чанк при старте коннектится к гейму и шлет `chunkServerConnection{id, ip=publicHost, port}`
+с `header.bootId` + `header.nextSeq` (outbox-эпоха для идемпотентных фактов) → гейм отвечает
+пачкой `set*` → чанк подтверждает one-way пакетом `chunkServerData`
+(`Init success/failed for chunk!`, `header.chunkId`; гейм его только логгирует —
+онлайн/сокет уже заведены хендшейком). Обрыв линка чанк переживает сам
+(экспоненциальный бэкофф; heartbeat каждые 60с делает полный ретрай каталога).
+
+Чанк in-memory и без БД: всю статику он получает от game при старте
+линка (`chunkServerConnection` → 24 `set*`-пуша → `chunkServerData`).
+Каждая запись каталога считается отдельно; итог виден в логе game:
+`[join] full catalog push chunk=1 entries=24 failed=0 tookMs=84`.
+
+- `failed > 0` → game роняет регистрацию чанка, следующий heartbeat
+  (чанк шлёт каждые 60с) делает полный ретрай; клиент в это время видит
+  `ERR_JOIN_CATALOG_INCOMPLETE` (с `body.errorCode`).
+- Heartbeat с того же сокета — пропуск повторного пуша (skip), с нового —
+  полный пуш заново (покрывает рестарт чанка).
+- Вместе со статикой едет `game_config` (запись каталога `GET_GAME_CONFIG`):
+  весь `game_config` (~81 ключ: `scheduler.*`, `interest.*`, `regen.*`,
+  `economy.*`, `mastery.*`, `durability.*`, `bestiary.*`, `movement.*`,
+  `combat.*`, `drop/corpse TTL`). Чанк семплирует значения в свой
+  конфиг-сервис; cadence-ключи читаются один раз при планировании задач
+  (фолбэк = скомпилированный литерал), TTL/amount-ключи — живьём каждый
+  тик. Смена значения требует рестарта чанка (game — перечитки `reload`).

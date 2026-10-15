@@ -1,7 +1,7 @@
 # Документация: NPC, Диалоги, Квесты, Торговля
 
-**Актуальная версия:** v0.0.4  
-**Дата обновления:** 2026-03-09  
+**Актуальная версия:** v0.0.5  
+**Дата обновления:** 2026-04-15  
 **Серверная архитектура:** Login Server → Game Server ↔ Chunk Server ↔ Client
 
 ---
@@ -17,6 +17,9 @@
 7. [Сводная таблица пакетов](#7-сводная-таблица-пакетов)
 8. [Примеры полных JSON-пакетов](#8-примеры-полных-json-пакетов)
 9. [Ограничения и статус реализации](#9-ограничения-и-статус-реализации)
+
+> **v0.0.5 изменения:** Обогащение choices (`questPreview`/`turnInPreview`), обогащение `quest_offered` и `quest_turned_in`, поле `currentStepEnriched` и `rewards` в `QUEST_UPDATE`, поддержка скрытых наград (`isHidden`). NPC Ambient Speech — отдельный документ: [npc-ambient-speech-protocol.md](./npc-ambient-speech-protocol.md).
+> **v0.0.6 изменения:** Добавлено поле `giftPreview` в choices для рёбер с `give_item`/`give_gold`/`give_exp`. Действия на рёбрах (а не на action-узлах) — рекомендуемый способ выдачи предметов через диалог.
 
 ---
 
@@ -91,7 +94,7 @@ Chunk Server (in-memory)
         "isInteractable": true,
         "dialogueId": "1",
         "quests": [
-          { "slug": "wolf_hunt_intro", "status": "available" }
+          { "slug": "varan_fox_menace", "status": "available" }
         ],
         "stats": {
           "health": { "current": 100, "max": 100 },
@@ -151,7 +154,7 @@ Chunk Server (in-memory)
 ```json
 { "all": [
     { "type": "level", "gte": 5 },
-    { "type": "quest", "slug": "wolf_hunt", "state": "not_started" }
+    { "type": "quest", "slug": "varan_fox_menace", "state": "not_started" }
 ]}
 ```
 
@@ -164,13 +167,13 @@ Chunk Server (in-memory)
 ```
 
 ```json
-{ "type": "quest_step", "slug": "wolf_hunt_intro", "step": 1 }
+{ "type": "quest_step", "slug": "varan_fox_menace", "step": 1 }
 ```
 
 ```json
 { "all": [
-    { "type": "quest", "slug": "wolf_hunt_intro", "state": "active" },
-    { "type": "quest_step", "slug": "wolf_hunt_intro", "step": 0 }
+    { "type": "quest", "slug": "varan_fox_menace", "state": "active" },
+    { "type": "quest_step", "slug": "varan_fox_menace", "step": 0 }
 ]}
 ```
 
@@ -206,8 +209,8 @@ Chunk Server (in-memory)
 У одного NPC может быть несколько диалогов с разными приоритетами и условиями. Сервер перебирает от наибольшего приоритета к наименьшему и запускает первый подходящий.
 
 **Пример:** У Гримора три диалога:
-- Приоритет 10: "Сдача квеста на волков" — условие: `wolf_hunt` = `completed`
-- Приоритет 5: "Выдача квеста на волков" — условие: `wolf_hunt` = `not_started`, уровень ≥ 5
+- Приоритет 10: "Сдача квеста на лис" — условие: `varan_fox_menace` = `completed`
+- Приоритет 5: "Выдача квеста на лис" — условие: `varan_fox_menace` = `not_started`, уровень ≥ 5
 - Приоритет 1: "Общий разговор" — без условий
 
 ### Сессия диалога
@@ -267,7 +270,24 @@ Chunk Server (in-memory)
       {
         "edgeId": 8,
         "clientChoiceKey": "npc.grimor.accept_quest",
-        "conditionMet": true
+        "conditionMet": true,
+        "questPreview": {
+          "questId": 5,
+          "clientQuestKey": "quest.varan_fox_menace",
+          "firstStep": {
+            "clientStepKey": "quest.varan_fox_menace.step_0",
+            "stepType": "kill",
+            "target_slug": "ForestFox",
+            "count": 5,
+            "current": 0
+          },
+          "rewards": [
+            { "rewardType": "exp",  "isHidden": false, "amount": 500 },
+            { "rewardType": "gold", "isHidden": false, "amount": 100 },
+            { "rewardType": "item", "isHidden": false, "item_slug": "wooden_staff", "quantity": 1 },
+            { "rewardType": "item", "isHidden": true }
+          ]
+        }
       },
       {
         "edgeId": 9,
@@ -276,6 +296,23 @@ Chunk Server (in-memory)
       }
     ]
   }
+}
+```
+
+Поле `questPreview` присутствует в choice если ребро содержит действие `offer_quest`.
+Поле `turnInPreview` присутствует если ребро содержит `turn_in_quest` (структура аналогична, без `firstStep`).
+Поле `giftPreview` присутствует если ребро содержит действия `give_item`, `give_gold` и/или `give_exp`.
+
+```json
+// Пример choice с giftPreview (ruins_dying_stranger — принять дар)
+{
+  "edgeId": 137,
+  "clientChoiceKey": "ruins_dying_stranger.choice.accept",
+  "conditionMet": true,
+  "giftPreview": [
+    { "giftType": "item", "item_slug": "sharp_sword",    "quantity": 1 },
+    { "giftType": "item", "item_slug": "small_health_potion", "quantity": 2 }
+  ]
 }
 ```
 
@@ -353,7 +390,7 @@ Chunk Server (in-memory)
 ```
 
 **2. Сервер проверяет:** NPC существует, `isInteractable=true`, дистанция 150 < 200 — ОК.  
-Диалог "Выдача квеста на волков" (приоритет 5) подходит: `wolf_hunt not_started` ✓, уровень 7 ≥ 5 ✓.  
+Диалог "Выдача квеста на лис" (приоритет 5) подходит: `varan_fox_menace not_started` ✓, уровень 7 ≥ 5 ✓.  
 Сессия создана, граф проходится до первого `line`-узла.
 
 **3. Ответ — первая реплика:**
@@ -400,11 +437,28 @@ Chunk Server (in-memory)
 { "header": { "eventType": "dialogueChoice" }, "body": { "sessionId": "dlg_7_1709834400000", "edgeId": 8, "characterId": 101 } }
 ```
 
-**7. Сервер выполняет `actionGroup` ребра:** `offer_quest("wolf_hunt")` → квест принят.
+**7. Сервер выполняет `actionGroup` ребра:** `offer_quest("varan_fox_menace")` → квест принят.
 
 **8. Ответы (уведомления + закрытие):**
 ```json
-{ "header": { "eventType": "quest_offered" }, "body": { "questId": 5, "clientQuestKey": "quest.wolf_hunt" } }
+{
+  "header": { "eventType": "quest_offered" },
+  "body": {
+    "questId": 5,
+    "clientQuestKey": "quest.varan_fox_menace",
+    "currentStep": {
+      "clientStepKey": "quest.varan_fox_menace.step_0",
+      "stepType": "kill",
+      "target_slug": "ForestFox",
+      "count": 5,
+      "current": 0
+    },
+    "rewards": [
+      { "rewardType": "exp",  "isHidden": false, "amount": 500 },
+      { "rewardType": "item", "isHidden": true }
+    ]
+  }
+}
 ```
 ```json
 { "header": { "eventType": "DIALOGUE_CLOSE" }, "body": { "sessionId": "dlg_7_1709834400000" } }
@@ -437,6 +491,12 @@ Chunk Server (in-memory)
 | `exp`        | `amount`    | Опыт персонажа |
 | `item`       | `item_id`, `quantity` | Предмет в инвентарь |
 | `gold`       | `amount`    | Монеты Gold Coin в инвентарь |
+
+**Скрытые награды (`isHidden`):**
+
+Любая награда может иметь `is_hidden = TRUE` в БД. Сервер различает два режима:
+- До сдачи квеста (`quest_offered`, `questPreview`, `QUEST_UPDATE`): скрытая награда сериализуется как `{ "rewardType": "item", "isHidden": true }` — только тип, без slug и количества. Клиент показывает иконку `???`.
+- При сдаче квеста (`quest_turned_in.rewardsReceived`): все награды раскрываются полностью независимо от флага `isHidden`.
 
 **Состояния квеста:**
 
@@ -482,16 +542,27 @@ Chunk Server (in-memory)
   "header": { "eventType": "QUEST_UPDATE", "clientId": 7 },
   "body": {
     "questId": 5,
-    "questSlug": "wolf_hunt_intro",
-    "clientQuestKey": "quest.wolf_hunt",
+    "questSlug": "varan_fox_menace",
+    "clientQuestKey": "quest.varan_fox_menace",
     "state": "active",
     "currentStep": 0,
     "totalSteps": 2,
-    "clientStepKey": "quest.wolf_hunt.step_0",
+    "clientStepKey": "quest.varan_fox_menace.step_0",
     "stepType": "kill",
     "completionMode": "auto",
     "progress": { "killed": 0 },
-    "required": { "mob_id": 2, "count": 5 }
+    "required": { "mob_id": 2, "count": 5 },
+    "currentStepEnriched": {
+      "clientStepKey": "quest.varan_fox_menace.step_0",
+      "stepType": "kill",
+      "target_slug": "ForestFox",
+      "count": 5,
+      "current": 0
+    },
+    "rewards": [
+      { "rewardType": "exp",  "isHidden": false, "amount": 500 },
+      { "rewardType": "item", "isHidden": true }
+    ]
   }
 }
 ```
@@ -502,15 +573,27 @@ Chunk Server (in-memory)
   "header": { "eventType": "QUEST_UPDATE" },
   "body": {
     "questId": 5,
-    "questSlug": "wolf_hunt_intro",
-    "clientQuestKey": "quest.wolf_hunt",
+    "questSlug": "varan_fox_menace",
+    "clientQuestKey": "quest.varan_fox_menace",
     "state": "active",
     "currentStep": 0,
     "totalSteps": 2,
+    "clientStepKey": "quest.varan_fox_menace.step_0",
     "stepType": "kill",
     "completionMode": "auto",
     "progress": { "killed": 3 },
-    "required": { "mob_id": 2, "count": 5 }
+    "required": { "mob_id": 2, "count": 5 },
+    "currentStepEnriched": {
+      "clientStepKey": "quest.varan_fox_menace.step_0",
+      "stepType": "kill",
+      "target_slug": "ForestFox",
+      "count": 5,
+      "current": 3
+    },
+    "rewards": [
+      { "rewardType": "exp",  "isHidden": false, "amount": 500 },
+      { "rewardType": "item", "isHidden": true }
+    ]
   }
 }
 ```
@@ -521,32 +604,77 @@ Chunk Server (in-memory)
   "header": { "eventType": "QUEST_UPDATE" },
   "body": {
     "questId": 5,
-    "questSlug": "wolf_hunt_intro",
+    "questSlug": "varan_fox_menace",
+    "clientQuestKey": "quest.varan_fox_menace",
     "state": "active",
     "currentStep": 1,
     "totalSteps": 2,
-    "clientStepKey": "quest.wolf_hunt.step_1",
+    "clientStepKey": "quest.varan_fox_menace.step_1",
     "stepType": "collect",
     "completionMode": "auto",
     "progress": { "have": 0 },
-    "required": { "item_id": 9, "count": 3 }
+    "required": { "item_id": 9, "count": 3 },
+    "currentStepEnriched": {
+      "clientStepKey": "quest.varan_fox_menace.step_1",
+      "stepType": "collect",
+      "target_slug": "animal_hide",
+      "count": 3,
+      "current": 0
+    },
+    "rewards": [
+      { "rewardType": "exp",  "isHidden": false, "amount": 500 },
+      { "rewardType": "item", "isHidden": true }
+    ]
   }
 }
 ```
 
 **При завершении всех шагов:**
+
+Код отправляет полный пакет — `state`, `progress`, `clientStepKey`, `stepType`, `completionMode`, `required`, `currentStepEnriched` и `rewards` присутствуют (шаг не сбрасывается в коде, `currentStep` остаётся индексом последнего шага):
 ```json
 {
   "header": { "eventType": "QUEST_UPDATE" },
-  "body": { "questId": 5, "questSlug": "wolf_hunt_intro", "state": "completed", "currentStep": 1 }
+  "body": {
+    "questId": 5,
+    "questSlug": "varan_fox_menace",
+    "clientQuestKey": "quest.varan_fox_menace",
+    "state": "completed",
+    "currentStep": 1,
+    "totalSteps": 2,
+    "clientStepKey": "quest.varan_fox_menace.step_1",
+    "stepType": "kill",
+    "completionMode": "auto",
+    "progress": { "killed": 1 },
+    "required": { "mob_id": 3, "count": 1 },
+    "currentStepEnriched": { "clientStepKey": "quest.varan_fox_menace.step_1", "stepType": "kill", "target_slug": "AlphaWolf", "count": 1, "current": 1 },
+    "rewards": [
+      { "rewardType": "exp",  "isHidden": false, "amount": 500 },
+      { "rewardType": "item", "isHidden": true }
+    ]
+  }
 }
 ```
 
 **После сдачи:**
+
+Аналогично — полный пакет с последним шагом и `rewards`:
 ```json
 {
   "header": { "eventType": "QUEST_UPDATE" },
-  "body": { "questId": 5, "questSlug": "wolf_hunt_intro", "state": "turned_in" }
+  "body": {
+    "questId": 5,
+    "questSlug": "varan_fox_menace",
+    "clientQuestKey": "quest.varan_fox_menace",
+    "state": "turned_in",
+    "currentStep": 1,
+    "totalSteps": 2,
+    "progress": { "killed": 1 },
+    "rewards": [
+      { "rewardType": "exp",  "isHidden": false, "amount": 500 },
+      { "rewardType": "item", "isHidden": false, "item_slug": "secret_amulet", "quantity": 1 }
+    ]
+  }
 }
 ```
 
@@ -563,19 +691,49 @@ Chunk Server (in-memory)
 | `completionMode` | string | `"auto"` — шаг завершается автоматически; `"manual"` — только через диалоговое действие. Отсутствует если `state = completed/turned_in` |
 | `progress` | object | Текущий прогресс шага (зависит от `stepType`). Отсутствует если `state = completed/turned_in` |
 | `required` | object | Требования шага (= `params` из БД). Отсутствует если `state = completed/turned_in` |
+| `currentStepEnriched` | object | Обогащённый шаг с resolved slugs (см. ниже). Присутствует когда есть текущий шаг |
+| `rewards` | array | Награды квеста (с учётом `isHidden`). Присутствует всегда |
+
+**Поля `currentStepEnriched`:**
+
+| `stepType` | Поля | Описание |
+|------------|------|----------|
+| `kill` | `clientStepKey`, `stepType`, `target_slug`, `count`, `current` | `target_slug` — slug моба из `mob_definitions` |
+| `collect` | `clientStepKey`, `stepType`, `target_slug`, `count`, `current` | `target_slug` — slug предмета |
+| `talk` | `clientStepKey`, `stepType`, `target_slug`, `count`, `current` | `target_slug` — slug NPC |
+| `reach` | `clientStepKey`, `stepType`, `zone_slug`, `x`, `y`, `count`, `current` | Координаты цели |
+| `custom` | `clientStepKey`, `stepType`, `params`, `count`, `current` | `params` — raw JSON из БД |
 
 ---
 
 #### `quest_offered` — квест принят
 
-**Направление:** Chunk Server → Client (уведомление из диалогового действия)
+**Направление:** Chunk Server → Client (уведомление из диалогового действия `offer_quest`)
 
 ```json
 {
   "header": { "eventType": "quest_offered" },
-  "body": { "questId": 5, "clientQuestKey": "quest.wolf_hunt" }
+  "body": {
+    "questId": 5,
+    "clientQuestKey": "quest.varan_fox_menace",
+    "currentStep": {
+      "clientStepKey": "quest.varan_fox_menace.step_0",
+      "stepType": "kill",
+      "target_slug": "ForestFox",
+      "count": 5,
+      "current": 0
+    },
+    "rewards": [
+      { "rewardType": "exp",  "isHidden": false, "amount": 500 },
+      { "rewardType": "gold", "isHidden": false, "amount": 100 },
+      { "rewardType": "item", "isHidden": false, "item_slug": "wooden_staff", "quantity": 1 },
+      { "rewardType": "item", "isHidden": true }
+    ]
+  }
 }
 ```
+
+`currentStep` отсутствует если у квеста нет шагов. `rewards` — массив с учётом `isHidden`.
 
 ---
 
@@ -586,9 +744,21 @@ Chunk Server (in-memory)
 ```json
 {
   "header": { "eventType": "quest_turned_in" },
-  "body": { "questId": 5, "clientQuestKey": "quest.wolf_hunt" }
+  "body": {
+    "questId": 5,
+    "clientQuestKey": "quest.varan_fox_menace",
+    "rewardsReceived": [
+      { "rewardType": "exp",  "isHidden": false, "amount": 500 },
+      { "rewardType": "gold", "isHidden": false, "amount": 100 },
+      { "rewardType": "item", "isHidden": false, "item_slug": "wooden_staff",  "quantity": 1 },
+      { "rewardType": "item", "isHidden": false, "item_slug": "secret_amulet", "quantity": 1 }
+    ]
+  }
 }
 ```
+
+`rewardsReceived` — все награды полностью раскрыты (скрытые показываются с реальными `item_slug`).
+Сразу за `quest_turned_in` идут отдельные уведомления `exp_received`, `item_received`, `gold_received`.
 
 ---
 
@@ -622,11 +792,11 @@ Chunk Server (in-memory)
 
 ---
 
-### Полный пример: цикл квеста "Охота на волков"
+### Полный пример: цикл квеста "Охота на лис"
 
-**Принятие:** → `quest_offered` + `QUEST_UPDATE { state: "active", step: 0, kill: 0/5 }`  
-**Убийство 1 волка:** → `QUEST_UPDATE { progress: {"killed": 1} }`  
-**Убийство 5 волков:** → `QUEST_UPDATE { progress: {"killed": 5} }` → шаг 0 завершён, переход к шагу 1  
+**Принятие:** → `quest_offered { currentStep, rewards }` + `QUEST_UPDATE { state: "active", step: 0, currentStepEnriched, rewards }`  
+**Убийство 1 лису:** → `QUEST_UPDATE { progress: {"killed": 1} }`  
+**Убийство 5 лис:** → `QUEST_UPDATE { progress: {"killed": 5} }` → шаг 0 завершён, переход к шагу 1  
 → `QUEST_UPDATE { step: 1, stepType: "kill", required: {"mob_id": 2, "count": 1} }`  
 
 *Диалог с Миладой на шаге 1: ребро с условием `quest_step = 1` становится видимым вместо шага 0.*  
@@ -635,7 +805,7 @@ Chunk Server (in-memory)
 → `QUEST_UPDATE { state: "completed" }`  
 **Диалог сдачи у Миладки (действие `turn_in_quest`):**  
 → `QUEST_UPDATE { state: "turned_in" }`  
-→ `quest_turned_in`  
+→ `quest_turned_in { rewardsReceived: [...все раскрыто...] }`  
 → `exp_received { amount: 500 }`  
 → `item_received { itemId: 15, quantity: 1 }` (Wooden Staff)  
 → `gold_received { amount: 100 }` (добавляет 100 Gold Coin в инвентарь)
@@ -716,12 +886,13 @@ NPC типа `vendor` полностью заблокирован при реп�
 | Пакет (`eventType`) | Когда | Ключевые поля |
 |---------------------|-------|---------------|
 | `spawnNPCs`         | Вход в зону | `npcsSpawn[]`, `npcCount` |
-| `DIALOGUE_NODE`     | Очередной узел | `sessionId`, `type`, `clientNodeKey`, `choices[]` |
+| `NPC_AMBIENT_POOLS` | После spawnNPCs при playerReady | `npcs[]` (filtered pools, см. [npc-ambient-speech-protocol.md](./npc-ambient-speech-protocol.md)) |
+| `DIALOGUE_NODE`     | Очередной узел | `sessionId`, `type`, `clientNodeKey`, `choices[]` (+ `questPreview`/`turnInPreview`/`giftPreview`) |
 | `DIALOGUE_CLOSE`    | Диалог завершён | `sessionId` |
 | `dialogueError`     | Ошибка взаимодействия | `errorCode` |
-| `QUEST_UPDATE`      | Любое изменение квеста | `questId`, `questSlug`, `state`, `progress`, `required` |
-| `quest_offered`     | Квест принят | `questId`, `clientQuestKey` |
-| `quest_turned_in`   | Квест сдан | `questId`, `clientQuestKey` |
+| `QUEST_UPDATE`      | Любое изменение квеста | `questId`, `questSlug`, `state`, `progress`, `required`, `currentStepEnriched`, `rewards` |
+| `quest_offered`     | Квест принят | `questId`, `clientQuestKey`, `currentStep`, `rewards` |
+| `quest_turned_in`   | Квест сдан | `questId`, `clientQuestKey`, `rewardsReceived` |
 | `exp_received`      | Выдан опыт | `amount` |
 | `item_received`     | Выдан предмет | `itemId`, `quantity` |
 | `gold_received`     | Выдано золото | `amount` |
@@ -753,7 +924,7 @@ NPC типа `vendor` полностью заблокирован при реп�
 }
 ```
 
-### Полный пакет узла выбора с заблокированным вариантом
+### Полный пакет узла выбора с quest preview и заблокированным вариантом
 
 ```json
 {
@@ -779,7 +950,23 @@ NPC типа `vendor` полностью заблокирован при реп�
       {
         "edgeId": 13,
         "clientChoiceKey": "npc.grimor.accept_easy_quest",
-        "conditionMet": true
+        "conditionMet": true,
+        "questPreview": {
+          "questId": 5,
+          "clientQuestKey": "quest.varan_fox_menace",
+          "firstStep": {
+            "clientStepKey": "quest.varan_fox_menace.step_0",
+            "stepType": "kill",
+            "target_slug": "ForestFox",
+            "count": 5,
+            "current": 0
+          },
+          "rewards": [
+            { "rewardType": "exp",  "isHidden": false, "amount": 500 },
+            { "rewardType": "item", "isHidden": false, "item_slug": "wooden_staff", "quantity": 1 },
+            { "rewardType": "item", "isHidden": true }
+          ]
+        }
       },
       {
         "edgeId": 14,
@@ -793,6 +980,8 @@ NPC типа `vendor` полностью заблокирован при реп�
 
 Вариант с `conditionMet: false` — условие не выполнено. Клиент решает: показать серым или скрыть (задаётся в БД полем `hide_if_locked`).
 
+`questPreview` присутствует только если ребро содержит действие `offer_quest`. Аналогично `turnInPreview` при `turn_in_quest`. Поле `giftPreview` — массив объектов `{giftType, item_slug?, quantity?, amount?}` — присутствует если ребро содержит `give_item`/`give_gold`/`give_exp`.
+
 ### Полный цикл сдачи квеста — все пакеты подряд
 
 ```json
@@ -800,6 +989,7 @@ NPC типа `vendor` полностью заблокирован при реп�
 { "header": { "eventType": "npcInteract" }, "body": { "npcId": 42, "characterId": 101 } }
 
 // 2. Сервер выбрал диалог "сдача квеста" (приоритет выше) → первая реплика
+// (ребро contains turn_in_quest → в choices появится turnInPreview)
 {
   "header": { "eventType": "DIALOGUE_NODE" },
   "body": {
@@ -809,18 +999,56 @@ NPC типа `vendor` полностью заблокирован при реп�
   }
 }
 
-// 3. Игрок "Далее"
+// 3. Игрок "Далее" → choice_hub с turnInPreview
 { "header": { "eventType": "dialogueChoice" }, "body": { "sessionId": "dlg_7_...", "edgeId": 20, "characterId": 101 } }
 
-// 4. action-узел выполняет turn_in_quest → rewards → end-узел
-// --- пакеты уведомлений ---
-{ "header": { "eventType": "QUEST_UPDATE" }, "body": { "questId": 5, "state": "turned_in" } }
-{ "header": { "eventType": "quest_turned_in" }, "body": { "questId": 5, "clientQuestKey": "quest.wolf_hunt" } }
-{ "header": { "eventType": "exp_received" }, "body": { "amount": 500 } }
-{ "header": { "eventType": "item_received" }, "body": { "itemId": 15, "quantity": 1 } }
-{ "header": { "eventType": "gold_received" }, "body": { "amount": 100 } }
+{
+  "header": { "eventType": "DIALOGUE_NODE" },
+  "body": {
+    "sessionId": "dlg_7_...", "type": "choice_hub",
+    "clientNodeKey": "npc.grimor.turnin_confirm",
+    "choices": [
+      {
+        "edgeId": 21,
+        "clientChoiceKey": "npc.grimor.handover",
+        "conditionMet": true,
+        "turnInPreview": {
+          "questId": 5,
+          "clientQuestKey": "quest.varan_fox_menace",
+          "rewards": [
+            { "rewardType": "exp",  "isHidden": false, "amount": 500 },
+            { "rewardType": "item", "isHidden": false, "item_slug": "wooden_staff", "quantity": 1 },
+            { "rewardType": "item", "isHidden": false, "item_slug": "secret_amulet", "quantity": 1 }
+          ]
+        }
+      }
+    ]
+  }
+}
 
-// 5. Граф дошёл до end → сессия закрыта
+// 4. Игрок нажимает "Сдать"
+{ "header": { "eventType": "dialogueChoice" }, "body": { "sessionId": "dlg_7_...", "edgeId": 21, "characterId": 101 } }
+
+// 5. action-узел выполняет turn_in_quest → rewards → end-узел
+// --- пакеты уведомлений ---
+{ "header": { "eventType": "QUEST_UPDATE" }, "body": { "questId": 5, "questSlug": "varan_fox_menace", "state": "turned_in" } }
+{
+  "header": { "eventType": "quest_turned_in" },
+  "body": {
+    "questId": 5,
+    "clientQuestKey": "quest.varan_fox_menace",
+    "rewardsReceived": [
+      { "rewardType": "exp",  "isHidden": false, "amount": 500 },
+      { "rewardType": "item", "isHidden": false, "item_slug": "wooden_staff",  "quantity": 1 },
+      { "rewardType": "item", "isHidden": false, "item_slug": "secret_amulet", "quantity": 1 }
+    ]
+  }
+}
+{ "header": { "eventType": "exp_received"  }, "body": { "amount": 500 } }
+{ "header": { "eventType": "item_received" }, "body": { "itemId": 15, "quantity": 1 } }
+{ "header": { "eventType": "item_received" }, "body": { "itemId": 22, "quantity": 1 } }
+
+// 6. Граф дошёл до end → сессия закрыта
 { "header": { "eventType": "DIALOGUE_CLOSE" }, "body": { "sessionId": "dlg_7_..." } }
 ```
 
@@ -829,7 +1057,7 @@ NPC типа `vendor` полностью заблокирован при реп�
 ```json
 {
   "actions": [
-    { "type": "turn_in_quest", "slug": "wolf_hunt" },
+    { "type": "turn_in_quest", "slug": "varan_fox_menace" },
     { "type": "set_flag", "key": "grimor_quest_done", "bool_value": true },
     { "type": "give_gold", "amount": 50 }
   ]
@@ -855,16 +1083,16 @@ NPC типа `vendor` полностью заблокирован при реп�
 // Ребро видно только когда квест активен И игрок на шаге 0
 {
   "all": [
-    { "type": "quest", "slug": "wolf_hunt_intro", "state": "active" },
-    { "type": "quest_step", "slug": "wolf_hunt_intro", "step": 0 }
+    { "type": "quest", "slug": "varan_fox_menace", "state": "active" },
+    { "type": "quest_step", "slug": "varan_fox_menace", "step": 0 }
   ]
 }
 
 // Ребро видно только когда квест активен И игрок на шаге 1
 {
   "all": [
-    { "type": "quest", "slug": "wolf_hunt_intro", "state": "active" },
-    { "type": "quest_step", "slug": "wolf_hunt_intro", "step": 1 }
+    { "type": "quest", "slug": "varan_fox_menace", "state": "active" },
+    { "type": "quest_step", "slug": "varan_fox_menace", "step": 1 }
   ]
 }
 ```
@@ -874,7 +1102,7 @@ NPC типа `vendor` полностью заблокирован при реп�
 ```json
 {
   "actions": [
-    { "type": "fail_quest", "slug": "wolf_hunt_intro" }
+    { "type": "fail_quest", "slug": "varan_fox_menace" }
   ]
 }
 ```
@@ -890,9 +1118,16 @@ NPC типа `vendor` полностью заблокирован при реп�
 | Выбор диалога по приоритету и условиям | ✅ | Полностью |
 | Сессия диалога с TTL 5 минут | ✅ | Полностью |
 | Действия диалога: флаги, квесты, предметы, опыт, золото | ✅ | Полностью |
+| `questPreview` / `turnInPreview` в choices | ✅ | **Добавлено в v0.0.5** — resolved slugs + rewards |
+| `giftPreview` в choices | ✅ | **Добавлено в v0.0.6** — `give_item`/`give_gold`/`give_exp` на рёбрах |
+| Скрытые награды (`isHidden`) | ✅ | **Добавлено в v0.0.5** — миграция 055 |
+| `quest_offered` обогащён (`currentStep` + `rewards`) | ✅ | **Добавлено в v0.0.5** |
+| `quest_turned_in` обогащён (`rewardsReceived` раскрыт) | ✅ | **Добавлено в v0.0.5** |
+| `QUEST_UPDATE` обогащён (`currentStepEnriched` + `rewards`) | ✅ | **Добавлено в v0.0.5** |
+| NPC Ambient Speech | ✅ | **Добавлено в v0.0.5** — см. [npc-ambient-speech-protocol.md](./npc-ambient-speech-protocol.md) |
 | Квесты: принятие, прогресс, шаги, сдача | ✅ | Полностью |
-| Квесты многошаговые (`quest_step` условие в диалоге) | ✅ | **Добавлено в v0.0.4** |
-| Провал квеста (`fail_quest` действие) | ✅ | **Добавлено в v0.0.4** |
+| Квесты многошаговые (`quest_step` условие в диалоге) | ✅ | Добавлено в v0.0.4 |
+| Провал квеста (`fail_quest` действие) | ✅ | Добавлено в v0.0.4 |
 | Триггеры: убийство, сбор, разговор, достижение | ✅ | Полностью |
 | Персистентность прогресса квестов | ✅ | Каждые 5с + при отключении |
 | Флаги игрока при входе | ✅ | Реализовано в v0.0.3+ |
@@ -902,3 +1137,4 @@ NPC типа `vendor` полностью заблокирован при реп�
 | P2P-торговля между игроками | ✅ | Полностью, см. `client-server-protocol.md` |
 | Скидка по репутации у торговцев | ✅ | Полностью |
 | Блокировка NPC при репутации `enemy` | ✅ | Полностью |
+| Обновление ambient pools при смене квеста/флага | ⏳ | Запланировано: пул пересчитывается при переподключении |

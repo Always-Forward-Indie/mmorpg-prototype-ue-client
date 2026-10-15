@@ -60,10 +60,10 @@
 
 **Зачем:** мотивирует ходить везде, а не только гриндить один спавн. Anti-stagnation hook.
 
-**Расширение:** флаг `explored_dead_forest == true` → новые ветки диалога с NPC.
+**Расширение:** флаг `explored_forest == true` → новые ветки диалога с NPC.
 Реализуется через существующее условие диалога:
 ```json
-{ "type": "flag", "key": "explored_dead_forest", "eq": true }
+{ "type": "flag", "key": "explored_forest", "eq": true }
 ```
 
 **Технически — что уже есть:**
@@ -160,7 +160,7 @@
 > **Заметка об архитектуре зон:**  
 > В БД существует три понятия:
 > - `zones` (id, slug, name, min_level, max_level, is_pvp, is_safe_zone, min_x, max_x, min_y, max_y, exploration_xp_reward) — ✅ смысловые игровые зоны. **С v036: AABB bounds добавлены, загружаются и отправляются на chunk server.**
-> - `spawn_zones` (posX/sizeX/posY/sizeY AABB) — зоны спавна мобов. Загружаются, используются.
+> - `spawn_zones` (RECT/CIRCLE/ANNULUS shapes, minX/maxX geometry + centerX/Y + radii) — зоны спавна мобов. Поддерживают несколько типов мобов через `spawn_zone_mobs`. Загружаются, используются.
 > - `respawn_zones` (x/y/z точка, zone_id → zones.id) — точки воскрешения.
 >
 > Для Exploration Rewards нужно: добавить bounds к таблице `zones` (миграция), загрузить их на game server и отправить на chunk server при старте. Chunk server уже имеет `ZoneBounds` helper struct для point-in-zone check.
@@ -206,7 +206,7 @@ pity-намёк и любые другие сообщения мира. Клие
 | `zone_entered` | `personal` | Игрок вошёл в новую зону (вкл. первый логин) |
 | `zone_explored` | `personal` | Игрок впервые входит в зону |
 | `rare_mob_spawned` | `zone` | Спавн редкого моба в зоне |
-| `champion_spawned` | `zone` | Спавн чемпиона (Threshold / Timed) |
+| `champion_spawned` | `zone` | Спавн чемпиона (Threshold / Timed). С 2026-10 несет трофей ключами: `trophySlug` + `trophyPrice` (миграция 103) |
 | `champion_killed` | `zone` | Чемпион убит — кем |
 | `zone_event_start` | `zone` | Начало зонального события |
 | `zone_event_end` | `zone` | Конец зонального события |
@@ -221,7 +221,7 @@ pity-намёк и любые другие сообщения мира. Клие
 
 **Поле `data`:** опциональный объект с доп. данными (имя чемпиона, slug зоны и т.д.):
 ```json
-"data": { "mobSlug": "phantom_wolf", "zoneSlug": "dark_forest" }
+"data": { "mobSlug": "SpiritFox", "zoneSlug": "forest" }
 ```
 
 **Статус:** ✅ Реализовано. Пакет `worldNotification` уже существует в `CharacterStatsNotificationService::sendWorldNotification`; broadcast для всех клиентов (зональный scope) работает через `statsUpdateCallback_`.
@@ -337,7 +337,7 @@ NPC видит предмет и меняет тон. `"Откуда у тебя
 
 **Технически:**
 - Миграция: `ALTER TABLE items ADD COLUMN name_key VARCHAR`
-- Заполнить `name_key` для всех существующих предметов (например `item.iron_sword.name`)
+- Заполнить `name_key` для всех существующих предметов (например `item.sharp_sword.name`)
 - Клиент получает `name_key`, берёт перевод из локали; `name` остаётся как fallback
 - Сервер продолжает хранить `name` на переходный период, постепенно переходя на `name_key`
 
@@ -482,7 +482,7 @@ if (mobData.isChampion)
 Для нахождения точки спавна в нужной game zone используется:
 
 1. Получить все spawn zones из `SpawnZoneManager::getMobSpawnZones()`
-2. Для каждой проверить: центр `((posX+sizeX)/2, (posY+sizeY)/2)` попадает в bounds `GameZoneStruct`
+2. Для каждой проверить: `SpawnZoneStruct::centerX/Y` попадает в bounds `GameZoneStruct`
 3. Из найденных — выбрать random spawn zone, взять случайную точку внутри её AABB
 4. Fallback: центр game zone bounds `((minX+maxX)/2, (minY+maxY)/2, 0.0f)`
 
@@ -814,19 +814,28 @@ bool updateMobInstance(const MobDataStruct& updated);
 которого нет нигде больше. Это не просто "хороший лут" — это узнаваемое явление мира.
 
 **Три составляющих редкого моба:**
-1. **Условие спавна** — серия убийств + зона + шанс (по данным: `AlphaWolf` и `SpiritFox` — `is_rare=t`, шанс 8, условие `on_kill`). Условий «ночь/день» в данных нет — day/night cycle в игре отсутствует.
+1. **Условие спавна** — ночь + зона + шанс, или: убито 50+ волков + ночь
 2. **Узнаваемость** — особое имя, звук, отличный визуал. Игрок должен узнать его сразу
 3. **Контекстный лут** — уникальный для этого моба. `Призрачный Волк` → `Призрачный Клык`
    который нигде больше не встречается и открывает диалог с NPC (система 3.2)
 
-**Пример: Матёрый волк (по данным)**
-- Спавн: серия убийств (`on_kill`) + шанс 8
-- Дроп: шкуры и трофеи + амулет звериного чутья (7%, очень редкий)
+**Пример: Призрачный Волк**
+- Спавн: ночь (day/night cycle) + зона Тёмный Лес + 2% шанс раз в 10 минут
+- При спавне: broadcast только в зоне `"[Ночь] Призрачная тень промелькнула в лесу..."`
+- Дроп: `Призрачный Клык` (unique, item_id: X) + увеличенный gold
 - Бестиарий: отдельная запись, не смешивается с обычным волком
 
-**Важно:** редкий моб не должен вызывать frustration. Серия убийств — понятное условие: игрок влияет на шанс своей охотой.
+**Важно:** редкий моб не должен вызывать frustration. Если ночь закончилась — окей, будет следующая.
 
-**Precondition:** отсутствует — условие `on_kill` уже работает на существующих данных, day/night не требуется.
+**Precondition:** требует day/night cycle (отдельная задача).
+
+**Статус (2026-10): реализовано упрощенно — замена при респе (миграция 108).**
+Без ночного цикла: когда обычному мобу семьи приходит время респауниться,
+роллится `rare_spawn_chance` в процентах — выпало, и вместо обычного встает
+редкий шаблон (`rare_of_mob_id`: SpiritFox←ForestFox, AlphaWolf←ForestWolf),
+в зону летит `rare_mob_spawned` (ключи, не текст). Живые примеры вместо
+Призрачного Волка — Духолис и Матёрый волк. Пин: `test_rare_spawn.py` + юниты
+`RareFixture`. Ночные/ивентовые условия (`rareSpawnCondition`) — следующий шаг.
 
 **Groundwork (можно заложить уже сейчас, не реализуя логику):**
 
@@ -835,22 +844,23 @@ bool updateMobInstance(const MobDataStruct& updated);
 ALTER TABLE mob_templates ADD COLUMN is_rare             BOOLEAN DEFAULT FALSE;
 ALTER TABLE mob_templates ADD COLUMN rare_spawn_chance   FLOAT   DEFAULT 0.0;
 ALTER TABLE mob_templates ADD COLUMN rare_spawn_condition VARCHAR(30) DEFAULT NULL;
--- rare_spawn_condition: 'on_kill' (серия убийств, по данным) | 'zone_event' | NULL (любое время)
+-- rare_spawn_condition: 'night' | 'day' | 'zone_event' | NULL (любое время)
 ```
 
 Поле `is_rare` и `rareSpawnChance` добавить в `MobDataStruct` — загружаются из DB,
 передаются на chunk server. Логика спавна (`RareSpawnManager`) — отдельный тикер,
-проверяющий условие `on_kill` (day/night cycle в игре нет и не требуется).
+реализуется после day/night cycle.
 
 **Архитектурная заготовка для RareSpawnManager:**
-- `tickRareSpawns()` — вызывается ChunkServer периодически
-- Для каждого `SpawnZoneStruct::spawnMobId` с флагом `is_rare`:
+- `tickRareSpawns(bool isNight)` — вызывается ChunkServer при смене дня/ночи
+  или периодически с передачей текущего `isNight` флага
+- Для каждого моба в `SpawnZoneStruct::mobEntries` с флагом `is_rare`:
   roll `rare_spawn_chance`, проверить `rare_spawn_condition`, если подходит → спавн
 - Инстанс редкого моба регистрируется через ChampionManager (если is_champion_type)
   или напрямую через `MobInstanceManager`
 - Строгое ограничение: 1 редкий моб одного типа в зоне одновременно
 
-**Статус:** ✅ Данные есть (AlphaWolf, SpiritFox — `on_kill`, шанс 8). Осталась логика тикера.
+**Статус:** ⏳ Зависит от day/night cycle. Groundwork (DB columns) включается в миграцию 038.
 
 ---
 
@@ -1034,11 +1044,11 @@ rep 200..500 → "Знакомый" — скидка у торговца, нов
 rep 500+     → "Союзник"  — эксклюзивные квесты, уникальные предметы
 ```
 
-**Что изменяет репутацию:**
-- Убийство волков → +rep с фракцией `hunters` (связь с системой мобов)
-- Убийство бандитов → +rep с `city_guard`, −rep с `bandit_guild`
-- Выполнение/провал квеста → ±rep с выдавшим квест NPC/фракцией
-- Убийство другого игрока → −rep с `city_guard` (мягкая anti-PK система)
+**Что изменяет репутацию (только то, что есть в игре):**
+- Убийство волков и медведей → +rep с фракцией `hunters` (связь с системой мобов)
+- Убийство големов → +rep с `city_guard`
+- Выполнение квеста `varan_fox_menace` → +50 rep с `merchants`
+- Убийство духовного лиса → +rep с `nature` (пока ни на что не влияет — кандидат на будущие титулы/скидки)
 
 **Технически (детальная реализация):**
 
@@ -1267,7 +1277,7 @@ NPC faction = `npc.factionSlug`, rep читается из `ReputationManager`.
 0–20:   стартовый уровень, без бонусов
 20–50:  +damage modifier 1..5%
 50–80:  разблокирует пассивку: +3% crit chance
-80–100: разблокирует пассивку: шанс parry
+80–100: разблокирует пассивку: +2 accuracy
 ```
 
 **Защита от гринда на слабых мобах:**
@@ -1319,7 +1329,7 @@ ALTER TABLE items ADD COLUMN IF NOT EXISTS mastery_slug VARCHAR(60) DEFAULT NULL
 ```
 delta = base_delta × level_factor
 
-base_delta = 0.02  (за каждый удар, по `game_config mastery.base_delta`)
+base_delta = 0.5  (за каждый удар)
 
 level_factor (уровень цели vs уровень персонажа):
   target_level - char_level >= +3  → 2.0   (risk/reward)
@@ -1338,12 +1348,13 @@ Soft cap: при value > 80 delta *= 0.3   (последние 20 единиц �
 | `sword_mastery` | 20 | +damage 1% | `ActiveEffectStruct` sourceType="mastery" |
 | `sword_mastery` | 50 | +damage 5% | `ActiveEffectStruct` |
 | `sword_mastery` | 80 | +crit_chance 3% | `ActiveEffectStruct` attributeSlug="crit_chance" |
-| `sword_mastery` | 100 | +parry_chance 2% | `ActiveEffectStruct` attributeSlug="parry_chance" |
+| `sword_mastery` | 100 | +accuracy 2 | `ActiveEffectStruct` attributeSlug="accuracy" |
 
 **Ключевое решение:** пассивки от mastery реализуются через **существующую** `ActiveEffectStruct`
 с `expiresAt = 0` (permanent) и `sourceType = "mastery"`. Это позволяет не изобретать
-новую систему — достаточно добавить `crit_chance` и `parry_chance` в `entity_attributes`
-(migration 039) и считать их в `CombatCalculator`.
+новую систему — достаточно добавить `crit_chance` и `accuracy` в `entity_attributes`
+(migration 039) и считать их в `CombatCalculator`. (Парирование не реализовано:
+тир 4 дает `accuracy`; `parry_chance` в базе нет.)
 
 #### MasteryManager
 
@@ -1395,7 +1406,7 @@ private:
 };
 ```
 
-**Debounce persist:** писать в БД каждые 25 ударов (`mastery.db_flush_every_hits`) или при пересечении milestone.
+**Debounce persist:** писать в БД каждые 10 ударов или при пересечении milestone.
 Аналогично ItemSoul debounce (проверенный паттерн).
 
 ```cpp
@@ -1412,7 +1423,7 @@ void MasteryManager::onPlayerAttack(int characterId, const std::string& masteryS
 
     checkAndApplyMilestone(characterId, masterySlug, oldValue, val); // без lock!
 
-    if (tierCrossed || hitCounters_[characterId][masterySlug] % 25 == 0)
+    if (tierCrossed || hitCounters_[characterId][masterySlug] % 10 == 0)
         saveCallback_(characterId, masterySlug, val);
 }
 ```
@@ -1422,7 +1433,7 @@ void MasteryManager::onPlayerAttack(int characterId, const std::string& masteryS
 mastery.sword.tier1 = 20   mastery.sword.tier1.effect = "sword_mastery_t1_damage"
 mastery.sword.tier2 = 50   mastery.sword.tier2.effect = "sword_mastery_t2_damage"
 mastery.sword.tier3 = 80   mastery.sword.tier3.effect = "sword_mastery_t3_crit"
-mastery.sword.tier4 = 100  mastery.sword.tier4.effect = "sword_mastery_t4_parry"
+mastery.sword.tier4 = 100  mastery.sword.tier4.effect = "sword_mastery_t4_accuracy"
 ```
 При пересечении тира: применить `ActiveEffectStruct` (постоянный бафф) через
 `CharacterManager::addActiveEffect(characterId, effect, sourceType="mastery")`.
@@ -1473,7 +1484,7 @@ bool evaluateMastery(const nlohmann::json& rule, const PlayerContextStruct& ctx)
 }
 ```
 
-**Статус:** ✅ Реализовано (migration 039, MasteryManager, CombatSystem mastery hook в executeSkillUsage, milestone ActiveEffects для crit_chance/parry_chance, CharacterEventHandler + ClientEventHandler load/unload)
+**Статус:** ✅ Реализовано (migration 039, MasteryManager, CombatSystem mastery hook в executeSkillUsage, milestone ActiveEffects для crit_chance/accuracy, CharacterEventHandler + ClientEventHandler load/unload)
 
 ---
 
@@ -1654,20 +1665,20 @@ gs_->getStatsNotificationService().sendWorldNotificationToGameZone(
     "Событие завершилось.", {{"slug", event.slug}});
 ```
 
-#### Invasion Event — волна мобов
+#### Invasion Event — волна мобов (проект, не реализовано: живых invasion-событий нет)
 
-При `startEvent("invasion_dark_forest")` с `hasInvasionWave = true`:
+При `startEvent("invasion_forest")` с `hasInvasionWave = true`:
 ```
 1. Спавнить invasionWaveCount мобов invasionMobTemplateId в зоне
    через ChampionManager::spawnChampion или прямой MobInstanceManager::registerMobInstance
 2. Отслеживать UIDs волны в ActiveZoneEvent::waveUids
 3. При deaths count == waveCount и invasionChampionTemplateId != 0:
    спавнить финального чемпиона
-4. При смерти чемпиона → endEvent("invasion_dark_forest")
+4. При смерти чемпиона → endEvent("invasion_forest")
 ```
 
 Финальный чемпион нашествия интегрируется через `ChampionManager::onChampionKilled`
-с custom slug `"invasion_champion_dark_forest"`:
+с custom slug `"invasion_champion_forest"`:
 ```cpp
 void ZoneEventManager::onChampionKilled(const std::string& champSlug) {
     // Найти событие которое ждёт этого чемпиона
@@ -1753,7 +1764,7 @@ Threshold достигнут в зоне (N убийств волков)
 | 6 | Бестиарий | 2 | ★★★★ | ★★★☆ | Loot data |
 | 7 | Локализация предметов (name_key) | 2 | ★★★☆ | ★★★☆ | Миграция БД |
 | 8 | Threshold Champion | 3 | ★★★★ | ★★★★ | SpawnService, worldNotification |
-| 9 | Редкие мобы (Rare Spawn) | 3 | ★★★★ | ★★★☆ | Данные (`on_kill`), worldNotification |
+| 9 | Редкие мобы (Rare Spawn) | 3 | ★★★★ | ★★★☆ | Day/night cycle, worldNotification |
 | 10 | Timed Spawn Champion | 3 | ★★★★★ | ★★★★ | SpawnService, worldNotification |
 | 11 | Survival Champion | 3 | ★★★☆ | ★★★☆ | SpawnService, worldNotification |
 | 12 | Reputation System | 4 | ★★★★★ | ★★★★☆ | Диалог условия |
@@ -1956,8 +1967,9 @@ CREATE TABLE IF NOT EXISTS factions (
     slug        VARCHAR(60)  NOT NULL UNIQUE,
     name        VARCHAR(120) NOT NULL,
     default_rep INT          NOT NULL DEFAULT 0,
-    -- Пороги тиров: enemies (<-500), hostile (-499..-1),
-    -- neutral (0..199), friendly (200..699), honored (700..)
+    -- Пороги тиров: enemy (<-500), stranger (-499..-1),
+    -- neutral (0..199), friendly (200..499), ally (500..)
+    -- (исторический черновик ниже упоминал honored/700 — не реализован)
     tier_hostile   INT NOT NULL DEFAULT -500,
     tier_neutral   INT NOT NULL DEFAULT 0,
     tier_friendly  INT NOT NULL DEFAULT 200,
@@ -1966,10 +1978,12 @@ CREATE TABLE IF NOT EXISTS factions (
 
 INSERT INTO factions (slug, name, default_rep)
 VALUES
-    ('guards_city',     'Стражи Города',  0),
-    ('merchants_guild', 'Торговцы',       0),
-    ('forest_spirits',  'Духи Леса',      0)
+    ('city_guard', 'Стражи Города',  0),
+    ('merchants',  'Торговцы',       0),
+    ('nature',     'Духи Леса',      0)
 ON CONFLICT (slug) DO NOTHING;
+-- ПРИМЕЧАНИЕ (2026-10): исторические слаги guards_city/merchants_guild/
+-- forest_spirits выше заменены живыми; тир honored не реализован.
 
 -- 2. Репутация персонажей
 CREATE TABLE IF NOT EXISTS character_reputation (
@@ -1985,8 +1999,11 @@ ALTER TABLE mob_templates
     ADD COLUMN IF NOT EXISTS rep_delta_per_kill   INT         NOT NULL DEFAULT 0;
 -- faction_slug = NULL → убийство не даёт репутации
 -- rep_delta_per_kill = отрицательное значение (потеря), положительное (прирост)
--- Примеры: faction_slug='guards_city', rep_delta_per_kill=-10
---           faction_slug='forest_spirits', rep_delta_per_kill=5
+-- Примеры: faction_slug='city_guard', rep_delta_per_kill=-10
+--           faction_slug='nature', rep_delta_per_kill=5
+-- ПРИМЕЧАНИЕ (2026-10): предложение выше разошлось с реализацией. Живые
+-- фракции: hunters/city_guard/merchants/nature; тиры: enemy/stranger/neutral/
+-- friendly/ally (без honored); пороги вшиты в ReputationManager.
 
 -- 4. Определения мастерства оружия
 CREATE TABLE IF NOT EXISTS mastery_definitions (
@@ -2125,10 +2142,11 @@ ON CONFLICT (slug) DO NOTHING;
 | Threshold Champion | ✅ Реализовано | `ChampionManager::recordMobKill`, `spawnChampion`, счётчик сбрасывается при деспауне/убийстве |
 | Survival Champion | ✅ Реализовано | `ChampionManager::tickSurvivalEvolution` (300s), `evolveSurvivalMob`, `getAllLivingInstances()` |
 | Timed Champion | ✅ Реализовано | `ChampionManager::tickTimedChampions` (30s), preannounce, `sendTimedChampionKilledToGameServer`, migration 038 |
-| Rare Spawn | ⏳ Данные есть | `is_rare`, шанс 8, условие `on_kill` (AlphaWolf, SpiritFox). Осталась логика тикера, day/night не требуется |
-| Reputation System | ✅ Реализовано | §5.1 migration 039, ReputationManager, dialogue + combat integration, guard block (BLOCKED_BY_REPUTATION, rep < −500), vendor discount (−5% buy / +5% sell при rep ≥ 200) |
-| Skill Mastery | ✅ Реализовано | §5.2 migration 039, MasteryManager, crit_chance/parry_chance milestones |
+| Rare Spawn | ⏳ Groundwork | DB columns в migration 038 заложены. Логика — после day/night cycle |
+| Reputation System | ✅ Реализовано | §5.1 migration 039, ReputationManager, dialogue + combat integration, guard block (BLOCKED_BY_REPUTATION, rep < −500), vendor discount (−5% buy / +5% sell при rep ≥ 200). **migration 041:** авто-изменение репутации при сдаче/провале квеста (`QuestStruct.reputationFactionSlug/OnComplete/OnFail`), уведомление клиента `reputationChanged` в `executeFailQuest` |
+| Skill Mastery | ✅ Реализовано | §5.2 migration 039, MasteryManager, crit_chance/accuracy milestones. **migration 041:** исправлены `items.mastery_slug` для мечей (sword_mastery) и посохов (staff_mastery) — система теперь реально начисляет опыт |
 | Zone Events | ✅ Реализовано | §5.3 migration 039, ZoneEventManager, loot + speed multipliers |
+| Durability Stat Penalty | ✅ Реализовано | **migration 041:** 3-уровневый прогрессивный штраф к атрибутам экипировки: 75% → −5%, 50% → −15%, 25% → −30%. SQL CTE `equip_bonus` в `get_character_attributes`. При пересечении каждого порога — `world_notification` типа `durability_warning` с полями `severity` (1–4), `severityLabel`, `durabilityCurrent`, `durabilityMax`. Клиент получает атрибуты уже с учётом штрафа |
 
 ---
 
@@ -2214,7 +2232,7 @@ ON CONFLICT (slug) DO NOTHING;
 - [x] Scheduled task в `ChunkServer`: каждые 30 сек вызывать `tickTimedChampions()`
 - [x] Контент: добавить первый `timed_champion_templates` row в БД
 
-**Шаг 4 — Rare Spawn** (§4.3): ⏳ Тикер под условие `on_kill` (данные есть, day/night не требуется)
+**Шаг 4 — Rare Spawn** (§4.3): ⏳ После day/night cycle
 
 #### P4 — Этап 4 (долгосрочный retention) ✅ COMPLETED
 
@@ -2235,7 +2253,7 @@ ON CONFLICT (slug) DO NOTHING;
   - [x] `loadReputations(characterId, reputations)` — заполнить in-memory map при логине
   - [x] `changeReputation(characterId, factionSlug, delta)` → обновить + queue `UPDATE_REPUTATION` на Game Server
   - [x] `fillReputationContext(characterId, ctx)` → заполнить `ctx.reputations` для dialogue evaluation
-  - [x] `getTier(characterId, factionSlug)` → `"enemies" | "hostile" | "neutral" | "friendly" | "honored"`
+  - [x] `getTier(characterId, factionSlug)` → `"enemy" | "stranger" | "neutral" | "friendly" | "ally"` (honored из черновика не реализован)
 - [x] **Game Server** — `SET_CHARACTER_REPUTATIONS` event: загружать `character_reputation` при логине + отправлять на Chunk Server
 - [x] **CombatSystem::handleMobDeath** — блок reputation: `if mob.repDeltaPerKill != 0 → reputationManager.changeReputation`
 - [x] **DialogueConditionEvaluator** — тип `reputation`:
@@ -2247,7 +2265,7 @@ ON CONFLICT (slug) DO NOTHING;
   void executeChangeReputation(const nlohmann::json& action, int characterId)
   ```
 - [x] **DialogueManager::openDialogue** — guard NPC MVP: проверить тир фракции NPC перед открытием диалога
-- [x] Контент: faction slug для охранников (`guards_city`) + `rep_delta_per_kill` для бандитских мобов
+- [x] Контент: faction slug для охранников (`city_guard`) + `rep_delta_per_kill` у големов/волков/медведей (бандитских мобов в игре нет)
 
 **Шаг 2 — Skill Mastery** (§5.2):
 - [x] **MasteryManager** — создать `include/services/MasteryManager.hpp` + `src/services/MasteryManager.cpp`

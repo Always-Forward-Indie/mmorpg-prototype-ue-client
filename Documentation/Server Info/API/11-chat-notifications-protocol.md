@@ -40,9 +40,9 @@
 
 #### LOCAL — Локальный чат
 
-- Радиус: **50.0 единиц** (3D евклидово расстояние)
+- Радиус: **50.0 единиц** (авторитетно 2D + допуск по Z)
 - Рассылка: только игрокам в радиусе
-- Формула: `sqrt(dx² + dy² + dz²) ≤ 50.0`
+- Формула: `(dx²+dy²) ≤ 50.0²` **и** `|dz| ≤ zTol`, `zTol = game_config interaction.z_tolerance_chat` (дефолт **400**)
 
 #### ZONE — Зональный чат
 
@@ -87,16 +87,22 @@
   "header": {
     "eventType": "chatMessage",
     "clientId": 42,
+    "status": "error",
     "message": "Player 'NonExistentPlayer' not found"
   },
-  "body": null
+  "body": {
+    "errorCode": "Player 'NonExistentPlayer' not found"
+  }
 }
 ```
 
+> Невалидный текст (пустой / >255 символов) и whisper без `targetName`
+> дропаются **молча** (warn в лог, пакета нет) — это не ошибка выше.
+
 ### Rate-limiting
 
-- Скользящее окно: `RATE_LIMIT_WINDOW_MS` (настраивается)
-- Максимум сообщений за окно: `RATE_LIMIT_MAX` (настраивается)
+- Фиксированное окно 2000мс, hardcoded (`ChatEventHandler`: `MAX=3`, `WINDOW=2000`)
+- Превышение — тихий дроп + warn (пакета нет)
 - Отдельный bucket на каждый `clientId`
 - При превышении: сообщение игнорируется
 
@@ -169,8 +175,8 @@
   "priority": "low",
   "channel": "silent",
   "data": {
-    "mobTemplateId": 15,
-    "newKillCount": 47
+    "mobSlug": "ForestWolf",
+    "killCount": 47
   }
 }
 ```
@@ -183,9 +189,9 @@
   "priority": "medium",
   "channel": "toast",
   "data": {
-    "mobTemplateId": 15,
-    "tier": 3,
-    "newKillCount": 25,
+    "mobSlug": "ForestWolf",
+    "unlockedTier": 3,
+    "killCount": 15,
     "categorySlug": "combat_info"
   }
 }
@@ -319,7 +325,7 @@
   "header": { "eventType": "reputationChanged" },
   "body": {
     "type": "reputationChanged",
-    "faction": "bandits",
+    "faction": "hunters",
     "delta": 50
   }
 }
@@ -352,7 +358,7 @@
       {
         "inventoryItemId": 123,
         "itemId": 7,
-        "itemName": "iron_sword",
+        "itemName": "sharp_sword",
         "durabilityCurrent": 45,
         "durabilityMax": 100,
         "repairCost": 150
@@ -376,8 +382,8 @@ on world_notification(notif):
         "banner": showBanner(notif.notificationType, notif.data)
 
     switch notif.notificationType:
-        "bestiary_kill_update": updateBestiaryCounter(data.mobTemplateId, data.newKillCount)
-        "bestiary_tier_unlocked": unlockBestiaryTier(data.mobTemplateId, data.tier)
+        "bestiary_kill_update": updateBestiaryCounter(data.mobSlug, data.killCount)
+        "bestiary_tier_unlocked": unlockBestiaryTier(data.mobSlug, data.unlockedTier)
         "mastery_tier_up": showMasteryAchievement(data.masterySlug, data.tier)
 ```
 

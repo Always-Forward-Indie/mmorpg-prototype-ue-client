@@ -19,6 +19,8 @@ always replaces its local state with the received values instead of applying a d
 | Item unequipped | `EquipmentEventHandler::handleUnequipItemEvent` |
 | Attribute reload from game server | `CharacterEventHandler::handleSetCharacterAttributesEvent` |
 | Item used (potion, scroll, food) | `ItemEventHandler::handleUseItemEvent` |
+| OOC HP/MP regeneration tick (каждые ~4 с) | `RegenManager::tickRegen` |
+| Item Soul tier перейдён (50 / 200 / 500 убийств) | `CombatSystem::handleMobDeath` |
 
 > On player join the server sends **two** `stats_update` packets: first after inventory
 > is loaded (equipment state and weight are correct), then after active effects arrive
@@ -54,6 +56,7 @@ always replaces its local state with the received values instead of applying a d
   "body": {
     "characterId": 42,
     "level": 7,
+    "freeSkillPoints": 2,
     "experience": {
       "current": 3400,
       "levelStart": 2500,
@@ -115,6 +118,7 @@ always replaces its local state with the received values instead of applying a d
 |---|---|---|
 | `characterId` | int | Identifies whose stats these are |
 | `level` | int | Current character level |
+| `freeSkillPoints` | int | Unspent skill points available for learning skills |
 | `experience.current` | int | Total accumulated experience points |
 | `experience.levelStart` | int | XP threshold at the **start** of the current level |
 | `experience.nextLevel` | int | XP threshold to reach the **next** level |
@@ -162,6 +166,9 @@ effective = base
 | `block_chance` | Probability to block (integer, treated as %) |
 | `block_value` | Flat damage absorbed on block |
 | `strength` | Also drives carry weight limit |
+| `constitution` | Scales HP regeneration per tick (`hpGain += constitution * 0.3`) |
+| `wisdom` | Scales MP regeneration per tick (`mpGain += wisdom * 0.5`) |
+| `move_speed` | Server-side anti-cheat speed cap: `worldUnits/s = move_speed * 40`; default value: `5` |
 
 Additional slugs may appear dynamically from DB — the client should treat the array as
 extensible.
@@ -333,3 +340,55 @@ For each activeEffect entry:
   if expiresAt == 0  → permanent icon (no timer) — typical for passive skill effects
   else               → countdown timer = expiresAt - Date.now()/1000
 ```
+
+---
+
+## Item Soul — `weapon_kill_count_update`
+
+Отдельный lightweight пакет, отправляемый **только владельцу** каждый раз при убийстве моба с экипированным оружием. Клиент использует его для обновления тултипа оружия (счётчик убийств) без полного пересчёта всего HUD.
+
+**Direction:** Server → Client (owner only, `worldNotification` envelope)  
+**eventType:** `worldNotification` с `type: "weapon_kill_count_update"`  
+**Отправляется:** на каждом убийстве моба с экипированным оружием (1, 2, 3, …)
+
+```json
+{
+  "header": {
+    "eventType": "worldNotification"
+  },
+  "body": {
+    "type": "weapon_kill_count_update",
+    "scope": "low",
+    "displayType": "silent",
+    "data": {
+      "inventoryItemId": 137,
+      "killCount": 51
+    }
+  }
+}
+```
+
+| Поле | Тип | Описание |
+|---|---|---|
+| `inventoryItemId` | int | ID экземпляра оружия в инвентаре (`PlayerInventoryItemStruct.id`) |
+| `killCount` | int | Новое значение счётчика убийств |
+
+### Item Soul тиры и `stats_update`
+
+При каждом убийстве сервер посылает `weapon_kill_count_update`. Атрибутный бонус из тира пересчитывается в `stats_update.attributes[].effective`. Пакет `stats_update` отправляется **только** при пересечении порога тира:
+
+| Тир | Порог (`killCount`) | Конфиг-ключ | Бонус |
+|-----|---------------------|-------------|-------|
+| 1 | 50 | `item_soul.tier1_kills` / `item_soul.tier1_bonus_flat` | +1 к primary атрибуту оружия |
+| 2 | 200 | `item_soul.tier2_kills` / `item_soul.tier2_bonus_flat` | +2 к primary атрибуту |
+| 3 | 500 | `item_soul.tier3_kills` / `item_soul.tier3_bonus_flat` | +3 к primary атрибуту |
+
+> При пересечении тира клиент получает **оба** пакета: `weapon_kill_count_update` (новый killCount) и `stats_update` (обновлённые `effective` атрибуты). Ожидать их в любом порядке — оба приходят в одном цикле обработки события.
+
+### Flush в БД
+
+Запись kill count в БД (через пакет `saveItemKillCount` на game-server) происходит не на каждом убийстве, а дебаунс-стратегией:
+- каждые `item_soul.db_flush_every_kills` убийств (default: 5), **или**  
+- при пересечении тира.
+
+При дисконнекте персонажа несохранённые убийства **не теряются** — `ClientEventHandler` и `evictStaleSession` принудительно сбрасывают `saveItemKillCount` во время logout.

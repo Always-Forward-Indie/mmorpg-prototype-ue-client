@@ -13,47 +13,33 @@ All three costs are optional and configured per skill in `class_skill_tree`.
 
 ## Trainers
 
-> Источник правды по привязкам — дамп БД (`npc_trainer_class`, `npc_placements`). Функциональный тренер воинов — Эдрик, не Терон (у Терона нет строки в `npc_trainer_class`; у него магазин и ремонт).
-
-| NPC | ID | Class | World Position (zone) |
+| NPC | ID | Class | World Position |
 |-----|----|-------|----------------|
-| Edrik | 3 | Warrior | -635, 2160, 200 (village) |
-| Sylara | 5 | Mage | -2416, -2718, 200 (village) |
-
-Theron (ID 4, village) — vendor + repair, not a trainer.
+| Theron | 4 | Warrior | 1200, -2800, 200 |
+| Sylara | 5 | Mage | -400, 1600, 200 |
 
 ---
 
 ## Available Skills
 
-> Цены ниже — из `class_skill_tree` дампа. Книга требуется только для Whirlwind и Chain Lightning.
+### Warrior Skills (learn from Theron)
 
-### Warrior Skills (learn from Edrik)
-
-| Skill | Slug | Level | SP Cost | Gold | Requires Book |
-|-------|------|-------|---------|------|---------------|
-| Power Slash | `power_slash` | 5 | 1 | 100 | No |
-| Shield Bash | `shield_bash` | 5 | 1 | 150 | No |
-| Iron Skin | `iron_skin` | 5 | 1 | 120 | No |
-| Constitution Mastery | `constitution_mastery` | 8 | 1 | 200 | No (requires Iron Skin) |
-| Whirlwind | `whirlwind` | 10 | 1 | 300 | Yes — Tome of Whirlwind (requires Shield Bash) |
-| Battle Cry | `battle_cry` | 5 | 1 | 100 | No |
-| Blink Home | `blink_home` | 5 | 1 | 80 | No |
-| Swift Feet | `swift_feet` | 5 | 1 | 100 | No |
+| Skill | Slug | SP Cost | Gold | Requires Book |
+|-------|------|---------|------|---------------|
+| Shield Bash | `shield_bash` | 1 | 50 | No |
+| Whirlwind | `whirlwind` | 2 | 100 | Yes — Tome of Whirlwind |
+| Iron Skin | `iron_skin` | 1 | 75 | No |
+| Constitution Mastery | `constitution_mastery` | 2 | 0 | Yes — Tome of Constitution Mastery |
 
 ### Mage Skills (learn from Sylara)
 
-| Skill | Slug | Level | SP Cost | Gold | Requires Book |
-|-------|------|-------|---------|------|---------------|
-| Fireball | `fireball` | 5 | 1 | 120 | No |
-| Frost Bolt | `frost_bolt` | 5 | 1 | 100 | No |
-| Arcane Blast | `arcane_blast` | 8 | 1 | 200 | No (requires Frost Bolt) |
-| Mana Shield | `mana_shield` | 5 | 1 | 150 | No |
-| Elemental Mastery | `elemental_mastery` | 10 | 1 | 300 | No (requires Mana Shield) |
-| Chain Lightning | `chain_lightning` | 12 | 1 | 400 | Yes — Tome of Chain Lightning (requires Arcane Blast) |
-| Healing Surge | `healing_surge` | 8 | 1 | 150 | No |
-| Blink Home | `blink_home` | 5 | 1 | 80 | No |
-| Swift Feet | `swift_feet` | 5 | 1 | 100 | No |
+| Skill | Slug | SP Cost | Gold | Requires Book |
+|-------|------|---------|------|---------------|
+| Frost Bolt | `frost_bolt` | 1 | 50 | No |
+| Arcane Blast | `arcane_blast` | 2 | 100 | Yes — Tome of Arcane Blast |
+| Chain Lightning | `chain_lightning` | 2 | 150 | Yes — Tome of Chain Lightning |
+| Mana Shield | `mana_shield` | 1 | 75 | No |
+| Elemental Mastery | `elemental_mastery` | 2 | 0 | Yes — Tome of Elemental Mastery |
 
 ---
 
@@ -61,15 +47,15 @@ Theron (ID 4, village) — vendor + repair, not a trainer.
 
 | Item Name | Item ID | Drop Only | Unlocks |
 |-----------|---------|-----------|---------|
-| Tome of Shield Bash | 18 | No | `shield_bash` (book not required by tree) |
-| Tome of Whirlwind | 19 | No | `whirlwind` |
-| Tome of Iron Skin | 20 | No | `iron_skin` (book not required by tree) |
-| Tome of Constitution Mastery | 21 | No | `constitution_mastery` (book not required by tree) |
-| Tome of Frost Bolt | 22 | No | `frost_bolt` (book not required by tree) |
-| Tome of Arcane Blast | 23 | No | `arcane_blast` (book not required by tree) |
-| Tome of Chain Lightning | 24 | Yes | `chain_lightning` |
-| Tome of Mana Shield | 25 | No | `mana_shield` (book not required by tree) |
-| Tome of Elemental Mastery | 26 | No | `elemental_mastery` (book not required by tree) |
+| Tome of Whirlwind | 18 | No | `whirlwind` |
+| Tome of Iron Skin | 19 | Yes | `iron_skin` |
+| Tome of Constitution Mastery | 20 | No | `constitution_mastery` |
+| Tome of Frost Bolt | 21 | No | `frost_bolt` |
+| Tome of Arcane Blast | 22 | No | `arcane_blast` |
+| Tome of Chain Lightning | 23 | No | `chain_lightning` |
+| Tome of Mana Shield | 24 | Yes | `mana_shield` |
+| Tome of Elemental Mastery | 25 | No | `elemental_mastery` |
+| Tome of Shield Bash | 26 | No | `shield_bash` |
 
 Drop-only books (`vendor_price_buy = 0`) cannot be purchased from vendors — they must be found as loot.
 
@@ -77,15 +63,19 @@ Drop-only books (`vendor_price_buy = 0`) cannot be purchased from vendors — th
 
 ## Packet Flow
 
+Существует два пути изучения скила — через диалог и через UI магазина тренера.
+Оба пути сходятся с шага `saveLearnedSkill` и дальше идентичны.
+
+### Путь 1: через диалог (DialogueActionExecutor)
+
 ```
 Client                Chunk Server              Game Server           Database
   |                        |                        |                     |
   |--- dialogue_choice --->|                        |                     |
-  |   (node with          |                        |                     |
-  |    learn_skill action)|                        |                     |
+  |   (node with           |                        |                     |
+  |    learn_skill action) |                        |                     |
   |                        |                        |                     |
   |                   [DialogueActionExecutor]       |                     |
-  |                   validateLearnSkill():          |                     |
   |                   - already learned?            |                     |
   |                   - enough SP?                  |                     |
   |                   - enough gold?                |                     |
@@ -96,9 +86,48 @@ Client                Chunk Server              Game Server           Database
   |   {reason, skillSlug}  |                        |                     |
   |                        |                        |                     |
   |                   [on success]                  |                     |
-  |                   - remove book from inventory  |                     |
-  |                   - remove gold from inventory  |                     |
+  |                   - removeItemFromInventory(book)|                    |
+  |                   - removeItemFromInventory(gold)|                    |
   |                   - modifyFreeSkillPoints(-n)   |                     |
+  |                        |                        |                     |
+  |                        |-- saveLearnedSkill --->|  ← общий путь ↓    |
+```
+
+### Путь 2: через UI тренера (requestLearnSkill)
+
+```
+Client                Chunk Server              Game Server           Database
+  |                        |                        |                     |
+  |--- requestLearnSkill ->|                        |                     |
+  |   {npcId, skillSlug}   |                        |                     |
+  |                        |                        |                     |
+  |                   [SkillEventHandler]           |                     |
+  |                   - npc_not_found?              |                     |
+  |                   - out_of_range?               |                     |
+  |                   - skill_not_available?        |                     |
+  |                   - already_learned?            |                     |
+  |                   - insufficient_level?         |                     |
+  |                   - missing_prerequisite?       |                     |
+  |                   - insufficient_sp?            |                     |
+  |                   - insufficient_gold?          |                     |
+  |                   - missing_skill_book?         |                     |
+  |                        |                        |                     |
+  |                   [on failure]                  |                     |
+  |<-- learn_skill_failed -|                        |                     |
+  |   {reason, skillSlug}  |                        |                     |
+  |                        |                        |                     |
+  |                   [on success]                  |                     |
+  |                   - removeItemFromInventory(book)|                    |
+  |                   - removeItemFromInventory(gold)|                    |
+  |                   - modifyFreeSkillPoints(-n)   |                     |
+  |                        |                        |                     |
+  |                        |-- saveLearnedSkill --->|  ← общий путь ↓    |
+```
+
+### Общий путь (оба варианта)
+
+```
+Client                Chunk Server              Game Server           Database
   |                        |                        |                     |
   |                        |-- saveLearnedSkill --->|                     |
   |                        |  {characterId,         |                     |
@@ -109,15 +138,24 @@ Client                Chunk Server              Game Server           Database
   |                        |                        |                     |
   |                        |<-- setLearnedSkill ----|                     |
   |                        |   {characterId,        |                     |
-  |                        |    skillData:{...}}    |                     |
+  |                        |    skillData:{...      |                     |
+  |                        |     effects:[...]}}    |                     |
   |                        |                        |                     |
-  |                   [CharacterManager.addSkill]   |                     |
+  |                   [addCharacterSkill()]         |                     |
+  |                   if isPassive && effects:      |                     |
+  |                   - addActiveEffect() per eff   |                     |
   |<-- skill_learned ------|                        |                     |
   |   {skillSlug,          |                        |                     |
   |    skillName,          |                        |                     |
   |    isPassive,          |                        |                     |
   |    newFreeSkillPoints, |                        |                     |
   |    skillData:{...}}    |                        |                     |
+  |                        |                        |                     |
+  | (только если isPassive |                        |                     |
+  |  && effects непустой)  |                        |                     |
+  |<-- stats_update -------|                        |                     |
+  |   {attributes,         |                        |                     |
+  |    activeEffects, ...} |                        |                     |
 ```
 
 ---
@@ -184,6 +222,16 @@ Only one `learn_skill` action should exist per action group.
 
 ## Client Packets
 
+### Skill levels (max 5, +10% effect/level)
+
+Повторный `requestLearnSkill` с явным `body.targetLevel == current+1`
+повышает уровень (до 5; дальше `max_level_reached`, пропуск — `invalid_level`).
+Цена: SP × новый уровень (книга + золото — разовые, только первое изучение).
+Без `targetLevel` повтор — `already_learned` без списаний (ретраи безопасны).
+Эффект масштабируется в `CombatCalculator`: `× (1 + 0.1 × (level − 1))`.
+Уровень персистится (`character_skills.current_level`, GREATEST-wins) и
+возвращается в `skillData.skillLevel` / `skill_learned.skillLevel`.
+
 ### `skill_learned` (chunk server → client)
 
 Sent when the skill is successfully learned and saved to the database.
@@ -196,17 +244,59 @@ Sent when the skill is successfully learned and saved to the database.
   "isPassive": false,
   "newFreeSkillPoints": 1,
   "skillData": {
-    "skillId": 4,
     "skillSlug": "shield_bash",
     "skillName": "Shield Bash",
-    "description": "Stuns the target briefly with your shield.",
     "isPassive": false,
-    "currentLevel": 1,
-    "skillProperties": [
-      { "propertyName": "stun_duration", "coeff": 0.0, "flatAdd": 1.5 }
+    "scaleStat": "strength",
+    "school": "physical",
+    "skillEffectType": "damage",
+    "skillLevel": 1,
+    "coeff": 0.8,
+    "flatAdd": 0.0,
+    "cooldownMs": 8000,
+    "gcdMs": 1500,
+    "castMs": 0,
+    "costMp": 0,
+    "maxRange": 2.0,
+    "areaRadius": 0.0,
+    "swingMs": 300,
+    "animationName": "ShieldBash",
+    "effects": []
+  }
+}
+```
+
+**Для пассивных скилов** (например `constitution_mastery`) поле `effects` содержит массив модификаторов:
+
+```json
+{
+  "type": "skill_learned",
+  "skillSlug": "constitution_mastery",
+  "skillName": "Constitution Mastery",
+  "isPassive": true,
+  "newFreeSkillPoints": 0,
+  "skillData": {
+    "skillSlug": "constitution_mastery",
+    "skillName": "Constitution Mastery",
+    "isPassive": true,
+    "effects": [
+      {
+        "effectSlug": "constitution_mastery_con_bonus",
+        "effectTypeSlug": "buff",
+        "attributeSlug": "constitution",
+        "value": 5.0,
+        "durationSeconds": 0,
+        "tickMs": 0
+      }
     ]
   }
 }
+```
+
+**Важно:** для пассивных скилов с непустым `effects` сервер немедленно отправляет
+дополнительный `stats_update` пакет — клиент получает обновлённые `effective`-атрибуты
+и актуальный список `activeEffects` (для buff-bar) без необходимости делать что-либо
+дополнительно. Порядок пакетов гарантирован: сначала `skill_learned`, затем `stats_update`.
 ```
 
 ### `learn_skill_failed` (chunk server → client)
@@ -225,10 +315,110 @@ Sent when a skill purchase attempt fails validation.
 
 | Code | Meaning |
 |------|---------|
-| `already_learned` | Player already knows this skill |
+| `already_learned` | Player already knows this skill (no `targetLevel`, or `targetLevel` ≤ current — repeats are idempotent, never charged) |
+| `invalid_level` | `targetLevel` skips levels (must be exactly current+1) |
+| `max_level_reached` | Skill already at max level (5) |
+| `insufficient_level` | Character level below `requiredLevel` |
+| `missing_prerequisite` | Prerequisite skill not yet learned |
 | `insufficient_sp` | Not enough free skill points |
 | `insufficient_gold` | Not enough gold coins in inventory |
 | `missing_skill_book` | Required skill book not in inventory |
+| `npc_not_found` | Referenced NPC does not exist |
+| `out_of_range` | Player is too far from the trainer |
+| `skill_not_available` | NPC does not teach this skill |
+
+---
+
+## Skill Trainer Shop UI (direct packets)
+
+In addition to the dialogue-based `learn_skill` action, clients can open a dedicated
+**skill trainer shop window** — a UI showing all skills the trainer teaches, along
+with per-skill affordability flags.  This is the preferred path for new UI work;
+the dialogue path is kept for backward compatibility.
+
+### Packet: `openSkillShop` (client → chunk)
+
+Opens the trainer shop window without going through a dialogue.
+
+```json
+{
+  "header": { "eventType": "openSkillShop", "clientId": 42 },
+  "body": {
+    "npcId": 4,
+    "posX": 1200, "posY": -2800, "posZ": 200
+  }
+}
+```
+
+### Response: `skillShop` (chunk → client)
+
+```json
+{
+  "header": { "eventType": "skillShop", "status": "success", "clientId": 42 },
+  "body": {
+    "npcId": 4,
+    "npcSlug": "theron",
+    "freeSkillPoints": 2,
+    "goldBalance": 350,
+    "skills": [
+      {
+        "skillId": 4,
+        "skillSlug": "shield_bash",
+        "skillName": "Shield Bash",
+        "description": "Stuns the target briefly with your shield.",
+        "isPassive": false,
+        "requiredLevel": 1,
+        "spCost": 1,
+        "goldCost": 50,
+        "requiresBook": false,
+        "bookItemId": 0,
+        "prerequisiteSkillSlug": "",
+        "isLearned": false,
+        "canLearn": true,
+        "prereqMet": true,
+        "levelMet": true,
+        "spMet": true,
+        "goldMet": true,
+        "bookMet": true
+      }
+    ]
+  }
+}
+```
+
+**Per-skill flags:**
+
+| Flag | Meaning |
+|------|---------|
+| `isLearned` | Player already knows this skill |
+| `canLearn` | All other flags are true (shortcut for UI enable/disable) |
+| `prereqMet` | Prerequisite skill is learned (or none required) |
+| `levelMet` | Character level ≥ `requiredLevel` |
+| `spMet` | `freeSkillPoints` ≥ `spCost` |
+| `goldMet` | Gold balance ≥ `goldCost` |
+| `bookMet` | Skill book is in inventory (or not required) |
+
+### Packet: `requestLearnSkill` (client → chunk)
+
+Sent when the player clicks "Learn" in the skill shop UI.
+
+```json
+{
+  "header": { "eventType": "requestLearnSkill", "clientId": 42 },
+  "body": {
+    "npcId": 4,
+    "skillSlug": "shield_bash",
+    "posX": 1200, "posY": -2800, "posZ": 200
+  }
+}
+```
+
+On success the server deducts SP, gold, and the skill book, sends `saveLearnedSkill`
+to the game server, and the usual `skill_learned` / `learn_skill_failed` response is
+returned (see above).
+
+Error codes from `requestLearnSkill` are identical to the `learn_skill_failed` reason
+table above, plus `npc_not_found`, `out_of_range`, and `skill_not_available`.
 
 ---
 
@@ -297,7 +487,7 @@ This means leveling from 1 → 3 grants 2 SP, but SP is never reduced by the lev
 
 ## Trainer Dialogue IDs
 
-| Trainer | NPC ID | Dialogue | Start Node | Node Range |
-|---------|--------|----------|------------|------------|
-| Edrik | 3 | `edrik_main` (dialogue 3) | 301 | 301+ |
-| Sylara | 5 | `sylara_main` (dialogue 5) | 500 | 500–599 |
+| Trainer | Dialogue ID | Start Node | Node Range |
+|---------|-------------|------------|------------|
+| Theron | 4 | 400 | 400–499 |
+| Sylara | 5 | 500 | 500–599 |

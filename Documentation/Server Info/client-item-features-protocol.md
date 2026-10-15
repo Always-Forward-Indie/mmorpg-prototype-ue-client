@@ -156,7 +156,7 @@ Gold itself also appears as a normal item in the `items` array (slug `gold_coin`
 {
   "id": 42,
   "itemId": 42,
-  "slug": "potion_hp_small",
+  "slug": "small_health_potion",
   "isQuestItem": false,
   "isUsable": true,
   "itemType": 3,
@@ -209,6 +209,57 @@ Gold itself also appears as a normal item in the `items` array (slug `gold_coin`
 
 ---
 
+## 5а. Item Soul — обновление kill count
+
+Каждый раз при убийстве моба с экипированным оружием сервер отправляет **только владельцу** пакет `worldNotification` с типом `weapon_kill_count_update`. Это легковесное уведомление для обновления тултипа/счётчика оружия. Полный `stats_update` приходит **только** при пересечении тира (50 / 200 / 500 убийств), когда изменяется `effective` значение атрибута.
+
+**Direction:** Server → Client (owner only)  
+**eventType:** `worldNotification`
+
+```json
+{
+  "header": {
+    "eventType": "worldNotification"
+  },
+  "body": {
+    "type": "weapon_kill_count_update",
+    "scope": "low",
+    "displayType": "silent",
+    "data": {
+      "inventoryItemId": 137,
+      "killCount": 51
+    }
+  }
+}
+```
+
+| Поле | Тип | Описание |
+|---|---|---|
+| `inventoryItemId` | int | `PlayerInventoryItemStruct.id` — конкретный экземпляр оружия |
+| `killCount` | int | Новое значение счётчика убийств |
+
+### Тиры Item Soul
+
+| Тир | Порог | Эффект |
+|-----|-------|--------|
+| 1 | 50 убийств | +1 плоский бонус к primary-атрибуту оружия |
+| 2 | 200 убийств | +2 плоский бонус |
+| 3 | 500 убийств | +3 плоский бонус |
+
+Бонус виден в `stats_update.attributes[].effective`. При пересечении порога сервер отправляет оба пакета: `weapon_kill_count_update` и `stats_update`.
+
+### Логика клиента
+
+```
+on worldNotification where type == "weapon_kill_count_update":
+    weapon = GetInventoryItem(data.inventoryItemId)
+    weapon.killCount = data.killCount
+    RefreshWeaponTooltip(weapon)
+    // НЕ обновлять атрибуты — подождать stats_update (придёт только на тире)
+```
+
+---
+
 ## 6. Use Consumable Item
 
 ### Client → Server
@@ -230,6 +281,9 @@ One unit of the item is consumed from the inventory. The server validates:
 - Character is alive.
 - Character owns the item.
 - `isUsable = true` и `useEffects` не пустой.
+- Per-item cooldown не активен (`cooldownSeconds` из первого use-effect).
+
+**Тimed-эффекты** (`isInstant = false`) сохраняются в `player_active_effect` (game server) и переживают реконнект. `sourceType` таких эффектов всегда `"item"`.
 
 ---
 
@@ -247,11 +301,13 @@ One unit of the item is consumed from the inventory. The server validates:
     "skillResult": {
       "casterId": 15,
       "targetId": 15,
-      "skillName": "Health Potion",
-      "skillSlug": "potion_hp_small",
+      "skillName": "Healing Surge",
+      "skillSlug": "healing_surge",
       "skillEffectType": "heal",
       "healing": 150,
+      "manaHealing": 0,
       "finalTargetHealth": 480,
+      "finalTargetMana": 320,
       "success": true
     }
   }
@@ -259,6 +315,8 @@ One unit of the item is consumed from the inventory. The server validates:
 ```
 
 `casterId == targetId` — персонаж хилит сам себя.
+
+> Для **зелий маны** (`attributeSlug == "mp"`): `healing` будет `0`, `manaHealing` — восстановленное количество маны. Для комбо-зелий (эффекты на HP и MP) оба поля могут быть > 0 одновременно.
 
 ---
 
@@ -361,6 +419,7 @@ One unit of the item is consumed from the inventory. The server validates:
 | Server → Client | `stats_update` | Full stats + active effects + weight update (owner only, после useItem) |
 | Server → Client | `effectTick` | One DoT/HoT tick (HP change + effect slug, broadcast, см. §9) |
 | Server → Client | `getPlayerInventory` | Full inventory refresh (now includes `gold` field) |
+| Server → Client | `worldNotification` (`weapon_kill_count_update`) | Kill count на оружии — owner only, каждое убийство |
 
 ---
 
@@ -765,24 +824,24 @@ Harvest — механика сбора лута с трупов мобов. Т�
     "availableLoot": [
       {
         "itemId": 15,
-        "itemSlug": "wolf_pelt",
+        "itemSlug": "alpha_fang",
         "quantity": 2,
         "rarityId": 1,
         "raritySlug": "common",
-        "itemType": "Material",
-        "itemTypeSlug": "material",
+        "itemType": "Resource",
+        "itemTypeSlug": "resource",
         "weight": 0.5,
         "addedToInventory": false,
         "isHarvestItem": true
       },
       {
         "itemId": 16,
-        "itemSlug": "wolf_fang",
+        "itemSlug": "alpha_fang",
         "quantity": 1,
         "rarityId": 2,
         "raritySlug": "uncommon",
-        "itemType": "Material",
-        "itemTypeSlug": "material",
+        "itemType": "Resource",
+        "itemTypeSlug": "resource",
         "weight": 0.1,
         "addedToInventory": false,
         "isHarvestItem": true
@@ -842,8 +901,8 @@ Harvest — механика сбора лута с трупов мобов. Т�
   "body": {
     "success": true,
     "pickedUpItems": [
-      { "itemId": 15, "quantity": 2, "slug": "wolf_pelt" },
-      { "itemId": 16, "quantity": 1, "slug": "wolf_fang" }
+      { "itemId": 15, "quantity": 2, "slug": "alpha_fang" },
+      { "itemId": 16, "quantity": 1, "slug": "alpha_fang" }
     ]
   }
 }

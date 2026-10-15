@@ -69,11 +69,13 @@ struct HarvestProgressStruct {
 };
 
 struct HarvestableCorpseStruct {
-    int corpseUID;
-    int mobTemplateId;
+    int mobUID;             // Unique mob instance UID (used as corpse identifier)
+    int mobId;              // Template mob ID
     PositionStruct position;
     bool hasBeenHarvested;
+    int harvestedByCharacterId;
     int currentHarvesterCharacterId;  // 0 = никто не канализирует
+    float interactionRadius;  // 250.0 units
     // Таймер жизни трупа
 };
 
@@ -110,7 +112,7 @@ struct CorpseLootStruct {
 #### Серверная валидация
 
 1. Труп с `corpseUID` существует в `harvestableCorpses_`
-2. Расстояние ≤ 150.0 единиц (`DEFAULT_INTERACTION_RADIUS`)
+2. Расстояние ≤ 300.0 единиц (`HarvestManager::DEFAULT_INTERACTION_RADIUS`, авторитетно 2D: `dist2D(player, corpse) <= interactionRadius`)
 3. `hasBeenHarvested == false`
 4. `currentHarvesterCharacterId == 0` (никто другой не канализирует)
 
@@ -132,14 +134,34 @@ struct CorpseLootStruct {
 }
 ```
 
+#### Сервер → Unicast (harvestStarted)
+
+```json
+{
+  "header": { "eventType": "harvestStarted", "message": "Harvest started successfully", "status": "success" },
+  "body": {
+    "type": "HARVEST_STARTED",
+    "clientId": 42,
+    "playerId": 1,
+    "corpseId": 1234,
+    "duration": 3000,
+    "startTime": 1711709400000
+  }
+}
+```
+
 #### Ошибки
 
 ```json
 {
   "header": { "eventType": "harvestError" },
   "body": {
+    "type": "HARVEST_ERROR",
+    "clientId": 42,
+    "playerId": 1,
+    "corpseId": 1234,
     "errorCode": "OUT_OF_RANGE",
-    "corpseUID": 1234
+    "message": "Corpse not available for harvest"
   }
 }
 ```
@@ -147,11 +169,9 @@ struct CorpseLootStruct {
 | Код | Причина |
 |-----|---------|
 | `CORPSE_NOT_FOUND` | Труп не существует или истёк |
-| `CORPSE_NOT_AVAILABLE` | Труп недоступен (фактический код сервера на неизвестный труп, 2026-09-13) |
-| `OUT_OF_RANGE` | Слишком далеко (> 150.0) |
+| `OUT_OF_RANGE` | Слишком далеко (> 300.0) |
 | `ALREADY_HARVESTED` | Труп уже собран |
 | `ALREADY_BEING_HARVESTED` | Кто-то другой уже собирает |
-| `HARVEST_FAILED` | Старт не удался (напр. contested corpse, см. тело `message`) |
 
 ---
 
@@ -167,28 +187,7 @@ struct CorpseLootStruct {
 
 ### harvestComplete — Завершение
 
-Проверено по коду: завершение — это **два** события. Ждать надо оба.
-
-#### Сервер → Unicast (harvestComplete, именно harvester'у)
-
-```json
-{
-  "header": { "eventType": "harvestComplete", "status": "success" },
-  "body": {
-    "type": "HARVEST_COMPLETE",
-    "clientId": 7,
-    "playerId": 7,
-    "corpseId": 1234,
-    "success": true,
-    "totalItems": 2,
-    "availableLoot": [ /* как в corpseLootInspect ниже */ ]
-  }
-}
-```
-
-> Лут уже виден прямо здесь в `availableLoot` — отдельный inspect не обязателен, но безвреден.
-
-#### Сервер → Broadcast (harvestCompleteBroadcast, всем рядом)
+#### Сервер → Broadcast (harvestCompleteBroadcast)
 
 ```json
 {
@@ -274,23 +273,17 @@ struct CorpseLootStruct {
 {
   "header": { "eventType": "corpseLootInspect", "status": "success" },
   "body": {
-    "success": true,
     "corpseUID": 1234,
-    "availableLoot": [
+    "items": [
       {
         "itemId": 20,
-        "itemSlug": "animal_hide",
         "quantity": 3,
-        "name": "animal_hide"
+        "item": { /* ItemDataStruct */ }
       }
-    ],
-    "totalItems": 1,
-    "type": "CORPSE_LOOT_INSPECT"
+    ]
   }
 }
 ```
-
-> Проверено по коду (`HarvestEventHandler`): список — **`availableLoot`**, не `items`. Ошибки → то же событие `corpseLootInspect` со `status: error`: `SECURITY_VIOLATION | CORPSE_NOT_FOUND | CORPSE_NOT_HARVESTED | NOT_YOUR_HARVEST` (лут чужого трупа смотреть нельзя — только свой `harvestedByCharacterId`).
 
 ---
 
@@ -351,12 +344,6 @@ struct CorpseLootStruct {
 }
 ```
 
-> **Исправлено по коду (2026-09-13, `HarvestEventHandler::handleGetNearbyCorpses`):**
-> реальные ключи — `id` (= corpseUID = mobUID), `mobId`, плоские `positionX/positionY`,
-> плюс `harvestedByCharacterId/currentHarvesterCharacterId/isBeingHarvested`.
-> Также исправлен резолв персонажа (был `getCharacterById(clientId)` —
-> всегда мимо; теперь из сессии).
-
 ---
 
 ## Генерация лута (MobLootInfo)
@@ -379,4 +366,8 @@ struct MobLootInfoStruct {
 |----------|---------|----------|
 | `harvest.duration` | 3.0 сек | Длительность каналки |
 | `harvest.max_move_distance` | 50.0 | Макс. расстояние от точки начала |
-| `harvest.interaction_radius` | 150.0 | Дистанция для начала харвеста |
+| `harvest.interaction_radius` | 300.0 | Константа `DEFAULT_INTERACTION_RADIUS` в `HarvestManager` (конфиг-оверрайда в коде нет) |
+| `pity.soft_pity_kills` | 300 | С этого числа убийств без дропа шанс растет |
+| `pity.soft_bonus_per_kill` | 0.00005 | Прибавка к шансу за каждое убийство после soft-порога |
+| `pity.hint_threshold_kills` | 500 | Клиенту показывают намек, что удача близко |
+| `pity.hard_pity_kills` | 800 | Гарантированный дроп; счетчик сбрасывается |

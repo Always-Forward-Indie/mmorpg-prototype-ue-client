@@ -178,23 +178,26 @@
   │  combatState: CHASING → PREPARING_ATTACK
   │  selectAttackSkill() → "mob_claw_attack"
   │
+  │  Урон применяется НЕМЕДЛЕННО при входе в PREPARING_ATTACK
+  │
   │──► combatInitiation ─────────────────────────────────► broadcast
   │    { casterId: 1001, targetId: 7,
   │      castTime: 0.5, skillSlug: "mob_claw_attack" }
+  │
+  │──► combatResult ─────────────────────────────────────► broadcast
+  │    { casterId: 1001, targetId: 7, damage: 22,
+  │      finalTargetHealth: 228, targetDied: false }
+  │    (оба пакета отправлены одновременно, до истечения castTime)
+  │
+  │──► stats_update ─────────────────────────────────────► только targetId=7
+  │    { currentHealth: 228 }
   │
   │──► mobMoveUpdate ────────────────────────────────────► clientId
   │    { combatState: 2, velocity: { dirX:0, dirY:0, speed:0 } }
   │    (моб заморожен, клиент запускает кастбар 0.5 сек)
   │
   │  castTime (0.5 с) истёк → combatState: PREPARING_ATTACK → ATTACKING
-  │  Урон применяется и отправляется СЕЙЧАС (по окончании каста)
-  │
-  │──► combatResult ─────────────────────────────────────► broadcast
-  │    { casterId: 1001, targetId: 7, damage: 22,
-  │      finalTargetHealth: 228, targetDied: false }
-  │
-  │──► stats_update ─────────────────────────────────────► только targetId=7
-  │    { currentHealth: 228 }
+  │  (урон уже был применён при входе в PREPARING_ATTACK)
   │
   │──► mobMoveUpdate: { combatState: 3 }  ───────────────► clientId
   │
@@ -242,7 +245,7 @@
   │──► combatResult ─────────────────────────────────────► broadcast
   │──► mobDeath ─────────────────────────────────────────► broadcast
   │    { mobUID: 1001, zoneId: 3 }
-  │──► experience_update ────────────────────────────────► только убийце
+  │──► experienceUpdate ────────────────────────────────► только убийце
   │──► itemDrop (если есть) ─────────────────────────────► broadcast
 ```
 
@@ -286,7 +289,7 @@
 | `attackRange` | `150 units` | Дистанция атаки (переход CHASING → PREPARING_ATTACK) |
 | `attackCooldown` | `2.0 с` | Базовый кулдаун (используется если у скилла `cooldownMs=0`) |
 | `chaseMultiplier` | `2.0×` | `aggroRange × chaseMultiplier` = макс. дистанция преследования |
-| `chaseDuration` | `30.0 с` | Максимальное время преследования до принудительного leash |
+| `chaseDuration` | `10.0 с` | Максимальное время преследования до принудительного leash (дефолт; в БД `mob.chase_duration`) |
 | `patrolSpeed` | `1.0` | Множитель скорости патруля (влияет на интервал шагов) |
 | `isSocial` | `false` | Включить групповую агрессию (см. раздел 11) |
 | `fleeHpThreshold` | `0.0` | Порог HP для бегства (0.0 = никогда не убегает) |
@@ -395,7 +398,7 @@ velocity.speed = chaseSpeedUnitsPerSec  (units/sec)
 **Алгоритм**:
 1. Вектор бегства = нормализованный `(mobPos - attackerPos)`.
 2. `fleeTargetPosition = mobPos + fleeVector × (aggroRange × chaseMultiplier × 1.1)`.
-3. Моб движется к `fleeTargetPosition` по той же логике, что и RETURNING (функция `calculateReturnToSpawnMovement`).
+3. Моб движется к `fleeTargetPosition` по той же логике, что и RETURNING (функция `calculateReturnToSpawnMovement`), но со скоростью **0.5×** — медленнее игрока, догон и добивание возможны (быстрее — неубиваемый кайтинг: добыча обгоняла и преследователя, и позиционные бродкасты). Перестал преследовать — моб отлипает, возвращается и лечится (штатно).
 4. Длительность бегства ≤ `chaseDuration / 3` секунд.
 5. По истечении или если атакующий мёртв → RETURNING.
 
@@ -452,7 +455,7 @@ velocity.speed = chaseSpeedUnitsPerSec  (units/sec)
 - Если threat нет — выбирается ближайший игрок в `aggroRange`.
 
 **Decay (затухание)**:
-- Каждые 100 мс: для игроков **вне** `aggroRange` threat умножается на `0.95^(deltaTime×10)` (≈ −50%/сек).
+- Каждые 100 мс: для игроков **вне** `aggroRange` threat умножается на `0.95^(deltaTime×10)` (≈ −40%/сек: `0.95^10 ≈ 0.60`).
 - Когда threat падает до 0 — игрок удаляется из таблицы.
 
 **Сброс**: при переходе в RETURNING / EVADING — `threatTable` и `attackerTimestamps` очищаются.
@@ -631,15 +634,21 @@ Client: кастбар           HP бар↓  удар    cooldown   бег
     "spawnZone": {
       "id": 1,
       "name": "Forest Zone",
+      "shape": "RECT",
       "bounds": {
         "minX": 0.0, "maxX": 1000.0,
         "minY": 0.0, "maxY": 1000.0,
         "minZ": 0.0, "maxZ": 0.0
       },
-      "spawnMobId": 2,
-      "maxSpawnCount": 5,
+      "center": { "x": 500.0, "y": 500.0 },
+      "innerRadius": 0.0,
+      "outerRadius": 0.0,
+      "mobEntries": [
+        { "mobId": 2, "maxCount": 5 }
+      ],
+      "totalSpawnCount": 5,
       "spawnedMobsCount": 2,
-      "respawnTime": 30000,
+      "respawnTimeSec": 30,
       "spawnEnabled": true
     },
     "mobs": [
@@ -649,7 +658,7 @@ Client: кастбар           HP бар↓  удар    cooldown   бег
         "zoneId": 1,
         "name": "Grey Wolf",
         "slug": "grey-wolf",
-        "race": "wolf",
+        "race": "Animal",
         "level": 3,
         "isAggressive": true,
         "isDead": false,
@@ -672,7 +681,7 @@ Client: кастбар           HP бар↓  удар    cooldown   бег
         "zoneId": 1,
         "name": "Grey Wolf",
         "slug": "grey-wolf",
-        "race": "wolf",
+        "race": "Animal",
         "level": 3,
         "isAggressive": true,
         "isDead": false,
@@ -723,7 +732,7 @@ Client: кастбар           HP бар↓  удар    cooldown   бег
         "zoneId": 1,
         "name": "Grey Wolf",
         "slug": "grey-wolf",
-        "race": "wolf",
+        "race": "Animal",
         "level": 3,
         "isAggressive": true,
         "isDead": false,

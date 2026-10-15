@@ -1,7 +1,15 @@
 # Client ↔ Server Protocol: Прокачка и прогрессия
 
-**Версия документа:** v1.0  
+**Версия документа:** v1.1  
 **Актуально для:** chunk-server v0.0.4+
+
+**Изменения v1.1:**
+- `experience_update` переименован в `experienceUpdate` (camelCase) во всех примерах — соответствует реальному `eventType`
+- Добавлен отдельный пакет `levelUp` в §2.2 последовательности
+- Исправлены поля `experience` в stats_update на `levelStart`/`nextLevel` (было `expForCurrentLevel`/`expForNextLevel`)
+- §5 Репутация: добавлен пакет `reputationChanged` — сервер отправляет его при `change_reputation` диалоговом действии
+- Все примеры `world_notification`: `text: ""` (было непустое), добавлены поля `notificationId`, `priority`, `channel`
+- §12 таблица `world_notification` расширена: все актуальные типы + колонки `priority`/`channel`
 
 ---
 
@@ -26,7 +34,7 @@
 
 | Система | Пакеты клиенту | Хранение |
 |---------|----------------|----------|
-| XP/Уровень | `experience_update`, `stats_update` | Game Server (PostgreSQL) |
+| XP/Уровень | `experienceUpdate`, `levelUp`, `stats_update` | Game Server (PostgreSQL) |
 | XP Долг | в `stats_update` (поле `experience.debt`) | Game Server (PostgreSQL) |
 | Мастерство | `world_notification` (тип `mastery_tier_up`) | Game Server (PostgreSQL) |
 | Репутация | нет прямого пакета; влияет на диалоги/магазин | Game Server (PostgreSQL) |
@@ -41,17 +49,19 @@
 
 ## 2. Опыт и уровни
 
-### 2.1 Получение XP — `experience_update`
+### 2.1 Получение XP — `experienceUpdate`
 
-Отправляется **только клиенту-владельцу** после получения опыта (убийство моба, выполнение квеста и т.д.).
+Отправляется после получения опыта (убийство моба, выполнение квеста и т.д.). (убийство моба, выполнение квеста и т.д.).
 
 **Направление:** Сервер → Клиент (только инициатору)  
-**eventType:** `experience_update`
+**eventType:** `experienceUpdate`
+
+> **Важно:** Пакет рассылается ВСЕМ подключённым клиентам, не только инициатору. Клиент должен фильтровать по `characterId`.
 
 ```json
 {
   "header": {
-    "eventType": "experience_update",
+    "eventType": "experienceUpdate",
     "message": "Experience updated"
   },
   "body": {
@@ -87,15 +97,16 @@
 ### 2.2 Левел-ап
 
 При `levelUp: true`:
-1. `experience_update` содержит `newLevel: oldLevel + 1`
-2. Следом приходит `stats_update` с пересчитанными характеристиками.
-
-> Рост характеристик — не flat-бонус, а формула `base + mult × level^exp` из таблицы `class_stat_formula` (наблюдаемое состояние — дамп БД). Примеры на 1 уровне: воин — HP 168 / MP 55 / физ. атака 13.5 / защита 19; маг — HP 88 / MP 225 / маг. атака 6.8 / защита 6.
+1. `experienceUpdate` содержит `newLevel: oldLevel + 1`
+2. Следом приходит `stats_update` с:
+   - Увеличенным `health.max` (+10 HP за уровень)
+   - Увеличенным `mana.max` (+5 MP за уровень)
+   - Обновлёнными `base`-атрибутами (зависит от класса)
 
 ```json
 {
   "header": {
-    "eventType": "experience_update",
+    "eventType": "experienceUpdate",
     "message": "Level up!"
   },
   "body": {
@@ -116,13 +127,34 @@
 
 #### Последовательность при левел-апе
 
+При левел-апе клиент получает **три пакета** в следующем порядке:
+
 ```
 Убийство моба →
   ▶ combatResult (targetDied: true)
-  ▶ experience_update (levelUp: true, newLevel: 6)
-  ▶ stats_update (health.max увеличен, новые base-значения)
+  ▶ experienceUpdate (levelUp: true, newLevel: 6)   ← пакет XP с флагом levelUp
+  ▶ levelUp { newLevel, oldLevel, newExperience, expForNextLevel, newAbilities }  ← отдельный пакет
+  ▶ stats_update (health.max увеличен, новые base-значения — после round-trip к Game Server)
   ▶ itemDrop (если есть дроп)
 ```
+
+**Пакет `levelUp` (eventType: `levelUp`):**
+
+```json
+{
+  "header": { "eventType": "levelUp", "message": "Level up achieved!" },
+  "body": {
+    "characterId": 7,
+    "oldLevel": 5,
+    "newLevel": 6,
+    "newExperience": 3700,
+    "expForNextLevel": 5000,
+    "newAbilities": []
+  }
+}
+```
+
+> **Для UI:** Использовать `levelUp` как триггер для level-up анимации (screen center flash). `experienceUpdate` содержит тот же `levelUp: true` — для совместимости. `stats_update` придёт после, когда Game Server пересчитает атрибуты, — обновлять UI стат только тогда.
 
 ---
 
@@ -144,9 +176,8 @@ System death-penalty: вместо потери набранного XP появ
   "body": {
     "experience": {
       "current": 2400,
-      "expForCurrentLevel": 2000,
-      "expForNextLevel": 3500,
-      "level": 5,
+      "levelStart": 2000,
+      "nextLevel": 3500,
       "debt": 800
     }
   }
@@ -158,7 +189,7 @@ System death-penalty: вместо потери набранного XP появ
 Получено 150 XP, долг 800:
 - Погашение долга: `150 * 0.5 = 75` → долг становится `800 - 75 = 725`
 - Фактический XP: `150 - 75 = 75`
-- В `experience_update.experienceChange` будет `75` (уже после вычета)
+- В `experienceUpdate.experienceChange` будет `75` (уже после вычета)
 
 Получено 150 XP, долг 0:
 - Весь XP зачисляется: `experienceChange = 150`
@@ -176,7 +207,7 @@ System death-penalty: вместо потери набранного XP появ
 - Значение мастерства: `0.0 – 100.0`
 - Прирост: каждый успешный удар/применение скилла оружием
 - Пороги тиров: **20, 50, 80, 100**
-- Сохраняется на сервере каждые 25 ударов (`mastery.db_flush_every_hits`) или при пересечении порога
+- Сохраняется на сервере каждые 10 ударов или при пересечении порога
 
 ### Бонусы по тирам
 
@@ -185,7 +216,7 @@ System death-penalty: вместо потери набранного XP появ
 | T1 | 20 | +1% к `physical_attack` | permanent ActiveEffect |
 | T2 | 50 | +4% к `physical_attack` | permanent ActiveEffect |
 | T3 | 80 | +3% к `crit_chance` | permanent ActiveEffect |
-| T4 | 100 | +2% к `parry_chance` | permanent ActiveEffect |
+| T4 | 100 | +2 к `accuracy` | permanent ActiveEffect |
 
 Бонусы накапливаются: при T3 активны все T1+T2+T3 (итого +5% physical_attack + 3% crit_chance).
 
@@ -198,21 +229,22 @@ System death-penalty: вместо потери набранного XP появ
   "header": { "eventType": "world_notification", "status": "success" },
   "body": {
     "characterId": 7,
+    "notificationId": "18",
     "notificationType": "mastery_tier_up",
-    "text": "Мастерство Меч достигло II тира!",
+    "priority": "medium",
+    "channel": "toast",
+    "text": "",
     "data": {
       "masterySlug": "sword",
-      "masteryValue": 50.3,
-      "tier": 2
-    }
+      "tier": "sword_t1_damage"
   }
 }
 ```
 
 Следом приходит `stats_update` с новыми значениями `attributes.effective` (бонус тира уже включён).
 
-> **Для UI:** Показать анимацию/тост `"Мастерство [weapon] — Тир 2!"`. Значение мастерства не присылается в `stats_update`, только через это уведомление.
-
+> **Для UI:** Показать тост `"Мастерство [weapon] — Тир X!"`. Определить номер тира по суффиксу `tier`: `_t1_` → тир 1, `_t2_` → тир 2 и т.д. Следом придёт `stats_update` с уже применёнными бонусами.
+тост `"Мастерство [weapon] — Тир X!"`. Определить номер тира по суффиксу `tier`: `_t1_` → тир 1, `_t2_` → тир 2 и т.д. Следом придёт `stats_update` с уже применёнными бонусами
 ---
 
 ## 5. Репутация с фракциями
@@ -244,7 +276,7 @@ System death-penalty: вместо потери набранного XP появ
     "vendorId": 50,
     "items": [
       {
-        "itemSlug": "health_potion_small",
+        "itemSlug": "small_health_potion",
         "buyPrice": 95,
         "sellPrice": 20
       }
@@ -266,16 +298,34 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
   "header": { "eventType": "dialogueError" },
   "body": {
     "errorCode": "BLOCKED_BY_REPUTATION",
-    "factionSlug": "dark_cult"
+    "factionSlug": "hunters"
   }
 }
 ```
 
 ### Изменение репутации
 
-Репутация изменяется через квестовые действия (`change_reputation` action в диалоге) или убийство мобов фракций. Никаких специальных пакетов не приходит — изменение отражается в следующем взаимодействии с NPC.
+Репутация изменяется через квестовые действия (`change_reputation` action в диалоге) или убийство мобов фракций.
 
-> **Для UI:** Текущие значения репутации нужно хранить на стороне клиента на основе событий квестов/диалогов, либо запрашивать отдельным API (если добавлено). Сейчас сервер не присылает "репутация обновлена" отдельным пакетом.
+При срабатывании `change_reputation` в диалоге/квесте сервер **отправляет клиенту пакет `reputationChanged`**:
+
+```json
+{
+  "header": { "eventType": "reputationChanged" },
+  "body": {
+    "type": "reputationChanged",
+    "faction": "hunters",
+    "delta": -100
+  }
+}
+```
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `faction` | string | Slug фракции |
+| `delta` | int | Изменение (отрицательное = потеря) |
+
+> **Для UI:** При получении `reputationChanged` обновить локальный кэш репутаций и при необходимости пересчитать видимость диалоговых опций. Тот же пакет приходит при провале квеста (`fail_quest` action), если квест настроен на штраф репутации.
 
 ---
 
@@ -302,7 +352,7 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
 
 ```json
 {
-  "itemSlug": "iron_sword",
+  "itemSlug": "sharp_sword",
   "itemInstanceId": 1234,
   "quantity": 1,
   "killCount": 74,
@@ -334,12 +384,15 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
   "header": { "eventType": "world_notification", "status": "success" },
   "body": {
     "characterId": 7,
+    "notificationId": "5",
     "notificationType": "zone_entered",
+    "priority": "high",
+    "channel": "zone_banner",
     "text": "",
     "data": {
-      "zoneSlug":   "dark_forest",
-      "minLevel":   10,
-      "maxLevel":   20,
+      "zoneSlug":   "forest",
+      "minLevel":   3,
+      "maxLevel":   10,
       "isPvp":      false,
       "isSafeZone": false
     }
@@ -365,10 +418,13 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
   "header": { "eventType": "world_notification", "status": "success" },
   "body": {
     "characterId": 7,
+    "notificationId": "6",
     "notificationType": "zone_explored",
+    "priority": "medium",
+    "channel": "toast",
     "text": "",
     "data": {
-      "zoneSlug": "dark_forest",
+      "zoneSlug": "forest",
       "xpGained": 300
     }
   }
@@ -377,12 +433,12 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
 
 > `text` пуст — используй `zoneSlug` для локализации названия зоны на клиенте.
 
-2. `experience_update` с `reason: "zone_explored"`:
+2. `experienceUpdate` с `reason: "zone_explored"`:
 
 ```json
 {
   "header": {
-    "eventType": "experience_update"
+    "eventType": "experienceUpdate"
   },
   "body": {
     "characterId": 7,
@@ -426,9 +482,9 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
   "id": 5,
   "uid": 10023,
   "zoneId": 3,
-  "name": "[Чемпион] Матёрый Волк",
-  "slug": "wolf",
-  "race": "Beast",
+  "name": "[!] Древний медведь",
+  "slug": "AncientBear",
+  "race": "Animal",
   "level": 8,
   "isAggressive": true,
   "isDead": false,
@@ -462,9 +518,12 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
 {
   "header": { "eventType": "world_notification", "status": "success" },
   "body": {
+    "notificationId": "30",
     "notificationType": "champion_spawned_soon",
-    "text": "Через несколько минут появится wolf!",
-    "data": { "slug": "wolf" }
+    "priority": "high",
+    "channel": "zone_banner",
+    "text": "",
+    "data": { "slug": "ancient_bear", "trophySlug": "alpha_fang", "trophyPrice": 200 }
   }
 }
 ```
@@ -475,9 +534,12 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
 {
   "header": { "eventType": "world_notification", "status": "success" },
   "body": {
+    "notificationId": "31",
     "notificationType": "champion_spawned",
-    "text": "[!] Матёрый Волк появился в зоне!",
-    "data": { "mobSlug": "wolf", "uid": 10023 }
+    "priority": "high",
+    "channel": "zone_banner",
+    "text": "",
+    "data": { "mobSlug": "AncientBear", "uid": 10023, "trophySlug": "alpha_fang", "trophyPrice": 200 }
   }
 }
 ```
@@ -490,8 +552,11 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
 {
   "header": { "eventType": "world_notification", "status": "success" },
   "body": {
+    "notificationId": "32",
     "notificationType": "champion_killed",
-    "text": "Aragorn убил Чемпиона!",
+    "priority": "medium",
+    "channel": "toast",
+    "text": "",
     "data": { "killerCharId": 7 }
   }
 }
@@ -526,10 +591,13 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
 {
   "header": { "eventType": "world_notification", "status": "success" },
   "body": {
+    "notificationId": "50",
     "notificationType": "zone_event_start",
-    "text": "Началось мировое событие: goblin_invasion",
+    "priority": "high",
+    "channel": "zone_banner",
+    "text": "",
     "data": {
-      "eventSlug": "goblin_invasion",
+      "eventSlug": "wolf_hour",
       "durationSec": 3600,
       "gameZoneId": 1
     }
@@ -543,9 +611,12 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
 {
   "header": { "eventType": "world_notification", "status": "success" },
   "body": {
+    "notificationId": "51",
     "notificationType": "zone_event_end",
-    "text": "Событие завершилось.",
-    "data": { "eventSlug": "goblin_invasion" }
+    "priority": "medium",
+    "channel": "toast",
+    "text": "",
+    "data": { "eventSlug": "wolf_hour" }
   }
 }
 ```
@@ -580,8 +651,8 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
   "body": {
     "characterId": 7,
     "entries": [
-      { "mobSlug": "forest_wolf", "killCount": 47 },
-      { "mobSlug": "cave_bat",    "killCount": 5  }
+      { "mobSlug": "ForestWolf", "killCount": 47 },
+      { "mobSlug": "ForestFox",    "killCount": 5  }
     ]
   }
 }
@@ -596,7 +667,7 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
   "header": { "eventType": "getBestiaryEntry", "clientId": 42, "hash": "" },
   "body": {
     "characterId": 7,
-    "mobSlug": "forest_wolf"
+    "mobSlug": "ForestWolf"
   }
 }
 ```
@@ -610,7 +681,7 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
   "body": {
     "characterId": 7,
     "entry": {
-      "mobSlug": "forest_wolf",
+      "mobSlug": "ForestWolf",
       "killCount": 47,
       "tiers": [
         {
@@ -697,7 +768,7 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
     "channel": "silent",
     "text": "",
     "data": {
-      "mobSlug": "forest_wolf",
+      "mobSlug": "ForestWolf",
       "killCount": 48
     }
   }
@@ -719,7 +790,7 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
     "channel": "toast",
     "text": "",
     "data": {
-      "mobSlug": "forest_wolf",
+      "mobSlug": "ForestWolf",
       "unlockedTier": 4,
       "categorySlug": "loot_table",
       "killCount": 30
@@ -754,8 +825,11 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
   "header": { "eventType": "world_notification", "status": "success" },
   "body": {
     "characterId": 7,
+    "notificationId": "55",
     "notificationType": "pity_hint",
-    "text": "Ты давно охотишься здесь... Удача должна улыбнуться",
+    "priority": "ambient",
+    "channel": "atmosphere",
+    "text": "",
     "data": {}
   }
 }
@@ -771,18 +845,23 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
 
 ### Таблица всех типов `world_notification`
 
-| `notificationType` | `data` | Кому | Описание |
-|--------|------|----------|---------|
-| `mastery_tier_up` | `{masterySlug, masteryValue, tier}` | Только владельцу | Повышение тира мастерства |
-| `zone_entered` | `{zoneSlug, minLevel, maxLevel, isPvp, isSafeZone}` | Только владельцу | Смена игровой зоны (отправляется при каждом входе, включая первый логин) |
-| `zone_explored` | `{zoneSlug, xpGained}` | Только владельцу | Первое посещение зоны — выдаётся XP |
-| `pity_hint` | `{}` | Только владельцу | Счётчик пити приближается к дропу |
-| `champion_spawned_soon` | `{slug}` | Всем в игровой зоне | Чемпион вот-вот появится |
-| `champion_spawned` | `{mobSlug, uid}` | Всем в игровой зоне | Чемпион появился |
-| `champion_killed` | `{killerCharId}` | Всем в игровой зоне | Чемпион убит |
-| `champion_despawned` | `{}` | Всем в игровой зоне | Чемпион исчез (taймаут 30 мин) |
-| `zone_event_start` | `{eventSlug, durationSec, gameZoneId}` | Всем в игровой зоне | Началось зональное событие |
-| `zone_event_end` | `{eventSlug}` | Всем в игровой зоне | Зональное событие завершилось |
+| `notificationType` | `priority` | `channel` | `data` | Кому | Описание |
+|--------|-----------|------|----------|---------|-------|
+| `mastery_tier_up` | `medium` | `toast` | `{masterySlug, tier}` | Только владельцу | Повышение тира мастерства (`tier` = effectSlug, e.g. `"sword_t2_damage"`) |
+| `level_up` | `critical` | `screen_center` | `{newLevel}`tier}` | Только владельцу | Повышение тира мастерства (`tier` = effectSlug, e.g. `"sword_t2_damage"`)
+| `zone_entered` | `high` | `zone_banner` | `{zoneSlug, minLevel, maxLevel, isPvp, isSafeZone}` | Только владельцу | Смена игровой зоны |
+| `zone_explored` | `medium` | `toast` | `{zoneSlug, xpGained}` | Только владельцу | Первое посещение зоны — выдаётся XP |
+| `fellowship_bonus` | `low` | `float_text` | `{xpBonus}` | Только владельцу | Fellowship XP-бонус |
+| `pity_hint` | `ambient` | `atmosphere` | `{}` | Только владельцу | Счётчик пити приближается к дропу |
+| `bestiary_kill_update` | `low` | `silent` | `{mobSlug, killCount}` | Только владельцу | Счётчик убийств в бестиарии |
+| `bestiary_tier_unlocked` | `medium` | `toast` | `{mobSlug, unlockedTier, categorySlug, killCount}` | Только владельцу | Открыт тир бестиария |
+| `durability_warning` | `low`/`medium`/`high` | `hud` | `{severity(1-4), severityLabel, durabilityCurrent, durabilityMax}` | Только владельцу | Прочность пересекла порог (1=75%, 2=50%, 3=25%, 4=0) |
+| `champion_spawned_soon` | `high` | `zone_banner` | `{slug}` | Всем в игровой зоне | Чемпион вот-вот появится |
+| `champion_spawned` | `high` | `zone_banner` | `{mobSlug, uid}` | Всем в игровой зоне | Чемпион появился |
+| `champion_killed` | `medium` | `toast` | `{killerCharId}` | Всем в игровой зоне | Чемпион убит |
+| `champion_despawned` | `medium` | `toast` | `{}` | Всем в игровой зоне | Чемпион исчез (таймаут 30 мин) |
+| `zone_event_start` | `high` | `zone_banner` | `{eventSlug, durationSec, gameZoneId}` | Всем в игровой зоне | Началось зональное событие |
+| `zone_event_end` | `medium` | `toast` | `{eventSlug}` | Всем в игровой зоне | Зональное событие завершилось |
 
 ### Общий формат пакета
 
@@ -794,13 +873,17 @@ _(Стандартная цена 100g, с скидкой 5% = 95g — клие�
   },
   "body": {
     "characterId": 7,
+    "notificationId": "<строка-идентификатор>",
     "notificationType": "<тип из таблицы выше>",
-    "text": "<локализованное сообщение для отображения>",
+    "priority": "<из таблицы>",
+    "channel": "<из таблицы>",
+    "text": "",
     "data": { }
   }
 }
 ```
 
-- `characterId` — присутствует только в личных уведомлениях (только владельцу); в broadcast-уведомлениях зоны отсутствует
-- `text` — готовый текст для отображения (на русском, из конфигурации сервера)
+- `characterId` — присутствует только в личных уведомлениях; в broadcast-уведомлениях зоны отсутствует
+- `notificationId` — строковый ID для дедупликации на клиенте
+- `text` — **всегда пустая строка** `""`. Клиент строит отображаемый текст из `notificationType` + `data` + локализационных файлов
 - `data` — дополнительные данные для программной обработки (специфично для каждого типа)

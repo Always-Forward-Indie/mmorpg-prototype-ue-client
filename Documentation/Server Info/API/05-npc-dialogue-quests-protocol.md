@@ -37,25 +37,59 @@ struct NPCDataStruct {
 {
   "header": {
     "eventType": "spawnNPCs",
-    "message": "success"
+    "status": "success",
+    "clientId": 7,
+    "timestamp": "2026-04-06T17:00:00.000Z",
+    "version": "1.0"
   },
   "body": {
-    "npcs": [
+    "npcsSpawn": [
       {
         "id": 42,
         "name": "Merchant John",
         "slug": "merchant_john",
-        "npcType": "vendor",
+        "race": "human",
         "level": 10,
-        "position": { "x": 200.0, "y": 150.0, "z": 0.0, "rotationZ": 90.0 },
+        "npcType": "vendor",
         "isInteractable": true,
-        "factionSlug": "traders_guild",
-        "radius": 200
+        "dialogueId": "merchant_john_main",
+        "quests": [
+          { "slug": "varan_fox_menace", "status": "available" }
+        ],
+        "stats": {
+          "health": { "current": 100, "max": 100 },
+          "mana": { "current": 0, "max": 0 }
+        },
+        "position": { "x": 200.0, "y": 150.0, "z": 0.0, "rotationZ": 90.0 },
+        "attributes": []
       }
-    ]
+    ],
+    "spawnRadius": "<halfDiag * 1.5 — динамически от interest-ячейки, см. CharacterEventHandler.cpp:102>",
+    "npcCount": 1
   }
 }
 ```
+
+> `factionSlug` и `radius` — серверные поля NPCDataStruct, в spawn-пакет **не включаются**.
+
+### Поля NPC в `npcsSpawn[]`
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `id` | int | ID NPC |
+| `name` | string | Имя NPC |
+| `slug` | string | Slug NPC |
+| `race` | string | Раса |
+| `level` | int | Уровень |
+| `npcType` | string | Тип NPC: `"vendor"`, `"quest_giver"`, `"blacksmith"`, `"guard"`, `"trainer"`, `"general"` |
+| `isInteractable` | bool | Можно ли взаимодействовать |
+| `dialogueId` | string | Slug диалога |
+| `quests[]` | array | Квесты, связанные с NPC — статус для текущего персонажа |
+| `quests[].slug` | string | Slug квеста |
+| `quests[].status` | string | `available` / `in_progress` / `completable` / `turned_in` / `failed` |
+| `stats` | object | HP и мана |
+| `position` | object | Позиция + поворот |
+| `attributes[]` | array | Атрибуты NPC: `{ id, name, slug, value }` |
 
 ---
 
@@ -75,18 +109,19 @@ struct NPCDataStruct {
     }
   },
   "body": {
-    "characterId": 101,
-    "npcId": 42,
-    "playerId": 1
+    "npcId": 42
   }
 }
+```
+
+> Только `body.npcId` является обязательным. `characterId` и `playerId` в теле не читаются — они определяются из контекста аутентификации.
 ```
 
 ### Серверная обработка
 
 1. Проверяет что персонаж жив + ID валидны
 2. Находит NPC, проверяет `isInteractable`
-3. Проверяет дистанцию: `distance(playerPos, npcPos) <= npc.radius`
+3. Проверяет дистанцию (авторитетно 2D + допуск по Z): `(dx²+dy²) <= npc.radius²` **и** `|dz| <= zTol`, `zTol = game_config interaction.z_tolerance_dialogue` (дефолт **400**)
 4. Проверяет репутацию: `rep < -500` с фракцией NPC → блокировка
 5. Вызывает `questManager.onNPCTalked(characterId, npcId)` → обновляет квесты со степом `talk`
 6. Собирает `PlayerContextStruct` (флаги, квесты, уровень, репутация, мастерство, скилл-поинты)
@@ -163,7 +198,7 @@ struct NPCDataStruct {
 |-----|---------|
 | `NPC_NOT_FOUND` | NPC не существует |
 | `OUT_OF_RANGE` | Слишком далеко от NPC |
-| `BLOCKED_BY_REPUTATION` | Репутация с фракцией NPC < -500 |
+| `BLOCKED_BY_REPUTATION` | Репутация с фракцией NPC < -500. Также в `body.factionSlug` = slug фракции |
 | `NO_DIALOGUE` | Нет подходящего диалога для текущего контекста |
 
 ---
@@ -184,10 +219,8 @@ struct NPCDataStruct {
     }
   },
   "body": {
-    "characterId": 101,
     "sessionId": "dlg_7_1709834400000",
-    "edgeId": 1,
-    "playerId": 1
+    "edgeId": 1
   }
 }
 ```
@@ -196,6 +229,8 @@ struct NPCDataStruct {
 |------|-----|----------|
 | `sessionId` | string | ID активной сессии |
 | `edgeId` | int | ID выбранного ребра (из `choices[].edgeId`) |
+
+> `characterId` и `playerId` в теле сервером не читаются — определяются из контекста аутентификации.
 
 ### Серверная обработка
 
@@ -212,12 +247,12 @@ struct NPCDataStruct {
 
 ### Сервер → Unicast (поток ответов)
 
-**Сначала**: Нотификации от actions (0+):
+**Сначала**: Нотификации от actions (0+). Каждая нотификация оборачивается так: `header.eventType` = `body.type`, `header.status = "success"`:
 ```json
-{ "header": { "eventType": "quest_offered" }, "body": { "type": "quest_offered", "questId": 10, "clientQuestKey": "quest_wolf_hunt" } }
+{ "header": { "eventType": "quest_offered", "status": "success", "timestamp": "...", "version": "1.0" }, "body": { "type": "quest_offered", "questId": 10, "clientQuestKey": "quest_varan_fox_menace" } }
 ```
 ```json
-{ "header": { "eventType": "item_received" }, "body": { "type": "item_received", "itemId": 7, "quantity": 3 } }
+{ "header": { "eventType": "item_received", "status": "success", "timestamp": "...", "version": "1.0" }, "body": { "type": "item_received", "itemId": 7, "quantity": 3 } }
 ```
 
 **Затем**: Следующая нода (или закрытие):
@@ -262,12 +297,12 @@ struct NPCDataStruct {
     }
   },
   "body": {
-    "characterId": 101,
-    "sessionId": "dlg_7_1709834400000",
-    "playerId": 1
+    "sessionId": "dlg_7_1709834400000"
   }
 }
 ```
+
+> Только `body.sessionId` читается сервером.
 
 ### Сервер → Unicast
 
@@ -296,6 +331,8 @@ struct NPCDataStruct {
 | `action` | ❌ | Выполняет `actionGroup`, автоматически переходит по первому ребру |
 | `jump` | ❌ | Безусловный переход к `jumpTargetNodeId` |
 | `end` | ❌ | Конец диалога → закрытие сессии |
+
+> Авто-ноды (`action`, `jump`) могут иметь `conditionGroup`. Если условие **не выполнено** — диалог немедленно завершается (`DIALOGUE_CLOSE`), а не переходит дальше.
 
 ### Обход графа
 
@@ -390,7 +427,7 @@ struct NPCDialogueMappingStruct {
 #### quest — Состояние квеста
 
 ```json
-{ "type": "quest", "slug": "wolf_hunt", "state": "active" }
+{ "type": "quest", "slug": "varan_fox_menace", "state": "active" }
 ```
 
 Допустимые значения `state`: `"not_started"`, `"offered"`, `"active"`, `"completed"`, `"turned_in"`, `"failed"`
@@ -400,10 +437,10 @@ struct NPCDialogueMappingStruct {
 #### quest_step — Текущий шаг квеста
 
 ```json
-{ "type": "quest_step", "slug": "wolf_hunt", "step": 1 }
+{ "type": "quest_step", "slug": "varan_fox_menace", "step": 1 }
 ```
 ```json
-{ "type": "quest_step", "slug": "wolf_hunt", "gte": 2 }
+{ "type": "quest_step", "slug": "varan_fox_menace", "gte": 2 }
 ```
 
 #### level — Уровень персонажа
@@ -421,12 +458,12 @@ struct NPCDialogueMappingStruct {
 #### reputation — Репутация с фракцией
 
 ```json
-{ "type": "reputation", "faction": "bandits", "gte": 200 }
+{ "type": "reputation", "faction": "hunters", "gte": 200 }
 ```
 
 Или по тиру:
 ```json
-{ "type": "reputation", "faction": "bandits", "tier": "friendly" }
+{ "type": "reputation", "faction": "hunters", "tier": "friendly" }
 ```
 
 Тиры репутации:
@@ -513,23 +550,23 @@ struct NPCDialogueMappingStruct {
 #### offer_quest
 
 ```json
-{ "type": "offer_quest", "slug": "wolf_hunt" }
+{ "type": "offer_quest", "slug": "varan_fox_menace" }
 ```
 
 **Нотификация**:
 ```json
-{ "type": "quest_offered", "questId": 10, "clientQuestKey": "quest_wolf_hunt" }
+{ "type": "quest_offered", "questId": 10, "clientQuestKey": "quest_varan_fox_menace" }
 ```
 
 #### turn_in_quest
 
 ```json
-{ "type": "turn_in_quest", "slug": "wolf_hunt" }
+{ "type": "turn_in_quest", "slug": "varan_fox_menace" }
 ```
 
 **Нотификации** (множественные):
 ```json
-{ "type": "quest_turned_in", "questId": 10, "clientQuestKey": "quest_wolf_hunt" }
+{ "type": "quest_turned_in", "questId": 10, "clientQuestKey": "quest_varan_fox_menace" }
 ```
 Плюс для каждой награды:
 ```json
@@ -541,18 +578,18 @@ struct NPCDialogueMappingStruct {
 #### fail_quest
 
 ```json
-{ "type": "fail_quest", "slug": "wolf_hunt" }
+{ "type": "fail_quest", "slug": "varan_fox_menace" }
 ```
 
 **Нотификация**:
 ```json
-{ "type": "quest_failed", "questId": 10, "clientQuestKey": "quest_wolf_hunt" }
+{ "type": "quest_failed", "questId": 10, "clientQuestKey": "quest_varan_fox_menace" }
 ```
 
 #### advance_quest_step
 
 ```json
-{ "type": "advance_quest_step", "slug": "wolf_hunt" }
+{ "type": "advance_quest_step", "slug": "varan_fox_menace" }
 ```
 
 **Нотификация**: Нет (отправляется `QUEST_UPDATE` отдельно — см. ниже)
@@ -609,12 +646,12 @@ struct NPCDialogueMappingStruct {
 #### change_reputation
 
 ```json
-{ "type": "change_reputation", "faction": "bandits", "delta": 50 }
+{ "type": "change_reputation", "faction": "hunters", "delta": 50 }
 ```
 
 **Нотификация**:
 ```json
-{ "type": "reputationChanged", "faction": "bandits", "delta": 50 }
+{ "type": "reputationChanged", "faction": "hunters", "delta": 50 }
 ```
 
 #### learn_skill
@@ -645,6 +682,49 @@ struct NPCDialogueMappingStruct {
 ```
 
 Возможные причины: `insufficient_sp`, `insufficient_gold`, `missing_skill_book`, `already_learned`
+
+#### open_skill_shop
+
+Открывает окно тренера навыков (Skill Trainer Shop UI) с полным списком навыков и флагами доступности.
+
+```json
+{
+  "type": "open_skill_shop"
+}
+```
+
+**Нотификация** — клиент получает пакет `openSkillShop` (`skillShop` ответ):
+```json
+{
+  "header": { "eventType": "skillShop", "status": "success", "clientId": 42 },
+  "body": {
+    "npcId": 4,
+    "npcSlug": "theron",
+    "freeSkillPoints": 2,
+    "goldBalance": 350,
+    "skills": [
+      {
+        "skillId": 4,
+        "skillSlug": "shield_bash",
+        "skillName": "Shield Bash",
+        "isLearned": false,
+        "canLearn": true,
+        "spCost": 1,
+        "goldCost": 50,
+        "requiresBook": false,
+        "prerequisiteSkillSlug": "",
+        "prereqMet": true,
+        "levelMet": true,
+        "spMet": true,
+        "goldMet": true,
+        "bookMet": true
+      }
+    ]
+  }
+}
+```
+
+Клиент также может отправить `openSkillShop` напрямую (без диалога) — см. `docs/skill-learning-system.md`.
 
 ---
 
@@ -774,8 +854,8 @@ struct QuestStepStruct {
   },
   "body": {
     "questId": 10,
-    "questSlug": "wolf_hunt",
-    "clientQuestKey": "quest_wolf_hunt",
+    "questSlug": "varan_fox_menace",
+    "clientQuestKey": "quest_varan_fox_menace",
     "state": "active",
     "currentStep": 1,
     "progress": { "killed": 5 },
@@ -797,16 +877,12 @@ struct QuestStepStruct {
 | `currentStep` | int | Индекс текущего шага (0-based) |
 | `progress` | object | Прогресс текущего шага |
 | `totalSteps` | int | Общее количество шагов |
-| `clientStepKey` | string | Ключ локализации шага |
-| `stepType` | string | Тип текущего шага |
-| `completionMode` | string | Режим завершения |
-| `required` | object | Параметры шага (что нужно сделать) |
-| `currentStepEnriched` | object | Шаг с `target_slug` + текущим счётчиком `current` |
-| `rewards` | array | Награды (скрытые — только после turn-in) |
+| `clientStepKey` | string | Ключ локализации шага. **Отсутствует**, если `currentStep >= totalSteps` (квест завершён/провален) |
+| `stepType` | string | Тип текущего шага. Отсутствует, если шагов нет |
+| `completionMode` | string | Режим завершения. Отсутствует, если шагов нет |
+| `required` | object | Параметры шага. Отсутствует, если шагов нет |
 
-Проверено по коду (`QuestManager::sendQuestUpdate`): `progress` ключи — `killed` (kill), `have` (collect), `done` (talk/reach). Состояния `state`: `active → completed → turned_in`, `failed`. `QUEST_UPDATE` шлётся при каждом изменении (килл, подбор, ток, turn-in) — клиент должен слушать его всегда, а не опрашивать.
-
-> Важно: `onNPCTalked` срабатывает до выбора диалога (talk-степы могут закрыться самим фактом разговора). Новая `npcInteract` закрывает предыдущую сессию персонажа (`closeSessionByCharacter`). Дистанция — по **серверной** позиции персонажа, позиция из тела запроса игнорируется.
+> Поля `clientStepKey`, `stepType`, `completionMode`, `required` присутствуют только если `currentStep < totalSteps`, т.е. есть активный шаг.
 
 ---
 

@@ -1,14 +1,16 @@
-# 08. Прогрессия: опыт, уровни, статы, регенерация, мастерство, репутация
+# 08. Прогрессия: опыт, уровни, статы, регенерация, мастерство, репутация, титулы
 
 ## Обзор
 
-Прогрессия включает 6 взаимосвязанных систем:
+Прогрессия включает 8 взаимосвязанных систем:
 - **Опыт и уровни**: XP → level up → stat bonuses
 - **XP-долг**: Штраф за смерть, погашается из нового XP
-- **Статы**: base + equipment + effects + mastery + item soul
+- **Статы**: base + equipment + effects + mastery + item soul + title bonuses
 - **OOC-регенерация**: Пассивное восстановление HP/MP вне боя
 - **Мастерство**: Прогресс 0-100 за каждый тип оружия
 - **Репутация**: Отношения с фракциями
+- **Титулы**: Заработанные звания с постоянными бонусами к статам
+- **Скилл-бар**: Привязка выученных скиллов к слотам 0–11, персистентна в БД
 
 ---
 
@@ -78,14 +80,18 @@
 
 ---
 
-### experience_update — Получение опыта
+### experienceUpdate — Получение опыта
 
-**Сервер → Unicast** (при каждом получении XP)
+**Сервер → Broadcast** (при каждом получении XP)
+
+> Параллельно `ExperienceManager` шлёт snake-case дубль `experience_update`
+> тем же получателям (broadcast-callback) — то же тело + `levelUp`-флаг.
+> Клиент слушает любой из двух; канонический для level-up — `levelUp`-пакет ниже.
 
 ```json
 {
   "header": {
-    "eventType": "experience_update",
+    "eventType": "experienceUpdate",
     "status": "success",
     "requestId": "exp_update_7",
     "timestamp": 1711709400100,
@@ -120,22 +126,40 @@
 
 ### Сигнал повышения уровня
 
-**Отдельного пакета `levelUp` нет.** Level-up сигнализируется через поле `levelUp: true` в `experience_update` + немедленный `stats_update` с новыми значениями HP/MP и атрибутов.
+При левел-апе клиент получает **три пакета** в следующем порядке:
+1. `experienceUpdate` (с `levelUp: true`)
+2. `levelUp` — отдельный пакет
+3. `stats_update` — после пересчёта атрибутов на Game Server
+
+**Пакет `levelUp` (eventType: `levelUp`):**
+
+```json
+{
+  "header": { "eventType": "levelUp", "message": "Level up achieved!" },
+  "body": {
+    "characterId": 7,
+    "oldLevel": 15,
+    "newLevel": 16,
+    "newExperience": 52000,
+    "expForNextLevel": 65000,
+    "newAbilities": []
+  }
+}
+```
 
 Клиент должен:
-1. При получении `experience_update` с `levelUp == true` — показать level-up анимацию/UI
-2. Дождаться следующего `stats_update` — в нём будут обновлённые HP/MP/атрибуты
+1. При получении `levelUp` — показать level-up анимацию/UI
+2. Дождаться `stats_update` — в нём будут обновлённые HP/MP/атрибуты
 
-> Обработчик `eventType: "levelUp"` существует в коде сервера, но событие `LEVEL_UP`
-> никогда не попадает в EventQueue — это зарезервированный механизм. Клиент **не должен**
-> зависеть от пакета `levelUp`. Используйте `experience_update.levelUp` как единственный сигнал.
+> `experienceUpdate.levelUp == true` — альтернативный сигнал для совместимости.
 
 ### Серверные действия при level up
 
-1. **Пересчёт характеристик** по формуле `base + mult × level^exp` из таблицы `class_stat_formula` (не flat-бонус; примеры 1 ур.: воин HP 168 / MP 55, маг HP 88 / MP 225)
+1. **+10 HP** и **+5 MP** к максимуму за каждый уровень
 2. Сохранение: `saveCharacterProgress` → game-server
-3. Отправка: `experience_update` (unicast + broadcast) с `levelUp: true`
-4. Отправка: `stats_update` (unicast, только повысившему уровень) с новыми статами
+3. Отправка: `experienceUpdate` (broadcast) с `levelUp: true`
+4. Отправка: `levelUp` (broadcast)
+5. Отправка: `stats_update` (unicast, только повысившему уровень) с новыми статами
 
 ---
 
@@ -223,6 +247,7 @@ expForLevel(n) = BASE_EXP_PER_LEVEL × (EXP_MULTIPLIER ^ (n - 2))
       "current": 155,
       "max": 155
     },
+    "freeSkillPoints": 3,
     "weight": {
       "current": 18.5,
       "max": 74.0
@@ -257,10 +282,17 @@ expForLevel(n) = BASE_EXP_PER_LEVEL × (EXP_MULTIPLIER ^ (n - 2))
 
 ### Расчёт effective атрибута
 
+> **`freeSkillPoints`** — количество незатраченных скилл-поинтов персонажа. Передаётся в каждом `stats_update`. Клиент должен отображать это значение в UI (например, панель прокачки скиллов). Скилл-поинты тратятся через тренера (NPC action `learn_skill`) и начисляются при level-up.
+
 ```
-effective = base
-          + Σ(equipment bonuses)           // из attributes предметов с apply_on="equip"
-          + Σ(active effect bonuses)       // из activeEffects
+// Единственный источник правды — StatsResolver (display = бой = реген).
+// Хранимые атрибуты УЖЕ содержат equip/set/durability (считает БД) и
+// никогда не прибавляются повторно (старый double-count убран).
+effective = stored(DB incl. equip/set/durability)
+          + Σ(active effect bonuses)       // flat; тикающие/dot/hot скипаются
+          + Σ(percent of stored base)      // modifierType=percent, напр. +8% max_health
+          + conversions                    // agi→evasion 0.3, int→mag 0.5, str→phys 0.5
+                                           // (game_config stats.conv_*, 0 = выкл)
           + item_soul_bonus                // бонус за kill count оружия
           + mastery_tier_bonus             // бонус за тиры мастерства
 ```
@@ -284,7 +316,7 @@ effective = base
 ### Прогресс при атаке
 
 ```
-base_delta = config.mastery.base_delta   // 0.02 по данным
+base_delta = config.mastery.base_delta   // default: 0.5
 
 levelDiff = targetLevel - charLevel
 if (levelDiff >= 3):  levelFactor = 2.0
@@ -308,7 +340,7 @@ newValue = min(currentValue + delta, 100.0)
 | T1 | 20.0 | +1% | `physical_attack` |
 | T2 | 50.0 | +4% (кумулятивно +5%) | `physical_attack` |
 | T3 | 80.0 | +3% | `crit_chance` |
-| T4 | 100.0 | +2% | `parry_chance` |
+| T4 | 100.0 | +2 | `accuracy` |
 
 При пересечении тира → `world_notification` типа `mastery_tier_up`:
 
@@ -330,10 +362,65 @@ newValue = min(currentValue + delta, 100.0)
 }
 ```
 
+### player_masteries — Полное состояние при входе в зону
+
+**Сервер → Unicast** (при логине: сразу после ответа game-server на `getPlayerMasteriesData`)
+
+**Последовательность событий:**
+1. `joinGameCharacter` от клиента
+2. Chunk-server → game-server: `getPlayerMasteriesData` (async request)
+3. Game-server → DB: `SELECT FROM character_skill_mastery WHERE character_id = ?`
+4. Game-server → chunk-server: `setPlayerMasteriesData`
+5. Chunk-server загружает в `MasteryManager`
+6. Chunk-server → клиент: **`player_masteries`**
+
+```json
+{
+  "header": {
+    "eventType": "player_masteries",
+    "status": "success"
+  },
+  "body": {
+    "characterId": 7,
+    "entries": [
+      { "masterySlug": "sword_mastery",  "value": 47.5 },
+      { "masterySlug": "axe_mastery",    "value": 12.0 },
+      { "masterySlug": "magic_mastery",  "value": 0.0  }
+    ]
+  }
+}
+```
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `masterySlug` | string | Идентификатор типа мастерства |
+| `value` | float | Текущий прогресс 0.0 – 100.0 |
+
+### mastery_update — Дельта обновления
+
+**Сервер → Unicast** (при каждом flush в БД: каждые 25 ударов (`mastery.db_flush_every_hits`) или при пересечении тира)
+
+```json
+{
+  "header": {
+    "eventType": "mastery_update",
+    "status": "success"
+  },
+  "body": {
+    "characterId": 7,
+    "masterySlug": "sword_mastery",
+    "value": 50.3
+  }
+}
+```
+
+> **Примечание:** `mastery_update` содержит только изменившийся слот. Поля `tier` нет —
+> достижение тира всегда сопровождается отдельным `world_notification` типа `mastery_tier_up`.
+
 ### Персистентность мастерства
 
-- Сохранение каждые **10 ударов** или при пересечении тира
-- Пакет: `saveMastery` → game-server
+- Сохранение каждые **25 ударов** (`mastery.db_flush_every_hits`) или при пересечении тира
+- Пакет: `saveMastery{factKey}` → game-server → `factAck{applied|duplicate}` (см. [13](13-reliability-delivery.md))
 
 ---
 
@@ -345,26 +432,65 @@ newValue = min(currentValue + delta, 100.0)
 |-----|-------------------:|------|
 | `enemy` | < -500 | 0 |
 | `stranger` | -500 ... -1 | 1 |
-| `neutral` | 0 ... 199 | 2 |
+| `neutral` | 0 ... 199 | 2
 | `friendly` | 200 ... 499 | 3 |
 | `ally` | ≥ 500 | 4 |
 
-### Изменение репутации
+### player_reputations — Полное состояние при входе в зону
 
-Происходит через:
-- Dialogue action `change_reputation`
-- Mob kill (если настроено)
-- Quest rewards
+**Сервер → Unicast** (при логине: сразу после ответа game-server на `getPlayerReputationsData`)
 
-При изменении тира → callback, возможно `world_notification`.
-
-### Нотификация при изменении (через диалог)
+**Последовательность событий:**
+1. `joinGameCharacter` от клиента
+2. Chunk-server → game-server: `getPlayerReputationsData` (async request)
+3. Game-server → DB: `SELECT FROM character_reputation WHERE character_id = ?`
+4. Game-server → chunk-server: `setPlayerReputationsData`
+5. Chunk-server загружает в `ReputationManager`
+6. Chunk-server → клиент: **`player_reputations`**
 
 ```json
 {
-  "type": "reputationChanged",
-  "faction": "bandits",
-  "delta": 50
+  "header": {
+    "eventType": "player_reputations",
+    "status": "success"
+  },
+  "body": {
+    "characterId": 7,
+    "entries": [
+      { "factionSlug": "hunters",  "value": 350,  "tier": "friendly" },
+      { "factionSlug": "city_guard",   "value": -120, "tier": "stranger" },
+      { "factionSlug": "merchants","value": 0,    "tier": "neutral"  }
+    ]
+  }
+}
+```
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `factionSlug` | string | Идентификатор фракции |
+| `value` | int | Текущее значение репутации |
+| `tier` | string | Текущий тир: `enemy`, `stranger`, `neutral`, `friendly`, `ally` |
+
+### reputation_update — Дельта при изменении репутации
+
+**Сервер → Unicast** (при каждом изменении через `ReputationManager::changeReputation`)
+
+> Персистентность — отдельно: чанк шлёт на game `saveReputation{characterId,
+> factionSlug, delta, factKey}` → `factAck{applied|duplicate}`
+> (см. [13](13-reliability-delivery.md)); плюс legacy 60s абсолютный снапшот.
+
+```json
+{
+  "header": {
+    "eventType": "reputation_update",
+    "status": "success"
+  },
+  "body": {
+    "characterId": 7,
+    "factionSlug": "hunters",
+    "value": 400,
+    "tier": "friendly"
+  }
 }
 ```
 
@@ -449,7 +575,7 @@ newMp   = min(currentMp + mpGain, maxMp)
 | `BASE_EXP_PER_LEVEL` | 100 | Базовый XP за уровень |
 | `EXP_MULTIPLIER` | 1.15 | Множитель XP таблицы |
 | `DEATH_PENALTY_PERCENT` | 0.1 | Штраф за смерть (10%) |
-| `MAX_LEVEL` | 70 | Максимальный уровень |
+| `MAX_LEVEL` | 100 (код); фактически 10 | Кап в коде; таблица `exp_for_level` кончается на 10 уровне |
 | `regen.tickIntervalMs` | 4000 | Интервал тика регенерации (мс) |
 | `regen.baseHpRegen` | 2 | Базовый HP за тик |
 | `regen.baseMpRegen` | 1 | Базовый MP за тик |
@@ -461,3 +587,401 @@ newMp   = min(currentMp + mpGain, maxMp)
 | `mastery.db_flush_every_hits` | 25 | Интервал сохранения |
 | `item_soul.tier1_kills` ... `tier3_kills` | 50/200/500 | Пороги Kill Count |
 | `item_soul.tier1_bonus_flat` ... `tier3_bonus_flat` | 1/2/3 | Бонусы Item Soul |
+
+---
+
+## 8.7. Система титулов (Titles)
+
+Титулы — это заработанные звания с постоянными бонусами к статам. Игрок может надеть один активный титул. Бонус активного титула хранится как `ActiveEffect` с `sourceType = "title"` и `expiresAt = 0` (постоянный).
+
+### Жизненный цикл на сервере
+
+1. **Чанк-сервер подключается к game-server** → game-server отправляет `setTitleDefinitionsData` (глобальный каталог, загружается один раз вместе с зонами, квестами и т.д.)
+2. **Игрок логинится** (`joinGameCharacter`) → chunk-server отправляет `getPlayerTitlesData` → game-server читает `character_titles` → отвечает `setPlayerTitlesData` → chunk-server загружает в `TitleManager` → **`player_titles_update`** отправляется клиенту
+3. При `equipTitle` от клиента → снять эффекты старого, надеть эффекты нового, персистировать (`savePlayerTitle` → game-server → DB), отправить `player_titles_update`
+
+### Где создаются и настраиваются титулы
+
+| Данные | Место |
+|--------|-------|
+| Список доступных титулов + их бонусы | Таблица `title_definitions` в БД (настраивается вручную / миграциями) |
+| Какие титулы заработал персонаж | Таблица `character_titles` (character_id, title_slug, equipped) |
+| Бонусы в runtime | `TitleManager` применяет как `ActiveEffectStruct` с `sourceType="title"`, `expiresAt=0` |
+| Выдача нового титула | Через `TitleManager::grantTitle()` — вызывается из game-logic (например, при убийстве N мобов) |
+
+### Пример записи в `title_definitions` (текущий формат; условия — см. миграцию 101)
+```sql
+INSERT INTO title_definitions (slug, display_name, description, earn_condition, bonuses, condition_params)
+VALUES ('wolf_hunter', 'Охотник на волков', 'Достиг 3-го тира бестиария волка', 'bestiary',
+        '[{"attributeSlug":"physical_attack","value":1.0}]',
+        '{"minTier": 3, "mobSlug": "ForestWolf"}');
+```
+
+### Бонусы как ActiveEffects при экипировке
+
+```
+effectSlug = "title_{titleSlug}_{attributeSlug}"  // напр. "title_wolf_hunter_physical_attack"
+effectTypeSlug = "title_bonus"
+sourceType = "title"
+expiresAt = 0   // постоянный эффект
+value = bonusValue
+```
+
+---
+
+### getTitles — Запрос полного списка титулов
+
+**Клиент → Сервер**
+
+```json
+{
+  "header": {
+    "eventType": "getTitles",
+    "clientId": 42,
+    "hash": "auth_token"
+  },
+  "body": {
+    "characterId": 7
+  }
+}
+```
+
+### player_titles_update — Полное состояние титулов
+
+**Сервер → Unicast** (ответ на `getTitles`, после `setPlayerTitlesData`, после успешного `equipTitle`)
+
+```json
+{
+  "header": {
+    "eventType": "player_titles_update",
+    "status": "success"
+  },
+  "body": {
+    "characterId": 7,
+    "equippedTitle": {
+      "slug": "wolf_hunter",
+      "earnCondition": "bestiary",
+      "bonuses": [
+        { "attributeSlug": "physical_attack", "value": 1.0 }
+      ]
+    },
+    "earnedTitles": [
+      {
+        "slug": "wolf_hunter",
+        "earnCondition": "bestiary",
+        "bonuses": [
+          { "attributeSlug": "physical_attack", "value": 1.0 }
+        ]
+      }
+    ]
+  }
+}
+```
+
+> Ключи, не текст: отображаемые имена живут в локали клиента
+> (`titles.{slug}.name/description`). `displayName`/`description` в пакете
+> больше не шлются (чистка дублей 2026-10).
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `equippedTitle` | object\|null | Надетый титул: `{slug, earnCondition, bonuses}` (null = ничего не надето) |
+| `earnedTitles` | array | Все заработанные титулы: `{slug, earnCondition, bonuses}` |
+| `earnedTitles[].slug` | string | Уникальный идентификатор титула (ключ локали) |
+| `earnedTitles[].bonuses` | array | Массив `{ attributeSlug, value }` |
+
+---
+
+### equipTitle — Надеть титул
+
+**Клиент → Сервер**
+
+```json
+{
+  "header": {
+    "eventType": "equipTitle",
+    "clientId": 42,
+    "hash": "auth_token"
+  },
+  "body": {
+    "characterId": 7,
+    "titleSlug": "wolf_hunter"
+  }
+}
+```
+
+| Поле | Описание |
+|------|----------|
+| `titleSlug` | Slug надеваемого титула. Пустая строка `""` — снять текущий |
+
+**Ответ: `equip_title_result`** (подтверждение операции, приходит первым)
+
+```json
+{
+  "header": { "eventType": "equip_title_result", "status": "success" },
+  "body": { "characterId": 7, "titleSlug": "wolf_hunter" }
+}
+```
+
+При успехе — сразу после `equip_title_result` приходит `player_titles_update` с обновлённым состоянием.
+
+**При ошибке** (титул не заработан):
+
+```json
+{
+  "header": { "eventType": "equip_title_result", "status": "error" },
+  "body": { "characterId": 7, "titleSlug": "unknown_title", "error": "title_not_earned" }
+}
+```
+
+---
+
+### Выдача титула — отдельного уведомления нет
+
+В коде нет `title_granted`-нотификации: когда титул выдается
+(`TitleManager::grantTitle` из бестиария/уровня/квеста/репутации/мастерства),
+клиент узнает об этом из ближайшего `player_titles_update` (пушится сразу
+после выдачи). Отдельного тоста не ждите — если нужен, это новая фича.
+
+---
+
+### Взаимодействие с stats_update
+
+Бонусы экипированного титула **включены в `attributes[].effective`** в пакете `stats_update`.
+При смене надетого титула клиент получает `player_titles_update`, затем `stats_update` с пересчитанными эффективными значениями.
+
+```
+effective_attr = base
+               + Σ(equipment bonuses)
+               + Σ(active effects, в т.ч. title_bonus с expiresAt=0)
+               + item_soul_bonus
+               + mastery_tier_bonus
+```
+
+---
+
+## 8.8. Скилл-бар (Hotbar)
+
+Скилл-бар — панель с 12 слотами (индексы 0–11), в каждом из которых игрок может разместить выученный скилл. Привязка хранится в БД, загружается при входе в зону и отправляется клиенту в составе процедуры логина.
+
+### Хранение данных
+
+| Что | Где |
+|-----|-----|
+| Привязки слотов | Таблица `character_skill_bar` (character_id, slot_index, skill_slug) |
+| Runtime-состояние | `CharacterDataStruct::skillBarSlots` на чанк-сервере (вектор `SkillBarSlotStruct`) |
+| Загрузка | Game-server читает при обработке `joinGame`, передаёт в `setCharacterData` |
+| Сохранение | Чанк-сервер → game-server fire-and-forget: `saveSkillBarSlot` |
+
+Отсутствие строки в `character_skill_bar` = пустой слот. NULL-значения не хранятся.
+
+---
+
+### Жизненный цикл при логине
+
+```
+Game Server                     Chunk Server                    Client
+     |                               |                               |
+     | <-- joinGame                  |                               |
+     |  loadCharacterFromDB()        |                               |
+     |  + read character_skill_bar   |                               |
+     |                               |                               |
+     | ------- setCharacterData ---> |  (включает поле skillBarData) |
+     |                               |  parseCharacterData()         |
+     |                               |  → CharacterDataStruct        |
+     |                               |    .skillBarSlots populated   |
+     |                               |                               |
+     |                               | -- initializePlayerSkills --> |
+     |                               |                               |
+     |                               | ------- skillBarState ------> |
+     |                               |                               |
+```
+
+### setCharacterData — Поле skillBarData
+
+Поле `skillBarData` является частью существующего пакета `setCharacterData` (game-server → chunk-server). Содержит массив ненулевых слотов. Пустые слоты **не включаются**.
+
+Формат поля внутри `body` пакета `setCharacterData`:
+
+```json
+"skillBarData": [
+  { "slotIndex": 0, "skillSlug": "basic_attack" },
+  { "slotIndex": 1, "skillSlug": "shield_bash" },
+  { "slotIndex": 3, "skillSlug": "whirlwind" }
+]
+```
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `slotIndex` | int | Индекс слота 0–11 |
+| `skillSlug` | string | Slug выученного скилла |
+
+---
+
+### skillBarState — Начальное состояние скилл-бара
+
+**Chunk Server → Client (Unicast)**  
+Отправляется сразу после `initializePlayerSkills` при входе персонажа в зону (в обоих путях: обычном и pending-join).
+
+```json
+{
+  "header": {
+    "eventType": "skillBarState",
+    "clientId": 42,
+    "message": "skill bar state"
+  },
+  "body": {
+    "slots": [
+      { "slotIndex": 0, "skillSlug": "basic_attack" },
+      { "slotIndex": 1, "skillSlug": "shield_bash" },
+      { "slotIndex": 3, "skillSlug": "whirlwind" }
+    ]
+  }
+}
+```
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `slots` | array | Массив заполненных слотов. Пустые слоты отсутствуют |
+| `slotIndex` | int | Индекс слота 0–11 |
+| `skillSlug` | string | Slug скилла в этом слоте |
+
+> Клиент должен сначала очистить все слоты, затем заполнить только те, что пришли в массиве.
+
+---
+
+### setSkillBarSlot — Назначение/очистка слота
+
+**Client → Chunk Server**  
+Клиент отправляет каждый раз, когда игрок перетаскивает скилл в слот или убирает его.
+
+```json
+{
+  "header": {
+    "eventType": "setSkillBarSlot",
+    "clientId": 42,
+    "hash": "auth_token"
+  },
+  "body": {
+    "slotIndex": 1,
+    "skillSlug": "shield_bash"
+  }
+}
+```
+
+Для **очистки слота** — передать пустую строку:
+
+```json
+{
+  "header": {
+    "eventType": "setSkillBarSlot",
+    "clientId": 42,
+    "hash": "auth_token"
+  },
+  "body": {
+    "slotIndex": 1,
+    "skillSlug": ""
+  }
+}
+```
+
+| Поле | Тип | Ограничение |
+|------|-----|-------------|
+| `slotIndex` | int | 0–11 (проверяется сервером) |
+| `skillSlug` | string | Должен быть выученным навыком, или `""` для очистки |
+
+#### Серверная валидация (SkillEventHandler::handleSetSkillBarSlotEvent)
+
+1. `slotIndex` должен быть в диапазоне `[0, 12)` — иначе error `"invalid_slot_index"`
+2. Если `skillSlug` не пуст — скилл должен присутствовать в `CharacterDataStruct::skills` — иначе error `"skill_not_learned"`
+3. Обновление in-memory: `CharacterManager::updateSkillBarSlot(characterId, slotIndex, skillSlug)`
+4. Персистенция: fire-and-forget пакет `saveSkillBarSlot` → game-server (без ожидания ответа)
+5. ACK клиенту: `skillBarSlotUpdated`
+
+---
+
+### skillBarSlotUpdated — Подтверждение обновления
+
+**Chunk Server → Client (Unicast)**  
+Ответ после успешной обработки `setSkillBarSlot`.
+
+```json
+{
+  "header": {
+    "eventType": "skillBarSlotUpdated",
+    "clientId": 42,
+    "message": "ok"
+  },
+  "body": {
+    "slotIndex": 1,
+    "skillSlug": "shield_bash"
+  }
+}
+```
+
+При **очистке** слота `skillSlug` будет пустой строкой `""`.
+
+При **ошибке** — стандартный error response:
+
+```json
+{
+  "header": {
+    "eventType": "error",
+    "clientId": 42,
+    "message": "skill_not_learned"
+  },
+  "body": {}
+}
+```
+
+| Код ошибки | Причина |
+|------------|---------|
+| `invalid_slot_index` | `slotIndex` вне диапазона 0–11 |
+| `skill_not_learned` | Скилл не изучен персонажем |
+
+---
+
+### saveSkillBarSlot — Межсерверный пакет персистенции
+
+**Chunk Server → Game Server (fire-and-forget, без ответа)**
+
+```json
+{
+  "header": {
+    "eventType": "saveSkillBarSlot",
+    "clientId": 42,
+    "hash": ""
+  },
+  "body": {
+    "characterId": 7,
+    "slotIndex": 1,
+    "skillSlug": "shield_bash"
+  }
+}
+```
+
+При очистке `skillSlug` = `""` — game-server выполнит `DELETE FROM character_skill_bar WHERE character_id = $1 AND slot_index = $2`.  
+При назначении — `INSERT INTO character_skill_bar ... ON CONFLICT DO UPDATE SET skill_slug = ...`.
+
+> Пакет одностороннний — game-server не отправляет ответа. In-memory обновление уже произошло до отправки пакета.
+
+---
+
+### Схема таблицы БД
+
+```sql
+CREATE TABLE public.character_skill_bar (
+    character_id  INTEGER     NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    slot_index    SMALLINT    NOT NULL CHECK (slot_index >= 0 AND slot_index < 12),
+    skill_slug    VARCHAR(64) NOT NULL,
+    PRIMARY KEY (character_id, slot_index)
+);
+CREATE INDEX idx_skill_bar_character ON public.character_skill_bar(character_id);
+```
+
+### Prepared Statements (game-server Database.cpp)
+
+| Имя | SQL |
+|-----|-----|
+| `get_character_skill_bar` | `SELECT slot_index, skill_slug FROM character_skill_bar WHERE character_id = $1 ORDER BY slot_index` |
+| `save_skill_bar_slot` | `INSERT INTO character_skill_bar (character_id, slot_index, skill_slug) VALUES ($1,$2,$3) ON CONFLICT (character_id, slot_index) DO UPDATE SET skill_slug = $3` |
+| `clear_skill_bar_slot` | `DELETE FROM character_skill_bar WHERE character_id = $1 AND slot_index = $2` |

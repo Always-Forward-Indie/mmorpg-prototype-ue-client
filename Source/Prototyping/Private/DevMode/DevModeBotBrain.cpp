@@ -11,6 +11,17 @@
 #include "Gameplay/Chat/ChatManager.h"
 #include "Gameplay/Dialogue/DialogueManager.h"
 #include "Gameplay/Quest/QuestManager.h"
+#include "Gameplay/SkillShop/SkillShopManager.h"
+#include "Gameplay/Skills/PlayerSkillManager.h"
+#include "Gameplay/Player/PlayerStatsManager.h"
+#include "Gameplay/Equipment/EquipmentManager.h"
+#include "Gameplay/Equipment/EquipmentVisualComponent.h"
+#include "Gameplay/Player/ExperienceManager.h"
+#include "Gameplay/Player/TitleNetworkHandler.h"
+#include "Gameplay/Player/TitleManager.h"
+#include "Gameplay/Emotes/EmoteNetworkHandler.h"
+#include "Gameplay/Emotes/EmoteManager.h"
+#include "Gameplay/Emotes/EmoteComponent.h"
 #include "Gameplay/UI/PlayerNameplateComponent.h"
 #include "UI/UIManager.h"
 #include "Engine/World.h"
@@ -136,6 +147,28 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     DialogueClicks = 0;
     LastAdvanceNodeId = 0;
     LastDialogueRequestTime = 0.0;
+    CharLegStartTime = 0.0;
+    bSkillShopOpened = false;
+    bLearnRequested = false;
+    bCastSent = false;
+    bBuffSent = false;
+    CastTargetUid = 0;
+    MobHpBefore = 0;
+    ManaBefore = 0;
+    bDamageSeen = false;
+    bCooldownSeen = false;
+    bManaSeen = false;
+    EquipInstanceId = 0;
+    EquipItemSlug.Empty();
+    StartLevel = 0;
+    StartExp = 0;
+    bTitleSent = false;
+    bEmoteSent = false;
+    bShopReqSent = false;
+    bUnequipSent = false;
+    LastLearnSlug.Empty();
+    bWasPreEquipped = false;
+    bRestorePass = false;
     CorpseUID = 0;
     bHarvestRequested = false;
     bInspectRequested = false;
@@ -497,7 +530,31 @@ void UDevModeBotBrain::BrainTick()
         if (SteerToward(Player, Waypoint, 60.0f, Now, TEXT("waypoint")))
         {
             BotAssert(Odometer > 50.0f, TEXT("player-walked"), (int32)Odometer, 50);
-            if (bQuestPhase)
+            if (bSkillsPhase)
+            {
+                Step = EBotStep::SkillWalk;
+                CharLegStartTime = Now;
+            }
+            else if (bEquipPhase)
+            {
+                Step = EBotStep::EquipOn;
+                CharLegStartTime = Now;
+            }
+            else if (bLevelPhase)
+            {
+                Step = EBotStep::LevelWait;
+                CharLegStartTime = Now;
+                StartLevel = GetProgressionLevel();
+                StartExp = GetProgressionExp();
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT level baseline %d exp %d, waiting for grant"),
+                    StartLevel, StartExp);
+            }
+            else if (bTitleEmotePhase)
+            {
+                Step = EBotStep::TitleLeg;
+                CharLegStartTime = Now;
+            }
+            else if (bQuestPhase)
             {
                 // Quest chain: locomotion proven, walk to the quest NPC.
                 Step = EBotStep::QuestWalk;
@@ -1465,6 +1522,410 @@ void UDevModeBotBrain::BrainTick()
         return;
     }
 
+    if (Step == EBotStep::SkillWalk)
+    {
+        // Honest walk to the trainer (shop range is server-side).
+        if (SteerToward(Player, SkillNpcPos, 150.0f, Now, TEXT("trainer")))
+        {
+            Step = EBotStep::SkillLearn;
+            CharLegStartTime = Now;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT at trainer npc=%d, opening skill shop"), SkillNpcId);
+            return;
+        }
+        if (Now - CharLegStartTime > CharTimeoutSec)
+        {
+            Finish(false, TEXT("skills-unreachable"));
+        }
+        return;
+    }
+
+    if (Step == EBotStep::SkillLearn)
+    {
+        USkillShopManager* Shop = GameInstance->GetSkillShopManager();
+        UPlayerSkillManager* PSM = GameInstance->GetPlayerSkillManager();
+        if (!Shop || !PSM)
+        {
+            Finish(false, TEXT("no-skills"));
+            return;
+        }
+        const int32 CharId = GameInstance->GetCurrentCharacterID();
+        if (Shop->GetCurrentShop().npcId != SkillNpcId)
+        {
+            if (!bShopReqSent)
+            {
+                Shop->RequestOpenSkillShop(SkillNpcId, Player->GetActorLocation());
+                bShopReqSent = true;
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT skill shop requested npc=%d"), SkillNpcId);
+            }
+            if (Now - CharLegStartTime > CharTimeoutSec)
+            {
+                Finish(false, TEXT("skill-shop-timeout"));
+            }
+            return;
+        }
+        BotAssert(true, TEXT("skill-shop-open"), SkillNpcId, SkillNpcId);
+        // Learn power_slash then battle_cry (one in flight at a time).
+        FString Next;
+        if (!PSM->HasSkill(TEXT("power_slash"))) { Next = TEXT("power_slash"); }
+        else if (!PSM->HasSkill(TEXT("battle_cry"))) { Next = TEXT("battle_cry"); }
+        if (!Next.IsEmpty())
+        {
+            if (!bLearnRequested || LastLearnSlug != Next)
+            {
+                Shop->RequestLearnSkill(SkillNpcId, Next);
+                bLearnRequested = true;
+                LastLearnSlug = Next;
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT learn requested %s"), *Next);
+            }
+            if (Now - CharLegStartTime > CharTimeoutSec)
+            {
+                BotAssert(false, TEXT("skill-learned"), 0, 1);
+                Finish(false, TEXT("learn-timeout"));
+            }
+            return;
+        }
+        BotAssert(true, TEXT("skill-learned-power"), 1, 1);
+        BotAssert(true, TEXT("skill-learned-cry"), 1, 1);
+        BotShot(TEXT("learned"));
+        Step = EBotStep::SkillCast;
+        CharLegStartTime = Now;
+        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT skills learned, hunting cast target"));
+        return;
+    }
+
+    if (Step == EBotStep::SkillCast)
+    {
+        UPlayerSkillManager* PSM = GameInstance->GetPlayerSkillManager();
+        if (!PSM)
+        {
+            Finish(false, TEXT("no-skills"));
+            return;
+        }
+        if (!TargetMob.IsValid() || TargetMob->GetMOBIsDead())
+        {
+            if (bCastSent && TargetMob.IsValid())
+            {
+                // Our hit landed lethally: the deferred server death flips
+                // the flag instead of an HP number. Damage proven — keep the
+                // corpse pointer (cooldown/mana latches still poll below),
+                // do NOT repick and lose the kill.
+                bDamageSeen = true;
+            }
+            else
+            {
+                TargetMob = FindNearestAliveMobExcluding(ExcludedKillerUIDs);
+                if (!TargetMob.IsValid())
+                {
+                    Finish(false, TEXT("no-cast-target"));
+                    return;
+                }
+                ChaseTargetUID = 0;
+            }
+        }
+        ABasicMOB* Target = TargetMob.Get();
+        const int32 TargetUid = FCString::Atoi(*Target->GetMOBUId());
+        const float CastRange = Player->GetCurrentSkillRange();
+        // Post-cast the mob may flee: poll the hit regardless of range.
+        // The range gate applies only to the first cast. Server
+        // confirmation lands piecemeal: cooldown arms on initiation, mana
+        // on stats_update, damage on the deferred result flush (which may
+        // lag ~12s and may only flip the dead flag — accept HP drop OR
+        // death as the damage proof).
+        if (bCastSent)
+        {
+            const int32 MobHpNow = Target->GetMOBCurrentHealth();
+            const int32 ManaNow = Player->GetPlayerCurrentMPPoints();
+            bDamageSeen = bDamageSeen || (MobHpNow < MobHpBefore) || Target->GetMOBIsDead();
+            bCooldownSeen = bCooldownSeen || PSM->IsSkillOnCooldown(TEXT("power_slash"));
+            bManaSeen = bManaSeen || (ManaNow < ManaBefore);
+            if (bDamageSeen && bCooldownSeen && bManaSeen)
+            {
+                BotAssert(true, TEXT("skill-damage"), 1, 1);
+                BotAssert(true, TEXT("skill-cooldown"), 1, 1);
+                BotAssert(true, TEXT("skill-mana"), 1, 1);
+                BotShot(TEXT("cast"));
+                Step = EBotStep::SkillBuff;
+                CharLegStartTime = Now;
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT power_slash confirmed: mobhp %d -> %d mana %d -> %d"),
+                    MobHpBefore, MobHpNow, ManaBefore, ManaNow);
+                return;
+            }
+            if (Now - CharLegStartTime > CharTimeoutSec)
+            {
+                BotAssert(bDamageSeen, TEXT("skill-damage"), bDamageSeen ? 1 : 0, 1);
+                BotAssert(bCooldownSeen, TEXT("skill-cooldown"), bCooldownSeen ? 1 : 0, 1);
+                BotAssert(bManaSeen, TEXT("skill-mana"), bManaSeen ? 1 : 0, 1);
+                Finish(false, TEXT("cast-timeout"));
+            }
+            return;
+        }
+        if (Dist2D(PlayerAt, Target->GetActorLocation()) > CastRange * ArrivalFraction)
+        {
+            SteerToward(Player, Target->GetActorLocation(), CastRange * ArrivalFraction, Now, *Target->GetMobName());
+            if (Now - CharLegStartTime > CharTimeoutSec)
+            {
+                Finish(false, TEXT("cast-unreachable"));
+            }
+            return;
+        }
+        if (Player->GetLockedTarget() != Target)
+        {
+            Player->SetLockedTarget(Target);
+        }
+        MobHpBefore = Target->GetMOBCurrentHealth();
+        ManaBefore = Player->GetPlayerCurrentMPPoints();
+        PSM->TryCastSkill(TEXT("power_slash"), TargetUid, ECasterType::Mob);
+        bCastSent = true;
+        bDamageSeen = false;
+        bCooldownSeen = false;
+        bManaSeen = false;
+        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT power_slash cast on uid=%d (mobhp=%d mana=%d)"),
+            TargetUid, MobHpBefore, ManaBefore);
+        return;
+    }
+
+    if (Step == EBotStep::SkillBuff)
+    {
+        UPlayerSkillManager* PSM = GameInstance->GetPlayerSkillManager();
+        if (!PSM)
+        {
+            Finish(false, TEXT("no-skills"));
+            return;
+        }
+        if (!bBuffSent)
+        {
+            PSM->TryCastSkill(TEXT("battle_cry"), 0, ECasterType::Player);
+            bBuffSent = true;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT battle_cry cast (self)"));
+            return;
+        }
+        // The buff lands as a server stats_update activeEffects entry —
+        // the same snapshot ActiveEffectsWidget renders.
+        if (HasActiveEffect(TEXT("battle_cry_phys_atk")))
+        {
+            BotAssert(true, TEXT("buff-active"), 1, 1);
+            BotShot(TEXT("buff"));
+            Finish(Failures == 0, Failures == 0 ? TEXT("skills-done") : TEXT("assert-failures"));
+            return;
+        }
+        if (Now - CharLegStartTime > CharTimeoutSec)
+        {
+            BotAssert(false, TEXT("buff-active"), 0, 1);
+            Finish(false, TEXT("buff-timeout"));
+        }
+        return;
+    }
+
+    if (Step == EBotStep::EquipOn)
+    {
+        UEquipmentManager* EqMgr = GameInstance->GetEquipmentManager();
+        if (!EqMgr)
+        {
+            Finish(false, TEXT("no-equipment"));
+            return;
+        }
+        const int32 CharId = GameInstance->GetCurrentCharacterID();
+        const FEquipmentSlotData Slot = EqMgr->GetSlot(EquipSlotSlug);
+        if (Slot.bIsOccupied && EquipInstanceId <= 0)
+        {
+            // Idempotent entry: already equipped (e.g. a previous run left
+            // it on) — verify slot + visual, then continue the round-trip.
+            bWasPreEquipped = true;
+            EquipInstanceId = Slot.inventoryItemId;
+            EquipItemSlug = Slot.itemSlug;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT slot %s pre-equipped instance=%d, verifying"),
+                *EquipSlotSlug, EquipInstanceId);
+        }
+        if (EquipInstanceId <= 0)
+        {
+            EquipInstanceId = FindEquippableMainHand(EquipItemSlug);
+            if (EquipInstanceId <= 0)
+            {
+                Finish(false, TEXT("no-equippable"));
+                return;
+            }
+            EqMgr->RequestEquipItem(CharId, EquipInstanceId);
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT equip requested instance=%d '%s'"),
+                EquipInstanceId, *EquipItemSlug);
+            return;
+        }
+        if (Slot.bIsOccupied && Slot.inventoryItemId == EquipInstanceId)
+        {
+            BotAssert(true, TEXT("equip-slot"), 1, 1);
+            // Visual proof: the mesh the game attached for this slot.
+            bool bVisualOk = false;
+            if (UEquipmentVisualComponent* Vis = Player->GetEquipmentVisualComponent())
+            {
+                bVisualOk = Vis->GetItemSlugForSlot(EquipSlotSlug) == EquipItemSlug
+                    && Vis->GetSlotComponent(EquipSlotSlug) != nullptr;
+            }
+            BotAssert(bVisualOk, TEXT("equip-visual"), bVisualOk ? 1 : 0, 1);
+            BotShot(TEXT("equipped"));
+            if (bRestorePass)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT pre-equipped item restored"));
+                Finish(Failures == 0, Failures == 0 ? TEXT("equip-done") : TEXT("assert-failures"));
+                return;
+            }
+            Step = EBotStep::EquipOff;
+            CharLegStartTime = Now;
+            return;
+        }
+        if (Now - CharLegStartTime > CharTimeoutSec)
+        {
+            BotAssert(false, TEXT("equip-slot"), 0, EquipInstanceId);
+            Finish(false, TEXT("equip-timeout"));
+        }
+        return;
+    }
+
+    if (Step == EBotStep::EquipOff)
+    {
+        UEquipmentManager* EqMgr = GameInstance->GetEquipmentManager();
+        if (!EqMgr)
+        {
+            Finish(false, TEXT("no-equipment"));
+            return;
+        }
+        if (!bUnequipSent)
+        {
+            EqMgr->RequestUnequipItem(GameInstance->GetCurrentCharacterID(), EquipSlotSlug);
+            bUnequipSent = true;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT unequip requested slot=%s"), *EquipSlotSlug);
+            return;
+        }
+        const FEquipmentSlotData Slot = EqMgr->GetSlot(EquipSlotSlug);
+        if (!Slot.bIsOccupied)
+        {
+            BotAssert(true, TEXT("unequip-slot"), 1, 1);
+            BotShot(TEXT("unequipped"));
+            if (bWasPreEquipped)
+            {
+                // Restore the pre-run state, verify once, then finish.
+                EqMgr->RequestEquipItem(GameInstance->GetCurrentCharacterID(), EquipInstanceId);
+                bWasPreEquipped = false;
+                bUnequipSent = false;
+                bRestorePass = true;
+                EquipInstanceId = 0;
+                Step = EBotStep::EquipOn;
+                CharLegStartTime = Now;
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT restoring pre-equipped item"));
+                return;
+            }
+            Finish(Failures == 0, Failures == 0 ? TEXT("equip-done") : TEXT("assert-failures"));
+            return;
+        }
+        if (Now - CharLegStartTime > CharTimeoutSec)
+        {
+            BotAssert(false, TEXT("unequip-slot"), 1, 0);
+            Finish(false, TEXT("unequip-timeout"));
+        }
+        return;
+    }
+
+    if (Step == EBotStep::LevelWait)
+    {
+        // XP is granted externally mid-run (admin grant_xp): the bot only
+        // polls the authoritative progression snapshot.
+        const int32 LevelNow = GetProgressionLevel();
+        const int32 ExpNow = GetProgressionExp();
+        if (LevelNow > StartLevel && ExpNow > StartExp)
+        {
+            BotAssert(true, TEXT("level-grew"), LevelNow, StartLevel + 1);
+            BotAssert(true, TEXT("exp-grew"), 1, 1);
+            BotShot(TEXT("levelup"));
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT leveled: %d -> %d exp %d -> %d"),
+                StartLevel, LevelNow, StartExp, ExpNow);
+            Finish(Failures == 0, Failures == 0 ? TEXT("level-done") : TEXT("assert-failures"));
+            return;
+        }
+        if (Now - CharLegStartTime > CharTimeoutSec)
+        {
+            BotAssert(false, TEXT("level-grew"), LevelNow, StartLevel + 1);
+            Finish(false, TEXT("level-timeout"));
+        }
+        return;
+    }
+
+    if (Step == EBotStep::TitleLeg)
+    {
+        UTitleNetworkHandler* TitleNet = GameInstance->GetTitleNetworkHandler();
+        UTitleManager* Titles = GameInstance->GetTitleManager();
+        if (!TitleNet || !Titles)
+        {
+            Finish(false, TEXT("no-titles"));
+            return;
+        }
+        if (!bTitleSent)
+        {
+            TitleNet->RequestEquipTitle(GameInstance->GetCurrentCharacterID(), TEXT("first_hunter"));
+            bTitleSent = true;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT equip title first_hunter"));
+            return;
+        }
+        if (Titles->GetEquippedTitleSlug() == TEXT("first_hunter"))
+        {
+            BotAssert(true, TEXT("title-equipped"), 1, 1);
+            BotShot(TEXT("title"));
+            Step = EBotStep::EmoteLeg;
+            CharLegStartTime = Now;
+            return;
+        }
+        if (Now - CharLegStartTime > CharTimeoutSec)
+        {
+            BotAssert(false, TEXT("title-equipped"), 0, 1);
+            Finish(false, TEXT("title-timeout"));
+        }
+        return;
+    }
+
+    if (Step == EBotStep::EmoteLeg)
+    {
+        UEmoteNetworkHandler* EmoteNet = GameInstance->GetEmoteNetworkHandler();
+        UEmoteManager* Emotes = GameInstance->GetEmoteManager();
+        if (!EmoteNet || !Emotes)
+        {
+            Finish(false, TEXT("no-emotes"));
+            return;
+        }
+        if (!bEmoteSent)
+        {
+            // Play the first owned emote from the server snapshot — never
+            // assume a slug is unlocked (salute is NOT default; wave is).
+            const TArray<FEmoteDefinitionData>& Owned = Emotes->GetPlayerEmotesState().emotes;
+            if (Owned.Num() == 0)
+            {
+                Finish(false, TEXT("no-emotes"));
+                return;
+            }
+            EmoteSlug = Owned[0].slug;
+            EmoteNet->RequestUseEmote(EmoteSlug);
+            bEmoteSent = true;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT emote %s sent"), *EmoteSlug);
+            return;
+        }
+        // The server broadcasts back (sender in own range): our actor plays
+        // through the same PlayEmoteForCharacter path as any player.
+        bool bPlaying = false;
+        if (UEmoteComponent* Emote = Player->GetEmoteComponent())
+        {
+            bPlaying = Emote->IsPlayingEmote() && Emote->GetCurrentEmoteSlug() == EmoteSlug;
+        }
+        if (bPlaying)
+        {
+            BotAssert(true, TEXT("emote-playing"), 1, 1);
+            BotShot(TEXT("emote"));
+            Finish(Failures == 0, Failures == 0 ? TEXT("titles-emotes-done") : TEXT("assert-failures"));
+            return;
+        }
+        if (Now - CharLegStartTime > CharTimeoutSec)
+        {
+            BotAssert(false, TEXT("emote-playing"), 0, 1);
+            Finish(false, TEXT("emote-timeout"));
+        }
+        return;
+    }
+
     ABasicMOB* Mob = TargetMob.Get();
     // Invariant: live target (repick above guarantees it; AssertKill and
     // GotoWaypoint returned). Defensive recover — never dereference stale.
@@ -1937,6 +2398,61 @@ ABasicPlayer* UDevModeBotBrain::FindPeerActor() const
         }
     }
     return nullptr;
+}
+
+// ---- Phase D helpers ----
+
+bool UDevModeBotBrain::HasActiveEffect(const FString& Slug) const
+{
+    if (GameInstance && GameInstance->GetPlayerStatsManager())
+    {
+        for (const FActiveEffectEntry& E : GameInstance->GetPlayerStatsManager()->GetCachedStats().activeEffects)
+        {
+            if (E.slug.Equals(Slug, ESearchCase::IgnoreCase))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+int32 UDevModeBotBrain::FindEquippableMainHand(FString& OutSlug) const
+{
+    OutSlug.Empty();
+    if (GameInstance && GameInstance->GetInventoryManager())
+    {
+        for (const FInventoryItemStruct& Item : GameInstance->GetInventoryManager()->GetInventory().items)
+        {
+            if (Item.isEquippable && !Item.is_equipped
+                && Item.equipSlotSlug.Equals(TEXT("main_hand"), ESearchCase::IgnoreCase))
+            {
+                OutSlug = Item.itemSlug;
+                return Item.id;
+            }
+        }
+    }
+    return 0;
+}
+
+int32 UDevModeBotBrain::GetProgressionLevel() const
+{
+    if (GameInstance && GameInstance->GetExperienceManager())
+    {
+        return GameInstance->GetExperienceManager()
+            ->GetCharacterProgression(GameInstance->GetCurrentCharacterID()).currentLevel;
+    }
+    return 0;
+}
+
+int32 UDevModeBotBrain::GetProgressionExp() const
+{
+    if (GameInstance && GameInstance->GetExperienceManager())
+    {
+        return GameInstance->GetExperienceManager()
+            ->GetCharacterProgression(GameInstance->GetCurrentCharacterID()).totalExperience;
+    }
+    return 0;
 }
 
 bool UDevModeBotBrain::EnsureDialogueOpen(int32 NpcId, double Now)

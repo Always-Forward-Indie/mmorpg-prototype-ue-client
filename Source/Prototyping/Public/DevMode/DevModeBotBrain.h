@@ -130,6 +130,21 @@ public:
     int32 QuestNpcId = 9000;
     FVector QuestNpcPos = FVector(700.0f, -3200.0f, 200.0f);
     float QuestTimeoutSec = 120.0f;
+    // ---- Phase D: character (set before Start, all LIVE ONLY) ----
+    // live_skills: trainer shop -> learn power_slash + battle_cry ->
+    // cast damage skill (mob HP + cooldown + mana) -> cast self buff
+    // (activeEffects). Needs a boosted bot (dev_learn.sql: level 5 + SP).
+    bool bSkillsPhase = false;
+    int32 SkillNpcId = 3;
+    FVector SkillNpcPos = FVector(-634.0f, 2160.0f, 200.0f);
+    // live_equip: equip main_hand (slot + visual mesh) -> unequip.
+    bool bEquipPhase = false;
+    // live_level: XP granted externally mid-run (admin grant_xp); poll
+    // the level-up through ExperienceManager.
+    bool bLevelPhase = false;
+    // live_titles_emotes: equip earned title -> play emote (own actor).
+    bool bTitleEmotePhase = false;
+    float CharTimeoutSec = 90.0f;
     // Global run budget (seconds). Live runs set this higher (slow real fights).
     float GlobalTimeoutSec = 120.0f;
     // Kill budget for the combat legs. Scenario profiles (console + live
@@ -158,6 +173,15 @@ private:
         QuestWalk,
         QuestAccept,
         QuestTurnin,
+        SkillWalk,
+        SkillLearn,
+        SkillCast,
+        SkillBuff,
+        EquipOn,
+        EquipOff,
+        LevelWait,
+        TitleLeg,
+        EmoteLeg,
     };
 
     UFUNCTION()
@@ -220,6 +244,11 @@ private:
     // Quest loot checkpoint (called after each corpse resolve): all kills
     // looted -> turn in; otherwise hunt the next victim.
     void QuestLootDone(double Now);
+    // Phase D helpers.
+    bool HasActiveEffect(const FString& Slug) const;
+    int32 FindEquippableMainHand(FString& OutSlug) const;
+    int32 GetProgressionLevel() const;
+    int32 GetProgressionExp() const;
 
     UPROPERTY()
     UMyGameInstance* GameInstance = nullptr;
@@ -323,6 +352,38 @@ private:
     int32 DialogueClicks = 0;
     int32 LastAdvanceNodeId = 0;
     double LastDialogueRequestTime = 0.0;
+    // ---- Phase D state ----
+    double CharLegStartTime = 0.0;
+    bool bSkillShopOpened = false;
+    bool bLearnRequested = false;
+    bool bCastSent = false;
+    bool bBuffSent = false;
+    int32 CastTargetUid = 0;
+    int32 MobHpBefore = 0;
+    int32 ManaBefore = 0;
+    // Skill-hit latches (damage, cooldown and mana land at different
+    // times: cooldown arms on initiation, mana on stats_update, damage on
+    // the deferred result flush — up to ~12s apart).
+    bool bDamageSeen = false;
+    bool bCooldownSeen = false;
+    bool bManaSeen = false;
+    int32 EquipInstanceId = 0;
+    FString EquipSlotSlug = TEXT("main_hand");
+    FString EquipItemSlug;
+    int32 StartLevel = 0;
+    int32 StartExp = 0;
+    bool bTitleSent = false;
+    bool bEmoteSent = false;
+    // Owned emote actually played (first row of the server player_emotes
+    // snapshot — never assume a slug is unlocked).
+    FString EmoteSlug;
+    bool bShopReqSent = false;
+    bool bUnequipSent = false;
+    FString LastLearnSlug;
+    // Equip round-trip is idempotent: a pre-equipped slot is verified,
+    // unequipped, then restored.
+    bool bWasPreEquipped = false;
+    bool bRestorePass = false;
     // Live death pull: mobs don't aggro a passive player, so the bot lands
     // ONE honest hit (real server damage, starts retaliation) and then
     // stops the loop via StopAutoAttack. The killing blows stay server-side.

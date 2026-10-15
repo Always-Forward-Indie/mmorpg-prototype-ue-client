@@ -199,6 +199,10 @@ void ULiveBotDriver::PollTick()
             Brain->bVendorPhase = false;
             Brain->bChatPhase = false;
             Brain->bQuestPhase = false;
+            Brain->bSkillsPhase = false;
+            Brain->bEquipPhase = false;
+            Brain->bLevelPhase = false;
+            Brain->bTitleEmotePhase = false;
             // Cross runs talk after meeting (plan Phase C): both sides send
             // one local message and assert the peer's arrival + bubble.
             // (Set after the resets above, which clear it.)
@@ -235,6 +239,26 @@ void ULiveBotDriver::PollTick()
                 Brain->bLootPhase = true;
                 Brain->bHarvestPhase = true;
                 Brain->GlobalTimeoutSec = 600.0f;
+            }
+            else if (Scenario.Equals(TEXT("live_skills"), ESearchCase::IgnoreCase))
+            {
+                Brain->TargetKills = 0;
+                Brain->bSkillsPhase = true;
+            }
+            else if (Scenario.Equals(TEXT("live_equip"), ESearchCase::IgnoreCase))
+            {
+                Brain->TargetKills = 0;
+                Brain->bEquipPhase = true;
+            }
+            else if (Scenario.Equals(TEXT("live_level"), ESearchCase::IgnoreCase))
+            {
+                Brain->TargetKills = 0;
+                Brain->bLevelPhase = true;
+            }
+            else if (Scenario.Equals(TEXT("live_titles_emotes"), ESearchCase::IgnoreCase))
+            {
+                Brain->TargetKills = 0;
+                Brain->bTitleEmotePhase = true;
             }
             Stop();
             Brain->Start(GameInstance, TrackedWorld);

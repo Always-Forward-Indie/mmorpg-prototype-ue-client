@@ -197,6 +197,12 @@ void ULiveBotDriver::PollTick()
             Brain->bHarvestPhase = false;
             Brain->bStubHarvest = false;
             Brain->bVendorPhase = false;
+            Brain->bChatPhase = false;
+            Brain->bQuestPhase = false;
+            // Cross runs talk after meeting (plan Phase C): both sides send
+            // one local message and assert the peer's arrival + bubble.
+            // (Set after the resets above, which clear it.)
+            Brain->bChatPhase = Brain->bRendezvousMode;
             if (Scenario.Equals(TEXT("live_loot_pickup"), ESearchCase::IgnoreCase))
             {
                 Brain->TargetKills = 1;
@@ -218,6 +224,17 @@ void ULiveBotDriver::PollTick()
             {
                 Brain->TargetKills = 0;
                 Brain->bVendorPhase = true;
+            }
+            else if (Scenario.Equals(TEXT("live_quest_turnin"), ESearchCase::IgnoreCase))
+            {
+                // Full chain (dialogue + 2 real kills + harvest + loot +
+                // turnin) is slow: generous global budget on top of the
+                // per-leg timeouts.
+                Brain->TargetKills = 2;
+                Brain->bQuestPhase = true;
+                Brain->bLootPhase = true;
+                Brain->bHarvestPhase = true;
+                Brain->GlobalTimeoutSec = 600.0f;
             }
             Stop();
             Brain->Start(GameInstance, TrackedWorld);

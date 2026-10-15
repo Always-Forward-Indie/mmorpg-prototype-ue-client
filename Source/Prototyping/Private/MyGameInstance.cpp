@@ -864,9 +864,10 @@ void UMyGameInstance::MaybeStartLiveBot()
 		&& !LiveBotScenario.Equals(TEXT("live_loot_pickup"), ESearchCase::IgnoreCase)
 		&& !LiveBotScenario.Equals(TEXT("live_death_respawn"), ESearchCase::IgnoreCase))
 		&& !LiveBotScenario.Equals(TEXT("live_harvest_run"), ESearchCase::IgnoreCase)
-		&& !LiveBotScenario.Equals(TEXT("live_vendor_repair"), ESearchCase::IgnoreCase))
+		&& !LiveBotScenario.Equals(TEXT("live_vendor_repair"), ESearchCase::IgnoreCase)
+		&& !LiveBotScenario.Equals(TEXT("live_quest_turnin"), ESearchCase::IgnoreCase))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("LiveBot: unknown scenario '%s' (use live_patrol_kill|live_cross_visibility|live_loot_pickup|live_death_respawn|live_harvest_run|live_vendor_repair)"), *LiveBotScenario);
+		UE_LOG(LogTemp, Warning, TEXT("LiveBot: unknown scenario '%s' (use live_patrol_kill|live_cross_visibility|live_loot_pickup|live_death_respawn|live_harvest_run|live_vendor_repair|live_quest_turnin)"), *LiveBotScenario);
 		return;
 	}
 	ULiveBotDriver* Driver = LiveBotDriver;

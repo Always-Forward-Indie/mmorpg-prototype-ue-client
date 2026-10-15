@@ -64,6 +64,14 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Player Nameplate")
     void ShowChatBubble(const FString& Text, float Duration = 5.0f);
 
+    // Last bubble pushed through this component (test-visible; rendering
+    // itself lives in UNameplateCanvasWidget). Bots assert peer bubbles.
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Nameplate")
+    FString GetLastBubbleText() const { return LastBubbleText; }
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Nameplate")
+    double GetLastBubbleTime() const { return LastBubbleTime; }
+
     // ------------------------------------------------------------------ //
     //  Per-actor configuration                                            //
     // ------------------------------------------------------------------ //
@@ -81,6 +89,10 @@ private:
     bool bInitialised   = false;
     bool bIsLocalPlayer = false;
     bool bRegistered    = false;
+
+    // Last bubble text/time pushed via ShowChatBubble (test-visible state).
+    FString LastBubbleText;
+    double LastBubbleTime = 0.0;
 
     FCharacterDataStruct CachedCharData;
     FTimerHandle RetryTimerHandle;

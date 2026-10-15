@@ -58,10 +58,12 @@ public:
     float CombatKillTimeoutSec = 120.0f;
     // Rendezvous mode (live_cross_visibility): after the waypoint leg, walk
     // to RendezvousPoint and assert a remote player actor is visible instead
-    // of fighting. RendezvousPoint default = starter-area ground verified
-    // walkable (qabot spawn); override before Start if needed.
+    // of fighting. Default = village courtyard by Varan (real ground, town
+    // = no aggro; proven by the vendor runs). The old starter value sat
+    // over the void (bots fell to Z -500k, breaking local chat via the
+    // server Z tolerance); override before Start if needed.
     bool bRendezvousMode = false;
-    FVector RendezvousPoint = FVector(20404.0f, -19697.0f, 1546.0f);
+    FVector RendezvousPoint = FVector(700.0f, -3200.0f, 200.0f);
     // Budget for reaching rendezvous + seeing the peer (both walk + spawn
     // propagation). Fails loudly on expiry, never hangs.
     float RendezvousTimeoutSec = 120.0f;
@@ -113,6 +115,21 @@ public:
     FVector VendorPos = FVector(585.0f, -3300.0f, 200.0f);
     float ShopTimeoutSec = 60.0f;
     float HarvestTimeoutSec = 90.0f;
+    // ---- Phase C: social + quests (set before Start) ----
+    // Chat rides on cross_visibility: after peer-visible, both clients send
+    // one "local" message and assert its arrival in the peer log + the peer
+    // actor bubble. Needs TWO clients on the same scenario.
+    bool bChatPhase = false;
+    float ChatTimeoutSec = 60.0f;
+    // quest_turnin (LIVE ONLY): walk to the quest NPC, accept via dialogue
+    // (edge with quest preview), kill + harvest + loot the objective with
+    // the Phase A/B machinery, walk back, turn in via dialogue (edge with
+    // turn-in preview), assert journal + reward (gold + item).
+    bool bQuestPhase = false;
+    int32 QuestId = 9000;
+    int32 QuestNpcId = 9000;
+    FVector QuestNpcPos = FVector(700.0f, -3200.0f, 200.0f);
+    float QuestTimeoutSec = 120.0f;
     // Global run budget (seconds). Live runs set this higher (slow real fights).
     float GlobalTimeoutSec = 120.0f;
     // Kill budget for the combat legs. Scenario profiles (console + live
@@ -137,6 +154,10 @@ private:
         VendorWalk,
         VendorSell,
         VendorRepair,
+        ChatExchange,
+        QuestWalk,
+        QuestAccept,
+        QuestTurnin,
     };
 
     UFUNCTION()
@@ -185,6 +206,20 @@ private:
     int32 FindDamagedInstanceId(int32& OutMaxDur) const;
     int32 GetQtyByInstance(int32 InstanceId) const;
     int32 GetDurabilityByInstance(int32 InstanceId) const;
+    // Phase C helpers.
+    bool HasItemTemplate(int32 TemplateItemId) const;
+    // Peer actor of a rendezvous run (any SpawnedPlayers entry that is not
+    // this client's own), or nullptr.
+    class ABasicPlayer* FindPeerActor() const;
+    // Phase C dialogue walker (quest legs).
+    bool EnsureDialogueOpen(int32 NpcId, double Now);
+    // Goal edge (accept or turn-in preview, condition met), or 0.
+    int32 FindGoalEdge(bool bWantTurnin) const;
+    // First conditionMet non-farewell edge (continue/back hubs), or 0.
+    int32 FindAdvanceEdge() const;
+    // Quest loot checkpoint (called after each corpse resolve): all kills
+    // looted -> turn in; otherwise hunt the next victim.
+    void QuestLootDone(double Now);
 
     UPROPERTY()
     UMyGameInstance* GameInstance = nullptr;
@@ -257,6 +292,10 @@ private:
     // Last swept-step collision (live diagnostics for STUCK lines).
     bool bLastMoveBlocked = false;
     FString LastBlockingActor;
+    // Chat settle: time since the peer entered local radius (server
+    // positions + replication lag the client, so speak only after holding
+    // range — never on a transient tick).
+    double PeerCloseSince = 0.0;
     // ---- Phase B state ----
     double ShopLegStartTime = 0.0;
     bool bShopRequestSent = false;
@@ -271,6 +310,19 @@ private:
     int32 RepairInstanceId = 0;
     int32 RepairMaxDur = 0;
     int32 GoldBeforeRepair = 0;
+    // ---- Phase C state ----
+    double ChatLegStartTime = 0.0;
+    bool bChatSent = false;
+    FString PeerChatText;
+    double QuestLegStartTime = 0.0;
+    bool bDialogueRequested = false;
+    bool bChoiceSent = false;
+    int32 GoldBeforeReward = 0;
+    // Dialogue walker: goal edge first, else advance through continue/back
+    // hubs (never farewell). Click budget + node tracking prevent loops.
+    int32 DialogueClicks = 0;
+    int32 LastAdvanceNodeId = 0;
+    double LastDialogueRequestTime = 0.0;
     // Live death pull: mobs don't aggro a passive player, so the bot lands
     // ONE honest hit (real server damage, starts retaliation) and then
     // stops the loop via StopAutoAttack. The killing blows stay server-side.

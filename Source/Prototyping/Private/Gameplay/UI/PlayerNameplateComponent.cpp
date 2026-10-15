@@ -138,6 +138,9 @@ void UPlayerNameplateComponent::UpdateTitle(const FText& InTitle)
 
 void UPlayerNameplateComponent::ShowChatBubble(const FString& Text, float Duration)
 {
+    // Test-visible latch (bots assert the peer bubble by text).
+    LastBubbleText = Text;
+    LastBubbleTime = FPlatformTime::Seconds();
     if (UNameplateManager* Mgr = ResolveNameplateManager())
     {
         Mgr->ShowPlayerChatBubble(GetOwner(), Text, Duration);

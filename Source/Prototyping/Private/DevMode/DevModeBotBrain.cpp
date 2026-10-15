@@ -8,6 +8,10 @@
 #include "Gameplay/Items/HarvestManager.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Gameplay/Repair/RepairManager.h"
+#include "Gameplay/Chat/ChatManager.h"
+#include "Gameplay/Dialogue/DialogueManager.h"
+#include "Gameplay/Quest/QuestManager.h"
+#include "Gameplay/UI/PlayerNameplateComponent.h"
 #include "UI/UIManager.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
@@ -121,6 +125,17 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     RepairInstanceId = 0;
     RepairMaxDur = 0;
     GoldBeforeRepair = 0;
+    ChatLegStartTime = 0.0;
+    bChatSent = false;
+    PeerChatText.Empty();
+    PeerCloseSince = 0.0;
+    QuestLegStartTime = 0.0;
+    bDialogueRequested = false;
+    bChoiceSent = false;
+    GoldBeforeReward = 0;
+    DialogueClicks = 0;
+    LastAdvanceNodeId = 0;
+    LastDialogueRequestTime = 0.0;
     CorpseUID = 0;
     bHarvestRequested = false;
     bInspectRequested = false;
@@ -482,7 +497,13 @@ void UDevModeBotBrain::BrainTick()
         if (SteerToward(Player, Waypoint, 60.0f, Now, TEXT("waypoint")))
         {
             BotAssert(Odometer > 50.0f, TEXT("player-walked"), (int32)Odometer, 50);
-            if (bVendorPhase)
+            if (bQuestPhase)
+            {
+                // Quest chain: locomotion proven, walk to the quest NPC.
+                Step = EBotStep::QuestWalk;
+                QuestLegStartTime = Now;
+            }
+            else if (bVendorPhase)
             {
                 // Economy run: locomotion proven, walk to the vendor next.
                 Step = EBotStep::VendorWalk;
@@ -554,6 +575,14 @@ void UDevModeBotBrain::BrainTick()
         if (bPeerVisible)
         {
             BotAssert(true, TEXT("peer-visible"), 1, 1);
+            if (bChatPhase)
+            {
+                // Social leg: stay at the rendezvous and talk next.
+                Step = EBotStep::ChatExchange;
+                ChatLegStartTime = Now;
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT peer visible, starting chat exchange"));
+                return;
+            }
             Finish(Failures == 0, Failures == 0 ? TEXT("peer-visible") : TEXT("assert-failures"));
             return;
         }
@@ -621,6 +650,11 @@ void UDevModeBotBrain::BrainTick()
             BotAssert(Have == InitialInvCount + 1, TEXT("loot-inv-plus-one"), Have, InitialInvCount + 1);
             BotAssert(HaveQty == InitialInvQty + 1, TEXT("loot-qty-plus-one"), HaveQty, InitialInvQty + 1);
             BotShot(TEXT("loot"));
+            if (bQuestPhase)
+            {
+                QuestLootDone(Now);
+                return;
+            }
             Finish(Failures == 0, Failures == 0 ? TEXT("loot-done") : TEXT("assert-failures"));
             return;
         }
@@ -642,6 +676,11 @@ void UDevModeBotBrain::BrainTick()
             {
                 BotAssert(true, TEXT("loot-inv-grew"), 1, 1);
                 BotShot(TEXT("loot"));
+                if (bQuestPhase)
+                {
+                    QuestLootDone(Now);
+                    return;
+                }
                 Finish(Failures == 0, Failures == 0 ? TEXT("loot-done") : TEXT("assert-failures"));
                 return;
             }
@@ -694,9 +733,18 @@ void UDevModeBotBrain::BrainTick()
             return;
         }
         // Server-confirmed empty corpse is a CONTENT signal (no loot table),
-        // reported loudly rather than timing out.
+        // reported loudly rather than timing out — except in quest mode,
+        // where an empty corpse just means this victim had no quest item:
+        // move on through the same checkpoint (hunt next or turn in).
         if (Harvest->IsCorpseEmpty(CorpseUID))
         {
+            if (bQuestPhase)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT corpse uid=%d empty, moving on (%d/%d)"),
+                    CorpseUID, Kills, TargetKills);
+                QuestLootDone(Now);
+                return;
+            }
             BotAssert(false, TEXT("loot-inv-grew"), 0, 1);
             Finish(false, TEXT("empty-corpse"));
             return;
@@ -726,6 +774,11 @@ void UDevModeBotBrain::BrainTick()
         {
             BotAssert(true, TEXT("loot-inv-grew"), 1, 1);
             BotShot(TEXT("loot"));
+            if (bQuestPhase)
+            {
+                QuestLootDone(Now);
+                return;
+            }
             Finish(Failures == 0, Failures == 0 ? TEXT("loot-done") : TEXT("assert-failures"));
             return;
         }
@@ -1134,6 +1187,280 @@ void UDevModeBotBrain::BrainTick()
         {
             BotAssert(false, TEXT("repair-durability-max"), NowDur, RepairMaxDur);
             Finish(false, TEXT("repair-timeout"));
+        }
+        return;
+    }
+
+    if (Step == EBotStep::ChatExchange)
+    {
+        UChatManager* Chat = GameInstance->GetChatManager();
+        if (!Chat)
+        {
+            Finish(false, TEXT("no-chat"));
+            return;
+        }
+        const int32 OwnCharId = GameInstance->GetCurrentCharacterID();
+        if (!bChatSent)
+        {
+            // Local chat only travels 50u server-side. Both sides anchor to
+            // the SAME static rendezvous point (arrive tight) instead of
+            // chasing the peer actor — replicated peer positions lag too
+            // much to converge on. Then settle (server positions lag the
+            // client tick) and speak.
+            if (Dist2D(PlayerAt, RendezvousPoint) > 20.0f)
+            {
+                PeerCloseSince = 0.0;
+                SteerToward(Player, RendezvousPoint, 20.0f, Now, TEXT("chat-anchor"));
+                if (Now - ChatLegStartTime > ChatTimeoutSec)
+                {
+                    Finish(false, TEXT("peer-unreachable"));
+                }
+                return;
+            }
+            if (!IsValid(FindPeerActor()))
+            {
+                Finish(false, TEXT("peer-lost"));
+                return;
+            }
+            if (PeerCloseSince <= 0.0)
+            {
+                PeerCloseSince = Now;
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT anchored at rendezvous, settling before speaking"));
+                return;
+            }
+            if (Now - PeerCloseSince < 3.0)
+            {
+                return;
+            }
+            // One short "local" message each; both sides send, both assert
+            // the peer's arrival (own echo, if any, is filtered by sender).
+            Chat->SendChatMessage(TEXT("local"), FString::Printf(TEXT("hi-%d"), OwnCharId));
+            bChatSent = true;
+            ChatLegStartTime = Now;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT chat sent hi-%d from (%.0f,%.0f,%.0f)"),
+                OwnCharId, PlayerAt.X, PlayerAt.Y, PlayerAt.Z);
+            return;
+        }
+        // Peer message = hi-* from anyone but us.
+        PeerChatText.Empty();
+        for (const FChatMessageStruct& Msg : Chat->GetMessageLog())
+        {
+            if (!Msg.bIsError && Msg.senderId > 0 && Msg.senderId != OwnCharId && Msg.text.StartsWith(TEXT("hi-")))
+            {
+                PeerChatText = Msg.text;
+                break;
+            }
+        }
+        if (!PeerChatText.IsEmpty())
+        {
+            BotAssert(true, TEXT("peer-msg-received"), 1, 1);
+            // The bubble renders on the peer actor's nameplate through the
+            // same ShowChatBubble call live players trigger.
+            bool bBubbleOk = false;
+            if (ABasicPlayer* Peer = FindPeerActor())
+            {
+                if (UPlayerNameplateComponent* Plate = Peer->GetNameplateComponent())
+                {
+                    bBubbleOk = Plate->GetLastBubbleText() == PeerChatText;
+                }
+            }
+            BotAssert(bBubbleOk, TEXT("peer-bubble"), bBubbleOk ? 1 : 0, 1);
+            BotShot(TEXT("chat"));
+            Finish(Failures == 0, Failures == 0 ? TEXT("chat-done") : TEXT("assert-failures"));
+            return;
+        }
+        if (Now - ChatLegStartTime > ChatTimeoutSec)
+        {
+            BotAssert(false, TEXT("peer-msg-received"), 0, 1);
+            Finish(false, TEXT("chat-timeout"));
+        }
+        return;
+    }
+
+    if (Step == EBotStep::QuestWalk)
+    {
+        // Honest walk to the quest giver (dialogue range is server-side).
+        if (SteerToward(Player, QuestNpcPos, 150.0f, Now, TEXT("quest-npc")))
+        {
+            Step = EBotStep::QuestAccept;
+            QuestLegStartTime = Now;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT at quest npc=%d, opening dialogue"), QuestNpcId);
+            return;
+        }
+        if (Now - QuestLegStartTime > QuestTimeoutSec)
+        {
+            Finish(false, TEXT("quest-unreachable"));
+        }
+        return;
+    }
+
+    if (Step == EBotStep::QuestAccept)
+    {
+        UDialogueManager* Dlg = GameInstance->GetDialogueManager();
+        UQuestManager* Qst = GameInstance->GetQuestManager();
+        if (!Dlg || !Qst)
+        {
+            Finish(false, TEXT("no-dialogue"));
+            return;
+        }
+        // Accepted already (choice landed, or a rerun mid-chain): hunt.
+        if (Qst->HasQuest(QuestId))
+        {
+            BotAssert(true, TEXT("quest-accepted"), QuestId, QuestId);
+            BotShot(TEXT("accepted"));
+            if (Dlg->IsDialogueActive())
+            {
+                Dlg->CloseDialogue();
+            }
+            // Objectives run on the shared combat/loot machinery (2 real
+            // kills + harvest + loot); the server credits them to the quest.
+            TargetMob.Reset();
+            Step = EBotStep::GotoTarget;
+            StepStartTime = Now;
+            LastChasePos = PlayerAt;
+            LastChaseProgressTime = Now;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT quest accepted, hunting objectives"));
+            return;
+        }
+        if (!EnsureDialogueOpen(QuestNpcId, Now))
+        {
+            if (Now - QuestLegStartTime > QuestTimeoutSec)
+            {
+                Finish(false, TEXT("accept-timeout"));
+            }
+            return;
+        }
+        if (const int32 AcceptEdge = FindGoalEdge(false))
+        {
+            if (!bChoiceSent)
+            {
+                Dlg->SendChoice(AcceptEdge);
+                bChoiceSent = true;
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT accept choice sent edge=%d"), AcceptEdge);
+            }
+            // Quest grant lands as a journal push; polled at the top on the
+            // next ticks (HasQuest branch above).
+            if (Now - QuestLegStartTime > QuestTimeoutSec)
+            {
+                Finish(false, TEXT("accept-timeout"));
+            }
+            return;
+        }
+        // No offer on this node: walk the dialogue (greeting -> hub).
+        if (DialogueClicks >= 10)
+        {
+            Finish(false, TEXT("dialogue-loop"));
+            return;
+        }
+        const int32 NodeId = Dlg->GetCurrentNode().nodeId;
+        if (const int32 AdvanceEdge = FindAdvanceEdge())
+        {
+            if (NodeId != LastAdvanceNodeId)
+            {
+                Dlg->SendChoice(AdvanceEdge);
+                LastAdvanceNodeId = NodeId;
+                ++DialogueClicks;
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT dialogue advance edge=%d (node %d)"),
+                    AdvanceEdge, NodeId);
+            }
+            return;
+        }
+        if (Now - QuestLegStartTime > QuestTimeoutSec)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT no accept/advance edge in node %d (%d choices)"),
+                NodeId, Dlg->GetCurrentNode().choices.Num());
+            Finish(false, TEXT("no-accept-choice"));
+        }
+        return;
+    }
+
+    if (Step == EBotStep::QuestTurnin)
+    {
+        UDialogueManager* Dlg = GameInstance->GetDialogueManager();
+        UQuestManager* Qst = GameInstance->GetQuestManager();
+        if (!Dlg || !Qst)
+        {
+            Finish(false, TEXT("no-dialogue"));
+            return;
+        }
+        // Walk back first (objectives may have pulled us far away). The
+        // server gates dialogue on proximity: only talk once arrived.
+        if (!SteerToward(Player, QuestNpcPos, 150.0f, Now, TEXT("turnin-npc")))
+        {
+            if (Now - QuestLegStartTime > QuestTimeoutSec)
+            {
+                Finish(false, TEXT("turnin-unreachable"));
+            }
+            return;
+        }
+        if (!EnsureDialogueOpen(QuestNpcId, Now))
+        {
+            if (Now - QuestLegStartTime > QuestTimeoutSec)
+            {
+                Finish(false, TEXT("turnin-timeout"));
+            }
+            return;
+        }
+        if (const int32 TurninEdge = FindGoalEdge(true))
+        {
+            if (!bChoiceSent)
+            {
+                Dlg->SendChoice(TurninEdge);
+                bChoiceSent = true;
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT turnin choice sent edge=%d"), TurninEdge);
+                return;
+            }
+        }
+        // Reward ground truth (checked regardless of the current node: the
+        // turn-in choice advances past the turn-in edge): +5g floor (loot
+        // gold may add more) and the freshly granted potion.
+        if (bChoiceSent && GetGold() >= GoldBeforeReward + 5 && HasItemTemplate(46))
+        {
+            const FQuestProgressData Q = Qst->GetQuestData(QuestId);
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT turned in: gold %d -> %d queststate='%s'"),
+                GoldBeforeReward, GetGold(), *Q.state);
+            BotAssert(true, TEXT("quest-reward-gold"), 1, 1);
+            BotAssert(true, TEXT("quest-reward-item"), 46, 46);
+            BotShot(TEXT("turnedin"));
+            Dlg->CloseDialogue();
+            Finish(Failures == 0, Failures == 0 ? TEXT("quest-done") : TEXT("assert-failures"));
+            return;
+        }
+        if (bChoiceSent)
+        {
+            if (Now - QuestLegStartTime > QuestTimeoutSec)
+            {
+                BotAssert(false, TEXT("quest-reward-gold"), GetGold(), GoldBeforeReward + 5);
+                Finish(false, TEXT("turnin-timeout"));
+            }
+            return;
+        }
+        // Objectives not yet credited server-side, or a hub without the
+        // turn-in: advance neutral hubs, budget the silence.
+        if (DialogueClicks >= 10)
+        {
+            Finish(false, TEXT("dialogue-loop"));
+            return;
+        }
+        const int32 NodeId = Dlg->GetCurrentNode().nodeId;
+        if (const int32 AdvanceEdge = FindAdvanceEdge())
+        {
+            if (NodeId != LastAdvanceNodeId)
+            {
+                Dlg->SendChoice(AdvanceEdge);
+                LastAdvanceNodeId = NodeId;
+                ++DialogueClicks;
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT turnin dialogue advance edge=%d (node %d)"),
+                    AdvanceEdge, NodeId);
+            }
+            return;
+        }
+        if (Now - QuestLegStartTime > QuestTimeoutSec)
+        {
+            const FQuestProgressData Q = Qst->GetQuestData(QuestId);
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT no turnin edge in node %d (%d choices) queststate='%s' step='%s' %d/%d"),
+                NodeId, Dlg->GetCurrentNode().choices.Num(), *Q.state, *Q.currentStepKey, Q.stepCurrentCount, Q.stepRequiredCount);
+            Finish(false, TEXT("no-turnin-choice"));
         }
         return;
     }
@@ -1575,4 +1902,139 @@ int32 UDevModeBotBrain::GetDurabilityByInstance(int32 InstanceId) const
         }
     }
     return -1;
+}
+
+// ---- Phase C helpers ----
+
+bool UDevModeBotBrain::HasItemTemplate(int32 TemplateItemId) const
+{
+    if (GameInstance && GameInstance->GetInventoryManager())
+    {
+        for (const FInventoryItemStruct& Item : GameInstance->GetInventoryManager()->GetInventory().items)
+        {
+            if (Item.itemId == TemplateItemId && Item.quantity > 0)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+ABasicPlayer* UDevModeBotBrain::FindPeerActor() const
+{
+    if (!GameInstance)
+    {
+        return nullptr;
+    }
+    // This client owns exactly one entry: any other live actor is the peer.
+    const int32 OwnId = GameInstance->GetCurrentClientID();
+    for (const TPair<int32, ABasicPlayer*>& E : GameInstance->SpawnedPlayers)
+    {
+        if (E.Key != OwnId && IsValid(E.Value) && !E.Value->IsActorBeingDestroyed())
+        {
+            return E.Value;
+        }
+    }
+    return nullptr;
+}
+
+bool UDevModeBotBrain::EnsureDialogueOpen(int32 NpcId, double Now)
+{
+    UDialogueManager* Dlg = GameInstance ? GameInstance->GetDialogueManager() : nullptr;
+    if (!Dlg)
+    {
+        return false;
+    }
+    if (Dlg->IsDialogueActive())
+    {
+        return true;
+    }
+    // (Re)open, throttled: covers the first open and server-side closes
+    // (TTL, end-nodes) mid-leg.
+    if (!bDialogueRequested || Now - LastDialogueRequestTime > 5.0)
+    {
+        Dlg->OpenDialogue(NpcId);
+        bDialogueRequested = true;
+        LastDialogueRequestTime = Now;
+        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT dialogue opened npc=%d"), NpcId);
+    }
+    return false;
+}
+
+int32 UDevModeBotBrain::FindGoalEdge(bool bWantTurnin) const
+{
+    UDialogueManager* Dlg = GameInstance ? GameInstance->GetDialogueManager() : nullptr;
+    if (!Dlg)
+    {
+        return 0;
+    }
+    for (const FDialogueChoice& Choice : Dlg->GetCurrentNode().choices)
+    {
+        const bool bGoal = bWantTurnin ? Choice.bHasTurnInPreview : Choice.bHasQuestPreview;
+        if (bGoal && Choice.conditionMet)
+        {
+            return Choice.edgeId;
+        }
+    }
+    return 0;
+}
+
+int32 UDevModeBotBrain::FindAdvanceEdge() const
+{
+    UDialogueManager* Dlg = GameInstance ? GameInstance->GetDialogueManager() : nullptr;
+    if (!Dlg)
+    {
+        return 0;
+    }
+    // Neutral hubs (continue/back): first met condition that is NOT a
+    // farewell-class edge. Goal edges have priority in the caller, so this
+    // never steals an accept/turn-in.
+    for (const FDialogueChoice& Choice : Dlg->GetCurrentNode().choices)
+    {
+        if (!Choice.conditionMet)
+        {
+            continue;
+        }
+        const FString Key = Choice.clientChoiceKey.ToLower();
+        if (Key.Contains(TEXT("farewell")) || Key.Contains(TEXT("bye")) || Key.Contains(TEXT("leave"))
+            || Key.Contains(TEXT("goodbye")) || Key.Contains(TEXT("close")) || Key.Contains(TEXT("exit"))
+            || Key.Contains(TEXT("cancel")))
+        {
+            continue;
+        }
+        return Choice.edgeId;
+    }
+    return 0;
+}
+
+void UDevModeBotBrain::QuestLootDone(double Now)
+{
+    ABasicPlayer* Player = GameInstance ? GameInstance->Player : nullptr;
+    if (Kills >= TargetKills)
+    {
+        Step = EBotStep::QuestTurnin;
+        QuestLegStartTime = Now;
+        bDialogueRequested = false;
+        bChoiceSent = false;
+        DialogueClicks = 0;
+        LastAdvanceNodeId = 0;
+        GoldBeforeReward = GetGold();
+        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT objectives done, returning to turn in"));
+        return;
+    }
+    // More kills to go: this corpse is resolved (looted or empty), hunt on.
+    TargetMob.Reset();
+    bHarvestRequested = false;
+    bInspectRequested = false;
+    bPickupRequested = false;
+    CorpseUID = 0;
+    Step = EBotStep::GotoTarget;
+    StepStartTime = Now;
+    if (Player)
+    {
+        LastChasePos = Player->GetActorLocation();
+        LastChaseProgressTime = Now;
+    }
+    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT corpse resolved, hunting next (%d/%d)"), Kills, TargetKills);
 }

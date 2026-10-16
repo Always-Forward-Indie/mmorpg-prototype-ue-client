@@ -456,9 +456,22 @@ bool UDevModeBotBrain::SteerToward(ABasicPlayer* Player, const FVector& Dest, fl
 
 bool UDevModeBotBrain::SteerTick(float)
 {
-    if (!bRunning || !bSteerIntent)
+    if (!bRunning)
     {
-        return bRunning;
+        return false;
+    }
+    // Queued BotShot pump (see BotShot): issue the parked request the moment
+    // the single-slot screenshot pipe is free. Runs even with no steering
+    // intent (death/respawn checkpoints steer nothing).
+    if (!PendingShotName.IsEmpty() && !FScreenshotRequest::IsScreenshotRequested())
+    {
+        FScreenshotRequest::RequestScreenshot(PendingShotName, true, false);
+        UE_LOG(LogTemp, Log, TEXT("DEVMODE_BOT_SHOT_FLUSHED %s"), *PendingShotName);
+        PendingShotName.Empty();
+    }
+    if (!bSteerIntent)
+    {
+        return true;
     }
     // Intent older than 3 BrainTicks with no SteerToward refresh: the leg
     // moved on (arrival, step change) or the world traveled — stop pushing.
@@ -1090,20 +1103,28 @@ void UDevModeBotBrain::BrainTick()
             const bool bScreen = IsDeathScreenVisible();
             BotAssert(bScreen, TEXT("death-screen"), bScreen ? 1 : 0, 1);
             BotShot(TEXT("death"));
-            if (bStubDeath)
-            {
-                ApplyStubRevive(Player);
-            }
-            else if (!bRespawnRequested)
-            {
-                Player->OnRespawnClicked();
-                bRespawnRequested = true;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT respawn requested"));
-            }
-            RespawnLegStartTime = FPlatformTime::Seconds();
-            Step = EBotStep::RespawnWait;
-            StepStartTime = RespawnLegStartTime;
         }
+        // The screenshot pipe holds one request: revive only after the death
+        // shot flushes, or the revive/respawned burst overwrites it and the
+        // checkpoint is lost (single-slot pipe, flush takes ~0.1-0.3s).
+        if (FScreenshotRequest::IsScreenshotRequested() || !PendingShotName.IsEmpty())
+        {
+            UE_LOG(LogTemp, Log, TEXT("DEVMODE_BOT death shot flushing, revive next tick"));
+            return;
+        }
+        if (bStubDeath)
+        {
+            ApplyStubRevive(Player);
+        }
+        else if (!bRespawnRequested)
+        {
+            Player->OnRespawnClicked();
+            bRespawnRequested = true;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT respawn requested"));
+        }
+        RespawnLegStartTime = FPlatformTime::Seconds();
+        Step = EBotStep::RespawnWait;
+        StepStartTime = RespawnLegStartTime;
         return;
     }
 
@@ -2495,8 +2516,18 @@ void UDevModeBotBrain::BotShot(const FString& Tag) const
     }
     // Deterministic file name (no frame suffix) so runs overwrite and the
     // golden gate can match by exact name.
-    FScreenshotRequest::RequestScreenshot(
-        FString::Printf(TEXT("DevBot_%s_%s"), *ScenarioName, *Tag), true, false);
+    const FString Name = FString::Printf(TEXT("DevBot_%s_%s"), *ScenarioName, *Tag);
+    if (FScreenshotRequest::IsScreenshotRequested() || !PendingShotName.IsEmpty())
+    {
+        // The pipe holds ONE pending request: a same-tick burst would
+        // silently eat the earlier shot (lost the death checkpoint this
+        // way). Park it; the per-frame SteerTick pump issues it the moment
+        // the pipe is free.
+        PendingShotName = Name;
+        UE_LOG(LogTemp, Log, TEXT("DEVMODE_BOT_SHOT_QUEUED %s_%s"), *ScenarioName, *Tag);
+        return;
+    }
+    FScreenshotRequest::RequestScreenshot(Name, true, false);
     UE_LOG(LogTemp, Log, TEXT("DEVMODE_BOT_SHOT %s_%s"), *ScenarioName, *Tag);
 }
 
@@ -2505,6 +2536,16 @@ void UDevModeBotBrain::Finish(bool bPass, const FString& Reason)
     if (!bRunning)
     {
         return;
+    }
+    // Last-chance shot flush: a parked BotShot (same-tick burst) would die
+    // with the ticker below; the quit itself is deferred, so one framed
+    // request still flushes (kill2 precedent). Only when the pipe is free —
+    // issuing over a busy pipe overwrites the in-flight shot (same bug).
+    if (!PendingShotName.IsEmpty() && !FScreenshotRequest::IsScreenshotRequested())
+    {
+        FScreenshotRequest::RequestScreenshot(PendingShotName, true, false);
+        UE_LOG(LogTemp, Log, TEXT("DEVMODE_BOT_SHOT_FLUSHED %s (finish)"), *PendingShotName);
+        PendingShotName.Empty();
     }
     const bool bOk = bPass && Failures == 0;
     Stop();

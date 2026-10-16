@@ -16,12 +16,15 @@
   flags in `MyGameInstance.cpp`) that asserts reset/spawn/kill/respawn/HP
   round-trips and quits; gates on `DEVMODE_SWEEP_RESULT PASS` in the log.
 - **L2 visual regression (goldens):** `Tools/Smoke/VerifyClient.ps1 -Sweep -Visual -Goldens`
-  runs a visual `-devmode=bot_combat_patrol` client (`-devmode-shots` saves
-  named checkpoints `DevBot_<scenario>_<step>`, deterministic names), gates on
-  `DEVMODE_BOT_RESULT combat_patrol PASS`, then `Tools/Smoke/Compare-Goldens.ps1`
-  gates the shots against `Config/DevMode/goldens/` (%-pixels tolerance,
-  default 5%; nonzero exit on mismatch/missing). `-Goldens` requires `-Visual`
-  (headless `-nullrhi` runs produce no screenshots — fail-fast usage error).
+  runs one visual client per `-GoldenScenarios` (default `bot_combat_patrol`,
+  `bot_loot_pickup`, `bot_death_respawn`, `bot_harvest_run`; periphery needs
+  designer music content, vendor_repair is live-only — both stay out),
+  each (`-devmode-shots`) saving named checkpoints `DevBot_<scenario>_<step>`
+  (deterministic names), gates on each `DEVMODE_BOT_RESULT ... PASS`, then
+  `Tools/Smoke/Compare-Goldens.ps1` gates all shots against
+  `Config/DevMode/goldens/` (%-pixels tolerance, default 5%; nonzero exit on
+  mismatch/missing). `-Goldens` requires `-Visual` (headless `-nullrhi` runs
+  produce no screenshots — fail-fast usage error).
   `Tools/Smoke/Approve-Goldens.ps1` blesses new shots in one command.
   Runs target `-DevMap LoginLevel` (default: lit, real ground + navmesh; the
   default container is an empty void — bots used to skydive through every

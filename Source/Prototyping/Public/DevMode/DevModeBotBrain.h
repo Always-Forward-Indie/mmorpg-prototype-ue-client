@@ -311,6 +311,8 @@ private:
     FVector SteerDest = FVector::ZeroVector;
     double LastSteerTime = 0.0;
     bool bSteerIntent = false;
+    // Parked BotShot name (same-tick bursts share one screenshot pipe).
+    mutable FString PendingShotName;
 
     EBotStep Step = EBotStep::GotoWaypoint;
     TWeakObjectPtr<ABasicMOB> TargetMob;

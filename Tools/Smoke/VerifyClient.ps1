@@ -16,6 +16,9 @@ param(
     # overridden by the login travel without it). Default TestLevel: the
     # dedicated bot gym (lit grid floor, PlayerStart, navmesh, KillZ).
     [string]$DevMap = "TestLevel",
+    # Golden scenarios (visual runs with BotShot checkpoints). Periphery needs
+    # designer music content, vendor_repair is live-only — both stay out.
+    [string[]]$GoldenScenarios = @("bot_combat_patrol", "bot_loot_pickup", "bot_death_respawn", "bot_harvest_run"),
     # L3 tripwire (loose by design — catches renderer collapse, not noise).
     # Baseline 2026-10-15 (RTX 4090, 960x540, black viewport): ~240-300fps,
     # p95 ~4ms per sweep phase. Tighten after more runs / lit map.
@@ -144,37 +147,44 @@ if ($Sweep) {
     $ShaderLines | ForEach-Object { Write-Host "SHADER: $_" }
     Write-Host "VERIFY: sweep OK" -ForegroundColor Green
 }
-# Stage 4 (optional): L2 golden gate — visual bot_combat_patrol run saves
+# Stage 4 (optional): L2 golden gate — one visual run per scenario saves
 # deterministic BotShot checkpoints (DevBot_*.png via -devmode-shots),
 # then Compare-Goldens.ps1 gates them against Config/DevMode/goldens.
-# NOTE: this is a separate run from full_sweep (stage 3 produces DevSweep_*
+# NOTE: these are separate runs from full_sweep (stage 3 produces DevSweep_*
 # shots, a different family). Standalone use: -Visual -Goldens.
+# bot_periphery stays out (music leg needs designer content), bot_vendor_repair
+# is live-only — both fail offline by design, not by regression.
 if ($Goldens) {
-    Write-Host "VERIFY: stage 4/5 - golden screenshots (bot_combat_patrol)..." -ForegroundColor Cyan
-    $GoldenStamp = Get-Date
-    # Same launch pattern as the sweep stage; the bot brain quits itself
-    # (bDevModeAutoQuit) after the DEVMODE_BOT_RESULT tombstone.
-    $GoldenArgs = @("`"$Project`"", "/Game/Maps/$DevMap", "-game", "-windowed", "-ResX=960", "-ResY=540", "-NoSplash", "-NoVerifyGC", "-devmode=bot_combat_patrol", "-devmode-map=$DevMap", "-devmode-shots", "-log=GoldenVerify.log")
-    $GoldenProc = Start-Process -FilePath $EditorGui -ArgumentList $GoldenArgs -PassThru
-    if (-not $GoldenProc.WaitForExit(300000)) {
-        try { $GoldenProc.Kill() } catch { }
-        Fail "golden client did not quit within 300s"
+    Write-Host "VERIFY: stage 4/5 - golden screenshots ($($GoldenScenarios -join ','))..." -ForegroundColor Cyan
+    foreach ($GoldenScenario in $GoldenScenarios) {
+        $GoldenBrain = $GoldenScenario
+        if ($GoldenBrain.StartsWith("bot_")) { $GoldenBrain = $GoldenBrain.Substring(4) }
+        Write-Host "VERIFY: golden run $GoldenScenario ..." -ForegroundColor Cyan
+        $GoldenStamp = Get-Date
+        # Same launch pattern as the sweep stage; the bot brain quits itself
+        # (bDevModeAutoQuit) after the DEVMODE_BOT_RESULT tombstone.
+        $GoldenArgs = @("`"$Project`"", "/Game/Maps/$DevMap", "-game", "-windowed", "-ResX=960", "-ResY=540", "-NoSplash", "-NoVerifyGC", "-devmode=$GoldenScenario", "-devmode-map=$DevMap", "-devmode-shots", "-log=GoldenVerify.log")
+        $GoldenProc = Start-Process -FilePath $EditorGui -ArgumentList $GoldenArgs -PassThru
+        if (-not $GoldenProc.WaitForExit(300000)) {
+            try { $GoldenProc.Kill() } catch { }
+            Fail "golden client ($GoldenScenario) did not quit within 300s"
+        }
+        $GoldenLogs = @()
+        if (Test-Path -LiteralPath $LogDir) {
+            $GoldenLogs = Get-ChildItem -LiteralPath $LogDir -Filter "*.log" |
+                Where-Object { $_.LastWriteTime -ge $GoldenStamp } |
+                Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        }
+        $GoldenResult = @()
+        foreach ($L in $GoldenLogs) {
+            $GoldenResult += Select-String -LiteralPath $L.FullName -Pattern "DEVMODE_BOT_RESULT $GoldenBrain (PASS|FAIL)" -ErrorAction SilentlyContinue |
+                Select-Object -ExpandProperty Line
+        }
+        $GoldenResult | ForEach-Object { Write-Host $_ }
+        if (-not $GoldenResult) { Fail "no DEVMODE_BOT_RESULT tombstone in golden log ($GoldenScenario)" }
+        if ($GoldenResult -match "DEVMODE_BOT_RESULT $GoldenBrain FAIL") { Fail "$GoldenScenario reported failures" }
     }
-    $GoldenLogs = @()
-    if (Test-Path -LiteralPath $LogDir) {
-        $GoldenLogs = Get-ChildItem -LiteralPath $LogDir -Filter "*.log" |
-            Where-Object { $_.LastWriteTime -ge $GoldenStamp } |
-            Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    }
-    $GoldenResult = @()
-    foreach ($L in $GoldenLogs) {
-        $GoldenResult += Select-String -LiteralPath $L.FullName -Pattern "DEVMODE_BOT_RESULT combat_patrol (PASS|FAIL)" -ErrorAction SilentlyContinue |
-            Select-Object -ExpandProperty Line
-    }
-    $GoldenResult | ForEach-Object { Write-Host $_ }
-    if (-not $GoldenResult) { Fail "no DEVMODE_BOT_RESULT tombstone in golden log" }
-    if ($GoldenResult -match "DEVMODE_BOT_RESULT combat_patrol FAIL") { Fail "bot_combat_patrol reported failures" }
-    Write-Host "VERIFY: golden run OK, comparing screenshots..." -ForegroundColor Cyan
+    Write-Host "VERIFY: golden runs OK, comparing screenshots..." -ForegroundColor Cyan
     & (Join-Path $PSScriptRoot "Compare-Goldens.ps1")
     if ($LASTEXITCODE -ne 0) { Fail "golden screenshots differ (review the shots, then run Approve-Goldens.ps1 to bless)" }
     Write-Host "VERIFY: goldens OK" -ForegroundColor Green

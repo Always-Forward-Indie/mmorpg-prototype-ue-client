@@ -50,6 +50,10 @@ public:
     // Offline: teleport to the dev spawn at start. Live: start where the
     // character actually spawned (no godmode jumps on a live run).
     bool bTeleportToSpawn = true;
+    // Offline: freeze all mob locomotion at start (deterministic golden
+    // frames — no wanderers photobombing, no chase-geometry variance).
+    // Live: never (server-authoritative mobs must keep moving).
+    bool bFreezeMobs = false;
     // Offline: mob HP is server-authoritative, so the killing blow is an
     // honest stub via setmobhp path. Live: wait for the real server hit.
     bool bStubHits = true;

@@ -540,6 +540,7 @@ void UDevModeConsoleCommands::StartBotBrain(const FString& ScenarioName) const
     Brain->ScenarioName = ScenarioName;
     Brain->TombstonePrefix = TEXT("DEVMODE_BOT");
     Brain->bTeleportToSpawn = true;
+    Brain->bFreezeMobs = true;
     Brain->bStubHits = true;
     Brain->bAutoQuitAtFinish = false;
     Brain->bDirectMove = false;
@@ -589,6 +590,12 @@ void UDevModeConsoleCommands::RunScenario(const FString& ScenarioName) const
 {
     TArray<FString> Args = { ScenarioName };
     Cmd_Scenario(Args);
+}
+
+void UDevModeConsoleCommands::ReloadMobsNow() const
+{
+    TArray<FString> NoArgs;
+    Cmd_ReloadMobs(NoArgs);
 }
 
 void UDevModeConsoleCommands::RunSweepPhase1() const

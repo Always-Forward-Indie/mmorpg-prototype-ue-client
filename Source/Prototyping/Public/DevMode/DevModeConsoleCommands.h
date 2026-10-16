@@ -44,8 +44,9 @@ void UnregisterCommands();
 
 // Scripted entry point for -devmode=<scenario> auto-runs (same path as console).
 void RunScenario(const FString& ScenarioName) const;
-void RunSweepPhase1() const;
-void RunSweepPhase2() const;
+// Re-seed dev mobs from JSON (same as devmode.reloadmobs console command).
+void ReloadMobsNow() const;
+void RunSweepPhase1() const;void RunSweepPhase2() const;
 void RunSweepPhase3() const;
 // L4 soak loop (offline churn: sweep kill/respawn/HP cycles + mem log).
 // -devmode=soak [-soak-iters=N] [-soak-period=F]. Manual console call

@@ -1,4 +1,5 @@
 #include "DevMode/DevModeBotBrain.h"
+#include "DevMode/DevModeConsoleCommands.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Mobs/BasicMOB.h"
@@ -91,6 +92,31 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     RunStartPos = Player->GetActorLocation();
     UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT spawn at (%.0f,%.0f,%.0f)"),
         RunStartPos.X, RunStartPos.Y, RunStartPos.Z);
+    // Deterministic golden frames: re-seed mobs to JSON spots (boot aggro
+    // lets them cluster around the player otherwise), then hold every mob's
+    // locomotion driver still (wanderers photobombing shots, chase geometry
+    // varying run to run). Offline only (live mobs are server-authoritative).
+    // Re-enabled in Stop so manual console sessions keep a living world.
+    if (bFreezeMobs)
+    {
+        if (GameInstance && GameInstance->DevModeConsoleCommands)
+        {
+            GameInstance->DevModeConsoleCommands->ReloadMobsNow();
+        }
+        int32 Frozen = 0;
+        for (TActorIterator<ABasicMOB> It(World); It; ++It)
+        {
+            if (ABasicMOB* Mob = *It)
+            {
+                if (UMOBMovementComponent* MC = Mob->MOBMovementComponent)
+                {
+                    MC->Deactivate();
+                    ++Frozen;
+                }
+            }
+        }
+        UE_LOG(LogTemp, Warning, TEXT("%s froze %d mob(s)"), *TombstonePrefix, Frozen);
+    }
     // Offline revive target: the run spawn. Live respawn point is
     // server-authoritative (asserted as alive + HP, not position).
     RespawnPoint = RunStartPos;
@@ -268,6 +294,21 @@ void UDevModeBotBrain::Stop()
     FTSTicker::GetCoreTicker().RemoveTicker(SteerTickerHandle);
     SteerTickerHandle.Reset();
     bSteerIntent = false;
+    // Unfreeze mob locomotion (see Start): manual console sessions keep
+    // a living world after the brain stops.
+    if (BrainWorld.IsValid())
+    {
+        for (TActorIterator<ABasicMOB> It(BrainWorld.Get()); It; ++It)
+        {
+            if (ABasicMOB* Mob = *It)
+            {
+                if (UMOBMovementComponent* MC = Mob->MOBMovementComponent)
+                {
+                    MC->Activate();
+                }
+            }
+        }
+    }
     bRunning = false;
     TargetMob.Reset();
 }

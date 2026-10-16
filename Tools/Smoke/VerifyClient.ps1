@@ -13,9 +13,9 @@ param(
     [switch]$Goldens = $false,
     [string]$TestFilter = "MMO.Protocol",
     # DevMode travel target (passed as -devmode-map=; the boot map arg is
-    # overridden by the login travel without it). Default LoginLevel: lit,
-    # real ground + navmesh (the default container is an empty void).
-    [string]$DevMap = "LoginLevel",
+    # overridden by the login travel without it). Default TestLevel: the
+    # dedicated bot gym (lit grid floor, PlayerStart, navmesh, KillZ).
+    [string]$DevMap = "TestLevel",
     # L3 tripwire (loose by design — catches renderer collapse, not noise).
     # Baseline 2026-10-15 (RTX 4090, 960x540, black viewport): ~240-300fps,
     # p95 ~4ms per sweep phase. Tighten after more runs / lit map.

@@ -14,9 +14,9 @@ param(
     [int]$WaitSec = 300,
     [switch]$NoRecord = $false,
     # DevMode travel target (passed as -devmode-map=; the boot map arg is
-    # overridden by the login travel without it). Default LoginLevel: lit,
-    # real ground + navmesh (the default container is an empty void).
-    [string]$DevMap = "LoginLevel",
+    # overridden by the login travel without it). Default TestLevel: the
+    # dedicated bot gym (lit grid floor, PlayerStart, navmesh, KillZ).
+    [string]$DevMap = "TestLevel",
     # Custom tombstone regex (default derives from $Scenario). Needed for
     # flows like soak that log their own result marker.
     [string]$Tombstone = ""

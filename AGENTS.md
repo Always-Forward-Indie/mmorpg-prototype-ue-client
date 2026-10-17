@@ -58,7 +58,7 @@ Single `Prototyping` runtime module. No Unreal replication — custom TCP + JSON
 - Navmesh is `Dynamic` with agents `small` (r=60) / `big` (r=220).
 - `.editorconfig` enforces `U/A/S/F/E/T/b` prefixes for C++.
 - Gitignored, often absent locally: `Binaries/ Intermediate/ Saved/ DerivedDataCache/ Build/`, most `Content/` packs (meshes, audio, Polygon*, Vefects, etc.), `server_config.json`. Don't edit or recreate them; don't `git add` them.
-- No CI (`.github/workflows/` empty), no lint/test runner; `Source/Prototyping/Private/Tests/NPCSystemTest.cpp` is an empty stub. Verify via editor compile + multi-client run.
+- CI gates: `.github/workflows/mmo-client.yml` (static budget/stub/honest-spec gates block PRs; `MMO.*` headless specs on a self-hosted `ue58` runner). Local mirror: `python Tools/CI/check_client_gates.py`. Verify via editor compile + multi-client run.
 
 ## Code health (Oct 2026 refactor — keep it that way)
 

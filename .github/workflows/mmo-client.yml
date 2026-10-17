@@ -1,0 +1,59 @@
+# MMO client gates (roadmap P3). Minimal AAA hygiene without excess:
+# - static-gates runs on GitHub-hosted ubuntu, no engine needed, blocks PRs.
+# - mmo-specs runs the real MMO.* Automation specs on a self-hosted Windows
+#   runner with UE 5.8 installed. It only runs when the runner is available
+#   (labels: [self-hosted, windows, ue58]); fork/foreign PRs skip it instead
+#   of hanging. Once a permanent farm exists, make it required.
+name: mmo-client
+
+on:
+  pull_request:
+    paths:
+      - "Source/Prototyping/**"
+      - "Tools/CI/**"
+      - "Tools/Smoke/**"
+      - ".github/workflows/mmo-client.yml"
+  push:
+    branches: [master]
+    paths:
+      - "Source/Prototyping/**"
+      - "Tools/CI/**"
+      - "Tools/Smoke/**"
+      - ".github/workflows/mmo-client.yml"
+
+jobs:
+  static-gates:
+    name: static gates (budget/stub/honest-spec)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: client gates
+        run: python3 Tools/CI/check_client_gates.py
+
+  mmo-specs:
+    name: MMO.* automation specs (UE 5.8)
+    # Self-hosted Windows box with the engine at D:\Game Dev\UE\UE_5.8.
+    # Skipped (not failed) where no such runner exists.
+    runs-on: [self-hosted, windows, ue58]
+    steps:
+      - uses: actions/checkout@v4
+      - name: build editor target
+        shell: powershell
+        run: |
+          & 'D:\Game Dev\UE\UE_5.8\Engine\Build\BatchFiles\Build.bat' PrototypingEditor Win64 Development -Project="$PWD\Prototyping.uproject" -WaitMutex
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: run MMO specs headless
+        shell: powershell
+        run: |
+          & 'D:\Game Dev\UE\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' "$PWD\Prototyping.uproject" -nullrhi -unattended -nopause -NoSplash -NoVerifyGC -ExecCmds="Automation RunTests MMO; Quit" -log=MMOSpecsCI.log
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: scan log for failure signatures
+        shell: powershell
+        run: |
+          $Log = Get-ChildItem Saved/Logs/*.log | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          $Hits = Select-String -LiteralPath $Log.FullName -Pattern 'Result=Fail|Automation Test Failed|Critical error:|Assertion failed|Fatal error|Ensure failed' -ErrorAction SilentlyContinue
+          if ($Hits) { $Hits | Select-Object -First 10 | ForEach-Object { Write-Host $_.Line }; exit 1 }
+          Write-Host "MMO specs: no failure signatures in $($Log.Name)"

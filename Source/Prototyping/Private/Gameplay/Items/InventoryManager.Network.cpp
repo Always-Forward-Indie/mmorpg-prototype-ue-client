@@ -227,52 +227,55 @@ void UInventoryManager::ProcessInventoryUpdate(const FString& JsonData)
 		{
 			for (const TSharedPtr<FJsonValue>& ItemValue : *ItemsArray)
 			{
-				TSharedPtr<FJsonObject> ItemObject = ItemValue->AsObject();
-				if (ItemObject.IsValid())
+				// TryGetObject (not AsObject): wrong-typed entries skip quietly.
+				const TSharedPtr<FJsonObject>* ItemPtr = nullptr;
+				if (!ItemValue.IsValid() || !ItemValue->TryGetObject(ItemPtr) || !ItemPtr || !(*ItemPtr).IsValid())
 				{
-					int32 ItemId = 0;
-					int32 Quantity = 0;
+					continue;
+				}
+				const TSharedPtr<FJsonObject>& ItemObject = *ItemPtr;
+				int32 ItemId = 0;
+				int32 Quantity = 0;
+				
+				ItemObject->TryGetNumberField(TEXT("itemId"), ItemId);
+				ItemObject->TryGetNumberField(TEXT("quantity"), Quantity);
+
+				// Read the unique instance id — process each server row independently
+				// to avoid duplicating ids when multiple items share the same itemId.
+				int32 InstanceId = 0;
+				ItemObject->TryGetNumberField(TEXT("id"), InstanceId);
+
+				// Find existing item by unique instance id (not template itemId)
+				FInventoryItemStruct* ExistingItem = nullptr;
+				if (InstanceId > 0)
+				{
+					ExistingItem = CurrentInventory.items.FindByPredicate(
+						[InstanceId](const FInventoryItemStruct& Item) { return Item.id == InstanceId; });
+				}
+				else
+				{
+					// Fallback: no id field — match by itemId (legacy/partial updates)
+					ExistingItem = CurrentInventory.items.FindByPredicate(
+						[ItemId](const FInventoryItemStruct& Item) { return Item.itemId == ItemId; });
+				}
+
+				if (ExistingItem)
+				{
+					// Update quantity of existing item
+					ExistingItem->quantity = Quantity;
+					NewInventory.items.Add(*ExistingItem);
+				}
+				else
+				{
+					// This is a new item, create with minimal data
+					FInventoryItemStruct NewItem;
+					NewItem.itemId = ItemId;
+					NewItem.quantity = Quantity;
+					NewItem.name = FString::Printf(TEXT("Item %d"), ItemId); // Placeholder
+					NewInventory.items.Add(NewItem);
 					
-					ItemObject->TryGetNumberField(TEXT("itemId"), ItemId);
-					ItemObject->TryGetNumberField(TEXT("quantity"), Quantity);
-
-					// Read the unique instance id — process each server row independently
-					// to avoid duplicating ids when multiple items share the same itemId.
-					int32 InstanceId = 0;
-					ItemObject->TryGetNumberField(TEXT("id"), InstanceId);
-
-					// Find existing item by unique instance id (not template itemId)
-					FInventoryItemStruct* ExistingItem = nullptr;
-					if (InstanceId > 0)
-					{
-						ExistingItem = CurrentInventory.items.FindByPredicate(
-							[InstanceId](const FInventoryItemStruct& Item) { return Item.id == InstanceId; });
-					}
-					else
-					{
-						// Fallback: no id field — match by itemId (legacy/partial updates)
-						ExistingItem = CurrentInventory.items.FindByPredicate(
-							[ItemId](const FInventoryItemStruct& Item) { return Item.itemId == ItemId; });
-					}
-
-					if (ExistingItem)
-					{
-						// Update quantity of existing item
-						ExistingItem->quantity = Quantity;
-						NewInventory.items.Add(*ExistingItem);
-					}
-					else
-					{
-						// This is a new item, create with minimal data
-						FInventoryItemStruct NewItem;
-						NewItem.itemId = ItemId;
-						NewItem.quantity = Quantity;
-						NewItem.name = FString::Printf(TEXT("Item %d"), ItemId); // Placeholder
-						NewInventory.items.Add(NewItem);
-						
 						UE_LOG(LogTemp, Warning, TEXT("InventoryManager: New item detected (ID: %d), may need full item data"), ItemId);
 					}
-				}
 			}
 		}
 

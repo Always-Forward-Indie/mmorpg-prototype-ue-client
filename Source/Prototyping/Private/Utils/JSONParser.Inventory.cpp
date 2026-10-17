@@ -150,13 +150,19 @@ FCharacterInventoryStruct JSONParser::DeserializeCharacterInventory(const FStrin
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCharacterInventory failed to parse JSON"));
 		return FCharacterInventoryStruct();
+	}
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
-	if (!Body.IsValid())
+	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCharacterInventory missing body"));
 		return FCharacterInventoryStruct();
+	}
 
-	return JSONParser::DeserializeCharacterInventory(Body);
+	return JSONParser::DeserializeCharacterInventory(*BodyPtr);
 }
 
 FCharacterInventoryStruct JSONParser::DeserializeCharacterInventory(const TSharedPtr<FJsonObject>& Body)
@@ -201,21 +207,15 @@ FInventoryUpdateStruct JSONParser::DeserializeInventoryUpdate(const TSharedPtr<F
 {
 	FInventoryUpdateStruct Update;
 	if (!UpdateObj.IsValid()) return Update;
-	
-	if (UpdateObj->HasField(TEXT("eventType")))
-		Update.eventType = UpdateObj->GetStringField(TEXT("eventType"));
-	
-	if (UpdateObj->HasField(TEXT("characterId")))
-		Update.characterId = UpdateObj->GetIntegerField(TEXT("characterId"));
+
+	UpdateObj->TryGetStringField(TEXT("eventType"), Update.eventType);
+	UpdateObj->TryGetNumberField(TEXT("characterId"), Update.characterId);
 
 	// Parse data object
-	if (UpdateObj->HasField(TEXT("data")))
+	const TSharedPtr<FJsonObject>* DataPtr = nullptr;
+	if (UpdateObj->TryGetObjectField(TEXT("data"), DataPtr) && DataPtr && (*DataPtr).IsValid())
 	{
-		TSharedPtr<FJsonObject> DataObj = UpdateObj->GetObjectField(TEXT("data"));
-		if (DataObj.IsValid())
-		{
-			Update.data = JSONParser::DeserializeCharacterInventory(DataObj);
-		}
+		Update.data = JSONParser::DeserializeCharacterInventory(*DataPtr);
 	}
 
 	return Update;
@@ -226,8 +226,21 @@ FInventoryUpdateStruct JSONParser::DeserializeInventoryUpdate(const FString& Jso
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeInventoryUpdate failed to parse JSON"));
 		return FInventoryUpdateStruct();
+	}
 
-	return JSONParser::DeserializeInventoryUpdate(Root);
+	// Packet convention (header/body like every other entry): the update
+	// object lives in body. The object overload stays the source of truth
+	// for the unwrapped shape.
+	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeInventoryUpdate missing body"));
+		return FInventoryUpdateStruct();
+	}
+
+	return JSONParser::DeserializeInventoryUpdate(*BodyPtr);
 }
 

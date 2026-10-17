@@ -231,6 +231,51 @@ private:
     // this core ticker (world-independent, survives travel) reapplies the
     // input each frame from the live position until the intent goes stale.
     bool SteerTick(float);
+    // Per-step legs of the BrainTick state machine (one method per EBotStep,
+    // defined in DevModeBotBrain.Tick*.cpp). Each leg takes the same tick
+    // context the inline block used (World/Player/Now/PlayerAt) and returns
+    // true when the original block returned from BrainTick (tick ends),
+    // false on fall-through so the dispatcher keeps scanning — control flow
+    // is identical to the pre-split inline chain.
+    bool Tick_ExpectGround(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_AssertKill(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_GotoWaypoint(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_GotoRendezvous(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_AssertVisible(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_GotoCorpse(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_LootPickup(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_ExpectDeath(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_AssertDead(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_RespawnWait(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_RecoverRevive(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_VendorWalk(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_VendorSell(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_VendorRepair(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_ChatExchange(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_QuestWalk(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_QuestAccept(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_QuestTurnin(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_SkillWalk(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_SkillLearn(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_SkillCast(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_SkillBuff(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_EquipOn(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_EquipOff(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_LevelWait(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_TitleLeg(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_EmoteLeg(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_LocaleLeg(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_MusicLeg(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_CameraLeg(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_CharList(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_CharCreate(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_CharDelete(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_BackToLogin(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    // Tick_GotoTarget/Tick_Combat additionally take the live-target
+    // preamble the dispatcher computes between BackToLogin and their legs
+    // (Mob/MobAt/Range/Dist) — same values the inline tail produced.
+    bool Tick_GotoTarget(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt, ABasicMOB* Mob, const FVector& MobAt, float Range, float Dist);
+    bool Tick_Combat(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt, ABasicMOB* Mob, const FVector& MobAt, float Range, float Dist);
     // Grounded reposition near Dest for the stuck fallback: traces down at a
     // few lateral candidates and takes the first with ground (never lands
     // inside rock). Falls back to raw Dest+100Z if nothing hits.

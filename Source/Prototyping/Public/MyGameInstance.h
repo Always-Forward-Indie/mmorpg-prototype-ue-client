@@ -210,6 +210,20 @@ FDateTime ReceiveTimeLoginServer;
 	// Called directly by TransitionToGameWorld, or deferred by the retry timer.
 	void DoOpenLevel();
 
+	// InitNetworkingSetup factories (defined in MyGameInstance.InitSystemsA/B.cpp).
+	// Split out of the 470-line inline sequence; call order in
+	// InitNetworkingSetup mirrors the original exactly.
+	void InitCoreNetworking();
+	void InitWorldManagers();
+	void InitProgression();
+	void InitCombat();
+	void InitNPC();
+	void InitSocial();
+	void InitEconomy();
+	void InitCharacterNets();
+	void InitWorldObjects();
+	void InitChatSystems();
+
 	// Begin counting rendered frames; removes loading screen after MinRenderedFramesBeforeHide.
 	void StartFrameCountdown();
 

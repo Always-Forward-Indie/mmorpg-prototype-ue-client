@@ -182,34 +182,22 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 	 FCharacterDataStruct Character;
 	 if (!CD.IsValid()) return Character;
 	 CD->TryGetNumberField(TEXT("id"), Character.characterId);
-	 if (CD->HasField(TEXT("name")))
-		 Character.characterName = CD->GetStringField(TEXT("name"));
-	 if (CD->HasField(TEXT("class")))
-		 Character.characterClass = CD->GetStringField(TEXT("class"));
-	 if (CD->HasField(TEXT("race")))
-		 Character.characterRace = CD->GetStringField(TEXT("race"));
-	 if (CD->HasField(TEXT("gender")))
-	 {
-		 Character.characterGender = CD->GetStringField(TEXT("gender"));
-	 }
+	 	CD->TryGetStringField(TEXT("name"), Character.characterName);
+	 	CD->TryGetStringField(TEXT("class"), Character.characterClass);
+	 	CD->TryGetStringField(TEXT("race"), Character.characterRace);
+	 	CD->TryGetStringField(TEXT("gender"), Character.characterGender);
 	 CD->TryGetNumberField(TEXT("level"), Character.characterLevel);
 
-	 //is dead
-	 if (CD->HasField(TEXT("isDead"))) {
-		 Character.bIsDead = CD->GetBoolField(TEXT("isDead"));
-	 } else {
-		 Character.bIsDead = false; // Default value if not present
-	 }
+	 //is dead (missing = false by struct default, quietly)
+	 CD->TryGetBoolField(TEXT("isDead"), Character.bIsDead);
 
-	 if (CD->HasField(TEXT("exp"))) {
-		 const TSharedPtr<FJsonObject>* ExpPtr = nullptr;
-		 if (CD->TryGetObjectField(TEXT("exp"), ExpPtr) && ExpPtr && (*ExpPtr).IsValid())
-		 {
-			 const TSharedPtr<FJsonObject>& Exp = *ExpPtr;
-			 Exp->TryGetNumberField(TEXT("current"), Character.characterExperiencePoints);
-			 Exp->TryGetNumberField(TEXT("levelStart"), Character.characterExpForLevelStart);
-			 Exp->TryGetNumberField(TEXT("levelEnd"), Character.characterExpForLevelEnd);
-		 }
+	 const TSharedPtr<FJsonObject>* ExpPtr = nullptr;
+	 if (CD->TryGetObjectField(TEXT("exp"), ExpPtr) && ExpPtr && (*ExpPtr).IsValid())
+	 {
+		 const TSharedPtr<FJsonObject>& Exp = *ExpPtr;
+		 Exp->TryGetNumberField(TEXT("current"), Character.characterExperiencePoints);
+		 Exp->TryGetNumberField(TEXT("levelStart"), Character.characterExpForLevelStart);
+		 Exp->TryGetNumberField(TEXT("levelEnd"), Character.characterExpForLevelEnd);
 	 }
 
 	 if (CD->HasField(TEXT("stats"))) {
@@ -271,8 +259,7 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 	 if (CD->TryGetArrayField(TEXT("attributes"), AttributesArray) && AttributesArray != nullptr)
 		 Character.characterAttributes.attributesData = JSONParser::DeserializeAttributesArray(*AttributesArray);
 
-	if (CD->HasField(TEXT("isFalling")))
-		Character.bIsFalling = CD->GetBoolField(TEXT("isFalling"));
+		CD->TryGetBoolField(TEXT("isFalling"), Character.bIsFalling);
 
 	CD->TryGetStringField(TEXT("equippedTitleSlug"), Character.equippedTitleSlug);
 	CD->TryGetStringField(TEXT("equippedTitleDisplayName"), Character.equippedTitleDisplayName);
@@ -350,15 +337,9 @@ FClientDataStruct JSONParser::DeserializeClientData(const FString& JsonString)
 		 const TSharedPtr<FJsonObject>* HeaderObject = nullptr;
 		 if (JsonObject->TryGetObjectField(TEXT("header"), HeaderObject) && HeaderObject != nullptr)
 		 {
-			 if ((*HeaderObject)->HasField(TEXT("clientId")))
-			 {
-				 ClientData.clientId = (*HeaderObject)->GetIntegerField(TEXT("clientId"));
-			 }
+			 	(*HeaderObject)->TryGetNumberField(TEXT("clientId"), ClientData.clientId);
 
-			 if ((*HeaderObject)->HasField(TEXT("hash")))
-			 {
-				 ClientData.hash = (*HeaderObject)->GetStringField(TEXT("hash"));
-			 }
+			 	(*HeaderObject)->TryGetStringField(TEXT("hash"), ClientData.hash);
 		 }
 	 }
 
@@ -367,112 +348,93 @@ FClientDataStruct JSONParser::DeserializeClientData(const FString& JsonString)
 
  // deserialize MessageData from a json string
  FMessageDataStruct JSONParser::DeserializeMessageData(const FString& JsonString)
- {
-	 TSharedPtr<FJsonObject> JsonObject;
-	 FMessageDataStruct MessageData;
-
-	 // Convert the string to a JSON object
-	 TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
-	 if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
-	 {
-		 const TSharedPtr<FJsonObject>* HeaderObject = nullptr;
-		 if (JsonObject->TryGetObjectField(TEXT("header"), HeaderObject) && HeaderObject != nullptr)
-		 {
-			 if ((*HeaderObject)->HasField(TEXT("status")))
-			 {
-				 MessageData.status = (*HeaderObject)->GetStringField(TEXT("status"));
-			 }
-
-			 if ((*HeaderObject)->HasField(TEXT("message")))
-			 {
-				 MessageData.message = (*HeaderObject)->GetStringField(TEXT("message"));
-			 }
-
-			 if ((*HeaderObject)->HasField(TEXT("eventType")))
-			 {
-				 MessageData.eventType = (*HeaderObject)->GetStringField(TEXT("eventType"));
-			 }
-
-			 if ((*HeaderObject)->HasField(TEXT("timestamp")))
-			 {
-				 MessageData.timestamp = (*HeaderObject)->GetStringField(TEXT("timestamp"));
-			 }
-
-			 if ((*HeaderObject)->HasField(TEXT("version")))
-			 {
-				 MessageData.version = (*HeaderObject)->GetStringField(TEXT("version"));
-			 }
-
-             // Parse time sync fields
-             if ((*HeaderObject)->HasField(TEXT("clientSendMs")))
-             {
-                 MessageData.clientSendMs = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("clientSendMs")));
-             }
-
-			 if ((*HeaderObject)->HasField(TEXT("clientSendMsEcho")))
-			 {
-				 MessageData.clientSendMs = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("clientSendMsEcho")));
-			 }
-
-			 if ((*HeaderObject)->HasField(TEXT("clientSendMsEcho")))
-			 {
-				 MessageData.clientSendMsEcho = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("clientSendMsEcho")));
-			 }
-
-             if ((*HeaderObject)->HasField(TEXT("serverRecvMs")))
-             {
-                 MessageData.serverRecvMs = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("serverRecvMs")));
-             }
-
-             if ((*HeaderObject)->HasField(TEXT("serverSendMs")))
-             {
-                 MessageData.serverSendMs = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("serverSendMs")));
-             }
-
-
-		 }
-
-		 // Per protocol (�1.4 pongClient): timestamps may also be a root-level object
-		 const TSharedPtr<FJsonObject>* TimestampsObject = nullptr;
-		 if (JsonObject->TryGetObjectField(TEXT("timestamps"), TimestampsObject) && TimestampsObject != nullptr)
-		 {
-			 if ((*TimestampsObject)->HasField(TEXT("serverRecvMs")))
-			 {
-				 MessageData.serverRecvMs = static_cast<int64>((*TimestampsObject)->GetNumberField(TEXT("serverRecvMs")));
-			 }
-			 if ((*TimestampsObject)->HasField(TEXT("serverSendMs")))
-			 {
-				 MessageData.serverSendMs = static_cast<int64>((*TimestampsObject)->GetNumberField(TEXT("serverSendMs")));
-			 }
-			 if ((*TimestampsObject)->HasField(TEXT("clientSendMsEcho")))
-			 {
-				 MessageData.clientSendMsEcho = static_cast<int64>((*TimestampsObject)->GetNumberField(TEXT("clientSendMsEcho")));
-				 MessageData.clientSendMs = MessageData.clientSendMsEcho;
-			 }
-		 }
-	 }
-
-	 // Central errorCode: body.errorCode mirrors header.message on status:error.
-const TSharedPtr<FJsonObject>* BodyObject = nullptr;
-if (JsonObject->TryGetObjectField(TEXT("body"), BodyObject) && BodyObject != nullptr)
 {
-FString BodyError;
-if ((*BodyObject)->TryGetStringField(TEXT("errorCode"), BodyError) && !BodyError.IsEmpty())
-{
-MessageData.errorCode = BodyError;
+	TSharedPtr<FJsonObject> JsonObject;
+	FMessageDataStruct MessageData;
+
+	// Crash-proofing: a truncated/dropped packet must yield defaults, never AV.
+	// (Hot per-packet path: quiet defaults, no error-level log; time-sync
+	// quality surfaces problems via the SampleRule instead.)
+	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+	if (!FJsonSerializer::Deserialize(Reader, JsonObject) || !JsonObject.IsValid())
+	{
+		return MessageData;
+	}
+
+	const TSharedPtr<FJsonObject>* HeaderObject = nullptr;
+	if (JsonObject->TryGetObjectField(TEXT("header"), HeaderObject) && HeaderObject && (*HeaderObject).IsValid())
+	{
+		const TSharedPtr<FJsonObject>& Header = *HeaderObject;
+		Header->TryGetStringField(TEXT("status"), MessageData.status);
+		Header->TryGetStringField(TEXT("message"), MessageData.message);
+		Header->TryGetStringField(TEXT("eventType"), MessageData.eventType);
+		Header->TryGetStringField(TEXT("timestamp"), MessageData.timestamp);
+		Header->TryGetStringField(TEXT("version"), MessageData.version);
+
+		// Parse time sync fields
+		double ClientSendMs = 0.0;
+		if (Header->TryGetNumberField(TEXT("clientSendMs"), ClientSendMs))
+			MessageData.clientSendMs = static_cast<int64>(ClientSendMs);
+
+		double ClientSendMsEcho = 0.0;
+		if (Header->TryGetNumberField(TEXT("clientSendMsEcho"), ClientSendMsEcho))
+		{
+			MessageData.clientSendMs = static_cast<int64>(ClientSendMsEcho);
+			MessageData.clientSendMsEcho = static_cast<int64>(ClientSendMsEcho);
+		}
+
+		double ServerRecvMs = 0.0;
+		if (Header->TryGetNumberField(TEXT("serverRecvMs"), ServerRecvMs))
+			MessageData.serverRecvMs = static_cast<int64>(ServerRecvMs);
+
+		double ServerSendMs = 0.0;
+		if (Header->TryGetNumberField(TEXT("serverSendMs"), ServerSendMs))
+			MessageData.serverSendMs = static_cast<int64>(ServerSendMs);
+	}
+
+	// Per protocol (§1.4 pongClient), timestamps may also be a root-level object
+	// (sibling of "header") instead of fields inside "header". Check and override
+	// if present so that pongClient responses are parsed correctly.
+	const TSharedPtr<FJsonObject>* TimestampsObject = nullptr;
+	if (JsonObject->TryGetObjectField(TEXT("timestamps"), TimestampsObject) && TimestampsObject && (*TimestampsObject).IsValid())
+	{
+		const TSharedPtr<FJsonObject>& Timestamps = *TimestampsObject;
+		double ServerRecvMs = 0.0;
+		if (Timestamps->TryGetNumberField(TEXT("serverRecvMs"), ServerRecvMs))
+			MessageData.serverRecvMs = static_cast<int64>(ServerRecvMs);
+		double ServerSendMs = 0.0;
+		if (Timestamps->TryGetNumberField(TEXT("serverSendMs"), ServerSendMs))
+			MessageData.serverSendMs = static_cast<int64>(ServerSendMs);
+		double ClientSendMsEcho = 0.0;
+		if (Timestamps->TryGetNumberField(TEXT("clientSendMsEcho"), ClientSendMsEcho))
+		{
+			MessageData.clientSendMsEcho = static_cast<int64>(ClientSendMsEcho);
+			MessageData.clientSendMs = MessageData.clientSendMsEcho;
+		}
+	}
+
+	// Central errorCode: body.errorCode mirrors header.message on status:error.
+	const TSharedPtr<FJsonObject>* BodyObject = nullptr;
+	if (JsonObject->TryGetObjectField(TEXT("body"), BodyObject) && BodyObject && (*BodyObject).IsValid())
+	{
+		const TSharedPtr<FJsonObject>& Body = *BodyObject;
+		FString BodyError;
+		if (Body->TryGetStringField(TEXT("errorCode"), BodyError) && !BodyError.IsEmpty())
+		{
+			MessageData.errorCode = BodyError;
+		}
+		Body->TryGetStringField(TEXT("serverVersion"), MessageData.serverVersion);
+		Body->TryGetStringField(TEXT("minClientVersion"), MessageData.minClientVersion);
+		Body->TryGetStringField(TEXT("maxClientVersion"), MessageData.maxClientVersion);
+		Body->TryGetStringField(TEXT("banReason"), MessageData.banReason);
+		Body->TryGetStringField(TEXT("banExpiresAt"), MessageData.banExpiresAt);
+	}
+	if (MessageData.errorCode.IsEmpty())
+	{
+		MessageData.errorCode = MessageData.message;
+	}
+	return MessageData;
 }
-(*BodyObject)->TryGetStringField(TEXT("serverVersion"), MessageData.serverVersion);
-(*BodyObject)->TryGetStringField(TEXT("minClientVersion"), MessageData.minClientVersion);
-(*BodyObject)->TryGetStringField(TEXT("maxClientVersion"), MessageData.maxClientVersion);
-(*BodyObject)->TryGetStringField(TEXT("banReason"), MessageData.banReason);
-(*BodyObject)->TryGetStringField(TEXT("banExpiresAt"), MessageData.banExpiresAt);
-}
-if (MessageData.errorCode.IsEmpty())
-{
-MessageData.errorCode = MessageData.message;
-}
-return MessageData;
- }
 
 FString JSONParser::ResolveErrorCode(const TSharedPtr<FJsonObject>& Root)
 {
@@ -518,10 +480,7 @@ return ResolveErrorCode(Root);
 		 const TSharedPtr<FJsonObject>* HeaderObject = nullptr;
 		 if (JsonObject->TryGetObjectField(TEXT("header"), HeaderObject) && HeaderObject != nullptr)
 		 {
-			 if ((*HeaderObject)->HasField(TEXT("eventType")))
-			 {
-				 EventType = (*HeaderObject)->GetStringField(TEXT("eventType"));
-			 }
+			 	(*HeaderObject)->TryGetStringField(TEXT("eventType"), EventType);
 		 }
 	 }
 	 return EventType;

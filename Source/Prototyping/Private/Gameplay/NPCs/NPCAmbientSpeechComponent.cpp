@@ -258,7 +258,10 @@ void UNPCAmbientSpeechComponent::ShowSpeechLine(const FAmbientSpeechLineData& Li
                 }
                 else
                 {
-                    UE_LOG(LogTemp, Error, TEXT("[AmbientSpeech] NPC %d: GetNameplateManager() returned null"), AmbientData.npcId);
+                    // Transient startup ordering (speech fired before the local
+                    // UI finished initializing) — Warning, not Error: the bubble
+                    // is skipped this time, the manager appears right after.
+                    UE_LOG(LogTemp, Warning, TEXT("[AmbientSpeech] NPC %d: NameplateManager not ready yet, bubble suppressed"), AmbientData.npcId);
                 }
             }
             else

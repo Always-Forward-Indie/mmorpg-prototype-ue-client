@@ -28,6 +28,32 @@ bool TryParseBody(const FString& Packet, TSharedPtr<FJsonObject>& OutBody)
 }
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMessageDataRobustnessTest, "MMO.Protocol.MessageDataRobustness",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+
+bool FMessageDataRobustnessTest::RunTest(const FString& Parameters)
+{
+    // Live crash (2026-10-17, chunk snapshot burst): a truncated mid-body
+    // packet AV'd on a null JsonObject. Any unparseable input must yield
+    // quiet defaults — hot per-packet path, no error-level log by design
+    // (an unexpected Error would fail the harness by itself).
+    FMessageDataStruct Garbage = JSONParser::DeserializeMessageData(TEXT("not json"));
+    TestTrue(TEXT("garbage error empty"), Garbage.errorCode.IsEmpty());
+    TestTrue(TEXT("garbage event empty"), Garbage.eventType.IsEmpty());
+
+    FMessageDataStruct Empty = JSONParser::DeserializeMessageData(TEXT(""));
+    TestTrue(TEXT("empty error empty"), Empty.errorCode.IsEmpty());
+
+    FMessageDataStruct Truncated = JSONParser::DeserializeMessageData(
+        TEXT("{\"header\":{\"eventType\":\"spawnSnapshot\",\"status\":\"success\"},\"body\":{\"mobs\":[{\"id\":1"));
+    TestEqual(TEXT("truncated event default"), Truncated.eventType, FString());
+    TestTrue(TEXT("truncated error empty"), Truncated.errorCode.IsEmpty());
+
+    FMessageDataStruct NoBody = JSONParser::DeserializeMessageData(TEXT("{\"header\":{\"eventType\":\"pingClient\"}}"));
+    TestEqual(TEXT("nobody event kept"), NoBody.eventType, FString(TEXT("pingClient")));
+    return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FResolveErrorCodeTest, "MMO.Protocol.ResolveErrorCode",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
 

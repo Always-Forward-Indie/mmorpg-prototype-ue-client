@@ -63,7 +63,7 @@ TArray<FWorldObjectData> JSONParser::DeserializeWorldObjectsList(const TSharedPt
     for (const TSharedPtr<FJsonValue>& Val : *ObjectsArray)
     {
         const TSharedPtr<FJsonObject>* ObjPtr = nullptr;
-        if (!Val->TryGetObject(ObjPtr) || !ObjPtr) continue;
+        if (!Val.IsValid() || !Val->TryGetObject(ObjPtr) || !ObjPtr || !(*ObjPtr).IsValid()) continue;
         Result.Add(DeserializeWorldObject(*ObjPtr));
     }
 
@@ -74,10 +74,18 @@ TArray<FWorldObjectData> JSONParser::DeserializeWorldObjectsList(const FString& 
 {
     TSharedPtr<FJsonObject> Root;
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return {};
+    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+    {
+        UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeWorldObjectsList failed to parse JSON"));
+        return {};
+    }
 
     const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
-    if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr) return {};
+    if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+    {
+        UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeWorldObjectsList missing body"));
+        return {};
+    }
 
     return DeserializeWorldObjectsList(*BodyPtr);
 }
@@ -99,7 +107,7 @@ FWIOInteractResult JSONParser::DeserializeWIOInteractResult(const TSharedPtr<FJs
         for (const TSharedPtr<FJsonValue>& Val : *LootArray)
         {
             const TSharedPtr<FJsonObject>* ItemPtr = nullptr;
-            if (!Val->TryGetObject(ItemPtr)) continue;
+            if (!Val.IsValid() || !Val->TryGetObject(ItemPtr) || !ItemPtr || !(*ItemPtr).IsValid()) continue;
 
             FWIOLootItem Item;
             (*ItemPtr)->TryGetNumberField(TEXT("itemId"),   Item.ItemId);
@@ -115,10 +123,18 @@ FWIOInteractResult JSONParser::DeserializeWIOInteractResult(const FString& JsonS
 {
     TSharedPtr<FJsonObject> Root;
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return {};
+    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+    {
+        UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeWIOInteractResult failed to parse JSON"));
+        return {};
+    }
 
     const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
-    if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr) return {};
+    if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+    {
+        UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeWIOInteractResult missing body"));
+        return {};
+    }
 
     return DeserializeWIOInteractResult(*BodyPtr);
 }
@@ -144,10 +160,18 @@ FWIOStateUpdate JSONParser::DeserializeWIOStateUpdate(const FString& JsonString)
 {
     TSharedPtr<FJsonObject> Root;
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return {};
+    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+    {
+        UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeWIOStateUpdate failed to parse JSON"));
+        return {};
+    }
 
     const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
-    if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr) return {};
+    if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+    {
+        UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeWIOStateUpdate missing body"));
+        return {};
+    }
 
     return DeserializeWIOStateUpdate(*BodyPtr);
 }
@@ -165,10 +189,18 @@ FWIOChannelCancelled JSONParser::DeserializeWIOChannelCancelled(const FString& J
 {
     TSharedPtr<FJsonObject> Root;
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return {};
+    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+    {
+        UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeWIOChannelCancelled failed to parse JSON"));
+        return {};
+    }
 
     const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
-    if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr) return {};
+    if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+    {
+        UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeWIOChannelCancelled missing body"));
+        return {};
+    }
 
     return DeserializeWIOChannelCancelled(*BodyPtr);
 }

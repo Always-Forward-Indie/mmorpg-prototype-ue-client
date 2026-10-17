@@ -2,6 +2,7 @@
 
 #include "Authentication/AuthenticationManager.h"
 #include "MyGameInstance.h"
+#include "Utils/NetCore/AuthValidation.h"
 
 UAuthenticationManager::UAuthenticationManager(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -133,7 +134,10 @@ bool UAuthenticationManager::HandleUnauthorized(const FString& Status, const FSt
 
 bool UAuthenticationManager::IsLoginValueValid(const FString& Login)
 {
-	if (Login.IsEmpty())
+	// Predicate lives in FAuthValidation (pinned by MMO.Auth.Validation);
+	// this wrapper keeps the legacy user-facing side effects 1:1.
+	const EAuthValueError Error = FAuthValidation::ValidateLogin(Login);
+	if (Error == EAuthValueError::Empty)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Login could not be empty!"));
 		if (gameInstance)
@@ -142,7 +146,7 @@ bool UAuthenticationManager::IsLoginValueValid(const FString& Login)
 		}
 		return false;
 	}
-	if (Login.Len() < 3)
+	if (Error == EAuthValueError::TooShort)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Login is too short!"));
 		if (gameInstance)
@@ -151,7 +155,7 @@ bool UAuthenticationManager::IsLoginValueValid(const FString& Login)
 		}
 		return false;
 	}
-	if (Login.Len() > 20)
+	if (Error == EAuthValueError::TooLong)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Login is too long!"));
 		if (gameInstance)
@@ -165,7 +169,10 @@ bool UAuthenticationManager::IsLoginValueValid(const FString& Login)
 
 bool UAuthenticationManager::IsPasswordValueValid(const FString& Password)
 {
-	if (Password.IsEmpty())
+	// Predicate lives in FAuthValidation (pinned by MMO.Auth.Validation);
+	// this wrapper keeps the legacy user-facing side effects 1:1.
+	const EAuthValueError Error = FAuthValidation::ValidatePassword(Password);
+	if (Error == EAuthValueError::Empty)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Password could not be empty!"));
 		if (gameInstance)
@@ -175,7 +182,7 @@ bool UAuthenticationManager::IsPasswordValueValid(const FString& Password)
 		return false;
 	}
 	// FIXED: server expects 8–100 chars, not 3–20
-	if (Password.Len() < 8)
+	if (Error == EAuthValueError::TooShort)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Password is too short!"));
 		if (gameInstance)
@@ -184,7 +191,7 @@ bool UAuthenticationManager::IsPasswordValueValid(const FString& Password)
 		}
 		return false;
 	}
-	if (Password.Len() > 100)
+	if (Error == EAuthValueError::TooLong)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Password is too long!"));
 		if (gameInstance)

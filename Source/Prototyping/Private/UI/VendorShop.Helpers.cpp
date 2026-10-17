@@ -1,5 +1,6 @@
 #include "UI/VendorShopWidget.h"
 #include "UI/VendorShopWidget.h"
+#include "Utils/NetCore/VendorAffordability.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "UI/VendorTooltipWidget.h"
@@ -53,24 +54,15 @@ int32 UVendorShopWidget::GetPlayerLevel() const
 
 EVendorSlotAffordability UVendorShopWidget::GetShopItemAffordability(const FVendorShopItemData& Item, int32 TotalCartCost) const
 {
-    // Level check takes priority over gold � more informative to the player
-    const int32 PlayerLevel = GetPlayerLevel();
-    if (PlayerLevel > 0 && Item.levelRequirement > PlayerLevel)
-        return EVendorSlotAffordability::LevelTooLow;
-
-    // Gold check: current gold minus what is already committed to the cart
-    const int32 AvailableGold = CachedInventory.gold - TotalCartCost;
-    if (Item.priceBuy > AvailableGold)
-        return EVendorSlotAffordability::NotEnoughGold;
-
-    return EVendorSlotAffordability::Affordable;
+    // Predicate lives in FVendorAffordability (pinned by MMO.Shop.Affordability).
+    return FVendorAffordability::ForShopItem(
+        GetPlayerLevel(), Item.levelRequirement, Item.priceBuy, CachedInventory.gold, TotalCartCost);
 }
 
 EVendorSlotAffordability UVendorShopWidget::GetCartEntryAffordability(int32 TotalBuyCartCost) const
 {
-    if (TotalBuyCartCost > CachedInventory.gold)
-        return EVendorSlotAffordability::NotEnoughGold;
-    return EVendorSlotAffordability::Affordable;
+    // Predicate lives in FVendorAffordability (pinned by MMO.Shop.Affordability).
+    return FVendorAffordability::ForCartEntry(TotalBuyCartCost, CachedInventory.gold);
 }
 
 int32 UVendorShopWidget::GetCharacterId() const

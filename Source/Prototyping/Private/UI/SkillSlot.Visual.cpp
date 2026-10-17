@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillSlotWidget.h"
 #include "UI/SkillSlotWidget.h"
+#include "Utils/NetCore/CooldownFormat.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
@@ -158,19 +159,7 @@ void USkillSlotWidget::UpdateHotkeyDisplay()
 
 FString USkillSlotWidget::FormatCooldownTime(float Time) const
 {
-    if (Time < 1.0f)
-    {
-        return FString::Printf(TEXT("%.1f"), Time);
-    }
-    else if (Time < 60.0f)
-    {
-        return FString::Printf(TEXT("%.0f"), Time);
-    }
-    else
-    {
-        int32 Minutes = static_cast<int32>(Time / 60.0f);
-        int32 Seconds = static_cast<int32>(Time) % 60;
-        return FString::Printf(TEXT("%d:%02d"), Minutes, Seconds);
-    }
+    // Formatting lives in FCooldownFormat (pinned by MMO.UI.CooldownFormat).
+    return FCooldownFormat::Format(Time);
 }
 

@@ -2,6 +2,7 @@
 #include "Gameplay/Combat/SkillSystemManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Services/TimeSyncService.h"
+#include "Utils/NetCore/SkillTargetRule.h"
 
 void UPlayerSkillManager::SetSkillSlot(int32 SlotIndex, const FString& SkillSlug, const FKey& BoundKey)
 {
@@ -77,30 +78,15 @@ ESkillTargetPolicy UPlayerSkillManager::GetEffectiveTargetPolicy(const FString& 
         return Explicit;
     }
 
-    // Auto-derive from effectType
-    switch (SkillData.definitionData.effectType)
-    {
-    case ESkillEffectType::Damage:
-    case ESkillEffectType::Debuff:
-        return ESkillTargetPolicy::TargetOnly;
-
-    case ESkillEffectType::Healing:
-    case ESkillEffectType::Buff:
-    case ESkillEffectType::Resource:
-        return ESkillTargetPolicy::SelfAndTarget;
-
-    case ESkillEffectType::Teleport:
-    case ESkillEffectType::None:
-        return ESkillTargetPolicy::SelfOnly;
-
-    default:
-        return ESkillTargetPolicy::SelfOnly;
-    }
+    // Auto-derive from effectType (derivation table lives in
+    // FSkillTargetRule, pinned by MMO.Skills.TargetPolicy).
+    return FSkillTargetRule::PolicyForEffect(SkillData.definitionData.effectType);
 }
 
 bool UPlayerSkillManager::IsSkillSelfCastable(const FString& SkillSlug) const
 {
     const ESkillTargetPolicy Policy = GetEffectiveTargetPolicy(SkillSlug);
-    return Policy == ESkillTargetPolicy::SelfOnly || Policy == ESkillTargetPolicy::SelfAndTarget;
+    // Predicate lives in FSkillTargetRule (pinned by MMO.Skills.TargetPolicy).
+    return FSkillTargetRule::IsSelfCastable(Policy);
 }
 

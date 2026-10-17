@@ -2,6 +2,7 @@
 #include "Gameplay/Combat/SkillSystemManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Services/TimeSyncService.h"
+#include "Utils/NetCore/SkillSlotRule.h"
 
 void UPlayerSkillManager::UpdateCooldowns(float DeltaTime)
 {
@@ -111,6 +112,7 @@ void UPlayerSkillManager::UpdateSkillCooldownState(FPlayerSkillData& SkillData)
 
 bool UPlayerSkillManager::ValidateSkillSlot(int32 SlotIndex) const
 {
-    return SlotIndex >= 0 && SlotIndex < MaxSkillSlots;
+    // Predicate lives in FSkillSlotRule (pinned by MMO.Skills.SlotRule).
+    return FSkillSlotRule::IsValidSlot(SlotIndex, MaxSkillSlots);
 }
 

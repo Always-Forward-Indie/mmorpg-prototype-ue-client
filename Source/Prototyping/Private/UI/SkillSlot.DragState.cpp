@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillSlotWidget.h"
 #include "UI/SkillSlotWidget.h"
+#include "Utils/NetCore/SkillDropRule.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
@@ -30,27 +31,18 @@ bool USkillSlotWidget::CanAcceptSkillDrop(USkillDragDropOperation* DragDropOp) c
     // glowing and stole the highlight from the real target — which is exactly
     // why the target slot appeared to flicker / never light up during slot-to-slot
     // drags.
-    if (DragDropOp->SourceSlotWidget == this && DragDropOp->SourceSlotIndex == SlotIndex)
-    {
-        CachedDragOp = DragDropOp;
-        bCachedCanAccept = false;
-        bCacheValid = true;
-        return false;
-    }
+    const bool bIsSameSource = DragDropOp->SourceSlotWidget == this && DragDropOp->SourceSlotIndex == SlotIndex;
 
     const FString& SkillSlug = DragDropOp->SkillData.networkData.skillSlug;
-    if (SkillSlug.IsEmpty())
-    {
-        CachedDragOp = DragDropOp;
-        bCachedCanAccept = false;
-        bCacheValid = true;
-        return false;
-    }
+    const bool bSlugEmpty = SkillSlug.IsEmpty();
 
     // If SkillManager is available, confirm the player actually has the skill.
     // Without it we optimistically accept \u2014 the authoritative check happens in
     // SkillBarWidget::OnSkillDroppedOnSlot -> AssignSkillToSlot.
-    const bool bCanAccept = SkillManager ? SkillManager->HasSkill(SkillSlug) : true;
+    // Predicate lives in FSkillDropRule (pinned by MMO.Skills.DropRule).
+    const bool bCanAccept = FSkillDropRule::CanAccept(
+        bIsSameSource, bSlugEmpty, SkillManager != nullptr,
+        SkillManager ? SkillManager->HasSkill(SkillSlug) : false);
 
     CachedDragOp = DragDropOp;
     bCachedCanAccept = bCanAccept;

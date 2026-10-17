@@ -157,15 +157,19 @@ FNPCSpawnDataStruct JSONParser::DeserializeNPCSpawnData(const FString& JsonStrin
     TSharedPtr<FJsonObject> Root;
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
     
-    if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
+    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
     {
-        const TSharedPtr<FJsonObject>* BodyObject = nullptr;
-        if (Root->TryGetObjectField(TEXT("body"), BodyObject) && BodyObject)
-        {
-            SpawnData = DeserializeNPCSpawnData(*BodyObject);
-        }
+        UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeNPCSpawnData failed to parse JSON"));
+        return SpawnData;
     }
-    
-    return SpawnData;
+
+    const TSharedPtr<FJsonObject>* BodyObject = nullptr;
+    if (!Root->TryGetObjectField(TEXT("body"), BodyObject) || !BodyObject || !(*BodyObject).IsValid())
+    {
+        UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeNPCSpawnData missing body"));
+        return SpawnData;
+    }
+
+    return DeserializeNPCSpawnData(*BodyObject);
 }
 

@@ -1,5 +1,6 @@
 #include "UI/InventoryWidget.h"
 #include "UI/InventorySlotWidget.h"
+#include "Utils/NetCore/InventoryWeight.h"
 #include "UI/ItemTooltipWidget.h"
 #include "UI/ItemActionMenuWidget.h"
 #include "UI/DropQuantityPopupWidget.h"
@@ -17,12 +18,8 @@
 
 float UInventoryWidget::GetCurrentInventoryWeight() const
 {
-	float TotalWeight = 0.0f;
-	for (const FInventoryItemStruct& Item : CurrentInventory.items)
-	{
-		TotalWeight += Item.weight * Item.quantity;
-	}
-	return TotalWeight;
+	// Summation lives in FInventoryWeight (pinned by MMO.Inventory.Weight).
+	return FInventoryWeight::Total(CurrentInventory.items);
 }
 
 int32 UInventoryWidget::GetUsedSlots() const
@@ -60,19 +57,19 @@ void UInventoryWidget::UpdateInventoryStats()
 		FString WeightString = FString::Printf(TEXT("Weight: %.1f/%.1f"), CurrentWeight, MaxWeight);
 		WeightText->SetText(FText::FromString(WeightString));
 		
-		// Optional: Change color based on weight percentage
-		float WeightPercentage = MaxWeight > 0.0f ? (CurrentWeight / MaxWeight) : 0.0f;
-		if (WeightPercentage >= 1.0f)
+		// Encumbrance bucket lives in FInventoryWeight
+		// (pinned by MMO.Inventory.Weight); colors stay here with the widget.
+		switch (FInventoryWeight::StatusFor(CurrentWeight, MaxWeight))
 		{
+		case EWeightStatus::Overweight:
 			WeightText->SetColorAndOpacity(FLinearColor::Red);
-		}
-		else if (WeightPercentage >= 0.8f)
-		{
+			break;
+		case EWeightStatus::Heavy:
 			WeightText->SetColorAndOpacity(FLinearColor::Yellow);
-		}
-		else
-		{
+			break;
+		default:
 			WeightText->SetColorAndOpacity(FLinearColor::White);
+			break;
 		}
 	}
 

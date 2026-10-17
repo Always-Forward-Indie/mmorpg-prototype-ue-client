@@ -40,6 +40,7 @@ Single `Prototyping` runtime module. No Unreal replication — custom TCP + JSON
 - Admin-RPC (DEV only): chunk `adminCommand` (teleport/spawn/grant/read) + `bots/admin.py` in the integration repo (separate `gm_bot`, never bot accounts). New mechanic ships with its admin command first (atom test via admin-RPC; locomotion tested once, everything else teleports). Prod builds contain no such code (`ADMIN_RPC` off + flag off + zero GM accounts).
 - `Tools/Smoke/SmokeClients.ps1 -n 2` (real UE clients + log scan).
 - `Source/Prototyping/Private/Tests/` (`MMO.*` Automation specs) + `devmode.scenario combat|reset` + `Config/DevMode/qa_presets.json` for offline QA.
+- Slice routine (every change, no exceptions): `Build.bat PrototypingEditor` → `Automation RunTests MMO` via headless `UnrealEditor-Cmd.exe -ExecCmds=... -abslog=...` (exit 0, `GIsCriticalError=0`) → `Tools/Smoke/VerifyClient.ps1 -Sweep` → profile DevMode bots headless (`-nullrhi`, `-devmode-map=TestLevel`, gate on `DEVMODE_BOT_RESULT ... PASS`) → `SmokeClients.ps1 -n 2` when sockets/travel touched. Commit + push per slice, `Source/Prototyping` only.
 
 ## DevMode (offline, no servers)
 
@@ -58,3 +59,10 @@ Single `Prototyping` runtime module. No Unreal replication — custom TCP + JSON
 - `.editorconfig` enforces `U/A/S/F/E/T/b` prefixes for C++.
 - Gitignored, often absent locally: `Binaries/ Intermediate/ Saved/ DerivedDataCache/ Build/`, most `Content/` packs (meshes, audio, Polygon*, Vefects, etc.), `server_config.json`. Don't edit or recreate them; don't `git add` them.
 - No CI (`.github/workflows/` empty), no lint/test runner; `Source/Prototyping/Private/Tests/NPCSystemTest.cpp` is an empty stub. Verify via editor compile + multi-client run.
+
+## Code health (Oct 2026 refactor — keep it that way)
+
+- Pure core: `Public/Utils/NetCore/` holds dependency-free rules (`FString`/`TArray`/plain structs only, no `UWorld`/`FSocket`). Producers delegate to it; specs must call prod code — local re-implementations in tests are reject-on-review. Expected `Error`-level logs inside a spec need `AddExpectedError`, otherwise the harness fails the test.
+- Client owns predicates/display/validation only (auth lengths, affordability, cooldown text, slot/target/drop rules, retry/backoff, readiness mask, NTP math). No server business arithmetic on the client (chunk decides, see seam rules above).
+- File budget ~500 lines; new feature = new module (`Manager + Handler + Parser + Core rule + bot scenario`), never an append to a god file. Mechanical splits must be byte-exact (anchor + full-coverage check per moved line), preserve BOM/CRLF and the complete include block — a cut include fails the build in another TU.
+- No-legacy: delete dead commented-out code when touching a function; single source of truth (no forked constants, no duplicated helpers — share via `inline`/extern headers). The WP transition slot stays process-global (`extern` in `MyGameInstance.h`) — multi-PIE safety, never a member.

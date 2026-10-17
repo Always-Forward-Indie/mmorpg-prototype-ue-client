@@ -57,11 +57,6 @@ public:
     static FSpawnZoneStruct DeserializeSpawnZoneData(const TSharedPtr<FJsonObject>& Body);
 
     static FMOBStruct DeserializeMobData(const TSharedPtr<FJsonObject>& MobObject);
-    
-    // Legacy combat data parsers (for backward compatibility)
-    static FCombatAnimationData DeserializeCombatAnimation(const TSharedPtr<FJsonObject>& AnimationObj);
-    static FCombatActionData DeserializeCombatAction(const TSharedPtr<FJsonObject>& ActionObj);
-    static FCombatResultData DeserializeCombatResult(const TSharedPtr<FJsonObject>& ResultObj);
 
     // New combat system parsers
     static ESkillEffectType ParseSkillEffectType(const FString& EffectTypeString);

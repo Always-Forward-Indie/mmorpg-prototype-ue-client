@@ -400,7 +400,7 @@ TArray<FActiveEffectEntry> JSONParser::DeserializeActiveEffectsPacket(const FStr
     for (const TSharedPtr<FJsonValue>& Val : *EffectsArray)
     {
         const TSharedPtr<FJsonObject>* ObjPtr = nullptr;
-        if (!Val->TryGetObject(ObjPtr)) continue;
+        if (!Val.IsValid() || !Val->TryGetObject(ObjPtr) || !ObjPtr || !(*ObjPtr).IsValid()) continue;
 
         FActiveEffectEntry Entry;
         (*ObjPtr)->TryGetStringField(TEXT("slug"), Entry.slug);

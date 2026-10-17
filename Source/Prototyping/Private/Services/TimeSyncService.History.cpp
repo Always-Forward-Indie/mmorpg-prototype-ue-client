@@ -4,6 +4,7 @@
 #include "Misc/Guid.h"
 #include "HAL/CriticalSection.h"
 #include "Utils/NetCore/TimeSyncMath.h"
+#include "Utils/NetCore/SampleRule.h"
 
 float UTimeSyncService::CalculateAverageLatency(EServerType ServerType) const
 {
@@ -83,56 +84,10 @@ float UTimeSyncService::CalculateSampleQuality(const FTimeSyncData& SyncData) co
 
 bool UTimeSyncService::IsSampleValid(const FTimeSyncData& SyncData) const
 {
-    float RTT = static_cast<float>(SyncData.ClientRecvMs - SyncData.ClientSendMs);
-    float ServerProcessing = static_cast<float>(SyncData.ServerSendMs - SyncData.ServerRecvMs);
-    
-    // Check RTT bounds
-    if (RTT <= 0 || RTT > MaxValidRTTMs)
-    {
-        return false;
-    }
-    
-    // Check server processing bounds
-    if (ServerProcessing < 0 || ServerProcessing > MaxValidServerProcessingMs)
-    {
-        return false;
-    }
-    
-    // Check for negative calculated latency (indicates clock issues)
-    float CalculatedLatency = CalculateNTPLatency(SyncData);
-    if (CalculatedLatency < 0)
-    {
-        return false;
-    }
-    
-    // Check server processing ratio - if server processing is too large compared to RTT,
-    // it indicates the server was overloaded and this sample should be discarded
-    float ProcessingRatio = ServerProcessing / RTT;
-    if (ProcessingRatio > 0.8f) // Server processing shouldn't be more than 80% of RTT
-    {
-        return false;
-    }
-
-    // NEW: �������� ���������� ������������������ �����������
-    //if (SyncData.ServerRecvMs < SyncData.ClientSendMs)
-    //{
-    //    UE_LOG(LogTemp, Warning, TEXT("TimeSyncService: Invalid sample - ServerRecvMs < ClientSendMs"));
-    //    return false;
-    //}
-
-    //if (SyncData.ServerSendMs < SyncData.ServerRecvMs)
-    //{
-    //    UE_LOG(LogTemp, Warning, TEXT("TimeSyncService: Invalid sample - ServerSendMs < ServerRecvMs"));
-    //    return false;
-    //}
-
-    //if (SyncData.ClientRecvMs < SyncData.ServerSendMs)
-    //{
-    //    UE_LOG(LogTemp, Warning, TEXT("TimeSyncService: Invalid sample - ClientRecvMs < ServerSendMs (possible clock skew)"));
-    //    return false;
-    //}
-    
-    return true;
+    // Predicate lives in FSampleRule (pinned by MMO.TimeSync.SampleRule);
+    // bounds come from the service tunables. Formula unchanged.
+    return FSampleRule::IsValidSample(SyncData.ClientSendMs, SyncData.ServerRecvMs,
+        SyncData.ServerSendMs, SyncData.ClientRecvMs, MaxValidRTTMs, MaxValidServerProcessingMs);
 }
 
 bool UTimeSyncService::IsNearBestSample(EServerType ServerType, const FTimeSyncData& NewSample) const

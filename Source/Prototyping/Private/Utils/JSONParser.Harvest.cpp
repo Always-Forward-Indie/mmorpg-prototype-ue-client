@@ -14,38 +14,27 @@ FHarvestItemStruct JSONParser::DeserializeHarvestItem(const TSharedPtr<FJsonObje
 	FHarvestItemStruct Item;
 	if (!ItemObj.IsValid()) return Item;
 
-	if (ItemObj->HasField(TEXT("itemId")))
-		Item.itemId = ItemObj->GetIntegerField(TEXT("itemId"));
+		ItemObj->TryGetNumberField(TEXT("itemId"), Item.itemId);
 
-	if (ItemObj->HasField(TEXT("itemSlug")))
-		Item.itemSlug = ItemObj->GetStringField(TEXT("itemSlug"));
+		ItemObj->TryGetStringField(TEXT("itemSlug"), Item.itemSlug);
 
-	if (ItemObj->HasField(TEXT("quantity")))
-		Item.quantity = ItemObj->GetIntegerField(TEXT("quantity"));
+		ItemObj->TryGetNumberField(TEXT("quantity"), Item.quantity);
 
-	if (ItemObj->HasField(TEXT("name")))
-		Item.name = ItemObj->GetStringField(TEXT("name"));
+		ItemObj->TryGetStringField(TEXT("name"), Item.name);
 
-	if (ItemObj->HasField(TEXT("description")))
-		Item.description = ItemObj->GetStringField(TEXT("description"));
+		ItemObj->TryGetStringField(TEXT("description"), Item.description);
 
-	if (ItemObj->HasField(TEXT("rarityId")))
-		Item.rarityId = ItemObj->GetIntegerField(TEXT("rarityId"));
+		ItemObj->TryGetNumberField(TEXT("rarityId"), Item.rarityId);
 
-	if (ItemObj->HasField(TEXT("rarityName")))
-		Item.rarityName = ItemObj->GetStringField(TEXT("rarityName"));
+		ItemObj->TryGetStringField(TEXT("rarityName"), Item.rarityName);
 
-	if (ItemObj->HasField(TEXT("itemType")))
-		Item.itemType = ItemObj->GetStringField(TEXT("itemType"));
+		ItemObj->TryGetStringField(TEXT("itemType"), Item.itemType);
 
-	if (ItemObj->HasField(TEXT("weight")))
-		Item.weight = ItemObj->GetNumberField(TEXT("weight"));
+		ItemObj->TryGetNumberField(TEXT("weight"), Item.weight);
 
-	if (ItemObj->HasField(TEXT("addedToInventory")))
-		Item.addedToInventory = ItemObj->GetBoolField(TEXT("addedToInventory"));
+		ItemObj->TryGetBoolField(TEXT("addedToInventory"), Item.addedToInventory);
 
-	if (ItemObj->HasField(TEXT("isHarvestItem")))
-		Item.isHarvestItem = ItemObj->GetBoolField(TEXT("isHarvestItem"));
+		ItemObj->TryGetBoolField(TEXT("isHarvestItem"), Item.isHarvestItem);
 
 	return Item;
 }
@@ -55,23 +44,19 @@ FHarvestStartedStruct JSONParser::DeserializeHarvestStarted(const TSharedPtr<FJs
 	FHarvestStartedStruct HarvestStarted;
 	if (!Body.IsValid()) return HarvestStarted;
 
-	if (Body->HasField(TEXT("type")))
-		HarvestStarted.type = Body->GetStringField(TEXT("type"));
+		Body->TryGetStringField(TEXT("type"), HarvestStarted.type);
 
-	if (Body->HasField(TEXT("clientId")))
-		HarvestStarted.clientId = Body->GetIntegerField(TEXT("clientId"));
+		Body->TryGetNumberField(TEXT("clientId"), HarvestStarted.clientId);
 
-	if (Body->HasField(TEXT("playerId")))
-		HarvestStarted.playerId = Body->GetIntegerField(TEXT("playerId"));
+		Body->TryGetNumberField(TEXT("playerId"), HarvestStarted.playerId);
 
-	if (Body->HasField(TEXT("corpseId")))
-		HarvestStarted.corpseId = Body->GetIntegerField(TEXT("corpseId"));
+		Body->TryGetNumberField(TEXT("corpseId"), HarvestStarted.corpseId);
 
-	if (Body->HasField(TEXT("duration")))
-		HarvestStarted.duration = Body->GetIntegerField(TEXT("duration"));
+		Body->TryGetNumberField(TEXT("duration"), HarvestStarted.duration);
 
-	if (Body->HasField(TEXT("startTime")))
-		HarvestStarted.startTime = static_cast<int64>(Body->GetNumberField(TEXT("startTime")));
+		double StartTimeMs = 0.0;
+		if (Body->TryGetNumberField(TEXT("startTime"), StartTimeMs))
+			HarvestStarted.startTime = static_cast<int64>(StartTimeMs);
 
 	return HarvestStarted;
 }
@@ -81,13 +66,19 @@ FHarvestStartedStruct JSONParser::DeserializeHarvestStarted(const FString& JsonS
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeHarvestStarted failed to parse JSON"));
 		return FHarvestStartedStruct();
+	}
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
-	if (!Body.IsValid())
+	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeHarvestStarted missing body"));
 		return FHarvestStartedStruct();
+	}
 
-	return JSONParser::DeserializeHarvestStarted(Body);
+	return JSONParser::DeserializeHarvestStarted(*BodyPtr);
 }
 
 FHarvestCompleteStruct JSONParser::DeserializeHarvestComplete(const TSharedPtr<FJsonObject>& Body)
@@ -95,23 +86,17 @@ FHarvestCompleteStruct JSONParser::DeserializeHarvestComplete(const TSharedPtr<F
 	FHarvestCompleteStruct HarvestComplete;
 	if (!Body.IsValid()) return HarvestComplete;
 
-	if (Body->HasField(TEXT("type")))
-		HarvestComplete.type = Body->GetStringField(TEXT("type"));
+		Body->TryGetStringField(TEXT("type"), HarvestComplete.type);
 
-	if (Body->HasField(TEXT("clientId")))
-		HarvestComplete.clientId = Body->GetIntegerField(TEXT("clientId"));
+		Body->TryGetNumberField(TEXT("clientId"), HarvestComplete.clientId);
 
-	if (Body->HasField(TEXT("playerId")))
-		HarvestComplete.playerId = Body->GetIntegerField(TEXT("playerId"));
+		Body->TryGetNumberField(TEXT("playerId"), HarvestComplete.playerId);
 
-	if (Body->HasField(TEXT("corpseId")))
-		HarvestComplete.corpseId = Body->GetIntegerField(TEXT("corpseId"));
+		Body->TryGetNumberField(TEXT("corpseId"), HarvestComplete.corpseId);
 
-	if (Body->HasField(TEXT("success")))
-		HarvestComplete.success = Body->GetBoolField(TEXT("success"));
+		Body->TryGetBoolField(TEXT("success"), HarvestComplete.success);
 
-	if (Body->HasField(TEXT("totalItems")))
-		HarvestComplete.totalItems = Body->GetIntegerField(TEXT("totalItems"));
+		Body->TryGetNumberField(TEXT("totalItems"), HarvestComplete.totalItems);
 
 	// Parse available loot
 	const TArray<TSharedPtr<FJsonValue>>* LootArray = nullptr;
@@ -138,13 +123,19 @@ FHarvestCompleteStruct JSONParser::DeserializeHarvestComplete(const FString& Jso
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeHarvestComplete failed to parse JSON"));
 		return FHarvestCompleteStruct();
+	}
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
-	if (!Body.IsValid())
+	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeHarvestComplete missing body"));
 		return FHarvestCompleteStruct();
-	
-	return JSONParser::DeserializeHarvestComplete(Body);
+	}
+
+	return JSONParser::DeserializeHarvestComplete(*BodyPtr);
 }
 
 FHarvestErrorStruct JSONParser::DeserializeHarvestError(const TSharedPtr<FJsonObject>& Body)
@@ -152,23 +143,17 @@ FHarvestErrorStruct JSONParser::DeserializeHarvestError(const TSharedPtr<FJsonOb
 	FHarvestErrorStruct HarvestError;
 	if (!Body.IsValid()) return HarvestError;
 
-	if (Body->HasField(TEXT("type")))
-		HarvestError.type = Body->GetStringField(TEXT("type"));
+		Body->TryGetStringField(TEXT("type"), HarvestError.type);
 
-	if (Body->HasField(TEXT("clientId")))
-		HarvestError.clientId = Body->GetIntegerField(TEXT("clientId"));
+		Body->TryGetNumberField(TEXT("clientId"), HarvestError.clientId);
 
-	if (Body->HasField(TEXT("playerId")))
-		HarvestError.playerId = Body->GetIntegerField(TEXT("playerId"));
+		Body->TryGetNumberField(TEXT("playerId"), HarvestError.playerId);
 
-	if (Body->HasField(TEXT("corpseId")))
-		HarvestError.corpseId = Body->GetIntegerField(TEXT("corpseId"));
+		Body->TryGetNumberField(TEXT("corpseId"), HarvestError.corpseId);
 
-	if (Body->HasField(TEXT("errorCode")))
-		HarvestError.errorCode = Body->GetStringField(TEXT("errorCode"));
+		Body->TryGetStringField(TEXT("errorCode"), HarvestError.errorCode);
 
-	if (Body->HasField(TEXT("message")))
-		HarvestError.message = Body->GetStringField(TEXT("message"));
+		Body->TryGetStringField(TEXT("message"), HarvestError.message);
 
 	return HarvestError;
 }
@@ -178,13 +163,19 @@ FHarvestErrorStruct JSONParser::DeserializeHarvestError(const FString& JsonStrin
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeHarvestError failed to parse JSON"));
 		return FHarvestErrorStruct();
+	}
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
-	if (!Body.IsValid())
+	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeHarvestError missing body"));
 		return FHarvestErrorStruct();
+	}
 
-	return JSONParser::DeserializeHarvestError(Body);
+	return JSONParser::DeserializeHarvestError(*BodyPtr);
 }
 
 FCorpseLootPickupResponseStruct JSONParser::DeserializeCorpseLootPickupResponse(const TSharedPtr<FJsonObject>& Body)
@@ -192,14 +183,11 @@ FCorpseLootPickupResponseStruct JSONParser::DeserializeCorpseLootPickupResponse(
 	FCorpseLootPickupResponseStruct Response;
 	if (!Body.IsValid()) return Response;
 
-	if (Body->HasField(TEXT("success")))
-		Response.success = Body->GetBoolField(TEXT("success"));
+		Body->TryGetBoolField(TEXT("success"), Response.success);
 
-	if (Body->HasField(TEXT("corpseUID")))
-		Response.corpseUID = Body->GetIntegerField(TEXT("corpseUID"));
+		Body->TryGetNumberField(TEXT("corpseUID"), Response.corpseUID);
 
-	if (Body->HasField(TEXT("itemsPickedUp")))
-		Response.itemsPickedUp = Body->GetIntegerField(TEXT("itemsPickedUp"));
+		Body->TryGetNumberField(TEXT("itemsPickedUp"), Response.itemsPickedUp);
 
 	// Parse picked up items
 	const TArray<TSharedPtr<FJsonValue>>* PickedUpArray = nullptr;
@@ -243,13 +231,19 @@ FCorpseLootPickupResponseStruct JSONParser::DeserializeCorpseLootPickupResponse(
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCorpseLootPickupResponse failed to parse JSON"));
 		return FCorpseLootPickupResponseStruct();
+	}
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
-	if (!Body.IsValid())
+	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCorpseLootPickupResponse missing body"));
 		return FCorpseLootPickupResponseStruct();
+	}
 
-	return JSONParser::DeserializeCorpseLootPickupResponse(Body);
+	return JSONParser::DeserializeCorpseLootPickupResponse(*BodyPtr);
 }
 
 FCorpseLootPickupErrorStruct JSONParser::DeserializeCorpseLootPickupError(const TSharedPtr<FJsonObject>& Body)
@@ -257,14 +251,11 @@ FCorpseLootPickupErrorStruct JSONParser::DeserializeCorpseLootPickupError(const 
 	FCorpseLootPickupErrorStruct Error;
 	if (!Body.IsValid()) return Error;
 
-	if (Body->HasField(TEXT("success")))
-		Error.success = Body->GetBoolField(TEXT("success"));
+		Body->TryGetBoolField(TEXT("success"), Error.success);
 
-	if (Body->HasField(TEXT("errorCode")))
-		Error.errorCode = Body->GetStringField(TEXT("errorCode"));
+		Body->TryGetStringField(TEXT("errorCode"), Error.errorCode);
 
-	if (Body->HasField(TEXT("corpseUID")))
-		Error.corpseUID = Body->GetIntegerField(TEXT("corpseUID"));
+		Body->TryGetNumberField(TEXT("corpseUID"), Error.corpseUID);
 
 	return Error;
 }
@@ -274,13 +265,19 @@ FCorpseLootPickupErrorStruct JSONParser::DeserializeCorpseLootPickupError(const 
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCorpseLootPickupError failed to parse JSON"));
 		return FCorpseLootPickupErrorStruct();
+	}
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
-	if (!Body.IsValid())
+	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCorpseLootPickupError missing body"));
 		return FCorpseLootPickupErrorStruct();
+	}
 
-	return JSONParser::DeserializeCorpseLootPickupError(Body);
+	return JSONParser::DeserializeCorpseLootPickupError(*BodyPtr);
 }
 
 FCorpseLootInspectResponseStruct JSONParser::DeserializeCorpseLootInspectResponse(const TSharedPtr<FJsonObject>& Body)
@@ -288,17 +285,13 @@ FCorpseLootInspectResponseStruct JSONParser::DeserializeCorpseLootInspectRespons
 	FCorpseLootInspectResponseStruct Response;
 	if (!Body.IsValid()) return Response;
 
-	if (Body->HasField(TEXT("success")))
-		Response.success = Body->GetBoolField(TEXT("success"));
+		Body->TryGetBoolField(TEXT("success"), Response.success);
 
-	if (Body->HasField(TEXT("corpseUID")))
-		Response.corpseUID = Body->GetIntegerField(TEXT("corpseUID"));
+		Body->TryGetNumberField(TEXT("corpseUID"), Response.corpseUID);
 
-	if (Body->HasField(TEXT("type")))
-		Response.type = Body->GetStringField(TEXT("type"));
+		Body->TryGetStringField(TEXT("type"), Response.type);
 
-	if (Body->HasField(TEXT("totalItems")))
-		Response.totalItems = Body->GetIntegerField(TEXT("totalItems"));
+		Body->TryGetNumberField(TEXT("totalItems"), Response.totalItems);
 
 	// Parse available loot
 	const TArray<TSharedPtr<FJsonValue>>* LootArray = nullptr;
@@ -325,13 +318,19 @@ FCorpseLootInspectResponseStruct JSONParser::DeserializeCorpseLootInspectRespons
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCorpseLootInspectResponse failed to parse JSON"));
 		return FCorpseLootInspectResponseStruct();
+	}
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
-	if (!Body.IsValid())
+	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCorpseLootInspectResponse missing body"));
 		return FCorpseLootInspectResponseStruct();
+	}
 
-	return JSONParser::DeserializeCorpseLootInspectResponse(Body);
+	return JSONParser::DeserializeCorpseLootInspectResponse(*BodyPtr);
 }
 
 FCorpseLootInspectErrorStruct JSONParser::DeserializeCorpseLootInspectError(const TSharedPtr<FJsonObject>& Body)
@@ -339,11 +338,9 @@ FCorpseLootInspectErrorStruct JSONParser::DeserializeCorpseLootInspectError(cons
 	FCorpseLootInspectErrorStruct Error;
 	if (!Body.IsValid()) return Error;
 
-	if (Body->HasField(TEXT("success")))
-		Error.success = Body->GetBoolField(TEXT("success"));
+		Body->TryGetBoolField(TEXT("success"), Error.success);
 
-	if (Body->HasField(TEXT("errorCode")))
-		Error.errorCode = Body->GetStringField(TEXT("errorCode"));
+		Body->TryGetStringField(TEXT("errorCode"), Error.errorCode);
 
 	return Error;
 }
@@ -353,12 +350,18 @@ FCorpseLootInspectErrorStruct JSONParser::DeserializeCorpseLootInspectError(cons
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCorpseLootInspectError failed to parse JSON"));
 		return FCorpseLootInspectErrorStruct();
+	}
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
-	if (!Body.IsValid())
+	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCorpseLootInspectError missing body"));
 		return FCorpseLootInspectErrorStruct();
+	}
 
-	return JSONParser::DeserializeCorpseLootInspectError(Body);
+	return JSONParser::DeserializeCorpseLootInspectError(*BodyPtr);
 }
 

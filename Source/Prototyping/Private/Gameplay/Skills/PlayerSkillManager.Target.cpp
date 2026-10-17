@@ -2,49 +2,33 @@
 #include "Gameplay/Combat/SkillSystemManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Services/TimeSyncService.h"
+#include "Utils/NetCore/SkillTargetRule.h"
 
 bool UPlayerSkillManager::ResolveSkillTarget(const FString& SkillSlug, int32& InOutTargetId, ECasterType& InOutTargetType) const
 {
     const ESkillTargetPolicy Policy = GetEffectiveTargetPolicy(SkillSlug);
-    const bool bHasExternalTarget = (InOutTargetId > 0 && InOutTargetId != CharacterId
-        && InOutTargetType != ECasterType::None && InOutTargetType != ECasterType::Self);
-
-    switch (Policy)
+    // Decision table lives in FSkillTargetRule (pinned by MMO.Skills.TargetResolve);
+    // this wrapper keeps the log lines and writes the resolved values back.
+    const FSkillTargetResolution R = FSkillTargetRule::Resolve(Policy, InOutTargetId, InOutTargetType, CharacterId);
+    switch (R.Outcome)
     {
-    case ESkillTargetPolicy::SelfOnly:
-        // Always target self regardless of what was passed
-        InOutTargetId = CharacterId;
-        InOutTargetType = ECasterType::Self;
-        return true;
-
-    case ESkillTargetPolicy::TargetOnly:
-        // Must have a valid external target; cannot target self
-        if (!bHasExternalTarget)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Skill %s requires a target (TargetOnly policy)"), *SkillSlug);
-            return false;
-        }
-        if (InOutTargetId == CharacterId)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Skill %s cannot target self (TargetOnly policy)"), *SkillSlug);
-            return false;
-        }
-        return true;
-
-    case ESkillTargetPolicy::SelfAndTarget:
-        // If external target is available, use it; otherwise default to self
-        if (bHasExternalTarget)
-        {
-            return true;
-        }
-        // No external target — cast on self
-        InOutTargetId = CharacterId;
-        InOutTargetType = ECasterType::Self;
+    case ETargetResolveOutcome::MissingTarget:
+        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Skill %s requires a target (TargetOnly policy)"), *SkillSlug);
+        return false;
+    case ETargetResolveOutcome::SelfTargetRejected:
+        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Skill %s cannot target self (TargetOnly policy)"), *SkillSlug);
+        return false;
+    case ETargetResolveOutcome::UnknownPolicy:
+        return false;
+    case ETargetResolveOutcome::OkFallback:
+        InOutTargetId = R.TargetId;
+        InOutTargetType = R.TargetType;
         UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Skill %s has no target, defaulting to self"), *SkillSlug);
         return true;
-
     default:
-        return false;
+        InOutTargetId = R.TargetId;
+        InOutTargetType = R.TargetType;
+        return true;
     }
 }
 

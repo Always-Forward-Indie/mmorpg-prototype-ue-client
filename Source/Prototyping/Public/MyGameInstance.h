@@ -40,7 +40,15 @@
 #include "Gameplay/UI/MonitorStatsWidget.h"
 #include "Components/ListView.h"
 #include "Utils/JSONParser.h"
+#include "Utils/NetCore/ReadinessGate.h"
 #include "MyGameInstance.generated.h"
+
+// Process-level World Partition transition slot: how many PIE instances are
+// currently inside GenerateStreaming (between OpenLevel and OnGameWorldReady).
+// Defined in MyGameInstance.Travel.cpp (must stay process-global: all PIE
+// instances run in one process, and a second concurrent OpenLevel would
+// corrupt WorldDataLayers). Manipulated only via FPlatformAtomics.
+extern volatile int32 GActiveWorldPartitionTransitions;
 
 
 // Delegate to handle the login response
@@ -119,19 +127,14 @@ FDateTime ReceiveTimeLoginServer;
 
 	// Bitmask tracking which subsystems have finished initializing.
 	// Loading screen is hidden only when ALL required flags are set.
-	// 
-	//  Bit 0 (0x01) � playerReady ACK received (Phase 3 > Phase 4 started)
-	//  Bit 1 (0x02) � local player UI fully initialized (UIInitTimerHandle fired)
-	//  Bit 2 (0x04) � first stats_update received and HUD refreshed
-	//  Bit 3 (0x08) � local player actor physically spawned and present in world
+	// Canonical values live in FReadinessGate (single source of truth,
+	// pinned by MMO.Readiness.Gate) — these are aliases, do not fork them.
 	//
-	static constexpr uint8 ReadyFlag_PlayerReadyAck = 0x01;
-	static constexpr uint8 ReadyFlag_UIInitialized  = 0x02;
-	static constexpr uint8 ReadyFlag_StatsReceived  = 0x04;
-	static constexpr uint8 ReadyFlag_PlayerSpawned  = 0x08;
-	static constexpr uint8 ReadyFlag_AllRequired    = ReadyFlag_PlayerReadyAck
-	                                                | ReadyFlag_UIInitialized
-	                                                | ReadyFlag_PlayerSpawned;  // StatsReceived excluded
+	static constexpr uint8 ReadyFlag_PlayerReadyAck = FReadinessGate::PlayerReadyAck;
+	static constexpr uint8 ReadyFlag_UIInitialized  = FReadinessGate::UIInitialized;
+	static constexpr uint8 ReadyFlag_StatsReceived  = FReadinessGate::StatsReceived;
+	static constexpr uint8 ReadyFlag_PlayerSpawned  = FReadinessGate::PlayerSpawned;
+	static constexpr uint8 ReadyFlag_AllRequired    = FReadinessGate::AllRequired; // StatsReceived excluded
 	uint8 ReadyFlags = 0;
 
 	// Wall-clock moment the safety net was armed (game-world load started).

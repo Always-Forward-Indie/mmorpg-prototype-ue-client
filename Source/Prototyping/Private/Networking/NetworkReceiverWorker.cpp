@@ -6,6 +6,7 @@
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 #include "Services/TimeSyncService.h"
+#include "Utils/NetCore/NetFraming.h"
 #include "Prototyping.h"
 
 NetworkReceiverWorker::NetworkReceiverWorker(FSocket* InSocket)
@@ -200,23 +201,16 @@ uint32 NetworkReceiverWorker::Run()
             // Get precise receive timestamp immediately after successful Socket->Recv() (t3)
             //int64 PreciseClientRecvMs = TimeSyncService ? TimeSyncService->GetCurrentClientTimeMs() : 0;
             
-            // �������� ���������� ������ � ������������� �����
+            // Append received bytes to the accumulation buffer, then extract
+            // complete '\n'-delimited packets via the canonical FNetFraming
+            // helper (byte-level split keeps multi-byte UTF-8 split across
+            // Recv() chunks intact; empty lines ignored, oversized dropped).
             AccumulatedBuffer.Append(ReceiveBuffer.GetData(), BytesRead);
 
-            int32 DelimiterIndex;
-            // ���������, ���� �� � ����������� ������ ������-����������� '\n'
-            while ((DelimiterIndex = AccumulatedBuffer.Find((uint8)'\n')) != INDEX_NONE)
+            TArray<FString> Packets;
+            FNetFraming::ExtractPackets(AccumulatedBuffer, Packets);
+            for (const FString& ReceivedString : Packets)
             {
-                // ��������� ���� ������ �����
-                TArray<uint8> SinglePacket;
-                SinglePacket.Append(AccumulatedBuffer.GetData(), DelimiterIndex);
-
-                // ������� ����� � ����������� �� ������
-                AccumulatedBuffer.RemoveAt(0, DelimiterIndex + 1);
-
-                // ����������� ����� � FString
-                FUTF8ToTCHAR Converter(reinterpret_cast<const ANSICHAR*>(SinglePacket.GetData()), SinglePacket.Num());
-                FString ReceivedString(Converter.Length(), Converter.Get());
 
                 // t3 ������ ��������� �����, �� ������ �����:
                 const int64 PerPacketT3 = TimeSyncService.IsValid() ? TimeSyncService.Get()->GetCurrentClientTimeMs() : 0;

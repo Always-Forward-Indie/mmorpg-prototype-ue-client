@@ -1,0 +1,101 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+
+
+#include "Gameplay/Items/ItemManager.h"
+#include "Gameplay/Items/DroppedItemActor.h"
+#include "Gameplay/Players/BasicPlayer.h"
+#include "Gameplay/Players/PlayerAnimInstance.h"
+#include "Gameplay/Mobs/BasicMOB.h"
+#include "Utils/JSONParser.h"
+#include "MyGameInstance.h"
+#include "Networking/NetworkManager.h"
+#include "UI/UIManager.h"
+#include "UI/WorldNotificationManager.h"
+#include "UI/NotificationToastWidget.h"
+#include "Kismet/GameplayStatics.h"
+#include "Engine/AssetManager.h"
+#include "CrashDiagnostics.h"
+
+void UItemManager::BindPickupPointDelegate()
+{
+	if (bPickupDelegateBound || !worldContext) return;
+
+	APlayerController* PC = worldContext->GetFirstPlayerController();
+	if (!PC) return;
+
+	ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn());
+	if (!Player) return;
+
+	UPlayerAnimInstance* AnimInst = Cast<UPlayerAnimInstance>(
+		Player->GetMesh()->GetAnimInstance());
+	if (!AnimInst) return;
+
+	AnimInst->OnPickupPoint.AddUObject(this, &UItemManager::OnPickupPointFired);
+	bPickupDelegateBound = true;
+
+	UE_LOG(LogTemp, Log, TEXT("ItemManager: bound OnPickupPoint delegate"));
+}
+
+// ---------------------------------------------------------------------------
+// OnPickupPointFired
+//   Called by AnimNotify_PickupPoint (or the fallback timer inside
+//   PlayerAnimInstance::NotifyPickup) at the visual moment of pickup.
+//   1. Plays the Niagara pickup VFX and destroys the DroppedItemActor.
+//   2. Broadcasts ProcessItemPickup so inventory / UI refresh happens here.
+//   3. Unlocks player movement.
+//   4. Triggers inventory refresh from server.
+// ---------------------------------------------------------------------------
+void UItemManager::OnPickupPointFired()
+{
+	UE_LOG(LogTemp, Warning, TEXT("ItemManager: OnPickupPointFired count=%d"), PendingPickupItemUIDs.Num());
+
+	for (int32 i = 0; i < PendingPickupItemUIDs.Num(); ++i)
+	{
+		const int32 UID = PendingPickupItemUIDs[i];
+
+		// Destroy the world item and play pickup VFX
+		if (UID > 0 && DroppedItemsMap.Contains(UID))
+		{
+			ADroppedItemActor* DroppedActor = DroppedItemsMap[UID];
+			if (IsValid(DroppedActor))
+			{
+				DroppedActor->PlayPickupEffect();
+			}
+			DroppedItemsMap.Remove(UID);
+		}
+
+		// Broadcast item to inventory/UI systems
+		if (i < PendingPickupItems.Num() && !PendingPickupItems[i].name.IsEmpty())
+		{
+			ProcessItemPickup(PendingPickupItems[i]);
+		}
+	}
+
+	// Unlock player movement
+	if (worldContext)
+	{
+		if (APlayerController* PC = worldContext->GetFirstPlayerController())
+		{
+			if (ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn()))
+			{
+				Player->UnlockMovementAfterPickup();
+			}
+		}
+	}
+
+	// Refresh inventory from server
+	if (gameInstance && gameInstance->GetInventoryManager())
+	{
+		gameInstance->GetInventoryManager()->RequestInventoryData(gameInstance->GetCurrentCharacterID());
+	}
+
+	// Reset pending state
+	PendingPickupItemUIDs.Empty();
+	PendingPickupItems.Empty();
+}
+
+// ---------------------------------------------------------------------------
+// FlushDropsForMob
+//   Called by BasicMOB::Die() once the mob is confirmed dead.
+//   Spawns every item that was deferred while the mob was still alive.
+// ---------------------------------------------------------------------------

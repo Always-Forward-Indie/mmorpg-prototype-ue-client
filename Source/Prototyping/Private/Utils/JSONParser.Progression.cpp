@@ -14,38 +14,27 @@ FExperienceUpdateStruct JSONParser::DeserializeExperienceUpdate(const TSharedPtr
 	FExperienceUpdateStruct ExperienceUpdate;
 	if (!Body.IsValid()) return ExperienceUpdate;
 
-	if (Body->HasField(TEXT("characterId")))
-		ExperienceUpdate.characterId = Body->GetIntegerField(TEXT("characterId"));
+		Body->TryGetNumberField(TEXT("characterId"), ExperienceUpdate.characterId);
 
-	if (Body->HasField(TEXT("oldLevel")))
-		ExperienceUpdate.oldLevel = Body->GetIntegerField(TEXT("oldLevel"));
+		Body->TryGetNumberField(TEXT("oldLevel"), ExperienceUpdate.oldLevel);
 
-	if (Body->HasField(TEXT("newLevel")))
-		ExperienceUpdate.newLevel = Body->GetIntegerField(TEXT("newLevel"));
+		Body->TryGetNumberField(TEXT("newLevel"), ExperienceUpdate.newLevel);
 
-	if (Body->HasField(TEXT("oldExperience")))
-		ExperienceUpdate.oldExperience = Body->GetIntegerField(TEXT("oldExperience"));
+		Body->TryGetNumberField(TEXT("oldExperience"), ExperienceUpdate.oldExperience);
 
-	if (Body->HasField(TEXT("newExperience")))
-		ExperienceUpdate.newExperience = Body->GetIntegerField(TEXT("newExperience"));
+		Body->TryGetNumberField(TEXT("newExperience"), ExperienceUpdate.newExperience);
 
-	if (Body->HasField(TEXT("experienceChange")))
-		ExperienceUpdate.experienceChange = Body->GetIntegerField(TEXT("experienceChange"));
+		Body->TryGetNumberField(TEXT("experienceChange"), ExperienceUpdate.experienceChange);
 
-	if (Body->HasField(TEXT("expForCurrentLevel")))
-		ExperienceUpdate.expForCurrentLevel = Body->GetIntegerField(TEXT("expForCurrentLevel"));
+		Body->TryGetNumberField(TEXT("expForCurrentLevel"), ExperienceUpdate.expForCurrentLevel);
 
-	if (Body->HasField(TEXT("expForNextLevel")))
-		ExperienceUpdate.expForNextLevel = Body->GetIntegerField(TEXT("expForNextLevel"));
+		Body->TryGetNumberField(TEXT("expForNextLevel"), ExperienceUpdate.expForNextLevel);
 
-	if (Body->HasField(TEXT("levelUp")))
-		ExperienceUpdate.levelUp = Body->GetBoolField(TEXT("levelUp"));
+		Body->TryGetBoolField(TEXT("levelUp"), ExperienceUpdate.levelUp);
 
-	if (Body->HasField(TEXT("reason")))
-		ExperienceUpdate.reason = Body->GetStringField(TEXT("reason"));
+		Body->TryGetStringField(TEXT("reason"), ExperienceUpdate.reason);
 
-	if (Body->HasField(TEXT("sourceId")))
-		ExperienceUpdate.sourceId = Body->GetIntegerField(TEXT("sourceId"));
+		Body->TryGetNumberField(TEXT("sourceId"), ExperienceUpdate.sourceId);
 
 	return ExperienceUpdate;
 }
@@ -55,13 +44,19 @@ FExperienceUpdateStruct JSONParser::DeserializeExperienceUpdate(const FString& J
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeExperienceUpdate failed to parse JSON"));
 		return FExperienceUpdateStruct();
+	}
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
-	if (!Body.IsValid())
+	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeExperienceUpdate missing body"));
 		return FExperienceUpdateStruct();
+	}
 
-	return JSONParser::DeserializeExperienceUpdate(Body);
+	return JSONParser::DeserializeExperienceUpdate(*BodyPtr);
 }
 
 FPlayerProgressionStruct JSONParser::DeserializePlayerProgression(const TSharedPtr<FJsonObject>& ProgressionObj)
@@ -69,29 +64,21 @@ FPlayerProgressionStruct JSONParser::DeserializePlayerProgression(const TSharedP
 	FPlayerProgressionStruct Progression;
 	if (!ProgressionObj.IsValid()) return Progression;
 
-	if (ProgressionObj->HasField(TEXT("characterId")))
-		Progression.characterId = ProgressionObj->GetIntegerField(TEXT("characterId"));
+		ProgressionObj->TryGetNumberField(TEXT("characterId"), Progression.characterId);
 
-	if (ProgressionObj->HasField(TEXT("currentLevel")))
-		Progression.currentLevel = ProgressionObj->GetIntegerField(TEXT("currentLevel"));
+		ProgressionObj->TryGetNumberField(TEXT("currentLevel"), Progression.currentLevel);
 
-	if (ProgressionObj->HasField(TEXT("currentExperience")))
-		Progression.currentExperience = ProgressionObj->GetIntegerField(TEXT("currentExperience"));
+		ProgressionObj->TryGetNumberField(TEXT("currentExperience"), Progression.currentExperience);
 
-	if (ProgressionObj->HasField(TEXT("totalExperience")))
-		Progression.totalExperience = ProgressionObj->GetIntegerField(TEXT("totalExperience"));
+		ProgressionObj->TryGetNumberField(TEXT("totalExperience"), Progression.totalExperience);
 
-	if (ProgressionObj->HasField(TEXT("expForNextLevel")))
-		Progression.expForNextLevel = ProgressionObj->GetIntegerField(TEXT("expForNextLevel"));
+		ProgressionObj->TryGetNumberField(TEXT("expForNextLevel"), Progression.expForNextLevel);
 
-	if (ProgressionObj->HasField(TEXT("expForCurrentLevel")))
-		Progression.expForCurrentLevel = ProgressionObj->GetIntegerField(TEXT("expForCurrentLevel"));
+		ProgressionObj->TryGetNumberField(TEXT("expForCurrentLevel"), Progression.expForCurrentLevel);
 
-	if (ProgressionObj->HasField(TEXT("hasPendingLevelUp")))
-		Progression.bHasPendingLevelUp = ProgressionObj->GetBoolField(TEXT("hasPendingLevelUp"));
+		ProgressionObj->TryGetBoolField(TEXT("hasPendingLevelUp"), Progression.bHasPendingLevelUp);
 
-	if (ProgressionObj->HasField(TEXT("pendingLevelGained")))
-		Progression.pendingLevelGained = ProgressionObj->GetIntegerField(TEXT("pendingLevelGained"));
+		ProgressionObj->TryGetNumberField(TEXT("pendingLevelGained"), Progression.pendingLevelGained);
 
 	return Progression;
 }
@@ -101,17 +88,26 @@ FPlayerProgressionStruct JSONParser::DeserializePlayerProgression(const FString&
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializePlayerProgression failed to parse JSON"));
 		return FPlayerProgressionStruct();
+	}
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
-	if (!Body.IsValid())
+	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializePlayerProgression missing body"));
 		return FPlayerProgressionStruct();
+	}
 
-	TSharedPtr<FJsonObject> Progression = Body->GetObjectField(TEXT("progression"));
-	if (!Progression.IsValid())
+	const TSharedPtr<FJsonObject>* ProgressionPtr = nullptr;
+	if (!(*BodyPtr)->TryGetObjectField(TEXT("progression"), ProgressionPtr) || !ProgressionPtr || !(*ProgressionPtr).IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializePlayerProgression missing progression"));
 		return FPlayerProgressionStruct();
+	}
 
-	return JSONParser::DeserializePlayerProgression(Progression);
+	return JSONParser::DeserializePlayerProgression(*ProgressionPtr);
 }
 
 FExperienceGainEventStruct JSONParser::DeserializeExperienceGainEvent(const TSharedPtr<FJsonObject>& EventObj)
@@ -119,17 +115,13 @@ FExperienceGainEventStruct JSONParser::DeserializeExperienceGainEvent(const TSha
 	FExperienceGainEventStruct Event;
 	if (!EventObj.IsValid()) return Event;
 
-	if (EventObj->HasField(TEXT("experienceGained")))
-		Event.experienceGained = EventObj->GetIntegerField(TEXT("experienceGained"));
+		EventObj->TryGetNumberField(TEXT("experienceGained"), Event.experienceGained);
 
-	if (EventObj->HasField(TEXT("reason")))
-		Event.reasonText = EventObj->GetStringField(TEXT("reason"));
+		EventObj->TryGetStringField(TEXT("reason"), Event.reasonText);
 
-	if (EventObj->HasField(TEXT("sourceId")))
-		Event.sourceId = EventObj->GetIntegerField(TEXT("sourceId"));
+		EventObj->TryGetNumberField(TEXT("sourceId"), Event.sourceId);
 
-	if (EventObj->HasField(TEXT("sourceName")))
-		Event.sourceName = EventObj->GetStringField(TEXT("sourceName"));
+		EventObj->TryGetStringField(TEXT("sourceName"), Event.sourceName);
 
 	// Parse reason enum from string
 	if (!Event.reasonText.IsEmpty())
@@ -171,27 +163,29 @@ FExperienceGainEventStruct JSONParser::DeserializeExperienceGainEvent(const FStr
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
-		return FExperienceGainEventStruct();
-
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
-	if (!Body.IsValid())
-		return FExperienceGainEventStruct();
-
-	TSharedPtr<FJsonObject> Event = Body->GetObjectField(TEXT("experienceEvent"));
-	if (!Event.IsValid())
 	{
-		// Try to parse directly from body if no experienceEvent object
-		return JSONParser::DeserializeExperienceGainEvent(Body);
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeExperienceGainEvent failed to parse JSON"));
+		return FExperienceGainEventStruct();
 	}
 
-	return JSONParser::DeserializeExperienceGainEvent(Event);
+	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeExperienceGainEvent missing body"));
+		return FExperienceGainEventStruct();
+	}
+
+	const TSharedPtr<FJsonObject>* EventPtr = nullptr;
+	if (!(*BodyPtr)->TryGetObjectField(TEXT("experienceEvent"), EventPtr) || !EventPtr || !(*EventPtr).IsValid())
+	{
+		// Try to parse directly from body if no experienceEvent object
+		return JSONParser::DeserializeExperienceGainEvent(*BodyPtr);
+	}
+
+	return JSONParser::DeserializeExperienceGainEvent(*EventPtr);
 }
 
-//FPlayerStatsUpdateStruct JSONParser::DeserializePlayerStatsUpdate(const FString& JsonString)
-//{
-//    return PlayerAttributeParser::DeserializePlayerStatsUpdate(JsonString);
-//}
-
+// Player stats parsing delegates to PlayerAttributeParser (single owner).
 FPlayerStatsUpdateStruct JSONParser::DeserializePlayerStatsUpdate(const TSharedPtr<FJsonObject>& Body)
 {
     return PlayerAttributeParser::DeserializePlayerStatsUpdate(Body);
@@ -206,10 +200,10 @@ FPlayerStatsUpdateStruct JSONParser::DeserializePlayerStatsUpdate(const FString&
 
 	if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
 	{
-		if (JsonObject->HasField(TEXT("body")))
+		const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+		if (JsonObject->TryGetObjectField(TEXT("body"), BodyPtr) && BodyPtr && (*BodyPtr).IsValid())
 		{
-			TSharedPtr<FJsonObject> Body = JsonObject->GetObjectField(TEXT("body"));
-			PlayerStatsUpdate = DeserializePlayerStatsUpdate(Body);
+			PlayerStatsUpdate = DeserializePlayerStatsUpdate(*BodyPtr);
 		}
 	}
 
@@ -223,50 +217,23 @@ FPlayerSkillNetworkData JSONParser::DeserializePlayerSkillNetworkData(const TSha
 
 	if (SkillObj.IsValid())
 	{
-		if (SkillObj->HasField(TEXT("skillSlug")))
-		{
-			SkillData.skillSlug = SkillObj->GetStringField(TEXT("skillSlug"));
-		}
+			SkillObj->TryGetStringField(TEXT("skillSlug"), SkillData.skillSlug);
 
-		if (SkillObj->HasField(TEXT("skillLevel")))
-		{
-			SkillData.skillLevel = SkillObj->GetIntegerField(TEXT("skillLevel"));
-		}
+			SkillObj->TryGetNumberField(TEXT("skillLevel"), SkillData.skillLevel);
 
-		if (SkillObj->HasField(TEXT("castMs")))
-		{
-			SkillData.castMs = SkillObj->GetIntegerField(TEXT("castMs"));
-		}
+			SkillObj->TryGetNumberField(TEXT("castMs"), SkillData.castMs);
 
-		if (SkillObj->HasField(TEXT("coeff")))
-		{
-			SkillData.coeff = SkillObj->GetNumberField(TEXT("coeff"));
-		}
+			SkillObj->TryGetNumberField(TEXT("coeff"), SkillData.coeff);
 
-		if (SkillObj->HasField(TEXT("cooldownMs")))
-		{
-			SkillData.cooldownMs = SkillObj->GetIntegerField(TEXT("cooldownMs"));
-		}
+			SkillObj->TryGetNumberField(TEXT("cooldownMs"), SkillData.cooldownMs);
 
-		if (SkillObj->HasField(TEXT("costMp")))
-		{
-			SkillData.costMp = SkillObj->GetIntegerField(TEXT("costMp"));
-		}
+			SkillObj->TryGetNumberField(TEXT("costMp"), SkillData.costMp);
 
-		if (SkillObj->HasField(TEXT("flatAdd")))
-		{
-			SkillData.flatAdd = SkillObj->GetNumberField(TEXT("flatAdd"));
-		}
+			SkillObj->TryGetNumberField(TEXT("flatAdd"), SkillData.flatAdd);
 
-		if (SkillObj->HasField(TEXT("gcdMs")))
-		{
-			SkillData.gcdMs = SkillObj->GetIntegerField(TEXT("gcdMs"));
-		}
+			SkillObj->TryGetNumberField(TEXT("gcdMs"), SkillData.gcdMs);
 
-		if (SkillObj->HasField(TEXT("maxRange")))
-		{
-			SkillData.maxRange = SkillObj->GetNumberField(TEXT("maxRange"));
-		}
+			SkillObj->TryGetNumberField(TEXT("maxRange"), SkillData.maxRange);
 	}
 
 	return SkillData;
@@ -295,10 +262,7 @@ FPlayerSkillsInitializationData JSONParser::DeserializePlayerSkillsInitializatio
 
 	if (Body.IsValid())
 	{
-		if (Body->HasField(TEXT("characterId")))
-		{
-			InitData.characterId = Body->GetIntegerField(TEXT("characterId"));
-		}
+			Body->TryGetNumberField(TEXT("characterId"), InitData.characterId);
 
 		if (Body->HasField(TEXT("skills")))
 		{
@@ -320,15 +284,19 @@ FPlayerSkillsInitializationData JSONParser::DeserializePlayerSkillsInitializatio
 
 	FPlayerSkillsInitializationData InitData;
 
-	if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
+	if (!FJsonSerializer::Deserialize(Reader, JsonObject) || !JsonObject.IsValid())
 	{
-		if (JsonObject->HasField(TEXT("body")))
-		{
-			TSharedPtr<FJsonObject> Body = JsonObject->GetObjectField(TEXT("body"));
-			InitData = DeserializePlayerSkillsInitialization(Body);
-		}
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializePlayerSkillsInitialization failed to parse JSON"));
+		return InitData;
 	}
 
-	return InitData;
+	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+	if (!JsonObject->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializePlayerSkillsInitialization missing body"));
+		return InitData;
+	}
+
+	return DeserializePlayerSkillsInitialization(*BodyPtr);
 }
 

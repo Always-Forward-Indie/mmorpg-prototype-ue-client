@@ -21,61 +21,34 @@ FNetworkHeaderStruct JSONParser::DeserializeNetworkHeader(const FString& JsonStr
         const TSharedPtr<FJsonObject>* HeaderObject = nullptr;
         if (JsonObject->TryGetObjectField(TEXT("header"), HeaderObject) && HeaderObject != nullptr)
         {
-            if ((*HeaderObject)->HasField(TEXT("eventType")))
-            {
-                NetworkHeader.eventType = (*HeaderObject)->GetStringField(TEXT("eventType"));
-            }
+                (*HeaderObject)->TryGetStringField(TEXT("eventType"), NetworkHeader.eventType);
 
-            if ((*HeaderObject)->HasField(TEXT("status")))
-            {
-                NetworkHeader.status = (*HeaderObject)->GetStringField(TEXT("status"));
-            }
+                (*HeaderObject)->TryGetStringField(TEXT("status"), NetworkHeader.status);
 
-            if ((*HeaderObject)->HasField(TEXT("clientId")))
-            {
-                NetworkHeader.clientId = (*HeaderObject)->GetIntegerField(TEXT("clientId"));
-            }
+                (*HeaderObject)->TryGetNumberField(TEXT("clientId"), NetworkHeader.clientId);
 
-            if ((*HeaderObject)->HasField(TEXT("hash")))
-            {
-                NetworkHeader.hash = (*HeaderObject)->GetStringField(TEXT("hash"));
-            }
+                (*HeaderObject)->TryGetStringField(TEXT("hash"), NetworkHeader.hash);
 
-            if ((*HeaderObject)->HasField(TEXT("message")))
-            {
-                NetworkHeader.message = (*HeaderObject)->GetStringField(TEXT("message"));
-            }
+                (*HeaderObject)->TryGetStringField(TEXT("message"), NetworkHeader.message);
 
             // Check for requestIdEcho first (server response), then requestId (client request)
-            if ((*HeaderObject)->HasField(TEXT("requestIdEcho")))
+            if (!(*HeaderObject)->TryGetStringField(TEXT("requestIdEcho"), NetworkHeader.requestId))
             {
-                NetworkHeader.requestId = (*HeaderObject)->GetStringField(TEXT("requestIdEcho"));
-            }
-            else if ((*HeaderObject)->HasField(TEXT("requestId")))
-            {
-                NetworkHeader.requestId = (*HeaderObject)->GetStringField(TEXT("requestId"));
+                (*HeaderObject)->TryGetStringField(TEXT("requestId"), NetworkHeader.requestId);
             }
 
             // Time sync fields
-            if ((*HeaderObject)->HasField(TEXT("clientSendMs")))
-            {
-                NetworkHeader.clientSendMs = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("clientSendMs")));
-            }
+            if (double TmpClientSendMs = 0.0; (*HeaderObject)->TryGetNumberField(TEXT("clientSendMs"), TmpClientSendMs))
+                NetworkHeader.clientSendMs = static_cast<int64>(TmpClientSendMs);
 
-            if ((*HeaderObject)->HasField(TEXT("serverRecvMs")))
-            {
-                NetworkHeader.serverRecvMs = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("serverRecvMs")));
-            }
+            if (double TmpServerRecvMs = 0.0; (*HeaderObject)->TryGetNumberField(TEXT("serverRecvMs"), TmpServerRecvMs))
+                NetworkHeader.serverRecvMs = static_cast<int64>(TmpServerRecvMs);
 
-            if ((*HeaderObject)->HasField(TEXT("serverSendMs")))
-            {
-                NetworkHeader.serverSendMs = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("serverSendMs")));
-            }
+            if (double TmpServerSendMs = 0.0; (*HeaderObject)->TryGetNumberField(TEXT("serverSendMs"), TmpServerSendMs))
+                NetworkHeader.serverSendMs = static_cast<int64>(TmpServerSendMs);
 
-            if ((*HeaderObject)->HasField(TEXT("clientSendMsEcho")))
-            {
-                NetworkHeader.clientSendMsEcho = static_cast<int64>((*HeaderObject)->GetNumberField(TEXT("clientSendMsEcho")));
-            }
+            if (double TmpClientSendMsEcho = 0.0; (*HeaderObject)->TryGetNumberField(TEXT("clientSendMsEcho"), TmpClientSendMsEcho))
+                NetworkHeader.clientSendMsEcho = static_cast<int64>(TmpClientSendMsEcho);
         }
 
         // Per protocol (�1.4 pongClient), timestamps may be a root-level object
@@ -84,25 +57,15 @@ FNetworkHeaderStruct JSONParser::DeserializeNetworkHeader(const FString& JsonStr
         const TSharedPtr<FJsonObject>* TimestampsObject = nullptr;
         if (JsonObject->TryGetObjectField(TEXT("timestamps"), TimestampsObject) && TimestampsObject != nullptr)
         {
-            if ((*TimestampsObject)->HasField(TEXT("serverRecvMs")))
+            if (double TmpServerRecvMs = 0.0; (*TimestampsObject)->TryGetNumberField(TEXT("serverRecvMs"), TmpServerRecvMs))
+                NetworkHeader.serverRecvMs = static_cast<int64>(TmpServerRecvMs);
+            if (double TmpServerSendMs = 0.0; (*TimestampsObject)->TryGetNumberField(TEXT("serverSendMs"), TmpServerSendMs))
+                NetworkHeader.serverSendMs = static_cast<int64>(TmpServerSendMs);
+            if (double TmpClientSendMsEcho = 0.0; (*TimestampsObject)->TryGetNumberField(TEXT("clientSendMsEcho"), TmpClientSendMsEcho))
+                NetworkHeader.clientSendMsEcho = static_cast<int64>(TmpClientSendMsEcho);
+            if (!(*TimestampsObject)->TryGetStringField(TEXT("requestId"), NetworkHeader.requestId))
             {
-                NetworkHeader.serverRecvMs = static_cast<int64>((*TimestampsObject)->GetNumberField(TEXT("serverRecvMs")));
-            }
-            if ((*TimestampsObject)->HasField(TEXT("serverSendMs")))
-            {
-                NetworkHeader.serverSendMs = static_cast<int64>((*TimestampsObject)->GetNumberField(TEXT("serverSendMs")));
-            }
-            if ((*TimestampsObject)->HasField(TEXT("clientSendMsEcho")))
-            {
-                NetworkHeader.clientSendMsEcho = static_cast<int64>((*TimestampsObject)->GetNumberField(TEXT("clientSendMsEcho")));
-            }
-            if ((*TimestampsObject)->HasField(TEXT("requestId")))
-            {
-                NetworkHeader.requestId = (*TimestampsObject)->GetStringField(TEXT("requestId"));
-            }
-            else if ((*TimestampsObject)->HasField(TEXT("requestIdEcho")))
-            {
-                NetworkHeader.requestId = (*TimestampsObject)->GetStringField(TEXT("requestIdEcho"));
+                (*TimestampsObject)->TryGetStringField(TEXT("requestIdEcho"), NetworkHeader.requestId);
             }
         }
     }
@@ -119,14 +82,14 @@ void JSONParser::ProcessTimeSyncFromHeader(const FString& JsonString, UTimeSyncS
 
 	FNetworkHeaderStruct NetworkHeader = DeserializeNetworkHeader(JsonString);
 
-	// ��������� requestIdEcho ��� ������� �������
+	// Prefer requestIdEcho (server response); fall back to requestId.
 	FString RequestIdToUse;
 	if (!NetworkHeader.requestId.IsEmpty())
 	{
-		RequestIdToUse = NetworkHeader.requestId; // ����� ���� requestIdEcho �� �������
+		RequestIdToUse = NetworkHeader.requestId;
 	}
 
-	// ������������ ������ ���� ���� ��������� ����������
+	// Update only when the full server timestamp pair is present.
 	if (!RequestIdToUse.IsEmpty() &&
 		NetworkHeader.serverRecvMs > 0 &&
 		NetworkHeader.serverSendMs > 0)

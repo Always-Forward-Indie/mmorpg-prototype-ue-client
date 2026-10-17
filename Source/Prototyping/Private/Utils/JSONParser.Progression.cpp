@@ -193,21 +193,8 @@ FPlayerStatsUpdateStruct JSONParser::DeserializePlayerStatsUpdate(const TSharedP
 
 FPlayerStatsUpdateStruct JSONParser::DeserializePlayerStatsUpdate(const FString& JsonString)
 {
-	TSharedPtr<FJsonObject> JsonObject;
-	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
-
-	FPlayerStatsUpdateStruct PlayerStatsUpdate;
-
-	if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
-	{
-		const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
-		if (JsonObject->TryGetObjectField(TEXT("body"), BodyPtr) && BodyPtr && (*BodyPtr).IsValid())
-		{
-			PlayerStatsUpdate = DeserializePlayerStatsUpdate(*BodyPtr);
-		}
-	}
-
-	return PlayerStatsUpdate;
+	// Single owner: PlayerAttributeParser does the parsing and logging.
+	return PlayerAttributeParser::DeserializePlayerStatsUpdate(JsonString);
 }
 
 // Player skills system parsers

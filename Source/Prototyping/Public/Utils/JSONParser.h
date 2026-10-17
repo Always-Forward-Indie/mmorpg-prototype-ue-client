@@ -91,11 +91,9 @@ public:
     static FItemBaseStruct DeserializeItemData(const TSharedPtr<FJsonObject>& ItemObj);
     static FDroppedItemStruct DeserializeDroppedItem(const TSharedPtr<FJsonObject>& DroppedItemObj);
     static FItemDropResponseStruct DeserializeItemDropResponse(const TSharedPtr<FJsonObject>& Body);
-    static FItemDropResponseStruct DeserializeItemDropResponse(const FString& JsonString);
 
     // Inventory data parsers
     static FInventoryItemStruct DeserializeInventoryItem(const TSharedPtr<FJsonObject>& ItemObj);
-    static TArray<FInventoryItemStruct> DeserializeInventoryItems(const TArray<TSharedPtr<FJsonValue>>& JsonArray);
     static FCharacterInventoryStruct DeserializeCharacterInventory(const TSharedPtr<FJsonObject>& InventoryObj);
     static FCharacterInventoryStruct DeserializeCharacterInventory(const FString& JsonString);
     static FInventoryUpdateStruct DeserializeInventoryUpdate(const TSharedPtr<FJsonObject>& UpdateObj);

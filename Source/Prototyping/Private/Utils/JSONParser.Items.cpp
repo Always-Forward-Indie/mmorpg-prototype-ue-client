@@ -14,17 +14,13 @@ FItemAttributeStruct JSONParser::DeserializeItemAttribute(const TSharedPtr<FJson
 	FItemAttributeStruct ItemAttribute;
 	if (!AttributeObj.IsValid()) return ItemAttribute;
 
-	if (AttributeObj->HasField(TEXT("id")))
-		ItemAttribute.id = AttributeObj->GetIntegerField(TEXT("id"));
+		AttributeObj->TryGetNumberField(TEXT("id"), ItemAttribute.id);
 	
-	if (AttributeObj->HasField(TEXT("name")))
-		ItemAttribute.name = AttributeObj->GetStringField(TEXT("name"));
+		AttributeObj->TryGetStringField(TEXT("name"), ItemAttribute.name);
 	
-	if (AttributeObj->HasField(TEXT("slug")))
-		ItemAttribute.slug = AttributeObj->GetStringField(TEXT("slug"));
+		AttributeObj->TryGetStringField(TEXT("slug"), ItemAttribute.slug);
 	
-	if (AttributeObj->HasField(TEXT("value")))
-		ItemAttribute.value = AttributeObj->GetNumberField(TEXT("value"));
+		AttributeObj->TryGetNumberField(TEXT("value"), ItemAttribute.value);
 
 	return ItemAttribute;
 }
@@ -52,31 +48,25 @@ FItemBaseStruct JSONParser::DeserializeItemData(const TSharedPtr<FJsonObject>& I
 	FItemBaseStruct Item;
 	if (!ItemObj.IsValid()) return Item;
 
-	if (ItemObj->HasField(TEXT("id")))
-		Item.id = ItemObj->GetIntegerField(TEXT("id"));
+		ItemObj->TryGetNumberField(TEXT("id"), Item.id);
 	
-	if (ItemObj->HasField(TEXT("name")))
-		Item.name = ItemObj->GetStringField(TEXT("name"));
+		ItemObj->TryGetStringField(TEXT("name"), Item.name);
 	
-	if (ItemObj->HasField(TEXT("slug")))
-		Item.slug = ItemObj->GetStringField(TEXT("slug"));
+		ItemObj->TryGetStringField(TEXT("slug"), Item.slug);
 	
-	if (ItemObj->HasField(TEXT("description")))
-		Item.description = ItemObj->GetStringField(TEXT("description"));
+		ItemObj->TryGetStringField(TEXT("description"), Item.description);
 	
-	if (ItemObj->HasField(TEXT("isQuestItem")))
-		Item.isQuestItem = ItemObj->GetBoolField(TEXT("isQuestItem"));
+		ItemObj->TryGetBoolField(TEXT("isQuestItem"), Item.isQuestItem);
 	
-	if (ItemObj->HasField(TEXT("itemType")))
+	int32 ItemTypeRaw = 0;
+	if (ItemObj->TryGetNumberField(TEXT("itemType"), ItemTypeRaw))
 	{
-		Item.itemType = static_cast<EItemType>(ItemObj->GetIntegerField(TEXT("itemType")));
+		Item.itemType = static_cast<EItemType>(ItemTypeRaw);
 	}
 	
-	if (ItemObj->HasField(TEXT("itemTypeName")))
-		Item.itemTypeName = ItemObj->GetStringField(TEXT("itemTypeName"));
+		ItemObj->TryGetStringField(TEXT("itemTypeName"), Item.itemTypeName);
 	
-	if (ItemObj->HasField(TEXT("itemTypeSlug")))
-		Item.itemTypeSlug = ItemObj->GetStringField(TEXT("itemTypeSlug"));
+		ItemObj->TryGetStringField(TEXT("itemTypeSlug"), Item.itemTypeSlug);
 	
 	if (ItemObj->HasField(TEXT("attributes")))
 	{
@@ -96,11 +86,9 @@ FDroppedItemStruct JSONParser::DeserializeDroppedItem(const TSharedPtr<FJsonObje
 	FDroppedItemStruct DroppedItem;
 	if (!DroppedItemObj.IsValid()) return DroppedItem;
 
-	if (DroppedItemObj->HasField(TEXT("uid")))
-		DroppedItem.uid = DroppedItemObj->GetIntegerField(TEXT("uid"));
+		DroppedItemObj->TryGetNumberField(TEXT("uid"), DroppedItem.uid);
 	
-	if (DroppedItemObj->HasField(TEXT("itemId")))
-		DroppedItem.itemId = DroppedItemObj->GetIntegerField(TEXT("itemId"));
+		DroppedItemObj->TryGetNumberField(TEXT("itemId"), DroppedItem.itemId);
 	
 	if (DroppedItemObj->HasField(TEXT("droppedByMobUID")))
 	{
@@ -120,17 +108,13 @@ FDroppedItemStruct JSONParser::DeserializeDroppedItem(const TSharedPtr<FJsonObje
 		}
 	}
 	
-	if (DroppedItemObj->HasField(TEXT("droppedByCharacterId")))
-		DroppedItem.droppedByCharacterId = DroppedItemObj->GetIntegerField(TEXT("droppedByCharacterId"));
+		DroppedItemObj->TryGetNumberField(TEXT("droppedByCharacterId"), DroppedItem.droppedByCharacterId);
 
-	if (DroppedItemObj->HasField(TEXT("quantity")))
-		DroppedItem.quantity = DroppedItemObj->GetIntegerField(TEXT("quantity"));
+		DroppedItemObj->TryGetNumberField(TEXT("quantity"), DroppedItem.quantity);
 	
-	if (DroppedItemObj->HasField(TEXT("canBePickedUp")))
-		DroppedItem.canBePickedUp = DroppedItemObj->GetBoolField(TEXT("canBePickedUp"));
+		DroppedItemObj->TryGetBoolField(TEXT("canBePickedUp"), DroppedItem.canBePickedUp);
 
-	if (DroppedItemObj->HasField(TEXT("reservedForCharacterId")))
-		DroppedItem.reservedForCharacterId = DroppedItemObj->GetIntegerField(TEXT("reservedForCharacterId"));
+		DroppedItemObj->TryGetNumberField(TEXT("reservedForCharacterId"), DroppedItem.reservedForCharacterId);
 
 	if (DroppedItemObj->HasField(TEXT("reservationSecondsLeft")))
 	{
@@ -139,11 +123,13 @@ FDroppedItemStruct JSONParser::DeserializeDroppedItem(const TSharedPtr<FJsonObje
 		DroppedItem.reservationSecondsLeft = static_cast<int64>(ResvSecs);
 	}
 	
-	if (DroppedItemObj->HasField(TEXT("position")) && DroppedItemObj->GetObjectField(TEXT("position")).IsValid())
-		DroppedItem.position = JSONParser::DeserializePositionData(DroppedItemObj->GetObjectField(TEXT("position")));
-	
-	if (DroppedItemObj->HasField(TEXT("item")) && DroppedItemObj->GetObjectField(TEXT("item")).IsValid())
-		DroppedItem.item = JSONParser::DeserializeItemData(DroppedItemObj->GetObjectField(TEXT("item")));
+	const TSharedPtr<FJsonObject>* PositionPtr = nullptr;
+	if (DroppedItemObj->TryGetObjectField(TEXT("position"), PositionPtr) && PositionPtr && (*PositionPtr).IsValid())
+		DroppedItem.position = JSONParser::DeserializePositionData(*PositionPtr);
+
+	const TSharedPtr<FJsonObject>* ItemPtr = nullptr;
+	if (DroppedItemObj->TryGetObjectField(TEXT("item"), ItemPtr) && ItemPtr && (*ItemPtr).IsValid())
+		DroppedItem.item = JSONParser::DeserializeItemData(*ItemPtr);
 
 	return DroppedItem;
 }

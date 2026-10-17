@@ -169,3 +169,64 @@ bool FMobTargetLostContractTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("null uid default"), Null.mobUID, 0);
     return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMobsListContractTest, "MMO.Protocol.MobsListContract",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+
+bool FMobsListContractTest::RunTest(const FString& Parameters)
+{
+    TSharedPtr<FJsonObject> Body = ParserContract_ParseObj(
+        TEXT("{\"mobs\":["
+        "{\"id\":4,\"uid\":501,\"name\":\"Fox\",\"level\":3},"
+        "\"oops\","
+        "{\"id\":5,\"uid\":502,\"name\":\"Wolf\"}"
+        "]}"));
+    TArray<FMOBStruct> Flat = JSONParser::DeserializeMobsList(Body);
+    // Wrong-typed entry skipped quietly (no LogJson Error, no phantom mob).
+    TestEqual(TEXT("two mobs"), Flat.Num(), 2);
+    if (Flat.Num() == 2)
+    {
+        TestEqual(TEXT("first uid"), Flat[0].mobUniqueID, FString(TEXT("501")));
+        TestEqual(TEXT("second name"), Flat[1].mobName, FString(TEXT("Wolf")));
+    }
+
+    // Legacy nested spawnZone format still resolves.
+    TSharedPtr<FJsonObject> Legacy = ParserContract_ParseObj(
+        TEXT("{\"spawnZone\":{\"mobs\":[{\"id\":6,\"uid\":503,\"name\":\"Boar\"}]}}"));
+    TArray<FMOBStruct> LegacyList = JSONParser::DeserializeMobsList(Legacy);
+    TestEqual(TEXT("legacy one mob"), LegacyList.Num(), 1);
+    if (LegacyList.Num() == 1)
+    {
+        TestEqual(TEXT("legacy name"), LegacyList[0].mobName, FString(TEXT("Boar")));
+    }
+
+    // Missing array and null body: empty, no crash.
+    TestEqual(TEXT("no array empty"), JSONParser::DeserializeMobsList(ParserContract_ParseObj(TEXT("{}"))).Num(), 0);
+    TestEqual(TEXT("null empty"), JSONParser::DeserializeMobsList(nullptr).Num(), 0);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSpawnZonesListContractTest, "MMO.Protocol.SpawnZonesListContract",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+
+bool FSpawnZonesListContractTest::RunTest(const FString& Parameters)
+{
+    TSharedPtr<FJsonObject> Body = ParserContract_ParseObj(
+        TEXT("{\"spawnZones\":["
+        "{\"id\":9,\"name\":\"Fox Den\",\"spawnEnabled\":true},"
+        "13,"
+        "{\"id\":10,\"name\":\"Wolf Lair\"}"
+        "]}"));
+    TArray<FSpawnZoneStruct> Zones = JSONParser::DeserializeSpawnZonesList(Body);
+    TestEqual(TEXT("two zones"), Zones.Num(), 2);
+    if (Zones.Num() == 2)
+    {
+        TestEqual(TEXT("first name"), Zones[0].zoneName, FString(TEXT("Fox Den")));
+        TestTrue(TEXT("first enabled"), Zones[0].bSpawningEnabled);
+        TestEqual(TEXT("second id"), Zones[1].zoneID, 10);
+    }
+
+    TestEqual(TEXT("no array empty"), JSONParser::DeserializeSpawnZonesList(ParserContract_ParseObj(TEXT("{}"))).Num(), 0);
+    TestEqual(TEXT("null empty"), JSONParser::DeserializeSpawnZonesList(nullptr).Num(), 0);
+    return true;
+}

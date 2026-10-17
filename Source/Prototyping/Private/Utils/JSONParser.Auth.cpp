@@ -36,8 +36,13 @@ TArray<FLoginCharacterEntry> JSONParser::DeserializeLoginCharactersList(const FS
 
 	for (const TSharedPtr<FJsonValue>& CharacterValue : *CharactersArray)
 	{
-		TSharedPtr<FJsonObject> CharacterObject = CharacterValue->AsObject();
-		if (!CharacterObject.IsValid()) continue;
+		// TryGetObject (not AsObject): wrong-typed entries skip quietly.
+		const TSharedPtr<FJsonObject>* CharacterPtr = nullptr;
+		if (!CharacterValue.IsValid() || !CharacterValue->TryGetObject(CharacterPtr) || !CharacterPtr || !(*CharacterPtr).IsValid())
+		{
+			continue;
+		}
+		const TSharedPtr<FJsonObject>& CharacterObject = *CharacterPtr;
 
 		FLoginCharacterEntry Entry;
 
@@ -56,8 +61,9 @@ TArray<FLoginCharacterEntry> JSONParser::DeserializeLoginCharactersList(const FS
 		{
 			for (const TSharedPtr<FJsonValue>& EquipValue : *EquipArray)
 			{
-				TSharedPtr<FJsonObject> EquipObject = EquipValue->AsObject();
-				if (!EquipObject.IsValid()) continue;
+				const TSharedPtr<FJsonObject>* EquipPtr = nullptr;
+				if (!EquipValue.IsValid() || !EquipValue->TryGetObject(EquipPtr) || !EquipPtr || !(*EquipPtr).IsValid()) continue;
+				const TSharedPtr<FJsonObject>& EquipObject = *EquipPtr;
 
 				FLoginEquipmentEntry EquipEntry;
 				EquipObject->TryGetNumberField(TEXT("slotId"),   EquipEntry.SlotId);

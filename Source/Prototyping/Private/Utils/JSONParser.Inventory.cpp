@@ -56,8 +56,10 @@ static void ParseItemFields(const TSharedPtr<FJsonObject>& Src, FInventoryItemSt
 		const TArray<TSharedPtr<FJsonValue>> AttrArray = Src->GetArrayField(TEXT("attributes"));
 		for (const TSharedPtr<FJsonValue>& AttrVal : AttrArray)
 		{
-			TSharedPtr<FJsonObject> AttrObj = AttrVal->AsObject();
-			if (!AttrObj.IsValid()) continue;
+			// TryGetObject (not AsObject): wrong-typed entries skip quietly.
+			const TSharedPtr<FJsonObject>* AttrPtr = nullptr;
+			if (!AttrVal.IsValid() || !AttrVal->TryGetObject(AttrPtr) || !AttrPtr || !(*AttrPtr).IsValid()) continue;
+			const TSharedPtr<FJsonObject>& AttrObj = *AttrPtr;
 
 			FItemAttributeStruct TypedAttr;
 			if (AttrObj->TryGetStringField(TEXT("slug"), TypedAttr.slug)) {}
@@ -81,8 +83,10 @@ static void ParseItemFields(const TSharedPtr<FJsonObject>& Src, FInventoryItemSt
 		const TArray<TSharedPtr<FJsonValue>> EffectArray = Src->GetArrayField(TEXT("useEffects"));
 		for (const TSharedPtr<FJsonValue>& EffVal : EffectArray)
 		{
-			TSharedPtr<FJsonObject> EffObj = EffVal->AsObject();
-			if (!EffObj.IsValid()) continue;
+			// TryGetObject (not AsObject): wrong-typed entries skip quietly.
+			const TSharedPtr<FJsonObject>* EffPtr = nullptr;
+			if (!EffVal.IsValid() || !EffVal->TryGetObject(EffPtr) || !EffPtr || !(*EffPtr).IsValid()) continue;
+			const TSharedPtr<FJsonObject>& EffObj = *EffPtr;
 
 			FItemUseEffectEntry Effect;
 			if (EffObj->HasField(TEXT("effectSlug")))       Effect.effectSlug       = EffObj->GetStringField(TEXT("effectSlug"));
@@ -179,8 +183,10 @@ FCharacterInventoryStruct JSONParser::DeserializeCharacterInventory(const TShare
 	{
 		for (const TSharedPtr<FJsonValue>& ItemValue : *ItemsArray)
 		{
-			TSharedPtr<FJsonObject> ItemObj = ItemValue->AsObject();
-			if (!ItemObj.IsValid()) continue;
+			// TryGetObject (not AsObject): wrong-typed entries skip quietly.
+			const TSharedPtr<FJsonObject>* ItemPtr = nullptr;
+			if (!ItemValue.IsValid() || !ItemValue->TryGetObject(ItemPtr) || !ItemPtr || !(*ItemPtr).IsValid()) continue;
+			const TSharedPtr<FJsonObject>& ItemObj = *ItemPtr;
 
 			FInventoryItemStruct Item = JSONParser::DeserializeInventoryItem(ItemObj);
 			Inventory.items.Add(Item);

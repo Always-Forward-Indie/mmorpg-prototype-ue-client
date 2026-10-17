@@ -119,12 +119,14 @@ FHarvestCompleteStruct JSONParser::DeserializeHarvestComplete(const TSharedPtr<F
 	{
 		for (const TSharedPtr<FJsonValue>& LootValue : *LootArray)
 		{
-			TSharedPtr<FJsonObject> LootObj = LootValue->AsObject();
-			if (LootObj.IsValid())
+			// TryGetObject (not AsObject): wrong-typed entries skip quietly.
+			const TSharedPtr<FJsonObject>* LootPtr = nullptr;
+			if (!LootValue.IsValid() || !LootValue->TryGetObject(LootPtr) || !LootPtr || !(*LootPtr).IsValid())
 			{
-				FHarvestItemStruct Item = JSONParser::DeserializeHarvestItem(LootObj);
-				HarvestComplete.availableLoot.Add(Item);
+				continue;
 			}
+			FHarvestItemStruct Item = JSONParser::DeserializeHarvestItem(*LootPtr);
+			HarvestComplete.availableLoot.Add(Item);
 		}
 	}
 
@@ -205,12 +207,14 @@ FCorpseLootPickupResponseStruct JSONParser::DeserializeCorpseLootPickupResponse(
 	{
 		for (const TSharedPtr<FJsonValue>& ItemValue : *PickedUpArray)
 		{
-			TSharedPtr<FJsonObject> ItemObj = ItemValue->AsObject();
-			if (ItemObj.IsValid())
+			// TryGetObject (not AsObject): wrong-typed entries skip quietly.
+			const TSharedPtr<FJsonObject>* ItemPtr = nullptr;
+			if (!ItemValue.IsValid() || !ItemValue->TryGetObject(ItemPtr) || !ItemPtr || !(*ItemPtr).IsValid())
 			{
-				FHarvestItemStruct Item = JSONParser::DeserializeHarvestItem(ItemObj);
-				Response.pickedUpItems.Add(Item);
+				continue;
 			}
+			FHarvestItemStruct Item = JSONParser::DeserializeHarvestItem(*ItemPtr);
+			Response.pickedUpItems.Add(Item);
 		}
 	}
 
@@ -220,12 +224,14 @@ FCorpseLootPickupResponseStruct JSONParser::DeserializeCorpseLootPickupResponse(
 	{
 		for (const TSharedPtr<FJsonValue>& ItemValue : *RemainingArray)
 		{
-			TSharedPtr<FJsonObject> ItemObj = ItemValue->AsObject();
-			if (ItemObj.IsValid())
+			// TryGetObject (not AsObject): wrong-typed entries skip quietly.
+			const TSharedPtr<FJsonObject>* ItemPtr = nullptr;
+			if (!ItemValue.IsValid() || !ItemValue->TryGetObject(ItemPtr) || !ItemPtr || !(*ItemPtr).IsValid())
 			{
-				FHarvestItemStruct Item = JSONParser::DeserializeHarvestItem(ItemObj);
-				Response.remainingLoot.Add(Item);
+				continue;
 			}
+			FHarvestItemStruct Item = JSONParser::DeserializeHarvestItem(*ItemPtr);
+			Response.remainingLoot.Add(Item);
 		}
 	}
 
@@ -300,12 +306,14 @@ FCorpseLootInspectResponseStruct JSONParser::DeserializeCorpseLootInspectRespons
 	{
 		for (const TSharedPtr<FJsonValue>& LootValue : *LootArray)
 		{
-			TSharedPtr<FJsonObject> LootObj = LootValue->AsObject();
-			if (LootObj.IsValid())
+			// TryGetObject (not AsObject): wrong-typed entries skip quietly.
+			const TSharedPtr<FJsonObject>* LootPtr = nullptr;
+			if (!LootValue.IsValid() || !LootValue->TryGetObject(LootPtr) || !LootPtr || !(*LootPtr).IsValid())
 			{
-				FHarvestItemStruct Item = JSONParser::DeserializeHarvestItem(LootObj);
-				Response.availableLoot.Add(Item);
+				continue;
 			}
+			FHarvestItemStruct Item = JSONParser::DeserializeHarvestItem(*LootPtr);
+			Response.availableLoot.Add(Item);
 		}
 	}
 

@@ -35,11 +35,13 @@ TArray<FItemAttributeStruct> JSONParser::DeserializeItemAttributes(const TArray<
 	TArray<FItemAttributeStruct> Attributes;
 	for (const TSharedPtr<FJsonValue>& Value : JsonArray)
 	{
-		const TSharedPtr<FJsonObject> AttrObj = Value->AsObject();
-		if (AttrObj.IsValid())
+		// TryGetObject (not AsObject): wrong-typed entries skip quietly.
+		const TSharedPtr<FJsonObject>* AttrPtr = nullptr;
+		if (!Value.IsValid() || !Value->TryGetObject(AttrPtr) || !AttrPtr || !(*AttrPtr).IsValid())
 		{
-			Attributes.Add(JSONParser::DeserializeItemAttribute(AttrObj));
+			continue;
 		}
+		Attributes.Add(JSONParser::DeserializeItemAttribute(*AttrPtr));
 	}
 	return Attributes;
 }
@@ -161,11 +163,13 @@ FItemDropResponseStruct JSONParser::DeserializeItemDropResponse(const TSharedPtr
 	{
 		for (const TSharedPtr<FJsonValue>& ItemValue : *DroppedItemsArray)
 		{
-			TSharedPtr<FJsonObject> ItemObject = ItemValue->AsObject();
-			if (ItemObject.IsValid())
+			// TryGetObject (not AsObject): wrong-typed entries skip quietly.
+			const TSharedPtr<FJsonObject>* ItemPtr = nullptr;
+			if (!ItemValue.IsValid() || !ItemValue->TryGetObject(ItemPtr) || !ItemPtr || !(*ItemPtr).IsValid())
 			{
-				ItemDropResponse.droppedItems.Add(JSONParser::DeserializeDroppedItem(ItemObject));
+				continue;
 			}
+			ItemDropResponse.droppedItems.Add(JSONParser::DeserializeDroppedItem(*ItemPtr));
 		}
 	}
 

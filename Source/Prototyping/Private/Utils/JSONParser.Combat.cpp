@@ -90,18 +90,24 @@ TArray<FAppliedEffectData> JSONParser::DeserializeAppliedEffects(const TArray<TS
 	TArray<FAppliedEffectData> Effects;
 	for (const TSharedPtr<FJsonValue>& Value : JsonArray)
 	{
-		const TSharedPtr<FJsonObject> EffectObj = Value->AsObject();
-		if (EffectObj.IsValid())
+		if (!Value.IsValid()) continue;
+		if (Value->Type == EJson::String)
 		{
-			Effects.Add(JSONParser::DeserializeAppliedEffect(EffectObj));
-		}
-		else if (Value->Type == EJson::String)
-		{
-			// skillExecutionResult format: appliedEffects is an array of slug strings
+			// skillExecutionResult format: appliedEffects is an array of slug strings.
+			// Checked BEFORE any object conversion: AsObject() on a string
+			// logs a LogJson Error per effect.
 			FAppliedEffectData Effect;
-			Effect.effectName = Value->AsString();
+			Value->TryGetString(Effect.effectName);
 			Effects.Add(Effect);
+			continue;
 		}
+		// TryGetObject (not AsObject): wrong-typed entries skip quietly.
+		const TSharedPtr<FJsonObject>* EffectPtr = nullptr;
+		if (!Value->TryGetObject(EffectPtr) || !EffectPtr || !(*EffectPtr).IsValid())
+		{
+			continue;
+		}
+		Effects.Add(JSONParser::DeserializeAppliedEffect(*EffectPtr));
 	}
 	return Effects;
 }
@@ -309,8 +315,10 @@ if ((*AoeObj)->TryGetArrayField(TEXT("targets"), TargetsArray) && TargetsArray)
 {
 for (const TSharedPtr<FJsonValue>& V : *TargetsArray)
 {
-TSharedPtr<FJsonObject> O = V->AsObject();
-if (!O.IsValid()) continue;
+// TryGetObject (not AsObject): wrong-typed entries skip quietly.
+const TSharedPtr<FJsonObject>* OPtr = nullptr;
+if (!V.IsValid() || !V->TryGetObject(OPtr) || !OPtr || !(*OPtr).IsValid()) continue;
+const TSharedPtr<FJsonObject>& O = *OPtr;
 FAoeTargetResultData T;
 O->TryGetNumberField(TEXT("targetId"), T.targetId);
 O->TryGetNumberField(TEXT("damage"), T.damage);

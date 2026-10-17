@@ -18,11 +18,13 @@ TArray<FSpawnZoneStruct> JSONParser::DeserializeSpawnZonesList(const TSharedPtr<
 	{
 		for (const TSharedPtr<FJsonValue>& SpawnZoneValue : *SpawnZonesArray)
 		{
-			TSharedPtr<FJsonObject> SpawnZoneObject = SpawnZoneValue->AsObject();
-			if (SpawnZoneObject.IsValid())
+			// TryGetObject (not AsObject): wrong-typed entries skip quietly.
+			const TSharedPtr<FJsonObject>* SpawnZonePtr = nullptr;
+			if (!SpawnZoneValue.IsValid() || !SpawnZoneValue->TryGetObject(SpawnZonePtr) || !SpawnZonePtr || !(*SpawnZonePtr).IsValid())
 			{
-				SpawnZonesList.Add(JSONParser::DeserializeSpawnZoneData(SpawnZoneObject));
+				continue;
 			}
+			SpawnZonesList.Add(JSONParser::DeserializeSpawnZoneData(*SpawnZonePtr));
 		}
 	}
 
@@ -97,11 +99,13 @@ TArray<FMOBStruct> JSONParser::DeserializeMobsList(const TSharedPtr<FJsonObject>
 	{
 		for (const TSharedPtr<FJsonValue>& MobValue : *MobsArray)
 		{
-			TSharedPtr<FJsonObject> MobObject = MobValue->AsObject();
-			if (MobObject.IsValid())
+			// TryGetObject (not AsObject): wrong-typed entries skip quietly.
+			const TSharedPtr<FJsonObject>* MobObjPtr = nullptr;
+			if (!MobValue.IsValid() || !MobValue->TryGetObject(MobObjPtr) || !MobObjPtr || !(*MobObjPtr).IsValid())
 			{
-				MobsList.Add(JSONParser::DeserializeMobData(MobObject));
+				continue;
 			}
+			MobsList.Add(JSONParser::DeserializeMobData(*MobObjPtr));
 		}
 	}
 	return MobsList;

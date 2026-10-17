@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Utils/JSONParser.h"
@@ -136,31 +136,38 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 }
 
 
- // Universal: Parse Position from JSON object
+ // Universal: Parse Position from JSON object.
+ // Missing or wrong-typed fields stay at the struct default (0) — quiet,
+ // so one truncated move packet never spams the log per field.
  FPositionDataStruct JSONParser::DeserializePositionData(const TSharedPtr<FJsonObject>& PosObj)
  {
 	 FPositionDataStruct Pos;
 	 if (!PosObj.IsValid()) return Pos;
-	 Pos.positionX = PosObj->GetNumberField(TEXT("x"));
-	 Pos.positionY = PosObj->GetNumberField(TEXT("y"));
-	 Pos.positionZ = PosObj->GetNumberField(TEXT("z"));
-	 Pos.rotationZ = PosObj->GetNumberField(TEXT("rotationZ"));
+	 PosObj->TryGetNumberField(TEXT("x"), Pos.positionX);
+	 PosObj->TryGetNumberField(TEXT("y"), Pos.positionY);
+	 PosObj->TryGetNumberField(TEXT("z"), Pos.positionZ);
+	 PosObj->TryGetNumberField(TEXT("rotationZ"), Pos.rotationZ);
 	 return Pos;
  }
 
- // Universal: Parse Attributes from array
+ // Universal: Parse Attributes from array.
+ // Entries without a slug are skipped (same as before); missing fields
+ // keep struct defaults instead of Warning-spamming per field.
  TMap<FString, FAttributeDataStruct> JSONParser::DeserializeAttributesArray(const TArray<TSharedPtr<FJsonValue>>& JsonArray)
  {
 	 TMap<FString, FAttributeDataStruct> Result;
 	 for (const TSharedPtr<FJsonValue>& Value : JsonArray)
 	 {
-		 const TSharedPtr<FJsonObject> AttrObj = Value->AsObject();
-		 if (!AttrObj.IsValid()) continue;
+		 // NOTE: never AsObject() blindly — wrong-typed values log a LogJson
+		 // Error. TryGetObject skips them quietly (same skip contract).
+		 const TSharedPtr<FJsonObject>* AttrPtr = nullptr;
+		 if (!Value.IsValid() || !Value->TryGetObject(AttrPtr) || !AttrPtr || !(*AttrPtr).IsValid()) continue;
+		 const TSharedPtr<FJsonObject>& AttrObj = *AttrPtr;
 		 FAttributeDataStruct Attr;
-		 Attr.attributeId = AttrObj->GetIntegerField(TEXT("id"));
-		 Attr.attributeName = AttrObj->GetStringField(TEXT("name"));
-		 Attr.attributeSlug = AttrObj->GetStringField(TEXT("slug"));
-		 Attr.attributeValue = AttrObj->GetIntegerField(TEXT("value"));
+		 AttrObj->TryGetNumberField(TEXT("id"), Attr.attributeId);
+		 AttrObj->TryGetStringField(TEXT("name"), Attr.attributeName);
+		 AttrObj->TryGetStringField(TEXT("slug"), Attr.attributeSlug);
+		 AttrObj->TryGetNumberField(TEXT("value"), Attr.attributeValue);
 		 if (!Attr.attributeSlug.IsEmpty())
 		 {
 			 Result.Add(Attr.attributeSlug, Attr);
@@ -174,7 +181,7 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
  {
 	 FCharacterDataStruct Character;
 	 if (!CD.IsValid()) return Character;
-	 Character.characterId = CD->GetIntegerField(TEXT("id"));
+	 CD->TryGetNumberField(TEXT("id"), Character.characterId);
 	 if (CD->HasField(TEXT("name")))
 		 Character.characterName = CD->GetStringField(TEXT("name"));
 	 if (CD->HasField(TEXT("class")))
@@ -185,8 +192,7 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 	 {
 		 Character.characterGender = CD->GetStringField(TEXT("gender"));
 	 }
-	 if (CD->HasField(TEXT("level")))
-		 Character.characterLevel = CD->GetIntegerField(TEXT("level"));
+	 CD->TryGetNumberField(TEXT("level"), Character.characterLevel);
 
 	 //is dead
 	 if (CD->HasField(TEXT("isDead"))) {
@@ -196,23 +202,46 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 	 }
 
 	 if (CD->HasField(TEXT("exp"))) {
-		 TSharedPtr<FJsonObject> Exp = CD->GetObjectField(TEXT("exp"));
-		 Character.characterExperiencePoints = Exp->GetIntegerField(TEXT("current"));
-		 Character.characterExpForLevelStart = Exp->GetIntegerField(TEXT("levelStart"));
-		 Character.characterExpForLevelEnd = Exp->GetIntegerField(TEXT("levelEnd"));
+		 const TSharedPtr<FJsonObject>* ExpPtr = nullptr;
+		 if (CD->TryGetObjectField(TEXT("exp"), ExpPtr) && ExpPtr && (*ExpPtr).IsValid())
+		 {
+			 const TSharedPtr<FJsonObject>& Exp = *ExpPtr;
+			 Exp->TryGetNumberField(TEXT("current"), Character.characterExperiencePoints);
+			 Exp->TryGetNumberField(TEXT("levelStart"), Character.characterExpForLevelStart);
+			 Exp->TryGetNumberField(TEXT("levelEnd"), Character.characterExpForLevelEnd);
+		 }
 	 }
 
 	 if (CD->HasField(TEXT("stats"))) {
-		 TSharedPtr<FJsonObject> Stats = CD->GetObjectField(TEXT("stats"));
-		 TSharedPtr<FJsonObject> Health = Stats->GetObjectField(TEXT("health"));
-		 TSharedPtr<FJsonObject> Mana = Stats->GetObjectField(TEXT("mana"));
-		 Character.characterCurrentHealth = Health->GetIntegerField(TEXT("current"));
-		 Character.characterCurrentMana = Mana->GetIntegerField(TEXT("current"));
+		 const TSharedPtr<FJsonObject>* StatsPtr = nullptr;
+		 if (CD->TryGetObjectField(TEXT("stats"), StatsPtr) && StatsPtr && (*StatsPtr).IsValid())
+		 {
+			 const TSharedPtr<FJsonObject>& Stats = *StatsPtr;
+			 const TSharedPtr<FJsonObject>* HealthPtr = nullptr;
+			 const TSharedPtr<FJsonObject>* ManaPtr = nullptr;
+			 const bool bHasHealth = Stats->TryGetObjectField(TEXT("health"), HealthPtr) && HealthPtr && (*HealthPtr).IsValid();
+			 const bool bHasMana = Stats->TryGetObjectField(TEXT("mana"), ManaPtr) && ManaPtr && (*ManaPtr).IsValid();
+			 if (bHasHealth)
+			 {
+				 (*HealthPtr)->TryGetNumberField(TEXT("current"), Character.characterCurrentHealth);
+			 }
+			 if (bHasMana)
+			 {
+				 (*ManaPtr)->TryGetNumberField(TEXT("current"), Character.characterCurrentMana);
+			 }
 
 		 // Also store max values in characterAttributes so RefreshHUD can use them
 		 // immediately after spawn, before the first stats_update arrives.
-		 const int32 MaxHealth = Health->HasField(TEXT("max")) ? Health->GetIntegerField(TEXT("max")) : 0;
-		 const int32 MaxMana   = Mana->HasField(TEXT("max"))   ? Mana->GetIntegerField(TEXT("max"))   : 0;
+		 int32 MaxHealth = 0;
+		 int32 MaxMana = 0;
+		 if (bHasHealth)
+		 {
+			 (*HealthPtr)->TryGetNumberField(TEXT("max"), MaxHealth);
+		 }
+		 if (bHasMana)
+		 {
+			 (*ManaPtr)->TryGetNumberField(TEXT("max"), MaxMana);
+		 }
 
 		 if (MaxHealth > 0)
 		 {
@@ -231,13 +260,16 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 			 ManaAttr.attributeValue = MaxMana;
 			 Character.characterAttributes.attributesData.Add(TEXT("max_mana"), ManaAttr);
 		 }
-	 }
+		 } // TryGet stats object
+	 } // HasField(stats)
 
-	 if (CD->HasField(TEXT("position")))
-		 Character.characterPosition = JSONParser::DeserializePositionData(CD->GetObjectField(TEXT("position")));
+	 const TSharedPtr<FJsonObject>* PositionPtr = nullptr;
+	 if (CD->TryGetObjectField(TEXT("position"), PositionPtr) && PositionPtr && (*PositionPtr).IsValid())
+		 Character.characterPosition = JSONParser::DeserializePositionData(*PositionPtr);
 
-	 if (CD->HasField(TEXT("attributes")))
-		 Character.characterAttributes.attributesData = JSONParser::DeserializeAttributesArray(CD->GetArrayField(TEXT("attributes")));
+	 const TArray<TSharedPtr<FJsonValue>>* AttributesArray = nullptr;
+	 if (CD->TryGetArrayField(TEXT("attributes"), AttributesArray) && AttributesArray != nullptr)
+		 Character.characterAttributes.attributesData = JSONParser::DeserializeAttributesArray(*AttributesArray);
 
 	if (CD->HasField(TEXT("isFalling")))
 		Character.bIsFalling = CD->GetBoolField(TEXT("isFalling"));
@@ -248,14 +280,27 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 	return Character;
  }
 
- // Entry point for string-based JSON input
+ // Entry point for string-based JSON input.
+ // Never crashes: garbage JSON or a missing body/character yields a default
+ // struct plus one error-level log (malformed server packet = seam failure).
  FCharacterDataStruct JSONParser::DeserializeCharacterData(const FString& JsonString)
  {
 	 TSharedPtr<FJsonObject> Root;
 	 TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
-	 if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return FCharacterDataStruct();
-	 TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
-	 return JSONParser::DeserializeCharacterData(Body->GetObjectField(TEXT("character")));
+	 if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+	 {
+		 UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCharacterData failed to parse JSON"));
+		 return FCharacterDataStruct();
+	 }
+	 const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+	 const TSharedPtr<FJsonObject>* CharacterPtr = nullptr;
+	 if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid()
+		 || !(*BodyPtr)->TryGetObjectField(TEXT("character"), CharacterPtr) || !CharacterPtr || !(*CharacterPtr).IsValid())
+	 {
+		 UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCharacterData missing body/character"));
+		 return FCharacterDataStruct();
+	 }
+	 return JSONParser::DeserializeCharacterData(*CharacterPtr);
  }
 
 
@@ -269,14 +314,22 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 	 {
 		 for (const TSharedPtr<FJsonValue>& Value : *CharactersArray)
 		 {
-			 TSharedPtr<FJsonObject> CharacterObj = Value->AsObject();
-			 if (CharacterObj.IsValid())
+			 // TryGetObject (not AsObject): wrong-typed entries skip quietly
+			 // instead of logging a LogJson Error per packet.
+			 const TSharedPtr<FJsonObject>* CharacterObjPtr = nullptr;
+			 if (!Value.IsValid() || !Value->TryGetObject(CharacterObjPtr) || !CharacterObjPtr || !(*CharacterObjPtr).IsValid())
 			 {
-				 FClientDataStruct ClientData;
-				 ClientData.clientId = CharacterObj->GetIntegerField(TEXT("clientId"));
-				 ClientData.characterData = JSONParser::DeserializeCharacterData(CharacterObj->GetObjectField(TEXT("character")));
-				 Result.Add(ClientData);
+				 continue;
 			 }
+			 const TSharedPtr<FJsonObject>& CharacterObj = *CharacterObjPtr;
+				 FClientDataStruct ClientData;
+				 CharacterObj->TryGetNumberField(TEXT("clientId"), ClientData.clientId);
+				 const TSharedPtr<FJsonObject>* CharacterPtr = nullptr;
+				 if (CharacterObj->TryGetObjectField(TEXT("character"), CharacterPtr) && CharacterPtr && (*CharacterPtr).IsValid())
+				 {
+					 ClientData.characterData = JSONParser::DeserializeCharacterData(*CharacterPtr);
+				 }
+				 Result.Add(ClientData);
 		 }
 	 }
 

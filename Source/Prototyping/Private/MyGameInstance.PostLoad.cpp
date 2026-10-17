@@ -404,7 +404,17 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 		IGameMoviePlayer* MoviePlayer = GetMoviePlayer();
 		if (!MoviePlayer || !MoviePlayer->IsMovieCurrentlyPlaying())
 		{
-			UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] CRITICAL: loading screen lost after level transition — reconfiguring MoviePlayer"));
+			// Headless (-nullrhi) has no renderer: MoviePlayer can never play,
+			// so "lost" is expected there — Warning, still reconfigure.
+			// A lost screen WITH a renderer is a real travel bug — Error.
+			if (!FApp::CanEverRender())
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Headless run: loading screen not playing after transition — reconfiguring MoviePlayer"));
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] CRITICAL: loading screen lost after level transition — reconfiguring MoviePlayer"));
+			}
 			SetupMoviePlayerLoadingScreen();
 		}
 		else

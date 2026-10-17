@@ -342,6 +342,14 @@ void UMyGameInstance::SetCharacterItems(TArray<FCharacterDataStruct> Items)
 {
 	if (!LoginScreenWidget)
 	{
+		// Live-bot flow (headless auto-login) intentionally has no login UI:
+		// the driver consumes the character list directly. Quiet Verbose there;
+		// a null widget in the manual flow is still an Error (empty list).
+		if (!LiveBotScenario.IsEmpty())
+		{
+			UE_LOG(LogTemp, Verbose, TEXT("SetCharacterItems: no login widget in live-bot flow, items consumed by driver"));
+			return;
+		}
 		UE_LOG(LogTemp, Error, TEXT("Failed to set character items - LoginScreenWidget is null"));
 		return;
 	}

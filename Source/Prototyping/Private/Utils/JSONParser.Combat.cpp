@@ -70,17 +70,13 @@ FAppliedEffectData JSONParser::DeserializeAppliedEffect(const TSharedPtr<FJsonOb
 	FAppliedEffectData Effect;
 	if (!EffectObj.IsValid()) return Effect;
 
-	if (EffectObj->HasField(TEXT("effectName")))
-		Effect.effectName = EffectObj->GetStringField(TEXT("effectName"));
+		EffectObj->TryGetStringField(TEXT("effectName"), Effect.effectName);
 	
-	if (EffectObj->HasField(TEXT("duration")))
-		Effect.duration = EffectObj->GetNumberField(TEXT("duration"));
+		EffectObj->TryGetNumberField(TEXT("duration"), Effect.duration);
 	
-	if (EffectObj->HasField(TEXT("value")))
-		Effect.value = EffectObj->GetIntegerField(TEXT("value"));
+		EffectObj->TryGetNumberField(TEXT("value"), Effect.value);
 	
-	if (EffectObj->HasField(TEXT("effectType")))
-		Effect.effectType = EffectObj->GetStringField(TEXT("effectType"));
+		EffectObj->TryGetStringField(TEXT("effectType"), Effect.effectType);
 
 	return Effect;
 }
@@ -117,69 +113,56 @@ FSkillInitiationData JSONParser::DeserializeSkillInitiation(const TSharedPtr<FJs
 	FSkillInitiationData SkillData;
 	if (!InitiationObj.IsValid()) return SkillData;
 
-	if (InitiationObj->HasField(TEXT("skillName")))
-		SkillData.skillName = InitiationObj->GetStringField(TEXT("skillName"));
+		InitiationObj->TryGetStringField(TEXT("skillName"), SkillData.skillName);
 
-	if (InitiationObj->HasField(TEXT("skillSlug")))
-		SkillData.skillSlug = InitiationObj->GetStringField(TEXT("skillSlug"));
+		InitiationObj->TryGetStringField(TEXT("skillSlug"), SkillData.skillSlug);
 	
-	if (InitiationObj->HasField(TEXT("animationName")))
-		SkillData.animationName = InitiationObj->GetStringField(TEXT("animationName"));
+		InitiationObj->TryGetStringField(TEXT("animationName"), SkillData.animationName);
 	
-	if (InitiationObj->HasField(TEXT("animationDuration")))
-		SkillData.animationDuration = InitiationObj->GetNumberField(TEXT("animationDuration"));
+		InitiationObj->TryGetNumberField(TEXT("animationDuration"), SkillData.animationDuration);
 	
-	if (InitiationObj->HasField(TEXT("castTime")))
-		SkillData.castTime = InitiationObj->GetNumberField(TEXT("castTime"));
+		InitiationObj->TryGetNumberField(TEXT("castTime"), SkillData.castTime);
 	
-	if (InitiationObj->HasField(TEXT("casterId")))
-		SkillData.casterId = InitiationObj->GetIntegerField(TEXT("casterId"));
+		InitiationObj->TryGetNumberField(TEXT("casterId"), SkillData.casterId);
 	
-	if (InitiationObj->HasField(TEXT("casterType")))
-		SkillData.casterType = InitiationObj->GetIntegerField(TEXT("casterType"));
+		InitiationObj->TryGetNumberField(TEXT("casterType"), SkillData.casterType);
 	
-	if (InitiationObj->HasField(TEXT("casterTypeString")))
-		SkillData.casterTypeString = InitiationObj->GetStringField(TEXT("casterTypeString"));
+		InitiationObj->TryGetStringField(TEXT("casterTypeString"), SkillData.casterTypeString);
 	
-	if (InitiationObj->HasField(TEXT("targetId")))
-		SkillData.targetId = InitiationObj->GetIntegerField(TEXT("targetId"));
+		InitiationObj->TryGetNumberField(TEXT("targetId"), SkillData.targetId);
 	
-	if (InitiationObj->HasField(TEXT("targetType")))
-		SkillData.targetType = InitiationObj->GetIntegerField(TEXT("targetType"));
+		InitiationObj->TryGetNumberField(TEXT("targetType"), SkillData.targetType);
 	
-	if (InitiationObj->HasField(TEXT("targetTypeString")))
-		SkillData.targetTypeString = InitiationObj->GetStringField(TEXT("targetTypeString"));
+		InitiationObj->TryGetStringField(TEXT("targetTypeString"), SkillData.targetTypeString);
 	
-	if (InitiationObj->HasField(TEXT("success")))
-		SkillData.success = InitiationObj->GetBoolField(TEXT("success"));
+		InitiationObj->TryGetBoolField(TEXT("success"), SkillData.success);
 
 	// Parse effect type and school
-	if (InitiationObj->HasField(TEXT("skillEffectType")))
+	FString EffectTypeStr;
+	if (InitiationObj->TryGetStringField(TEXT("skillEffectType"), EffectTypeStr))
 	{
-		FString EffectTypeStr = InitiationObj->GetStringField(TEXT("skillEffectType"));
 		SkillData.skillEffectType = JSONParser::ParseSkillEffectType(EffectTypeStr);
 	}
-	
-	if (InitiationObj->HasField(TEXT("skillSchool")))
+
+	FString SchoolStr;
+	if (InitiationObj->TryGetStringField(TEXT("skillSchool"), SchoolStr))
 	{
-		FString SchoolStr = InitiationObj->GetStringField(TEXT("skillSchool"));
 		SkillData.skillSchool = JSONParser::ParseSkillSchool(SchoolStr);
 	}
 
-	if (InitiationObj->HasField(TEXT("cooldownMs")))
-		SkillData.cooldownMs = InitiationObj->GetIntegerField(TEXT("cooldownMs"));
+		InitiationObj->TryGetNumberField(TEXT("cooldownMs"), SkillData.cooldownMs);
 
-	if (InitiationObj->HasField(TEXT("gcdMs")))
-		SkillData.gcdMs = InitiationObj->GetIntegerField(TEXT("gcdMs"));
+		InitiationObj->TryGetNumberField(TEXT("gcdMs"), SkillData.gcdMs);
 
-	if (InitiationObj->HasField(TEXT("serverTimestamp")))
-		SkillData.serverTimestamp = static_cast<int64>(InitiationObj->GetNumberField(TEXT("serverTimestamp")));
+	double ServerTsMs = 0.0;
+	if (InitiationObj->TryGetNumberField(TEXT("serverTimestamp"), ServerTsMs))
+		SkillData.serverTimestamp = static_cast<int64>(ServerTsMs);
 
-	if (InitiationObj->HasField(TEXT("castStartedAt")))
-		SkillData.castStartedAt = static_cast<int64>(InitiationObj->GetNumberField(TEXT("castStartedAt")));
+	double CastStartedMs = 0.0;
+	if (InitiationObj->TryGetNumberField(TEXT("castStartedAt"), CastStartedMs))
+		SkillData.castStartedAt = static_cast<int64>(CastStartedMs);
 
-	if (InitiationObj->HasField(TEXT("errorReason")))
-		SkillData.errorReason = InitiationObj->GetStringField(TEXT("errorReason"));
+		InitiationObj->TryGetStringField(TEXT("errorReason"), SkillData.errorReason);
 if (InitiationObj->HasField(TEXT("errorCode")))
 {
 InitiationObj->TryGetStringField(TEXT("errorCode"), SkillData.errorCode);
@@ -197,11 +180,18 @@ FSkillInitiationData JSONParser::DeserializeSkillInitiation(const FString& JsonS
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
-		{ FSkillInitiationData FailedInit; FailedInit.success = false; FailedInit.errorCode = JSONParser::ResolveErrorCode(Root); FailedInit.errorReason = FailedInit.errorCode; return FailedInit; }
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeSkillInitiation failed to parse JSON"));
+		FSkillInitiationData FailedInit; FailedInit.success = false; return FailedInit;
+	}
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
-	if (!Body.IsValid())
-		{ FSkillInitiationData FailedInit; FailedInit.success = false; FailedInit.errorCode = JSONParser::ResolveErrorCode(Root); FailedInit.errorReason = FailedInit.errorCode; return FailedInit; }
+	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeSkillInitiation missing body"));
+		FSkillInitiationData FailedInit; FailedInit.success = false; FailedInit.errorCode = JSONParser::ResolveErrorCode(Root); FailedInit.errorReason = FailedInit.errorCode; return FailedInit;
+	}
+	TSharedPtr<FJsonObject> Body = *BodyPtr;
 
 	TSharedPtr<FJsonObject> SkillInitiation; const TSharedPtr<FJsonObject>* SkillInitPtr = nullptr; if (Body->TryGetObjectField(TEXT("skillInitiation"), SkillInitPtr) && SkillInitPtr) SkillInitiation = *SkillInitPtr;
 	if (!SkillInitiation.IsValid())
@@ -215,82 +205,62 @@ FSkillResultData JSONParser::DeserializeSkillResult(const TSharedPtr<FJsonObject
 	FSkillResultData SkillResult;
 	if (!ResultObj.IsValid()) return SkillResult;
 
-	if (ResultObj->HasField(TEXT("skillName")))
-		SkillResult.skillName = ResultObj->GetStringField(TEXT("skillName"));
+		ResultObj->TryGetStringField(TEXT("skillName"), SkillResult.skillName);
 	
-	if (ResultObj->HasField(TEXT("skillSlug")))
-		SkillResult.skillSlug = ResultObj->GetStringField(TEXT("skillSlug"));
+		ResultObj->TryGetStringField(TEXT("skillSlug"), SkillResult.skillSlug);
 	
-	if (ResultObj->HasField(TEXT("casterId")))
-		SkillResult.casterId = ResultObj->GetIntegerField(TEXT("casterId"));
+		ResultObj->TryGetNumberField(TEXT("casterId"), SkillResult.casterId);
 	
-	if (ResultObj->HasField(TEXT("casterType")))
-		SkillResult.casterType = ResultObj->GetIntegerField(TEXT("casterType"));
+		ResultObj->TryGetNumberField(TEXT("casterType"), SkillResult.casterType);
 	
-	if (ResultObj->HasField(TEXT("casterTypeString")))
-		SkillResult.casterTypeString = ResultObj->GetStringField(TEXT("casterTypeString"));
+		ResultObj->TryGetStringField(TEXT("casterTypeString"), SkillResult.casterTypeString);
 	
-	if (ResultObj->HasField(TEXT("targetId")))
-		SkillResult.targetId = ResultObj->GetIntegerField(TEXT("targetId"));
+		ResultObj->TryGetNumberField(TEXT("targetId"), SkillResult.targetId);
 	
-	if (ResultObj->HasField(TEXT("targetType")))
-		SkillResult.targetType = ResultObj->GetIntegerField(TEXT("targetType"));
+		ResultObj->TryGetNumberField(TEXT("targetType"), SkillResult.targetType);
 	
-	if (ResultObj->HasField(TEXT("targetTypeString")))
-		SkillResult.targetTypeString = ResultObj->GetStringField(TEXT("targetTypeString"));
+		ResultObj->TryGetStringField(TEXT("targetTypeString"), SkillResult.targetTypeString);
 	
-	if (ResultObj->HasField(TEXT("damage")))
-		SkillResult.damage = ResultObj->GetIntegerField(TEXT("damage"));
-	
-	if (ResultObj->HasField(TEXT("healing")))
-		SkillResult.healing = ResultObj->GetIntegerField(TEXT("healing"));
-	else if (ResultObj->HasField(TEXT("healAmount")))
-		SkillResult.healing = ResultObj->GetIntegerField(TEXT("healAmount"));
+		ResultObj->TryGetNumberField(TEXT("damage"), SkillResult.damage);
 
-	if (ResultObj->HasField(TEXT("manaHealing")))
-		SkillResult.manaHealing = ResultObj->GetIntegerField(TEXT("manaHealing"));
-	
-	if (ResultObj->HasField(TEXT("finalTargetHealth")))
-		SkillResult.finalTargetHealth = ResultObj->GetIntegerField(TEXT("finalTargetHealth"));
-	
-	if (ResultObj->HasField(TEXT("finalTargetMana")))
-		SkillResult.finalTargetMana = ResultObj->GetIntegerField(TEXT("finalTargetMana"));
-	
-	if (ResultObj->HasField(TEXT("finalCasterMana")))
-		SkillResult.finalCasterMana = ResultObj->GetIntegerField(TEXT("finalCasterMana"));
-	
-	if (ResultObj->HasField(TEXT("isCritical")))
-		SkillResult.isCritical = ResultObj->GetBoolField(TEXT("isCritical"));
-	
-	if (ResultObj->HasField(TEXT("isBlocked")))
-		SkillResult.isBlocked = ResultObj->GetBoolField(TEXT("isBlocked"));
-	
-	if (ResultObj->HasField(TEXT("isMissed")))
-		SkillResult.isMissed = ResultObj->GetBoolField(TEXT("isMissed"));
-	
-	if (ResultObj->HasField(TEXT("targetDied")))
-		SkillResult.targetDied = ResultObj->GetBoolField(TEXT("targetDied"));
-	
-	if (ResultObj->HasField(TEXT("success")))
-		SkillResult.success = ResultObj->GetBoolField(TEXT("success"));
+		if (!ResultObj->TryGetNumberField(TEXT("healing"), SkillResult.healing))
+			ResultObj->TryGetNumberField(TEXT("healAmount"), SkillResult.healing);
 
-	if (ResultObj->HasField(TEXT("serverTimestamp")))
-		SkillResult.serverTimestamp = static_cast<int64>(ResultObj->GetNumberField(TEXT("serverTimestamp")));
+		ResultObj->TryGetNumberField(TEXT("manaHealing"), SkillResult.manaHealing);
+	
+		ResultObj->TryGetNumberField(TEXT("finalTargetHealth"), SkillResult.finalTargetHealth);
+	
+		ResultObj->TryGetNumberField(TEXT("finalTargetMana"), SkillResult.finalTargetMana);
+	
+		ResultObj->TryGetNumberField(TEXT("finalCasterMana"), SkillResult.finalCasterMana);
+	
+		ResultObj->TryGetBoolField(TEXT("isCritical"), SkillResult.isCritical);
+	
+		ResultObj->TryGetBoolField(TEXT("isBlocked"), SkillResult.isBlocked);
+	
+		ResultObj->TryGetBoolField(TEXT("isMissed"), SkillResult.isMissed);
+	
+		ResultObj->TryGetBoolField(TEXT("targetDied"), SkillResult.targetDied);
+	
+		ResultObj->TryGetBoolField(TEXT("success"), SkillResult.success);
 
-	if (ResultObj->HasField(TEXT("errorReason")))
-		SkillResult.errorReason = ResultObj->GetStringField(TEXT("errorReason"));
+	double ResultServerTsMs = 0.0;
+	if (ResultObj->TryGetNumberField(TEXT("serverTimestamp"), ResultServerTsMs))
+		SkillResult.serverTimestamp = static_cast<int64>(ResultServerTsMs);
+
+		ResultObj->TryGetStringField(TEXT("errorReason"), SkillResult.errorReason);
 
 	// Parse effect type and school
-	if (ResultObj->HasField(TEXT("skillEffectType")))
+	FString ResultEffectTypeStr;
+	if (ResultObj->TryGetStringField(TEXT("skillEffectType"), ResultEffectTypeStr))
 	{
-		FString EffectTypeStr = ResultObj->GetStringField(TEXT("skillEffectType"));
-		SkillResult.skillEffectType = JSONParser::ParseSkillEffectType(EffectTypeStr);
+		SkillResult.skillEffectType = JSONParser::ParseSkillEffectType(ResultEffectTypeStr);
 	}
-	
-	if (ResultObj->HasField(TEXT("skillSchool")))
+
+	FString ResultSchoolStr;
+	if (ResultObj->TryGetStringField(TEXT("skillSchool"), ResultSchoolStr))
 	{
-		FString SchoolStr = ResultObj->GetStringField(TEXT("skillSchool"));
-		SkillResult.skillSchool = JSONParser::ParseSkillSchool(SchoolStr);
+		SkillResult.skillSchool = JSONParser::ParseSkillSchool(ResultSchoolStr);
 	}
 
 	// Parse applied effects array
@@ -342,11 +312,18 @@ FSkillResultData JSONParser::DeserializeSkillResult(const FString& JsonString)
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
-		{ FSkillResultData FailedRes; FailedRes.success = false; FailedRes.errorCode = JSONParser::ResolveErrorCode(Root); FailedRes.errorReason = FailedRes.errorCode; return FailedRes; }
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeSkillResult failed to parse JSON"));
+		FSkillResultData FailedRes; FailedRes.success = false; return FailedRes;
+	}
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
-	if (!Body.IsValid())
-		{ FSkillResultData FailedRes; FailedRes.success = false; FailedRes.errorCode = JSONParser::ResolveErrorCode(Root); FailedRes.errorReason = FailedRes.errorCode; return FailedRes; }
+	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeSkillResult missing body"));
+		FSkillResultData FailedRes; FailedRes.success = false; FailedRes.errorCode = JSONParser::ResolveErrorCode(Root); FailedRes.errorReason = FailedRes.errorCode; return FailedRes;
+	}
+	TSharedPtr<FJsonObject> Body = *BodyPtr;
 
 	// Try nested skillResult object first (combatResult / healingResult format)
 	TSharedPtr<FJsonObject> SkillResult; const TSharedPtr<FJsonObject>* SkillResPtr = nullptr; if (Body->TryGetObjectField(TEXT("skillResult"), SkillResPtr) && SkillResPtr) SkillResult = *SkillResPtr;
@@ -361,10 +338,16 @@ FSkillResultData JSONParser::DeserializeSkillResult(const FString& JsonString)
 	// skillExecutionResult wraps success in the header, not in body
 if (!Body->HasField(TEXT("success")))
 {
-TSharedPtr<FJsonObject> Header = Root->GetObjectField(TEXT("header"));
-if (Header.IsValid() && Header->HasField(TEXT("status")))
+const TSharedPtr<FJsonObject>* HeaderPtr = nullptr;
+TSharedPtr<FJsonObject> Header;
+if (Root->TryGetObjectField(TEXT("header"), HeaderPtr) && HeaderPtr && (*HeaderPtr).IsValid()) Header = *HeaderPtr;
+if (Header.IsValid())
 {
-Result.success = Header->GetStringField(TEXT("status")).Equals(TEXT("success"), ESearchCase::IgnoreCase);
+	FString Status;
+	if (Header->TryGetStringField(TEXT("status"), Status))
+	{
+		Result.success = Status.Equals(TEXT("success"), ESearchCase::IgnoreCase);
+	}
 }
 }
 if (Result.errorCode.IsEmpty())

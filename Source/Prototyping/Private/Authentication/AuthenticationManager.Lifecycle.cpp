@@ -1,0 +1,202 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#include "Authentication/AuthenticationManager.h"
+#include "MyGameInstance.h"
+
+UAuthenticationManager::UAuthenticationManager(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
+// initialize the authentication manager
+void UAuthenticationManager::Initialize(UNetworkManager* NetworkManager, UPingManager* PingManager)
+{
+	// Initialize the network manager
+	networkManager = NetworkManager;
+
+	// Initialize the ping manager
+	pingManager = PingManager;
+
+	// Get the game instance
+	gameInstance = Cast<UMyGameInstance>(worldContext->GetGameInstance());
+
+	if (gameInstance)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("GameInstance found"));
+		
+		// Set up PingManager with TimeSyncService integration
+		if (pingManager)
+		{
+			pingManager->SetTimeSyncService(gameInstance->GetTimeSyncService());
+			UE_LOG(LogTemp, Warning, TEXT("AuthenticationManager: PingManager configured with TimeSyncService"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("GameInstance not found"));
+	}
+
+	// Subscribe to the network manager's event
+	//SubscribeToNetworkManager();
+}
+
+//subscribe to network manager
+void UAuthenticationManager::SubscribeToNetworkManager()
+{
+	// Subscribe to the network manager's event
+	if (networkManager != nullptr)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Network Manager found and subscribed to LoginServerResponse delegate"));
+
+		if (IsValid(networkManager))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Network Manager is valid"));
+			networkManager->OnLoginServerDataReceived.RemoveDynamic(this, &UAuthenticationManager::ProcessLoginResponse);
+			networkManager->OnLoginServerDataReceived.AddDynamic(this, &UAuthenticationManager::ProcessLoginResponse);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("Network Manager is not valid"));
+		}
+
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("Network Manager not found"));
+	}
+}
+
+// set world context 
+void UAuthenticationManager::SetWorldContext(UWorld* WorldContext)
+{
+	// Set the world context
+	worldContext = WorldContext;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Request timeout helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+void UAuthenticationManager::StartRequestTimeout(FTimerHandle& Handle, void (UAuthenticationManager::* Callback)())
+{
+	UWorld* World = worldContext ? worldContext : (gameInstance ? gameInstance->GetWorld() : nullptr);
+	if (!World) return;
+
+	World->GetTimerManager().ClearTimer(Handle);
+	World->GetTimerManager().SetTimer(Handle, this, Callback, RequestTimeoutSeconds, false);
+}
+
+void UAuthenticationManager::ClearRequestTimeout(FTimerHandle& Handle)
+{
+	UWorld* World = worldContext ? worldContext : (gameInstance ? gameInstance->GetWorld() : nullptr);
+	if (!World) return;
+
+	World->GetTimerManager().ClearTimer(Handle);
+}
+
+void UAuthenticationManager::OnLoginRequestTimeout()
+{
+	UE_LOG(LogTemp, Error, TEXT("AuthManager: Login request timed out after %.0fs — broadcasting error"), RequestTimeoutSeconds);
+	OnLoginResponse.Broadcast(false, TEXT("ERR_TIMEOUT"));
+}
+
+void UAuthenticationManager::OnRegisterRequestTimeout()
+{
+	UE_LOG(LogTemp, Error, TEXT("AuthManager: Register request timed out after %.0fs — broadcasting error"), RequestTimeoutSeconds);
+	OnRegisterResponse.Broadcast(false, TEXT("ERR_TIMEOUT"));
+}
+
+
+
+void UAuthenticationManager::FillAuthHeader(TMap<FString, TSharedPtr<FJsonValue>>& HeaderData) const
+{
+	if (!gameInstance) return;
+
+	HeaderData.Add("clientId", MakeShareable(new FJsonValueNumber(gameInstance->GetCurrentClientID())));
+	HeaderData.Add("hash",     MakeShareable(new FJsonValueString(gameInstance->GetCurrentClientHash())));
+}
+
+bool UAuthenticationManager::HandleUnauthorized(const FString& Status, const FString& Message, const FString& ErrorCode)
+{
+	if (Status == "error" && (Message == "Unauthorized" || ErrorCode == "Unauthorized"))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("AuthManager: Session expired (Unauthorized)"));
+		OnSessionExpired.Broadcast();
+		return true;
+	}
+	return false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Validation (legacy — kept for backward compat)
+// ─────────────────────────────────────────────────────────────────────────────
+
+bool UAuthenticationManager::IsLoginValueValid(const FString& Login)
+{
+	if (Login.IsEmpty())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Login could not be empty!"));
+		if (gameInstance)
+		{
+			gameInstance->OnLoginResponseReceived.Broadcast(gameInstance->GetCurrentClientID(), "Login could not be empty!");
+		}
+		return false;
+	}
+	if (Login.Len() < 3)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Login is too short!"));
+		if (gameInstance)
+		{
+			gameInstance->OnLoginResponseReceived.Broadcast(gameInstance->GetCurrentClientID(), "Login is too short!");
+		}
+		return false;
+	}
+	if (Login.Len() > 20)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Login is too long!"));
+		if (gameInstance)
+		{
+			gameInstance->OnLoginResponseReceived.Broadcast(gameInstance->GetCurrentClientID(), "Login is too long!");
+		}
+		return false;
+	}
+	return true;
+}
+
+bool UAuthenticationManager::IsPasswordValueValid(const FString& Password)
+{
+	if (Password.IsEmpty())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Password could not be empty!"));
+		if (gameInstance)
+		{
+			gameInstance->OnLoginResponseReceived.Broadcast(gameInstance->GetCurrentClientID(), "Password could not be empty!");
+		}
+		return false;
+	}
+	// FIXED: server expects 8–100 chars, not 3–20
+	if (Password.Len() < 8)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Password is too short!"));
+		if (gameInstance)
+		{
+			gameInstance->OnLoginResponseReceived.Broadcast(gameInstance->GetCurrentClientID(), "Password must be at least 8 characters!");
+		}
+		return false;
+	}
+	if (Password.Len() > 100)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Password is too long!"));
+		if (gameInstance)
+		{
+			gameInstance->OnLoginResponseReceived.Broadcast(gameInstance->GetCurrentClientID(), "Password must be 100 characters or fewer!");
+		}
+		return false;
+	}
+	return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Outgoing requests
+// ─────────────────────────────────────────────────────────────────────────────
+

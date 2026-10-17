@@ -1,0 +1,65 @@
+#include "Services/LocalizationSubsystem.h"
+#include "Data/LocalizationDataAsset.h"
+#include "Engine/DataTable.h"
+#include "Misc/ConfigCacheIni.h"
+#include "Internationalization/Internationalization.h"
+
+void ULocalizationSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+    Super::Initialize(Collection);
+}
+
+void ULocalizationSubsystem::SetLocalizationData(ULocalizationDataAsset* InAsset)
+{
+    LocalizationData = InAsset;
+
+    CachedQuestTable              = nullptr;
+    CachedQuestStepTable          = nullptr;
+    CachedDialogueNodeTable       = nullptr;
+    CachedDialogueChoiceTable     = nullptr;
+    CachedItemLocaleTable         = nullptr;
+    CachedMobLocaleTable          = nullptr;
+    CachedNPCLocaleTable          = nullptr;
+    CachedBestiaryCategoryTable   = nullptr;
+    CachedZoneLocaleTable         = nullptr;
+    CachedNotificationLocaleTable = nullptr;
+    CachedAmbientSpeechTable      = nullptr;
+    CachedWIOLocaleTable          = nullptr;
+    CachedTitleLocaleTable        = nullptr;
+    CachedMasteryLocaleTable      = nullptr;
+    CachedEffectLocaleTable       = nullptr;
+
+    UE_LOG(LogTemp, Log, TEXT("LocalizationSubsystem: data asset %s"),
+        InAsset ? TEXT("assigned") : TEXT("cleared"));
+}
+
+void ULocalizationSubsystem::SetLocale(const FString& InLocale)
+{
+    if (CurrentLocale.Equals(InLocale, ESearchCase::IgnoreCase)) return;
+
+    const bool bIsRussian = InLocale.StartsWith(TEXT("ru"), ESearchCase::IgnoreCase);
+    ULocalizationDataAsset* Target = bIsRussian ? LocalizationDataRU : LocalizationDataEN;
+
+    if (!Target)
+    {
+        UE_LOG(LogTemp, Error, TEXT("LocalizationSubsystem: no DataAsset for locale '%s' — LocalizationData%s is NULL. Check BP_MyGameInstance defaults."),
+            *InLocale, bIsRussian ? TEXT("RU") : TEXT("EN"));
+        return;
+    }
+
+    CurrentLocale = InLocale;
+    SetLocalizationData(Target);
+
+    FInternationalization::Get().SetCurrentCulture(InLocale);
+
+    // Persist the choice
+    GConfig->SetString(TEXT("Localization"), TEXT("Locale"), *InLocale, GGameUserSettingsIni);
+    GConfig->Flush(false, GGameUserSettingsIni);
+
+    OnLocaleChanged.Broadcast(CurrentLocale);
+
+    UE_LOG(LogTemp, Log, TEXT("LocalizationSubsystem: locale set to '%s'"), *InLocale);
+}
+
+// ?? Private helpers ???????????????????????????????????????????????????????????
+

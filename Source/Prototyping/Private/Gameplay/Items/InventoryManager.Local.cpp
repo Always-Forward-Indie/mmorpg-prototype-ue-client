@@ -80,6 +80,14 @@ void UInventoryManager::RequestInventoryData(int32 CharacterId)
 		return;
 	}
 
+	// DevMode offline: inventory comes from DevModeDataProvider, no chunk to
+	// ask — skip quietly instead of Erroring on the missing worker.
+	if (gameInstance->DevModeConfig.bEnabled)
+	{
+		UE_LOG(LogTemp, Verbose, TEXT("InventoryManager: skipping inventory request (DevMode offline)"));
+		return;
+	}
+
 	// Create a JSON object for the header and body data
 	TMap<FString, TSharedPtr<FJsonValue>> HeaderData;
 	TMap<FString, TSharedPtr<FJsonValue>> BodyData;

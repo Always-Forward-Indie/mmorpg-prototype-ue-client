@@ -365,8 +365,10 @@ Super::BeginPlay();
 						UIManager->InitializeNotificationSystem(MyGameInstance->GetBestiaryNetworkHandler());
 						UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: WorldNotificationManager initialized"));
 
-						// Request the bestiary overview so the mob list is populated on login
-						if (playerData.characterData.characterId > 0)
+						// Request the bestiary overview so the mob list is populated on login.
+						// Skipped in DevMode offline (no chunk to ask — avoids an
+						// Error for an expected offline state).
+						if (playerData.characterData.characterId > 0 && MyGameInstance && !MyGameInstance->DevModeConfig.bEnabled)
 						{
 							MyGameInstance->GetBestiaryNetworkHandler()->RequestBestiaryOverview(
 								playerData.characterData.characterId);

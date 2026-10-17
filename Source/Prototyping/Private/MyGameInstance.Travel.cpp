@@ -155,8 +155,8 @@ void UMyGameInstance::ReturnToLoginLevel()
 
 	// 1. Send disconnect packets to Login Server and Chunk Server.
 	//    The server session is terminated; the client will re-authenticate when
-	//    logging in again.
-	if (ClientData.clientId > 0 && !ClientData.hash.IsEmpty())
+	//    logging in again. Skipped in DevMode offline (never connected).
+	if (ClientData.clientId > 0 && !ClientData.hash.IsEmpty() && !DevModeConfig.bEnabled)
 	{
 		if (AuthenticationManager)
 		{

@@ -185,6 +185,15 @@ void UPlayerManager::SendGetConnectedPlayersRequest(FClientDataStruct& ClientDat
 
 void UPlayerManager::SendMovePlayerRequest(FClientDataStruct& ClientData)
 {
+	// DevMode offline: movement is local-only, no chunk to report to.
+	// Skip quietly (Verbose) instead of Error-spamming every tick.
+	// Live path (DevMode off) is unchanged.
+	if (gameInstance && gameInstance->DevModeConfig.bEnabled)
+	{
+		UE_LOG(LogConnection, Verbose, TEXT("PlayerManager: skipping SendMovePlayerRequest (DevMode offline)"));
+		return;
+	}
+
 	TMap<FString, TSharedPtr<FJsonValue>> HeaderData;
 	TMap<FString, TSharedPtr<FJsonValue>> BodyData;
 

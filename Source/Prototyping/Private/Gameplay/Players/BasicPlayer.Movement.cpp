@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -110,8 +111,17 @@ void ABasicPlayer::UpdateCurrentPlayerMovement(float DeltaTime)
 		playerData.characterData.characterPosition.positionZ = currentLocation.Z;
 		playerData.characterData.bIsFalling = GetCharacterMovement()->IsFalling();
 
-		// Send player movement to the game server
-		MyGameInstance->PlayerManager->SendMovePlayerRequest(playerData);
+		// Send player movement to the game server (skipped in DevMode offline:
+		// movement is local-only, no chunk to report to — avoids per-tick
+		// Error spam from the send path).
+		if (MyGameInstance && MyGameInstance->PlayerManager && !MyGameInstance->DevModeConfig.bEnabled)
+		{
+			MyGameInstance->PlayerManager->SendMovePlayerRequest(playerData);
+		}
+		else
+		{
+			UE_LOG(LogConnection, Verbose, TEXT("UpdateCurrentPlayerMovement: skipping move send (DevMode offline or tearing down)"));
+		}
 
         // Update the last sent position and rotation
         LastSentPosition = currentLocation;

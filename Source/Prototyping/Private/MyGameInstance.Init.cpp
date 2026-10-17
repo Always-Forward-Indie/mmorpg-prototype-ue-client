@@ -441,7 +441,9 @@ void UMyGameInstance::Shutdown()
 	// Each PIE instance owns its own UMyGameInstance so ClientData is per-instance.
 	const bool bIsAuthenticated = (ClientData.clientId > 0 && !ClientData.hash.IsEmpty());
 
-	if (bIsAuthenticated)
+	// DevMode offline never connects — no disconnect to send (avoids Error
+	// spam from the send path for an expected offline state).
+	if (bIsAuthenticated && !DevModeConfig.bEnabled)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Shutdown: Sending disconnect for ClientID=%d CharID=%d"),
 			ClientData.clientId, ClientData.characterData.characterId);

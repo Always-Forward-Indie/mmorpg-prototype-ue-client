@@ -65,6 +65,13 @@ void UBestiaryNetworkHandler::UnsubscribeFromNetworkEvents()
 
 void UBestiaryNetworkHandler::RequestBestiaryOverview(int32 CharacterId)
 {
+    // DevMode offline: no chunk to ask, overview stays empty by design.
+    if (GameInstance && GameInstance->DevModeConfig.bEnabled)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("BestiaryNetworkHandler: skipping overview request (DevMode offline)"));
+        return;
+    }
+
     if (!NetworkManager || !GameInstance)
     {
         UE_LOG(LogTemp, Error, TEXT("BestiaryNetworkHandler: Cannot request overview - missing dependencies"));
@@ -90,6 +97,13 @@ void UBestiaryNetworkHandler::RequestBestiaryOverview(int32 CharacterId)
 
 void UBestiaryNetworkHandler::RequestBestiaryEntry(int32 CharacterId, const FString& MobSlug)
 {
+    // DevMode offline: no chunk to ask, entry stays uncached by design.
+    if (GameInstance && GameInstance->DevModeConfig.bEnabled)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("BestiaryNetworkHandler: skipping entry request (DevMode offline)"));
+        return;
+    }
+
     if (!NetworkManager || !GameInstance)
     {
         UE_LOG(LogTemp, Error, TEXT("BestiaryNetworkHandler: Cannot request entry - missing dependencies"));

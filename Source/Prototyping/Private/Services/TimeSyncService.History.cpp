@@ -97,22 +97,15 @@ bool UTimeSyncService::IsNearBestSample(EServerType ServerType, const FTimeSyncD
     {
         return true; // Accept samples when we don't have enough history
     }
-    
-    // Find the best (lowest) RTT in recent history
-    float BestRTT = NewSample.RoundTripTimeMs;
-    int32 SamplesToCheck = FMath::Min(ServerData->SyncHistory.Num(), 10); // Check last 10 samples
-    
-    for (int32 i = ServerData->SyncHistory.Num() - SamplesToCheck; i < ServerData->SyncHistory.Num(); ++i)
+
+    // Predicate lives in FSampleRule (pinned by MMO.TimeSync.NearBest).
+    TArray<float> HistoryRTTs;
+    HistoryRTTs.Reserve(ServerData->SyncHistory.Num());
+    for (const FTimeSyncData& Sample : ServerData->SyncHistory)
     {
-        if (i >= 0)
-        {
-            BestRTT = FMath::Min(BestRTT, ServerData->SyncHistory[i].RoundTripTimeMs);
-        }
+        HistoryRTTs.Add(Sample.RoundTripTimeMs);
     }
-    
-    // Accept sample if it's within 20% of the best RTT
-    float RTTThreshold = BestRTT * 1.2f;
-    return NewSample.RoundTripTimeMs <= RTTThreshold;
+    return FSampleRule::IsNearBest(HistoryRTTs, NewSample.RoundTripTimeMs);
 }
 
 void UTimeSyncService::ApplyEWMAFiltering(EServerType ServerType, const FTimeSyncData& NewSample)

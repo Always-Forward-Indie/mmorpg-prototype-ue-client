@@ -2,6 +2,7 @@
 #include "Gameplay/Combat/SkillSystemManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Services/TimeSyncService.h"
+#include "Utils/NetCore/CooldownFormat.h"
 #include "Utils/NetCore/SkillSlotRule.h"
 
 void UPlayerSkillManager::UpdateCooldowns(float DeltaTime)
@@ -106,7 +107,8 @@ UWorld* UPlayerSkillManager::GetWorld() const
 void UPlayerSkillManager::UpdateSkillCooldownState(FPlayerSkillData& SkillData)
 {
     float CurrentTime = GetCurrentTime();
-    SkillData.bIsOnCooldown = CurrentTime < SkillData.cooldownEndTime;
+    // Predicate lives in FCooldownState (pinned by MMO.Skills.CooldownState).
+    SkillData.bIsOnCooldown = FCooldownState::IsOnCooldown(CurrentTime, SkillData.cooldownEndTime);
     SkillData.bIsReady = !SkillData.bIsOnCooldown;
 }
 

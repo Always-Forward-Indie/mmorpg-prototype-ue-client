@@ -3,6 +3,7 @@
 #include "MyGameInstance.h"
 #include "Gameplay/Items/HarvestManager.h"
 #include "Utils/JSONParser.h"
+#include "Utils/NetCore/InventoryQuery.h"
 #include "Engine/World.h"
 #include "UI/InventoryWidget.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
@@ -14,54 +15,33 @@
 
 bool UInventoryManager::HasItem(int32 ItemId) const
 {
-	return CurrentInventory.items.ContainsByPredicate(
-		[ItemId](const FInventoryItemStruct& Item) { return Item.itemId == ItemId; });
+	// Lookup lives in FInventoryQuery (pinned by MMO.Inventory.Query).
+	return FInventoryQuery::HasItem(CurrentInventory.items, ItemId);
 }
 
 FInventoryItemStruct UInventoryManager::GetItemById(int32 ItemId) const
 {
-	const FInventoryItemStruct* FoundItem = CurrentInventory.items.FindByPredicate(
-		[ItemId](const FInventoryItemStruct& Item) { return Item.itemId == ItemId; });
-
-	return FoundItem ? *FoundItem : FInventoryItemStruct();
+	// Lookup lives in FInventoryQuery (pinned by MMO.Inventory.Query).
+	const int32 Idx = FInventoryQuery::IndexOf(CurrentInventory.items, ItemId);
+	return Idx != INDEX_NONE ? CurrentInventory.items[Idx] : FInventoryItemStruct();
 }
 
 int32 UInventoryManager::GetItemQuantity(int32 ItemId) const
 {
-	const FInventoryItemStruct* FoundItem = CurrentInventory.items.FindByPredicate(
-		[ItemId](const FInventoryItemStruct& Item) { return Item.itemId == ItemId; });
-
-	return FoundItem ? FoundItem->quantity : 0;
+	// Lookup lives in FInventoryQuery (pinned by MMO.Inventory.Query).
+	return FInventoryQuery::QuantityOf(CurrentInventory.items, ItemId);
 }
 
 TArray<FInventoryItemStruct> UInventoryManager::GetItemsByType(const FString& ItemType) const
 {
-	TArray<FInventoryItemStruct> ItemsOfType;
-	
-	for (const FInventoryItemStruct& Item : CurrentInventory.items)
-	{
-		if (Item.type.Equals(ItemType, ESearchCase::IgnoreCase))
-		{
-			ItemsOfType.Add(Item);
-		}
-	}
-	
-	return ItemsOfType;
+	// Filter lives in FInventoryQuery (pinned by MMO.Inventory.Query).
+	return FInventoryQuery::ByType(CurrentInventory.items, ItemType);
 }
 
 TArray<FInventoryItemStruct> UInventoryManager::GetItemsByRarity(const FString& Rarity) const
 {
-	TArray<FInventoryItemStruct> ItemsOfRarity;
-	
-	for (const FInventoryItemStruct& Item : CurrentInventory.items)
-	{
-		if (Item.rarity.Equals(Rarity, ESearchCase::IgnoreCase))
-		{
-			ItemsOfRarity.Add(Item);
-		}
-	}
-	
-	return ItemsOfRarity;
+	// Filter lives in FInventoryQuery (pinned by MMO.Inventory.Query).
+	return FInventoryQuery::ByRarity(CurrentInventory.items, Rarity);
 }
 
 int32 UInventoryManager::GetTotalItemCount() const

@@ -46,4 +46,26 @@ struct PROTOTYPING_API FSampleRule
 
 		return true;
 	}
+
+	/**
+	 * Near-best filter: accept the sample when history is thin (< 3),
+	 * else require it within Tolerance of the best (lowest) RTT over
+	 * the trailing Window samples (best seeds from the new sample,
+	 * exactly like the service loop). Pinned by MMO.TimeSync.NearBest.
+	 */
+	static bool IsNearBest(const TArray<float>& HistoryRTTs, float NewRTT,
+		int32 MinHistory = 3, int32 Window = 10, float Tolerance = 1.2f)
+	{
+		if (HistoryRTTs.Num() < MinHistory)
+		{
+			return true;
+		}
+		float BestRTT = NewRTT;
+		const int32 Start = FMath::Max(0, HistoryRTTs.Num() - Window);
+		for (int32 i = Start; i < HistoryRTTs.Num(); ++i)
+		{
+			BestRTT = FMath::Min(BestRTT, HistoryRTTs[i]);
+		}
+		return NewRTT <= BestRTT * Tolerance;
+	}
 };

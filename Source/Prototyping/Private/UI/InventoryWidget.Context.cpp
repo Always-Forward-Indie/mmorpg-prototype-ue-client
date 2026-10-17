@@ -1,5 +1,6 @@
 #include "UI/InventoryWidget.h"
 #include "UI/InventorySlotWidget.h"
+#include "Utils/NetCore/SlotMath.h"
 #include "UI/ItemTooltipWidget.h"
 #include "UI/ItemActionMenuWidget.h"
 #include "UI/DropQuantityPopupWidget.h"
@@ -97,13 +98,14 @@ void UInventoryWidget::HideTooltip()
 
 int32 UInventoryWidget::GetSlotIndexFromPosition(int32 Row, int32 Column) const
 {
-	return Row * InventoryColumns + Column;
+	// Mapping lives in FSlotMath (pinned by MMO.Inventory.SlotMath).
+	return FSlotMath::IndexFromPosition(Row, Column, InventoryColumns);
 }
 
 void UInventoryWidget::GetPositionFromSlotIndex(int32 SlotIndex, int32& OutRow, int32& OutColumn) const
 {
-	OutRow = SlotIndex / InventoryColumns;
-	OutColumn = SlotIndex % InventoryColumns;
+	// Mapping lives in FSlotMath (pinned by MMO.Inventory.SlotMath).
+	FSlotMath::PositionFromIndex(SlotIndex, InventoryColumns, OutRow, OutColumn);
 }
 
 void UInventoryWidget::OnCloseButtonClicked()

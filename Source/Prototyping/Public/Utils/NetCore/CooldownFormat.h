@@ -26,3 +26,16 @@ struct PROTOTYPING_API FCooldownFormat
 		return FString::Printf(TEXT("%d:%02d"), Minutes, Seconds);
 	}
 };
+
+/**
+ * Cooldown active flag (pure logic, no UObject).
+ *
+ * Canonical owner of the on-cooldown predicate used by
+ * UPlayerSkillManager::UpdateSkillCooldownState: on cooldown while now
+ * is strictly before the end time (equality = ready). Pinned by
+ * MMO.Skills.CooldownState.
+ */
+struct PROTOTYPING_API FCooldownState
+{
+	static bool IsOnCooldown(float Now, float EndTime) { return Now < EndTime; }
+};

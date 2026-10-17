@@ -443,21 +443,33 @@ void UMyGameInstance::Shutdown()
 
 	// DevMode offline never connects — no disconnect to send (avoids Error
 	// spam from the send path for an expected offline state).
+	// Live teardown after ReturnToLoginLevel may already have destroyed the
+	// workers — never send into a dead socket (same wire effect as the Error
+	// path, minus the noise).
 	if (bIsAuthenticated && !DevModeConfig.bEnabled)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Shutdown: Sending disconnect for ClientID=%d CharID=%d"),
-			ClientData.clientId, ClientData.characterData.characterId);
-
 		// Notify Login Server
-		if (AuthenticationManager)
+		if (AuthenticationManager && NetworkManager && NetworkManager->IsLoginServerConnected())
 		{
+			UE_LOG(LogTemp, Warning, TEXT("Shutdown: Sending login disconnect for ClientID=%d"),
+				ClientData.clientId);
 			AuthenticationManager->SendLeaveGameRequest(ClientData);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Verbose, TEXT("Shutdown: skipping login disconnect (no live login socket)"));
 		}
 
 		// Notify Chunk Server (and optionally Game Server)
-		if (PlayerManager)
+		if (PlayerManager && NetworkManager && NetworkManager->IsChunkServerConnected())
 		{
+			UE_LOG(LogTemp, Warning, TEXT("Shutdown: Sending chunk disconnect for ClientID=%d CharID=%d"),
+				ClientData.clientId, ClientData.characterData.characterId);
 			PlayerManager->SendLeaveGameRequest(ClientData);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Verbose, TEXT("Shutdown: skipping chunk disconnect (no live chunk socket)"));
 		}
 	}
 	else

@@ -1,8 +1,6 @@
 #include "Misc/AutomationTest.h"
 #include "Utils/JSONParser.h"
-#include "Dom/JsonObject.h"
-#include "Serialization/JsonSerializer.h"
-#include "Serialization/JsonReader.h"
+#include "ParserContractHelpers.h"
 
 // Contract specs for the Core/Auth parser entry points (roadmap P0.1).
 // Rule pinned here: every FString entry never crashes — garbage JSON or a
@@ -13,28 +11,6 @@
 // statics; JSON text -> FJsonObject parsing below is engine API, not game
 // logic. Error-logging cases declare AddExpectedErrorPlain, otherwise the
 // harness fails the spec.
-
-namespace
-{
-TSharedPtr<FJsonObject> ParseObj(const FString& Json)
-{
-    TSharedPtr<FJsonObject> Out;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Json);
-    FJsonSerializer::Deserialize(Reader, Out);
-    return Out;
-}
-
-TArray<TSharedPtr<FJsonValue>> ParseArray(const FString& Json)
-{
-    TSharedPtr<FJsonObject> Root = ParseObj(Json);
-    const TArray<TSharedPtr<FJsonValue>>* Arr = nullptr;
-    if (Root.IsValid() && Root->TryGetArrayField(TEXT("items"), Arr) && Arr)
-    {
-        return *Arr;
-    }
-    return {};
-}
-}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterDataContractTest, "MMO.Protocol.CharacterDataContract",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
@@ -76,20 +52,20 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPositionContractTest, "MMO.Protocol.PositionCo
 bool FPositionContractTest::RunTest(const FString& Parameters)
 {
     FPositionDataStruct Valid = JSONParser::DeserializePositionData(
-        ParseObj(TEXT("{\"x\":10,\"y\":20,\"z\":30,\"rotationZ\":45}")));
+        ParserContract_ParseObj(TEXT("{\"x\":10,\"y\":20,\"z\":30,\"rotationZ\":45}")));
     TestEqual(TEXT("valid x"), Valid.positionX, 10.0);
     TestEqual(TEXT("valid z"), Valid.positionZ, 30.0);
     TestEqual(TEXT("valid rot"), Valid.rotationZ, 45.0);
 
     // Truncated tail: missing fields stay 0, no crash, no log spam.
     FPositionDataStruct Short = JSONParser::DeserializePositionData(
-        ParseObj(TEXT("{\"y\":20}")));
+        ParserContract_ParseObj(TEXT("{\"y\":20}")));
     TestEqual(TEXT("short x default"), Short.positionX, 0.0);
     TestEqual(TEXT("short y kept"), Short.positionY, 20.0);
 
     // Wrong-typed field: default for that field only, rest intact.
     FPositionDataStruct Wrong = JSONParser::DeserializePositionData(
-        ParseObj(TEXT("{\"x\":\"oops\",\"y\":20,\"z\":30,\"rotationZ\":45}")));
+        ParserContract_ParseObj(TEXT("{\"x\":\"oops\",\"y\":20,\"z\":30,\"rotationZ\":45}")));
     TestEqual(TEXT("wrong x default"), Wrong.positionX, 0.0);
     TestEqual(TEXT("wrong y kept"), Wrong.positionY, 20.0);
 
@@ -104,13 +80,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAttributesContractTest, "MMO.Protocol.Attribut
 
 bool FAttributesContractTest::RunTest(const FString& Parameters)
 {
-    TArray<TSharedPtr<FJsonValue>> Arr = ParseArray(
+    TArray<TSharedPtr<FJsonValue>> Arr = ParserContract_ParseArrayField(
         TEXT("{\"items\":["
         "{\"id\":1,\"name\":\"Strength\",\"slug\":\"str\",\"value\":10},"
         "{\"id\":2,\"name\":\"NoSlug\",\"value\":5},"
         "42,"
         "{\"id\":3,\"slug\":\"agi\",\"value\":\"oops\"}"
-        "]}"));
+        "]}"), TEXT("items"));
     TMap<FString, FAttributeDataStruct> Map = JSONParser::DeserializeAttributesArray(Arr);
     // Slugless entry and the non-object are skipped; wrong-typed value -> 0.
     TestEqual(TEXT("two slugged entries"), Map.Num(), 2);
@@ -132,7 +108,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharactersListContractTest, "MMO.Protocol.Char
 
 bool FCharactersListContractTest::RunTest(const FString& Parameters)
 {
-    TSharedPtr<FJsonObject> Body = ParseObj(
+    TSharedPtr<FJsonObject> Body = ParserContract_ParseObj(
         TEXT("{\"characters\":["
         "{\"clientId\":11,\"character\":{\"id\":7,\"name\":\"Bob\",\"level\":5}},"
         "{\"clientId\":12},"
@@ -153,7 +129,7 @@ bool FCharactersListContractTest::RunTest(const FString& Parameters)
     }
 
     // Missing array: empty, no crash.
-    TestEqual(TEXT("no array empty"), JSONParser::DeserializeCharactersList(ParseObj(TEXT("{}"))).Num(), 0);
+    TestEqual(TEXT("no array empty"), JSONParser::DeserializeCharactersList(ParserContract_ParseObj(TEXT("{}"))).Num(), 0);
     // Null body: empty, no crash.
     TestEqual(TEXT("null body empty"), JSONParser::DeserializeCharactersList(nullptr).Num(), 0);
     return true;

@@ -36,24 +36,28 @@ FSpawnZoneStruct JSONParser::DeserializeSpawnZoneData(const TSharedPtr<FJsonObje
 
 	if (!SpawnZoneObject.IsValid()) return SpawnZoneData;
 
-	SpawnZoneData.zoneID = SpawnZoneObject->GetIntegerField(TEXT("id"));
-	SpawnZoneData.zoneName = SpawnZoneObject->GetStringField(TEXT("name"));
-	SpawnZoneData.MobIDToSpawn = SpawnZoneObject->GetIntegerField(TEXT("spawnMobId"));
-	SpawnZoneData.MaxMobs = SpawnZoneObject->GetIntegerField(TEXT("maxSpawnCount"));
-	SpawnZoneData.currentMobsCount = SpawnZoneObject->GetIntegerField(TEXT("spawnedMobsCount"));
-	SpawnZoneData.respawnTime = SpawnZoneObject->GetIntegerField(TEXT("respawnTime"));
-	SpawnZoneData.bSpawningEnabled = SpawnZoneObject->GetBoolField(TEXT("spawnEnabled"));
+	SpawnZoneObject->TryGetNumberField(TEXT("id"), SpawnZoneData.zoneID);
+	SpawnZoneObject->TryGetStringField(TEXT("name"), SpawnZoneData.zoneName);
+	SpawnZoneObject->TryGetNumberField(TEXT("spawnMobId"), SpawnZoneData.MobIDToSpawn);
+	SpawnZoneObject->TryGetNumberField(TEXT("maxSpawnCount"), SpawnZoneData.MaxMobs);
+	SpawnZoneObject->TryGetNumberField(TEXT("spawnedMobsCount"), SpawnZoneData.currentMobsCount);
+	SpawnZoneObject->TryGetNumberField(TEXT("respawnTime"), SpawnZoneData.respawnTime);
+	// Missing flag keeps the legacy effective default (disabled), quietly.
+	bool bEnabled = false;
+	SpawnZoneObject->TryGetBoolField(TEXT("spawnEnabled"), bEnabled);
+	SpawnZoneData.bSpawningEnabled = bEnabled;
 
-	if (SpawnZoneObject->HasField(TEXT("bounds")))
+	const TSharedPtr<FJsonObject>* BoundsPtr = nullptr;
+	if (SpawnZoneObject->TryGetObjectField(TEXT("bounds"), BoundsPtr) && BoundsPtr && (*BoundsPtr).IsValid())
 	{
-		const TSharedPtr<FJsonObject> Bounds = SpawnZoneObject->GetObjectField(TEXT("bounds"));
-
-		const float MinX = (float)Bounds->GetNumberField(TEXT("minX"));
-		const float MinY = (float)Bounds->GetNumberField(TEXT("minY"));
-		const float MinZ = (float)Bounds->GetNumberField(TEXT("minZ"));
-		const float MaxX = (float)Bounds->GetNumberField(TEXT("maxX"));
-		const float MaxY = (float)Bounds->GetNumberField(TEXT("maxY"));
-		const float MaxZ = (float)Bounds->GetNumberField(TEXT("maxZ"));
+		const TSharedPtr<FJsonObject>& Bounds = *BoundsPtr;
+		double MinX = 0.0, MinY = 0.0, MinZ = 0.0, MaxX = 0.0, MaxY = 0.0, MaxZ = 0.0;
+		Bounds->TryGetNumberField(TEXT("minX"), MinX);
+		Bounds->TryGetNumberField(TEXT("minY"), MinY);
+		Bounds->TryGetNumberField(TEXT("minZ"), MinZ);
+		Bounds->TryGetNumberField(TEXT("maxX"), MaxX);
+		Bounds->TryGetNumberField(TEXT("maxY"), MaxY);
+		Bounds->TryGetNumberField(TEXT("maxZ"), MaxZ);
 
 		// spawnStartPos = world position of the bottom-center of the zone
 		SpawnZoneData.spawnStartPos = FVector(
@@ -114,42 +118,50 @@ TArray<JSONParser::FMobMovePacketEntry> JSONParser::DeserializeMobMoveUpdate(con
 
 	for (const TSharedPtr<FJsonValue>& MobValue : *MobsArray)
 	{
-		TSharedPtr<FJsonObject> Obj = MobValue->AsObject();
-		if (!Obj.IsValid()) continue;
+		const TSharedPtr<FJsonObject>* ObjPtr = nullptr;
+		if (!MobValue.IsValid() || !MobValue->TryGetObject(ObjPtr) || !ObjPtr || !(*ObjPtr).IsValid()) continue;
+		const TSharedPtr<FJsonObject>& Obj = *ObjPtr;
 
 		FMobMovePacketEntry Entry;
-		Entry.uid = Obj->GetIntegerField(TEXT("uid"));
+		Obj->TryGetNumberField(TEXT("uid"), Entry.uid);
 
 		// position
 		const TSharedPtr<FJsonObject>* PosObjPtr = nullptr;
-		if (Obj->TryGetObjectField(TEXT("position"), PosObjPtr) && PosObjPtr)
+		if (Obj->TryGetObjectField(TEXT("position"), PosObjPtr) && PosObjPtr && (*PosObjPtr).IsValid())
 		{
-			Entry.moveEntry.position.positionX = (*PosObjPtr)->GetNumberField(TEXT("x"));
-			Entry.moveEntry.position.positionY = (*PosObjPtr)->GetNumberField(TEXT("y"));
-			Entry.moveEntry.position.positionZ = (*PosObjPtr)->GetNumberField(TEXT("z"));
-			Entry.moveEntry.position.rotationZ = (*PosObjPtr)->GetNumberField(TEXT("rotationZ"));
+			(*PosObjPtr)->TryGetNumberField(TEXT("x"), Entry.moveEntry.position.positionX);
+			(*PosObjPtr)->TryGetNumberField(TEXT("y"), Entry.moveEntry.position.positionY);
+			(*PosObjPtr)->TryGetNumberField(TEXT("z"), Entry.moveEntry.position.positionZ);
+			(*PosObjPtr)->TryGetNumberField(TEXT("rotationZ"), Entry.moveEntry.position.rotationZ);
 		}
 
 		// velocity
 		const TSharedPtr<FJsonObject>* VelObjPtr = nullptr;
-		if (Obj->TryGetObjectField(TEXT("velocity"), VelObjPtr) && VelObjPtr)
+		if (Obj->TryGetObjectField(TEXT("velocity"), VelObjPtr) && VelObjPtr && (*VelObjPtr).IsValid())
 		{
-			Entry.moveEntry.velocityX = static_cast<float>((*VelObjPtr)->GetNumberField(TEXT("dirX")));
-			Entry.moveEntry.velocityY = static_cast<float>((*VelObjPtr)->GetNumberField(TEXT("dirY")));
-			Entry.moveEntry.speed     = static_cast<float>((*VelObjPtr)->GetNumberField(TEXT("speed")));
+			double DirX = 0.0, DirY = 0.0, Speed = 0.0;
+			(*VelObjPtr)->TryGetNumberField(TEXT("dirX"), DirX);
+			(*VelObjPtr)->TryGetNumberField(TEXT("dirY"), DirY);
+			(*VelObjPtr)->TryGetNumberField(TEXT("speed"), Speed);
+			Entry.moveEntry.velocityX = static_cast<float>(DirX);
+			Entry.moveEntry.velocityY = static_cast<float>(DirY);
+			Entry.moveEntry.speed     = static_cast<float>(Speed);
 		}
 
-		Entry.moveEntry.combatState     = Obj->GetIntegerField(TEXT("combatState"));
+		Obj->TryGetNumberField(TEXT("combatState"), Entry.moveEntry.combatState);
 		double RawStepMs = 0.0;
 		Obj->TryGetNumberField(TEXT("stepTimestampMs"), RawStepMs);
 		Entry.moveEntry.stepTimestampMs = static_cast<int64>(RawStepMs);
 
 		// optional waypoint
 		const TSharedPtr<FJsonObject>* WpObjPtr = nullptr;
-		if (Obj->TryGetObjectField(TEXT("waypoint"), WpObjPtr) && WpObjPtr)
+		if (Obj->TryGetObjectField(TEXT("waypoint"), WpObjPtr) && WpObjPtr && (*WpObjPtr).IsValid())
 		{
-			Entry.moveEntry.waypointX    = static_cast<float>((*WpObjPtr)->GetNumberField(TEXT("x")));
-			Entry.moveEntry.waypointY    = static_cast<float>((*WpObjPtr)->GetNumberField(TEXT("y")));
+			double WpX = 0.0, WpY = 0.0;
+			(*WpObjPtr)->TryGetNumberField(TEXT("x"), WpX);
+			(*WpObjPtr)->TryGetNumberField(TEXT("y"), WpY);
+			Entry.moveEntry.waypointX    = static_cast<float>(WpX);
+			Entry.moveEntry.waypointY    = static_cast<float>(WpY);
 			Entry.moveEntry.bHasWaypoint = true;
 		}
 
@@ -162,47 +174,66 @@ TArray<JSONParser::FMobMovePacketEntry> JSONParser::DeserializeMobMoveUpdate(con
 FMOBStruct JSONParser::DeserializeMobData(const TSharedPtr<FJsonObject>& MobObject)
 {
 	FMOBStruct Mob;
-	Mob.mobID = MobObject->GetIntegerField(TEXT("id"));
-	Mob.mobUniqueID = FString::FromInt(MobObject->GetIntegerField(TEXT("uid")));
-	Mob.mobZoneID = MobObject->GetIntegerField(TEXT("zoneId"));
-	Mob.mobName = MobObject->GetStringField(TEXT("name"));
-	Mob.mobSlug = MobObject->GetStringField(TEXT("slug"));
-	Mob.mobRace = MobObject->GetStringField(TEXT("race"));
-	Mob.mobLevel = MobObject->GetIntegerField(TEXT("level"));
-	Mob.bIsAggressive = MobObject->GetBoolField(TEXT("isAggressive"));
-	Mob.bIsDead = MobObject->GetBoolField(TEXT("isDead"));
+	if (!MobObject.IsValid()) return Mob;
+
+	MobObject->TryGetNumberField(TEXT("id"), Mob.mobID);
+	// Missing uid keeps the legacy effective default ("0"), quietly.
+	int32 Uid = 0;
+	MobObject->TryGetNumberField(TEXT("uid"), Uid);
+	Mob.mobUniqueID = FString::FromInt(Uid);
+	MobObject->TryGetNumberField(TEXT("zoneId"), Mob.mobZoneID);
+	MobObject->TryGetStringField(TEXT("name"), Mob.mobName);
+	MobObject->TryGetStringField(TEXT("slug"), Mob.mobSlug);
+	MobObject->TryGetStringField(TEXT("race"), Mob.mobRace);
+	MobObject->TryGetNumberField(TEXT("level"), Mob.mobLevel);
+	MobObject->TryGetBoolField(TEXT("isAggressive"), Mob.bIsAggressive);
+	MobObject->TryGetBoolField(TEXT("isDead"), Mob.bIsDead);
 
 
-	Mob.mobPosition = JSONParser::DeserializePositionData(MobObject->GetObjectField(TEXT("position")));
-
-	if (MobObject->HasField(TEXT("stats"))) {
-		TSharedPtr<FJsonObject> Stats = MobObject->GetObjectField(TEXT("stats"));
-		TSharedPtr<FJsonObject> Health = Stats->GetObjectField(TEXT("health"));
-		TSharedPtr<FJsonObject> Mana = Stats->GetObjectField(TEXT("mana"));
-		Mob.mobCurrentHealth = Health->GetIntegerField(TEXT("current"));
-		Mob.mobCurrentMana = Mana->GetIntegerField(TEXT("current"));
+	const TSharedPtr<FJsonObject>* PositionPtr = nullptr;
+	if (MobObject->TryGetObjectField(TEXT("position"), PositionPtr) && PositionPtr && (*PositionPtr).IsValid())
+	{
+		Mob.mobPosition = JSONParser::DeserializePositionData(*PositionPtr);
 	}
 
-	if (MobObject->HasField(TEXT("attributes")))
+	const TSharedPtr<FJsonObject>* StatsPtr = nullptr;
+	if (MobObject->TryGetObjectField(TEXT("stats"), StatsPtr) && StatsPtr && (*StatsPtr).IsValid())
 	{
-		Mob.mobAttributes.attributesData = JSONParser::DeserializeAttributesArray(MobObject->GetArrayField(TEXT("attributes")));
+		const TSharedPtr<FJsonObject>& Stats = *StatsPtr;
+		const TSharedPtr<FJsonObject>* HealthPtr = nullptr;
+		const TSharedPtr<FJsonObject>* ManaPtr = nullptr;
+		if (Stats->TryGetObjectField(TEXT("health"), HealthPtr) && HealthPtr && (*HealthPtr).IsValid())
+		{
+			(*HealthPtr)->TryGetNumberField(TEXT("current"), Mob.mobCurrentHealth);
+		}
+		if (Stats->TryGetObjectField(TEXT("mana"), ManaPtr) && ManaPtr && (*ManaPtr).IsValid())
+		{
+			(*ManaPtr)->TryGetNumberField(TEXT("current"), Mob.mobCurrentMana);
+		}
+	}
+
+	const TArray<TSharedPtr<FJsonValue>>* AttributesArray = nullptr;
+	if (MobObject->TryGetArrayField(TEXT("attributes"), AttributesArray) && AttributesArray != nullptr)
+	{
+		Mob.mobAttributes.attributesData = JSONParser::DeserializeAttributesArray(*AttributesArray);
 	}
 
 	// Parse velocity from spawn data (server sends current velocity for mobs
 	// that are already moving when the client joins)
 	const TSharedPtr<FJsonObject>* VelObjPtr = nullptr;
-	if (MobObject->TryGetObjectField(TEXT("velocity"), VelObjPtr) && VelObjPtr)
+	if (MobObject->TryGetObjectField(TEXT("velocity"), VelObjPtr) && VelObjPtr && (*VelObjPtr).IsValid())
 	{
-		Mob.mobVelocity.dirX  = static_cast<float>((*VelObjPtr)->GetNumberField(TEXT("dirX")));
-		Mob.mobVelocity.dirY  = static_cast<float>((*VelObjPtr)->GetNumberField(TEXT("dirY")));
-		Mob.mobVelocity.speed = static_cast<float>((*VelObjPtr)->GetNumberField(TEXT("speed")));
+		double DirX = 0.0, DirY = 0.0, Speed = 0.0;
+		(*VelObjPtr)->TryGetNumberField(TEXT("dirX"), DirX);
+		(*VelObjPtr)->TryGetNumberField(TEXT("dirY"), DirY);
+		(*VelObjPtr)->TryGetNumberField(TEXT("speed"), Speed);
+		Mob.mobVelocity.dirX  = static_cast<float>(DirX);
+		Mob.mobVelocity.dirY  = static_cast<float>(DirY);
+		Mob.mobVelocity.speed = static_cast<float>(Speed);
 	}
 
 	// Parse combatState from spawn data
-	if (MobObject->HasField(TEXT("combatState")))
-	{
-		Mob.mobCombatState = MobObject->GetIntegerField(TEXT("combatState"));
-	}
+	MobObject->TryGetNumberField(TEXT("combatState"), Mob.mobCombatState);
 
 	return Mob;
 }
@@ -213,24 +244,15 @@ FMobTargetLostStruct JSONParser::DeserializeMobTargetLost(const TSharedPtr<FJson
 	FMobTargetLostStruct MobTargetLostData;
 	if (!Body.IsValid()) return MobTargetLostData;
 
-	if (Body->HasField(TEXT("lostTargetPlayerId")))
-		MobTargetLostData.lostTargetPlayerId = Body->GetIntegerField(TEXT("lostTargetPlayerId"));
+	Body->TryGetNumberField(TEXT("lostTargetPlayerId"), MobTargetLostData.lostTargetPlayerId);
+	Body->TryGetNumberField(TEXT("mobId"), MobTargetLostData.mobId);
+	Body->TryGetNumberField(TEXT("mobUID"), MobTargetLostData.mobUID);
 
-	if (Body->HasField(TEXT("mobId")))
-		MobTargetLostData.mobId = Body->GetIntegerField(TEXT("mobId"));
-
-	if (Body->HasField(TEXT("mobUID")))
-		MobTargetLostData.mobUID = Body->GetIntegerField(TEXT("mobUID"));
-
-	// Parse position data from individual fields
-	if (Body->HasField(TEXT("positionX")) && Body->HasField(TEXT("positionY")) &&
-		Body->HasField(TEXT("positionZ")) && Body->HasField(TEXT("rotationZ")))
-	{
-		MobTargetLostData.position.positionX = Body->GetNumberField(TEXT("positionX"));
-		MobTargetLostData.position.positionY = Body->GetNumberField(TEXT("positionY"));
-		MobTargetLostData.position.positionZ = Body->GetNumberField(TEXT("positionZ"));
-		MobTargetLostData.position.rotationZ = Body->GetNumberField(TEXT("rotationZ"));
-	}
+	// Parse position data from individual fields (each optional, quiet).
+	Body->TryGetNumberField(TEXT("positionX"), MobTargetLostData.position.positionX);
+	Body->TryGetNumberField(TEXT("positionY"), MobTargetLostData.position.positionY);
+	Body->TryGetNumberField(TEXT("positionZ"), MobTargetLostData.position.positionZ);
+	Body->TryGetNumberField(TEXT("rotationZ"), MobTargetLostData.position.rotationZ);
 
 	return MobTargetLostData;
 }

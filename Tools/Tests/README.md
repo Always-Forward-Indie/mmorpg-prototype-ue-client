@@ -113,7 +113,12 @@
   `-bot-live=live_char_create_delete` (list → create `Test V..Z` → verify
   in list → delete → verify gone; name rotation on taken),
   `-bot-live=live_back_to_login` (return to login, assert map from the
-  PostLoadMap callback + core-ticker watchdog, tombstone + quit).
+  PostLoadMap callback + core-ticker watchdog, tombstone + quit),
+  `-bot-live=live_travel_roundtrip` (full login→game→login→game round-trip:
+  leg 1 like back_to_login without quitting, driver-supervised leg-2 rejoin
+  (incl. an intentional double JoinSelectedCharacterToGame — the FJoinGuard
+  swallows the duplicate), verify spawn in the second game world, tombstone
+  + quit).
   Out of bot scope: chunk transitions (dev runs a single chunk — N/A),
   AFK disconnect (deferred to the night soak).
 - **L1 live bot (dev servers):** `-bot-live=<scenario> -botlogin=<user>

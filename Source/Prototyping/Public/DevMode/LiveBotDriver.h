@@ -46,6 +46,9 @@ private:
         WaitAuth,
         WaitChars,
         WaitWorld,
+        // Roundtrip supervisor: brain leg 1 finished (no quit); re-run the
+        // connect/auth/chars/join flow for leg 2 with the same creds.
+        WaitBrainLeg1,
     };
 
     UFUNCTION()
@@ -97,6 +100,15 @@ private:
     bool bLoginSent = false;
     bool bCharsRequested = false;
     bool bRunning = false;
+
+    // Roundtrip state (live_travel_roundtrip only): supervisor reuses the
+    // connect/auth/chars/join flow for leg 2 instead of quitting at login.
+    bool bTravelRoundtrip = false;
+    int32 RoundtripLeg = 1;
+    int32 Leg1CharId = 0;
+    // Whole-run budget, set in Start() (default GlobalTimeoutSec;
+    // roundtrip needs ~2 legs so it gets a bigger budget there).
+    float RunTimeoutSec;
 
     // State budgets (seconds). World wait is generous: travel crawls on a
     // throttled window (measured ~3-10 fps unfocused).

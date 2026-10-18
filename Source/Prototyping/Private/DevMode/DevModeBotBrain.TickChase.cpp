@@ -45,6 +45,16 @@ bool UDevModeBotBrain::Tick_ExpectGround(UWorld* World, ABasicPlayer* Player, do
         const bool bGrounded = MoveComp && MoveComp->IsMovingOnGround();
         if (bGrounded)
         {
+            if (bRoundtripVerifyOnly)
+            {
+                // Roundtrip leg 2: reaching the ground in a non-login world
+                // after rejoin IS the assertion — travel round-trip complete.
+                const bool bInGame = World && !World->GetMapName().Contains(TEXT("Login"));
+                BotAssert(bInGame, TEXT("roundtrip-spawn"), bInGame ? 1 : 0, 1);
+                BotShot(TEXT("roundtrip"));
+                Finish(bInGame, bInGame ? TEXT("travel-roundtrip-done") : TEXT("roundtrip-wrong-world"));
+                return true;
+            }
             BotAssert(true, TEXT("spawn-grounded"), 1, 1);
             Step = EBotStep::GotoWaypoint;
             StepStartTime = Now;

@@ -160,6 +160,11 @@ public:
     // live_back_to_login: return to login, assert map, tombstone + quit
     // from the PostLoadMap callback (world timers die at travel).
     bool bBackToLoginPhase = false;
+    // Roundtrip (live_travel_roundtrip): leg 1 reports at login without
+    // quitting; leg 2 rejoins and a verify-only brain asserts the spawn.
+    bool bTravelRoundtripPhase = false;
+    bool bRoundtripLeg1Done = false;
+    bool bRoundtripVerifyOnly = false;
     float FlowTimeoutSec = 60.0f;
     // Global run budget (seconds). Live runs set this higher (slow real fights).
     float GlobalTimeoutSec = 120.0f;

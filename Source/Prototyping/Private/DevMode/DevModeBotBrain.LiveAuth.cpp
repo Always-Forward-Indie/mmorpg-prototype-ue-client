@@ -86,6 +86,16 @@ void UDevModeBotBrain::HandlePostLoadMapLogin(UWorld* LoadedWorld)
     {
         BotAssert(true, TEXT("back-to-login"), 1, 1);
         BotShot(TEXT("login"));
+        if (bTravelRoundtripPhase && !bRoundtripLeg1Done)
+        {
+            // Roundtrip leg 1 complete: stay alive for the driver's leg-2
+            // re-auth (the login watchdog already did its job — disarm it
+            // so it cannot fire mid-leg-2). No Finish, no quit here.
+            bRoundtripLeg1Done = true;
+            FTSTicker::GetCoreTicker().RemoveTicker(LoginWatchdogHandle);
+            LoginWatchdogHandle.Reset();
+            return;
+        }
         Finish(true, TEXT("back-to-login-done"));
         // Finish quits via the (here torn-down) run world: quit explicitly
         // from the freshly loaded login world instead.

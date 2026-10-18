@@ -44,7 +44,16 @@ void UDevModeBotBrain::BrainTick()
     ABasicPlayer* Player = GameInstance ? GameInstance->Player : nullptr;
     if (!World || !Player || Player->IsActorBeingDestroyed())
     {
-        Finish(false, TEXT("lost-world-or-player"));
+        // Roundtrip leg-1 teardown race: ReturnToLoginLevel nulls the
+        // player before the old world finishes tearing down, so one last
+        // world-timer tick can land here after leg 1 already reported
+        // done. That is the EXPECTED supervisor handoff, not a failure:
+        // stay quiet and let the driver start leg 2 (its watchdogs still
+        // bound a genuinely stuck run).
+        if (!(bTravelRoundtripPhase && bRoundtripLeg1Done))
+        {
+            Finish(false, TEXT("lost-world-or-player"));
+        }
         return;
     }
 

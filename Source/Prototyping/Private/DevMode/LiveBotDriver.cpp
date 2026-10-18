@@ -36,6 +36,11 @@ void ULiveBotDriver::Start(UMyGameInstance* InGameInstance, const FString& InSce
     bLoginSent = false;
     bCharsRequested = false;
     bRunning = true;
+    // Roundtrip needs ~2 full login→game legs: generous whole-run budget.
+    bTravelRoundtrip = Scenario.Equals(TEXT("live_travel_roundtrip"), ESearchCase::IgnoreCase);
+    RoundtripLeg = 1;
+    Leg1CharId = 0;
+    RunTimeoutSec = bTravelRoundtrip ? 600.0f : GlobalTimeoutSec;
 
     if (UAuthenticationManager* Auth = GameInstance->GetAuthenticationManager())
     {
@@ -112,7 +117,7 @@ void ULiveBotDriver::PollTick()
 
     const double Now = FPlatformTime::Seconds();
 
-    if (Now - RunStartTime > GlobalTimeoutSec)
+    if (Now - RunStartTime > RunTimeoutSec)
     {
         Finish(false, TEXT("global-timeout"));
         return;
@@ -160,6 +165,34 @@ void ULiveBotDriver::PollTick()
         if (Now - StepStartTime > CharsTimeoutSec)
         {
             Finish(false, TEXT("chars-timeout"));
+        }
+        return;
+    }
+
+    if (Step == ELiveStep::WaitBrainLeg1)
+    {
+        // Roundtrip supervisor: leg 1 finished at login (no quit). Tear the
+        // leg-1 brain down and re-run the proven connect/auth/chars/join
+        // flow for leg 2 with the same creds.
+        if (LiveBrain && LiveBrain->bRoundtripLeg1Done)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("LIVEBOT roundtrip leg 1 done, starting leg 2"));
+            LiveBrain->Stop();
+            Leg1CharId = GameInstance ? GameInstance->GetCurrentCharacterID() : 0;
+            RoundtripLeg = 2;
+            bLoginSent = false;
+            bCharsRequested = false;
+            Step = ELiveStep::WaitConnect;
+            StepStartTime = Now;
+            LastConnectAttemptTime = 0.0;
+            return;
+        }
+        if (LiveBrain && !LiveBrain->IsRunning())
+        {
+            // Brain died without reporting leg-1 completion — no tombstone
+            // to trust; fail loudly instead of hanging to global timeout.
+            Finish(false, TEXT("roundtrip-leg1-died"));
+            return;
         }
         return;
     }
@@ -273,7 +306,28 @@ void ULiveBotDriver::PollTick()
                 Brain->TargetKills = 0;
                 Brain->bBackToLoginPhase = true;
             }
-            Stop();
+            else if (Scenario.Equals(TEXT("live_travel_roundtrip"), ESearchCase::IgnoreCase))
+            {
+                // Login -> game -> login -> game. Leg 1 runs like back_to_login
+                // but reports without quitting; the driver supervises leg 2.
+                Brain->TargetKills = 0;
+                Brain->bBackToLoginPhase = (RoundtripLeg == 1);
+                Brain->bTravelRoundtripPhase = (RoundtripLeg == 1);
+                Brain->bRoundtripVerifyOnly = (RoundtripLeg == 2);
+                Brain->GlobalTimeoutSec = 420.0f;
+            }
+            if (bTravelRoundtrip)
+            {
+                // Supervisor mode: keep polling across the leg-1 -> leg-2
+                // handoff instead of stopping (Stop would kill the poll
+                // ticker and auth bindings leg 2 still needs).
+                Step = ELiveStep::WaitBrainLeg1;
+                StepStartTime = Now;
+            }
+            else
+            {
+                Stop();
+            }
             Brain->Start(GameInstance, TrackedWorld);
             return;
         }
@@ -324,11 +378,35 @@ void ULiveBotDriver::HandleCharacterList(const TArray<FLoginCharacterEntry>& Cha
     }
 
     // First character, same as a player pressing Play on row 0.
-    const int32 CharId = Characters[0].CharacterId;
+    int32 CharId = Characters[0].CharacterId;
+    const TCHAR* CharName = *Characters[0].CharacterName;
+    if (bTravelRoundtrip && RoundtripLeg == 2)
+    {
+        // Rejoin the SAME character as leg 1 when still listed.
+        for (const FLoginCharacterEntry& E : Characters)
+        {
+            if (E.CharacterId == Leg1CharId)
+            {
+                CharId = E.CharacterId;
+                CharName = *E.CharacterName;
+                break;
+            }
+        }
+    }
+    else
+    {
+        Leg1CharId = CharId;
+    }
     UE_LOG(LogTemp, Warning, TEXT("LIVEBOT joining character %d ('%s')"),
-        CharId, *Characters[0].CharacterName);
+        CharId, CharName);
     GameInstance->SetCurrentCharacterID(CharId);
     GameInstance->JoinSelectedCharacterToGame();
+    if (bTravelRoundtrip && RoundtripLeg == 2)
+    {
+        // P0.2 double-join coverage: the FJoinGuard inside
+        // JoinSelectedCharacterToGame must swallow the duplicate.
+        GameInstance->JoinSelectedCharacterToGame();
+    }
     Step = ELiveStep::WaitWorld;
     StepStartTime = FPlatformTime::Seconds();
 }

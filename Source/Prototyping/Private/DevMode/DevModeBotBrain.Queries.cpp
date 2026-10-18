@@ -427,10 +427,14 @@ int32 UDevModeBotBrain::FindEquippableMainHand(FString& OutSlug) const
     {
         for (const FInventoryItemStruct& Item : GameInstance->GetInventoryManager()->GetInventory().items)
         {
+            // Inventory rows carry the slug in `slug` (`itemSlug` belongs to
+            // other structs and stays empty here) — mirror the ItemTooltip
+            // fallback instead of trusting one field.
+            const FString& Slug = Item.slug.IsEmpty() ? Item.itemSlug : Item.slug;
             if (Item.isEquippable && !Item.is_equipped
                 && Item.equipSlotSlug.Equals(TEXT("main_hand"), ESearchCase::IgnoreCase))
             {
-                OutSlug = Item.itemSlug;
+                OutSlug = Slug;
                 return Item.id;
             }
         }

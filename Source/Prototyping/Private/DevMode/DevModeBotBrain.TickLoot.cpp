@@ -76,6 +76,15 @@ bool UDevModeBotBrain::Tick_AssertVisible(UWorld* World, ABasicPlayer* Player, d
         if (bPeerVisible)
         {
             BotAssert(true, TEXT("peer-visible"), 1, 1);
+            if (bTradePhase)
+            {
+                // P2P trade: elect roles from the visible actors, then run
+                // the invite -> accept -> offer -> confirm chain on both sides.
+                Step = EBotStep::TradeElect;
+                TradeLegStartTime = Now;
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT peer visible, starting trade election"));
+                return true;
+            }
             if (bChatPhase)
             {
                 // Social leg: stay at the rendezvous and talk next.

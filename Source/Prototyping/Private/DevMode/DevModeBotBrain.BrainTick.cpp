@@ -229,6 +229,26 @@ void UDevModeBotBrain::BrainTick()
     {
         if (Tick_ChatExchange(World, Player, Now, PlayerAt)) { return; }
     }
+    if (Step == EBotStep::TradeElect)
+    {
+        if (Tick_TradeElect(World, Player, Now, PlayerAt)) { return; }
+    }
+    if (Step == EBotStep::TradeInvite)
+    {
+        if (Tick_TradeInvite(World, Player, Now, PlayerAt)) { return; }
+    }
+    if (Step == EBotStep::TradeAccept)
+    {
+        if (Tick_TradeAccept(World, Player, Now, PlayerAt)) { return; }
+    }
+    if (Step == EBotStep::TradeOffer)
+    {
+        if (Tick_TradeOffer(World, Player, Now, PlayerAt)) { return; }
+    }
+    if (Step == EBotStep::TradeConfirm)
+    {
+        if (Tick_TradeConfirm(World, Player, Now, PlayerAt)) { return; }
+    }
     if (Step == EBotStep::QuestWalk)
     {
         if (Tick_QuestWalk(World, Player, Now, PlayerAt)) { return; }

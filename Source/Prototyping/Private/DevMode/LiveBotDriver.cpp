@@ -304,6 +304,16 @@ void ULiveBotDriver::PollTick()
                 Brain->TargetKills = 0;
                 Brain->bTitleEmotePhase = true;
             }
+            else if (Scenario.Equals(TEXT("live_trade"), ESearchCase::IgnoreCase))
+            {
+                // Two clients on the same scenario meet at the rendezvous;
+                // roles elect by character id (lower invites). Chat stays off.
+                Brain->TargetKills = 0;
+                Brain->bRendezvousMode = true;
+                Brain->bTradePhase = true;
+                Brain->bChatPhase = false;
+                Brain->GlobalTimeoutSec = 420.0f;
+            }
             else if (Scenario.Equals(TEXT("live_char_create_delete"), ESearchCase::IgnoreCase))
             {
                 Brain->TargetKills = 0;

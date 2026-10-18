@@ -164,6 +164,12 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     bChatSent = false;
     PeerChatText.Empty();
     PeerCloseSince = 0.0;
+    TradeLegStartTime = 0.0;
+    TradePeerCharId = 0;
+    bTradeInviteSent = false;
+    bTradeOfferSent = false;
+    bTradeConfirmSent = false;
+    GoldBeforeTrade = 0;
     QuestLegStartTime = 0.0;
     bDialogueRequested = false;
     bChoiceSent = false;

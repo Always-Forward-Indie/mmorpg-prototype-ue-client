@@ -15,6 +15,8 @@
 #include "Gameplay/SkillShop/SkillShopManager.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
+#include "Gameplay/Trade/TradeManager.h"
+#include "Utils/NetCore/TradeStatusRule.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "Gameplay/Equipment/EquipmentVisualComponent.h"
 #include "Gameplay/Player/ExperienceManager.h"
@@ -119,6 +121,182 @@ bool UDevModeBotBrain::Tick_ChatExchange(UWorld* World, ABasicPlayer* Player, do
         {
             BotAssert(false, TEXT("peer-msg-received"), 0, 1);
             Finish(false, TEXT("chat-timeout"));
+        }
+        return true;
+}
+
+bool UDevModeBotBrain::Tick_TradeElect(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt)
+{
+        UTradeManager* Trade = GameInstance ? GameInstance->GetTradeManager() : nullptr;
+        if (!Trade)
+        {
+            Finish(false, TEXT("no-trade"));
+            return true;
+        }
+        ABasicPlayer* Peer = FindPeerActor();
+        if (!IsValid(Peer))
+        {
+            Finish(false, TEXT("peer-lost"));
+            return true;
+        }
+        const int32 OwnCharId = GameInstance->GetCurrentCharacterID();
+        TradePeerCharId = Peer->GetPlayerCharacterID();
+        if (TradePeerCharId <= 0)
+        {
+            // Remote actor visible but its character id not replicated yet —
+            // wait for it to settle instead of electing on garbage.
+            if (Now - TradeLegStartTime > TradeTimeoutSec)
+            {
+                Finish(false, TEXT("peer-id-timeout"));
+            }
+            return true;
+        }
+        // Election lives in FTradeStatusRule (spec-pinned): lower id invites.
+        GoldBeforeTrade = GetGold();
+        BotAssert(true, TEXT("trade-peer-found"), TradePeerCharId, TradePeerCharId);
+        if (FTradeStatusRule::ShouldInitiateTrade(OwnCharId, TradePeerCharId))
+        {
+            Step = EBotStep::TradeInvite;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade: inviting char %d (we are %d)"),
+                TradePeerCharId, OwnCharId);
+        }
+        else
+        {
+            Step = EBotStep::TradeAccept;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade: accepting from char %d (we are %d)"),
+                TradePeerCharId, OwnCharId);
+        }
+        TradeLegStartTime = Now;
+        return true;
+}
+
+bool UDevModeBotBrain::Tick_TradeInvite(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt)
+{
+        UTradeManager* Trade = GameInstance ? GameInstance->GetTradeManager() : nullptr;
+        if (!Trade)
+        {
+            Finish(false, TEXT("no-trade"));
+            return true;
+        }
+        const int32 OwnCharId = GameInstance->GetCurrentCharacterID();
+        if (!bTradeInviteSent)
+        {
+            Trade->RequestTrade(OwnCharId, TradePeerCharId, Player->GetActorLocation());
+            bTradeInviteSent = true;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade invite sent to char %d"), TradePeerCharId);
+            return true;
+        }
+        // Session id arrives on the tradeState echo — that is the invite proof.
+        if (Trade->IsInTrade())
+        {
+            BotAssert(true, TEXT("trade-invited"), 1, 1);
+            BotShot(TEXT("trade-invite"));
+            Step = EBotStep::TradeOffer;
+            TradeLegStartTime = Now;
+            return true;
+        }
+        if (Now - TradeLegStartTime > TradeTimeoutSec)
+        {
+            Finish(false, TEXT("trade-invite-timeout"));
+        }
+        return true;
+}
+
+bool UDevModeBotBrain::Tick_TradeAccept(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt)
+{
+        UTradeManager* Trade = GameInstance ? GameInstance->GetTradeManager() : nullptr;
+        if (!Trade)
+        {
+            Finish(false, TEXT("no-trade"));
+            return true;
+        }
+        const int32 OwnCharId = GameInstance->GetCurrentCharacterID();
+        if (Trade->IsInTrade())
+        {
+            // Invite accepted (or the peer was faster) — session is live.
+            BotAssert(true, TEXT("trade-accepted"), 1, 1);
+            BotShot(TEXT("trade-accept"));
+            Step = EBotStep::TradeOffer;
+            TradeLegStartTime = Now;
+            return true;
+        }
+        if (Trade->HasPendingInvite())
+        {
+            Trade->RespondToTradeInvite(OwnCharId, true);
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade invite accepted"));
+            return true;
+        }
+        if (Now - TradeLegStartTime > TradeTimeoutSec)
+        {
+            Finish(false, TEXT("trade-accept-timeout"));
+        }
+        return true;
+}
+
+bool UDevModeBotBrain::Tick_TradeOffer(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt)
+{
+        UTradeManager* Trade = GameInstance ? GameInstance->GetTradeManager() : nullptr;
+        if (!Trade)
+        {
+            Finish(false, TEXT("no-trade"));
+            return true;
+        }
+        const int32 OwnCharId = GameInstance->GetCurrentCharacterID();
+        if (!bTradeOfferSent)
+        {
+            // Same-socket FIFO: the offer is processed before our confirm
+            // below, so no echo wait is needed here. Initiator moves 1 gold,
+            // acceptor offers nothing — the gold delta is the trade proof.
+            const int32 OfferGold = FTradeStatusRule::ShouldInitiateTrade(OwnCharId, TradePeerCharId) ? 1 : 0;
+            Trade->UpdateTradeOffer(OwnCharId, OfferGold, TArray<FTradeOfferItem>());
+            bTradeOfferSent = true;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade offer sent: %d gold"), OfferGold);
+            Step = EBotStep::TradeConfirm;
+            TradeLegStartTime = Now;
+            return true;
+        }
+        return true;
+}
+
+bool UDevModeBotBrain::Tick_TradeConfirm(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt)
+{
+        UTradeManager* Trade = GameInstance ? GameInstance->GetTradeManager() : nullptr;
+        if (!Trade)
+        {
+            Finish(false, TEXT("no-trade"));
+            return true;
+        }
+        const int32 OwnCharId = GameInstance->GetCurrentCharacterID();
+        if (!bTradeConfirmSent)
+        {
+            Trade->ConfirmTrade(OwnCharId);
+            bTradeConfirmSent = true;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade confirmed"));
+            return true;
+        }
+        // Completion proof is the authoritative gold snapshot (the session
+        // row is wiped on tradeComplete, so only the balance persists).
+        const bool bInitiator = FTradeStatusRule::ShouldInitiateTrade(OwnCharId, TradePeerCharId);
+        const int32 GoldNow = GetGold();
+        const int32 GoldWant = bInitiator ? GoldBeforeTrade - 1 : GoldBeforeTrade + 1;
+        if (GoldNow == GoldWant)
+        {
+            BotAssert(true, TEXT("trade-gold-moved"), GoldNow, GoldWant);
+            BotShot(TEXT("trade"));
+            Finish(Failures == 0, Failures == 0 ? TEXT("trade-done") : TEXT("assert-failures"));
+            return true;
+        }
+        if (!Trade->IsInTrade())
+        {
+            // Session gone without our gold moving: cancelled/failed server-side.
+            BotAssert(false, TEXT("trade-gold-moved"), GoldNow, GoldWant);
+            Finish(false, TEXT("trade-cancelled"));
+            return true;
+        }
+        if (Now - TradeLegStartTime > TradeTimeoutSec)
+        {
+            BotAssert(false, TEXT("trade-gold-moved"), GoldNow, GoldWant);
+            Finish(false, TEXT("trade-confirm-timeout"));
         }
         return true;
 }

@@ -29,4 +29,12 @@ struct PROTOTYPING_API FTradeStatusRule
 		return EventType.Equals(TEXT("tradeCancelled"), ESearchCase::IgnoreCase)
 			|| EventType.Equals(TEXT("tradeComplete"), ESearchCase::IgnoreCase);
 	}
+
+	/** Initiator election for bot/social flows: the lower character id
+	 * invites, the higher accepts. Deterministic — no coin flip, no extra
+	 * channel. Unknown ids (<= 0, replication not settled) never initiate. */
+	static bool ShouldInitiateTrade(int32 OwnCharId, int32 PeerCharId)
+	{
+		return OwnCharId > 0 && PeerCharId > 0 && OwnCharId < PeerCharId;
+	}
 };

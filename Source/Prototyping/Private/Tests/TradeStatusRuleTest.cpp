@@ -27,5 +27,12 @@ bool FTradeStatusRuleTest::RunTest(const FString& Parameters)
     TestFalse(TEXT("invite preserves"), R::ShouldClearSession(TEXT("tradeInvite")));
     TestFalse(TEXT("empty preserves"), R::ShouldClearSession(TEXT("")));
     TestFalse(TEXT("unknown preserves"), R::ShouldClearSession(TEXT("trade frobnicate")));
+
+    // Initiator election: lower character id invites, higher accepts.
+    TestTrue(TEXT("lower id initiates"), R::ShouldInitiateTrade(614, 615));
+    TestFalse(TEXT("higher id accepts"), R::ShouldInitiateTrade(615, 614));
+    TestFalse(TEXT("same id never initiates"), R::ShouldInitiateTrade(614, 614));
+    TestFalse(TEXT("unknown own never initiates"), R::ShouldInitiateTrade(0, 615));
+    TestFalse(TEXT("unknown peer never initiates"), R::ShouldInitiateTrade(614, 0));
     return true;
 }

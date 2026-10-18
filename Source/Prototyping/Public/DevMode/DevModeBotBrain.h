@@ -126,6 +126,12 @@ public:
     // actor bubble. Needs TWO clients on the same scenario.
     bool bChatPhase = false;
     float ChatTimeoutSec = 60.0f;
+    // live_trade (LIVE ONLY, needs TWO clients on the same scenario):
+    // rendezvous -> the lower character id invites (pure election in
+    // FTradeStatusRule) -> accept -> initiator offers 1 gold -> both
+    // confirm -> tradeComplete moves the gold. Asserts the gold delta.
+    bool bTradePhase = false;
+    float TradeTimeoutSec = 120.0f;
     // quest_turnin (LIVE ONLY): walk to the quest NPC, accept via dialogue
     // (edge with quest preview), kill + harvest + loot the objective with
     // the Phase A/B machinery, walk back, turn in via dialogue (edge with
@@ -211,6 +217,11 @@ private:
         VendorBuy,
         VendorRepair,
         ChatExchange,
+        TradeElect,
+        TradeInvite,
+        TradeAccept,
+        TradeOffer,
+        TradeConfirm,
         QuestWalk,
         QuestAccept,
         QuestTurnin,
@@ -275,6 +286,11 @@ private:
     bool Tick_VendorBuy(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
     bool Tick_VendorRepair(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
     bool Tick_ChatExchange(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_TradeElect(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_TradeInvite(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_TradeAccept(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_TradeOffer(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_TradeConfirm(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
     bool Tick_QuestWalk(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
     bool Tick_QuestAccept(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
     bool Tick_QuestTurnin(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
@@ -479,6 +495,12 @@ private:
     double ChatLegStartTime = 0.0;
     bool bChatSent = false;
     FString PeerChatText;
+    double TradeLegStartTime = 0.0;
+    int32 TradePeerCharId = 0;
+    bool bTradeInviteSent = false;
+    bool bTradeOfferSent = false;
+    bool bTradeConfirmSent = false;
+    int32 GoldBeforeTrade = 0;
     double QuestLegStartTime = 0.0;
     bool bDialogueRequested = false;
     bool bChoiceSent = false;

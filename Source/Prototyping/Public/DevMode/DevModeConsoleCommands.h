@@ -79,6 +79,11 @@ private:
     void Cmd_SetMobHP(const TArray<FString>& Args) const;
     void Cmd_KillMob(const TArray<FString>& Args) const;
     void Cmd_ClearCorpses(const TArray<FString>& Args) const;
+    // A2 reconnect hook: closes the chunk socket so the drop detector and
+    // bounded reconnect run exactly like on a real network drop. Offline
+    // DevMode has no live socket (safe no-op with a log); live verification
+    // drops a real session. Never called in prod (DevMode-only object).
+    void Cmd_DropSocket(const TArray<FString>& Args) const;
 
     // Screenshot helper for visual sweep runs (-devmode-shots flag).
     void SweepShot(const FString& Tag) const;

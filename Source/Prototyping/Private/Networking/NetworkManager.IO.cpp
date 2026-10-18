@@ -10,6 +10,7 @@
 #include "MyGameInstance.h"
 #include "Utils/JSONParser.h"
 #include "Utils/NetCore/RetryPolicy.h"
+#include "Utils/NetCore/ChunkLinkRule.h"
 #include "Prototyping.h"
 #include "CrashDiagnostics.h"
 
@@ -56,6 +57,13 @@ void UNetworkManager::SendDataToChunkServer(const FString& Data)
 	if (SenderChunkServerWorker != nullptr)
 	{
 		SenderChunkServerWorker->EnqueueDataForSending(Data);
+	}
+	else if (ChunkServerConnectionTimerHandle.IsValid())
+	{
+		// Reconnect in flight (mid-session drop or connect-time retries):
+		// packets have nowhere to go — drop quietly. Fresh positions arrive
+		// on their own after rejoin, and Error here would spam every tick.
+		UE_LOG(LogConnection, Verbose, TEXT("SendDataToChunkServer dropped while reconnecting"));
 	}
 	else
 	{
@@ -112,6 +120,26 @@ void UNetworkManager::PollChunkServerNetworkData()
 		
 		// Trigger the event or delegate call
 		OnChunkServerDataReceived.Broadcast(ReceivedData);
+	}
+
+	// Mid-session drop watch (game thread, ~1ms tick). Connect-time failures
+	// are owned by the ConnectChunkServer retry timer; this only fires once a
+	// session exists (workers up) and the link goes down. The pure predicate
+	// owns the decision; the handler reuses the connect-time budget + popup.
+	if (bIsShutDown || !WorldContext)
+	{
+		return;
+	}
+	if (!ReceiverChunkServerWorker || !SenderChunkServerWorker)
+	{
+		return;
+	}
+	const bool bWorkerDrop = ReceiverChunkServerWorker->ConsumeDropObserved();
+	const bool bSocketDown = ChunkServerSocket
+		&& ChunkServerSocket->GetConnectionState() != ESocketConnectionState::SCS_Connected;
+	if (FChunkLinkRule::ShouldStartReconnect(true, bWorkerDrop || bSocketDown, ChunkServerConnectionTimerHandle.IsValid()))
+	{
+		HandleChunkMidSessionDrop();
 	}
 }
 

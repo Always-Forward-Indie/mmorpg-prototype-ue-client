@@ -37,6 +37,37 @@
 #include "Misc/Parse.h"
 #include "DevMode/BotBrainHelpers.h"
 
+void UDevModeBotBrain::MaybeDropSocketMidRun(double Now)
+{
+    if (!bDropSocketMidRun || bDropSocketDone)
+    {
+        return;
+    }
+    const double Elapsed = Now - RunStartSec;
+    // Minimum settle time first; then drop right after the first confirmed
+    // kill (the fight is proven real), or at the max wait as a fallback so
+    // a bad spot fails loud instead of hanging the global budget.
+    if (Elapsed < DropSocketAfterSec || (Kills < 1 && Elapsed < DropSocketMaxWaitSec))
+    {
+        return;
+    }
+    bDropSocketDone = true;
+    // Strict proof: kills before the drop don't count — PASS needs
+    // TargetKills fresh kills strictly after the rejoin completes.
+    const int32 Discarded = Kills;
+    Kills = 0;
+    if (GameInstance && GameInstance->GetNetworkManager())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("%s socket DROP requested (reconnect test, discarded pre-drop kills=%d)"),
+            *TombstonePrefix, Discarded);
+        GameInstance->GetNetworkManager()->DropChunkSocketForTest();
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("%s socket DROP skipped (no NetworkManager)"), *TombstonePrefix);
+    }
+}
+
 void UDevModeBotBrain::BrainTick()
 {
     if (!bRunning) { return; }
@@ -59,6 +90,10 @@ void UDevModeBotBrain::BrainTick()
 
     const double Now = FPlatformTime::Seconds();
 
+    // live_reconnect: self-inflicted mid-run drop, once. The run continues
+    // on the same timers — recovery (or its absence) is what the scenario proves.
+    MaybeDropSocketMidRun(Now);
+
     // Death is fatal by default (death UI needs a human click) — but the
     // death_respawn scenario EXPECTS it: redirect into the assert leg
     // instead of failing. RespawnWait polls the revival itself.
@@ -80,6 +115,7 @@ void UDevModeBotBrain::BrainTick()
     // (runs against the just-killed mob) and GotoWaypoint (needs no target).
     // Mid-combat death (server hit lands between ticks): do NOT repick —
     // fall through to AssertKill so the kill is counted, not skipped.
+    const FVector PlayerAt = Player->GetActorLocation();
     if ((Step == EBotStep::GotoTarget || Step == EBotStep::Combat)
         && (!TargetMob.IsValid() || TargetMob->GetMOBIsDead()))
     {
@@ -97,6 +133,28 @@ void UDevModeBotBrain::BrainTick()
                 Finish(Kills >= TargetKills, Kills >= TargetKills ? TEXT("no-targets-left") : TEXT("target-lost"));
                 return;
             }
+            // live_reconnect: never chase across the map into a mesh wall.
+            // Only a close top-up is an acceptable pick; otherwise wait in
+            // place (patient, backstopped below) for one to arrive.
+            if (bDropSocketMidRun)
+            {
+                const float PickDist = Dist2D(PlayerAt, TargetMob->GetActorLocation());
+                if (PickDist > CloseTargetRadius)
+                {
+                    TargetMob.Reset();
+                    if (Now - LastCloseWaitLogSec > 15.0)
+                    {
+                        LastCloseWaitLogSec = Now;
+                        UE_LOG(LogTemp, Warning, TEXT("%s waiting for close target (nearest %.0f > %.0f)"),
+                            *TombstonePrefix, PickDist, CloseTargetRadius);
+                    }
+                    if (Now - RunStartSec > NoCloseTargetTimeoutSec)
+                    {
+                        Finish(false, TEXT("no-close-targets"));
+                    }
+                    return;
+                }
+            }
             Step = EBotStep::GotoTarget;
             StepStartTime = Now;
             LastChasePos = Player->GetActorLocation();
@@ -105,8 +163,6 @@ void UDevModeBotBrain::BrainTick()
                 *TargetMob->GetMobName(), TargetMob->GetActorLocation().X, TargetMob->GetActorLocation().Y);
         }
     }
-
-    const FVector PlayerAt = Player->GetActorLocation();
 
 
     if (Step == EBotStep::ExpectGround)

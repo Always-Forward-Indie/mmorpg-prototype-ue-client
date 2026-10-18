@@ -316,6 +316,16 @@ void ULiveBotDriver::PollTick()
                 Brain->bRoundtripVerifyOnly = (RoundtripLeg == 2);
                 Brain->GlobalTimeoutSec = 420.0f;
             }
+            else if (Scenario.Equals(TEXT("live_reconnect"), ESearchCase::IgnoreCase))
+            {
+                // P0.2 reconnect gate: patrol, self-drop the chunk socket
+                // mid-run, recover, finish kills after the rejoin. The brain
+                // resets its kill counter at the drop, so PASS proves
+                // post-rejoin gameplay on the rebound session.
+                Brain->TargetKills = 2;
+                Brain->bDropSocketMidRun = true;
+                Brain->GlobalTimeoutSec = 300.0f;
+            }
             if (bTravelRoundtrip)
             {
                 // Supervisor mode: keep polling across the leg-1 -> leg-2

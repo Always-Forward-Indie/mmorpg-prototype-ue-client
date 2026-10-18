@@ -11,6 +11,32 @@
 #include "Prototyping.h"
 #include "CrashDiagnostics.h"
 
+void UPlayerManager::HandleChunkServerSocketConnected()
+{
+	if (!gameInstance || !IsValid(gameInstance))
+	{
+		return;
+	}
+	// Initial connects happen before the game world is live — the normal
+	// game-server flow (Phase PRE) drives the join. Only a reconnect lands
+	// here with a live world: resend Phase 1 so the server rebinds the new
+	// socket to our clientId (it drops all state on disconnect). Phase 2/3
+	// then continue through the regular response handlers below.
+	if (!gameInstance->IsGameWorldReady())
+	{
+		return;
+	}
+	const int32 OwnClientId = gameInstance->GetCurrentClientID();
+	if (OwnClientId <= 0)
+	{
+		return;
+	}
+	FClientDataStruct LocalClientData = gameInstance->GetCurrentClientData();
+	UE_LOG(LogConnection, Warning, TEXT("[REJOIN] chunk reconnected mid-session, clientId=%d charId=%d — resending Phase 1 joinGameClient"),
+		OwnClientId, LocalClientData.characterData.characterId);
+	SendJoinClientChunkRequest(LocalClientData);
+}
+
 void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 {
 	CRASH_GUARD("PlayerManager::ProcessChunkServerData");
@@ -140,10 +166,28 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 			if (gameInstance->GetCurrentClientID() == ClientData.clientId) {
 				// Store player data before world transition
 				gameInstance->AddPlayerData(ClientData.clientId, ClientData);
-				// Queue local player spawn for after the game world loads
-				gameInstance->PendingSpawnClientId = ClientData.clientId;
-				// Transition to game world (OpenLevel for World Partition)
-				gameInstance->TransitionToGameWorld();
+				// Rejoin after a mid-session reconnect: the world is already
+				// live and our actor spawned — travelling again would flash
+				// the loading screen and reset readiness for nothing. Skip
+				// the travel, restore the characterId the response omits,
+				// and resend playerReady so the server pushes a fresh
+				// Phase-4 world-state snapshot over the new socket.
+				const int32 OwnCharId = gameInstance->GetCurrentCharacterID();
+				if (gameInstance->IsGameWorldReady() && gameInstance->GetPlayerByCharacterId(OwnCharId) != nullptr)
+				{
+					FClientDataStruct RejoinData = ClientData;
+					RejoinData.characterData.characterId = OwnCharId;
+					UE_LOG(LogConnection, Warning, TEXT("[PHASE 2] rejoin OK: clientId=%d charId=%d — world live, skipping travel, resending playerReady"),
+						RejoinData.clientId, OwnCharId);
+					SendPlayerReadyRequest(RejoinData);
+				}
+				else
+				{
+					// Queue local player spawn for after the game world loads
+					gameInstance->PendingSpawnClientId = ClientData.clientId;
+					// Transition to game world (OpenLevel for World Partition)
+					gameInstance->TransitionToGameWorld();
+				}
 			}
 			else {
 				// Remote player: only queue/spawn if we have valid position data

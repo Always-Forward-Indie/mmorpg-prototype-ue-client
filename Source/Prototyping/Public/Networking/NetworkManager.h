@@ -133,6 +133,20 @@ public:
 	void RestartPolling();
 	void ConnectLoginServer();
 	void ConnectChunkServer();
+	// Mid-session chunk drop: safe chunk-only teardown + ConnectChunkServer()
+	// (same 1s / 3-retry budget, popup on exceed). Called on the game thread
+	// from PollChunkServerNetworkData when the link is down but a session
+	// was established. Keeps the poll timer running by design.
+	void HandleChunkMidSessionDrop();
+	// Chunk-only twin of Disconnect(): stops/closes/destroys just the chunk
+	// socket + workers in the same safe order (Stop -> Detach -> Close ->
+	// WaitForCompletion -> Destroy -> delete). Never touches login/game.
+	void TeardownChunkLink();
+	// DEV-ONLY test hook (called only from devmode.dropsocket): closes the
+	// chunk socket without tearing anything down, so the drop detector and
+	// the bounded reconnect run exactly like on a real network drop.
+	// Safe no-op when there is no live socket. Zero prod impact.
+	void DropChunkSocketForTest();
 	void SendDataToLoginServer(const FString& Data);
 	void SendDataToGameServer(const FString& Data);
 	void SendDataToChunkServer(const FString& Data);

@@ -80,4 +80,89 @@ void UNetworkManager::ConnectChunkServer()
 	WorldContext->GetTimerManager().SetTimer(ChunkServerConnectionTimerHandle, ChunkTimerDelegate, FRetryPolicy::ConnectionRetryIntervalSec, true);
 }
 
+// Mid-session drop entry point (game thread, called from the poll timer).
+// Guards: shutdown / no world / reconnect already running / no session yet
+// (connect-time retries own that case). Otherwise tears the dead link down
+// and dials again with the same budget ConnectChunkServer enforces.
+void UNetworkManager::HandleChunkMidSessionDrop()
+{
+	if (bIsShutDown || !WorldContext)
+	{
+		return;
+	}
+	if (ChunkServerConnectionTimerHandle.IsValid())
+	{
+		return;
+	}
+	if (!ReceiverChunkServerWorker && !SenderChunkServerWorker)
+	{
+		return;
+	}
+	UE_LOG(LogConnection, Error, TEXT("Chunk mid-session drop detected - tearing down link and reconnecting (budget %d)."), MaxChunkRetries);
+	TeardownChunkLink();
+	ConnectChunkServer();
+}
+
+void UNetworkManager::TeardownChunkLink()
+{
+	// Same safe order as Disconnect(), chunk-only. The poll timer is left
+	// running on purpose: it is the same game thread calling us, and once
+	// ConnectChunkServer recreates the workers the next poll tick picks the
+	// session back up. Only the connection timer is cleared here.
+	if (WorldContext)
+	{
+		WorldContext->GetTimerManager().ClearTimer(ChunkServerConnectionTimerHandle);
+	}
+	ChunkServerConnectionTimerHandle.Invalidate();
+
+	if (SenderChunkServerWorker) SenderChunkServerWorker->Stop();
+	if (ReceiverChunkServerWorker) ReceiverChunkServerWorker->Stop();
+
+	if (ReceiverChunkServerWorker) ReceiverChunkServerWorker->DetachSocket();
+	if (SenderChunkServerWorker) SenderChunkServerWorker->DetachSocket();
+
+	if (ChunkServerSocket != nullptr)
+	{
+		ChunkServerSocket->Close();
+	}
+
+	auto ShutdownChunkThread = [](FRunnable* Worker, FRunnableThread*& Thread)
+	{
+		if (Thread)
+		{
+			Thread->WaitForCompletion();
+			delete Thread;
+			Thread = nullptr;
+		}
+	};
+
+	ShutdownChunkThread(ReceiverChunkServerWorker, ReceiverChunkServerThread);
+	ShutdownChunkThread(SenderChunkServerWorker, SenderChunkServerThread);
+
+	if (ChunkServerSocket != nullptr)
+	{
+		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ChunkServerSocket);
+		ChunkServerSocket = nullptr;
+	}
+
+	delete ReceiverChunkServerWorker; ReceiverChunkServerWorker = nullptr;
+	delete SenderChunkServerWorker; SenderChunkServerWorker = nullptr;
+	bIsChunkSocketConnected = false;
+
+	UE_LOG(LogConnection, Log, TEXT("Chunk link torn down for reconnect."));
+}
+
+void UNetworkManager::DropChunkSocketForTest()
+{
+	if (ChunkServerSocket != nullptr)
+	{
+		UE_LOG(LogConnection, Warning, TEXT("DropChunkSocketForTest: closing chunk socket to simulate a mid-session drop."));
+		ChunkServerSocket->Close();
+	}
+	else
+	{
+		UE_LOG(LogConnection, Warning, TEXT("DropChunkSocketForTest: no chunk socket, nothing to drop."));
+	}
+}
+
 

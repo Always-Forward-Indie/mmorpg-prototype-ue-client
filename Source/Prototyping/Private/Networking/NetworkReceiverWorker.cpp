@@ -36,6 +36,16 @@ void NetworkReceiverWorker::SetSocketTag(const TCHAR* InTag)
     SocketTag = InTag ? InTag : TEXT("?");
 }
 
+bool NetworkReceiverWorker::HasObservedDrop() const
+{
+    return bDropObserved.load();
+}
+
+bool NetworkReceiverWorker::ConsumeDropObserved()
+{
+    return bDropObserved.exchange(false);
+}
+
 //FString NetworkReceiverWorker::AddClientReceiveTimestamp(const FString& JsonData, int64 ClientRecvMs)
 //{
 //    if (!TimeSyncService)
@@ -224,6 +234,24 @@ uint32 NetworkReceiverWorker::Run()
 
                 // ��������� ������ � �������
                 DataQueue.Enqueue(TimestampedString);
+            }
+        }
+        else
+        {
+            // No data this tick: idle and dead sockets look identical here
+            // (non-blocking Recv returns false with 0 bytes in both cases),
+            // so only the connection state tells them apart. A live idle link
+            // stays SCS_Connected; anything else means the peer went away
+            // mid-session. Flag it once (Error per seam rule) so the game
+            // thread can start a bounded reconnect; the thread itself keeps
+            // spinning so Shutdown() ordering stays unchanged.
+            FSocket* StateSocket = Socket.load();
+            if (StateSocket && StateSocket->GetConnectionState() != ESocketConnectionState::SCS_Connected)
+            {
+                if (!bDropObserved.exchange(true))
+                {
+                    UE_LOG(LogConnection, Error, TEXT("NetworkReceiverWorker: %s socket drop observed (mid-session link down)."), *SocketTag);
+                }
             }
         }
 

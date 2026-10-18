@@ -142,6 +142,13 @@ void UDevModeConsoleCommands::RegisterCommands(UMyGameInstance* InGameInstance)
             if (UDevModeConsoleCommands* Cmd = WeakThis.Get()) { Cmd->Cmd_ClearCorpses(A); }
         }));
 
+    Reg(TEXT("devmode.dropsocket"),
+        TEXT("DevMode: simulate a mid-session socket drop. Usage: devmode.dropsocket chunk"),
+        FConsoleCommandWithArgsDelegate::CreateLambda([WeakThis](const TArray<FString>& A)
+        {
+            if (UDevModeConsoleCommands* Cmd = WeakThis.Get()) { Cmd->Cmd_DropSocket(A); }
+        }));
+
     UE_LOG(LogTemp, Log, TEXT("DevMode: %d console commands registered"), RegisteredCommandNames.Num());
 }
 

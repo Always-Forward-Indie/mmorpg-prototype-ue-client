@@ -171,6 +171,22 @@ public:
     // Kill budget for the combat legs. Scenario profiles (console + live
     // driver) set this before Start: 2 patrol, 1 loot, 0 death.
     int32 TargetKills = 2;
+    // live_reconnect: drop the chunk socket once mid-run (self-inflicted via
+    // UNetworkManager::DropChunkSocketForTest), then prove the run recovers:
+    // the kill counter resets at the drop, so PASS needs TargetKills fresh
+    // kills strictly after the rejoin. Default off — offline runs never drop.
+    // The drop fires after the first confirmed kill (the fight is real and
+    // the recovery is proven on a second one), or at DropSocketMaxWaitSec
+    // as a fallback so a bad spot fails loud instead of hanging.
+    bool bDropSocketMidRun = false;
+    float DropSocketAfterSec = 15.0f;
+    float DropSocketMaxWaitSec = 90.0f;
+    // live_reconnect: only chase mobs within this radius. The scenario
+    // proves recovery on a guaranteed-nearby fox (topped up externally),
+    // never a cross-map chase into a mesh wall. Gated to live_reconnect.
+    float CloseTargetRadius = 800.0f;
+    // Patient wait for a close target before giving up (covers spawn lag).
+    float NoCloseTargetTimeoutSec = 240.0f;
 
 private:
     enum class EBotStep : uint8
@@ -289,6 +305,8 @@ private:
     void Finish(bool bPass, const FString& Reason);
     // Local assert in DEVMODE_ASSERT format (same as devmode.expect).
     void BotAssert(bool bPass, const FString& What, int32 Actual, int32 Expected);
+    // live_reconnect: one-shot mid-run socket drop (see bDropSocketMidRun).
+    void MaybeDropSocketMidRun(double Now);
     // Checkpoint screenshot for watchable runs (-devmode-shots flag only;
     // headless runs skip). Named DevBot_<scenario>_<tag>.
     void BotShot(const FString& Tag) const;
@@ -385,6 +403,11 @@ private:
     int32 Kills = 0;
     int32 Failures = 0;
     bool bRunning = false;
+    // live_reconnect bookkeeping: run clock for the drop delay + one-shot latch.
+    double RunStartSec = 0.0;
+    bool bDropSocketDone = false;
+    // live_reconnect: throttle for the "waiting for close target" notice.
+    double LastCloseWaitLogSec = 0.0;
     bool bAttackStarted = false;
     // ---- Phase A state ----
     // Where the last counted kill died (loot leg walks back here).

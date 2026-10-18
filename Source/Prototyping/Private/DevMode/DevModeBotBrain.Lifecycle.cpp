@@ -127,6 +127,9 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     TargetMob.Reset();
     Kills = 0;
     Failures = 0;
+    RunStartSec = FPlatformTime::Seconds();
+    bDropSocketDone = false;
+    LastCloseWaitLogSec = 0.0;
     Odometer = 0.0f;
     LastMoveTime = FPlatformTime::Seconds();
     Step = EBotStep::ExpectGround;

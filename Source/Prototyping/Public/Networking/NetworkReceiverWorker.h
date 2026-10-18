@@ -20,6 +20,9 @@ private:
 	std::atomic<bool> bRunThread; // Flag to control thread execution
 	TQueue<FString, EQueueMode::Mpsc> DataQueue; // Thread-safe queue for messages
 	TWeakObjectPtr<UTimeSyncService> TimeSyncService; // Weak ref - GC-safe access from worker thread
+	// Set once when Recv observes a dead socket (game thread consumes it
+	// to start a bounded reconnect, then clears it via ConsumeDropObserved).
+	mutable std::atomic<bool> bDropObserved{ false };
 	// Human-readable socket tag for drop logs ("Login"/"Game"/"Chunk").
 	// Set once at setup; read on the worker thread.
 	FString SocketTag = TEXT("?");
@@ -43,6 +46,12 @@ public:
     // on the socket object. Must be called BEFORE ISocketSubsystem::DestroySocket()
     // to prevent a vtable-read crash on the receiver thread.
     void DetachSocket();
+
+    // True if the worker thread has observed a dead socket since the last
+    // ConsumeDropObserved() call (thread-safe, polled on the game thread).
+    bool HasObservedDrop() const;
+    // Returns true once per observed drop and clears the flag.
+    bool ConsumeDropObserved();
 
     // FRunnable interface implementation
     virtual bool Init() override;

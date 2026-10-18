@@ -75,6 +75,9 @@ void UPlayerManager::SubscribeToNetworkManager()
 		// Subscribe to the network manager's events for chunk server data
 		networkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UPlayerManager::ProcessChunkServerData);
 		networkManager->OnChunkServerDataReceived.AddDynamic(this, &UPlayerManager::ProcessChunkServerData);
+		// Rejoin trigger for mid-session reconnects (idempotent: Remove first).
+		networkManager->OnChunkServerSocketConnected.RemoveDynamic(this, &UPlayerManager::HandleChunkServerSocketConnected);
+		networkManager->OnChunkServerSocketConnected.AddDynamic(this, &UPlayerManager::HandleChunkServerSocketConnected);
 		UE_LOG(LogConnection, Log, TEXT("PlayerManager: Subscribed to NetworkManager delegates"));
 	}
 	else

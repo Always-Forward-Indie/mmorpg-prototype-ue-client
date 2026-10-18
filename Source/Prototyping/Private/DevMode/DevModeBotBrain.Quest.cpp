@@ -36,6 +36,7 @@
 #include "HighResScreenshot.h"
 #include "Misc/Parse.h"
 #include "DevMode/BotBrainHelpers.h"
+#include "Utils/NetCore/QuestEdgeRule.h"
 
 bool UDevModeBotBrain::EnsureDialogueOpen(int32 NpcId, double Now)
 {
@@ -67,15 +68,20 @@ int32 UDevModeBotBrain::FindGoalEdge(bool bWantTurnin) const
     {
         return 0;
     }
+    // Predicate lives in FQuestEdgeRule (pure, spec-pinned); here only the
+    // 1:1 field mapping from the live dialogue node remains.
+    TArray<FQuestEdgeRule::FChoice> Edges;
     for (const FDialogueChoice& Choice : Dlg->GetCurrentNode().choices)
     {
-        const bool bGoal = bWantTurnin ? Choice.bHasTurnInPreview : Choice.bHasQuestPreview;
-        if (bGoal && Choice.conditionMet)
-        {
-            return Choice.edgeId;
-        }
+        FQuestEdgeRule::FChoice E;
+        E.EdgeId = Choice.edgeId;
+        E.bHasQuestPreview = Choice.bHasQuestPreview;
+        E.bHasTurnInPreview = Choice.bHasTurnInPreview;
+        E.bConditionMet = Choice.conditionMet;
+        E.ChoiceKey = Choice.clientChoiceKey;
+        Edges.Add(E);
     }
-    return 0;
+    return FQuestEdgeRule::FindGoalEdge(Edges, bWantTurnin);
 }
 
 int32 UDevModeBotBrain::FindAdvanceEdge() const
@@ -85,25 +91,20 @@ int32 UDevModeBotBrain::FindAdvanceEdge() const
     {
         return 0;
     }
-    // Neutral hubs (continue/back): first met condition that is NOT a
-    // farewell-class edge. Goal edges have priority in the caller, so this
-    // never steals an accept/turn-in.
+    // Predicate lives in FQuestEdgeRule (pure, spec-pinned); here only the
+    // 1:1 field mapping from the live dialogue node remains.
+    TArray<FQuestEdgeRule::FChoice> Edges;
     for (const FDialogueChoice& Choice : Dlg->GetCurrentNode().choices)
     {
-        if (!Choice.conditionMet)
-        {
-            continue;
-        }
-        const FString Key = Choice.clientChoiceKey.ToLower();
-        if (Key.Contains(TEXT("farewell")) || Key.Contains(TEXT("bye")) || Key.Contains(TEXT("leave"))
-            || Key.Contains(TEXT("goodbye")) || Key.Contains(TEXT("close")) || Key.Contains(TEXT("exit"))
-            || Key.Contains(TEXT("cancel")))
-        {
-            continue;
-        }
-        return Choice.edgeId;
+        FQuestEdgeRule::FChoice E;
+        E.EdgeId = Choice.edgeId;
+        E.bHasQuestPreview = Choice.bHasQuestPreview;
+        E.bHasTurnInPreview = Choice.bHasTurnInPreview;
+        E.bConditionMet = Choice.conditionMet;
+        E.ChoiceKey = Choice.clientChoiceKey;
+        Edges.Add(E);
     }
-    return 0;
+    return FQuestEdgeRule::FindAdvanceEdge(Edges);
 }
 
 void UDevModeBotBrain::QuestLootDone(double Now)

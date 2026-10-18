@@ -36,6 +36,7 @@
 #include "HighResScreenshot.h"
 #include "Misc/Parse.h"
 #include "DevMode/BotBrainHelpers.h"
+#include "Utils/NetCore/VendorSyncRule.h"
 
 bool UDevModeBotBrain::Tick_VendorWalk(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt)
 {
@@ -68,7 +69,11 @@ bool UDevModeBotBrain::Tick_VendorSell(UWorld* World, ABasicPlayer* Player, doub
         const int32 CharId = GameInstance->GetCurrentCharacterID();
         if (!bVendorShopOpened)
         {
-            if (Vend->GetCurrentShop().npcId == VendorNpcId)
+            // Open handshake owned by FVendorSyncRule (pure, spec-pinned);
+            // run flags and timers stay here.
+            switch (FVendorSyncRule::NextOpenStep(Vend->GetCurrentShop().npcId, VendorNpcId, bShopRequestSent))
+            {
+            case FVendorSyncRule::EOpenStep::ShopOpen:
             {
                 bVendorShopOpened = true;
                 BotAssert(true, TEXT("vendor-shop-open"), VendorNpcId, VendorNpcId);
@@ -81,19 +86,22 @@ bool UDevModeBotBrain::Tick_VendorSell(UWorld* World, ABasicPlayer* Player, doub
                 }
                 UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT shop open (npc=%d) gold=%d, selling instance=%d qty=%d"),
                     VendorNpcId, GoldBeforeSell, SellInstanceId, SellStartQty);
+                break;
             }
-            else
+            case FVendorSyncRule::EOpenStep::SendOpenRequest:
             {
-                if (!bShopRequestSent)
-                {
-                    Vend->RequestOpenVendorShop(CharId, VendorNpcId, Player->GetActorLocation());
-                    bShopRequestSent = true;
-                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT vendor shop requested npc=%d"), VendorNpcId);
-                }
-                if (Now - ShopLegStartTime > ShopTimeoutSec)
-                {
-                    Finish(false, TEXT("shop-timeout"));
-                }
+                Vend->RequestOpenVendorShop(CharId, VendorNpcId, Player->GetActorLocation());
+                bShopRequestSent = true;
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT vendor shop requested npc=%d"), VendorNpcId);
+                break;
+            }
+            case FVendorSyncRule::EOpenStep::AwaitOpen:
+            default:
+                break;
+            }
+            if (!bVendorShopOpened && Now - ShopLegStartTime > ShopTimeoutSec)
+            {
+                Finish(false, TEXT("shop-timeout"));
             }
             return true;
         }
@@ -106,7 +114,7 @@ bool UDevModeBotBrain::Tick_VendorSell(UWorld* World, ABasicPlayer* Player, doub
         }
         // Server pushes the post-sale inventory snapshot (same packet the
         // shop UI reads) — gold up AND stack down by exactly one.
-        if (GetGold() > GoldBeforeSell && GetQtyByInstance(SellInstanceId) == SellStartQty - 1)
+        if (FVendorSyncRule::IsSellSynced(GetGold(), GoldBeforeSell, GetQtyByInstance(SellInstanceId), SellStartQty))
         {
             BotAssert(true, TEXT("sell-gold-up"), 1, 1);
             BotAssert(true, TEXT("sell-qty-down"), 1, 1);
@@ -135,20 +143,30 @@ bool UDevModeBotBrain::Tick_VendorRepair(UWorld* World, ABasicPlayer* Player, do
         const int32 CharId = GameInstance->GetCurrentCharacterID();
         if (!bRepairShopOpened)
         {
-            if (Rep->GetCurrentShop().npcId == VendorNpcId)
+            // Same open handshake as the vendor leg, one rule for both.
+            switch (FVendorSyncRule::NextOpenStep(Rep->GetCurrentShop().npcId, VendorNpcId, bRepairShopRequestSent))
+            {
+            case FVendorSyncRule::EOpenStep::ShopOpen:
             {
                 bRepairShopOpened = true;
                 BotAssert(true, TEXT("repair-shop-open"), VendorNpcId, VendorNpcId);
                 GoldBeforeRepair = GetGold();
-                RepairInstanceId = 0;
+                TArray<FVendorSyncRule::FRepairableItem> Rows;
                 for (const FRepairShopItemData& Item : Rep->GetCurrentShop().items)
                 {
-                    if (Item.durabilityMax > 0 && Item.durabilityCurrent < Item.durabilityMax && Item.repairCost > 0)
-                    {
-                        RepairInstanceId = Item.inventoryItemId;
-                        RepairMaxDur = Item.durabilityMax;
-                        break;
-                    }
+                    FVendorSyncRule::FRepairableItem R;
+                    R.InstanceId = Item.inventoryItemId;
+                    R.DurabilityMax = Item.durabilityMax;
+                    R.DurabilityCurrent = Item.durabilityCurrent;
+                    R.RepairCost = Item.repairCost;
+                    Rows.Add(R);
+                }
+                RepairInstanceId = 0;
+                const int32 RepairableIdx = FVendorSyncRule::FindRepairableIndex(Rows);
+                if (RepairableIdx != INDEX_NONE)
+                {
+                    RepairInstanceId = Rows[RepairableIdx].InstanceId;
+                    RepairMaxDur = Rows[RepairableIdx].DurabilityMax;
                 }
                 if (RepairInstanceId <= 0)
                 {
@@ -157,19 +175,22 @@ bool UDevModeBotBrain::Tick_VendorRepair(UWorld* World, ABasicPlayer* Player, do
                 }
                 UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT repair shop open, target instance=%d maxdur=%d gold=%d"),
                     RepairInstanceId, RepairMaxDur, GoldBeforeRepair);
+                break;
             }
-            else
+            case FVendorSyncRule::EOpenStep::SendOpenRequest:
             {
-                if (!bRepairShopRequestSent)
-                {
-                    Rep->RequestOpenRepairShop(CharId, VendorNpcId, Player->GetActorLocation());
-                    bRepairShopRequestSent = true;
-                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT repair shop requested npc=%d"), VendorNpcId);
-                }
-                if (Now - ShopLegStartTime > ShopTimeoutSec)
-                {
-                    Finish(false, TEXT("repair-shop-timeout"));
-                }
+                Rep->RequestOpenRepairShop(CharId, VendorNpcId, Player->GetActorLocation());
+                bRepairShopRequestSent = true;
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT repair shop requested npc=%d"), VendorNpcId);
+                break;
+            }
+            case FVendorSyncRule::EOpenStep::AwaitOpen:
+            default:
+                break;
+            }
+            if (!bRepairShopOpened && Now - ShopLegStartTime > ShopTimeoutSec)
+            {
+                Finish(false, TEXT("repair-shop-timeout"));
             }
             return true;
         }
@@ -184,7 +205,7 @@ bool UDevModeBotBrain::Tick_VendorRepair(UWorld* World, ABasicPlayer* Player, do
         // are listed), so durability is read from the server inventory
         // snapshot + gold must have dropped by the repair cost.
         const int32 NowDur = GetDurabilityByInstance(RepairInstanceId);
-        if (NowDur == RepairMaxDur && GetGold() < GoldBeforeRepair)
+        if (FVendorSyncRule::IsRepairSynced(NowDur, RepairMaxDur, GetGold(), GoldBeforeRepair))
         {
             BotAssert(true, TEXT("repair-durability-max"), NowDur, RepairMaxDur);
             BotAssert(GetGold() < GoldBeforeRepair, TEXT("repair-gold-down"), GetGold(), GoldBeforeRepair);

@@ -79,5 +79,22 @@ bool FProtocolFramingTest::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("buffer drained"), Oversized.Num(), 0);
 
+	// Event-type peek for drop logs (byte-level, no decoding — safe on garbage).
+	auto Peek = [](const FString& Text)
+	{
+		FTCHARToUTF8 Converted(*Text);
+		return FNetFraming::PeekEventType(
+			reinterpret_cast<const uint8*>(Converted.Get()), Converted.Length());
+	};
+	TestEqual(TEXT("peek finds type"), Peek(TEXT("{\"header\":{\"eventType\":\"mobMoveUpdate\"},\"body\":{}}")),
+		FString(TEXT("mobMoveUpdate")));
+	TestEqual(TEXT("peek spaced type"), Peek(TEXT("{\"header\" : {\"eventType\" : \"spawnMobsInZone\"}}")),
+		FString(TEXT("spawnMobsInZone")));
+	TestEqual(TEXT("peek missing is ?"), Peek(TEXT("{\"header\":{}}")), FString(TEXT("?")));
+	TestEqual(TEXT("peek garbage is ?"), Peek(TEXT("not json at all")), FString(TEXT("?")));
+	TestEqual(TEXT("peek empty is ?"), FNetFraming::PeekEventType(nullptr, 0), FString(TEXT("?")));
+	TestEqual(TEXT("peek head sanitizes"), FNetFraming::PeekHead((const uint8*)"ab\x01\x7F" "cd", 6),
+		FString(TEXT("ab??cd")));
+
 	return true;
 }

@@ -39,5 +39,22 @@ struct PROTOTYPING_API FNetFraming
 	 *   so a hung sender cannot grow the buffer unbounded.
 	 * @return number of complete messages in OutMessages.
 	 */
-	static int32 ExtractPackets(TArray<uint8>& InOutAccumulatedBytes, TArray<FString>& OutMessages);
+	static int32 ExtractPackets(TArray<uint8>& InOutAccumulatedBytes, TArray<FString>& OutMessages,
+	const TCHAR* SocketTag = nullptr);
+
+	/**
+	 * Best-effort eventType peek for drop logs (seam observability).
+	 * Scans the first MaxScanBytes for `"eventType"` followed by optional
+	 * whitespace, `:`, optional whitespace and a quoted string value
+	 * (tolerates `"eventType" : "x"` spacing variants). Byte-level, no UTF-8
+	 * decoding — safe on truncated/binary input. Returns "?" when absent.
+	 * Pure so specs can pin it.
+	 */
+	static FString PeekEventType(const uint8* Data, int32 Len, int32 MaxScanBytes = 256);
+
+	/**
+	 * Sanitized printable prefix of a byte buffer (for drop logs).
+	 * Non-printable bytes become '?'. Pure so specs can pin it.
+	 */
+	static FString PeekHead(const uint8* Data, int32 Len, int32 MaxChars = 96);
 };

@@ -47,6 +47,7 @@ void UNetworkManager::ConnectChunkServer()
 				Mgr->ChunkServerConnectionTimerHandle.Invalidate();
 				
 				Mgr->ReceiverChunkServerWorker = new NetworkReceiverWorker(Mgr->ChunkServerSocket);
+				Mgr->ReceiverChunkServerWorker->SetSocketTag(TEXT("Chunk"));
 				if (UTimeSyncService* TimeSyncSvc = Mgr->GetTimeSyncService())
 				{
 					Mgr->ReceiverChunkServerWorker->SetTimeSyncService(TimeSyncSvc);

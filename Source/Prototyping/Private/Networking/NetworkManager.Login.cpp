@@ -53,6 +53,7 @@ void UNetworkManager::ConnectLoginServer()
 				Mgr->LoginServerConnectionTimerHandle.Invalidate();
 
 				Mgr->ReceiverLoginServerWorker = new NetworkReceiverWorker(Mgr->LoginServerSocket);
+				Mgr->ReceiverLoginServerWorker->SetSocketTag(TEXT("Login"));
 				if (UTimeSyncService* TimeSyncSvc = Mgr->GetTimeSyncService())
 				{
 					Mgr->ReceiverLoginServerWorker->SetTimeSyncService(TimeSyncSvc);

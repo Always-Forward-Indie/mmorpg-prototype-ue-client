@@ -20,6 +20,9 @@ private:
 	std::atomic<bool> bRunThread; // Flag to control thread execution
 	TQueue<FString, EQueueMode::Mpsc> DataQueue; // Thread-safe queue for messages
 	TWeakObjectPtr<UTimeSyncService> TimeSyncService; // Weak ref - GC-safe access from worker thread
+	// Human-readable socket tag for drop logs ("Login"/"Game"/"Chunk").
+	// Set once at setup; read on the worker thread.
+	FString SocketTag = TEXT("?");
 
 public:
     // Constructor
@@ -32,6 +35,9 @@ public:
 
     // Set TimeSyncService reference for precise timestamp updates
     void SetTimeSyncService(UTimeSyncService* InTimeSyncService);
+
+    // Tag this worker's socket for seam-observability (drop logs name the peer).
+    void SetSocketTag(const TCHAR* InTag);
 
     // Atomically clear the socket pointer so Run() stops calling Recv()
     // on the socket object. Must be called BEFORE ISocketSubsystem::DestroySocket()

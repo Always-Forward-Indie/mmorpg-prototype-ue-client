@@ -49,6 +49,7 @@ void UNetworkManager::ConnectGameServer()
 				Mgr->GameServerConnectionTimerHandle.Invalidate();
 
 				Mgr->ReceiverGameServerWorker = new NetworkReceiverWorker(Mgr->GameServerSocket);
+				Mgr->ReceiverGameServerWorker->SetSocketTag(TEXT("Game"));
 				if (UTimeSyncService* TimeSyncSvc = Mgr->GetTimeSyncService())
 				{
 					Mgr->ReceiverGameServerWorker->SetTimeSyncService(TimeSyncSvc);

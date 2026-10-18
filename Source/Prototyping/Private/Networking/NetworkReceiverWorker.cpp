@@ -31,6 +31,11 @@ void NetworkReceiverWorker::SetTimeSyncService(UTimeSyncService* InTimeSyncServi
     TimeSyncService = InTimeSyncService;
 }
 
+void NetworkReceiverWorker::SetSocketTag(const TCHAR* InTag)
+{
+    SocketTag = InTag ? InTag : TEXT("?");
+}
+
 //FString NetworkReceiverWorker::AddClientReceiveTimestamp(const FString& JsonData, int64 ClientRecvMs)
 //{
 //    if (!TimeSyncService)
@@ -208,7 +213,7 @@ uint32 NetworkReceiverWorker::Run()
             AccumulatedBuffer.Append(ReceiveBuffer.GetData(), BytesRead);
 
             TArray<FString> Packets;
-            FNetFraming::ExtractPackets(AccumulatedBuffer, Packets);
+            FNetFraming::ExtractPackets(AccumulatedBuffer, Packets, *SocketTag);
             for (const FString& ReceivedString : Packets)
             {
 

@@ -22,8 +22,8 @@ param(
     # L3 tripwire (loose by design — catches renderer collapse, not noise).
     # Baseline 2026-10-15 (RTX 4090, 960x540, black viewport): ~240-300fps,
     # p95 ~4ms per sweep phase. Tighten after more runs / lit map.
-    [double]$PerfFpsFloor = 30.0,
-    [double]$PerfP95CeilMs = 50.0
+    [double]$PerfFpsFloor = 100.0,
+    [double]$PerfP95CeilMs = 10.0
 )
 
 $ErrorActionPreference = "Continue"

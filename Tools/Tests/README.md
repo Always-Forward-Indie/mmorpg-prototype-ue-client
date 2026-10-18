@@ -46,9 +46,11 @@
 - **L3 perf gates:** every `full_sweep`/`soak` cycle logs
   `DEVMODE_PERF phase=<n> frames=N seconds=F fps=X p95ms=Y` per phase.
   `VerifyClient.ps1 -Sweep` gates on marker presence + a loose tripwire
-  (`-PerfFpsFloor` 30, `-PerfP95CeilMs` 50; baseline 2026-10-15: ~240-330fps,
-  p95 ~4ms). Shader-compile hitch context comes from `LogShaderCompilers`
-  lines (info only). Tighten thresholds after more runs / lit map.
+  (`-PerfFpsFloor` 100, `-PerfP95CeilMs` 10; baselines: 2026-10-15 lit
+  ~240-330fps p95 ~4ms, 2026-10-18 nullrhi TestLevel ~1700-2200fps p95
+  0.6-0.8ms over 6 sweeps — tripwire keeps 2x+ margin on both, catches
+  order-of-magnitude collapse, not noise). Shader-compile hitch context
+  comes from `LogShaderCompilers` lines (info only).
 - **L4 soak (offline):** `-devmode=soak [-soak-iters=N] [-soak-period=F]`
   loops sweep churn cycles; each logs `DEVMODE_SOAK iter=N memMB=X peakMB=Y`
   (watch `memMB` growth across iters), finish logs `DEVMODE_SOAK_RESULT`.

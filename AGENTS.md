@@ -41,6 +41,7 @@ Single `Prototyping` runtime module. No Unreal replication — custom TCP + JSON
 - `Tools/Smoke/SmokeClients.ps1 -n 2` (real UE clients + log scan).
 - `Source/Prototyping/Private/Tests/` (`MMO.*` Automation specs) + `devmode.scenario combat|reset` + `Config/DevMode/qa_presets.json` for offline QA.
 - Slice routine (every change, no exceptions): `Build.bat PrototypingEditor` → `Automation RunTests MMO` via headless `UnrealEditor-Cmd.exe -ExecCmds=... -abslog=...` (exit 0, `GIsCriticalError=0`) → `Tools/Smoke/VerifyClient.ps1 -Sweep` → profile DevMode bots headless (`-nullrhi`, `-devmode-map=TestLevel`, gate on `DEVMODE_BOT_RESULT ... PASS`) → `SmokeClients.ps1 -n 2` when sockets/travel touched. Commit + push per slice, `Source/Prototyping` only.
+- Live-bot runs on the DEV stand (`-bot-live=<scenario> -botlogin= -botpass=`, never live VPS): park chars next to the target via DB (`character_position` for the `character_id`, verify by re-reading) — the bot steers straight lines and wedges on mesh walls. Quote negative coords through wsl (`"-3050"`, else eaten). Spots: quest NPC 9000 (700,-3200), vendor NPC 1 (585,-3300), skill trainer 3 (-634,2160), fox arena zone 9001 (4638-4838,-1025..-825). Caveats: admin-spawned mobs grant XP but NOT quest credit (server-side, needs server-team look — use wild mobs for quest runs); `grant_item` only lands in DB (no live push, relog to see); admin `teleport` does not move a live UE client (client moves overwrite it).
 
 ## DevMode (offline, no servers)
 

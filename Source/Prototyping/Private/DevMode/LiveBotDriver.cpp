@@ -40,6 +40,7 @@ void ULiveBotDriver::Start(UMyGameInstance* InGameInstance, const FString& InSce
     bTravelRoundtrip = Scenario.Equals(TEXT("live_travel_roundtrip"), ESearchCase::IgnoreCase);
     RoundtripLeg = 1;
     Leg1CharId = 0;
+    bRoundtripLeg2Active = false;
     RunTimeoutSec = bTravelRoundtrip ? 600.0f : GlobalTimeoutSec;
 
     if (UAuthenticationManager* Auth = GameInstance->GetAuthenticationManager())
@@ -180,6 +181,7 @@ void ULiveBotDriver::PollTick()
             LiveBrain->Stop();
             Leg1CharId = GameInstance ? GameInstance->GetCurrentCharacterID() : 0;
             RoundtripLeg = 2;
+            bRoundtripLeg2Active = true;
             bLoginSent = false;
             bCharsRequested = false;
             Step = ELiveStep::WaitConnect;
@@ -187,10 +189,12 @@ void ULiveBotDriver::PollTick()
             LastConnectAttemptTime = 0.0;
             return;
         }
-        if (LiveBrain && !LiveBrain->IsRunning())
+        if (!bRoundtripLeg2Active && LiveBrain && !LiveBrain->IsRunning())
         {
             // Brain died without reporting leg-1 completion — no tombstone
             // to trust; fail loudly instead of hanging to global timeout.
+            // (Stood down once leg 2 runs: its verify brain owns its own
+            // timeouts, and its normal Finish must not read as a leg-1 death.)
             Finish(false, TEXT("roundtrip-leg1-died"));
             return;
         }

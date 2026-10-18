@@ -106,6 +106,10 @@ private:
     bool bTravelRoundtrip = false;
     int32 RoundtripLeg = 1;
     int32 Leg1CharId = 0;
+    // Once leg 2 starts, the leg-1 watchdog below must stand down: the leg-2
+    // verify brain owns its own timeouts + tombstone, and its normal Finish
+    // (followed by auto-quit) must not be misread as a leg-1 death.
+    bool bRoundtripLeg2Active = false;
     // Whole-run budget, set in Start() (default GlobalTimeoutSec;
     // roundtrip needs ~2 legs so it gets a bigger budget there).
     float RunTimeoutSec;

@@ -251,6 +251,10 @@ void ULiveBotDriver::PollTick()
             {
                 Brain->TargetKills = 1;
                 Brain->bLootPhase = true;
+                // Server rejects corpse inspect before harvest on these
+                // corpses (CORPSE_NOT_HARVESTED) — harvest is a mandatory
+                // precondition leg, not optional scenario flavor.
+                Brain->bHarvestPhase = true;
             }
             else if (Scenario.Equals(TEXT("live_death_respawn"), ESearchCase::IgnoreCase))
             {

@@ -1,5 +1,6 @@
 #include "UI/TradeWidget.h"
 #include "Gameplay/Trade/TradeManager.h"
+#include "Utils/NetCore/TradeStatusRule.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "MyGameInstance.h"
 #include "Services/LocalizationSubsystem.h"
@@ -150,9 +151,10 @@ void UTradeWidget::RefreshTradeState()
     if (My_Confirm_Text)    My_Confirm_Text   ->SetText(FText::FromString(MyConfirmStr));
     if (Their_Confirm_Text) Their_Confirm_Text->SetText(FText::FromString(TheirConfirmStr));
 
-    // Disable confirm while both already confirmed (waiting for server complete)
+    // Disable confirm once we confirmed (waiting for server complete);
+    // peer flag never gates us. Single owner: FTradeStatusRule.
     if (Confirm_Btn)
-        Confirm_Btn->SetIsEnabled(!CurrentState.myConfirmed);
+        Confirm_Btn->SetIsEnabled(FTradeStatusRule::CanConfirm(CurrentState.sessionId, CurrentState.myConfirmed));
 }
 
 void UTradeWidget::DispatchAddItem(int32 InventoryItemId, int32 ItemId)

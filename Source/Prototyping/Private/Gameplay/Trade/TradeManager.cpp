@@ -1,6 +1,7 @@
 #include "Gameplay/Trade/TradeManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
+#include "Utils/NetCore/TradeStatusRule.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Serialization/JsonSerializer.h"
@@ -169,7 +170,7 @@ void UTradeManager::CancelTrade(int32 CharacterId)
 }
 
 // ---------------------------------------------------------------------------
-// Incoming — called by TradeNetworkHandler
+// Incoming ï¿½ called by TradeNetworkHandler
 // ---------------------------------------------------------------------------
 
 void UTradeManager::OnTradeInviteReceived(const FTradeInviteData& Invite)
@@ -190,18 +191,31 @@ void UTradeManager::OnTradeStateReceived(const FTradeStateData& State)
 
 void UTradeManager::OnTradeDeclined(const FTradeDeclinedData& Data)
 {
+    // A decline intentionally preserves the session snapshot (the rule pins
+    // it): the server error echo heals it via cancel. Single owner of the
+    // terminal-event list is FTradeStatusRule.
+    if (FTradeStatusRule::ShouldClearSession(TEXT("tradeDeclined")))
+    {
+        ClearSession();
+    }
     OnTradeDeclinedDelegate.Broadcast(Data);
 }
 
 void UTradeManager::OnTradeCancelled(const FTradeCancelledData& Data)
 {
-    ClearSession();
+    if (FTradeStatusRule::ShouldClearSession(TEXT("tradeCancelled")))
+    {
+        ClearSession();
+    }
     OnTradeCancelledDelegate.Broadcast(Data);
 }
 
 void UTradeManager::OnTradeCompleted(const FTradeCompleteData& Data)
 {
-    ClearSession();
+    if (FTradeStatusRule::ShouldClearSession(TEXT("tradeComplete")))
+    {
+        ClearSession();
+    }
     OnTradeCompletedDelegate.Broadcast(Data);
 }
 

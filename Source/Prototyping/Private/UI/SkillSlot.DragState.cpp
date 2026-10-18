@@ -20,8 +20,21 @@ bool USkillSlotWidget::CanAcceptSkillDrop(USkillDragDropOperation* DragDropOp) c
         return false;
     }
 
-    // Use cached result for the same operation pointer.
-    if (bCacheValid && CachedDragOp.Get() == DragDropOp)
+    // Ownership inputs are computed up front: the cached answer is keyed by
+    // the op pointer PLUS these. Learning a skill mid-drag
+    // (OnSkillsInitialized) must recompute instead of serving stale.
+    // The rule owns that decision (FSkillDropRule::ShouldInvalidateCache).
+    const bool bIsSameSource = DragDropOp->SourceSlotWidget == this && DragDropOp->SourceSlotIndex == SlotIndex;
+
+    const FString& SkillSlug = DragDropOp->SkillData.networkData.skillSlug;
+    const bool bSlugEmpty = SkillSlug.IsEmpty();
+
+    const bool bHadManager = SkillManager != nullptr;
+    const bool bHasSkillNow = SkillManager ? SkillManager->HasSkill(SkillSlug) : false;
+
+    if (bCacheValid && !FSkillDropRule::ShouldInvalidateCache(
+            CachedDragOp.Get() == DragDropOp, bCachedHadManager, bHadManager,
+            bCachedHasSkill, bHasSkillNow))
     {
         return bCachedCanAccept;
     }
@@ -31,20 +44,16 @@ bool USkillSlotWidget::CanAcceptSkillDrop(USkillDragDropOperation* DragDropOp) c
     // glowing and stole the highlight from the real target — which is exactly
     // why the target slot appeared to flicker / never light up during slot-to-slot
     // drags.
-    const bool bIsSameSource = DragDropOp->SourceSlotWidget == this && DragDropOp->SourceSlotIndex == SlotIndex;
-
-    const FString& SkillSlug = DragDropOp->SkillData.networkData.skillSlug;
-    const bool bSlugEmpty = SkillSlug.IsEmpty();
-
     // If SkillManager is available, confirm the player actually has the skill.
     // Without it we optimistically accept \u2014 the authoritative check happens in
     // SkillBarWidget::OnSkillDroppedOnSlot -> AssignSkillToSlot.
     // Predicate lives in FSkillDropRule (pinned by MMO.Skills.DropRule).
     const bool bCanAccept = FSkillDropRule::CanAccept(
-        bIsSameSource, bSlugEmpty, SkillManager != nullptr,
-        SkillManager ? SkillManager->HasSkill(SkillSlug) : false);
+        bIsSameSource, bSlugEmpty, bHadManager, bHasSkillNow);
 
     CachedDragOp = DragDropOp;
+    bCachedHadManager = bHadManager;
+    bCachedHasSkill = bHasSkillNow;
     bCachedCanAccept = bCanAccept;
     bCacheValid = true;
 
@@ -77,6 +86,8 @@ void USkillSlotWidget::InvalidateDragCache()
     bCacheValid = false;
     CachedDragOp.Reset();
     bCachedCanAccept = false;
+    bCachedHadManager = false;
+    bCachedHasSkill = false;
 }
 
 void USkillSlotWidget::ResetDragVisualState()

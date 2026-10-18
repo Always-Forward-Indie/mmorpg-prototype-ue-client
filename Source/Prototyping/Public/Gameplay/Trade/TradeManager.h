@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "Data/DataStructs.h"
+#include "Utils/NetCore/TradeStatusRule.h"
 #include "TradeManager.generated.h"
 
 class UNetworkManager;
@@ -53,7 +54,7 @@ public:
     FTradeStateData GetCurrentState() const { return CurrentState; }
 
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Trade")
-    bool IsInTrade() const { return !CurrentSessionId.IsEmpty(); }
+    bool IsInTrade() const { return FTradeStatusRule::HasActiveSession(CurrentSessionId); }
 
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Trade")
     FTradeInviteData GetPendingInvite() const { return PendingInvite; }

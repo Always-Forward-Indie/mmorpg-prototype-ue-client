@@ -198,6 +198,11 @@ private:
     mutable TWeakObjectPtr<USkillDragDropOperation> CachedDragOp;
     mutable bool bCachedCanAccept = false;
     mutable bool bCacheValid = false;
+    // Cached predicate inputs (see FSkillDropRule::ShouldInvalidateCache):
+    // the cached answer also depends on skill ownership, which can change
+    // mid-drag when a skill is learned (OnSkillsInitialized re-fires).
+    mutable bool bCachedHadManager = false;
+    mutable bool bCachedHasSkill = false;
 
     // Watchdog: timestamp when bIsDragging was last set to true, used to detect stuck drags
     float StuckDragStartTime = 0.0f;

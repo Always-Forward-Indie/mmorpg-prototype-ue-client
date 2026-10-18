@@ -67,7 +67,6 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
             *TombstonePrefix, *ScenarioName, TargetKills, Alive);
         return;
     }
-    InitialAlive = Alive;
 
     // Offline: start from the dev spawn; physics settles while we walk (real
     // falling). Live: start where the character actually is.

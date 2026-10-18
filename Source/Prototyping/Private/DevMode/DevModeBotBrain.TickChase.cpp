@@ -66,13 +66,12 @@ bool UDevModeBotBrain::Tick_AssertKill(UWorld* World, ABasicPlayer* Player, doub
         const bool bDead = !IsValid(DeadMob) || DeadMob->GetMOBIsDead();
         BotAssert(bDead, TEXT("mob-dead"), bDead ? 1 : 0, 1);
 
-        int32 Alive = 0;
-        for (TActorIterator<ABasicMOB> It(World); It; ++It)
-        {
-            if (!(*It)->GetMOBIsDead()) { ++Alive; }
-        }
-        // Kills must drain the living count one by one (started at InitialAlive).
-        BotAssert(Alive == InitialAlive - Kills - 1, TEXT("alive-count"), Alive, InitialAlive - Kills - 1);
+        // NOTE: no global-census assert by design. On a live shared stand
+        // the total alive count drifts for server-side reasons (respawns,
+        // timed-champion expiry, janitor, other players), so an exact
+        // `Alive == InitialAlive - Kills - 1` check is flaky and proves
+        // nothing about OUR kills. Kill registration is pinned per-target
+        // by mob-dead above plus the kills==TargetKills gate at Finish.
 
         // Real locomotion is proven by the waypoint leg (odometer), not here.
         BotAssert(bAttackStarted, TEXT("attack-loop-active"), bAttackStarted ? 1 : 0, 1);

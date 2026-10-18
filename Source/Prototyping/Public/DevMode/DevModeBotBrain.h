@@ -378,7 +378,6 @@ private:
     FVector LastChasePos = FVector::ZeroVector;
     double LastChaseProgressTime = 0.0;
     int32 Kills = 0;
-    int32 InitialAlive = 0;
     int32 Failures = 0;
     bool bRunning = false;
     bool bAttackStarted = false;

@@ -102,7 +102,7 @@
 void UMyGameInstance::LoadLoginLevel()
 {
 	// Reset join flow guard so the player can select a character again after returning to login
-	bJoinGameInProgress = false;
+	JoinGuard.Reset();
 
 	if (DevModeConfig.bEnabled)
 	{
@@ -184,7 +184,7 @@ void UMyGameInstance::ReturnToLoginLevel()
 	}
 
 	// 3. Reset game-world state so the next login starts from a clean slate.
-	bJoinGameInProgress = false;
+	JoinGuard.Reset();
 	bGameWorldReady = false;
 	bTransitioningToGameWorld = false;
 	ReadyFlags = 0;

@@ -41,6 +41,7 @@
 #include "Components/ListView.h"
 #include "Utils/JSONParser.h"
 #include "Utils/NetCore/ReadinessGate.h"
+#include "Utils/NetCore/JoinGuard.h"
 #include "MyGameInstance.generated.h"
 
 // Process-level World Partition transition slot: how many PIE instances are
@@ -104,11 +105,8 @@ FDateTime SendTimeLoginServer;
 FDateTime ReceiveTimeGameServer;
 FDateTime ReceiveTimeLoginServer;
 
-	// --- Join flow state ---
-	// True once JoinSelectedCharacterToGame has fired its joinGameClient request.
-	// Prevents a second click (or accidental double-call) from sending duplicate
-	// joinGameCharacter packets before the server flow completes.
-	bool bJoinGameInProgress = false;
+	// --- Join flow state (canonical predicate: FJoinGuard, no forked copies) ---
+	FJoinGuard JoinGuard;
 
 	// --- Level transition state ---
 	// True while we are in the process of transitioning from Login to GameWorld

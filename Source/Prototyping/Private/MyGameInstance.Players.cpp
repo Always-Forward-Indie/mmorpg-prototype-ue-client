@@ -143,7 +143,7 @@ void UMyGameInstance::JoinSelectedCharacterToGame()
 {
 	UE_LOG(LogTemp, Warning, TEXT("JoinSelectedCharacterToGame called with CharacterID: %d"), CurrentCharacterID);
 
-	if (bJoinGameInProgress)
+	if (!JoinGuard.TryEnter())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("JoinSelectedCharacterToGame: join already in progress, ignoring duplicate call (charId=%d)"), CurrentCharacterID);
 		return;
@@ -161,9 +161,7 @@ void UMyGameInstance::JoinSelectedCharacterToGame()
 		return;
 	}
 
-	bJoinGameInProgress = true;
-
-	// PRE-PHASE: Send joinGameClient to Game Server first.
+	// PRE-PHASE: Send joinGameClient to Game Server first (latch held by TryEnter above).
 	// The Game Server will respond with chunkServerData, and the response handler
 	// (ProcessGameServerData) will chain to Phase 1 (joinGameClient on Chunk Server),
 	// then Phase 1 continued (joinGameCharacter on Chunk Server).
@@ -175,7 +173,7 @@ void UMyGameInstance::JoinSelectedCharacterToGame()
 	else
 	{
 		UE_LOG(LogTemp, Error, TEXT("Cannot join game: PlayerManager is null."));
-		bJoinGameInProgress = false;
+		JoinGuard.Reset();
 	}
 }
 

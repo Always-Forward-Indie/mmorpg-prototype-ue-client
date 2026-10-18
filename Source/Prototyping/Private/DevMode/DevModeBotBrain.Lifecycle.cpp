@@ -152,6 +152,11 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     SellInstanceId = 0;
     SellStartQty = 0;
     GoldBeforeSell = 0;
+    bBuyRequested = false;
+    BuyItemId = 0;
+    BuyPrice = 0;
+    BuyQtyBefore = 0;
+    GoldBeforeBuy = 0;
     RepairInstanceId = 0;
     RepairMaxDur = 0;
     GoldBeforeRepair = 0;

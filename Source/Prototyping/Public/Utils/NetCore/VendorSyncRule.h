@@ -68,4 +68,36 @@ struct PROTOTYPING_API FVendorSyncRule
 		}
 		return INDEX_NONE;
 	}
+
+	/** Minimal buyable-row snapshot (mapped 1:1 from FVendorShopItemData). */
+	struct FBuyableItem
+	{
+		int32 ItemId = 0;
+		int32 PriceBuy = 0;
+	};
+
+	/** Index of the cheapest affordable row (price>0 and within gold); INDEX_NONE = none. */
+	static int32 FindCheapestAffordableIndex(const TArray<FBuyableItem>& Items, int32 GoldNow)
+	{
+		int32 Best = INDEX_NONE;
+		for (int32 i = 0; i < Items.Num(); ++i)
+		{
+			const FBuyableItem& Item = Items[i];
+			if (Item.PriceBuy <= 0 || Item.PriceBuy > GoldNow)
+			{
+				continue;
+			}
+			if (Best == INDEX_NONE || Item.PriceBuy < Items[Best].PriceBuy)
+			{
+				Best = i;
+			}
+		}
+		return Best;
+	}
+
+	/** Buy leg synced: gold dropped by exactly the price AND the stack grew by one. */
+	static bool IsBuySynced(int32 GoldNow, int32 GoldBeforeBuy, int32 PricePaid, int32 QtyNow, int32 QtyBefore)
+	{
+		return GoldNow == GoldBeforeBuy - PricePaid && QtyNow == QtyBefore + 1;
+	}
 };

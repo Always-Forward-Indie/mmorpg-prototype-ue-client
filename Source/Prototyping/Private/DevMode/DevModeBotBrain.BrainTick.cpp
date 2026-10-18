@@ -217,6 +217,10 @@ void UDevModeBotBrain::BrainTick()
     {
         if (Tick_VendorSell(World, Player, Now, PlayerAt)) { return; }
     }
+    if (Step == EBotStep::VendorBuy)
+    {
+        if (Tick_VendorBuy(World, Player, Now, PlayerAt)) { return; }
+    }
     if (Step == EBotStep::VendorRepair)
     {
         if (Tick_VendorRepair(World, Player, Now, PlayerAt)) { return; }

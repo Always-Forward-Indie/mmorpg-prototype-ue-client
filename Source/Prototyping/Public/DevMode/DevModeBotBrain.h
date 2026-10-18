@@ -208,6 +208,7 @@ private:
         RecoverRevive,
         VendorWalk,
         VendorSell,
+        VendorBuy,
         VendorRepair,
         ChatExchange,
         QuestWalk,
@@ -271,6 +272,7 @@ private:
     bool Tick_RecoverRevive(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
     bool Tick_VendorWalk(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
     bool Tick_VendorSell(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_VendorBuy(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
     bool Tick_VendorRepair(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
     bool Tick_ChatExchange(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
     bool Tick_QuestWalk(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
@@ -465,6 +467,11 @@ private:
     int32 SellInstanceId = 0;
     int32 SellStartQty = 0;
     int32 GoldBeforeSell = 0;
+    bool bBuyRequested = false;
+    int32 BuyItemId = 0;
+    int32 BuyPrice = 0;
+    int32 BuyQtyBefore = 0;
+    int32 GoldBeforeBuy = 0;
     int32 RepairInstanceId = 0;
     int32 RepairMaxDur = 0;
     int32 GoldBeforeRepair = 0;

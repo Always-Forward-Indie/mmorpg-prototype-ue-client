@@ -81,7 +81,11 @@ bool UDevModeBotBrain::Tick_VendorSell(UWorld* World, ABasicPlayer* Player, doub
                 SellInstanceId = FindSellableInstanceId(SellStartQty);
                 if (SellInstanceId <= 0)
                 {
-                    Finish(false, TEXT("no-junk"));
+                    // Empty-handed is an account state, not a bot failure:
+                    // skip the sell leg, the buy leg still proves commerce.
+                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT no junk to sell, skipping sell leg"));
+                    Step = EBotStep::VendorBuy;
+                    ShopLegStartTime = Now;
                     return true;
                 }
                 UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT shop open (npc=%d) gold=%d, selling instance=%d qty=%d"),
@@ -119,7 +123,7 @@ bool UDevModeBotBrain::Tick_VendorSell(UWorld* World, ABasicPlayer* Player, doub
             BotAssert(true, TEXT("sell-gold-up"), 1, 1);
             BotAssert(true, TEXT("sell-qty-down"), 1, 1);
             BotShot(TEXT("sold"));
-            Step = EBotStep::VendorRepair;
+            Step = EBotStep::VendorBuy;
             ShopLegStartTime = Now;
             UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT sold: gold %d -> %d"), GoldBeforeSell, GetGold());
             return true;
@@ -130,6 +134,74 @@ bool UDevModeBotBrain::Tick_VendorSell(UWorld* World, ABasicPlayer* Player, doub
             Finish(false, TEXT("sell-timeout"));
         }
         return true;
+}
+
+bool UDevModeBotBrain::Tick_VendorBuy(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt)
+{
+    UVendorManager* Vend = GameInstance->GetVendorManager();
+    UInventoryManager* Inv = GameInstance->GetInventoryManager();
+    if (!Vend || !Inv)
+    {
+        Finish(false, TEXT("no-vendor"));
+        return true;
+    }
+    const int32 CharId = GameInstance->GetCurrentCharacterID();
+    auto SumQtyByItemId = [Inv](int32 ItemId)
+    {
+        int32 Total = 0;
+        for (const FInventoryItemStruct& Item : Inv->GetInventory().items)
+        {
+            if (Item.itemId == ItemId) { Total += Item.quantity; }
+        }
+        return Total;
+    };
+    if (!bBuyRequested)
+    {
+        // Cheapest affordable row from the still-open shop (same snapshot
+        // the shop UI reads). Predicate lives in FVendorSyncRule.
+        TArray<FVendorSyncRule::FBuyableItem> Goods;
+        for (const FVendorShopItemData& Item : Vend->GetCurrentShop().items)
+        {
+            FVendorSyncRule::FBuyableItem G;
+            G.ItemId = Item.itemId;
+            G.PriceBuy = Item.priceBuy;
+            Goods.Add(G);
+        }
+        GoldBeforeBuy = GetGold();
+        const int32 BuyIdx = FVendorSyncRule::FindCheapestAffordableIndex(Goods, GoldBeforeBuy);
+        if (BuyIdx == INDEX_NONE)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT nothing affordable (gold=%d), skipping buy"), GoldBeforeBuy);
+            Step = EBotStep::VendorRepair;
+            ShopLegStartTime = Now;
+            return true;
+        }
+        BuyItemId = Goods[BuyIdx].ItemId;
+        BuyPrice = Goods[BuyIdx].PriceBuy;
+        BuyQtyBefore = SumQtyByItemId(BuyItemId);
+        Vend->RequestBuyItem(CharId, VendorNpcId, BuyItemId, 1, Player->GetActorLocation());
+        bBuyRequested = true;
+        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT buy requested item=%d price=%d"), BuyItemId, BuyPrice);
+        return true;
+    }
+    // Server snapshot confirms the purchase: gold dropped by exactly the
+    // price AND the stack grew by one.
+    if (FVendorSyncRule::IsBuySynced(GetGold(), GoldBeforeBuy, BuyPrice, SumQtyByItemId(BuyItemId), BuyQtyBefore))
+    {
+        BotAssert(true, TEXT("buy-gold-down"), 1, 1);
+        BotAssert(true, TEXT("buy-qty-up"), 1, 1);
+        BotShot(TEXT("bought"));
+        Step = EBotStep::VendorRepair;
+        ShopLegStartTime = Now;
+        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT bought item=%d for %d gold"), BuyItemId, BuyPrice);
+        return true;
+    }
+    if (Now - ShopLegStartTime > ShopTimeoutSec)
+    {
+        BotAssert(false, TEXT("buy-gold-down"), GetGold(), GoldBeforeBuy - BuyPrice);
+        Finish(false, TEXT("buy-timeout"));
+    }
+    return true;
 }
 
 bool UDevModeBotBrain::Tick_VendorRepair(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt)

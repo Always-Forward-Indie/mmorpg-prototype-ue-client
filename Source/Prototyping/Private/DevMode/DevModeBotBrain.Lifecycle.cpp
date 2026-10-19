@@ -182,6 +182,7 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     bLearnRequested = false;
     bCastSent = false;
     bBuffSent = false;
+    bCastSteerInit = false;
     CastTargetUid = 0;
     MobHpBefore = 0;
     ManaBefore = 0;

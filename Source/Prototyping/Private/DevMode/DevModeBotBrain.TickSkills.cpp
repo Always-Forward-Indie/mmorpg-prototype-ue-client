@@ -135,6 +135,7 @@ bool UDevModeBotBrain::Tick_SkillCast(UWorld* World, ABasicPlayer* Player, doubl
                     return true;
                 }
                 ChaseTargetUID = 0;
+                bCastSteerInit = false;
             }
         }
         ABasicMOB* Target = TargetMob.Get();
@@ -177,6 +178,31 @@ bool UDevModeBotBrain::Tick_SkillCast(UWorld* World, ABasicPlayer* Player, doubl
         if (Dist2D(PlayerAt, Target->GetActorLocation()) > CastRange * ArrivalFraction)
         {
             SteerToward(Player, Target->GetActorLocation(), CastRange * ArrivalFraction, Now, *Target->GetMobName());
+            const float TargetDist = Dist2D(PlayerAt, Target->GetActorLocation());
+            if (!bCastSteerInit)
+            {
+                bCastSteerInit = true;
+                ChaseCheckTime = Now;
+                ChaseCheckDist = TargetDist;
+            }
+            // Same safeguard as the death leg: no distance gain in the
+            // stall window means a wall the server won't let us cross —
+            // exclude this pick and repick (fresh clock) instead of
+            // hanging to the leg timeout.
+            if (Now - ChaseCheckTime > ChaseStallSec)
+            {
+                if (ChaseCheckDist - TargetDist < ChaseMinGain)
+                {
+                    ExcludedKillerUIDs.Add(TargetUid);
+                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT cast target unreachable (gain %.0f in %.0fs) — excluding uid=%d, repicking"),
+                        ChaseCheckDist - TargetDist, ChaseStallSec, TargetUid);
+                    TargetMob.Reset();
+                    bCastSteerInit = false;
+                    return true;
+                }
+                ChaseCheckTime = Now;
+                ChaseCheckDist = TargetDist;
+            }
             if (Now - CharLegStartTime > CharTimeoutSec)
             {
                 Finish(false, TEXT("cast-unreachable"));

@@ -516,6 +516,10 @@ private:
     bool bLearnRequested = false;
     bool bCastSent = false;
     bool bBuffSent = false;
+    // Cast-steer stall clock: a target making no distance gain for
+    // ChaseStallSec is geometry-separated (server reverts the moves) —
+    // exclude it like the death leg and repick instead of pushing a wall.
+    bool bCastSteerInit = false;
     int32 CastTargetUid = 0;
     int32 MobHpBefore = 0;
     int32 ManaBefore = 0;

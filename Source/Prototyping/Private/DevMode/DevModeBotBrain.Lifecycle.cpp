@@ -232,6 +232,9 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     DeathLegStartTime = 0.0;
     RespawnLegStartTime = 0.0;
     ReviveSeenTime = 0.0;
+    bWaypointInit = false;
+    WaypointCheckTime = 0.0;
+    WaypointCheckDist = 0.0f;
     // Deterministic locomotion proof: waypoint 150u from spawn TOWARD the
     // nearest mob (same heading as the coming chase — never into a blind
     // wall, unlike a fixed offset). Only physically walked distance counts.

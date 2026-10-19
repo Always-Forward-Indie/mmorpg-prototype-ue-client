@@ -72,6 +72,13 @@ public:
     // Budget for reaching rendezvous + seeing the peer (both walk + spawn
     // propagation). Fails loudly on expiry, never hangs.
     float RendezvousTimeoutSec = 120.0f;
+    // Waypoint stall safeguard (all live runs): a waypoint behind geometry
+    // re-rolls toward the current nearest mob instead of pushing the wall
+    // to the leg timeout. Progress sampled every StuckTimeoutSec; the
+    // overall GotoTimeoutSec budget still bounds the leg.
+    bool bWaypointInit = false;
+    double WaypointCheckTime = 0.0;
+    float WaypointCheckDist = 0.0f;
     // Live only: steer with swept direct movement instead of AddMovementInput.
     // Rationale (measured): on live servers the CharacterMovement input
     // pipeline barely converts (odometer ~2u/s at MaxWalkSpeed 320, cause

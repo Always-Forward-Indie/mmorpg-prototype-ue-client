@@ -132,6 +132,43 @@ bool UDevModeBotBrain::Tick_GotoWaypoint(UWorld* World, ABasicPlayer* Player, do
         // Deterministic locomotion proof before any combat: walk the leg.
         // Arrival radius 60 on a 150u leg guarantees >=90u of real walking;
         // threshold 50 keeps margin. Teleport jumps never count (odometer).
+        // Stall safeguard: a waypoint behind geometry (arena/trainer walls)
+        // never arrives — re-roll it toward the CURRENT nearest mob instead
+        // of pushing to the leg timeout. The proof semantics don't change
+        // (arrival at A waypoint + odometer>50 still required); the overall
+        // GotoTimeoutSec budget still bounds the leg.
+        const float WayDist = Dist2D(PlayerAt, Waypoint);
+        if (!bWaypointInit)
+        {
+            bWaypointInit = true;
+            WaypointCheckTime = Now;
+            WaypointCheckDist = WayDist;
+        }
+        else if (Now - WaypointCheckTime > StuckTimeoutSec)
+        {
+            if (WaypointCheckDist - WayDist < 25.0f)
+            {
+                if (ABasicMOB* Near = FindNearestAliveMob())
+                {
+                    FVector ToMob = Near->GetActorLocation() - PlayerAt;
+                    ToMob.Z = 0.0f;
+                    if (ToMob.Size() < 1.0f) { ToMob = FVector(300.0f, 0.0f, 0.0f); }
+                    ToMob.Normalize();
+                    ToMob *= 150.0f;
+                    Waypoint = PlayerAt + ToMob;
+                    Waypoint.Z = PlayerAt.Z;
+                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT waypoint stalled (gain %.0f in %.0fs) — re-rolling toward '%s'"),
+                        WaypointCheckDist - WayDist, StuckTimeoutSec, *Near->GetMobName());
+                }
+                WaypointCheckTime = Now;
+                WaypointCheckDist = Dist2D(PlayerAt, Waypoint);
+            }
+            else
+            {
+                WaypointCheckTime = Now;
+                WaypointCheckDist = WayDist;
+            }
+        }
         if (SteerToward(Player, Waypoint, 60.0f, Now, TEXT("waypoint")))
         {
             BotAssert(Odometer > 50.0f, TEXT("player-walked"), (int32)Odometer, 50);

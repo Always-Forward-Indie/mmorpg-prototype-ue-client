@@ -267,18 +267,17 @@ void UTradeWidget::HandleCloseButtonClicked()
 void UTradeWidget::HandleInviteAcceptClicked()
 {
     if (!TradeManager) return;
-    const int32 CharId = GetGameInstance()
-        ? Cast<UMyGameInstance>(GetGameInstance())->GetCurrentCharacterID() : 0;
-    TradeManager->RespondToTradeInvite(CharId, true);
+    // Echo the INITIATOR's id (the server matches the pending invite on
+    // it — our own id answers "no_pending_invite").
+    TradeManager->RespondToTradeInvite(TradeManager->GetPendingInvite().initiatorId, true);
     if (Invite_Banner) Invite_Banner->SetVisibility(ESlateVisibility::Collapsed);
 }
 
 void UTradeWidget::HandleInviteDeclineClicked()
 {
     if (!TradeManager) return;
-    const int32 CharId = GetGameInstance()
-        ? Cast<UMyGameInstance>(GetGameInstance())->GetCurrentCharacterID() : 0;
-    TradeManager->RespondToTradeInvite(CharId, false);
+    // Same initiator-echo as accept (server matches the invite on it).
+    TradeManager->RespondToTradeInvite(TradeManager->GetPendingInvite().initiatorId, false);
     CloseTrade();
 }
 

@@ -50,7 +50,7 @@ void UTradeManager::RequestTrade(int32 CharacterId, int32 TargetCharacterId, con
     SendPacket(Payload);
 }
 
-void UTradeManager::RespondToTradeInvite(int32 CharacterId, bool bAccept)
+void UTradeManager::RespondToTradeInvite(int32 FromCharacterId, bool bAccept)
 {
     if (!NetworkManager || !GameInstance) return;
 
@@ -64,8 +64,11 @@ void UTradeManager::RespondToTradeInvite(int32 CharacterId, bool bAccept)
     Header->SetNumberField(TEXT("clientId"),  GameInstance->GetCurrentClientID());
     Header->SetStringField(TEXT("hash"),      GameInstance->GetCurrentClientHash());
 
-    // Protocol sec. 8.3: fromCharacterId is a string value
-    Body->SetStringField(TEXT("fromCharacterId"), FString::FromInt(CharacterId));
+    // Protocol sec. 8.3: fromCharacterId is a string value carrying the
+    // INITIATOR's character id (echo of the invite) — the server matches
+    // the pending invite on it. Passing our own id answers
+    // "no_pending_invite", so callers must pass PendingInvite.initiatorId.
+    Body->SetStringField(TEXT("fromCharacterId"), FString::FromInt(FromCharacterId));
 
     Root->SetObjectField(TEXT("header"), Header);
     Root->SetObjectField(TEXT("body"),   Body);

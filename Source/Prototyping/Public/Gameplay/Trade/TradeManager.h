@@ -35,9 +35,11 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Trade")
     void RequestTrade(int32 CharacterId, int32 TargetCharacterId, const FVector& PlayerPosition);
 
-    // accept = true to accept, false to decline
+    // accept = true to accept, false to decline.
+    // FromCharacterId is the INITIATOR's character id (echo
+    // PendingInvite.initiatorId) — see RespondToTradeInvite note.
     UFUNCTION(BlueprintCallable, Category = "Trade")
-    void RespondToTradeInvite(int32 CharacterId, bool bAccept);
+    void RespondToTradeInvite(int32 FromCharacterId, bool bAccept);
 
     UFUNCTION(BlueprintCallable, Category = "Trade")
     void UpdateTradeOffer(int32 CharacterId, int32 Gold, const TArray<FTradeOfferItem>& Items);

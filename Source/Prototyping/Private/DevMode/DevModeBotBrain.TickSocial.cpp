@@ -210,7 +210,6 @@ bool UDevModeBotBrain::Tick_TradeAccept(UWorld* World, ABasicPlayer* Player, dou
             Finish(false, TEXT("no-trade"));
             return true;
         }
-        const int32 OwnCharId = GameInstance->GetCurrentCharacterID();
         if (Trade->IsInTrade())
         {
             // Invite accepted (or the peer was faster) — session is live.
@@ -222,7 +221,9 @@ bool UDevModeBotBrain::Tick_TradeAccept(UWorld* World, ABasicPlayer* Player, dou
         }
         if (Trade->HasPendingInvite())
         {
-            Trade->RespondToTradeInvite(OwnCharId, true);
+            // Echo the INITIATOR's id (TradePeerCharId) — the server matches
+            // the pending invite on it; our own id answers "no_pending_invite".
+            Trade->RespondToTradeInvite(TradePeerCharId, true);
             UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade invite accepted"));
             return true;
         }

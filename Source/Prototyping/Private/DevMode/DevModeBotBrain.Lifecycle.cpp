@@ -164,6 +164,8 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     bChatSent = false;
     PeerChatText.Empty();
     PeerCloseSince = 0.0;
+    bPeerMsgSeen = false;
+    LastChatResendTime = 0.0;
     TradeLegStartTime = 0.0;
     TradePeerCharId = 0;
     bTradeInviteSent = false;
@@ -181,6 +183,10 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     bSkillShopOpened = false;
     bLearnRequested = false;
     bCastSent = false;
+    CastSentTime = 0.0;
+    CastInRangeSince = 0.0;
+    CombatCheckTime = 0.0;
+    CombatCheckHp = 0;
     bBuffSent = false;
     bCastSteerInit = false;
     CastTargetUid = 0;

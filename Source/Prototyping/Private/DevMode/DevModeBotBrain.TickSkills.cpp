@@ -173,11 +173,24 @@ bool UDevModeBotBrain::Tick_SkillCast(UWorld* World, ABasicPlayer* Player, doubl
                 BotAssert(bManaSeen, TEXT("skill-mana"), bManaSeen ? 1 : 0, 1);
                 Finish(false, TEXT("cast-timeout"));
             }
+            // Fizzle retry: zero confirms 15s after the send means the server
+            // rejected the initiation (stale positions on a drifting player /
+            // wandering mob read "out of range") — re-approach and try a
+            // fresh cast instead of idling to the leg timeout. The overall
+            // CharLegStartTime budget still bounds the leg.
+            if (!bDamageSeen && !bCooldownSeen && !bManaSeen && Now - CastSentTime > 15.0f)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT cast fizzled (no confirm in 15s), re-approaching"));
+                bCastSent = false;
+                TargetMob.Reset();
+                bCastSteerInit = false;
+                CastInRangeSince = 0.0;
+            }
             return true;
         }
-        if (Dist2D(PlayerAt, Target->GetActorLocation()) > CastRange * ArrivalFraction)
+        if (Dist2D(PlayerAt, Target->GetActorLocation()) > CastRange * CastArriveFrac)
         {
-            SteerToward(Player, Target->GetActorLocation(), CastRange * ArrivalFraction, Now, *Target->GetMobName());
+            SteerToward(Player, Target->GetActorLocation(), CastRange * CastArriveFrac, Now, *Target->GetMobName());
             const float TargetDist = Dist2D(PlayerAt, Target->GetActorLocation());
             if (!bCastSteerInit)
             {
@@ -198,6 +211,7 @@ bool UDevModeBotBrain::Tick_SkillCast(UWorld* World, ABasicPlayer* Player, doubl
                         ChaseCheckDist - TargetDist, ChaseStallSec, TargetUid);
                     TargetMob.Reset();
                     bCastSteerInit = false;
+                    CastInRangeSince = 0.0;
                     return true;
                 }
                 ChaseCheckTime = Now;
@@ -207,6 +221,21 @@ bool UDevModeBotBrain::Tick_SkillCast(UWorld* World, ABasicPlayer* Player, doubl
             {
                 Finish(false, TEXT("cast-unreachable"));
             }
+            CastInRangeSince = 0.0;
+            return true;
+        }
+        // Hold inside cast range briefly so the server's tracked positions
+        // converge before committing (same settle pattern as chat/rendezvous:
+        // a throttled headless client outruns the server's movement view,
+        // which then reads "out of range" on an actually close cast).
+        if (CastInRangeSince <= 0.0)
+        {
+            CastInRangeSince = Now;
+            return true;
+        }
+        if (Now - CastInRangeSince < 2.0)
+        {
+            SteerToward(Player, Target->GetActorLocation(), CastRange * CastArriveFrac, Now, *Target->GetMobName());
             return true;
         }
         if (Player->GetLockedTarget() != Target)
@@ -217,6 +246,7 @@ bool UDevModeBotBrain::Tick_SkillCast(UWorld* World, ABasicPlayer* Player, doubl
         ManaBefore = Player->GetPlayerCurrentMPPoints();
         PSM->TryCastSkill(TEXT("power_slash"), TargetUid, ECasterType::Mob);
         bCastSent = true;
+        CastSentTime = Now;
         bDamageSeen = false;
         bCooldownSeen = false;
         bManaSeen = false;

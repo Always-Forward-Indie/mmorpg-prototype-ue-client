@@ -82,9 +82,16 @@ bool UDevModeBotBrain::Tick_ChatExchange(UWorld* World, ABasicPlayer* Player, do
             }
             // One short "local" message each; both sides send, both assert
             // the peer's arrival (own echo, if any, is filtered by sender).
+            // Re-sent while waiting: a message spoken before the peer's
+            // client finished loading is lost to them (no chat history), and
+            // the early speaker must still be talking when the late joiner
+            // starts listening. Finishing waits for the leg budget, never
+            // for the first receipt — otherwise the early side quits before
+            // the late side heard anything.
             Chat->SendChatMessage(TEXT("local"), FString::Printf(TEXT("hi-%d"), OwnCharId));
             bChatSent = true;
             ChatLegStartTime = Now;
+            LastChatResendTime = Now;
             UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT chat sent hi-%d from (%.0f,%.0f,%.0f)"),
                 OwnCharId, PlayerAt.X, PlayerAt.Y, PlayerAt.Z);
             return true;
@@ -99,11 +106,13 @@ bool UDevModeBotBrain::Tick_ChatExchange(UWorld* World, ABasicPlayer* Player, do
                 break;
             }
         }
-        if (!PeerChatText.IsEmpty())
+        if (!PeerChatText.IsEmpty() && !bPeerMsgSeen)
         {
+            bPeerMsgSeen = true;
             BotAssert(true, TEXT("peer-msg-received"), 1, 1);
             // The bubble renders on the peer actor's nameplate through the
-            // same ShowChatBubble call live players trigger.
+            // same ShowChatBubble call live players trigger. Checked at
+            // receipt: bubbles expire, a timeout-time check would lie.
             bool bBubbleOk = false;
             if (ABasicPlayer* Peer = FindPeerActor())
             {
@@ -114,13 +123,25 @@ bool UDevModeBotBrain::Tick_ChatExchange(UWorld* World, ABasicPlayer* Player, do
             }
             BotAssert(bBubbleOk, TEXT("peer-bubble"), bBubbleOk ? 1 : 0, 1);
             BotShot(TEXT("chat"));
-            Finish(Failures == 0, Failures == 0 ? TEXT("chat-done") : TEXT("assert-failures"));
-            return true;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT peer message received: %s"), *PeerChatText);
+        }
+        else if (PeerChatText.IsEmpty() && Now - LastChatResendTime > 10.0)
+        {
+            Chat->SendChatMessage(TEXT("local"), FString::Printf(TEXT("hi-%d"), OwnCharId));
+            LastChatResendTime = Now;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT chat re-sent hi-%d (peer msg not yet seen)"), OwnCharId);
         }
         if (Now - ChatLegStartTime > ChatTimeoutSec)
         {
-            BotAssert(false, TEXT("peer-msg-received"), 0, 1);
-            Finish(false, TEXT("chat-timeout"));
+            if (!bPeerMsgSeen)
+            {
+                BotAssert(false, TEXT("peer-msg-received"), 0, 1);
+                Finish(false, TEXT("chat-timeout"));
+            }
+            else
+            {
+                Finish(Failures == 0, Failures == 0 ? TEXT("chat-done") : TEXT("assert-failures"));
+            }
         }
         return true;
 }

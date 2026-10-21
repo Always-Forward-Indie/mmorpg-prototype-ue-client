@@ -295,6 +295,8 @@ bool UDevModeBotBrain::Tick_GotoTarget(UWorld* World, ABasicPlayer* Player, doub
             Player->OnAttackInput();
             bAttackStarted = Player->bIsAutoAttacking;
             CombatStartTime = Now;
+            CombatCheckTime = Now;
+            CombatCheckHp = Mob->GetMOBCurrentHealth();
             StepStartTime = Now;
             Step = EBotStep::Combat;
             UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT combat vs '%s' (dist %.0f, attack-loop=%d)"),
@@ -350,6 +352,28 @@ bool UDevModeBotBrain::Tick_Combat(UWorld* World, ABasicPlayer* Player, double N
             }
             if (!Mob->GetMOBIsDead())
             {
+                // Live re-approach: the server fizzles hits on stale
+                // positions ("out of range" with zero confirms) — if a whole
+                // window passes with no HP movement, break off and re-steer
+                // instead of burning the kill budget on a dead loop. The
+                // overall CombatKillTimeoutSec budget still bounds the fight
+                // (StepStartTime is deliberately NOT reset here).
+                const int32 MobHpNow = Mob->GetMOBCurrentHealth();
+                if (Now - CombatCheckTime > 20.0f)
+                {
+                    if (MobHpNow >= CombatCheckHp)
+                    {
+                        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT combat stalled (no damage in 20s on '%s') — re-approaching"),
+                            *Mob->GetMobName());
+                        TargetMob.Reset();
+                        Step = EBotStep::GotoTarget;
+                        CombatCheckTime = Now;
+                        CombatCheckHp = MobHpNow;
+                        return true;
+                    }
+                    CombatCheckTime = Now;
+                    CombatCheckHp = MobHpNow;
+                }
                 // Offline only: the stub hit lands on a fixed beat, so a stall
                 // here means broken plumbing. Live waits the full kill budget
                 // above (real fights take tens of seconds).

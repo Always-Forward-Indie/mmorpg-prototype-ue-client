@@ -512,6 +512,12 @@ private:
     bool bDialogueRequested = false;
     bool bChoiceSent = false;
     int32 GoldBeforeReward = 0;
+    // Chat convergence: re-send while the peer's message hasn't been
+    // seen (a message spoken before the peer's client loaded is lost).
+    // Finished only at the leg budget so the early side never quits
+    // before the late side heard anything.
+    bool bPeerMsgSeen = false;
+    double LastChatResendTime = 0.0;
     // Dialogue walker: goal edge first, else advance through continue/back
     // hubs (never farewell). Click budget + node tracking prevent loops.
     int32 DialogueClicks = 0;
@@ -522,14 +528,29 @@ private:
     bool bSkillShopOpened = false;
     bool bLearnRequested = false;
     bool bCastSent = false;
+    // When the current cast was sent. A cast with zero confirms after
+    // CastRetrySec is a server-side fizzle (stale positions read "out of
+    // range") — re-approach instead of burning the whole leg budget.
+    double CastSentTime = 0.0;
     bool bBuffSent = false;
     // Cast-steer stall clock: a target making no distance gain for
     // ChaseStallSec is geometry-separated (server reverts the moves) —
     // exclude it like the death leg and repick instead of pushing a wall.
     bool bCastSteerInit = false;
+    // Cast settle clock: hold inside cast range briefly so the server's
+    // tracked positions converge before committing (same pattern as the
+    // chat/rendezvous settle). Reset whenever we re-steer.
+    double CastInRangeSince = 0.0;
     int32 CastTargetUid = 0;
     int32 MobHpBefore = 0;
     int32 ManaBefore = 0;
+    // Combat stall sampling (live): if the mob takes no damage for a
+    // whole window, the server isn't landing our hits (stale positions on
+    // a drifting player/wandering mob read "out of range") — break off and
+    // re-approach instead of burning the whole kill budget on a dead loop.
+    // The overall CombatKillTimeoutSec budget still bounds the fight.
+    double CombatCheckTime = 0.0;
+    int32 CombatCheckHp = 0;
     // Skill-hit latches (damage, cooldown and mana land at different
     // times: cooldown arms on initiation, mana on stats_update, damage on
     // the deferred result flush — up to ~12s apart).
@@ -585,17 +606,24 @@ private:
 
     // Step budgets (seconds). Chasing across the small dev area takes seconds;
     // anything beyond the budget teleports (logged fallback) or fails.
-    // GotoTimeoutSec must stay ABOVE ChaseStallSec: the stall safeguard
+    // GotoTimeoutSec must stay ABOVE 2x ChaseStallSec: the stall safeguard
     // (exclude the pick, repick, fresh clock) samples every ChaseStallSec,
-    // so a shorter leg budget would time out first and the safeguard could
-    // never fire (seen live: 25s leg vs 30s stall window — obstacle slides
-    // always failed instead of repicking). Clean 600u chase takes ~6s;
-    // 45s leaves headroom to round obstacles while the 120s global watchdog
-    // still bounds the scenario.
-    static constexpr float GotoTimeoutSec = 45.0f;
+    // and a first window WITH partial progress (sliding toward a wall, then
+    // wedging) refreshes the clock instead of excluding — the second window
+    // needs room too (seen live: 935u gain, then stuck, timeout at 45s with
+    // the safeguard never firing). Clean 600u chase takes ~6s; 75s leaves
+    // headroom to round obstacles while the 120s global watchdog still
+    // bounds the scenario.
+    static constexpr float GotoTimeoutSec = 75.0f;
     static constexpr float StuckTimeoutSec = 5.0f;
     static constexpr float CombatTimeoutSec = 12.0f;
     static constexpr float ArrivalFraction = 0.8f;
+    // Melee-cast arrival: stand well INSIDE the server's envelope (250uu
+    // for power_slash). The server validates against its own tracked
+    // positions, which lag a drifting player on a throttled headless
+    // client — 0.8 leaves no margin for that skew and reads "out of
+    // range" while the client thinks it is in range.
+    static constexpr float CastArriveFrac = 0.5f;
     // A live killer that deals no damage for this long is a dummy (wrong
     // faction, leashed, or geometry-separated) — exclude and move on.
     static constexpr float KillerDummySec = 45.0f;

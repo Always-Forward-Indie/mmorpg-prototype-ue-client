@@ -11,6 +11,10 @@ GitHub-hosted runners:
 3. Honest specs: every Private/Tests/*.cpp containing an
    IMPLEMENT_SIMPLE_AUTOMATION_TEST must call production code
    (JSONParser:: or F<Rule>::) instead of re-implementing logic locally.
+4. Rule coverage: every struct F*Rule in Public/Utils/NetCore/ must be
+   referenced by at least one Private/Tests/*.cpp (a new pure rule with
+   no spec calling it fails the gate — the fromCharacterId echo bug
+   shipped exactly through this hole).
 
 Exit 0 = all green, exit 1 = red (blocks the PR).
 Usage: python3 Tools/CI/check_client_gates.py [--root <repo root>]
@@ -24,6 +28,7 @@ WARN_BUDGET = 500
 
 PROD_INCLUDE = re.compile(r'#include\s+"Utils/(NetCore/|JSONParser\.h)')
 PROD_CALL = re.compile(r"\b([A-Z]\w*)::(\w+)")
+RULE_STRUCT = re.compile(r"\bstruct\s+(?:\w+\s+)?(F\w*Rule\w*)\b")
 CALL_BLOCKLIST_PREFIX = ("Test",)
 CALL_BLOCKLIST_NAME = {"RunTest"}
 SPEC_MACRO = "IMPLEMENT_SIMPLE_AUTOMATION_TEST"
@@ -92,6 +97,29 @@ def main() -> int:
                 "production code — specs must pin prod code, "
                 "local re-implementations are reject-on-review"
             )
+
+    # 4. Rule coverage: every pure rule struct in NetCore/ must be called
+    # by at least one spec.
+    netcore_dir = src / "Public" / "Utils" / "NetCore"
+    if netcore_dir.is_dir():
+        rules: set[str] = set()
+        for header in sorted(netcore_dir.glob("*.h")):
+            try:
+                rules.update(RULE_STRUCT.findall(header.read_text(encoding="utf-8", errors="replace")))
+            except OSError as exc:
+                failures.append(f"cannot read {header}: {exc}")
+        test_texts: list[str] = []
+        for spec in sorted(tests_dir.glob("*.cpp")):
+            try:
+                test_texts.append(spec.read_text(encoding="utf-8", errors="replace"))
+            except OSError:
+                pass
+        for rule in sorted(rules):
+            if not any(rule in text for text in test_texts):
+                failures.append(
+                    f"uncovered rule: {rule} has no spec calling it — "
+                    "new NetCore rules must ship with an honest MMO.* spec"
+                )
 
     if failures:
         print("CLIENT GATES: FAIL")

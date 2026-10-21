@@ -37,4 +37,14 @@ struct PROTOTYPING_API FTradeStatusRule
 	{
 		return OwnCharId > 0 && PeerCharId > 0 && OwnCharId < PeerCharId;
 	}
+
+	/** Accept/decline echo field: the server matches the pending invite on
+	 * fromCharacterId carrying the INITIATOR's id (as string). Echoing our
+	 * own id answers "no_pending_invite" — this exact mistake shipped in
+	 * both the bot and the trade widget (fixed 2026-10-20, bug #118).
+	 * Empty when there is no invite to answer (fail-closed upstream). */
+	static FString AcceptEchoField(int32 InitiatorId)
+	{
+		return InitiatorId > 0 ? FString::FromInt(InitiatorId) : FString();
+	}
 };

@@ -34,5 +34,11 @@ bool FTradeStatusRuleTest::RunTest(const FString& Parameters)
     TestFalse(TEXT("same id never initiates"), R::ShouldInitiateTrade(614, 614));
     TestFalse(TEXT("unknown own never initiates"), R::ShouldInitiateTrade(0, 615));
     TestFalse(TEXT("unknown peer never initiates"), R::ShouldInitiateTrade(614, 0));
+
+    // Accept/decline echo: the server matches the pending invite on the
+    // INITIATOR's id — echoing our own id answers "no_pending_invite".
+    TestEqual(TEXT("accept echoes initiator"), R::AcceptEchoField(614), TEXT("614"));
+    TestEqual(TEXT("accept echo empty without invite"), R::AcceptEchoField(0), TEXT(""));
+    TestEqual(TEXT("accept echo empty for negative"), R::AcceptEchoField(-3), TEXT(""));
     return true;
 }

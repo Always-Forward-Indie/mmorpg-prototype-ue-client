@@ -23,6 +23,11 @@ void ULiveBotDriver::Start(UMyGameInstance* InGameInstance, const FString& InSce
     // Credentials: command line only, dev-only path. Password never logged.
     FParse::Value(FCommandLine::Get(), TEXT("botlogin="), Login);
     FParse::Value(FCommandLine::Get(), TEXT("botpass="), Password);
+    FString BotCharStr;
+    if (FParse::Value(FCommandLine::Get(), TEXT("botchar="), BotCharStr))
+    {
+        ForcedCharId = FCString::Atoi(*BotCharStr);
+    }
     if (Login.IsEmpty() || Password.IsEmpty())
     {
         UE_LOG(LogTemp, Warning, TEXT("LIVEBOT_RESULT %s FAIL missing-creds (need -botlogin= -botpass=)"), *InScenario);
@@ -405,9 +410,29 @@ void ULiveBotDriver::HandleCharacterList(const TArray<FLoginCharacterEntry>& Cha
         return;
     }
 
-    // First character, same as a player pressing Play on row 0.
+    // First character, same as a player pressing Play on row 0 —
+    // unless -botchar= forced a specific one (falls back to row 0
+    // with a warning when the forced id isn't listed).
     int32 CharId = Characters[0].CharacterId;
     const TCHAR* CharName = *Characters[0].CharacterName;
+    if (ForcedCharId != 0 && !(bTravelRoundtrip && RoundtripLeg == 2))
+    {
+        bool bFound = false;
+        for (const FLoginCharacterEntry& E : Characters)
+        {
+            if (E.CharacterId == ForcedCharId)
+            {
+                CharId = E.CharacterId;
+                CharName = *E.CharacterName;
+                bFound = true;
+                break;
+            }
+        }
+        if (!bFound)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("LIVEBOT -botchar=%d not listed, using row 0"), ForcedCharId);
+        }
+    }
     if (bTravelRoundtrip && RoundtripLeg == 2)
     {
         // Rejoin the SAME character as leg 1 when still listed.

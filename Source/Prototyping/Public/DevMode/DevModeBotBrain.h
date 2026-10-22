@@ -523,6 +523,10 @@ private:
     int32 DialogueClicks = 0;
     int32 LastAdvanceNodeId = 0;
     double LastDialogueRequestTime = 0.0;
+    // Turn-in resync: the server confirms turned_in but the inventory
+    // delta sometimes never arrives (lost push — proven live 22.10).
+    // Re-request the authoritative snapshot instead of idling.
+    double LastInvResyncTime = 0.0;
     // ---- Phase D state ----
     double CharLegStartTime = 0.0;
     bool bSkillShopOpened = false;

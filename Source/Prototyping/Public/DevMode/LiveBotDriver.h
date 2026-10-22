@@ -93,6 +93,10 @@ private:
     FString Scenario;
     FString Login;
     FString Password;
+    // Optional: join a specific character instead of row 0
+    // (-botchar=<id>, dev-only). Used to rotate one-shot content
+    // (e.g. non-repeatable quest 9000) across fresh test chars.
+    int32 ForcedCharId = 0;
     ELiveStep Step = ELiveStep::WaitConnect;
     double StepStartTime = 0.0;
     double RunStartTime = 0.0;

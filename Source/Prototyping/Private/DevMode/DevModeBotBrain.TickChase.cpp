@@ -100,6 +100,20 @@ bool UDevModeBotBrain::Tick_AssertKill(UWorld* World, ABasicPlayer* Player, doub
         UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT kill %d/%d confirmed"), Kills, TargetKills);
         BotShot(FString::Printf(TEXT("kill%d"), Kills));
 
+        // Quest needs a harvest-only hide (45% per corpse) on top of the
+        // kills: loot EVERY corpse, not just the last one — otherwise the
+        // first victim is abandoned unharvested and the run is a coin flip.
+        if (bQuestPhase && bLootPhase)
+        {
+            Step = EBotStep::GotoCorpse;
+            StepStartTime = Now;
+            LootLegStartTime = Now;
+            LastChasePos = PlayerAt;
+            LastChaseProgressTime = Now;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT quest kill %d/%d, resolving corpse (%.0f,%.0f)"),
+                Kills, TargetKills, LastKillLocation.X, LastKillLocation.Y);
+            return true;
+        }
         if (Kills >= TargetKills)
         {
             // Loot leg walks back to the last corpse instead of quitting.

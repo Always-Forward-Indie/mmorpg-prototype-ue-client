@@ -179,6 +179,7 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     DialogueClicks = 0;
     LastAdvanceNodeId = 0;
     LastDialogueRequestTime = 0.0;
+    LastInvResyncTime = 0.0;
     CharLegStartTime = 0.0;
     bSkillShopOpened = false;
     bLearnRequested = false;

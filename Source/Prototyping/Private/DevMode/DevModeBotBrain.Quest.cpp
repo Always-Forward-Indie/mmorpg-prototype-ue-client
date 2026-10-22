@@ -110,7 +110,23 @@ int32 UDevModeBotBrain::FindAdvanceEdge() const
 void UDevModeBotBrain::QuestLootDone(double Now)
 {
     ABasicPlayer* Player = GameInstance ? GameInstance->Player : nullptr;
-    if (Kills >= TargetKills)
+    // Live: the turn-in needs 2 kills AND a harvest-only hide (45% per
+    // corpse). Extra kills are harmless (kill step is already done), so
+    // keep hunting until the hide lands — capped to fail loud, not loop.
+    // Offline loot is stubbed (no hide concept): keep the old gate.
+    if (Kills >= TargetKills && !bStubLoot && !HasItemTemplate(57))
+    {
+        if (Kills < 6)
+        {
+            ++TargetKills;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT no hide yet after %d kills, hunting on (need 2 + hide)"), Kills);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT no hide in 6 kills, turning in anyway"));
+        }
+    }
+    if (Kills >= TargetKills && (bStubLoot || HasItemTemplate(57) || Kills >= 6))
     {
         Step = EBotStep::QuestTurnin;
         QuestLegStartTime = Now;

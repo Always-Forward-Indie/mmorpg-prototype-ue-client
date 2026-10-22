@@ -133,10 +133,13 @@ void UDevModeBotBrain::BrainTick()
                 Finish(Kills >= TargetKills, Kills >= TargetKills ? TEXT("no-targets-left") : TEXT("target-lost"));
                 return;
             }
-            // live_reconnect: never chase across the map into a mesh wall.
-            // Only a close top-up is an acceptable pick; otherwise wait in
-            // place (patient, backstopped below) for one to arrive.
-            if (bDropSocketMidRun)
+            // live_reconnect + live_quest_turnin: never chase across the map
+            // into a mesh wall. Only a close pick is acceptable; otherwise
+            // wait in place (patient, backstopped below) for one to arrive.
+            // Quest seeds land at accept time; a distant nearest means the
+            // seeds went stale — chasing it wedges on geometry to the
+            // global timeout (proven live 22.10).
+            if (bDropSocketMidRun || bQuestPhase)
             {
                 const float PickDist = Dist2D(PlayerAt, TargetMob->GetActorLocation());
                 if (PickDist > CloseTargetRadius)

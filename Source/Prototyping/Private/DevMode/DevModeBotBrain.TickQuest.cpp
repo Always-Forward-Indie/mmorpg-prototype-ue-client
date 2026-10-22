@@ -188,6 +188,24 @@ bool UDevModeBotBrain::Tick_QuestTurnin(UWorld* World, ABasicPlayer* Player, dou
         }
         if (bChoiceSent)
         {
+            // The server confirms turned_in (QUEST_UPDATE + quest_turned_in)
+            // but the inventory delta sometimes never arrives (lost push on
+            // the shared stand — proven live 22.10: DB showed 290 + potion
+            // while the client sat at 285). Re-request the authoritative
+            // snapshot (throttled) instead of idling to the leg timeout.
+            const FQuestProgressData QT = Qst->GetQuestData(QuestId);
+            if (QT.state == TEXT("turned_in"))
+            {
+                if (UInventoryManager* Inv = GameInstance->GetInventoryManager())
+                {
+                    if (Now - LastInvResyncTime > 15.0)
+                    {
+                        LastInvResyncTime = Now;
+                        Inv->RequestInventoryData(Inv->GetInventory().characterId);
+                        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT turned_in but no reward snapshot, re-requesting inventory"));
+                    }
+                }
+            }
             if (Now - QuestLegStartTime > QuestTimeoutSec)
             {
                 BotAssert(false, TEXT("quest-reward-gold"), GetGold(), GoldBeforeReward + 5);

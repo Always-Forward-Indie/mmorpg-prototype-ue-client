@@ -60,13 +60,20 @@ elif op == "charpos":
     cid = int(sys.argv[2])
     cur = db().cursor(); cur.execute("SELECT x, y, z FROM character_position WHERE character_id=%s", (cid,))
     print("pos", cid, cur.fetchone())
+elif op == "questreset":
+    # Quest 9000 is one-shot (not repeatable): a previous PASS leaves it
+    # turned_in and the next run fails at accept with no-accept-choice.
+    # Reset the test char's progress so the scenario is re-runnable.
+    pid, qid = int(sys.argv[2]), int(sys.argv[3])
+    cur = db().cursor(); cur.execute("DELETE FROM player_quest WHERE player_id=%s AND quest_id=%s", (pid, qid))
+    print("questreset", pid, qid, cur.rowcount)
 elif op in ("spawn", "sethp", "grantxp", "grantitem", "grantlevel", "tp"):
     a = adm()
     try:
         if op == "spawn":
             cid, x, y, z, n = int(sys.argv[2]), float(sys.argv[3]), float(sys.argv[4]), float(sys.argv[5]), int(sys.argv[6])
             rsp = a.spawn_mob(cid, 1, x, y, z, n, mob_template_id=4)
-            print("SPAWN", rsp.get("header", {}).get("status"), str(rsp.get("body", {}))[:120])
+            print("SPAWN", rsp.get("header", {}).get("status"), str(rsp.get("body", {}))[:300])
         elif op == "sethp":
             rsp = a.set_hp(int(sys.argv[2]), int(sys.argv[3]))
             print("SETHP", rsp.get("header", {}).get("status"), str(rsp.get("body", {}))[:120])
@@ -128,12 +135,13 @@ function Wait-Log([string]$File, [string]$Pattern, [int]$TimeoutSec) {
     return $null
 }
 
-function Start-Bot([string]$Scenario, [string]$Login, [string]$Pass, [string]$LogName) {
+function Start-Bot([string]$Scenario, [string]$Login, [string]$Pass, [string]$LogName, [int]$BotChar = 0) {
     $log = Join-Path $LogsDir $LogName
     if (Test-Path -LiteralPath $log) { Remove-Item -LiteralPath $log -Force }
     $args = @("`"$Project`"", $Map, "-game", "-windowed", "-ResX=960", "-ResY=540",
         "-NoSplash", "-NoVerifyGC", "-bot-live=$Scenario", "-botlogin=$Login", "-botpass=$Pass",
         "-nullrhi", "-log=$LogName")
+    if ($BotChar -ne 0) { $args += "-botchar=$BotChar" }
     return @{ Proc = (Start-Process -FilePath $UE -ArgumentList $args -PassThru); Log = $log }
 }
 
@@ -202,7 +210,7 @@ $Scenarios = @(
     @{ Name = "live_reconnect";      Login = $Login1; Pass = $Pass1; Char = 614; Park = @(4700, -900, 300);   Ready = "spawn 2"; Timeout = 420 },
     @{ Name = "live_cross_visibility"; Login = $Login1; Pass = $Pass1; Char = 614; Park = @(700, -3200, 300); Ready = "DUAL"; Timeout = 480 },
     @{ Name = "live_patrol_kill";    Login = $Login1; Pass = $Pass1; Char = 614; Park = @(4700, -900, 300);   Ready = "spawn 3"; Timeout = 420 },
-    @{ Name = "live_quest_turnin";   Login = $Login1; Pass = $Pass1; Char = 614; Park = @(700, -3200, 300);   Ready = "spawn 2"; Timeout = 600 },
+    @{ Name = "live_quest_turnin";   Login = $Login1; Pass = $Pass1; Char = 614; Park = @(700, -3200, 300);   Ready = "spawn 6"; Timeout = 600 },
     @{ Name = "live_trade";          Login = $Login1; Pass = $Pass1; Char = 614; Park = @(700, -3200, 300);   Ready = "DUALGRANT"; Timeout = 480 }
 )
 
@@ -215,13 +223,41 @@ function Invoke-ReadyActions([hashtable]$S, [string]$Log) {
             # Seed at the PLAYER (fresh position echo, post-fall), not at
             # fixed coords: the player drifts while landing and foxes
             # wander off.
-            Start-Sleep -Seconds 6
+            # Quest hunts only AFTER a locomotion proof + NPC walk +
+            # dialogue (~1 min after world-ready): seeding at world-ready
+            # goes stale (foxes wander / get farmed) and the brain chases
+            # distant wild foxes into mesh walls. Wait for the accept
+            # marker so the seeds land fresh at the NPC when hunting starts.
+            if ($S.Name -eq "live_quest_turnin") {
+                # Wait for the accept marker (up to ~150s: the brain's
+                # accept budget is 120s), but bail early if the run already
+                # finished — seeding a dead client fails and wastes the
+                # retry window.
+                $acc = $null; $t0 = Get-Date
+                while (((Get-Date) - $t0).TotalSeconds -lt 150) {
+                    if (Test-Path -LiteralPath $Log) {
+                        $acc = Select-String -LiteralPath $Log -Pattern "quest accepted, hunting" | Select-Object -First 1
+                        if ($acc) { break }
+                        if (Select-String -LiteralPath $Log -Pattern "LIVEBOT_RESULT $($S.Name)") { break }
+                    }
+                    Start-Sleep -Seconds 4
+                }
+                if (-not $acc) {
+                    if (Select-String -LiteralPath $Log -Pattern "LIVEBOT_RESULT $($S.Name)") { return }
+                    Write-Host "WARNING: no quest-accepted marker, seeding anyway" -ForegroundColor Yellow
+                }
+            } else {
+                Start-Sleep -Seconds 6
+            }
             $pp = Get-PlayerPos $Log $S.Char
             if ($pp) {
                 $dx = 0; $dy = 0
                 if ($Toks.Count -ge 4) { $dx = [double]$Toks[2]; $dy = [double]$Toks[3] }
                 $sx = [double]$pp[0] + $dx; $sy = [double]$pp[1] + $dy
                 $so = Invoke-Helper -AdminArgs "spawn $($S.Char) $sx $sy $($pp[2]) $($Toks[1])"
+                $st = (($so -join "`n") -replace '\s+', ' ')
+                if ($st.Length -gt 180) { $st = $st.Substring(0, 180) }
+                Write-Host "seed: $st"
                 # Verify the seed actually replicated to THIS client: parse
                 # the returned uids and wait for the spawn packet. Admin
                 # spawn on a shared stand is lossy (uid reuse, wandering
@@ -255,11 +291,26 @@ function Format-Result($Line) {
 # One live client run: start -> world-ready gate -> ready actions ->
 # tombstone wait -> stop. Returns the formatted result.
 function Invoke-SingleRun([hashtable]$S, [string]$Login, [string]$Pass, [string]$LogName) {
+    if ($S.Name -eq "live_quest_turnin") {
+        # Quest accept is gated on server-side quest state, which lives in
+        # the char's session (stale sessions outlive clients — server #119).
+        # A lingering session from the previous run still holds turned_in
+        # and the fresh accept is offered locked. Wait (bounded) for it.
+        $t0 = Get-Date
+        while (((Get-Date) - $t0).TotalSeconds -lt 240) {
+            $sr = Invoke-Helper -AdminArgs "sesscheck $($S.Char)"
+            if (($sr -join "`n") -match "SESSION-GONE") { break }
+            Start-Sleep -Seconds 10
+        }
+    }
     for ($a = 1; $a -le 2; $a++) {
     if ($S.Park) {
         $null = Invoke-Helper -DbArgs "setpos $($S.Char) $($S.Park[0]) $($S.Park[1]) $($S.Park[2])"
     }
-    $b = Start-Bot $S.Name $Login $Pass $(if ($a -eq 1) { $LogName } else { $LogName -replace '\.log$', '_retry2.log' })
+    if ($a -eq 1 -and $S.Name -eq "live_quest_turnin") {
+        $null = Invoke-Helper -DbArgs "questreset $($S.Char) 9000"
+    }
+    $b = Start-Bot $S.Name $Login $Pass $(if ($a -eq 1) { $LogName } else { $LogName -replace '\.log$', '_retry2.log' }) $(if ($S.BotChar) { $S.BotChar } else { 0 })
     $wr = Wait-Log $b.Log "LIVEBOT world ready" 240
     if (-not $wr) { Stop-Bot $b.Proc 5; return "FAIL/no-world-ready" }
     # Spawn check: offline DB parking is best-effort (the server's session-

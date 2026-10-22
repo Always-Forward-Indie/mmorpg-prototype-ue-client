@@ -201,10 +201,23 @@ bool UDevModeBotBrain::Tick_SkillCast(UWorld* World, ABasicPlayer* Player, doubl
             // Same safeguard as the death leg: no distance gain in the
             // stall window means a wall the server won't let us cross —
             // exclude this pick and repick (fresh clock) instead of
-            // hanging to the leg timeout.
+            // hanging to the leg timeout. Symmetric case: the pick is
+            // fleeing faster than the bot runs (gain deeply negative) —
+            // uncatchable, every cast reads out of range server-side.
             if (Now - ChaseCheckTime > ChaseStallSec)
             {
-                if (ChaseCheckDist - TargetDist < ChaseMinGain)
+                const float Gain = ChaseCheckDist - TargetDist;
+                if (Gain < -ChaseFleeLoss)
+                {
+                    ExcludedKillerUIDs.Add(TargetUid);
+                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT cast target fleeing (gain %.0f in %.0fs) — excluding uid=%d, repicking"),
+                        Gain, ChaseStallSec, TargetUid);
+                    TargetMob.Reset();
+                    bCastSteerInit = false;
+                    CastInRangeSince = 0.0;
+                    return true;
+                }
+                if (Gain < ChaseMinGain)
                 {
                     ExcludedKillerUIDs.Add(TargetUid);
                     UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT cast target unreachable (gain %.0f in %.0fs) — excluding uid=%d, repicking"),

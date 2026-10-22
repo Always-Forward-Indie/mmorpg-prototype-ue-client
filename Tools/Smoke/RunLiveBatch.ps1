@@ -61,12 +61,19 @@ elif op == "charpos":
     cur = db().cursor(); cur.execute("SELECT x, y, z FROM character_position WHERE character_id=%s", (cid,))
     print("pos", cid, cur.fetchone())
 elif op == "questreset":
-    # Quest 9000 is one-shot (not repeatable): a previous PASS leaves it
+    # Quest 9000 is one-shot server-side: a previous PASS leaves it
     # turned_in and the next run fails at accept with no-accept-choice.
-    # Reset the test char's progress so the scenario is re-runnable.
-    pid, qid = int(sys.argv[2]), int(sys.argv[3])
-    cur = db().cursor(); cur.execute("DELETE FROM player_quest WHERE player_id=%s AND quest_id=%s", (pid, qid))
-    print("questreset", pid, qid, cur.rowcount)
+    # Server resetQuest clears chunk memory AND the DB row via game
+    # (a plain DB delete is invisible to the in-memory QuestStore).
+    # Needs the char online (CharacterManager gate), so the batch calls
+    # this after world-ready, not before start.
+    cid = int(sys.argv[2])
+    a = adm()
+    try:
+        rsp = a.call("resetQuest", characterId=cid, questSlug="dev_short_chain", timeout=15.0)
+        print("QUESTRESET", rsp.get("header", {}).get("status"), str(rsp.get("body", {}))[:160])
+    finally:
+        a.close()
 elif op in ("spawn", "sethp", "grantxp", "grantitem", "grantlevel", "tp"):
     a = adm()
     try:
@@ -210,7 +217,7 @@ $Scenarios = @(
     @{ Name = "live_reconnect";      Login = $Login1; Pass = $Pass1; Char = 614; Park = @(4700, -900, 300);   Ready = "spawn 2"; Timeout = 420 },
     @{ Name = "live_cross_visibility"; Login = $Login1; Pass = $Pass1; Char = 614; Park = @(700, -3200, 300); Ready = "DUAL"; Timeout = 480 },
     @{ Name = "live_patrol_kill";    Login = $Login1; Pass = $Pass1; Char = 614; Park = @(4700, -900, 300);   Ready = "spawn 3"; Timeout = 420 },
-    @{ Name = "live_quest_turnin";   Login = $Login1; Pass = $Pass1; Char = 614; Park = @(700, -3200, 300);   Ready = "spawn 6"; Timeout = 600 },
+    @{ Name = "live_quest_turnin";   Login = $Login1; Pass = $Pass1; Char = 614; Park = @(700, -3200, 300);   Ready = $null; Timeout = 600 },
     @{ Name = "live_trade";          Login = $Login1; Pass = $Pass1; Char = 614; Park = @(700, -3200, 300);   Ready = "DUALGRANT"; Timeout = 480 }
 )
 
@@ -226,17 +233,25 @@ function Invoke-ReadyActions([hashtable]$S, [string]$Log) {
             # Quest hunts only AFTER a locomotion proof + NPC walk +
             # dialogue (~1 min after world-ready): seeding at world-ready
             # goes stale (foxes wander / get farmed) and the brain chases
-            # distant wild foxes into mesh walls. Wait for the accept
-            # marker so the seeds land fresh at the NPC when hunting starts.
-            if ($S.Name -eq "live_quest_turnin") {
-                # Wait for the accept marker (up to ~150s: the brain's
-                # accept budget is 120s), but bail early if the run already
-                # finished — seeding a dead client fails and wastes the
-                # retry window.
+            # Distant-marker seeding: quest and skills hunt only AFTER a
+            # long preamble (NPC walk + dialogue / waypoint + shop), so a
+            # world-ready seed goes stale or loses the race (hunting starts
+            # before the seed replicates and the brain commits to a distant
+            # wild fox into a mesh wall — proven live 22.10). Wait for the
+            # hunting marker so seeds land fresh where the hunt starts.
+            # Everything else hunts within seconds of world-ready: seed at
+            # once (6s settle for the landing drift).
+            $SeedMarker = $null
+            if ($S.Name -eq "live_quest_turnin") { $SeedMarker = "quest accepted, hunting" }
+            elseif ($S.Name -eq "live_skills") { $SeedMarker = "skills learned, hunting" }
+            if ($SeedMarker) {
+                # Wait for the marker (budgets are ~120s), but bail early
+                # if the run already finished — seeding a dead client fails
+                # and wastes the retry window.
                 $acc = $null; $t0 = Get-Date
                 while (((Get-Date) - $t0).TotalSeconds -lt 150) {
                     if (Test-Path -LiteralPath $Log) {
-                        $acc = Select-String -LiteralPath $Log -Pattern "quest accepted, hunting" | Select-Object -First 1
+                        $acc = Select-String -LiteralPath $Log -Pattern $SeedMarker | Select-Object -First 1
                         if ($acc) { break }
                         if (Select-String -LiteralPath $Log -Pattern "LIVEBOT_RESULT $($S.Name)") { break }
                     }
@@ -244,7 +259,7 @@ function Invoke-ReadyActions([hashtable]$S, [string]$Log) {
                 }
                 if (-not $acc) {
                     if (Select-String -LiteralPath $Log -Pattern "LIVEBOT_RESULT $($S.Name)") { return }
-                    Write-Host "WARNING: no quest-accepted marker, seeding anyway" -ForegroundColor Yellow
+                    Write-Host "WARNING: no hunting marker, seeding anyway" -ForegroundColor Yellow
                 }
             } else {
                 Start-Sleep -Seconds 6
@@ -307,12 +322,14 @@ function Invoke-SingleRun([hashtable]$S, [string]$Login, [string]$Pass, [string]
     if ($S.Park) {
         $null = Invoke-Helper -DbArgs "setpos $($S.Char) $($S.Park[0]) $($S.Park[1]) $($S.Park[2])"
     }
-    if ($a -eq 1 -and $S.Name -eq "live_quest_turnin") {
-        $null = Invoke-Helper -DbArgs "questreset $($S.Char) 9000"
-    }
     $b = Start-Bot $S.Name $Login $Pass $(if ($a -eq 1) { $LogName } else { $LogName -replace '\.log$', '_retry2.log' }) $(if ($S.BotChar) { $S.BotChar } else { 0 })
     $wr = Wait-Log $b.Log "LIVEBOT world ready" 240
     if (-not $wr) { Stop-Bot $b.Proc 5; return "FAIL/no-world-ready" }
+    if ($a -eq 1 -and $S.Name -eq "live_quest_turnin") {
+        # Server-side reset (memory + DB). Char is online by now, which
+        # the admin gate requires (CharacterManager must know the char).
+        Invoke-Admin "questreset 614"
+    }
     # Spawn check: offline DB parking is best-effort (the server's session-
     # teardown save can land after our write and resurrect a stale spot —
     # proven live 21.10). Verify the ACTUAL spawn from the brain's own log

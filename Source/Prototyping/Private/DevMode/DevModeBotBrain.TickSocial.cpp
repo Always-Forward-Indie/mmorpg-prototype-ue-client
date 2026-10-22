@@ -173,7 +173,28 @@ bool UDevModeBotBrain::Tick_TradeElect(UWorld* World, ABasicPlayer* Player, doub
             return true;
         }
         // Election lives in FTradeStatusRule (spec-pinned): lower id invites.
-        GoldBeforeTrade = GetGold();
+        // NOTE: GoldBeforeTrade is captured at offer time, not here (a grant landing in between would poison it).
+        // Baseline needs the authoritative inventory snapshot (async push;
+        // fat snapshots fragment — proven live 22.10). Capturing GetGold()
+        // on an empty cache would poison the gold-moved assert with 0, so
+        // wait for the snapshot inside the leg budget instead.
+        if (CountInventoryItems() <= 0)
+        {
+            if (UInventoryManager* Inv = GameInstance->GetInventoryManager())
+            {
+                if (Now - LastInvResyncTime > 15.0)
+                {
+                    LastInvResyncTime = Now;
+                    Inv->RequestInventoryData(GameInstance->GetCurrentCharacterID());
+                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade waits for inventory snapshot"));
+                }
+            }
+            if (Now - TradeLegStartTime > TradeTimeoutSec)
+            {
+                Finish(false, TEXT("trade-no-inventory"));
+            }
+            return true;
+        }
         BotAssert(true, TEXT("trade-peer-found"), TradePeerCharId, TradePeerCharId);
         if (FTradeStatusRule::ShouldInitiateTrade(OwnCharId, TradePeerCharId))
         {
@@ -276,6 +297,12 @@ bool UDevModeBotBrain::Tick_TradeOffer(UWorld* World, ABasicPlayer* Player, doub
         const int32 OwnCharId = GameInstance->GetCurrentCharacterID();
         if (!bTradeOfferSent)
         {
+            // Baseline at the last responsible moment: a balance change
+            // landing between election and the offer (e.g. the batch grant)
+            // would poison the gold-moved assert (proven live 22.10:
+            // baseline 125 vs actual 134). Election only guarantees a
+            // non-empty snapshot; the offer pins the number.
+            GoldBeforeTrade = GetGold();
             // Same-socket FIFO: the offer is processed before our confirm
             // below, so no echo wait is needed here. Initiator moves 1 gold,
             // acceptor offers nothing — the gold delta is the trade proof.

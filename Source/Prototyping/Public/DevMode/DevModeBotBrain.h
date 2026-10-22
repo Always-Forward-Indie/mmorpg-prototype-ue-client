@@ -639,4 +639,9 @@ private:
     // geometry the server won't let us cross — exclude and move on.
     static constexpr float ChaseStallSec = 30.0f;
     static constexpr float ChaseMinGain = 200.0f;
+    // ...while one losing this much ground in the same window is fleeing
+    // faster than the bot runs (foxes outrun players) — uncatchable, and
+    // the server reads every cast as out of range. Exclude and repick
+    // (an idle seed is usually among the six) instead of burning the leg.
+    static constexpr float ChaseFleeLoss = 300.0f;
 };

@@ -172,6 +172,7 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     bTradeOfferSent = false;
     bTradeConfirmSent = false;
     GoldBeforeTrade = 0;
+    LastInviteResendTime = 0.0;
     QuestLegStartTime = 0.0;
     bDialogueRequested = false;
     bChoiceSent = false;

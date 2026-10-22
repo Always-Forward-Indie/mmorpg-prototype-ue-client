@@ -62,6 +62,28 @@ bool UDevModeBotBrain::Tick_EquipOn(UWorld* World, ABasicPlayer* Player, double 
             EquipInstanceId = FindEquippableMainHand(EquipItemSlug);
             if (EquipInstanceId <= 0)
             {
+                // The inventory snapshot is an async server push (lossy on
+                // the shared stand — proven live 22.10: a whole run with
+                // zero getPlayerInventory). An EMPTY inventory means "not
+                // arrived yet": re-request throttled, wait the leg budget.
+                // A non-empty inventory with nothing equippable is genuine.
+                if (CountInventoryItems() <= 0)
+                {
+                    if (UInventoryManager* Inv = GameInstance->GetInventoryManager())
+                    {
+                        if (Now - LastInvResyncTime > 15.0)
+                        {
+                            LastInvResyncTime = Now;
+                            Inv->RequestInventoryData(GameInstance->GetCurrentCharacterID());
+                            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT no inventory yet, re-requesting"));
+                        }
+                    }
+                    if (Now - CharLegStartTime > CharTimeoutSec)
+                    {
+                        Finish(false, TEXT("no-inventory-snapshot"));
+                    }
+                    return true;
+                }
                 Finish(false, TEXT("no-equippable"));
                 return true;
             }

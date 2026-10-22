@@ -204,10 +204,20 @@ bool UDevModeBotBrain::Tick_TradeInvite(UWorld* World, ABasicPlayer* Player, dou
         {
             Trade->RequestTrade(OwnCharId, TradePeerCharId, Player->GetActorLocation());
             bTradeInviteSent = true;
+            LastInviteResendTime = Now;
             UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade invite sent to char %d"), TradePeerCharId);
             return true;
         }
         // Session id arrives on the tradeState echo — that is the invite proof.
+        // No session yet: the invite is one-shot but the server TTL is 60s
+        // while the peer starts ~35s later — re-send to refresh TTL and
+        // cover a lost first send (same pattern as the chat resend).
+        if (bTradeInviteSent && Now - LastInviteResendTime > 20.0)
+        {
+            LastInviteResendTime = Now;
+            Trade->RequestTrade(OwnCharId, TradePeerCharId, Player->GetActorLocation());
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade invite re-sent to char %d"), TradePeerCharId);
+        }
         if (Trade->IsInTrade())
         {
             BotAssert(true, TEXT("trade-invited"), 1, 1);
@@ -310,9 +320,25 @@ bool UDevModeBotBrain::Tick_TradeConfirm(UWorld* World, ABasicPlayer* Player, do
         }
         if (!Trade->IsInTrade())
         {
-            // Session gone without our gold moving: cancelled/failed server-side.
-            BotAssert(false, TEXT("trade-gold-moved"), GoldNow, GoldWant);
-            Finish(false, TEXT("trade-cancelled"));
+            // Session gone without our gold moving: usually cancelled —
+            // BUT the session row is also wiped on a clean complete, and
+            // our gold snapshot may still be in flight (lost push, proven
+            // live 22.10 with 8KB+ snapshots). Re-request inventory
+            // throttled and wait the leg budget before calling it.
+            if (UInventoryManager* Inv = GameInstance->GetInventoryManager())
+            {
+                if (Now - LastInvResyncTime > 15.0)
+                {
+                    LastInvResyncTime = Now;
+                    Inv->RequestInventoryData(GameInstance->GetCurrentCharacterID());
+                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade session gone, re-requesting inventory"));
+                }
+            }
+            if (Now - TradeLegStartTime > TradeTimeoutSec)
+            {
+                BotAssert(false, TEXT("trade-gold-moved"), GoldNow, GoldWant);
+                Finish(false, TEXT("trade-cancelled"));
+            }
             return true;
         }
         if (Now - TradeLegStartTime > TradeTimeoutSec)

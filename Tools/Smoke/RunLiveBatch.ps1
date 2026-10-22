@@ -392,7 +392,10 @@ foreach ($S in $Scenarios) {
             }
             $r1 = Wait-Log $b1.Log "LIVEBOT_RESULT $($S.Name)" $S.Timeout
             $r2 = $null
-            if ($pok2) { $r2 = Wait-Log $b2.Log "LIVEBOT_RESULT $($S.Name)" 120 }
+            # P2 starts a full stagger + load after P1 and its legs run on
+            # their own budgets (trade confirm alone is 120s) — give it a
+            # full window from P1's finish instead of cutting a legit wait.
+            if ($pok2) { $r2 = Wait-Log $b2.Log "LIVEBOT_RESULT $($S.Name)" 300 }
             Stop-Bot $b1.Proc; if ($b2 -and -not $b2.HasExited) { Stop-Bot $b2.Proc }
             $o1 = Format-Result $r1; $o2 = if ($pok2) { Format-Result $r2 } else { "FAIL/spawn-mismatch" }
         }

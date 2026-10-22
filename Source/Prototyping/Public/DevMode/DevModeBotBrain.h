@@ -508,6 +508,10 @@ private:
     bool bTradeOfferSent = false;
     bool bTradeConfirmSent = false;
     int32 GoldBeforeTrade = 0;
+    // Invite convergence: the server invite TTL is 60s but the peer's
+    // client starts ~35s later (stagger + load). Re-send while no
+    // session — same pattern as the chat resend. Each send refreshes TTL.
+    double LastInviteResendTime = 0.0;
     double QuestLegStartTime = 0.0;
     bool bDialogueRequested = false;
     bool bChoiceSent = false;

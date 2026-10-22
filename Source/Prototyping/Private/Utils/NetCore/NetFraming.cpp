@@ -1,4 +1,4 @@
-#include "Utils/NetCore/NetFraming.h"
+﻿#include "Utils/NetCore/NetFraming.h"
 #include "Prototyping.h"
 
 int32 FNetFraming::SplitFraming(const FString& InBuffer, TArray<FString>& OutMessages, FString& OutRest)
@@ -144,4 +144,65 @@ FString FNetFraming::PeekHead(const uint8* Data, int32 Len, int32 MaxChars)
 		Out.AppendChar((C >= 32 && C <= 126) ? static_cast<TCHAR>(C) : TEXT('?'));
 	}
 	return Out;
+}
+
+int32 FNetFraming::ExtractRawLines(TArray<uint8>& InOutAccumulatedBytes, TArray<TArray<uint8>>& OutLines,
+const TCHAR* SocketTag)
+{
+	OutLines.Reset();
+
+	int32 DelimiterIndex = INDEX_NONE;
+	while ((DelimiterIndex = InOutAccumulatedBytes.Find((uint8)'\n')) != INDEX_NONE)
+	{
+		if (DelimiterIndex > MaxMessageBytes)
+		{
+			UE_LOG(LogNetPacket, Error, TEXT("FNetFraming: dropping oversized %d-byte packet (cap %d) socket=%s eventType=%s head=%s"),
+				DelimiterIndex, MaxMessageBytes, SocketTag ? SocketTag : TEXT("?"),
+				*PeekEventType(InOutAccumulatedBytes.GetData(), DelimiterIndex),
+				*PeekHead(InOutAccumulatedBytes.GetData(), DelimiterIndex));
+			InOutAccumulatedBytes.RemoveAt(0, DelimiterIndex + 1);
+			continue;
+		}
+		if (DelimiterIndex == 0)
+		{
+			// Empty line: ignored per spec, never forwarded downstream.
+			InOutAccumulatedBytes.RemoveAt(0, 1);
+			continue;
+		}
+		TArray<uint8> Line;
+		Line.SetNumUninitialized(DelimiterIndex);
+		FMemory::Memcpy(Line.GetData(), InOutAccumulatedBytes.GetData(), DelimiterIndex);
+		InOutAccumulatedBytes.RemoveAt(0, DelimiterIndex + 1);
+
+		// CRLF tolerance: strip one trailing '\r' (mirrors the trim in
+		// ExtractPackets, which drops it post-decode).
+		if (Line.Num() > 0 && Line.Last() == '\r')
+		{
+			Line.SetNum(Line.Num() - 1);
+		}
+		bool bEmpty = true;
+		for (const uint8 C : Line)
+		{
+			if (C != ' ' && C != '\t' && C != '\r')
+			{
+				bEmpty = false;
+				break;
+			}
+		}
+		if (!bEmpty)
+		{
+			OutLines.Add(MoveTemp(Line));
+		}
+	}
+
+	if (InOutAccumulatedBytes.Num() > MaxMessageBytes)
+	{
+		UE_LOG(LogNetPacket, Error, TEXT("FNetFraming: dropping %d-byte partial without delimiter (cap %d) socket=%s eventType=%s head=%s"),
+			InOutAccumulatedBytes.Num(), MaxMessageBytes, SocketTag ? SocketTag : TEXT("?"),
+			*PeekEventType(InOutAccumulatedBytes.GetData(), InOutAccumulatedBytes.Num()),
+			*PeekHead(InOutAccumulatedBytes.GetData(), InOutAccumulatedBytes.Num()));
+		InOutAccumulatedBytes.Reset();
+	}
+
+	return OutLines.Num();
 }

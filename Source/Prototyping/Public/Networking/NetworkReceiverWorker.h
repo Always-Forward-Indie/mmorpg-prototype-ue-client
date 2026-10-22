@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Sockets.h"
 #include "SocketSubsystem.h"
+#include "Utils/NetCore/WireFragReassembler.h"
 #include <atomic>
 
 // Forward declaration
@@ -26,6 +27,9 @@ private:
 	// Human-readable socket tag for drop logs ("Login"/"Game"/"Chunk").
 	// Set once at setup; read on the worker thread.
 	FString SocketTag = TEXT("?");
+	// Transport reassembly for wireFrag frames (server fragments oversize
+	// lines for frag-capable sockets). Single-owner: only Run() touches it.
+	FWireFragReassembler FragReassembler;
 
 public:
     // Constructor

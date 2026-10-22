@@ -222,10 +222,61 @@ uint32 NetworkReceiverWorker::Run()
             // Recv() chunks intact; empty lines ignored, oversized dropped).
             AccumulatedBuffer.Append(ReceiveBuffer.GetData(), BytesRead);
 
-            TArray<FString> Packets;
-            FNetFraming::ExtractPackets(AccumulatedBuffer, Packets, *SocketTag);
-            for (const FString& ReceivedString : Packets)
+            TArray<TArray<uint8>> RawLines;
+            FNetFraming::ExtractRawLines(AccumulatedBuffer, RawLines, *SocketTag);
+            for (const TArray<uint8>& RawLine : RawLines)
             {
+                if (RawLine.Num() == 0)
+                {
+                    continue;
+                }
+                // wireFrag frames route raw payload bytes to the reassembler
+                // (server slices by bytes; per-frame decode would corrupt
+                // split UTF-8). Everything else decodes as before.
+                FString ReceivedString;
+                // Route by the full line: live senders emit keys
+                // alphabetically, so the header (with eventType) may sit at
+                // the END of a ~6KB frame — the 256-byte peek window would
+                // miss it. Only wireFrag lines go to the reassembler.
+                if (FNetFraming::PeekEventType(RawLine.GetData(), RawLine.Num(), RawLine.Num()).Equals(TEXT("wireFrag")))
+                {
+                    // Frame payloads are JSON-escaped strings: decode first
+                    // (mirrors the server, which parses frames as JSON),
+                    // then feed raw bytes to the reassembler.
+                    FNetFraming::FWireFragFramePos Frame;
+                    TArray<uint8> Payload;
+                    if (FNetFraming::ParseWireFragFrame(RawLine.GetData(), RawLine.Num(), Frame)
+                        && FNetFraming::UnescapeJsonString(RawLine.GetData() + Frame.PayloadBegin, Frame.PayloadLen, Payload))
+                    {
+                        const FWireFragReassembler::FFeedResult Fed = FragReassembler.Feed(
+                            Frame.StreamId, Frame.Index, Frame.Total,
+                            Payload.Num() > 0 ? Payload.GetData() : nullptr, Payload.Num(),
+                            FPlatformTime::Seconds());
+                        if (Fed.bComplete && Fed.Message.Num() > 0)
+                        {
+                            FUTF8ToTCHAR Converter(reinterpret_cast<const ANSICHAR*>(Fed.Message.GetData()), Fed.Message.Num());
+                            ReceivedString = FString(Converter.Length(), Converter.Get());
+                            ReceivedString.TrimStartAndEndInline();
+                        }
+                    }
+                    if (ReceivedString.IsEmpty())
+                    {
+                        // Incomplete stream or malformed frame: nothing to
+                        // deliver yet. Swallow the line.
+                        continue;
+                    }
+                }
+                else
+                {
+                    FUTF8ToTCHAR Converter(reinterpret_cast<const ANSICHAR*>(RawLine.GetData()), RawLine.Num());
+                    ReceivedString = FString(Converter.Length(), Converter.Get());
+                    ReceivedString.TrimStartAndEndInline();
+                    if (ReceivedString.IsEmpty())
+                    {
+                        continue;
+                    }
+                }
+
 
                 // t3 ������ ��������� �����, �� ������ �����:
                 const int64 PerPacketT3 = TimeSyncService.IsValid() ? TimeSyncService.Get()->GetCurrentClientTimeMs() : 0;
@@ -234,6 +285,10 @@ uint32 NetworkReceiverWorker::Run()
 
                 // ��������� ������ � �������
                 DataQueue.Enqueue(TimestampedString);
+            }
+            if (FragReassembler.PendingStreams() > 0)
+            {
+                FragReassembler.ReapIdle(FPlatformTime::Seconds());
             }
         }
         else

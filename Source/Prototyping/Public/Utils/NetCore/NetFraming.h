@@ -57,4 +57,50 @@ struct PROTOTYPING_API FNetFraming
 	 * Non-printable bytes become '?'. Pure so specs can pin it.
 	 */
 	static FString PeekHead(const uint8* Data, int32 Len, int32 MaxChars = 96);
+
+	/**
+	 * Byte offsets of one `wireFrag` frame body. Pure so specs can pin it.
+	 * No key-order assumption: number fields are trusted only OUTSIDE the
+	 * payload span (a payload may quote "total":N text of its own — and
+	 * live senders emit keys alphabetically, numbers after payload).
+	 */
+	struct FWireFragFramePos
+	{
+		uint64 StreamId = 0;
+		uint64 Index = 0;
+		uint64 Total = 0;
+		/** Payload value bytes (without quotes), may split UTF-8. */
+		int32 PayloadBegin = -1;
+		int32 PayloadLen = 0;
+	};
+
+	/**
+	 * Parse one complete wireFrag line (WITHOUT the trailing delimiter).
+	 * Key order is NOT assumed (live senders emit alphabetically: body
+	 * before header, numbers after payload). OutPos points at the RAW
+	 * payload span (still JSON-escaped — decode with UnescapeJsonString
+	 * before feeding the reassembler, mirroring the server which parses
+	 * frames with a real JSON parser).
+	 * Returns false on any shape violation (caller swallows the line —
+	 * the sender's totals can no longer be trusted for this stream).
+	 */
+	static bool ParseWireFragFrame(const uint8* Data, int32 Len, FWireFragFramePos& OutPos);
+
+	/**
+	 * Decode a JSON string value body (no surrounding quotes): \" \\ \/
+	 * \b \f \n \r \t and \uXXXX (with surrogate pairs, emitted as UTF-8).
+	 * Raw bytes (incl. split-nothing — this runs on one complete frame)
+	 * pass through untouched. Returns false on truncated/invalid escapes.
+	 */
+	static bool UnescapeJsonString(const uint8* Data, int32 Len, TArray<uint8>& OutBytes);
+
+	/**
+	 * Raw-line twin of ExtractPackets: same split/drop/buffer rules, but
+	 * segments stay byte arrays (no UTF-8 decode) so the caller can route
+	 * wireFrag frames to the reassembler before decoding. Oversized
+	 * segments are dropped with the same error log; the cap still applies:
+	 * frames are small by construction, anything bigger is a violation.
+	 */
+	static int32 ExtractRawLines(TArray<uint8>& InOutAccumulatedBytes, TArray<TArray<uint8>>& OutLines,
+	const TCHAR* SocketTag = nullptr);
 };

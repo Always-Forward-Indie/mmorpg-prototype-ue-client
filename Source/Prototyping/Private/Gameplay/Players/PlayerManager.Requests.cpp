@@ -94,6 +94,10 @@ void UPlayerManager::SendPlayerReadyRequest(const FClientDataStruct& ClientData)
 	// Per protocol: body has characterId — use ClientData exclusively
 	const int32 CharId = ClientData.characterData.characterId;
 	BodyData.Add("characterId", MakeShareable(new FJsonValueNumber(CharId)));
+	// Transport fragmentation (wireFrag, issues #121/#122): the server
+	// fragments oversize lines only for sockets that opt in here. The
+	// receiver reassembles generically, so the game never sees frames.
+	BodyData.Add("frag", MakeShareable(new FJsonValueBoolean(true)));
 
 	FString JsonString = JSONParser::SerializeJsonWithTimeSync("playerReady", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::ChunkServer);
 

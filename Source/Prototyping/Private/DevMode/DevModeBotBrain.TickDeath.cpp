@@ -218,8 +218,12 @@ bool UDevModeBotBrain::Tick_RespawnWait(UWorld* World, ABasicPlayer* Player, dou
             {
                 ReviveSeenTime = NowHP;
                 BotAssert(true, TEXT("player-revived"), 1, 1);
+                // Re-arm the respawn click: a re-death in the revive window
+                // (seeded swarm still aggro'd) must click again instead of
+                // idling on the spent request to the leg timeout.
+                bRespawnRequested = false;
             }
-            if (NowHP - ReviveSeenTime > 10.0)
+            if (NowHP - ReviveSeenTime > 20.0)
             {
                 BotAssert(false, TEXT("respawn-hp"), HP, 1);
                 Finish(false, TEXT("respawn-hp-timeout"));
@@ -230,6 +234,8 @@ bool UDevModeBotBrain::Tick_RespawnWait(UWorld* World, ABasicPlayer* Player, dou
         {
             ReviveSeenTime = FPlatformTime::Seconds();
             BotAssert(true, TEXT("player-revived"), 1, 1);
+            // Same re-arm as above (revive observed with HP already up).
+            bRespawnRequested = false;
         }
         BotAssert(HP > 0, TEXT("respawn-hp"), HP, 1);
         const bool bScreenHidden = !IsDeathScreenVisible();

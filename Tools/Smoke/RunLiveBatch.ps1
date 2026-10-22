@@ -193,7 +193,7 @@ $Scenarios = @(
     @{ Name = "live_harvest_run";    Login = $Login2; Pass = $Pass2; Char = 615; Park = @(4700, -900, 300);   Ready = $null; Timeout = 420 },
     @{ Name = "live_death_respawn";  Login = $Login2; Pass = $Pass2; Char = 615; Park = @(4700, -900, 300);   Ready = "sethp 615 1;spawn 3 0 0"; Timeout = 420 },
     @{ Name = "live_equip";          Login = $Login2; Pass = $Pass2; Char = 615; Park = @(700, -3200, 300);   Ready = $null; Timeout = 420 },
-    @{ Name = "live_level";          Login = $Login2; Pass = $Pass2; Char = 615; Park = @(700, -3200, 300);   Ready = "GRANTXP"; Timeout = 420 },
+    @{ Name = "live_level";          Login = $Login1; Pass = $Pass1; Char = 614; Park = @(700, -3200, 300);   Ready = "GRANTXP"; Timeout = 420 },
     @{ Name = "live_titles_emotes";  Login = $Login2; Pass = $Pass2; Char = 615; Park = @(700, -3200, 300);   Ready = $null; Timeout = 420 },
     @{ Name = "live_skills";         Login = $Login2; Pass = $Pass2; Char = 615; Park = @(-634, 2160, 300);   Ready = "spawn 6"; Timeout = 480 },
     @{ Name = "live_char_create_delete"; Login = $Login1; Pass = $Pass1; Char = 614; Park = @(700, -3200, 300); Ready = "grantlevel 5"; Timeout = 420 },
@@ -292,21 +292,6 @@ function Invoke-SingleRun([hashtable]$S, [string]$Login, [string]$Pass, [string]
     return "FAIL/spawn-mismatch"
 }
 
-# Wait until the server drops the char's session (get_state stops
-# answering). A lingering session makes the next login attach to the stale
-# server-side position instead of the DB park point. Returns when gone.
-function Wait-NoSession([int]$CharId, [int]$TimeoutSec, [string]$Who) {
-    $t0 = Get-Date
-    while (((Get-Date) - $t0).TotalSeconds -lt $TimeoutSec) {
-        $r = Invoke-Helper -AdminArgs "sesscheck $CharId"
-        if (($r -join "`n") -match "SESSION-GONE") { return $true }
-        Write-Host "waiting for stale $Who session to drop..." -ForegroundColor DarkYellow
-        Start-Sleep -Seconds 10
-    }
-    Write-Host "WARNING: $Who session still alive after ${TimeoutSec}s, proceeding anyway" -ForegroundColor Yellow
-    return $false
-}
-
 foreach ($S in $Scenarios) {
     if ($Filters.Count -gt 0 -and -not ($Filters | Where-Object { $S.Name -like "*$_*" })) { continue }
     Write-Host "=== $($S.Name) ===" -ForegroundColor Cyan
@@ -314,7 +299,6 @@ foreach ($S in $Scenarios) {
     $strays = @(Get-Process | Where-Object { $_.Path -like "*UnrealEditor*" })
     if ($strays.Count -gt 0) { Write-Host "stray clients running, aborting batch" -ForegroundColor Red; exit 1 }
 
-    $null = Wait-NoSession $S.Char 120 "$($S.Name)/$($S.Char)"
     if ($S.Park) {
         $null = Invoke-Helper -DbArgs "setpos $($S.Char) $($S.Park[0]) $($S.Park[1]) $($S.Park[2])"
         $pos = Invoke-Helper -DbArgs "charpos $($S.Char)"
@@ -342,7 +326,6 @@ foreach ($S in $Scenarios) {
         } elseif (-not $pok1) { Stop-Bot $b1.Proc 5; $o1 = "FAIL/spawn-mismatch"; $o2 = ""
         } else {
             if ($S.Ready -eq "DUALGRANT") { Invoke-Admin "grantitem 614 16 10" }
-            $null = Wait-NoSession 615 300 "$($S.Name)/615"
             Start-Sleep -Seconds $StaggerSec
             $log2 = "Batch_$($S.Name)_p2.log"
             $b2 = $null; $pok2 = $false

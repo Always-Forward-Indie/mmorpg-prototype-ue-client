@@ -263,6 +263,14 @@ private:
     // (teleport jumps never count), stuck/teleport fallback. Returns true on
     // arrival within ArriveRadius. Label names the leg in fallback logs.
     bool SteerToward(ABasicPlayer* Player, const FVector& Dest, float ArriveRadius, double Now, const TCHAR* Label);
+    // Navmesh waypoint resolution for SteerToward: returns the next path
+    // point toward Dest (or Dest itself when no usable path exists — the
+    // caller then steers direct, status quo). Pure path bookkeeping;
+    // movement itself stays in SteerToward/SteerTick.
+    void NavSteerTarget(ABasicPlayer* Player, const FVector& Dest, double Now, FVector& OutTarget);
+    // (Re)build the path to Dest. False = no navmesh/unreachable (caller
+    // steers direct). Throttled by the caller via LastNavRepathSec.
+    bool BuildNavPath(ABasicPlayer* Player, const FVector& Dest, double Now);
     // Per-frame movement pump: BrainTick runs at 10Hz but CharacterMovement
     // consumes AddMovementInput EVERY rendered frame, so input applied only
     // in BrainTick moves the pawn at (frame_rate/10Hz) duty — ~20u/s at
@@ -408,6 +416,21 @@ private:
     FVector SteerDest = FVector::ZeroVector;
     double LastSteerTime = 0.0;
     bool bSteerIntent = false;
+    // Navmesh path following (replaces blind straight-line steering):
+    // SteerToward walks PathPoints toward the leg destination; when no
+    // usable path exists it falls back to direct steering (status quo).
+    // Repath on destination drift, on a timer for moving targets, or
+    // after a stuck event (which also keeps working as a safety net).
+    TArray<FVector> NavPathPoints;
+    int32 NavPathIndex = 0;
+    FVector NavPathDest = FVector::ZeroVector;
+    bool bNavPathValid = false;
+    double LastNavRepathSec = 0.0;
+    // One-time observability per run: did pathfinding ever engage, or is
+    // this map/travel without navmesh (all steering stays direct then).
+    bool bNavLoggedActive = false;
+    bool bNavLoggedMissing = false;
+    int32 NavFailStage = 0;
     // Parked BotShot name (same-tick bursts share one screenshot pipe).
     mutable FString PendingShotName;
 
@@ -635,13 +658,17 @@ private:
     // A live killer that deals no damage for this long is a dummy (wrong
     // faction, leashed, or geometry-separated) — exclude and move on.
     static constexpr float KillerDummySec = 45.0f;
+    // Repath when the destination drifted this far from the built path
+    // or this often for moving targets (mobs). Waypoint consumption radius.
+    static constexpr float NavRepathMinDrift = 400.0f;
+    static constexpr float NavRepathIntervalSec = 2.5f;
+    static constexpr float NavPointRadius = 100.0f;
     // A live chase making no distance gain for this long is stuck behind
     // geometry the server won't let us cross — exclude and move on.
     static constexpr float ChaseStallSec = 30.0f;
     static constexpr float ChaseMinGain = 200.0f;
     // ...while one losing this much ground in the same window is fleeing
-    // faster than the bot runs (foxes outrun players) — uncatchable, and
-    // the server reads every cast as out of range. Exclude and repick
-    // (an idle seed is usually among the six) instead of burning the leg.
+    // faster than the bot runs — uncatchable (casts read out of range).
+    // Exclude and repick instead of burning the leg.
     static constexpr float ChaseFleeLoss = 300.0f;
 };

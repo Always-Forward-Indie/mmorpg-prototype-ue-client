@@ -33,6 +33,9 @@
 #include "EngineUtils.h"
 #include "TimerManager.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "NavigationSystem.h"
+#include "NavigationPath.h"
 #include "HighResScreenshot.h"
 #include "Misc/Parse.h"
 #include "DevMode/BotBrainHelpers.h"
@@ -72,6 +75,163 @@ FVector UDevModeBotBrain::FindTeleportSpot(ABasicPlayer* Player, const FVector& 
     return Dest + FVector(0.0f, 0.0f, 100.0f);
 }
 
+bool UDevModeBotBrain::BuildNavPath(ABasicPlayer* Player, const FVector& Dest, double Now)
+{
+    bNavPathValid = false;
+    NavPathPoints.Reset();
+    NavPathIndex = 0;
+    NavFailStage = 1;
+    if (!Player)
+    {
+        return false;
+    }
+    UWorld* World = BrainWorld.Get();
+    if (!World)
+    {
+        return false;
+    }
+    NavFailStage = 2;
+    UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+    if (!NavSys)
+    {
+        return false;
+    }
+    const FVector PlayerAt = Player->GetActorLocation();
+    // Agent sized like the pawn's capsule; falls back to the small
+    // agent class when the capsule is unavailable or unmatched (lookup
+    // can reject an agent the mesh was not built for) — a cascade.
+    ANavigationData* NavData = nullptr;
+    if (const UCapsuleComponent* Cap = Player->GetCapsuleComponent())
+    {
+        FNavAgentProperties Props;
+        Props.AgentRadius = Cap->GetScaledCapsuleRadius();
+        Props.AgentHeight = Cap->GetScaledCapsuleHalfHeight() * 2.0f;
+        NavData = NavSys->GetNavDataForProps(Props, PlayerAt);
+    }
+    if (!NavData)
+    {
+        FNavAgentProperties Small;
+        Small.AgentRadius = 30.0f;
+        Small.AgentHeight = 176.0f;
+        NavData = NavSys->GetNavDataForProps(Small, PlayerAt);
+    }
+    NavFailStage = 3;
+    if (!NavData)
+    {
+        if (!bNavLoggedMissing)
+        {
+            bNavLoggedMissing = true;
+            const ANavigationData* DefaultNav = NavSys ? NavSys->GetDefaultNavDataInstance(FNavigationSystem::DontCreate) : nullptr;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT no navmesh data (stage 3) default=[%s] at (%.0f,%.0f,%.0f)"),
+                DefaultNav ? *DefaultNav->GetName() : TEXT("(none)"), PlayerAt.X, PlayerAt.Y, PlayerAt.Z);
+        }
+        return false;
+    }
+    FPathFindingQuery Query(Player, *NavData, PlayerAt, Dest);
+    const FPathFindingResult Result = NavSys->FindPathSync(Query);
+    NavFailStage = 4;
+    if (!Result.IsSuccessful() || !Result.Path.IsValid() || Result.Path->IsPartial())
+    {
+        return false;
+    }
+    TArray<FVector> RawPoints;
+    for (const FNavPathPoint& P : Result.Path->GetPathPoints())
+    {
+        RawPoints.Add(P.Location);
+    }
+    // Drop points already behind us (path start ~= current position).
+    for (const FVector& P : RawPoints)
+    {
+        if (Dist2D(PlayerAt, P) > NavPointRadius)
+        {
+            NavPathPoints.Add(P);
+        }
+    }
+    if (NavPathPoints.Num() == 0)
+    {
+        NavFailStage = 5;
+        return false;
+    }
+    NavPathDest = Dest;
+    NavPathIndex = 0;
+    LastNavRepathSec = Now;
+    bNavPathValid = true;
+    if (!bNavLoggedActive)
+    {
+        bNavLoggedActive = true;
+        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT navmesh active (%d points on %s)"), NavPathPoints.Num(), NavData ? *NavData->GetName() : TEXT("?"));
+    }
+    return true;
+}
+
+void UDevModeBotBrain::NavSteerTarget(ABasicPlayer* Player, const FVector& Dest, double Now, FVector& OutTarget)
+{
+    OutTarget = Dest;
+    if (!Player)
+    {
+        return;
+    }
+    UWorld* World = BrainWorld.Get();
+    if (!World)
+    {
+        return;
+    }
+    const FVector PlayerAt = Player->GetActorLocation();
+    const bool bDestDrifted = !bNavPathValid || Dist2D(NavPathDest, Dest) > NavRepathMinDrift;
+    // Off-route (knockback, far wander): the remaining points no longer
+    // describe where we are — rebuild instead of cutting across walls.
+    bool bOffRoute = false;
+    if (bNavPathValid && NavPathIndex < NavPathPoints.Num())
+    {
+        float Nearest = FLT_MAX;
+        for (int32 i = NavPathIndex; i < NavPathPoints.Num(); ++i)
+        {
+            Nearest = FMath::Min(Nearest, Dist2D(PlayerAt, NavPathPoints[i]));
+        }
+        bOffRoute = Nearest > 600.0f;
+    }
+    if (!bNavPathValid || bDestDrifted || bOffRoute
+        || (Dist2D(NavPathDest, Dest) > 50.0f && Now - LastNavRepathSec > NavRepathIntervalSec))
+    {
+        NavFailStage = 0;
+        if (!BuildNavPath(Player, Dest, Now))
+        {
+            // Stage 3 logs itself (with the available mesh list).
+            if (NavFailStage != 3 && !bNavLoggedMissing)
+            {
+                bNavLoggedMissing = true;
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT no navmesh path (stage %d) — direct steering"), NavFailStage);
+            }
+            return; // OutTarget stays Dest: direct steering, status quo.
+        }
+    }
+    // Consume reached waypoints.
+    while (NavPathIndex < NavPathPoints.Num()
+        && Dist2D(PlayerAt, NavPathPoints[NavPathIndex]) < NavPointRadius)
+    {
+        ++NavPathIndex;
+    }
+    if (NavPathIndex >= NavPathPoints.Num())
+    {
+        // Path consumed but the leg hasn't arrived (drift since the build):
+        // rebuild once, else steer direct this tick (arrival check upstream
+        // still bounds the leg).
+        if (BuildNavPath(Player, Dest, Now) && NavPathIndex < NavPathPoints.Num())
+        {
+            OutTarget = NavPathPoints[NavPathIndex];
+        }
+        return;
+    }
+    // Final approach goes straight at Dest so the leg's own arrival radius
+    // (often tighter than a waypoint) decides completion.
+    if (NavPathIndex == NavPathPoints.Num() - 1)
+    {
+        OutTarget = Dest;
+        return;
+    }
+    OutTarget = NavPathPoints[NavPathIndex];
+}
+
 bool UDevModeBotBrain::SteerToward(ABasicPlayer* Player, const FVector& Dest, float ArriveRadius, double Now, const TCHAR* Label)
 {
     if (!Player) { return true; }
@@ -84,6 +244,12 @@ bool UDevModeBotBrain::SteerToward(ABasicPlayer* Player, const FVector& Dest, fl
 
     if (Dist2D(PlayerAt, Dest) <= ArriveRadius) { return true; }
 
+    // Navmesh first: walk path points toward Dest instead of pushing blindly
+    // into walls. Falls back to Dest itself (direct steering, status quo)
+    // when no usable path exists.
+    FVector SteerTarget = Dest;
+    NavSteerTarget(Player, Dest, Now, SteerTarget);
+
     if (bDirectMove)
     {
         // Swept kinematic step at the pawn's real MaxWalkSpeed (0.1s timer
@@ -94,7 +260,7 @@ bool UDevModeBotBrain::SteerToward(ABasicPlayer* Player, const FVector& Dest, fl
         const double Now2 = FPlatformTime::Seconds();
         const float Dt = (float)FMath::Min(Now2 - LastMoveTime, 0.25);
         LastMoveTime = Now2;
-        FVector Dir = Dest - PlayerAt;
+        FVector Dir = SteerTarget - PlayerAt;
         Dir.Z = 0.0f;
         if (Dir.Normalize())
         {
@@ -111,10 +277,10 @@ bool UDevModeBotBrain::SteerToward(ABasicPlayer* Player, const FVector& Dest, fl
         // applied only in this 10Hz tick would crawl at high fps (input is
         // consumed every rendered frame). Immediate apply keeps this tick's
         // behavior identical; the ticker sustains it between ticks.
-        FVector Dir = Dest - PlayerAt;
+        FVector Dir = SteerTarget - PlayerAt;
         Dir.Z = 0.0f;
         if (!Dir.Normalize()) { return true; }
-        SteerDest = Dest;
+        SteerDest = SteerTarget;
         LastSteerTime = Now;
         bSteerIntent = true;
         Player->AddMovementInput(Dir, 1.0f);
@@ -137,7 +303,12 @@ bool UDevModeBotBrain::SteerToward(ABasicPlayer* Player, const FVector& Dest, fl
         {
             // Live: the chunk server reverts off-pace moves
             // (positionCorrection), so admin teleports never stick.
+            // Invalidate the nav path too: the route may itself be stale
+            // (dynamic blockage) — next tick repaths or steers direct.
             LastChasePos = PlayerAt;
+            bNavPathValid = false;
+            NavPathPoints.Reset();
+            NavPathIndex = 0;
             UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT_STUCK %s (dist %.0f, no teleport on live) from (%.0f,%.0f,%.0f) blocked=%d on='%s'"),
                 Label, Dist2D(PlayerAt, Dest), PlayerAt.X, PlayerAt.Y, PlayerAt.Z,
                 bLastMoveBlocked ? 1 : 0, *LastBlockingActor);

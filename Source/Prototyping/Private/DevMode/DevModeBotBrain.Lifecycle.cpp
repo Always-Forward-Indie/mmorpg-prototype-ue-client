@@ -139,6 +139,7 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     LastNavRepathSec = 0.0;
     bNavLoggedActive = false;
     bNavLoggedMissing = false;
+    NavDetourCount = 0;
     Step = EBotStep::ExpectGround;
     StepStartTime = FPlatformTime::Seconds();
     // Phase A baselines: loot asserts inv growth, revive returns here.

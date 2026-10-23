@@ -80,6 +80,7 @@ bool UDevModeBotBrain::BuildNavPath(ABasicPlayer* Player, const FVector& Dest, d
     bNavPathValid = false;
     NavPathPoints.Reset();
     NavPathIndex = 0;
+    NavDetourCount = 0;
     NavFailStage = 1;
     if (!Player)
     {
@@ -303,15 +304,39 @@ bool UDevModeBotBrain::SteerToward(ABasicPlayer* Player, const FVector& Dest, fl
         {
             // Live: the chunk server reverts off-pace moves
             // (positionCorrection), so admin teleports never stick.
-            // Invalidate the nav path too: the route may itself be stale
-            // (dynamic blockage) — next tick repaths or steers direct.
             LastChasePos = PlayerAt;
-            bNavPathValid = false;
-            NavPathPoints.Reset();
-            NavPathIndex = 0;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT_STUCK %s (dist %.0f, no teleport on live) from (%.0f,%.0f,%.0f) blocked=%d on='%s'"),
-                Label, Dist2D(PlayerAt, Dest), PlayerAt.X, PlayerAt.Y, PlayerAt.Z,
-                bLastMoveBlocked ? 1 : 0, *LastBlockingActor);
+            if (bNavPathValid && NavPathIndex < NavPathPoints.Num())
+            {
+                // Local avoidance: the global corridor threads a wall the
+                // sweep can't cross (repaths return the same corridor).
+                // Insert an alternating, widening sidestep ahead of the
+                // carrot so the route bends around it. Bounded by the leg
+                // timeout — a truly blocked leg still fails honestly.
+                ++NavDetourCount;
+                FVector Fwd = Dest - PlayerAt;
+                Fwd.Z = 0.0f;
+                if (Fwd.Normalize())
+                {
+                    const float SideSign = (NavDetourCount % 2 == 0) ? 1.0f : -1.0f;
+                    const float SideDist = 300.0f * ((NavDetourCount + 1) / 2);
+                    const FVector Detour = PlayerAt + Fwd * 200.0f + FVector(-Fwd.Y, Fwd.X, 0.0f) * SideSign * SideDist;
+                    NavPathPoints.Insert(Detour, NavPathIndex);
+                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT_STUCK %s (dist %.0f, detour %d %.0fuu) from (%.0f,%.0f,%.0f) blocked=%d on='%s'"),
+                        Label, Dist2D(PlayerAt, Dest), NavDetourCount, SideDist, PlayerAt.X, PlayerAt.Y, PlayerAt.Z,
+                        bLastMoveBlocked ? 1 : 0, *LastBlockingActor);
+                }
+            }
+            else
+            {
+                // No usable path (direct steering): nothing to bend.
+                // Invalidate so the next tick repaths or steers direct.
+                bNavPathValid = false;
+                NavPathPoints.Reset();
+                NavPathIndex = 0;
+                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT_STUCK %s (dist %.0f, no teleport on live) from (%.0f,%.0f,%.0f) blocked=%d on='%s'"),
+                    Label, Dist2D(PlayerAt, Dest), PlayerAt.X, PlayerAt.Y, PlayerAt.Z,
+                    bLastMoveBlocked ? 1 : 0, *LastBlockingActor);
+            }
         }
         else
         {

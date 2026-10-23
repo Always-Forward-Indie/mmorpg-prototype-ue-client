@@ -63,7 +63,9 @@ bool UDevModeBotBrain::Tick_QuestAccept(UWorld* World, ABasicPlayer* Player, dou
             Finish(false, TEXT("no-dialogue"));
             return true;
         }
-        // Accepted already (choice landed, or a rerun mid-chain): hunt.
+        // Accepted already (choice landed, or a rerun mid-chain):
+        // relocate to the fox arena first — objectives are hunted there
+        // (reliable wild spawns), not at the NPC. Navmesh walks both legs.
         if (Qst->HasQuest(QuestId))
         {
             BotAssert(true, TEXT("quest-accepted"), QuestId, QuestId);
@@ -72,14 +74,12 @@ bool UDevModeBotBrain::Tick_QuestAccept(UWorld* World, ABasicPlayer* Player, dou
             {
                 Dlg->CloseDialogue();
             }
-            // Objectives run on the shared combat/loot machinery (2 real
-            // kills + harvest + loot); the server credits them to the quest.
             TargetMob.Reset();
-            Step = EBotStep::GotoTarget;
-            StepStartTime = Now;
+            Step = EBotStep::QuestRelocate;
+            QuestLegStartTime = Now;
             LastChasePos = PlayerAt;
             LastChaseProgressTime = Now;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT quest accepted, hunting objectives"));
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT quest accepted, relocating to hunt grounds"));
             return true;
         }
         if (!EnsureDialogueOpen(QuestNpcId, Now))
@@ -130,6 +130,29 @@ bool UDevModeBotBrain::Tick_QuestAccept(UWorld* World, ABasicPlayer* Player, dou
             UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT no accept/advance edge in node %d (%d choices)"),
                 NodeId, Dlg->GetCurrentNode().choices.Num());
             Finish(false, TEXT("no-accept-choice"));
+        }
+        return true;
+}
+
+bool UDevModeBotBrain::Tick_QuestRelocate(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt)
+{
+        // Walk (navmesh) to the hunting grounds. Objectives run on the
+        // shared combat/loot machinery once there (2 real kills + harvest
+        // + loot); the server credits them to the quest.
+        if (SteerToward(Player, QuestHuntPos, 300.0f, Now, TEXT("quest-arena")))
+        {
+            BotAssert(true, TEXT("quest-relocated"), 1, 1);
+            TargetMob.Reset();
+            Step = EBotStep::GotoTarget;
+            StepStartTime = Now;
+            LastChasePos = PlayerAt;
+            LastChaseProgressTime = Now;
+            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT at hunting grounds, hunting objectives"));
+            return true;
+        }
+        if (Now - QuestLegStartTime > QuestTimeoutSec)
+        {
+            Finish(false, TEXT("relocate-unreachable"));
         }
         return true;
 }

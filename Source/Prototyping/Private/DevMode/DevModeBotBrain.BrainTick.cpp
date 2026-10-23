@@ -260,6 +260,10 @@ void UDevModeBotBrain::BrainTick()
     {
         if (Tick_QuestAccept(World, Player, Now, PlayerAt)) { return; }
     }
+    if (Step == EBotStep::QuestRelocate)
+    {
+        if (Tick_QuestRelocate(World, Player, Now, PlayerAt)) { return; }
+    }
     if (Step == EBotStep::QuestTurnin)
     {
         if (Tick_QuestTurnin(World, Player, Now, PlayerAt)) { return; }

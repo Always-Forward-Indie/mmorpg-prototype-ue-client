@@ -147,6 +147,11 @@ public:
     int32 QuestId = 9000;
     int32 QuestNpcId = 9000;
     FVector QuestNpcPos = FVector(700.0f, -3200.0f, 200.0f);
+    // Fox arena: the reliable wild-ForestFox spot (zone 9001, 1min
+    // respawn). Objectives are hunted here, not at the NPC — wild foxes
+    // near the giver are drifters and get farmed out. Navmesh walks both
+    // legs (relocate out, turnin back).
+    FVector QuestHuntPos = FVector(4700.0f, -900.0f, 200.0f);
     float QuestTimeoutSec = 120.0f;
     // ---- Phase D: character (set before Start, all LIVE ONLY) ----
     // live_skills: trainer shop -> learn power_slash + battle_cry ->
@@ -231,6 +236,7 @@ private:
         TradeConfirm,
         QuestWalk,
         QuestAccept,
+        QuestRelocate,
         QuestTurnin,
         SkillWalk,
         SkillLearn,
@@ -308,6 +314,7 @@ private:
     bool Tick_TradeConfirm(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
     bool Tick_QuestWalk(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
     bool Tick_QuestAccept(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
+    bool Tick_QuestRelocate(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
     bool Tick_QuestTurnin(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
     bool Tick_SkillWalk(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
     bool Tick_SkillLearn(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt);
@@ -426,6 +433,10 @@ private:
     FVector NavPathDest = FVector::ZeroVector;
     bool bNavPathValid = false;
     double LastNavRepathSec = 0.0;
+    // Local-avoidance counter: consecutive stucks on a live nav path insert
+    // alternating, widening sidesteps ahead of the carrot (global repaths
+    // alone return the same blocked corridor). Bounded by leg timeouts.
+    int32 NavDetourCount = 0;
     // One-time observability per run: did pathfinding ever engage, or is
     // this map/travel without navmesh (all steering stays direct then).
     bool bNavLoggedActive = false;

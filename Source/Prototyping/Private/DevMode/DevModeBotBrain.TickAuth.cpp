@@ -36,6 +36,7 @@
 #include "HighResScreenshot.h"
 #include "Misc/Parse.h"
 #include "DevMode/BotBrainHelpers.h"
+#include "Utils/NetCore/ThrowawayNameRule.h"
 
 bool UDevModeBotBrain::Tick_CharList(UWorld* World, ABasicPlayer* Player, double Now, const FVector& PlayerAt)
 {
@@ -121,12 +122,18 @@ bool UDevModeBotBrain::Tick_CharCreate(UWorld* World, ABasicPlayer* Player, doub
         }
         if (CharName.IsEmpty())
         {
-            if (NameLetterIdx > 4)
+            // Slice 2 (variant B): timestamped unique Qabot names, no
+            // ID-parsing races. Letters only (server rejects digits/
+            // underscores), seed = wall time mixed with rand. The old
+            // Test V..Z cycle exhausted after 5 runs (names-exhausted).
+            if (NameLetterIdx > 10)
             {
                 Finish(false, TEXT("names-exhausted"));
                 return true;
             }
-            CharName = FString::Printf(TEXT("Test %c"), TCHAR('V' + NameLetterIdx));
+            const uint32 Seed = static_cast<uint32>(FDateTime::Now().ToUnixTimestamp() & 0xffffffff)
+                ^ static_cast<uint32>(FMath::Rand() << (NameLetterIdx % 16));
+            CharName = FThrowawayNameRule::MakeQabotName(Seed);
         }
         if (!bCreateSent)
         {

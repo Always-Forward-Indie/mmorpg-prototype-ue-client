@@ -40,7 +40,15 @@ $LogsDir = Join-Path $PSScriptRoot "..\..\Saved\Logs"
 $drive = $env:TEMP.Substring(0, 1).ToLower()
 $mntTemp = "/mnt/$drive" + ($env:TEMP.Substring(2) -replace "\\", "/")
 $HelperPy = Join-Path $env:TEMP "livebatch_helper.py"
+# Slice 2 (variant B): quest + level run on a throwaway char instead of the
+# fixed 614/615 pair (one-shot quest 9000, exp_for_level cap at 10). The
+# helper creates the char via the real login API with a timestamped unique
+# letter-only name (Qabot XXXX — server rejects digits/underscores), the
+# batch looks the id up by UNIQUE name in DB (no log-line ID parsing races),
+# parks it, runs the scenario with -botchar=<id>, then deletes it via the
+# real deleteCharacter API. Stale Qabot_* leftovers are cleaned first.
 $HelperSrc = @'
+import os
 import sys
 def db():
     import psycopg
@@ -51,6 +59,42 @@ def adm():
     sys.path.insert(0, ".")
     from bots.admin import AdminClient
     return AdminClient()
+def login_auth(login, password):
+    sys.path.insert(0, ".")
+    import os as _os
+    _os.environ.setdefault("MMO_CLIENT_VERSION", "0.1.2")
+    sys.path.insert(0, os.path.join(".", "proto"))
+    try:
+        from mmo_proto import PORTS, TARGET_HOST, MmoClient
+    except ImportError:
+        sys.path.insert(0, os.path.join("..", "proto"))
+        from mmo_proto import PORTS, TARGET_HOST, MmoClient
+    import os as _o2
+    ver = _o2.environ.get("MMO_CLIENT_VERSION", "0.1.2")
+    c = MmoClient(host=TARGET_HOST, port=PORTS["login"], timeout=10.0)
+    c.connect()
+    try:
+        c.send_event("authentificationClient", {"login": login, "password": password, "clientVersion": ver})
+        rsp = c.wait_for("authentificationClient", duration=10.0)
+        if rsp is None or rsp.get("header", {}).get("status") != "success":
+            raise RuntimeError("auth failed for %s: %s" % (login, rsp))
+        h = rsp.get("header", {})
+        return int(h["clientId"]), h["hash"]
+    finally:
+        c.close()
+def login_client(cid, hh):
+    sys.path.insert(0, ".")
+    import os as _os
+    sys.path.insert(0, os.path.join(".", "proto"))
+    try:
+        from mmo_proto import PORTS, TARGET_HOST, MmoClient
+    except ImportError:
+        sys.path.insert(0, os.path.join("..", "proto"))
+        from mmo_proto import PORTS, TARGET_HOST, MmoClient
+    return MmoClient(host=TARGET_HOST, port=PORTS["login"], client_id=cid, hash_=hh, timeout=10.0)
+def qabot_name():
+    import random as _r
+    return "Qabot " + "".join(_r.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ") for _ in range(4))
 op = sys.argv[1]
 if op == "setpos":
     cid, x, y, z = int(sys.argv[2]), float(sys.argv[3]), float(sys.argv[4]), float(sys.argv[5])
@@ -74,7 +118,7 @@ elif op == "questreset":
         print("QUESTRESET", rsp.get("header", {}).get("status"), str(rsp.get("body", {}))[:160])
     finally:
         a.close()
-elif op in ("spawn", "sethp", "grantxp", "grantitem", "grantlevel", "tp"):
+elif op in ("spawn", "sethp", "grantxp", "grantitem", "grantlevel", "tp", "sesscheck", "mkthrowaway", "delthrowaway", "cleanup_qabot"):
     a = adm()
     try:
         if op == "spawn":
@@ -110,6 +154,79 @@ elif op in ("spawn", "sethp", "grantxp", "grantitem", "grantlevel", "tp"):
                     print("SESSION-GONE")
             except Exception as e:
                 print("SESSION-GONE")
+        elif op == "mkthrowaway":
+            # Slice 2 variant B: fresh char via the real login API.
+            # Unique letter-only name (server rejects digits/underscores),
+            # id resolved by UNIQUE name in DB (no log-line ID parsing).
+            # Usage: mkthrowaway <login> <pass>
+            login, password = sys.argv[2], sys.argv[3]
+            cid, hh = login_auth(login, password)
+            c = login_client(cid, hh)
+            c.connect()
+            try:
+                name = None
+                newid = 0
+                for _ in range(10):
+                    cand = qabot_name()
+                    c.send_event("createCharacter", {"characterName": cand, "characterClass": "warrior", "characterRace": "human", "characterGender": "male"})
+                    rsp = c.wait_for("createCharacter", duration=10.0)
+                    if rsp is None:
+                        continue
+                    h = rsp.get("header", {})
+                    if h.get("status") == "success":
+                        name = cand
+                        b = rsp.get("body", {}) or {}
+                        newid = b.get("characterId") or (b.get("character") or {}).get("characterId") or 0
+                        break
+                    # name taken -> retry with a fresh random suffix
+                    continue
+                if not name:
+                    print("MKCHAR FAIL no-name")
+                else:
+                    # Ground truth by UNIQUE name (never parse the log line).
+                    cur = db().cursor()
+                    cur.execute("SELECT id FROM characters WHERE name=%s AND deleted_at IS NULL", (name,))
+                    row = cur.fetchone()
+                    rid = int(row[0]) if row else int(newid or 0)
+                    print("MKCHAR id=%d name=%s" % (rid, name))
+            finally:
+                c.close()
+        elif op == "delthrowaway":
+            # Real deleteCharacter API (same path the UE bot uses), not raw DB.
+            # Usage: delthrowaway <login> <pass> <charId>
+            login, password, charid = sys.argv[2], sys.argv[3], int(sys.argv[4])
+            cid, hh = login_auth(login, password)
+            c = login_client(cid, hh)
+            c.connect()
+            try:
+                c.send_event("deleteCharacter", {"characterId": charid})
+                rsp = c.wait_for("deleteCharacter", duration=10.0)
+                st = (rsp.get("header", {}) if rsp else {}).get("status", "none")
+                print("DELCHAR id=%d status=%s" % (charid, st))
+            finally:
+                c.close()
+        elif op == "cleanup_qabot":
+            # Delete stale Qabot_* leftovers from crashed runs (real API).
+            # Usage: cleanup_qabot <login> <pass>
+            login, password = sys.argv[2], sys.argv[3]
+            cid, hh = login_auth(login, password)
+            c = login_client(cid, hh)
+            c.connect()
+            try:
+                c.send_event("getCharactersList", {})
+                rsp = c.wait_for("getCharactersList", duration=10.0)
+                chars = (rsp.get("body", {}) or {}).get("charactersList", []) if rsp else []
+                n = 0
+                for e in chars:
+                    nm = e.get("characterName", "")
+                    if isinstance(nm, str) and nm.startswith("Qabot "):
+                        cid2 = int(e.get("characterId", 0))
+                        c.send_event("deleteCharacter", {"characterId": cid2})
+                        r2 = c.wait_for("deleteCharacter", duration=10.0)
+                        n += 1
+                print("CLEANUP deleted=%d" % n)
+            finally:
+                c.close()
         else:
             print("UNKNOWN-OP", op)
     finally:
@@ -303,6 +420,26 @@ function Format-Result($Line) {
     return "NO-RESULT"
 }
 
+# Slice 2 (variant B): throwaway char lifecycle for one-shot content.
+# Creates via the real login API (letter-only Qabot XXXX), resolves the id
+# by UNIQUE name in DB (no log-line ID parsing), parks/plays/deletes.
+# Stale Qabot leftovers from crashed runs are cleaned first (same API).
+function New-ThrowawayChar([string]$Login, [string]$Pass) {
+    $null = Invoke-Helper -AdminArgs "cleanup_qabot $Login $Pass"
+    $mk = Invoke-Helper -AdminArgs "mkthrowaway $Login $Pass"
+    $t = (($mk -join "`n") -replace '\s+', ' ')
+    Write-Host "throwaway: $t"
+    $m = [regex]::Match(($mk -join "`n"), "MKCHAR id=(\d+) name=([A-Za-z ']+)")
+    if (-not $m.Success) { return $null }
+    return @{ Id = [int]$m.Groups[1].Value; Name = $m.Groups[2].Value.Trim() }
+}
+
+function Remove-ThrowawayChar([string]$Login, [string]$Pass, [int]$CharId) {
+    if ($CharId -le 0) { return }
+    $dr = Invoke-Helper -AdminArgs "delthrowaway $Login $Pass $CharId"
+    Write-Host "throwaway delete: $dr"
+}
+
 # One live client run: start -> world-ready gate -> ready actions ->
 # tombstone wait -> stop. Returns the formatted result.
 function Invoke-SingleRun([hashtable]$S, [string]$Login, [string]$Pass, [string]$LogName) {
@@ -325,10 +462,11 @@ function Invoke-SingleRun([hashtable]$S, [string]$Login, [string]$Pass, [string]
     $b = Start-Bot $S.Name $Login $Pass $(if ($a -eq 1) { $LogName } else { $LogName -replace '\.log$', '_retry2.log' }) $(if ($S.BotChar) { $S.BotChar } else { 0 })
     $wr = Wait-Log $b.Log "LIVEBOT world ready" 240
     if (-not $wr) { Stop-Bot $b.Proc 5; return "FAIL/no-world-ready" }
-    if ($a -eq 1 -and $S.Name -eq "live_quest_turnin") {
+    if ($a -eq 1 -and $S.Name -eq "live_quest_turnin" -and -not $S.BotChar) {
         # Server-side reset (memory + DB). Char is online by now, which
         # the admin gate requires (CharacterManager must know the char).
-        Invoke-Admin "questreset 614"
+        # Skipped for throwaway chars (fresh quest state, nothing to reset).
+        Invoke-Admin "questreset $($S.Char)"
     }
     # Spawn check: offline DB parking is best-effort (the server's session-
     # teardown save can land after our write and resurrect a stale spot —
@@ -363,6 +501,10 @@ function Invoke-SingleRun([hashtable]$S, [string]$Login, [string]$Pass, [string]
 foreach ($S in $Scenarios) {
     if ($Filters.Count -gt 0 -and -not ($Filters | Where-Object { $S.Name -like "*$_*" })) { continue }
     Write-Host "=== $($S.Name) ===" -ForegroundColor Cyan
+    # Slice 2 state (single-path throwaway); defined here so the shared
+    # revive/cleanup tail below sees it on DUAL paths too ($null-safe).
+    $ThrowawayId = 0
+    $OrigChar = $null
 
     $strays = @(Get-Process | Where-Object { $_.Path -like "*UnrealEditor*" })
     if ($strays.Count -gt 0) { Write-Host "stray clients running, aborting batch" -ForegroundColor Red; exit 1 }
@@ -418,8 +560,27 @@ foreach ($S in $Scenarios) {
         }
     } else {
         $log1 = "Batch_$($S.Name).log"
-        $o1 = Invoke-SingleRun $S $S.Login $S.Pass $log1
-        $o2 = ""
+        # Slice 2 variant B: quest + level run on a throwaway char (fresh
+        # quest state, no exp cap) instead of fixed 614. Create -> park ->
+        # run with -botchar=<id from DB> -> delete via real API.
+        $ThrowawayId = 0
+        $OrigChar = $S.Char
+        if ($S.Name -eq "live_quest_turnin" -or $S.Name -eq "live_level") {
+            $tw = New-ThrowawayChar $S.Login $S.Pass
+            if (-not $tw) {
+                $o1 = "FAIL/throwaway-create"; $o2 = ""
+            } else {
+                $ThrowawayId = $tw.Id
+                $S.Char = $ThrowawayId
+                $S.BotChar = $ThrowawayId
+                Write-Host "throwaway char $($tw.Name) id=$ThrowawayId for $($S.Name)"
+                $o1 = Invoke-SingleRun $S $S.Login $S.Pass $log1
+                $o2 = ""
+            }
+        } else {
+            $o1 = Invoke-SingleRun $S $S.Login $S.Pass $log1
+            $o2 = ""
+        }
     }
     # Revive-and-retry: a logged-in corpse (stale death from a previous run)
     # fails instantly with player-died. Run the death scenario once as the
@@ -427,11 +588,17 @@ foreach ($S in $Scenarios) {
     if ($o1 -like "FAIL/player-died*" -and $S.Name -ne "live_death_respawn") {
         Write-Host "player-died at start, reviving via death scenario..." -ForegroundColor Yellow
         $rec = @{ Name = "live_death_respawn"; Char = $S.Char; Park = @(4700, -900, 300); Timeout = 420 }
+        if ($ThrowawayId -gt 0) { $rec.BotChar = $ThrowawayId }
         $ro = Invoke-SingleRun $rec $S.Login $S.Pass "Batch_recover_$($S.Name).log"
         Write-Host "recovery: $ro"
         if ($ro -like "PASS*") {
             $o1 = (Invoke-SingleRun $S $S.Login $S.Pass "Batch_$($S.Name)_retry.log") + " (retry)"
         }
+    }
+    if ($ThrowawayId -gt 0) {
+        Remove-ThrowawayChar $S.Login $S.Pass $ThrowawayId
+        $S.Char = $OrigChar
+        $S.Remove("BotChar")
     }
     $row = [pscustomobject]@{ Scenario = $S.Name; P1 = $o1; P2 = $o2 }
     $Results += $row

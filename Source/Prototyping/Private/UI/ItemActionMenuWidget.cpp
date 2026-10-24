@@ -1,5 +1,8 @@
 #include "UI/ItemActionMenuWidget.h"
 #include "UI/ItemActionRowWidget.h"
+
+// S5: action labels gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "ItemActionMenu"
 #include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "Components/VerticalBox.h"
@@ -101,16 +104,16 @@ void UItemActionMenuWidget::RebuildActions()
 	if (CurrentItem.itemId <= 0) return;
 
 	if (CurrentItem.isEquippable && !CurrentItem.is_equipped)
-		AddActionRow(FText::FromString(TEXT("Equip")), EItemContextAction::Equip);
+		AddActionRow(LOCTEXT("Equip", "Equip"), EItemContextAction::Equip);
 
 	if (CurrentItem.isEquippable && CurrentItem.is_equipped)
-		AddActionRow(FText::FromString(TEXT("Unequip")), EItemContextAction::Unequip);
+		AddActionRow(LOCTEXT("Unequip", "Unequip"), EItemContextAction::Unequip);
 
 	if (CurrentItem.isUsable)
-		AddActionRow(FText::FromString(TEXT("Use")), EItemContextAction::Use);
+		AddActionRow(LOCTEXT("Use", "Use"), EItemContextAction::Use);
 
 	if (!CurrentItem.isQuestItem)
-		AddActionRow(FText::FromString(TEXT("Drop")), EItemContextAction::Drop);
+		AddActionRow(LOCTEXT("Drop", "Drop"), EItemContextAction::Drop);
 }
 
 void UItemActionMenuWidget::AddActionRow(const FText& Label, EItemContextAction Action)
@@ -223,3 +226,5 @@ void UItemActionMenuWidget::ExecuteAction(EItemContextAction Action)
 
 	HideMenu();
 }
+
+#undef LOCTEXT_NAMESPACE

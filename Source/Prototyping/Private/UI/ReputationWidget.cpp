@@ -1,4 +1,7 @@
 #include "UI/ReputationWidget.h"
+
+// S5: widget chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "ReputationWidget"
 #include "Gameplay/Player/ReputationManager.h"
 #include "Components/ScrollBox.h"
 #include "Components/TextBlock.h"
@@ -131,7 +134,7 @@ void UReputationWidget::RefreshAll()
     if (Entries.Num() == 0)
     {
         UTextBlock* TB = NewObject<UTextBlock>(this);
-        TB->SetText(FText::FromString(TEXT("No reputation data yet.")));
+        TB->SetText(LOCTEXT("NoData", "No reputation data yet."));
         Reputation_ScrollBox->AddChild(TB);
     }
 }
@@ -234,3 +237,5 @@ void UReputationWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPo
     CurrentViewportPosition = Pos;
     SetPositionInViewport(Pos, false);
 }
+
+#undef LOCTEXT_NAMESPACE

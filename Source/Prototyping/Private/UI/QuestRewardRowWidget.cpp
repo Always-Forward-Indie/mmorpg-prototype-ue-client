@@ -1,4 +1,7 @@
 #include "UI/QuestRewardRowWidget.h"
+
+// S5: widget chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "QuestRewardRow"
 #include "Services/LocalizationSubsystem.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "MyGameInstance.h"
@@ -65,11 +68,11 @@ void UQuestRewardRowWidget::Populate(const FString& TypeOrSlug, int32 Amount, bo
         }
         else if (TypeOrSlug == TEXT("exp"))
         {
-            NameText = FText::FromString(TEXT("Experience"));
+            NameText = LOCTEXT("Experience", "Experience");
         }
         else if (TypeOrSlug == TEXT("gold"))
         {
-            NameText = FText::FromString(TEXT("Gold"));
+            NameText = LOCTEXT("Gold", "Gold");
         }
         Reward_Name_Text->SetText(NameText);
     }
@@ -158,3 +161,5 @@ void UQuestRewardRowWidget::AsyncLoad(const FSoftObjectPath& Path, FStreamableDe
         StreamableHandle = UAssetManager::Get().GetStreamableManager().RequestAsyncLoad(Path, Callback);
     }
 }
+
+#undef LOCTEXT_NAMESPACE

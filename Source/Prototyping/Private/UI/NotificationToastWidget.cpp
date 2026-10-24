@@ -5,6 +5,9 @@
 #include "Services/LocalizationSubsystem.h"
 #include "TimerManager.h"
 
+// S5: all display literals gathered via LOCTEXT (Localization Dashboard).
+#define LOCTEXT_NAMESPACE "NotificationToast"
+
 void UNotificationToastWidget::NativeConstruct()
 {
     Super::NativeConstruct();
@@ -132,33 +135,33 @@ void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& 
         const FString CatSlug = Notification.dataFields.FindRef(TEXT("categorySlug"));
         FText MobName = Loc ? Loc->GetMobDisplayName(MobSlug) : FText::FromString(MobSlug);
         FText CatName = Loc ? Loc->GetBestiaryCategoryName(CatSlug) : FText::FromString(CatSlug);
-        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Bestiary unlocked"));
-        OutBody  = FText::FromString(FString::Printf(TEXT("%s \u2014 %s"),
-            *MobName.ToString(), *CatName.ToString()));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : LOCTEXT("BestiaryUnlocked", "Bestiary unlocked");
+        OutBody  = FText::Format(LOCTEXT("BestiaryUnlockedBody", "{0} — {1}"),
+            MobName, CatName);
     }
     else if (Type == TEXT("zone_explored"))
     {
         const FString ZoneSlug = Notification.dataFields.FindRef(TEXT("zoneSlug"));
         const FString XpStr    = Notification.dataFields.FindRef(TEXT("xpGained"));
         FText ZoneName = Loc ? Loc->GetZoneDisplayName(ZoneSlug) : FText::FromString(ZoneSlug);
-        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Zone discovered"));
-        OutBody  = FText::FromString(FString::Printf(TEXT("%s (+%s XP)"),
-            *ZoneName.ToString(), *XpStr));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : LOCTEXT("ZoneDiscovered", "Zone discovered");
+        OutBody  = FText::Format(LOCTEXT("ZoneDiscoveredBody", "{0} (+{1} XP)"),
+            ZoneName, FText::FromString(XpStr));
     }
     else if (Type == TEXT("mastery_tier_up"))
     {
         const FString MasterySlug = Notification.dataFields.FindRef(TEXT("masterySlug"));
         const FString TierStr     = Notification.dataFields.FindRef(TEXT("tier"));
         FText MasteryName = Loc ? Loc->GetMasteryDisplayName(MasterySlug) : FText::FromString(MasterySlug);
-        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Mastery increased"));
-        OutBody  = FText::FromString(FString::Printf(TEXT("%s \u2014 tier %s"),
-            *MasteryName.ToString(), *TierStr));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : LOCTEXT("MasteryIncreased", "Mastery increased");
+        OutBody  = FText::Format(LOCTEXT("MasteryIncreasedBody", "{0} — tier {1}"),
+            MasteryName, FText::FromString(TierStr));
     }
     else if (Type == TEXT("champion_spawned"))
     {
         const FString MobSlug = Notification.dataFields.FindRef(TEXT("mobSlug"));
         FText MobName = Loc ? Loc->GetMobDisplayName(MobSlug) : FText::FromString(MobSlug);
-        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Champion appeared!"));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : LOCTEXT("ChampionAppeared", "Champion appeared!");
         OutBody  = MobName;
         const FString TrophySlug = Notification.dataFields.FindRef(TEXT("trophySlug"));
         const FString TrophyPrice = Notification.dataFields.FindRef(TEXT("trophyPrice"));
@@ -169,7 +172,7 @@ void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& 
             {
                 TrophyText += FString::Printf(TEXT(" (%s)"), *TrophyPrice);
             }
-            OutBody = FText::FromString(FString::Printf(TEXT("%s \u2014 Trophy: %s"), *MobName.ToString(), *TrophyText));
+            OutBody = FText::Format(LOCTEXT("ChampionTrophyBody", "{0} — Trophy: {1}"), MobName, FText::FromString(TrophyText));
         }
     }
     else if (Type == TEXT("champion_spawned_soon"))
@@ -177,7 +180,7 @@ void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& 
         FString MobSlugSoon = Notification.dataFields.FindRef(TEXT("mobSlug"));
         if (MobSlugSoon.IsEmpty()) MobSlugSoon = Notification.dataFields.FindRef(TEXT("slug"));
         FText MobNameSoon = Loc ? Loc->GetMobDisplayName(MobSlugSoon) : FText::FromString(MobSlugSoon);
-        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Champion approaching!"));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : LOCTEXT("ChampionApproaching", "Champion approaching!");
         OutBody  = MobNameSoon;
         const FString TrophySlugSoon = Notification.dataFields.FindRef(TEXT("trophySlug"));
         const FString TrophyPriceSoon = Notification.dataFields.FindRef(TEXT("trophyPrice"));
@@ -188,19 +191,19 @@ void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& 
             {
                 TrophyTextSoon += FString::Printf(TEXT(" (%s)"), *TrophyPriceSoon);
             }
-            OutBody = FText::FromString(FString::Printf(TEXT("%s \u2014 Trophy: %s"), *MobNameSoon.ToString(), *TrophyTextSoon));
+            OutBody = FText::Format(LOCTEXT("ChampionTrophyBodySoon", "{0} — Trophy: {1}"), MobNameSoon, FText::FromString(TrophyTextSoon));
         }
     }
     else if (Type == TEXT("champion_killed"))
     {
-        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Champion defeated!"));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : LOCTEXT("ChampionDefeated", "Champion defeated!");
         OutBody  = FText::GetEmpty();
     }
     else if (Type == TEXT("rare_mob_spawned"))
     {
         const FString RareSlug = Notification.dataFields.FindRef(TEXT("mobSlug"));
         FText RareName = Loc ? Loc->GetMobDisplayName(RareSlug) : FText::FromString(RareSlug);
-        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Rare mob appeared!"));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : LOCTEXT("RareMobAppeared", "Rare mob appeared!");
         OutBody  = RareName;
     }
     else if (Type == TEXT("overweight_started") || Type == TEXT("overweight_ended"))
@@ -208,9 +211,9 @@ void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& 
         const bool bStarted = (Type == TEXT("overweight_started"));
         const FString Carried = Notification.dataFields.FindRef(TEXT("currentWeight"));
         const FString Limit = Notification.dataFields.FindRef(TEXT("weightLimit"));
-        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(bStarted ? TEXT("Overweight!") : TEXT("Weight OK"));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : (bStarted ? LOCTEXT("Overweight", "Overweight!") : LOCTEXT("WeightOk", "Weight OK"));
         OutBody  = bStarted
-            ? FText::FromString(FString::Printf(TEXT("Carrying %s / %s - movement slowed"), *Carried, *Limit))
+            ? FText::Format(LOCTEXT("OverweightBody", "Carrying {0} / {1} - movement slowed"), FText::FromString(Carried), FText::FromString(Limit))
             : FText::GetEmpty();
     }
     // ====================================================================
@@ -221,7 +224,7 @@ void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& 
         const FString QuestKey = Notification.dataFields.FindRef(TEXT("clientQuestKey"));
         FText QuestName = Loc ? Loc->GetNotificationTextTemplate(QuestKey) : FText::GetEmpty();
         if (QuestName.IsEmpty()) QuestName = FText::FromString(QuestKey);
-        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("New Quest"));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : LOCTEXT("NewQuest", "New Quest");
         OutBody  = QuestName;
     }
     else if (Type == TEXT("quest_turned_in"))
@@ -229,7 +232,7 @@ void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& 
         const FString QuestKey = Notification.dataFields.FindRef(TEXT("clientQuestKey"));
         FText QuestName = Loc ? Loc->GetNotificationTextTemplate(QuestKey) : FText::GetEmpty();
         if (QuestName.IsEmpty()) QuestName = FText::FromString(QuestKey);
-        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Quest Complete"));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : LOCTEXT("QuestComplete", "Quest Complete");
         OutBody  = QuestName;
     }
     else if (Type == TEXT("quest_failed"))
@@ -237,7 +240,7 @@ void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& 
         const FString QuestKey = Notification.dataFields.FindRef(TEXT("clientQuestKey"));
         FText QuestName = Loc ? Loc->GetNotificationTextTemplate(QuestKey) : FText::GetEmpty();
         if (QuestName.IsEmpty()) QuestName = FText::FromString(QuestKey);
-        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Quest Failed"));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : LOCTEXT("QuestFailed", "Quest Failed");
         OutBody  = QuestName;
     }
     else if (Type == TEXT("item_received"))
@@ -250,27 +253,29 @@ void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& 
         if (Loc && !ItemSlug.IsEmpty())
             ItemName = Loc->GetItemDisplayName(ItemSlug);
         if (ItemName.IsEmpty())
-            ItemName = FText::FromString(ItemSlug.IsEmpty() ? FString::Printf(TEXT("Item #%s"), *ItemId) : ItemSlug);
-        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Item Received"));
-        OutBody  = FText::FromString(FString::Printf(TEXT("%s x%s"),
-            *ItemName.ToString(), *Quantity));
+            ItemName = ItemSlug.IsEmpty()
+                ? FText::Format(LOCTEXT("ItemNumbered", "Item #{0}"), FText::FromString(ItemId))
+                : FText::FromString(ItemSlug);
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : LOCTEXT("ItemReceived", "Item Received");
+        OutBody  = FText::Format(LOCTEXT("ItemReceivedBody", "{0} x{1}"),
+            ItemName, FText::FromString(Quantity));
     }
     else if (Type == TEXT("exp_received"))
     {
         const FString Amount = Notification.dataFields.FindRef(TEXT("amount"));
-        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Experience"));
-        OutBody  = FText::FromString(FString::Printf(TEXT("+%s XP"), *Amount));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : LOCTEXT("ExperienceTitle", "Experience");
+        OutBody  = FText::Format(LOCTEXT("ExperienceBody", "+{0} XP"), FText::FromString(Amount));
     }
     else if (Type == TEXT("gold_received"))
     {
         const FString Amount = Notification.dataFields.FindRef(TEXT("amount"));
-        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Gold"));
-        OutBody  = FText::FromString(FString::Printf(TEXT("+%s Gold"), *Amount));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : LOCTEXT("GoldTitle", "Gold");
+        OutBody  = FText::Format(LOCTEXT("GoldBody", "+{0} Gold"), FText::FromString(Amount));
     }
     else if (Type == TEXT("skill_learned"))
     {
         const FString SkillSlug = Notification.dataFields.FindRef(TEXT("skillSlug"));
-        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Skill Learned"));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : LOCTEXT("SkillLearnedTitle", "Skill Learned");
         // S3c: skill name via codebook table, slug as fallback.
         FText SkillName = FText::FromString(SkillSlug);
         if (Loc && !SkillSlug.IsEmpty())
@@ -285,18 +290,18 @@ void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& 
     {
         const FString Reason    = Notification.dataFields.FindRef(TEXT("reason"));
         const FString SkillSlug = Notification.dataFields.FindRef(TEXT("skillSlug"));
-        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Cannot Learn Skill"));
-        OutBody  = FText::FromString(FString::Printf(TEXT("%s (%s)"), *SkillSlug, *Reason));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : LOCTEXT("CannotLearnSkillTitle", "Cannot Learn Skill");
+        OutBody  = FText::Format(LOCTEXT("LearnSkillFailedBody", "{0} ({1})"), FText::FromString(SkillSlug), FText::FromString(Reason));
     }
     else if (Type == TEXT("reputationChanged"))
     {
         const FString Faction = Notification.dataFields.FindRef(TEXT("faction"));
         const FString Delta   = Notification.dataFields.FindRef(TEXT("delta"));
-        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Reputation"));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : LOCTEXT("ReputationTitle", "Reputation");
         // Show +/- prefix based on sign
         FString Prefix = TEXT("+");
         if (Delta.StartsWith(TEXT("-"))) Prefix = TEXT("");
-        OutBody  = FText::FromString(FString::Printf(TEXT("%s: %s%s"), *Faction, *Prefix, *Delta));
+        OutBody  = FText::Format(LOCTEXT("ReputationBody", "{0}: {1}{2}"), FText::FromString(Faction), FText::FromString(Prefix), FText::FromString(Delta));
     }
     else
     {
@@ -307,3 +312,5 @@ void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& 
         OutBody = FText::GetEmpty();
     }
 }
+
+#undef LOCTEXT_NAMESPACE

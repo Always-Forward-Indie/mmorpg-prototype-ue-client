@@ -1,4 +1,7 @@
 #include "UI/HarvestLootWidget.h"
+
+// S5: widget chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "HarvestLoot"
 #include "Components/ScrollBox.h"
 #include "Components/WrapBox.h"
 #include "Components/WrapBoxSlot.h"
@@ -77,7 +80,7 @@ void UHarvestLootWidget::InitializeWidget()
 
 	if (TextBlock_Title)
 	{
-		TextBlock_Title->SetText(FText::FromString(TEXT("Harvest Loot")));
+		TextBlock_Title->SetText(LOCTEXT("HarvestLoot", "Harvest Loot"));
 	}
 
 	UpdateItemCountDisplay();
@@ -85,4 +88,6 @@ void UHarvestLootWidget::InitializeWidget()
 	
 	UE_LOG(LogTemp, Warning, TEXT("HarvestLootWidget: InitializeWidget completed"));
 }
+
+#undef LOCTEXT_NAMESPACE
 

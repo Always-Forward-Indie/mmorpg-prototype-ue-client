@@ -12,6 +12,9 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Blueprint/UserWidget.h"
 
+// S5: title labels gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "PlayerStatsWidget"
+
 void UPlayerStatsWidget::HandleTitlesUpdated(const FPlayerTitlesState& /*State*/)
 {
     if (GetVisibility() == ESlateVisibility::Visible)
@@ -45,7 +48,7 @@ void UPlayerStatsWidget::RefreshEquippedTitle()
         const FPlayerTitlesState& State = TitleManager->GetCachedState();
         if (State.equippedTitleSlug.IsEmpty())
         {
-            EquippedTitle_Text->SetText(FText::FromString(TEXT("Title: (none)")));
+            EquippedTitle_Text->SetText(LOCTEXT("TitleNone", "Title: (none)"));
         }
         else
         {
@@ -65,12 +68,12 @@ void UPlayerStatsWidget::RefreshEquippedTitle()
             if (TitleDisplayName.IsEmpty())
                 TitleDisplayName = FText::FromString(State.equippedTitleSlug);
             EquippedTitle_Text->SetText(FText::Format(
-                FText::FromString(TEXT("Title: {0}")), TitleDisplayName));
+                LOCTEXT("TitleValue", "Title: {0}"), TitleDisplayName));
         }
     }
     else
     {
-        EquippedTitle_Text->SetText(FText::FromString(TEXT("Title: (none)")));
+        EquippedTitle_Text->SetText(LOCTEXT("TitleNone", "Title: (none)"));
     }
 }
 
@@ -177,4 +180,6 @@ void UPlayerStatsWidget::UpdateCountdownTimer()
 // ---------------------------------------------------------------------------
 // Drag support (same pattern as VendorShopWidget)
 // ---------------------------------------------------------------------------
+
+#undef LOCTEXT_NAMESPACE
 

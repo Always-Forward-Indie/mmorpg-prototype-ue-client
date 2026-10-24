@@ -6,6 +6,9 @@
 #include "Engine/AssetManager.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 
+// S5: shop chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "VendorTooltip"
+
 void UVendorTooltipWidget::SetDataFromShopItem(const FVendorShopItemData& Item)
 {
     ApplyCommonFields(TEXT(""), Item.itemTypeSlug, TEXT(""), Item.raritySlug,
@@ -26,25 +29,25 @@ void UVendorTooltipWidget::SetDataFromShopItem(const FVendorShopItemData& Item)
                       Item.killCount);
 
     // Price: buy price
-    if (PriceLabelText) { PriceLabelText->SetText(FText::FromString(TEXT("Buy:"))); PriceLabelText->SetVisibility(ESlateVisibility::Visible); }
-    if (PriceText)      { PriceText->SetText(FText::FromString(FString::Printf(TEXT("%d g"), Item.priceBuy))); PriceText->SetVisibility(ESlateVisibility::Visible); }
+    if (PriceLabelText) { PriceLabelText->SetText(LOCTEXT("Buy", "Buy:")); PriceLabelText->SetVisibility(ESlateVisibility::Visible); }
+    if (PriceText)      { PriceText->SetText(FText::Format(LOCTEXT("PriceGold", "{0} g"), FText::AsNumber(Item.priceBuy))); PriceText->SetVisibility(ESlateVisibility::Visible); }
 
     // Stock
     if (StockText)
     {
         if (Item.stockCurrent == -1)
         {
-            StockText->SetText(FText::FromString(TEXT("In stock: \u221E")));
+            StockText->SetText(LOCTEXT("InStockInfinite", "In stock: \u221E"));
             StockText->SetColorAndOpacity(FLinearColor(0.6f, 0.9f, 0.6f));
         }
         else if (Item.stockCurrent == 0)
         {
-            StockText->SetText(FText::FromString(TEXT("Out of stock")));
+            StockText->SetText(LOCTEXT("OutOfStock", "Out of stock"));
             StockText->SetColorAndOpacity(FLinearColor::Red);
         }
         else
         {
-            StockText->SetText(FText::FromString(FString::Printf(TEXT("In stock: %d"), Item.stockCurrent)));
+            StockText->SetText(FText::Format(LOCTEXT("InStockValue", "In stock: {0}"), FText::AsNumber(Item.stockCurrent)));
             StockText->SetColorAndOpacity(FLinearColor(0.6f, 0.9f, 0.6f));
         }
         StockText->SetVisibility(ESlateVisibility::Visible);
@@ -73,13 +76,13 @@ void UVendorTooltipWidget::SetDataFromInventoryItem(const FInventoryItemStruct& 
                       Item.killCount);
 
     // Price: sell price
-    if (PriceLabelText) { PriceLabelText->SetText(FText::FromString(TEXT("Sell:"))); PriceLabelText->SetVisibility(ESlateVisibility::Visible); }
-    if (PriceText)      { PriceText->SetText(FText::FromString(FString::Printf(TEXT("%d g"), Item.priceSell))); PriceText->SetVisibility(ESlateVisibility::Visible); }
+    if (PriceLabelText) { PriceLabelText->SetText(LOCTEXT("Sell", "Sell:")); PriceLabelText->SetVisibility(ESlateVisibility::Visible); }
+    if (PriceText)      { PriceText->SetText(FText::Format(LOCTEXT("PriceGold", "{0} g"), FText::AsNumber(Item.priceSell))); PriceText->SetVisibility(ESlateVisibility::Visible); }
 
     // Quantity owned
     if (QuantityText)
     {
-        QuantityText->SetText(FText::FromString(FString::Printf(TEXT("Owned: %d"), Item.quantity)));
+        QuantityText->SetText(FText::Format(LOCTEXT("OwnedValue", "Owned: {0}"), FText::AsNumber(Item.quantity)));
         QuantityText->SetVisibility(ESlateVisibility::Visible);
     }
 
@@ -114,13 +117,13 @@ void UVendorTooltipWidget::SetDataFromCartEntry(const FVendorCartEntry& Entry)
     if (StockText)       StockText->SetVisibility(ESlateVisibility::Collapsed);
 
     // Price per unit
-    if (PriceLabelText) { PriceLabelText->SetText(FText::FromString(TEXT("Price / pc:"))); PriceLabelText->SetVisibility(ESlateVisibility::Visible); }
-    if (PriceText)      { PriceText->SetText(FText::FromString(FString::Printf(TEXT("%d g  (total: %d g)"), Entry.pricePerUnit, Entry.pricePerUnit * Entry.quantity))); PriceText->SetVisibility(ESlateVisibility::Visible); }
+    if (PriceLabelText) { PriceLabelText->SetText(LOCTEXT("PricePerPc", "Price / pc:")); PriceLabelText->SetVisibility(ESlateVisibility::Visible); }
+    if (PriceText)      { PriceText->SetText(FText::Format(LOCTEXT("PriceTotal", "{0} g  (total: {1} g)"), FText::AsNumber(Entry.pricePerUnit), FText::AsNumber(Entry.pricePerUnit * Entry.quantity))); PriceText->SetVisibility(ESlateVisibility::Visible); }
 
     // Quantity in cart
     if (QuantityText)
     {
-        QuantityText->SetText(FText::FromString(FString::Printf(TEXT("In cart: %d / %d"), Entry.quantity, Entry.maxQuantity)));
+        QuantityText->SetText(FText::Format(LOCTEXT("InCartValue", "In cart: {0} / {1}"), FText::AsNumber(Entry.quantity), FText::AsNumber(Entry.maxQuantity)));
         QuantityText->SetVisibility(ESlateVisibility::Visible);
     }
 
@@ -173,4 +176,6 @@ void UVendorTooltipWidget::UpdateTooltipPosition()
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+#undef LOCTEXT_NAMESPACE
 

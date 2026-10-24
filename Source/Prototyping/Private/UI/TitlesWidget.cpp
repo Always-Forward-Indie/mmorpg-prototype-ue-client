@@ -1,5 +1,4 @@
 #include "UI/TitlesWidget.h"
-#include "UI/TitlesWidget.h"
 #include "UI/TitleRowWidget.h"
 #include "Gameplay/Player/TitleManager.h"
 #include "Gameplay/Player/TitleNetworkHandler.h"
@@ -10,6 +9,9 @@
 #include "Components/Button.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/CanvasPanelSlot.h"
+
+// S5: title labels gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "TitlesWidget"
 
 // ---------------------------------------------------------------------------
 // NativeConstruct / NativeDestruct
@@ -168,10 +170,10 @@ void UTitlesWidget::RefreshAll(const FPlayerTitlesState& State)
     if (EquippedTitle_Text)
     {
         if (State.equippedTitleSlug.IsEmpty())
-            EquippedTitle_Text->SetText(FText::FromString(TEXT("Equipped: (none)")));
+            EquippedTitle_Text->SetText(LOCTEXT("EquippedNone", "Equipped: (none)"));
         else
             EquippedTitle_Text->SetText(FText::Format(
-                FText::FromString(TEXT("Equipped: {0}")),
+                LOCTEXT("EquippedValue", "Equipped: {0}"),
                 ResolveName(State.equippedTitleSlug, State.equippedTitle.displayName)));
     }
 
@@ -269,3 +271,5 @@ void UTitlesWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPos)
     CurrentViewportPosition = Pos;
     SetPositionInViewport(Pos, false);
 }
+
+#undef LOCTEXT_NAMESPACE

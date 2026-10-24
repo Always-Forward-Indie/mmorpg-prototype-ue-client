@@ -7,6 +7,9 @@
 #include "UObject/SoftObjectPath.h"
 #include "Services/LocalizationSubsystem.h"
 
+// S5: tooltip pattern gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "EffectSlot"
+
 void UEffectSlotWidget::NativeConstruct()
 {
     Super::NativeConstruct();
@@ -272,6 +275,8 @@ void UEffectSlotWidget::BuildTooltip()
         }
 
         SetToolTipText(FText::Format(
-            FText::FromString(TEXT("{0}\n{1}")), Title, FText::FromString(DescStr)));
+            LOCTEXT("TitleBody", "{0}\n{1}"), Title, FText::FromString(DescStr)));
     }
 }
+
+#undef LOCTEXT_NAMESPACE

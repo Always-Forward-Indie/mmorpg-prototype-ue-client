@@ -1,4 +1,7 @@
 #include "UI/HarvestProgressWidget.h"
+
+// S5: widget chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "HarvestProgress"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Animation/WidgetAnimation.h"
@@ -67,12 +70,12 @@ void UHarvestProgressWidget::InitializeWidget()
 	// Set default text
 	if (TextBlock_HarvestTitle)
 	{
-		TextBlock_HarvestTitle->SetText(FText::FromString(TEXT("Harvesting...")));
+		TextBlock_HarvestTitle->SetText(LOCTEXT("Harvesting", "Harvesting..."));
 	}
 
 	if (TextBlock_CancelHint)
 	{
-		TextBlock_CancelHint->SetText(FText::FromString(TEXT("Press ESC to cancel")));
+		TextBlock_CancelHint->SetText(LOCTEXT("CancelHint", "Press ESC to cancel"));
 	}
 
 	// Initialize progress bar
@@ -271,3 +274,5 @@ void UHarvestProgressWidget::NativeDestruct()
 	UnbindFromHarvestManager();
 	Super::NativeDestruct();
 }
+
+#undef LOCTEXT_NAMESPACE

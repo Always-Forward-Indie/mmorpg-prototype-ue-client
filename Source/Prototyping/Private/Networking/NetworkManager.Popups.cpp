@@ -13,6 +13,9 @@
 #include "Prototyping.h"
 #include "CrashDiagnostics.h"
 
+// S5: connection-issue popups gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "NetworkPopups"
+
 UTimeSyncService* UNetworkManager::GetTimeSyncService()
 {
     if (WorldContext)
@@ -41,10 +44,10 @@ void UNetworkManager::ShowChunkServerConnectionIssuePopup()
 	}
 	if (MsgBoxChunkServer)
 	{
-		FText TitleMessage = FText::FromString(TEXT("Error"));
-		FText ErrorMessage = FText::FromString(TEXT("Can not connect to Chunk Server. Retry?"));
-		FText YesText = FText::FromString(TEXT("Yes"));
-		FText NoText = FText::FromString(TEXT("No"));
+		FText TitleMessage = LOCTEXT("Error", "Error");
+		FText ErrorMessage = LOCTEXT("ChunkRetry", "Can not connect to Chunk Server. Retry?");
+		FText YesText = LOCTEXT("Yes", "Yes");
+		FText NoText = LOCTEXT("No", "No");
 		MsgBoxChunkServer->SetupMessageBox(TitleMessage, ErrorMessage, YesText, NoText);
 		// ������������� ���� �� �����
 		MsgBoxChunkServer->AddToViewport(100);
@@ -70,10 +73,10 @@ void UNetworkManager::ShowLoginServerConnectionIssuePopup()
 	if (MsgBoxLoginServer)
 	{
 
-		FText TitleMessage = FText::FromString(TEXT("Error"));
-		FText ErrorMessage = FText::FromString(TEXT("Can not connect to Login Server. Retry?"));
-		FText YesText = FText::FromString(TEXT("Yes"));
-		FText NoText = FText::FromString(TEXT("No"));
+		FText TitleMessage = LOCTEXT("Error", "Error");
+		FText ErrorMessage = LOCTEXT("LoginRetry", "Can not connect to Login Server. Retry?");
+		FText YesText = LOCTEXT("Yes", "Yes");
+		FText NoText = LOCTEXT("No", "No");
 		MsgBoxLoginServer->SetupMessageBox(TitleMessage, ErrorMessage, YesText, NoText);
 
 		// ������������� ���� �� �����
@@ -99,10 +102,10 @@ void UNetworkManager::ShowGameServerConnectionIssuePopup()
 	}
 	if (MsgBoxGameServer)
 	{
-		FText TitleMessage = FText::FromString(TEXT("Error"));
-		FText ErrorMessage = FText::FromString(TEXT("Can not connect to Game Server. Retry?"));
-		FText YesText = FText::FromString(TEXT("Yes"));
-		FText NoText = FText::FromString(TEXT("No"));
+		FText TitleMessage = LOCTEXT("Error", "Error");
+		FText ErrorMessage = LOCTEXT("GameRetry", "Can not connect to Game Server. Retry?");
+		FText YesText = LOCTEXT("Yes", "Yes");
+		FText NoText = LOCTEXT("No", "No");
 		MsgBoxGameServer->SetupMessageBox(TitleMessage, ErrorMessage, YesText, NoText);
 
 		// ������������� ���� �� �����
@@ -113,5 +116,7 @@ void UNetworkManager::ShowGameServerConnectionIssuePopup()
 		MsgBoxGameServer->OnRightButtonClicked.AddDynamic(this, &UNetworkManager::OnConnectCancel);
 	}
 }
+
+#undef LOCTEXT_NAMESPACE
 
 

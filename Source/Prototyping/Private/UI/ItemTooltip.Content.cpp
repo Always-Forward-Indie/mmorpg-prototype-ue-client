@@ -14,6 +14,9 @@
 #include "MyGameInstance.h"
 #include "Services/LocalizationSubsystem.h"
 
+// S5: tooltip fallback chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "ItemTooltip"
+
 void UItemTooltipWidget::UpdateTooltipContent()
 {
 	UpdateItemHeader();
@@ -43,7 +46,7 @@ void UItemTooltipWidget::UpdateItemHeader()
 		// Prefer raritySlug (from protocol); fall back to rarity display name.
 		// S3a: localized via codebook table, humanised slug when content lands later.
 		const FString& RarityKey = CurrentItem.raritySlug.IsEmpty() ? CurrentItem.rarity : CurrentItem.raritySlug;
-		FText RarityText = FText::FromString(TEXT("Common"));
+		FText RarityText = LOCTEXT("CommonFallback", "Common");
 		if (!RarityKey.IsEmpty())
 		{
 			if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
@@ -143,7 +146,7 @@ void UItemTooltipWidget::UpdateItemTypeAndLevel()
 		// Prefer itemTypeSlug (comes from protocol item.itemTypeSlug); fall back to legacy type.
 		// S3a: localized via codebook table.
 		FString TypeKey = CurrentItem.itemTypeSlug.IsEmpty() ? CurrentItem.type : CurrentItem.itemTypeSlug;
-		FText TypeText = FText::FromString(TEXT("Unknown"));
+		FText TypeText = LOCTEXT("UnknownFallback", "Unknown");
 		if (!TypeKey.IsEmpty())
 		{
 			if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
@@ -158,7 +161,7 @@ void UItemTooltipWidget::UpdateItemTypeAndLevel()
 		const int32 LvlReq = CurrentItem.levelRequirement > 0 ? CurrentItem.levelRequirement : CurrentItem.level_requirement;
 		if (LvlReq >= 1)
 		{
-			ItemLevelText->SetText(FText::FromString(FString::Printf(TEXT("Required Level: %d"), LvlReq)));
+			ItemLevelText->SetText(FText::Format(LOCTEXT("RequiredLevel", "Required Level: {0}"), FText::AsNumber(LvlReq)));
 			ItemLevelText->SetVisibility(ESlateVisibility::Visible);
 		}
 		else
@@ -378,4 +381,6 @@ void UItemTooltipWidget::ClearKillCountWidget()
 		KillCountRowWidget = nullptr;
 	}
 }
+
+#undef LOCTEXT_NAMESPACE
 

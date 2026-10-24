@@ -4,6 +4,9 @@
 #include "Services/LocalizationSubsystem.h"
 #include "TimerManager.h"
 
+// S5: screen-center chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "ScreenCenter"
+
 void UNotificationScreenCenterWidget::NativeConstruct()
 {
     Super::NativeConstruct();
@@ -31,14 +34,14 @@ void UNotificationScreenCenterWidget::ShowScreenCenter(const FWorldNotificationS
 
         Title = (bHasLocale && !Def.title.IsEmpty())
             ? Def.title
-            : FText::FromString(TEXT("LEVEL UP!"));
+            : LOCTEXT("LevelUp", "LEVEL UP!");
 
         FText SubTemplate = (bHasLocale && !Def.textTemplate.IsEmpty())
             ? Def.textTemplate
             : FText::GetEmpty();
         Sub = SubTemplate.IsEmpty()
-            ? FText::FromString(FString::Printf(TEXT("You are now level %s"), *NewLevel))
-            : FText::FromString(FString::Printf(TEXT("%s %s"), *SubTemplate.ToString(), *NewLevel));
+            ? FText::Format(LOCTEXT("LevelUpBody", "You are now level {0}"), FText::FromString(NewLevel))
+            : FText::Format(LOCTEXT("LevelUpBodyTpl", "{0} {1}"), SubTemplate, FText::FromString(NewLevel));
     }
     else
     {
@@ -60,7 +63,7 @@ if (!MobName.IsEmpty()) MobSlug = MobName.ToString();
 }
 if (Type == TEXT("rare_mob_spawned"))
 {
-Title = FText::FromString(TEXT("RARE MOB!"));
+Title = LOCTEXT("RareMob", "RARE MOB!");
 Sub = FText::FromString(MobSlug);
 }
 else
@@ -68,7 +71,9 @@ else
 const FString TrophySlug = Notification.dataFields.FindRef(TEXT("trophySlug"));
 FString TrophyLine = MobSlug;
 if (!TrophySlug.IsEmpty()) TrophyLine += FString::Printf(TEXT(" - Trophy: %s"), *TrophySlug);
-Title = FText::FromString(Type == TEXT("champion_spawned_soon") ? TEXT("CHAMPION APPROACHING!") : TEXT("CHAMPION!"));
+Title = (Type == TEXT("champion_spawned_soon"))
+    ? LOCTEXT("ChampionApproaching", "CHAMPION APPROACHING!")
+    : LOCTEXT("Champion", "CHAMPION!");
 Sub = FText::FromString(TrophyLine);
 }
 Loc = nullptr;
@@ -93,3 +98,5 @@ Sub   = FText::GetEmpty();
             [this]() { PlayHideAnimation(); }), DisplayDuration, false);
     }
 }
+
+#undef LOCTEXT_NAMESPACE

@@ -12,6 +12,13 @@
 #include "Engine/StreamableManager.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 
+// S5: tooltip chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "SkillTooltip"
+
+// File-local enum display names (defined below, used in header/stats).
+static FText GetSkillSchoolDisplayName(ESkillSchool School);
+static FText GetEffectTypeDisplayName(ESkillEffectType EffectType);
+
 USkillTooltipWidget::USkillTooltipWidget(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
 {
@@ -142,10 +149,7 @@ void USkillTooltipWidget::UpdateSkillHeader()
     // Update skill school
     if (SkillSchoolText)
     {
-        FString SchoolName = UEnum::GetValueAsString(CurrentSkillData.definitionData.school);
-        // Remove the enum prefix (e.g., "ESkillSchool::Fire" -> "Fire")
-        SchoolName = SchoolName.Replace(TEXT("ESkillSchool::"), TEXT(""));
-        SkillSchoolText->SetText(FText::FromString(SchoolName));
+        SkillSchoolText->SetText(GetSkillSchoolDisplayName(CurrentSkillData.definitionData.school));
         
         FLinearColor SchoolColor = GetSchoolColor(CurrentSkillData.definitionData.school);
         SkillSchoolText->SetColorAndOpacity(SchoolColor);
@@ -198,24 +202,51 @@ void USkillTooltipWidget::UpdateSkillStats()
     {
         if (CurrentSkillData.networkData.maxRange > 0.0f)
         {
-            FString RangeString = FString::Printf(TEXT("Range: %.1f"), CurrentSkillData.networkData.maxRange);
-            RangeText->SetText(FText::FromString(RangeString));
+            RangeText->SetText(FText::Format(LOCTEXT("RangeValue", "Range: {0}"),
+                FText::AsNumber(CurrentSkillData.networkData.maxRange)));
         }
         else
         {
-            RangeText->SetText(FText::FromString(TEXT("Melee")));
+            RangeText->SetText(LOCTEXT("Melee", "Melee"));
         }
     }
 
     // Update effect type
     if (EffectTypeText)
     {
-        FString EffectTypeName = UEnum::GetValueAsString(CurrentSkillData.definitionData.effectType);
-        EffectTypeName = EffectTypeName.Replace(TEXT("ESkillEffectType::"), TEXT(""));
-        EffectTypeText->SetText(FText::FromString(EffectTypeName));
+        EffectTypeText->SetText(GetEffectTypeDisplayName(CurrentSkillData.definitionData.effectType));
         
         FLinearColor EffectTypeColor = GetEffectTypeColor(CurrentSkillData.definitionData.effectType);
         EffectTypeText->SetColorAndOpacity(EffectTypeColor);
+    }
+}
+
+// S5: enum display names gathered via LOCTEXT (file-local: tooltip-only).
+static FText GetSkillSchoolDisplayName(ESkillSchool School)
+{
+    switch (School)
+    {
+    case ESkillSchool::Physical: return LOCTEXT("SchoolPhysical", "Physical");
+    case ESkillSchool::Fire:     return LOCTEXT("SchoolFire", "Fire");
+    case ESkillSchool::Ice:      return LOCTEXT("SchoolIce", "Ice");
+    case ESkillSchool::Nature:   return LOCTEXT("SchoolNature", "Nature");
+    case ESkillSchool::Arcane:   return LOCTEXT("SchoolArcane", "Arcane");
+    case ESkillSchool::Shadow:   return LOCTEXT("SchoolShadow", "Shadow");
+    case ESkillSchool::Holy:     return LOCTEXT("SchoolHoly", "Holy");
+    default:                     return LOCTEXT("SchoolNone", "None");
+    }
+}
+
+static FText GetEffectTypeDisplayName(ESkillEffectType EffectType)
+{
+    switch (EffectType)
+    {
+    case ESkillEffectType::Damage:  return LOCTEXT("EffectDamage", "Damage");
+    case ESkillEffectType::Healing: return LOCTEXT("EffectHealing", "Healing");
+    case ESkillEffectType::Buff:    return LOCTEXT("EffectBuff", "Buff");
+    case ESkillEffectType::Debuff:  return LOCTEXT("EffectDebuff", "Debuff");
+    case ESkillEffectType::Resource: return LOCTEXT("EffectResource", "Resource");
+    default:                        return LOCTEXT("EffectNone", "None");
     }
 }
 
@@ -223,8 +254,8 @@ void USkillTooltipWidget::UpdateSkillLevelInfo()
 {
     if (SkillLevelText)
     {
-        FString LevelText = FString::Printf(TEXT("lvl %d"), CurrentSkillData.networkData.skillLevel);
-        SkillLevelText->SetText(FText::FromString(LevelText));
+        SkillLevelText->SetText(FText::Format(LOCTEXT("LevelValue", "lvl {0}"),
+            FText::AsNumber(CurrentSkillData.networkData.skillLevel)));
     }
 }
 
@@ -252,17 +283,17 @@ FText USkillTooltipWidget::FormatCooldownText(float CooldownMs) const
     
     if (CooldownSeconds < 1.0f)
     {
-        return FText::FromString(TEXT("Instant"));
+        return LOCTEXT("Instant", "Instant");
     }
     else if (CooldownSeconds < 60.0f)
     {
-        return FText::FromString(FString::Printf(TEXT("Cooldown: %.1fs"), CooldownSeconds));
+        return FText::Format(LOCTEXT("CooldownSecs", "Cooldown: {0}s"), FText::AsNumber(CooldownSeconds));
     }
     else
     {
         int32 Minutes = static_cast<int32>(CooldownSeconds / 60.0f);
         int32 Seconds = static_cast<int32>(CooldownSeconds) % 60;
-        return FText::FromString(FString::Printf(TEXT("Cooldown: %dm %ds"), Minutes, Seconds));
+        return FText::Format(LOCTEXT("CooldownMinSecs", "Cooldown: {0}m {1}s"), Minutes, Seconds);
     }
 }
 
@@ -270,11 +301,11 @@ FText USkillTooltipWidget::FormatManaCostText(int32 ManaCost) const
 {
     if (ManaCost > 0)
     {
-        return FText::FromString(FString::Printf(TEXT("Mana Cost: %d"), ManaCost));
+        return FText::Format(LOCTEXT("ManaCostValue", "Mana Cost: {0}"), FText::AsNumber(ManaCost));
     }
     else
     {
-        return FText::FromString(TEXT("No Mana Cost"));
+        return LOCTEXT("NoManaCost", "No Mana Cost");
     }
 }
 
@@ -282,11 +313,12 @@ FText USkillTooltipWidget::FormatDamageText(int32 Flat, float Coeff) const
 {
     if (Flat > 0 && Coeff > 0)
     {
-        return FText::FromString(FString::Printf(TEXT("Damage: Flat: %d * Coeff: %.2f + Stats Value"), Flat, static_cast<double>(Coeff)));
+        return FText::Format(LOCTEXT("DamageFormula", "Damage: Flat: {0} * Coeff: {1} + Stats Value"),
+            FText::AsNumber(Flat), FText::AsNumber(Coeff));
     }
     else
     {
-        return FText::FromString(TEXT("No Damage"));
+        return LOCTEXT("NoDamage", "No Damage");
     }
 }
 
@@ -356,3 +388,5 @@ void USkillTooltipWidget::AsyncLoad(const FSoftObjectPath& Path, FSimpleDelegate
         StreamableHandle = StreamableManager.RequestAsyncLoad(Path, Callback);
     }
 }
+
+#undef LOCTEXT_NAMESPACE

@@ -1,5 +1,4 @@
 #include "UI/UIManager.h"
-#include "UI/UIManager.h"
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
 #include "UI/HarvestLootWidget.h"
@@ -78,6 +77,9 @@
 #include "Gameplay/WorldObjects/WorldObjectManager.h"
 #include "Gameplay/WorldObjects/WorldInteractiveObjectActor.h"
 #include "Services/LocalizationSubsystem.h"
+
+// S5: widget chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "UIManager"
 
 void UUIManager::InitializeWIOWidgets(UWorldObjectManager* InWorldObjectManager)
 {
@@ -169,7 +171,7 @@ void UUIManager::ShowWIOChannelBar(int32 ObjectId, float Duration)
 	if (!GI || !GI->GetWorldObjectManager()) return;
 
 	// Get object data for display name
-	FText ObjectName = FText::FromString(TEXT("Channeling..."));
+	FText ObjectName = LOCTEXT("Channeling", "Channeling...");
 	if (UWorldObjectManager* WOM = GI->GetWorldObjectManager())
 	{
 		// Use localization for the display name if available
@@ -244,3 +246,5 @@ void UUIManager::UpdateIdleCountdown(int32 SecondsRemaining)
 		IdleWarningWidget->UpdateCountdown(SecondsRemaining);
 	}
 }
+
+#undef LOCTEXT_NAMESPACE

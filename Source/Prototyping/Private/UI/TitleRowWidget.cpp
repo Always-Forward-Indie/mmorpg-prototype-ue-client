@@ -2,6 +2,9 @@
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
 
+// S5: row chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "TitleRow"
+
 void UTitleRowWidget::NativeConstruct()
 {
     Super::NativeConstruct();
@@ -20,7 +23,7 @@ void UTitleRowWidget::Populate(const FTitleEntry& Entry, bool bIsEquipped, const
         if (bIsEquipped)
         {
             Row_Name_Text->SetText(FText::Format(
-                FText::FromString(TEXT("[E] {0}")), ResolvedName));
+                LOCTEXT("EquippedName", "[E] {0}"), ResolvedName));
         }
         else
         {
@@ -35,8 +38,7 @@ void UTitleRowWidget::Populate(const FTitleEntry& Entry, bool bIsEquipped, const
         Row_Equip_Button->SetIsEnabled(true);
 
     if (Row_Equip_Button_Text)
-        Row_Equip_Button_Text->SetText(FText::FromString(
-            bIsEquipped ? TEXT("Unequip") : TEXT("Equip")));
+        Row_Equip_Button_Text->SetText(bIsEquipped ? LOCTEXT("Unequip", "Unequip") : LOCTEXT("Equip", "Equip"));
 }
 
 void UTitleRowWidget::HandleEquipClicked()
@@ -62,3 +64,5 @@ FString UTitleRowWidget::BuildBonusSummary(const TArray<FTitleBonusEntry>& Bonus
     }
     return FString::Join(Parts, TEXT(", "));
 }
+
+#undef LOCTEXT_NAMESPACE

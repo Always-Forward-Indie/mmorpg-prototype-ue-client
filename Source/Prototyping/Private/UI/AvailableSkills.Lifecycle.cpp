@@ -1,5 +1,4 @@
 ﻿#include "UI/AvailableSkillsWidget.h"
-#include "UI/AvailableSkillsWidget.h"
 #include "MyGameInstance.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
@@ -20,6 +19,9 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Input/Events.h"
+
+// S5: widget chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "AvailableSkills"
 
 void UAvailableSkillsWidget::NativeConstruct()
 {
@@ -82,7 +84,7 @@ void UAvailableSkillsWidget::NativeConstruct()
     // Initialize widget but hide it
     if (TextBlock_Title)
     {
-        TextBlock_Title->SetText(FText::FromString(TEXT("Skills")));
+        TextBlock_Title->SetText(LOCTEXT("Skills", "Skills"));
     }
 
     UpdateSkillCountDisplay();
@@ -125,4 +127,6 @@ void UAvailableSkillsWidget::NativeDestruct()
     UnsubscribeFromSkillManagerEvents();
     Super::NativeDestruct();
 }
+
+#undef LOCTEXT_NAMESPACE
 

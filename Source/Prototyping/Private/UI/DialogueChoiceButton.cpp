@@ -2,6 +2,9 @@
 #include "Services/LocalizationSubsystem.h"
 #include "Engine/GameInstance.h"
 
+// S5: quest-step fallback patterns gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "DialogueChoiceButton"
+
 void UDialogueChoiceButton::NativeConstruct()
 {
     Super::NativeConstruct();
@@ -118,7 +121,7 @@ FText UDialogueChoiceButton::BuildStepText(const FQuestPreviewData& Preview, boo
 {
     if (bIsTurnIn)
     {
-        return FText::FromString(TEXT("Quest ready to turn in"));
+        return LOCTEXT("QuestReadyTurnIn", "Quest ready to turn in");
     }
 
     if (!Preview.bHasFirstStep)
@@ -150,7 +153,7 @@ FText UDialogueChoiceButton::BuildStepText(const FQuestPreviewData& Preview, boo
         {
             TargetName = FText::FromString(Step.targetSlug);
         }
-        return FText::Format(FText::FromString(TEXT("Kill: {0} × {1}")), TargetName, FText::AsNumber(Step.count));
+        return FText::Format(LOCTEXT("KillStep", "Kill: {0} × {1}"), TargetName, FText::AsNumber(Step.count));
     }
     else if (Step.stepType == TEXT("collect"))
     {
@@ -163,7 +166,7 @@ FText UDialogueChoiceButton::BuildStepText(const FQuestPreviewData& Preview, boo
         {
             TargetName = FText::FromString(Step.targetSlug);
         }
-        return FText::Format(FText::FromString(TEXT("Collect: {0} × {1}")), TargetName, FText::AsNumber(Step.count));
+        return FText::Format(LOCTEXT("CollectStep", "Collect: {0} × {1}"), TargetName, FText::AsNumber(Step.count));
     }
     else if (Step.stepType == TEXT("talk"))
     {
@@ -176,7 +179,7 @@ FText UDialogueChoiceButton::BuildStepText(const FQuestPreviewData& Preview, boo
         {
             TargetName = FText::FromString(Step.targetSlug);
         }
-        return FText::Format(FText::FromString(TEXT("Talk to: {0}")), TargetName);
+        return FText::Format(LOCTEXT("TalkStep", "Talk to: {0}"), TargetName);
     }
     else if (Step.stepType == TEXT("reach"))
     {
@@ -189,7 +192,7 @@ FText UDialogueChoiceButton::BuildStepText(const FQuestPreviewData& Preview, boo
         {
             ZoneName = FText::FromString(Step.zoneSlug);
         }
-        return FText::Format(FText::FromString(TEXT("Go to: {0}")), ZoneName);
+        return FText::Format(LOCTEXT("GoToStep", "Go to: {0}"), ZoneName);
     }
 
     return FText::FromString(Step.clientStepKey);
@@ -334,3 +337,5 @@ void UDialogueChoiceButton::HandleClicked()
 {
     OnChoiceButtonClicked.Broadcast(StoredEdgeId);
 }
+
+#undef LOCTEXT_NAMESPACE

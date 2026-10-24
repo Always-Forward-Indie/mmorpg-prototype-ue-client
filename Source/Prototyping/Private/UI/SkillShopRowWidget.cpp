@@ -4,6 +4,9 @@
 #include "Components/Button.h"
 #include "Components/Image.h"
 
+// S5: row chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "SkillShopRow"
+
 void USkillShopRowWidget::NativeConstruct()
 {
     Super::NativeConstruct();
@@ -59,7 +62,7 @@ void USkillShopRowWidget::PopulateFromSkillData(const FSkillShopSkillData& Skill
     {
         if (Skill.requiresBook)
         {
-            Skill_Book_Text->SetText(FText::FromString(TEXT("Book Required")));
+            Skill_Book_Text->SetText(LOCTEXT("BookRequired", "Book Required"));
             Skill_Book_Text->SetColorAndOpacity(
                 Skill.bookMet
                     ? FSlateColor(FLinearColor::White)
@@ -77,8 +80,8 @@ void USkillShopRowWidget::PopulateFromSkillData(const FSkillShopSkillData& Skill
     {
         if (!Skill.prerequisiteSkillSlug.IsEmpty())
         {
-            Prereq_Text->SetText(FText::FromString(
-                FString::Printf(TEXT("Requires: %s"), *Skill.prerequisiteSkillSlug)));
+            Prereq_Text->SetText(FText::Format(LOCTEXT("RequiresValue", "Requires: {0}"),
+                FText::FromString(Skill.prerequisiteSkillSlug)));
             Prereq_Text->SetColorAndOpacity(
                 Skill.prereqMet
                     ? FSlateColor(FLinearColor::White)
@@ -109,13 +112,13 @@ void USkillShopRowWidget::PopulateFromSkillData(const FSkillShopSkillData& Skill
     {
         if (Skill.isLearned)
         {
-            Status_Text->SetText(FText::FromString(TEXT("KNOWN")));
+            Status_Text->SetText(LOCTEXT("Known", "KNOWN"));
             Status_Text->SetColorAndOpacity(FSlateColor(FLinearColor(0.5f, 0.5f, 0.5f)));
             Status_Text->SetVisibility(ESlateVisibility::Visible);
         }
         else if (!Skill.levelMet || !Skill.prereqMet)
         {
-            Status_Text->SetText(FText::FromString(TEXT("LOCKED")));
+            Status_Text->SetText(LOCTEXT("Locked", "LOCKED"));
             Status_Text->SetColorAndOpacity(FSlateColor(FLinearColor(0.8f, 0.2f, 0.2f)));
             Status_Text->SetVisibility(ESlateVisibility::Visible);
         }
@@ -140,3 +143,5 @@ void USkillShopRowWidget::PopulateFromSkillData(const FSkillShopSkillData& Skill
     const bool bDimRow = Skill.isLearned || !Skill.levelMet || !Skill.prereqMet;
     SetColorAndOpacity(bDimRow ? FLinearColor(0.55f, 0.55f, 0.55f, 1.0f) : FLinearColor::White);
 }
+
+#undef LOCTEXT_NAMESPACE

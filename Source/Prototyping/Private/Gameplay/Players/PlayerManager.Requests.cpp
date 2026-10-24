@@ -5,6 +5,7 @@
 #include "Gameplay/Players/PlayerManager.h"
 #include "Gameplay/Combat/CombatSystemManager.h"
 #include "Gameplay/Combat/CombatNetworkHandler.h"
+#include "Gameplay/Items/ItemManager.h"
 #include "Gameplay/Player/ExperienceManager.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "MyGameInstance.h"
@@ -129,6 +130,16 @@ void UPlayerManager::SendJoinCharacterChunkRequest(const FClientDataStruct& Clie
 	// from GameInstance before invoking this function.
 	const int32 CharId = ClientData.characterData.characterId;
 	BodyData.Add("id", MakeShareable(new FJsonValueNumber(CharId)));
+
+	// S2.1: report our cached item stat catalog version (0 = unknown).
+	// The server pushes the full itemCatalog only on mismatch.
+	int32 CatalogVersion = 0;
+	if (gameInstance)
+	{
+		if (UItemManager* ItemMgr = gameInstance->GetItemManager())
+			CatalogVersion = ItemMgr->GetCatalogVersion();
+	}
+	BodyData.Add("itemCatalogVersion", MakeShareable(new FJsonValueNumber(CatalogVersion)));
 
 	// Use TimeSyncService for automatic clientSendMs with correct server type
 	FString JsonString = JSONParser::SerializeJsonWithTimeSync("joinGameCharacter", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::ChunkServer);

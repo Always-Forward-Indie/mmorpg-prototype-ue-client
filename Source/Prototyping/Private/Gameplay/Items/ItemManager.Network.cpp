@@ -226,5 +226,26 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 			}
 		}
 	}
+	else if (MessageData.eventType == "itemCatalog" && MessageData.status == "success")
+	{
+		// S2.1: versioned item stat templates. Entries reuse the inventory-record
+		// wrapper ({itemId, item:{...}}) so the shared parser applies as-is.
+		int32 Version = 0;
+		Body->TryGetNumberField(TEXT("version"), Version);
+		TArray<FInventoryItemStruct> Entries;
+		const TArray<TSharedPtr<FJsonValue>>* ItemsArray = nullptr;
+		if (Body.IsValid() && Body->TryGetArrayField(TEXT("items"), ItemsArray))
+		{
+			for (const TSharedPtr<FJsonValue>& ItemValue : *ItemsArray)
+			{
+				const TSharedPtr<FJsonObject>* ItemPtr = nullptr;
+				if (!ItemValue.IsValid() || !ItemValue->TryGetObject(ItemPtr) || !ItemPtr || !(*ItemPtr).IsValid()) continue;
+				FInventoryItemStruct Entry = JSONParser::DeserializeInventoryItem(*ItemPtr);
+				if (Entry.itemId > 0)
+					Entries.Add(Entry);
+			}
+		}
+		SetItemCatalog(Version, Entries);
+	}
 }
 

@@ -140,6 +140,35 @@ FItemVisualData UItemManager::GetItemVisualDataBySlug(const FString& ItemSlug)
 	return FItemVisualData();
 }
 
+void UItemManager::SetItemCatalog(int32 Version, const TArray<FInventoryItemStruct>& Items)
+{
+	// New version replaces the cache; same-version chunks accumulate
+	// (the server splits the catalog across 8KB-capped lines).
+	if (Version != ItemCatalogVersion)
+	{
+		ItemStatCatalog.Empty();
+		ItemCatalogVersion = Version;
+	}
+	for (const FInventoryItemStruct& Item : Items)
+	{
+		if (Item.itemId > 0)
+			ItemStatCatalog.Add(Item.itemId, Item);
+	}
+	UE_LOG(LogTemp, Log, TEXT("ItemManager: Stat catalog v%d now holds %d templates (+%d)"),
+		ItemCatalogVersion, ItemStatCatalog.Num(), Items.Num());
+}
+
+bool UItemManager::GetCatalogStats(int32 ItemId, FInventoryItemStruct& OutStats) const
+{
+	if (ItemId <= 0) return false;
+	if (const FInventoryItemStruct* Found = ItemStatCatalog.Find(ItemId))
+	{
+		OutStats = *Found;
+		return true;
+	}
+	return false;
+}
+
 // ---------------------------------------------------------------------------
 // BindPickupPointDelegate
 //   Lazily binds to the local player's PlayerAnimInstance::OnPickupPoint so

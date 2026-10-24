@@ -116,6 +116,21 @@ private:
 		UFUNCTION(BlueprintCallable, Category = "Item Manager")
 		FItemVisualData GetItemVisualDataBySlug(const FString& ItemSlug);
 
+		// Item stat catalog (S2.1): server-pushed templates by itemId.
+		// Lets drops/inventory deltas/vendor lists resolve stats without
+		// re-sending templates. Same-version chunks accumulate.
+		UFUNCTION(BlueprintCallable, Category = "Item Manager")
+		void SetItemCatalog(int32 Version, const TArray<FInventoryItemStruct>& Items);
+
+		// Resolve cached stats for an itemId. Returns false when the catalog
+		// hasn't arrived (or holds another version) — caller shows a placeholder.
+		UFUNCTION(BlueprintCallable, Category = "Item Manager")
+		bool GetCatalogStats(int32 ItemId, FInventoryItemStruct& OutStats) const;
+
+		// Version sent back in joinGameCharacter; 0 = unknown, server pushes full.
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Item Manager")
+		int32 GetCatalogVersion() const { return ItemCatalogVersion; }
+
 		// Bind to the local player's AnimInstance::OnPickupPoint so that
 		// PlayPickupEffect fires at the correct animation frame.
 		void BindPickupPointDelegate();
@@ -144,6 +159,10 @@ private:
 		// Cache for quick lookup of visual data by slug
 		UPROPERTY()
 		TMap<FString, FItemVisualData> ItemVisualsCache;
+
+		// Item stat catalog by template itemId (S2.1, session-scoped).
+		TMap<int32, FInventoryItemStruct> ItemStatCatalog;
+		int32 ItemCatalogVersion = 0;
 
 		// Keeps Niagara VFX resident in memory after async preload
 		TSharedPtr<FStreamableHandle> NiagaraPreloadHandle;

@@ -59,3 +59,50 @@ bool FItemCatalogCacheContractTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("wire slug"), Wire.slug, FString(TEXT("health_potion")));
     return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDropResolveContractTest, "MMO.Protocol.DropResolveContract",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+
+bool FDropResolveContractTest::RunTest(const FString& Parameters)
+{
+    UItemManager* Mgr = NewObject<UItemManager>(GetTransientPackage());
+    TestTrue(TEXT("manager created"), Mgr != nullptr);
+    if (!Mgr) return false;
+
+    // Seed catalog: template 46 with a typed attribute.
+    FInventoryItemStruct Tpl;
+    Tpl.itemId = 46;
+    Tpl.slug = TEXT("health_potion");
+    Tpl.itemTypeSlug = TEXT("consumable");
+    Tpl.item_type_id = 3;
+    FItemAttributeStruct Attr;
+    Attr.slug = TEXT("weight");
+    Attr.value = 0.1f;
+    Tpl.itemAttributes.Add(Attr);
+    Mgr->SetItemCatalog(7, { Tpl });
+
+    // Slim id-only drop parses with an empty template...
+    FDroppedItemStruct Drop = JSONParser::DeserializeDroppedItem(ParserContract_ParseObj(
+        TEXT("{\"uid\":701,\"itemId\":46,\"quantity\":2,\"canBePickedUp\":true,"
+        "\"position\":{\"x\":10,\"y\":20,\"z\":5,\"rotationZ\":0}}")));
+    TestTrue(TEXT("template empty pre-resolve"), Drop.item.slug.IsEmpty());
+
+    // ...and resolves from the catalog.
+    Mgr->ResolveDropStats(Drop);
+    TestEqual(TEXT("resolved slug"), Drop.item.slug, FString(TEXT("health_potion")));
+    TestEqual(TEXT("resolved id"), Drop.item.id, 46);
+    TestEqual(TEXT("resolved type"), (int32)Drop.item.itemType, 3);
+    TestEqual(TEXT("resolved type slug"), Drop.item.itemTypeSlug, FString(TEXT("consumable")));
+    TestEqual(TEXT("resolved attrs"), Drop.item.attributes.Num(), 1);
+
+    // Miss / already-filled are no-ops.
+    FDroppedItemStruct Missing = JSONParser::DeserializeDroppedItem(ParserContract_ParseObj(
+        TEXT("{\"uid\":702,\"itemId\":4242,\"quantity\":1}")));
+    Mgr->ResolveDropStats(Missing);
+    TestTrue(TEXT("miss stays empty"), Missing.item.slug.IsEmpty());
+    FDroppedItemStruct Full = JSONParser::DeserializeDroppedItem(ParserContract_ParseObj(
+        TEXT("{\"uid\":703,\"itemId\":46,\"item\":{\"id\":46,\"slug\":\"server_name\"}}")));
+    Mgr->ResolveDropStats(Full);
+    TestEqual(TEXT("filled kept"), Full.item.slug, FString(TEXT("server_name")));
+    return true;
+}

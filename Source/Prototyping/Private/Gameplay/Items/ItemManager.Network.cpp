@@ -45,6 +45,11 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("ItemManager: Received itemDrop event"));
 		FItemDropResponseStruct ItemDropResponse = JSONParser::DeserializeItemDropResponse(Body);
+		for (FDroppedItemStruct& DroppedItem : ItemDropResponse.droppedItems)
+		{
+			// S2.2: id-only drops resolve their template from the stat catalog.
+			ResolveDropStats(DroppedItem);
+		}
 		HandleItemDrop(ItemDropResponse);
 	}
 	else if (MessageData.eventType == "nearbyItems")
@@ -52,8 +57,10 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 		UE_LOG(LogTemp, Warning, TEXT("ItemManager: Received nearbyItems event"));
 		// Body contains { "items": [ DroppedItemStruct... ] } - same shape as itemDrop
 		FItemDropResponseStruct NearbyResponse = JSONParser::DeserializeItemDropResponse(Body);
-		for (const FDroppedItemStruct& DroppedItem : NearbyResponse.droppedItems)
+		for (FDroppedItemStruct& DroppedItem : NearbyResponse.droppedItems)
 		{
+			// S2.2: id-only drops resolve their template from the stat catalog.
+			ResolveDropStats(DroppedItem);
 			if (DroppedItem.uid > 0)
 				SpawnDroppedItem(DroppedItem);
 		}

@@ -131,6 +131,11 @@ private:
 		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Item Manager")
 		int32 GetCatalogVersion() const { return ItemCatalogVersion; }
 
+		// S2.2: fill an id-only drop's template from the stat catalog.
+		// No-op when the drop already carries a slug or the catalog misses it.
+		UFUNCTION(BlueprintCallable, Category = "Item Manager")
+		void ResolveDropStats(FDroppedItemStruct& Drop) const;
+
 		// Bind to the local player's AnimInstance::OnPickupPoint so that
 		// PlayPickupEffect fires at the correct animation frame.
 		void BindPickupPointDelegate();

@@ -169,6 +169,19 @@ bool UItemManager::GetCatalogStats(int32 ItemId, FInventoryItemStruct& OutStats)
 	return false;
 }
 
+void UItemManager::ResolveDropStats(FDroppedItemStruct& Drop) const
+{
+	if (!Drop.item.slug.IsEmpty() || Drop.itemId <= 0) return;
+	FInventoryItemStruct Stats;
+	if (!GetCatalogStats(Drop.itemId, Stats)) return;
+	Drop.item.id = Drop.itemId;
+	Drop.item.slug = Stats.slug;
+	Drop.item.itemType = static_cast<EItemType>(Stats.item_type_id);
+	Drop.item.itemTypeSlug = Stats.itemTypeSlug;
+	Drop.item.attributes = Stats.itemAttributes;
+	// name/description stay empty: every display path resolves via Loc/humanized slug.
+}
+
 // ---------------------------------------------------------------------------
 // BindPickupPointDelegate
 //   Lazily binds to the local player's PlayerAnimInstance::OnPickupPoint so

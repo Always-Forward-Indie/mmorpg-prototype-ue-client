@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Items/ItemManager.h"
+#include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Items/DroppedItemActor.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Players/PlayerAnimInstance.h"
@@ -156,6 +157,14 @@ void UItemManager::SetItemCatalog(int32 Version, const TArray<FInventoryItemStru
 	}
 	UE_LOG(LogTemp, Log, TEXT("ItemManager: Stat catalog v%d now holds %d templates (+%d)"),
 		ItemCatalogVersion, ItemStatCatalog.Num(), Items.Num());
+
+	// New statics may complete placeholder rows the inventory merged from
+	// slim deltas before the catalog arrived (join race).
+	if (gameInstance)
+	{
+		if (UInventoryManager* InvMgr = gameInstance->GetInventoryManager())
+			InvMgr->ResolveUnresolvedRows();
+	}
 }
 
 bool UItemManager::GetCatalogStats(int32 ItemId, FInventoryItemStruct& OutStats) const

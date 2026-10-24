@@ -112,6 +112,8 @@ FInventoryItemStruct JSONParser::DeserializeInventoryItem(const TSharedPtr<FJson
 	if (ItemObj->HasField(TEXT("id")))       Item.id       = ItemObj->GetIntegerField(TEXT("id"));   // player_inventory PK
 	if (ItemObj->HasField(TEXT("itemId")))   Item.itemId   = ItemObj->GetIntegerField(TEXT("itemId"));
 	if (ItemObj->HasField(TEXT("quantity"))) Item.quantity = ItemObj->GetIntegerField(TEXT("quantity"));
+	if (ItemObj->HasField(TEXT("slotIndex")))  Item.slotIndex  = ItemObj->GetIntegerField(TEXT("slotIndex"));
+	if (ItemObj->HasField(TEXT("killCount")))  Item.killCount  = ItemObj->GetIntegerField(TEXT("killCount"));
 
 	// Durability from top-level (overridden by nested "item" if present)
 	if (ItemObj->HasField(TEXT("durabilityCurrent"))) Item.durabilityCurrent = ItemObj->GetIntegerField(TEXT("durabilityCurrent"));

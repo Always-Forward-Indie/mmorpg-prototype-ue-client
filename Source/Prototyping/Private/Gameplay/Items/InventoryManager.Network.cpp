@@ -1,6 +1,7 @@
 ﻿#include "Gameplay/Items/InventoryManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
+#include "Utils/NetCore/InventoryRules.h"
 #include "Gameplay/Items/HarvestManager.h"
 #include "Utils/JSONParser.h"
 #include "Engine/World.h"
@@ -200,6 +201,50 @@ void UInventoryManager::ProcessInventoryUpdate(const FString& JsonData)
 	if (!Body.IsValid())
 	{
 		UE_LOG(LogTemp, Error, TEXT("InventoryManager: No body found in inventory update"));
+		return;
+	}
+
+	// S2.3 delta shape: body = {characterId, changed[], removed[], gold}.
+	// Slim rows merge into the cached inventory (statics resolve from the
+	// itemCatalog); full loads still arrive via ProcessInventoryData.
+	const TArray<TSharedPtr<FJsonValue>>* ChangedArray = nullptr;
+	if (Body->TryGetArrayField(TEXT("changed"), ChangedArray))
+	{
+		int32 CharacterId = 0;
+		Body->TryGetNumberField(TEXT("characterId"), CharacterId);
+		if (OwnerCharacterId > 0 && CharacterId > 0 && CharacterId != OwnerCharacterId)
+		{
+			UE_LOG(LogTemp, Verbose, TEXT("InventoryManager: Ignoring INVENTORY_UPDATE for CharID=%d (owner=%d)"), CharacterId, OwnerCharacterId);
+			return;
+		}
+
+		TArray<FInventoryItemStruct> Changed;
+		for (const TSharedPtr<FJsonValue>& ItemValue : *ChangedArray)
+		{
+			const TSharedPtr<FJsonObject>* ItemPtr = nullptr;
+			if (!ItemValue.IsValid() || !ItemValue->TryGetObject(ItemPtr) || !ItemPtr || !(*ItemPtr).IsValid()) continue;
+			Changed.Add(JSONParser::DeserializeInventoryItem(*ItemPtr));
+		}
+		TArray<int32> Removed;
+		const TArray<TSharedPtr<FJsonValue>>* RemovedArray = nullptr;
+		if (Body->TryGetArrayField(TEXT("removed"), RemovedArray))
+		{
+			for (const TSharedPtr<FJsonValue>& RemValue : *RemovedArray)
+			{
+				if (RemValue.IsValid())
+					Removed.Add(static_cast<int32>(RemValue->AsNumber()));
+			}
+		}
+
+		if (CharacterId > 0)
+			CurrentInventory.characterId = CharacterId;
+		int32 Gold = CurrentInventory.gold;
+		Body->TryGetNumberField(TEXT("gold"), Gold);
+		CurrentInventory.gold = Gold;
+
+		FInventoryRules::ApplyInventoryDelta(CurrentInventory.items, Changed, Removed);
+		ResolveUnresolvedRows();
+		OnInventoryUpdated.Broadcast(CurrentInventory);
 		return;
 	}
 

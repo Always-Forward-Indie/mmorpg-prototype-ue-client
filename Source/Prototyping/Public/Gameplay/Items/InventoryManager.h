@@ -184,6 +184,11 @@ public:
 	// Apply a full inventory snapshot locally (used e.g. by EquipmentManager to sync is_equipped flags)
 	void UpdateLocalInventory(const FCharacterInventoryStruct& NewInventory);
 
+	// S2.3: fill statics of cached rows that arrived slim (empty slug) from
+	// the itemCatalog. Called after every delta merge and on catalog arrival.
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	void ResolveUnresolvedRows();
+
 	// Set the character ID this manager owns.
 	// Called before SubscribeToNetworkManager so packets are filtered correctly.
 	UFUNCTION(BlueprintCallable, Category = "Inventory")

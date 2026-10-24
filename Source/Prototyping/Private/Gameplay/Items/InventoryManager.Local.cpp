@@ -12,6 +12,35 @@
 #include "Utils/AudioSpawnHelpers.h"
 #include "CrashDiagnostics.h"
 
+void UInventoryManager::ResolveUnresolvedRows()
+{
+	if (!gameInstance) return;
+	UItemManager* ItemMgr = gameInstance->GetItemManager();
+	if (!ItemMgr) return;
+	for (FInventoryItemStruct& Row : CurrentInventory.items)
+	{
+		if (!Row.slug.IsEmpty() || Row.itemId <= 0) continue;
+		FInventoryItemStruct Stats;
+		if (!ItemMgr->GetCatalogStats(Row.itemId, Stats)) continue;
+		// Instance state (id/qty/durability/equipped/slot/kill) is authoritative
+		// from the delta — only statics come from the catalog.
+		const int32 KeepId = Row.id;
+		const int32 KeepQty = Row.quantity;
+		const int32 KeepDur = Row.durabilityCurrent;
+		const bool KeepEquipped = Row.is_equipped;
+		const int32 KeepSlot = Row.slotIndex;
+		const int32 KeepKill = Row.killCount;
+		Row = Stats;
+		Row.id = KeepId;
+		Row.quantity = KeepQty;
+		Row.durabilityCurrent = KeepDur;
+		Row.is_equipped = KeepEquipped;
+		Row.slotIndex = KeepSlot;
+		Row.killCount = KeepKill;
+		Row.itemId = Stats.itemId;
+	}
+}
+
 void UInventoryManager::UpdateLocalInventory(const FCharacterInventoryStruct& NewInventory)
 {
 	FCharacterInventoryStruct OldInventory = CurrentInventory;

@@ -1,0 +1,11 @@
+slug,name_ru,name_en
+weapon,Weapon,
+armor,Armor,
+potion,Potion,
+food,Food,
+quest_item,Quest Item,
+resource,Resource,
+accessory,Accessory,
+currency,Currency,
+container,Container,
+skill_book,Skill Book,

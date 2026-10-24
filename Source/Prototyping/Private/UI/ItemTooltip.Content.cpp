@@ -40,11 +40,16 @@ void UItemTooltipWidget::UpdateItemHeader()
 	// Update rarity text
 	if (ItemRarityText)
 	{
-		// Prefer raritySlug (from protocol); fall back to rarity display name
+		// Prefer raritySlug (from protocol); fall back to rarity display name.
+		// S3a: localized via codebook table, humanised slug when content lands later.
 		const FString& RarityKey = CurrentItem.raritySlug.IsEmpty() ? CurrentItem.rarity : CurrentItem.raritySlug;
-		FString RarityText = RarityKey.IsEmpty() ? TEXT("Common") : RarityKey;
-		RarityText = RarityText.Left(1).ToUpper() + RarityText.Mid(1).ToLower();
-		ItemRarityText->SetText(FText::FromString(RarityText));
+		FText RarityText = FText::FromString(TEXT("Common"));
+		if (!RarityKey.IsEmpty())
+		{
+			if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
+				RarityText = Loc->GetRarityDisplayName(RarityKey);
+		}
+		ItemRarityText->SetText(RarityText);
 		ItemRarityText->SetColorAndOpacity(GetRarityColor(RarityKey));
 	}
 
@@ -84,9 +89,14 @@ void UItemTooltipWidget::UpdateItemAttributes()
 	// Use typed itemAttributes if available (has apply_on); fall back to legacy TMap
 	if (CurrentItem.itemAttributes.Num() > 0)
 	{
+		ULocalizationSubsystem* LocAttr = ULocalizationSubsystem::Get(this);
 		for (const FItemAttributeStruct& Attr : CurrentItem.itemAttributes)
 		{
-			const FString& DisplayName = Attr.name.IsEmpty() ? Attr.slug : Attr.name;
+			// S3a: server names first when present (legacy/full packets),
+			// else localized codebook lookup (humanised slug until S3b content).
+			FString DisplayName = Attr.name;
+			if (DisplayName.IsEmpty() && LocAttr && !Attr.slug.IsEmpty())
+				DisplayName = LocAttr->GetAttributeDisplayName(Attr.slug).ToString();
 			if (DisplayName.IsEmpty()) continue;
 
 			FString ValueStr;
@@ -130,11 +140,16 @@ void UItemTooltipWidget::UpdateItemTypeAndLevel()
 {
 	if (ItemTypeText)
 	{
-		// Prefer itemTypeSlug (comes from protocol item.itemTypeSlug); fall back to legacy type
-		FString TypeText = CurrentItem.itemTypeSlug.IsEmpty() ? CurrentItem.type : CurrentItem.itemTypeSlug;
-		if (TypeText.IsEmpty()) TypeText = TEXT("Unknown");
-		TypeText = TypeText.Left(1).ToUpper() + TypeText.Mid(1).ToLower();
-		ItemTypeText->SetText(FText::FromString(TypeText));
+		// Prefer itemTypeSlug (comes from protocol item.itemTypeSlug); fall back to legacy type.
+		// S3a: localized via codebook table.
+		FString TypeKey = CurrentItem.itemTypeSlug.IsEmpty() ? CurrentItem.type : CurrentItem.itemTypeSlug;
+		FText TypeText = FText::FromString(TEXT("Unknown"));
+		if (!TypeKey.IsEmpty())
+		{
+			if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
+				TypeText = Loc->GetItemTypeDisplayName(TypeKey);
+		}
+		ItemTypeText->SetText(TypeText);
 		ItemTypeText->SetColorAndOpacity(GetTypeColor(CurrentItem.itemTypeSlug.IsEmpty() ? CurrentItem.type : CurrentItem.itemTypeSlug));
 	}
 
@@ -214,15 +229,25 @@ void UItemTooltipWidget::UpdateEquipInfo()
 
 	if (CurrentItem.isEquippable && !CurrentItem.equipSlotSlug.IsEmpty())
 	{
-		FString SlotText = CurrentItem.equipSlotSlug.Replace(TEXT("_"), TEXT(" "));
-		SlotText = SlotText.Left(1).ToUpper() + SlotText.Mid(1);
+		// S3a: localized via codebook table.
+		FText SlotText = FText::GetEmpty();
+		if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
+			SlotText = Loc->GetEquipSlotDisplayName(CurrentItem.equipSlotSlug);
+		FString SlotStr = SlotText.IsEmpty() ? CurrentItem.equipSlotSlug.Replace(TEXT("_"), TEXT(" ")) : SlotText.ToString();
+		if (!SlotStr.IsEmpty())
+			SlotStr[0] = FChar::ToUpper(SlotStr[0]);
 		if (CurrentItem.isTwoHanded)
-			SlotText += TEXT(" (Two-Handed)");
+			SlotStr += TEXT(" (Two-Handed)");
 if (CurrentItem.equipSlotSlug.Equals(TEXT("off_hand"), ESearchCase::IgnoreCase))
-SlotText += TEXT(" - attacks at 50%");
+SlotStr += TEXT(" - attacks at 50%");
 if (!CurrentItem.setSlug.IsEmpty())
-SlotText += FString::Printf(TEXT(" | Set: %s (bonuses apply automatically to stats)"), *CurrentItem.setSlug);
-		EquipSlotText->SetText(FText::FromString(SlotText));
+{
+FString SetName = CurrentItem.setSlug;
+if (ULocalizationSubsystem* LocSet = ULocalizationSubsystem::Get(this))
+SetName = LocSet->GetItemSetDisplayName(CurrentItem.setSlug).ToString();
+SlotStr += FString::Printf(TEXT(" | Set: %s (bonuses apply automatically to stats)"), *SetName);
+}
+		EquipSlotText->SetText(FText::FromString(SlotStr));
 		EquipSlotText->SetColorAndOpacity(FLinearColor(0.9f, 0.8f, 0.5f, 1.0f));
 		EquipSlotText->SetVisibility(ESlateVisibility::Visible);
 	}
@@ -271,16 +296,24 @@ void UItemTooltipWidget::UpdateUseEffects()
 
 	for (const FItemUseEffectEntry& Effect : CurrentItem.useEffects)
 	{
+		// S3a: effect target name via codebook table (humanised slug until S3b).
+		FString TargetName = Effect.attributeSlug;
+		if (!TargetName.IsEmpty())
+		{
+			if (ULocalizationSubsystem* LocFx = ULocalizationSubsystem::Get(this))
+				TargetName = LocFx->GetAttributeDisplayName(Effect.attributeSlug).ToString();
+		}
+		if (TargetName.IsEmpty())
+			TargetName = Effect.isInstant ? TEXT("HP") : TEXT("Effect");
 		FString EffectStr;
 		if (Effect.isInstant)
 		{
-			EffectStr = FString::Printf(TEXT("Restores %.0f %s"), Effect.value,
-				Effect.attributeSlug.IsEmpty() ? TEXT("HP") : *Effect.attributeSlug.ToUpper());
+			EffectStr = FString::Printf(TEXT("Restores %.0f %s"), Effect.value, *TargetName);
 		}
 		else
 		{
 			EffectStr = FString::Printf(TEXT("%s +%.0f over %ds"),
-				Effect.attributeSlug.IsEmpty() ? TEXT("Effect") : *Effect.attributeSlug.ToUpper(),
+				*TargetName,
 				Effect.value, Effect.durationSeconds);
 		}
 		if (Effect.cooldownSeconds > 0)

@@ -15,6 +15,9 @@ GitHub-hosted runners:
    referenced by at least one Private/Tests/*.cpp (a new pure rule with
    no spec calling it fails the gate — the fromCharacterId echo bug
    shipped exactly through this hole).
+5. Codebook coverage (S3a): every Get*DisplayName codebook getter must be
+   called by at least one spec, and every Config/Localization/*.csv must
+   parse with unique spaceless non-empty slugs.
 
 Exit 0 = all green, exit 1 = red (blocks the PR).
 Usage: python3 Tools/CI/check_client_gates.py [--root <repo root>]
@@ -26,7 +29,7 @@ from pathlib import Path
 FAIL_BUDGET = 700
 WARN_BUDGET = 500
 
-PROD_INCLUDE = re.compile(r'#include\s+"Utils/(NetCore/|JSONParser\.h)')
+PROD_INCLUDE = re.compile(r'#include\s+"(Utils/(NetCore/|JSONParser\.h)|Services/LocalizationSubsystem\.h)')
 PROD_CALL = re.compile(r"\b([A-Z]\w*)::(\w+)")
 RULE_STRUCT = re.compile(r"\bstruct\s+(?:\w+\s+)?(F\w*Rule\w*)\b")
 CALL_BLOCKLIST_PREFIX = ("Test",)
@@ -101,6 +104,12 @@ def main() -> int:
     # 4. Rule coverage: every pure rule struct in NetCore/ must be called
     # by at least one spec.
     netcore_dir = src / "Public" / "Utils" / "NetCore"
+    test_texts: list[str] = []
+    for spec in sorted(tests_dir.glob("*.cpp")):
+        try:
+            test_texts.append(spec.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            pass
     if netcore_dir.is_dir():
         rules: set[str] = set()
         for header in sorted(netcore_dir.glob("*.h")):
@@ -108,18 +117,49 @@ def main() -> int:
                 rules.update(RULE_STRUCT.findall(header.read_text(encoding="utf-8", errors="replace")))
             except OSError as exc:
                 failures.append(f"cannot read {header}: {exc}")
-        test_texts: list[str] = []
-        for spec in sorted(tests_dir.glob("*.cpp")):
-            try:
-                test_texts.append(spec.read_text(encoding="utf-8", errors="replace"))
-            except OSError:
-                pass
         for rule in sorted(rules):
             if not any(rule in text for text in test_texts):
                 failures.append(
                     f"uncovered rule: {rule} has no spec calling it — "
                     "new NetCore rules must ship with an honest MMO.* spec"
                 )
+
+    # 5. Codebook coverage (S3a): every Get*DisplayName codebook getter must
+    # be called by at least one spec, and every Config/Localization/*.csv
+    # must parse with unique non-empty slugs (+ name_ru column).
+    for getter in ("GetAttributeDisplayName", "GetItemTypeDisplayName",
+                   "GetRarityDisplayName", "GetEquipSlotDisplayName",
+                   "GetItemSetDisplayName"):
+        if not any(getter in text for text in test_texts):
+            failures.append(
+                f"uncovered getter: {getter} has no spec calling it"
+            )
+    loc_dir = root / "Config" / "Localization"
+    if loc_dir.is_dir():
+        import csv as _csv
+        for csv_path in sorted(loc_dir.glob("*.csv")):
+            try:
+                with csv_path.open(encoding="utf-8-sig", newline="") as handle:
+                    rows = list(_csv.DictReader(handle))
+            except OSError as exc:
+                failures.append(f"cannot read {csv_path.name}: {exc}")
+                continue
+            if not rows or "slug" not in (rows[0].keys() if rows else []):
+                failures.append(f"codebook csv: {csv_path.name} has no slug column/rows")
+                continue
+            seen: set[str] = set()
+            for row in rows:
+                slug = (row.get("slug") or "").strip()
+                if not slug:
+                    failures.append(f"codebook csv: {csv_path.name} has an empty slug")
+                    break
+                if " " in slug:
+                    failures.append(f"codebook csv: {csv_path.name} slug has spaces: {slug!r}")
+                    break
+                if slug in seen:
+                    failures.append(f"codebook csv: {csv_path.name} duplicate slug: {slug!r}")
+                    break
+                seen.add(slug)
 
     if failures:
         print("CLIENT GATES: FAIL")

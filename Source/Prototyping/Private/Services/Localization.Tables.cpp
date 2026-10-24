@@ -1,6 +1,7 @@
 #include "Services/LocalizationSubsystem.h"
 #include "Data/LocalizationDataAsset.h"
 #include "Engine/DataTable.h"
+#include "Engine/World.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Internationalization/Internationalization.h"
 
@@ -67,6 +68,41 @@ UDataTable* ULocalizationSubsystem::GetZoneLocaleTable() const
     return CachedZoneLocaleTable;
 }
 
+UDataTable* ULocalizationSubsystem::GetAttributeLocaleTable() const
+{
+    if (!CachedAttributeLocaleTable && LocalizationData)
+        CachedAttributeLocaleTable = LocalizationData->AttributeLocale.Get();
+    return CachedAttributeLocaleTable;
+}
+
+UDataTable* ULocalizationSubsystem::GetItemTypeLocaleTable() const
+{
+    if (!CachedItemTypeLocaleTable && LocalizationData)
+        CachedItemTypeLocaleTable = LocalizationData->ItemTypeLocale.Get();
+    return CachedItemTypeLocaleTable;
+}
+
+UDataTable* ULocalizationSubsystem::GetRarityLocaleTable() const
+{
+    if (!CachedRarityLocaleTable && LocalizationData)
+        CachedRarityLocaleTable = LocalizationData->RarityLocale.Get();
+    return CachedRarityLocaleTable;
+}
+
+UDataTable* ULocalizationSubsystem::GetEquipSlotLocaleTable() const
+{
+    if (!CachedEquipSlotLocaleTable && LocalizationData)
+        CachedEquipSlotLocaleTable = LocalizationData->EquipSlotLocale.Get();
+    return CachedEquipSlotLocaleTable;
+}
+
+UDataTable* ULocalizationSubsystem::GetItemSetLocaleTable() const
+{
+    if (!CachedItemSetLocaleTable && LocalizationData)
+        CachedItemSetLocaleTable = LocalizationData->ItemSetLocale.Get();
+    return CachedItemSetLocaleTable;
+}
+
 UDataTable* ULocalizationSubsystem::GetNotificationLocaleTable() const
 {
     if (!CachedNotificationLocaleTable && LocalizationData)
@@ -77,6 +113,17 @@ UDataTable* ULocalizationSubsystem::GetNotificationLocaleTable() const
 FText ULocalizationSubsystem::FallbackText(const FString& Key)
 {
     return Key.IsEmpty() ? FText::GetEmpty() : FText::FromString(Key);
+}
+
+ULocalizationSubsystem* ULocalizationSubsystem::Get(const UObject* WorldContext)
+{
+    if (!WorldContext) return nullptr;
+    if (UWorld* World = WorldContext->GetWorld())
+    {
+        if (UGameInstance* GI = World->GetGameInstance())
+            return GI->GetSubsystem<ULocalizationSubsystem>();
+    }
+    return nullptr;
 }
 
 // ?? Quests ????????????????????????????????????????????????????????????????????

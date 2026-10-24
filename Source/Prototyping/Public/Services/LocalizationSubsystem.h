@@ -50,6 +50,10 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization")
     FString GetCurrentLocale() const { return CurrentLocale; }
 
+    /** Resolve the subsystem from any world-context object (widget/actor).
+     * Single source for the GetWorld->GameInstance->Subsystem dance. */
+    static ULocalizationSubsystem* Get(const UObject* WorldContext);
+
     /** Broadcast when the locale changes so open widgets can refresh their text. */
     UPROPERTY(BlueprintAssignable, Category = "Localization|Events")
     FOnLocaleChanged OnLocaleChanged;
@@ -262,6 +266,31 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Effects")
     FText GetEffectDescription(const FString& EffectSlug) const;
 
+    // -- Codebook statics (S3a) ------------------------------------------------
+    // Display names for attribute / item-type / rarity / equip-slot / item-set
+    // slugs. Each falls back to a humanised slug when its table has no row,
+    // so UI renders exactly as before until content lands.
+
+    /** Localised attribute name. Key = attribute slug (e.g. "max_health"). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Codebook")
+    FText GetAttributeDisplayName(const FString& AttributeSlug) const;
+
+    /** Localised item-type name. Key = item type slug (e.g. "weapon"). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Codebook")
+    FText GetItemTypeDisplayName(const FString& ItemTypeSlug) const;
+
+    /** Localised rarity name. Key = rarity slug (e.g. "uncommon"). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Codebook")
+    FText GetRarityDisplayName(const FString& RaritySlug) const;
+
+    /** Localised equip-slot name. Key = slot slug (e.g. "main_hand"). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Codebook")
+    FText GetEquipSlotDisplayName(const FString& EquipSlotSlug) const;
+
+    /** Localised item-set name. Key = set slug. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Codebook")
+    FText GetItemSetDisplayName(const FString& ItemSetSlug) const;
+
 private:
     UPROPERTY()
     ULocalizationDataAsset* LocalizationData = nullptr;
@@ -292,6 +321,11 @@ private:
     UPROPERTY() mutable UDataTable* CachedTitleLocaleTable        = nullptr;
     UPROPERTY() mutable UDataTable* CachedMasteryLocaleTable      = nullptr;
     UPROPERTY() mutable UDataTable* CachedEffectLocaleTable       = nullptr;
+    UPROPERTY() mutable UDataTable* CachedAttributeLocaleTable    = nullptr;
+    UPROPERTY() mutable UDataTable* CachedItemTypeLocaleTable     = nullptr;
+    UPROPERTY() mutable UDataTable* CachedRarityLocaleTable       = nullptr;
+    UPROPERTY() mutable UDataTable* CachedEquipSlotLocaleTable    = nullptr;
+    UPROPERTY() mutable UDataTable* CachedItemSetLocaleTable      = nullptr;
 
     UDataTable* GetQuestTable()              const;
     UDataTable* GetQuestStepTable()          const;
@@ -308,6 +342,11 @@ private:
     UDataTable* GetTitleLocaleTable()        const;
     UDataTable* GetMasteryLocaleTable()      const;
     UDataTable* GetEffectLocaleTable()       const;
+    UDataTable* GetAttributeLocaleTable()    const;
+    UDataTable* GetItemTypeLocaleTable()     const;
+    UDataTable* GetRarityLocaleTable()       const;
+    UDataTable* GetEquipSlotLocaleTable()    const;
+    UDataTable* GetItemSetLocaleTable()      const;
 
     static FText FallbackText(const FString& Key);
 };

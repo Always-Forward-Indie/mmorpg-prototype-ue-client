@@ -39,7 +39,7 @@ $EditorGui = "D:\Game Dev\UE\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe"
 # back to the GUI binary with a visible note. Fix the engine install
 # (Epic Launcher 5.8 -> Verify) to return to the standard path.
 $LogDir = Join-Path $Root "Saved\Logs"
-$FailPatterns = @("Result=Fail", "Automation Test Failed", "Critical error:", "Assertion failed", "Fatal error", "Ensure failed")
+$FailPatterns = @("Result=Fail", "Result={Fail}", "Automation Test Failed", "Critical error:", "Assertion failed", "Fatal error", "Ensure failed")
 
 function Fail($msg) { Write-Host "VERIFY: FAIL - $msg" -ForegroundColor Red; exit 1 }
 

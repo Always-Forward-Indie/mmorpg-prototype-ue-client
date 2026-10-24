@@ -1241,6 +1241,9 @@ struct FHarvestItemStruct
     FString itemType = "";
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Item")
+    FString itemTypeSlug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Item")
     float weight = 0.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Harvest Item")
@@ -1259,6 +1262,7 @@ struct FHarvestItemStruct
         rarityId = 1;
         rarityName = "Common";
         itemType = "";
+        itemTypeSlug = "";
         weight = 0.0f;
         addedToInventory = false;
         isHarvestItem = true;
@@ -4139,6 +4143,64 @@ struct PROTOTYPING_API FZoneLocaleDefinition : public FTableRowBase
     FText description;
 
     FZoneLocaleDefinition() {}
+};
+
+// S3a codebook statics: attribute / item type / rarity / equip slot / item set
+// display names. Row name = slug exactly as sent by the server.
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FAttributeLocaleDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attribute Locale")
+    FText displayName;
+
+    FAttributeLocaleDefinition() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FItemTypeLocaleDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ItemType Locale")
+    FText displayName;
+
+    FItemTypeLocaleDefinition() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FRarityLocaleDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rarity Locale")
+    FText displayName;
+
+    FRarityLocaleDefinition() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FEquipSlotLocaleDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "EquipSlot Locale")
+    FText displayName;
+
+    FEquipSlotLocaleDefinition() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FItemSetLocaleDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ItemSet Locale")
+    FText displayName;
+
+    FItemSetLocaleDefinition() {}
 };
 
 USTRUCT(BlueprintType)

@@ -30,6 +30,8 @@ FHarvestItemStruct JSONParser::DeserializeHarvestItem(const TSharedPtr<FJsonObje
 
 		ItemObj->TryGetStringField(TEXT("itemType"), Item.itemType);
 
+		ItemObj->TryGetStringField(TEXT("itemTypeSlug"), Item.itemTypeSlug);
+
 		ItemObj->TryGetNumberField(TEXT("weight"), Item.weight);
 
 		ItemObj->TryGetBoolField(TEXT("addedToInventory"), Item.addedToInventory);

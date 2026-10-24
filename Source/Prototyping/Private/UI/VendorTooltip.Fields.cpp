@@ -3,6 +3,7 @@
 #include "MyGameInstance.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "Services/LocalizationSubsystem.h"
+#include "Utils/JSONParser.h"
 #include "Engine/AssetManager.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 
@@ -25,27 +26,18 @@ int32 KillCount)
     // Pretty-print the raw server name/slug as fallback (replace underscores, capitalise first letter)
     auto PrettyFallback = [](const FString& Raw) -> FText
     {
-        if (Raw.IsEmpty()) return FText::GetEmpty();
-        FString Pretty = Raw.Replace(TEXT("_"), TEXT(" "));
-        if (!Pretty.IsEmpty())
-            Pretty = Pretty.Left(1).ToUpper() + Pretty.Mid(1);
-        return FText::FromString(Pretty);
+        return FText::FromString(JSONParser::HumanizeSlugForDisplay(Raw));
     };
 
+    ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this);
     FText LocalisedName        = PrettyFallback(Name.IsEmpty() ? Slug : Name);
     FText LocalisedDescription = FText::FromString(Description);
-    if (!Slug.IsEmpty())
+    if (!Slug.IsEmpty() && Loc)
     {
-        if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
-        {
-            if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
-            {
-                const FText LocName = Loc->GetItemDisplayName(Slug);
-                if (!LocName.IsEmpty()) LocalisedName = LocName;
-                const FText LocDesc = Loc->GetItemDescription(Slug);
-                if (!LocDesc.IsEmpty()) LocalisedDescription = LocDesc;
-            }
-        }
+        const FText LocName = Loc->GetItemDisplayName(Slug);
+        if (!LocName.IsEmpty()) LocalisedName = LocName;
+        const FText LocDesc = Loc->GetItemDescription(Slug);
+        if (!LocDesc.IsEmpty()) LocalisedDescription = LocDesc;
     }
 
     if (ItemNameText)
@@ -54,9 +46,15 @@ int32 KillCount)
         ItemNameText->SetColorAndOpacity(GetRarityColor(RaritySlug));
     }
 
+    // S3a: TypeName/RarityName/EquipSlotName params carry slugs (callers pass
+    // itemTypeSlug/raritySlug/equipSlotSlug); resolve via codebook tables.
     if (ItemTypeText)
     {
-        const FText DisplayType = PrettyFallback(TypeName);
+        FText DisplayType = FText::GetEmpty();
+        if (!TypeName.IsEmpty() && Loc)
+            DisplayType = Loc->GetItemTypeDisplayName(TypeName);
+        if (DisplayType.IsEmpty())
+            DisplayType = PrettyFallback(TypeName);
         if (!DisplayType.IsEmpty())
         {
             ItemTypeText->SetText(DisplayType);
@@ -84,10 +82,16 @@ int32 KillCount)
 
     if (ItemRarityText)
     {
-        const FString DisplayRarity = RarityName.IsEmpty() ? RaritySlug : RarityName;
+        // S3a: RarityName param is usually empty (S2.4 slim); RaritySlug rules.
+        const FString& RarityKey = RarityName.IsEmpty() ? RaritySlug : RarityName;
+        FText DisplayRarity = FText::GetEmpty();
+        if (!RarityKey.IsEmpty() && Loc && RarityName.IsEmpty())
+            DisplayRarity = Loc->GetRarityDisplayName(RarityKey);
+        if (DisplayRarity.IsEmpty())
+            DisplayRarity = RarityName.IsEmpty() ? PrettyFallback(RarityKey) : FText::FromString(RarityName);
         if (!DisplayRarity.IsEmpty())
         {
-            ItemRarityText->SetText(FText::FromString(DisplayRarity));
+            ItemRarityText->SetText(DisplayRarity);
             ItemRarityText->SetColorAndOpacity(GetRarityColor(RaritySlug));
             ItemRarityText->SetVisibility(ESlateVisibility::Visible);
         }
@@ -150,14 +154,19 @@ int32 KillCount)
         }
     }
 
-    // Equip slot
+    // Equip slot (S3a: EquipSlotName param carries the slug; codebook lookup).
     if (EquipSlotText)
     {
         if (bIsEquippable && !EquipSlotName.IsEmpty())
         {
-            FString SlotLabel = EquipSlotName;
-            if (bIsTwoHanded) SlotLabel += TEXT(" (Two-Handed)");
-            EquipSlotText->SetText(FText::FromString(SlotLabel));
+            FText SlotLabel = FText::GetEmpty();
+            if (Loc)
+                SlotLabel = Loc->GetEquipSlotDisplayName(EquipSlotName);
+            if (SlotLabel.IsEmpty())
+                SlotLabel = PrettyFallback(EquipSlotName);
+            FString SlotStr = SlotLabel.ToString();
+            if (bIsTwoHanded) SlotStr += TEXT(" (Two-Handed)");
+            EquipSlotText->SetText(FText::FromString(SlotStr));
             EquipSlotText->SetVisibility(ESlateVisibility::Visible);
         }
         else
@@ -207,11 +216,17 @@ int32 KillCount)
             TArray<FString> Lines;
             for (const auto& Pair : Attributes)
             {
-                // Key may be a human-readable name ("Physical Attack") or a slug ("physical_attack").
-                // Normalise: replace underscores then capitalise first letter only.
-                FString AttrName = Pair.Key.Replace(TEXT("_"), TEXT(" "));
-                if (!AttrName.IsEmpty())
-                    AttrName = AttrName.Left(1).ToUpper() + AttrName.Mid(1);
+                // S3a: key may be a server name, a slug, or (S2.4) already resolved.
+                // Prefer the codebook table for slug keys; keep server names verbatim.
+                FString AttrName = Pair.Key;
+                if (Loc && !AttrName.IsEmpty() && AttrName.Find(TEXT(" ")) == INDEX_NONE)
+                {
+                    const FText LocAttr = Loc->GetAttributeDisplayName(AttrName);
+                    if (!LocAttr.IsEmpty() && LocAttr.ToString() != AttrName)
+                        AttrName = LocAttr.ToString();
+                    else
+                        AttrName = PrettyFallback(AttrName).ToString();
+                }
                 Lines.Add(FString::Printf(TEXT("%s: %s"), *AttrName, *Pair.Value));
             }
             AttributesText->SetText(FText::FromString(FString::Join(Lines, TEXT("\n"))));
@@ -232,9 +247,12 @@ int32 KillCount)
             TArray<FString> EffLines;
             for (const FItemUseEffectEntry& Effect : UseEffects)
             {
-                FString AttrLabel = Effect.attributeSlug.Replace(TEXT("_"), TEXT(" "));
-                if (!AttrLabel.IsEmpty())
-                    AttrLabel = AttrLabel.Left(1).ToUpper() + AttrLabel.Mid(1).ToLower();
+                // S3a: codebook lookup for the target slug.
+                FString AttrLabel = Effect.attributeSlug;
+                if (Loc && !AttrLabel.IsEmpty())
+                    AttrLabel = Loc->GetAttributeDisplayName(Effect.attributeSlug).ToString();
+                if (AttrLabel.IsEmpty())
+                    AttrLabel = PrettyFallback(Effect.attributeSlug).ToString();
                 FString Line;
                 if (Effect.isInstant)
                     Line = FString::Printf(TEXT("Use: Restores %.0f %s"), Effect.value, *AttrLabel);
@@ -275,8 +293,16 @@ int32 KillCount)
             TArray<FString> Parts;
             if (bHasMastery)
             {
-                FString ML = MasterySlug.Replace(TEXT("_"), TEXT(" "));
-                ML = ML.Left(1).ToUpper() + ML.Mid(1).ToLower();
+                // S3a: mastery display name from its locale table.
+                FString ML = MasterySlug;
+                if (Loc && !MasterySlug.IsEmpty())
+                {
+                    const FText LocMastery = Loc->GetMasteryDisplayName(MasterySlug);
+                    if (!LocMastery.IsEmpty())
+                        ML = LocMastery.ToString();
+                    else
+                        ML = PrettyFallback(MasterySlug).ToString();
+                }
                 Parts.Add(FString::Printf(TEXT("Mastery: %s"), *ML));
             }
             if (bHasKills)

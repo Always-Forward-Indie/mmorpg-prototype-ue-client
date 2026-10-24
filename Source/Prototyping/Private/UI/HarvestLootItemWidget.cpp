@@ -126,7 +126,16 @@ void UHarvestLootItemWidget::UpdateItemDisplay()
 		}
 		else
 		{
+			// S3a: slug-keyed codebook lookup; server display string as fallback.
 			FString TypeText = CurrentItemData.itemType;
+			if (!CurrentItemData.itemTypeSlug.IsEmpty())
+			{
+				if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+				{
+					if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+						TypeText = Loc->GetItemTypeDisplayName(CurrentItemData.itemTypeSlug).ToString();
+				}
+			}
 			if (TypeText.IsEmpty())
 			{
 				TypeText = TEXT("Material");

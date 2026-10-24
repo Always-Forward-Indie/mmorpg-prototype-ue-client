@@ -123,4 +123,27 @@ public:
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|WorldObjects")
     TObjectPtr<UDataTable> WorldObjectLocale;
+
+    // -- Codebook statics (S3a) -------------------------------------------------
+
+    // Maps attribute slug -> FAttributeLocaleDefinition (display name).
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Codebook")
+    TObjectPtr<UDataTable> AttributeLocale;
+
+    // Maps item-type slug -> FItemTypeLocaleDefinition (display name).
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Codebook")
+    TObjectPtr<UDataTable> ItemTypeLocale;
+
+    // Maps rarity slug -> FRarityLocaleDefinition (display name; rarity COLOR
+    // stays in code (GetRarityColor), not in locale).
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Codebook")
+    TObjectPtr<UDataTable> RarityLocale;
+
+    // Maps equip-slot slug -> FEquipSlotLocaleDefinition (display name).
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Codebook")
+    TObjectPtr<UDataTable> EquipSlotLocale;
+
+    // Maps item-set slug -> FItemSetLocaleDefinition (display name).
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Codebook")
+    TObjectPtr<UDataTable> ItemSetLocale;
 };

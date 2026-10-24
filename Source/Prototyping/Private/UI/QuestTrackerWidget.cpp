@@ -5,6 +5,9 @@
 #include "Components/VerticalBox.h"
 #include "Engine/GameInstance.h"
 
+// S5b: tracker fallback chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "QuestTracker"
+
 void UQuestTrackerWidget::NativeConstruct()
 {
     Super::NativeConstruct();
@@ -83,7 +86,8 @@ void UQuestTrackerWidget::RefreshTracker()
                     FText DisplayName = (LocSys && !Quest.clientQuestKey.IsEmpty())
                         ? LocSys->GetQuestDisplayName(Quest.clientQuestKey)
                         : FText::FromString(Quest.clientQuestKey.IsEmpty()
-                            ? FString::Printf(TEXT("Quest #%d"), Quest.questId)
+                            ? FText::Format(LOCTEXT("QuestNumbered", "Quest #{0}"),
+                                FText::AsNumber(Quest.questId)).ToString()
                             : Quest.clientQuestKey);
                     NameText->SetText(DisplayName);
                 }
@@ -100,17 +104,17 @@ void UQuestTrackerWidget::RefreshTracker()
                 UTextBlock* ProgressText = Cast<UTextBlock>(Row->GetWidgetFromName(TEXT("Quest_Row_Progress")));
                 if (ProgressText)
                 {
-                    const FString ProgressStr = BuildTrackerLine(Quest);
+                    const FText Progress = BuildTrackerLine(Quest);
                     FText HintText;
                     if (LocSys && !Quest.clientStepKey.IsEmpty())
                     {
                         HintText = LocSys->GetQuestStepHint(Quest.clientStepKey);
                     }
-                    const FString HintStr = HintText.ToString();
-                    const FString Combined = HintStr.IsEmpty()
-                        ? ProgressStr
-                        : (ProgressStr.IsEmpty() ? HintStr : FString::Printf(TEXT("%s  (%s)"), *ProgressStr, *HintStr));
-                    ProgressText->SetText(FText::FromString(Combined));
+                    const FText Combined = HintText.IsEmpty()
+                        ? Progress
+                        : (Progress.IsEmpty() ? HintText
+                            : FText::Format(LOCTEXT("ProgressHint", "{0}  ({1})"), Progress, HintText));
+                    ProgressText->SetText(Combined);
                 }
 
                 Tracker_Box->AddChild(Row);
@@ -122,14 +126,14 @@ void UQuestTrackerWidget::RefreshTracker()
             UTextBlock* Line = NewObject<UTextBlock>(this);
             if (Line)
             {
-                Line->SetText(FText::FromString(BuildTrackerLine(Quest)));
+                Line->SetText(BuildTrackerLine(Quest));
                 Tracker_Box->AddChild(Line);
             }
         }
     }
 }
 
-FString UQuestTrackerWidget::BuildTrackerLine(const FQuestProgressData& Data) const
+FText UQuestTrackerWidget::BuildTrackerLine(const FQuestProgressData& Data) const
 {
     // Prefer enriched step data (has resolved slug names)
     if (Data.bHasEnrichedStep)
@@ -140,45 +144,48 @@ FString UQuestTrackerWidget::BuildTrackerLine(const FQuestProgressData& Data) co
 
         if (Step.stepType == TEXT("kill"))
         {
-            FString Target = (LocSys && !Step.targetSlug.IsEmpty())
-                ? LocSys->GetMobDisplayName(Step.targetSlug).ToString()
-                : Step.targetSlug;
-            return FString::Printf(TEXT("%s  %d/%d"), *Target, Step.current, Step.count);
+            FText Target = (LocSys && !Step.targetSlug.IsEmpty())
+                ? LocSys->GetMobDisplayName(Step.targetSlug)
+                : FText::FromString(Step.targetSlug);
+            return FText::Format(LOCTEXT("TargetProgress", "{0}  {1}/{2}"),
+                Target, FText::AsNumber(Step.current), FText::AsNumber(Step.count));
         }
         else if (Step.stepType == TEXT("collect"))
         {
-            FString Target = (LocSys && !Step.targetSlug.IsEmpty())
-                ? LocSys->GetItemDisplayName(Step.targetSlug).ToString()
-                : Step.targetSlug;
-            return FString::Printf(TEXT("%s  %d/%d"), *Target, Step.current, Step.count);
+            FText Target = (LocSys && !Step.targetSlug.IsEmpty())
+                ? LocSys->GetItemDisplayName(Step.targetSlug)
+                : FText::FromString(Step.targetSlug);
+            return FText::Format(LOCTEXT("TargetProgress", "{0}  {1}/{2}"),
+                Target, FText::AsNumber(Step.current), FText::AsNumber(Step.count));
         }
         else if (Step.stepType == TEXT("talk"))
         {
-            FString Target = (LocSys && !Step.targetSlug.IsEmpty())
-                ? LocSys->GetNPCDisplayName(Step.targetSlug).ToString()
-                : Step.targetSlug;
-            return FString::Printf(TEXT("Talk to: %s"), *Target);
+            FText Target = (LocSys && !Step.targetSlug.IsEmpty())
+                ? LocSys->GetNPCDisplayName(Step.targetSlug)
+                : FText::FromString(Step.targetSlug);
+            return FText::Format(LOCTEXT("TalkTo", "Talk to: {0}"), Target);
         }
         else if (Step.stepType == TEXT("reach"))
         {
-            FString Zone = (LocSys && !Step.zoneSlug.IsEmpty())
-                ? LocSys->GetZoneDisplayName(Step.zoneSlug).ToString()
-                : Step.zoneSlug;
-            return FString::Printf(TEXT("Go to: %s"), *Zone);
+            FText Zone = (LocSys && !Step.zoneSlug.IsEmpty())
+                ? LocSys->GetZoneDisplayName(Step.zoneSlug)
+                : FText::FromString(Step.zoneSlug);
+            return FText::Format(LOCTEXT("GoTo", "Go to: {0}"), Zone);
         }
     }
 
     // Fallback: use the old flat fields
     if (Data.stepType == TEXT("kill") || Data.stepType == TEXT("collect"))
     {
-        return FString::Printf(TEXT("%d/%d"), Data.progressCurrent, Data.progressRequired);
+        return FText::Format(LOCTEXT("ProgressFraction", "{0}/{1}"),
+            FText::AsNumber(Data.progressCurrent), FText::AsNumber(Data.progressRequired));
     }
     if (Data.stepType == TEXT("talk") || Data.stepType == TEXT("reach"))
     {
-        return Data.progressCurrent > 0 ? TEXT("Done") : TEXT("In progress");
+        return Data.progressCurrent > 0 ? LOCTEXT("Done", "Done") : LOCTEXT("InProgress", "In progress");
     }
 
-    return FString();
+    return FText::GetEmpty();
 }
 
 void UQuestTrackerWidget::HandleQuestUpdated(const FQuestProgressData& /*Data*/)
@@ -206,3 +213,5 @@ void UQuestTrackerWidget::HandleLocaleChanged(const FString& NewLocale)
 {
     RefreshTracker();
 }
+
+#undef LOCTEXT_NAMESPACE

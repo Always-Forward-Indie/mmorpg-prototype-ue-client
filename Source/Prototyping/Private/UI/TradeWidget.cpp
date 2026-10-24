@@ -11,6 +11,9 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/CanvasPanelSlot.h"
 
+// S5b: trade chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "Trade"
+
 // ---------------------------------------------------------------------------
 // UTradeInvItemRowBinding
 // ---------------------------------------------------------------------------
@@ -142,14 +145,14 @@ void UTradeWidget::RefreshTradeState()
     RebuildItemsList(My_Items_Box,    CurrentState.myItems);
     RebuildItemsList(Their_Items_Box, CurrentState.theirItems);
 
-    if (My_Gold_Text)    My_Gold_Text   ->SetText(FText::FromString(FString::Printf(TEXT("%d g"), CurrentState.myGold)));
-    if (Their_Gold_Text) Their_Gold_Text->SetText(FText::FromString(FString::Printf(TEXT("%d g"), CurrentState.theirGold)));
+    if (My_Gold_Text)    My_Gold_Text   ->SetText(FText::Format(LOCTEXT("GoldValue", "{0} g"), FText::AsNumber(CurrentState.myGold)));
+    if (Their_Gold_Text) Their_Gold_Text->SetText(FText::Format(LOCTEXT("GoldValue", "{0} g"), FText::AsNumber(CurrentState.theirGold)));
 
-    const FString MyConfirmStr    = CurrentState.myConfirmed    ? TEXT("? Confirmed") : TEXT("Pending");
-    const FString TheirConfirmStr = CurrentState.theirConfirmed ? TEXT("? Confirmed") : TEXT("Pending");
+    const FText MyConfirmStr    = CurrentState.myConfirmed    ? LOCTEXT("Confirmed", "? Confirmed") : LOCTEXT("Pending", "Pending");
+    const FText TheirConfirmStr = CurrentState.theirConfirmed ? LOCTEXT("Confirmed", "? Confirmed") : LOCTEXT("Pending", "Pending");
 
-    if (My_Confirm_Text)    My_Confirm_Text   ->SetText(FText::FromString(MyConfirmStr));
-    if (Their_Confirm_Text) Their_Confirm_Text->SetText(FText::FromString(TheirConfirmStr));
+    if (My_Confirm_Text)    My_Confirm_Text   ->SetText(MyConfirmStr);
+    if (Their_Confirm_Text) Their_Confirm_Text->SetText(TheirConfirmStr);
 
     // Disable confirm once we confirmed (waiting for server complete);
     // peer flag never gates us. Single owner: FTradeStatusRule.
@@ -196,8 +199,8 @@ void UTradeWidget::HandleTradeInviteReceived(const FTradeInviteData& Invite)
     }
     if (Invite_Name_Text)
     {
-        Invite_Name_Text->SetText(FText::FromString(
-            FString::Printf(TEXT("%s wants to trade"), *Invite.fromCharacterName)));
+        Invite_Name_Text->SetText(FText::Format(LOCTEXT("WantsToTrade", "{0} wants to trade"),
+            FText::FromString(Invite.fromCharacterName)));
     }
     // Show the widget so the invite banner is visible
     if (GetVisibility() != ESlateVisibility::Visible)
@@ -310,8 +313,7 @@ void UTradeWidget::RebuildItemsList(UScrollBox* Box, const TArray<FInventoryItem
                     }
                 }
             }
-            Txt->SetText(FText::FromString(
-                FString::Printf(TEXT("%s x%d"), *ItemName.ToString(), Item.quantity)));
+            Txt->SetText(FText::Format(LOCTEXT("ItemQty", "{0} x{1}"), ItemName, FText::AsNumber(Item.quantity)));
         }
         // Hide the add button for offer display rows
         if (UButton* Btn = Cast<UButton>(Row->GetWidgetFromName(TEXT("Row_Add_Btn"))))
@@ -347,8 +349,7 @@ void UTradeWidget::RebuildItemsList(UScrollBox* Box, const TArray<FTradeOfferIte
                     }
                 }
             }
-            Txt->SetText(FText::FromString(
-                FString::Printf(TEXT("%s x%d"), *ItemName.ToString(), Offer.quantity)));
+            Txt->SetText(FText::Format(LOCTEXT("ItemQty", "{0} x{1}"), ItemName, FText::AsNumber(Offer.quantity)));
         }
         if (UButton* Btn = Cast<UButton>(Row->GetWidgetFromName(TEXT("Row_Add_Btn"))))
         {
@@ -385,8 +386,7 @@ void UTradeWidget::RebuildInventoryList()
                     }
                 }
             }
-            Txt->SetText(FText::FromString(
-                FString::Printf(TEXT("%s x%d"), *ItemName.ToString(), Item.quantity)));
+            Txt->SetText(FText::Format(LOCTEXT("ItemQty", "{0} x{1}"), ItemName, FText::AsNumber(Item.quantity)));
         }
         if (UButton* Btn = Cast<UButton>(Row->GetWidgetFromName(TEXT("Row_Add_Btn"))))
         {
@@ -485,3 +485,5 @@ void UTradeWidget::HandleGoldTextChanged(const FText& Text)
         Gold_Input->SetText(FText::FromString(Filtered));
     }
 }
+
+#undef LOCTEXT_NAMESPACE

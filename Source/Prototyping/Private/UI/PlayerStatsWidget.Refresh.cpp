@@ -13,6 +13,9 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Blueprint/UserWidget.h"
 
+// S5b: vitals labels gathered via LOCTEXT (same namespace as Titles TU).
+#define LOCTEXT_NAMESPACE "PlayerStatsWidget"
+
 void UPlayerStatsWidget::HandleStatsUpdated(const FPlayerStatsUpdateStruct& NewStats)
 {
     CachedStats = NewStats;
@@ -44,14 +47,14 @@ void UPlayerStatsWidget::RefreshVitals(const FPlayerStatsUpdateStruct& Stats)
 {
     // Level
     if (Level_Text)
-        Level_Text->SetText(FText::FromString(FString::Printf(TEXT("Level %d"), Stats.level)));
+        Level_Text->SetText(FText::Format(LOCTEXT("LevelValue", "Level {0}"), FText::AsNumber(Stats.level)));
 
     // Free skill points
     if (!SP_Text)
         UE_LOG(LogTemp, Warning, TEXT("PlayerStatsWidget::RefreshVitals - SP_Text is NULL (add UTextBlock named 'SP_Text' to WBP_PlayerStats), SP value would be %d"), Stats.freeSkillPoints);
     if (SP_Text)
     {
-        SP_Text->SetText(FText::FromString(FString::Printf(TEXT("Skill Points: %d"), Stats.freeSkillPoints)));
+        SP_Text->SetText(FText::Format(LOCTEXT("SkillPoints", "Skill Points: {0}"), FText::AsNumber(Stats.freeSkillPoints)));
         // Highlight in gold when there are unspent points, grey when zero
         SP_Text->SetColorAndOpacity(
             Stats.freeSkillPoints > 0
@@ -66,7 +69,8 @@ void UPlayerStatsWidget::RefreshVitals(const FPlayerStatsUpdateStruct& Stats)
         HP_Bar->SetPercent(FMath::Clamp(Pct, 0.f, 1.f));
     }
     if (HP_Text)
-        HP_Text->SetText(FText::FromString(FString::Printf(TEXT("HP: %d / %d"), Stats.healthCurrent, Stats.healthMax)));
+        HP_Text->SetText(FText::Format(LOCTEXT("HPValue", "HP: {0} / {1}"),
+            FText::AsNumber(Stats.healthCurrent), FText::AsNumber(Stats.healthMax)));
 
     // MP
     if (MP_Bar)
@@ -75,7 +79,8 @@ void UPlayerStatsWidget::RefreshVitals(const FPlayerStatsUpdateStruct& Stats)
         MP_Bar->SetPercent(FMath::Clamp(Pct, 0.f, 1.f));
     }
     if (MP_Text)
-        MP_Text->SetText(FText::FromString(FString::Printf(TEXT("MP: %d / %d"), Stats.manaCurrent, Stats.manaMax)));
+        MP_Text->SetText(FText::Format(LOCTEXT("MPValue", "MP: {0} / {1}"),
+            FText::AsNumber(Stats.manaCurrent), FText::AsNumber(Stats.manaMax)));
 
     // XP bar: (current - levelStart) / (nextLevel - levelStart)
     if (XP_Bar)
@@ -86,14 +91,15 @@ void UPlayerStatsWidget::RefreshVitals(const FPlayerStatsUpdateStruct& Stats)
         XP_Bar->SetPercent(FMath::Clamp(Pct, 0.f, 1.f));
     }
     if (XP_Text)
-        XP_Text->SetText(FText::FromString(FString::Printf(TEXT("XP: %d / %d"), Stats.experienceCurrent, Stats.experienceNextLevel)));
+        XP_Text->SetText(FText::Format(LOCTEXT("XPValue", "XP: {0} / {1}"),
+            FText::AsNumber(Stats.experienceCurrent), FText::AsNumber(Stats.experienceNextLevel)));
 
     // Debt: show in red when non-zero, hide otherwise
     if (Debt_Text)
     {
         if (Stats.experienceDebt > 0)
         {
-            Debt_Text->SetText(FText::FromString(FString::Printf(TEXT("Debt: %d XP"), Stats.experienceDebt)));
+            Debt_Text->SetText(FText::Format(LOCTEXT("DebtValue", "Debt: {0} XP"), FText::AsNumber(Stats.experienceDebt)));
             Debt_Text->SetVisibility(ESlateVisibility::Visible);
         }
         else
@@ -109,7 +115,9 @@ void UPlayerStatsWidget::RefreshVitals(const FPlayerStatsUpdateStruct& Stats)
         Weight_Bar->SetPercent(FMath::Clamp(Pct, 0.f, 1.f));
     }
     if (Weight_Text)
-        Weight_Text->SetText(FText::FromString(FString::Printf(TEXT("Weight: %.1f / %.1f kg"), Stats.weightCurrent, Stats.weightMax)));
+        Weight_Text->SetText(FText::Format(LOCTEXT("WeightValue", "Weight: {0} / {1} kg"),
+            FText::FromString(FString::Printf(TEXT("%.1f"), Stats.weightCurrent)),
+            FText::FromString(FString::Printf(TEXT("%.1f"), Stats.weightMax))));
 }
 
 void UPlayerStatsWidget::RefreshAttributes(const FPlayerStatsUpdateStruct& Stats)
@@ -251,4 +259,6 @@ void UPlayerStatsWidget::RefreshEffects(const FPlayerStatsUpdateStruct& Stats)
 // ---------------------------------------------------------------------------
 // Effect countdown tick
 // ---------------------------------------------------------------------------
+
+#undef LOCTEXT_NAMESPACE
 

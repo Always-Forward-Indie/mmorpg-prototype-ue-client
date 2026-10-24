@@ -3,6 +3,9 @@
 
 #include "Gameplay/UI/W_MOBHeadInfoWidget.h"
 
+// S5b: head-info level chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "MOBHeadWidget"
+
 void UW_MOBHeadInfoWidget::UpdateHealth(float CurrentHP, float MaxHP)
 {
 	if (!HealthProgressBar || MaxHP <= 0.f) return;
@@ -18,7 +21,7 @@ void UW_MOBHeadInfoWidget::UpdateNameAndLevel(const FString& Name, int32 Level)
 
 	if (MobLevelText)
 	{
-		MobLevelText->SetText(FText::FromString(FString::Printf(TEXT("LVL: %d"), Level)));
+		MobLevelText->SetText(FText::Format(LOCTEXT("LevelValue", "LVL: {0}"), FText::AsNumber(Level)));
 	}
 }
 
@@ -39,3 +42,5 @@ void UW_MOBHeadInfoWidget::SetWidgetScale(float Scale)
 	Transform.Scale = FVector2D(Scale, Scale);
 	SetRenderTransform(Transform);
 }
+
+#undef LOCTEXT_NAMESPACE

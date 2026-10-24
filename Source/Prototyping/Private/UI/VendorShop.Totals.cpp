@@ -13,6 +13,9 @@
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "EngineUtils.h"
 
+// S5b: shop total/gold chrome gathered via LOCTEXT (same namespace as Results TU).
+#define LOCTEXT_NAMESPACE "VendorShop"
+
 void UVendorShopWidget::HandleBuyCartSlotHovered(int32 SlotIndex, bool bIsHovered)
 {
     if (!VendorTooltipWidget) return;
@@ -60,7 +63,7 @@ void UVendorShopWidget::UpdateBuyTotalText()
     if (!Buy_Total_Text) return;
     int32 Total = 0;
     for (const FVendorCartEntry& E : BuyCart) Total += E.pricePerUnit * E.quantity;
-    Buy_Total_Text->SetText(FText::FromString(FString::Printf(TEXT("Total: %d g"), Total)));
+    Buy_Total_Text->SetText(FText::Format(LOCTEXT("TotalValue", "Total: {0} g"), FText::AsNumber(Total)));
 }
 
 void UVendorShopWidget::UpdateSellTotalText()
@@ -68,7 +71,7 @@ void UVendorShopWidget::UpdateSellTotalText()
     if (!Sell_Total_Text) return;
     int32 Total = 0;
     for (const FVendorCartEntry& E : SellCart) Total += E.pricePerUnit * E.quantity;
-    Sell_Total_Text->SetText(FText::FromString(FString::Printf(TEXT("You get: %d g"), Total)));
+    Sell_Total_Text->SetText(FText::Format(LOCTEXT("YouGetValue", "You get: {0} g"), FText::AsNumber(Total)));
 }
 
 void UVendorShopWidget::UpdatePlayerGoldText()
@@ -92,16 +95,18 @@ void UVendorShopWidget::UpdatePlayerGoldText()
 
     if (Delta == 0)
     {
-        Player_Gold_Text->SetText(FText::FromString(FString::Printf(TEXT("%d g"), CurrentGold)));
+        Player_Gold_Text->SetText(FText::Format(LOCTEXT("GoldValue", "{0} g"), FText::AsNumber(CurrentGold)));
         Player_Gold_Text->SetColorAndOpacity(FLinearColor(1.f, 0.85f, 0.3f));
     }
     else
     {
         const FString Sign   = (Delta > 0) ? TEXT("+") : TEXT("");
         const FLinearColor C = (Delta > 0) ? FLinearColor(0.3f, 1.f, 0.3f) : FLinearColor(1.f, 0.35f, 0.35f);
-        Player_Gold_Text->SetText(FText::FromString(
-            FString::Printf(TEXT("%d g  (%s%d g)"), CurrentGold, *Sign, Delta)));
+        Player_Gold_Text->SetText(FText::Format(LOCTEXT("GoldDelta", "{0} g  ({1}{2} g)"),
+            FText::AsNumber(CurrentGold), FText::FromString(Sign), FText::AsNumber(Delta)));
         Player_Gold_Text->SetColorAndOpacity(C);
     }
 }
+
+#undef LOCTEXT_NAMESPACE
 

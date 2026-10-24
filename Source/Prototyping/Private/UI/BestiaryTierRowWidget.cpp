@@ -5,6 +5,9 @@
 #include "MyGameInstance.h"
 #include "Services/LocalizationSubsystem.h"
 
+// S5b: locked-hint fallback chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "BestiaryTierRow"
+
 void UBestiaryTierRowWidget::Setup(const FBestiaryTierStruct& Tier)
 {
     // Cache localization subsystem once
@@ -55,21 +58,21 @@ void UBestiaryTierRowWidget::Setup(const FBestiaryTierStruct& Tier)
                 ? Loc->GetBestiaryCategoryLockedHint(Tier.categorySlug)
                 : FText::GetEmpty();
 
-            FString LockedStr;
+            FText LockedStr;
             if (!LockedHint.IsEmpty())
             {
                 LockedStr = Tier.requiredKillsLeft > 0
-                    ? FString::Printf(TEXT("%s (%d)"), *LockedHint.ToString(), Tier.requiredKillsLeft)
-                    : LockedHint.ToString();
+                    ? FText::Format(LOCTEXT("HintKillsLeft", "{0} ({1})"), LockedHint, FText::AsNumber(Tier.requiredKillsLeft))
+                    : LockedHint;
             }
             else
             {
                 LockedStr = Tier.requiredKillsLeft > 0
-                    ? FString::Printf(TEXT("??? \u2014 %d more kills"), Tier.requiredKillsLeft)
-                    : FString::Printf(TEXT("??? \u2014 %d kills needed"), Tier.requiredKills);
+                    ? FText::Format(LOCTEXT("MoreKillsFallback", "??? — {0} more kills"), FText::AsNumber(Tier.requiredKillsLeft))
+                    : FText::Format(LOCTEXT("KillsNeededFallback", "??? — {0} kills needed"), FText::AsNumber(Tier.requiredKills));
             }
 
-            Tier_Locked_Text->SetText(FText::FromString(LockedStr));
+            Tier_Locked_Text->SetText(LockedStr);
             Tier_Locked_Text->SetVisibility(ESlateVisibility::Visible);
         }
     }
@@ -152,3 +155,5 @@ void UBestiaryTierRowWidget::PopulateTierContent(const FBestiaryTierStruct& Tier
             AddLine(Tier.achievementSlug);
     }
 }
+
+#undef LOCTEXT_NAMESPACE

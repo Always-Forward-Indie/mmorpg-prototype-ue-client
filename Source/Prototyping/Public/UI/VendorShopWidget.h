@@ -200,7 +200,7 @@ UPROPERTY() UVendorTooltipWidget* VendorTooltipWidget = nullptr;
     UPROPERTY() TArray<UVendorSlotWidget*> SellCartSlots;
 
     // Helpers
-    void ShowStatus(const FString& Msg);
+    void ShowStatus(const FText& Msg);
     FText GetVendorErrorText(const FString& ErrorCode) const;
     void UpdateBuyTotalText();
     void UpdateSellTotalText();

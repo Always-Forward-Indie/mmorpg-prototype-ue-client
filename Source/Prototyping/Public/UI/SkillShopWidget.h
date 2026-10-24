@@ -115,7 +115,7 @@ protected:
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UWidget*    DragHandle       = nullptr;
 
 private:
-    void ShowStatus(const FString& Msg);
+    void ShowStatus(const FText& Msg);
     void ClearStatus();
     void UpdateHeaderDisplay();
     void PopulateSkillRows();

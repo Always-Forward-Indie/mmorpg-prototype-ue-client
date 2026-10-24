@@ -1,5 +1,8 @@
 #include "UI/QuantityPopupWidget.h"
 
+// S5b: popup price chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "QuantityPopup"
+
 void UQuantityPopupWidget::NativeConstruct()
 {
     Super::NativeConstruct();
@@ -32,8 +35,8 @@ void UQuantityPopupWidget::OpenForAdd(int32 InSlotIndex, const FString& InName,
         ItemNameText->SetText(FText::FromString(InName));
 
     if (PricePerUnitText)
-        PricePerUnitText->SetText(FText::FromString(
-            FString::Printf(TEXT("%d g / pc"), InPricePerUnit)));
+        PricePerUnitText->SetText(FText::Format(LOCTEXT("PricePerPc", "{0} g / pc"),
+            FText::AsNumber(InPricePerUnit)));
 
     if (RemoveButton)
         RemoveButton->SetVisibility(ESlateVisibility::Collapsed);
@@ -55,8 +58,8 @@ void UQuantityPopupWidget::OpenForUpdate(int32 InSlotIndex, const FString& InNam
         ItemNameText->SetText(FText::FromString(InName));
 
     if (PricePerUnitText)
-        PricePerUnitText->SetText(FText::FromString(
-            FString::Printf(TEXT("%d g / pc"), InPricePerUnit)));
+        PricePerUnitText->SetText(FText::Format(LOCTEXT("PricePerPc", "{0} g / pc"),
+            FText::AsNumber(InPricePerUnit)));
 
     if (RemoveButton)
         RemoveButton->SetVisibility(ESlateVisibility::Visible);
@@ -93,8 +96,8 @@ void UQuantityPopupWidget::SetQuantity(int32 NewQty)
 void UQuantityPopupWidget::UpdateTotalPrice()
 {
     if (TotalPriceText)
-        TotalPriceText->SetText(FText::FromString(
-            FString::Printf(TEXT("Total: %d g"), PricePerUnit * CurrentQty)));
+        TotalPriceText->SetText(FText::Format(LOCTEXT("TotalPrice", "Total: {0} g"),
+            FText::AsNumber(PricePerUnit * CurrentQty)));
 }
 
 // ---------------------------------------------------------------------------
@@ -175,3 +178,5 @@ FReply UQuantityPopupWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry
     HandleCancel();
     return FReply::Handled();
 }
+
+#undef LOCTEXT_NAMESPACE

@@ -3,6 +3,9 @@
 #include "Gameplay/UI/MOBHeadInfo.h"
 #include "Gameplay/UI/W_MOBHeadInfoWidget.h"
 
+// S5b: mob level chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "MOBHeadInfo"
+
 UW_MOBHeadInfoWidget* UMOBHeadInfo::GetHeadWidget()
 {
 	if (!CachedWidget)
@@ -44,7 +47,7 @@ void UMOBHeadInfo::UpdateMobLevel(int32 MobLevel)
 	{
 		if (W->MobLevelText)
 		{
-			W->MobLevelText->SetText(FText::FromString(FString::Printf(TEXT("LVL: %d"), MobLevel)));
+			W->MobLevelText->SetText(FText::Format(LOCTEXT("LevelValue", "LVL: {0}"), FText::AsNumber(MobLevel)));
 		}
 	}
 }
@@ -61,3 +64,5 @@ void UMOBHeadInfo::ShowWidget(bool bShow)
 {
 	SetVisibility(bShow);
 }
+
+#undef LOCTEXT_NAMESPACE

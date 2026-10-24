@@ -102,7 +102,7 @@ private:
     FRepairShopData CachedShop;
     int32           CachedGoldBalance = 0;
 
-    void ShowStatus(const FString& Msg);
+    void ShowStatus(const FText& Msg);
     void UpdateGoldText();
     FText GetVendorErrorText(const FString& ErrorCode) const;
 

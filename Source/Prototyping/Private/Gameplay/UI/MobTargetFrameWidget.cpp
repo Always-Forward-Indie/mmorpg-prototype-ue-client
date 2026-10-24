@@ -10,6 +10,9 @@
 #include "Services/LocalizationSubsystem.h"
 #include "Data/DataStructs.h"
 
+// S5b: target-frame level chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "MobTargetFrame"
+
 void UMobTargetFrameWidget::NativeConstruct()
 {
     Super::NativeConstruct();
@@ -109,7 +112,7 @@ void UMobTargetFrameWidget::SetMobInfo(const FString& MobSlug,
     // Level
     if (MobLevelText)
     {
-        MobLevelText->SetText(FText::FromString(FString::Printf(TEXT("LVL: %d"), MobLevel)));
+        MobLevelText->SetText(FText::Format(LOCTEXT("LevelValue", "LVL: {0}"), FText::AsNumber(MobLevel)));
     }
 
     // Aggro icon
@@ -223,3 +226,5 @@ void UMobTargetFrameWidget::HandleLocaleChanged(const FString& NewLocale)
     if (!bHasTarget) return;
     SetMobInfo(CachedMobSlug, CachedMobName, CachedMobLevel, CachedCurrentHP, CachedMaxHP, bCachedAggro, nullptr);
 }
+
+#undef LOCTEXT_NAMESPACE

@@ -72,5 +72,5 @@ private:
     ULocalizationSubsystem* GetLocSys() const;
 
     // Build a single text line for one quest
-    FString BuildTrackerLine(const FQuestProgressData& Data) const;
+    FText BuildTrackerLine(const FQuestProgressData& Data) const;
 };

@@ -7,6 +7,11 @@
 #include "Engine/AssetManager.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 
+// S5b: field-label chrome gathered via LOCTEXT. Fragments stay FString
+// (multi-line join before a single SetText); patterns come from LOCTEXT
+// so the dashboard still gathers them.
+#define LOCTEXT_NAMESPACE "VendorTooltipFields"
+
 void UVendorTooltipWidget::ApplyCommonFields(const FString& Name, const FString& TypeName,
 const FString& RarityName, const FString& RaritySlug, const FString& Description,
 float Weight, int32 DurabilityMax, int32 DurabilityCurrent,
@@ -120,7 +125,8 @@ int32 KillCount)
     {
         if (Weight > 0.f)
         {
-            WeightText->SetText(FText::FromString(FString::Printf(TEXT("Weight: %.1f kg"), Weight)));
+            WeightText->SetText(FText::Format(LOCTEXT("WeightValue", "Weight: {0} kg"),
+                FText::FromString(FString::Printf(TEXT("%.1f"), Weight))));
             WeightText->SetVisibility(ESlateVisibility::Visible);
             if (Separator6) Separator6->SetVisibility(ESlateVisibility::Visible);
         }
@@ -141,8 +147,8 @@ int32 KillCount)
             const FLinearColor DurColor = (Ratio <= 0.25f) ? FLinearColor::Red
                 : (Ratio <= 0.5f) ? FLinearColor::Yellow
                 : FLinearColor(0.6f, 0.9f, 0.6f, 1.f);
-            DurabilityText->SetText(FText::FromString(
-                FString::Printf(TEXT("Durability: %d / %d"), DurabilityCurrent, DurabilityMax)));
+            DurabilityText->SetText(FText::Format(LOCTEXT("DurabilityValue", "Durability: {0} / {1}"),
+                FText::AsNumber(DurabilityCurrent), FText::AsNumber(DurabilityMax)));
             DurabilityText->SetColorAndOpacity(DurColor);
             DurabilityText->SetVisibility(ESlateVisibility::Visible);
 			if (Separator3) Separator3->SetVisibility(ESlateVisibility::Visible);
@@ -165,7 +171,7 @@ int32 KillCount)
             if (SlotLabel.IsEmpty())
                 SlotLabel = PrettyFallback(EquipSlotName);
             FString SlotStr = SlotLabel.ToString();
-            if (bIsTwoHanded) SlotStr += TEXT(" (Two-Handed)");
+            if (bIsTwoHanded) SlotStr += LOCTEXT("TwoHandedSuffix", " (Two-Handed)").ToString();
             EquipSlotText->SetText(FText::FromString(SlotStr));
             EquipSlotText->SetVisibility(ESlateVisibility::Visible);
         }
@@ -180,8 +186,8 @@ int32 KillCount)
     {
         if (LevelRequirement > 1)
         {
-            LevelRequirementText->SetText(FText::FromString(
-                FString::Printf(TEXT("Required Level: %d"), LevelRequirement)));
+            LevelRequirementText->SetText(FText::Format(LOCTEXT("RequiredLevel", "Required Level: {0}"),
+                FText::AsNumber(LevelRequirement)));
             LevelRequirementText->SetColorAndOpacity(FLinearColor(1.f, 0.85f, 0.45f));
             LevelRequirementText->SetVisibility(ESlateVisibility::Visible);
         }
@@ -195,8 +201,8 @@ int32 KillCount)
     if (FlagsText)
     {
         TArray<FString> Flags;
-        if (bIsQuestItem)  Flags.Add(TEXT("Quest Item"));
-        if (!bIsTradable)  Flags.Add(TEXT("Not Tradable"));
+        if (bIsQuestItem)  Flags.Add(LOCTEXT("QuestItem", "Quest Item").ToString());
+        if (!bIsTradable)  Flags.Add(LOCTEXT("NotTradable", "Not Tradable").ToString());
         if (Flags.Num() > 0)
         {
             FlagsText->SetText(FText::FromString(FString::Join(Flags, TEXT("  \u00b7  "))));
@@ -255,13 +261,16 @@ int32 KillCount)
                     AttrLabel = PrettyFallback(Effect.attributeSlug).ToString();
                 FString Line;
                 if (Effect.isInstant)
-                    Line = FString::Printf(TEXT("Use: Restores %.0f %s"), Effect.value, *AttrLabel);
+                    Line = FText::Format(LOCTEXT("UseRestores", "Use: Restores {0} {1}"),
+                        FText::FromString(FString::Printf(TEXT("%.0f"), Effect.value)), FText::FromString(AttrLabel)).ToString();
                 else if (Effect.durationSeconds > 0)
-                    Line = FString::Printf(TEXT("Use: +%.0f %s for %ds"), Effect.value, *AttrLabel, Effect.durationSeconds);
+                    Line = FText::Format(LOCTEXT("UseBuff", "Use: +{0} {1} for {2}s"),
+                        FText::FromString(FString::Printf(TEXT("%.0f"), Effect.value)), FText::FromString(AttrLabel), FText::AsNumber(Effect.durationSeconds)).ToString();
                 else
-                    Line = FString::Printf(TEXT("Use: %.0f %s"), Effect.value, *AttrLabel);
+                    Line = FText::Format(LOCTEXT("UseFlat", "Use: {0} {1}"),
+                        FText::FromString(FString::Printf(TEXT("%.0f"), Effect.value)), FText::FromString(AttrLabel)).ToString();
                 if (Effect.cooldownSeconds > 0)
-                    Line += FString::Printf(TEXT(" (%ds cooldown)"), Effect.cooldownSeconds);
+                    Line += FText::Format(LOCTEXT("CooldownSuffix", " ({0}s cooldown)"), FText::AsNumber(Effect.cooldownSeconds)).ToString();
                 EffLines.Add(Line);
             }
             UseEffectText->SetText(FText::FromString(FString::Join(EffLines, TEXT("\n"))));
@@ -303,10 +312,10 @@ int32 KillCount)
                     else
                         ML = PrettyFallback(MasterySlug).ToString();
                 }
-                Parts.Add(FString::Printf(TEXT("Mastery: %s"), *ML));
+                Parts.Add(FText::Format(LOCTEXT("MasteryValue", "Mastery: {0}"), FText::FromString(ML)).ToString());
             }
             if (bHasKills)
-                Parts.Add(FString::Printf(TEXT("Kills: %d"), KillCount));
+                Parts.Add(FText::Format(LOCTEXT("KillsValue", "Kills: {0}"), FText::AsNumber(KillCount)).ToString());
             WeaponSoulText->SetText(FText::FromString(FString::Join(Parts, TEXT("  |  "))));
             WeaponSoulText->SetColorAndOpacity(FLinearColor(1.f, 0.6f, 0.1f));
             WeaponSoulText->SetVisibility(ESlateVisibility::Visible);
@@ -319,4 +328,6 @@ int32 KillCount)
 
     LoadIconBySlug(Slug);
 }
+
+#undef LOCTEXT_NAMESPACE
 

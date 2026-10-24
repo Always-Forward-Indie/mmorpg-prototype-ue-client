@@ -5,6 +5,9 @@
 #include "Components/Image.h"
 #include "Kismet/GameplayStatics.h"
 
+// S5b: fallback prompt chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "WIOInteractionPrompt"
+
 void UWIOInteractionPromptWidget::NativeConstruct()
 {
     Super::NativeConstruct();
@@ -66,17 +69,17 @@ void UWIOInteractionPromptWidget::ShowForObject(AWorldInteractiveObjectActor* In
 	// Fallback prompt text built from object type
 	if (PromptText.IsEmpty())
 	{
-		FString TypeLabel;
+		FText TypeLabel;
 		switch (InActor->GetObjectType())
 		{
-		case EWIOObjectType::Examine:    TypeLabel = TEXT("Examine");  break;
-		case EWIOObjectType::Search:     TypeLabel = TEXT("Search");   break;
-		case EWIOObjectType::Activate:   TypeLabel = TEXT("Activate"); break;
-		case EWIOObjectType::UseWithItem:TypeLabel = TEXT("Use");      break;
-		case EWIOObjectType::Channeled:  TypeLabel = TEXT("Channel");  break;
-		default:                         TypeLabel = TEXT("Interact"); break;
+		case EWIOObjectType::Examine:     TypeLabel = LOCTEXT("Examine", "Examine");   break;
+		case EWIOObjectType::Search:      TypeLabel = LOCTEXT("Search", "Search");     break;
+		case EWIOObjectType::Activate:    TypeLabel = LOCTEXT("Activate", "Activate"); break;
+		case EWIOObjectType::UseWithItem: TypeLabel = LOCTEXT("Use", "Use");           break;
+		case EWIOObjectType::Channeled:   TypeLabel = LOCTEXT("Channel", "Channel");   break;
+		default:                          TypeLabel = LOCTEXT("Interact", "Interact"); break;
 		}
-		PromptText = FText::FromString(FString::Printf(TEXT("[%s] %s"), *InteractionKeyName, *TypeLabel));
+		PromptText = FText::Format(LOCTEXT("PromptPattern", "[{0}] {1}"), FText::FromString(InteractionKeyName), TypeLabel);
 	}
 
 	// ── Auto-populate bound widget members ──────────────────────────────
@@ -110,3 +113,5 @@ void UWIOInteractionPromptWidget::HandleLocaleChanged(const FString& NewLocale)
         ShowForObject(CurrentActor.Get());
     }
 }
+
+#undef LOCTEXT_NAMESPACE

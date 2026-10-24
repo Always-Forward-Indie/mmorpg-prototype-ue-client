@@ -10,6 +10,9 @@
 #include "Components/Button.h"
 #include "Components/ScrollBox.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
+
+// S5b: repair status/cost chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "RepairShop"
 #include "Components/CanvasPanelSlot.h"
 
 // ---------------------------------------------------------------------------
@@ -167,12 +170,12 @@ void URepairShopWidget::RefreshDisplay()
         }
 
         if (Row->Row_Durability_Text)
-            Row->Row_Durability_Text->SetText(FText::FromString(
-                FString::Printf(TEXT("%d / %d"), Item.durabilityCurrent, Item.durabilityMax)));
+            Row->Row_Durability_Text->SetText(FText::Format(LOCTEXT("DurabilityValue", "{0} / {1}"),
+                FText::AsNumber(Item.durabilityCurrent), FText::AsNumber(Item.durabilityMax)));
 
         if (Row->Row_Cost_Text)
-            Row->Row_Cost_Text->SetText(FText::FromString(
-                FString::Printf(TEXT("%d g"), Item.repairCost)));
+            Row->Row_Cost_Text->SetText(FText::Format(LOCTEXT("CostGold", "{0} g"),
+                FText::AsNumber(Item.repairCost)));
 
         if (Row->Row_Repair_Btn)
         {
@@ -187,8 +190,8 @@ void URepairShopWidget::RefreshDisplay()
 
     if (Total_Cost_Text)
     {
-        Total_Cost_Text->SetText(FText::FromString(
-            FString::Printf(TEXT("Total: %d g"), CachedShop.totalRepairCost)));
+        Total_Cost_Text->SetText(FText::Format(LOCTEXT("TotalCost", "Total: {0} g"),
+            FText::AsNumber(CachedShop.totalRepairCost)));
     }
 
     if (Repair_All_Btn)
@@ -242,10 +245,10 @@ void URepairShopWidget::HandleRepairItemResult(const FRepairItemResultData& Resu
 	if (!Result.errorCode.IsEmpty())
 	{
 		const FText Friendly = GetVendorErrorText(Result.errorCode);
-		ShowStatus(FString::Printf(TEXT("Repair failed: %s"), *Friendly.ToString()));
+		ShowStatus(FText::Format(LOCTEXT("RepairFailed", "Repair failed: {0}"), Friendly));
 		return;
 	}
-    ShowStatus(FString::Printf(TEXT("Repaired  (-%d g)"), Result.goldSpent));
+    ShowStatus(FText::Format(LOCTEXT("RepairedSpent", "Repaired  (-{0} g)"), FText::AsNumber(Result.goldSpent)));
 
     // Update gold balance immediately (server also sends a follow-up repairShop
     // packet, but we update now for visual responsiveness)
@@ -275,12 +278,12 @@ void URepairShopWidget::HandleRepairAllResult(const FRepairAllResultData& Result
 	if (!Result.errorCode.IsEmpty())
 	{
 		const FText Friendly = GetVendorErrorText(Result.errorCode);
-		ShowStatus(FString::Printf(TEXT("Repair all failed: %s"), *Friendly.ToString()));
+		ShowStatus(FText::Format(LOCTEXT("RepairAllFailed", "Repair all failed: {0}"), Friendly));
 		return;
 	}
 
     const int32 TotalSpent = Result.goldSpent > 0 ? Result.goldSpent : Result.totalGoldSpent;
-    ShowStatus(FString::Printf(TEXT("All repaired  (-%d g)"), TotalSpent));
+    ShowStatus(FText::Format(LOCTEXT("AllRepairedSpent", "All repaired  (-{0} g)"), FText::AsNumber(TotalSpent)));
 
     // Update gold balance immediately
     if (Result.newGoldBalance > 0)
@@ -322,15 +325,15 @@ void URepairShopWidget::HandleInventoryUpdated(const FCharacterInventoryStruct& 
 void URepairShopWidget::UpdateGoldText()
 {
     if (Player_Gold_Text)
-        Player_Gold_Text->SetText(FText::FromString(
-            FString::Printf(TEXT("Gold: %d"), CachedGoldBalance)));
+        Player_Gold_Text->SetText(FText::Format(LOCTEXT("GoldValue", "Gold: {0}"),
+            FText::AsNumber(CachedGoldBalance)));
 }
 
-void URepairShopWidget::ShowStatus(const FString& Msg)
+void URepairShopWidget::ShowStatus(const FText& Msg)
 {
     if (Status_Text)
     {
-        Status_Text->SetText(FText::FromString(Msg));
+        Status_Text->SetText(Msg);
         Status_Text->SetVisibility(ESlateVisibility::Visible);
     }
 }
@@ -421,3 +424,5 @@ void URepairShopWidget::HandleLocaleChanged(const FString& NewLocale)
         RefreshDisplay();
     }
 }
+
+#undef LOCTEXT_NAMESPACE

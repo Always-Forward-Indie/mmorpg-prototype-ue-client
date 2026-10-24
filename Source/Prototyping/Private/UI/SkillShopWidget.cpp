@@ -15,6 +15,9 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/CanvasPanelSlot.h"
 
+// S5b: trainer status/reason chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "SkillShop"
+
 // ---------------------------------------------------------------------------
 // USkillShopRowBinding
 // ---------------------------------------------------------------------------
@@ -198,7 +201,7 @@ void USkillShopWidget::HandleSkillLearned(const FLearnSkillResultData& Result)
     if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
         LearnedName = ULocalizationSubsystem::PickTableOrServer(
             Loc->GetSkillDisplayName(Result.skillSlug), Result.skillSlug, Result.skillName);
-    ShowStatus(FString::Printf(TEXT("Learned: %s"), *LearnedName.ToString()));
+    ShowStatus(FText::Format(LOCTEXT("LearnedValue", "Learned: {0}"), LearnedName));
 
     // Refresh the shop display from the updated manager state
     if (SkillShopManager)
@@ -210,15 +213,16 @@ void USkillShopWidget::HandleSkillLearned(const FLearnSkillResultData& Result)
 
 void USkillShopWidget::HandleSkillLearnFailed(const FString& SkillSlug, const FString& Reason)
 {
-    FString Msg = FString::Printf(TEXT("Cannot learn %s: %s"), *SkillSlug, *Reason);
-    // Map reason codes to human-friendly text
-    if (Reason == TEXT("insufficient_sp"))   Msg = FString::Printf(TEXT("Not enough Skill Points to learn %s"), *SkillSlug);
-    else if (Reason == TEXT("insufficient_gold"))   Msg = FString::Printf(TEXT("Not enough gold to learn %s"), *SkillSlug);
-    else if (Reason == TEXT("missing_skill_book"))  Msg = FString::Printf(TEXT("Need a skill book to learn %s"), *SkillSlug);
-    else if (Reason == TEXT("already_learned"))     Msg = FString::Printf(TEXT("%s is already learned"), *SkillSlug);
-    else if (Reason == TEXT("insufficient_level"))  Msg = FString::Printf(TEXT("Level too low to learn %s"), *SkillSlug);
-    else if (Reason == TEXT("missing_prerequisite"))Msg = FString::Printf(TEXT("Missing prerequisite for %s"), *SkillSlug);
-    else if (Reason == TEXT("out_of_range"))        Msg = TEXT("Move closer to the trainer");
+    // Map reason codes to human-friendly text (S5b: gathered via LOCTEXT).
+    FText SkillName = FText::FromString(SkillSlug);
+    FText Msg = FText::Format(LOCTEXT("CannotLearn", "Cannot learn {0}: {1}"), SkillName, FText::FromString(Reason));
+    if (Reason == TEXT("insufficient_sp"))        Msg = FText::Format(LOCTEXT("NotEnoughSP", "Not enough Skill Points to learn {0}"), SkillName);
+    else if (Reason == TEXT("insufficient_gold")) Msg = FText::Format(LOCTEXT("NotEnoughGold", "Not enough gold to learn {0}"), SkillName);
+    else if (Reason == TEXT("missing_skill_book"))Msg = FText::Format(LOCTEXT("NeedBook", "Need a skill book to learn {0}"), SkillName);
+    else if (Reason == TEXT("already_learned"))   Msg = FText::Format(LOCTEXT("AlreadyLearned", "{0} is already learned"), SkillName);
+    else if (Reason == TEXT("insufficient_level"))Msg = FText::Format(LOCTEXT("LevelTooLow", "Level too low to learn {0}"), SkillName);
+    else if (Reason == TEXT("missing_prerequisite")) Msg = FText::Format(LOCTEXT("MissingPrereq", "Missing prerequisite for {0}"), SkillName);
+    else if (Reason == TEXT("out_of_range"))      Msg = LOCTEXT("MoveCloser", "Move closer to the trainer");
     ShowStatus(Msg);
 }
 
@@ -235,19 +239,19 @@ void USkillShopWidget::UpdateHeaderDisplay()
 {
     if (NPC_Name_Text)
     {
-        FString Name = CachedShop.npcSlug.IsEmpty()
-            ? FString::Printf(TEXT("Trainer #%d"), CachedShop.npcId)
-            : CachedShop.npcSlug;
-        NPC_Name_Text->SetText(FText::FromString(Name));
+        FText Name = !CachedShop.npcSlug.IsEmpty()
+            ? FText::FromString(CachedShop.npcSlug)
+            : FText::Format(LOCTEXT("TrainerNumbered", "Trainer #{0}"), FText::AsNumber(CachedShop.npcId));
+        NPC_Name_Text->SetText(Name);
     }
 
     if (Player_SP_Text)
-        Player_SP_Text->SetText(FText::FromString(
-            FString::Printf(TEXT("Free SP: %d"), CachedShop.freeSkillPoints)));
+        Player_SP_Text->SetText(FText::Format(LOCTEXT("FreeSP", "Free SP: {0}"),
+            FText::AsNumber(CachedShop.freeSkillPoints)));
 
     if (Player_Gold_Text)
-        Player_Gold_Text->SetText(FText::FromString(
-            FString::Printf(TEXT("Gold: %d"), CachedShop.goldBalance)));
+        Player_Gold_Text->SetText(FText::Format(LOCTEXT("GoldValue", "Gold: {0}"),
+            FText::AsNumber(CachedShop.goldBalance)));
 }
 
 void USkillShopWidget::PopulateSkillRows()
@@ -326,11 +330,11 @@ void USkillShopWidget::SetRowState(UUserWidget* /*Row*/, const FSkillShopSkillDa
 {
 }
 
-void USkillShopWidget::ShowStatus(const FString& Msg)
+void USkillShopWidget::ShowStatus(const FText& Msg)
 {
     if (Status_Text)
     {
-        Status_Text->SetText(FText::FromString(Msg));
+        Status_Text->SetText(Msg);
         Status_Text->SetVisibility(ESlateVisibility::Visible);
     }
 }
@@ -405,3 +409,5 @@ void USkillShopWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPos
     CurrentViewportPosition = Pos;
     SetPositionInViewport(Pos, false);
 }
+
+#undef LOCTEXT_NAMESPACE

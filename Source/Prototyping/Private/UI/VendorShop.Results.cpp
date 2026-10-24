@@ -13,6 +13,9 @@
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "EngineUtils.h"
 
+// S5b: shop status/result chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "VendorShop"
+
 void UVendorShopWidget::HandleConfirmBuyCart()
 {
     if (!VendorManager || BuyCart.IsEmpty()) return;
@@ -100,7 +103,8 @@ void UVendorShopWidget::HandleVendorShopOpened(const FVendorShopData& ShopData)
             }
             else
             {
-                DisplayName = FString::Printf(TEXT("Vendor (NPC #%d)"), ShopData.npcId);
+                DisplayName = FText::Format(LOCTEXT("VendorNumbered", "Vendor (NPC #{0})"),
+                    FText::AsNumber(ShopData.npcId)).ToString();
             }
         }
 
@@ -114,12 +118,13 @@ void UVendorShopWidget::HandleBuyItemResult(const FBuyItemResultData& Result)
 	if (!Result.errorCode.IsEmpty())
 	{
 		const FText Friendly = GetVendorErrorText(Result.errorCode);
-		ShowStatus(FString::Printf(TEXT("Buy failed: %s"), *Friendly.ToString()));
+		ShowStatus(FText::Format(LOCTEXT("BuyFailed", "Buy failed: {0}"), Friendly));
 	}
 	else
 	{
 		FString ItemName = ResolveItemNameFromShop(Result.itemId);
-		ShowStatus(FString::Printf(TEXT("Bought %s x%d  (-%d g)"), *ItemName, Result.quantity, Result.totalPrice));
+		ShowStatus(FText::Format(LOCTEXT("BoughtQty", "Bought {0} x{1}  (-{2} g)"),
+			FText::FromString(ItemName), FText::AsNumber(Result.quantity), FText::AsNumber(Result.totalPrice)));
 	}
 	RefreshShopDisplay();
 }
@@ -129,12 +134,13 @@ void UVendorShopWidget::HandleSellItemResult(const FSellItemResultData& Result)
 	if (!Result.errorCode.IsEmpty())
 	{
 		const FText Friendly = GetVendorErrorText(Result.errorCode);
-		ShowStatus(FString::Printf(TEXT("Sell failed: %s"), *Friendly.ToString()));
+		ShowStatus(FText::Format(LOCTEXT("SellFailed", "Sell failed: {0}"), Friendly));
 	}
 	else
 	{
 		FString ItemName = ResolveItemNameFromInventory(Result.inventoryItemId);
-		ShowStatus(FString::Printf(TEXT("Sold %s  (+%d g)"), *ItemName, Result.goldReceived));
+		ShowStatus(FText::Format(LOCTEXT("SoldGain", "Sold {0}  (+{1} g)"),
+			FText::FromString(ItemName), FText::AsNumber(Result.goldReceived)));
 	}
 	RefreshInventoryDisplay();
 }
@@ -145,16 +151,18 @@ void UVendorShopWidget::HandleBuyItemBatchResult(const FBuyItemBatchResultData& 
 	if (!Result.errorCode.IsEmpty())
 	{
 		const FText Friendly = GetVendorErrorText(Result.errorCode);
-		ShowStatus(FString::Printf(TEXT("Buy failed: %s"), *Friendly.ToString()));
+		ShowStatus(FText::Format(LOCTEXT("BuyFailed", "Buy failed: {0}"), Friendly));
 		return;
 	}
 	FString FirstItemName;
 	if (Result.items.Num() > 0)
 		FirstItemName = ResolveItemNameFromShop(Result.items[0].itemId);
 	if (Result.items.Num() <= 1)
-		ShowStatus(FString::Printf(TEXT("Bought %s  (-%d g)"), *FirstItemName, Result.totalGoldSpent));
+		ShowStatus(FText::Format(LOCTEXT("BoughtSpent", "Bought {0}  (-{1} g)"),
+			FText::FromString(FirstItemName), FText::AsNumber(Result.totalGoldSpent)));
 	else
-		ShowStatus(FString::Printf(TEXT("Bought %s [+%d more]  (-%d g)"), *FirstItemName, Result.items.Num() - 1, Result.totalGoldSpent));
+		ShowStatus(FText::Format(LOCTEXT("BoughtMoreSpent", "Bought {0} [+{1} more]  (-{2} g)"),
+			FText::FromString(FirstItemName), FText::AsNumber(Result.items.Num() - 1), FText::AsNumber(Result.totalGoldSpent)));
 	BuyCart.Reset();
 	RefreshBuyCartDisplay();
 	RefreshShopDisplay(); // stock may have changed
@@ -166,7 +174,7 @@ void UVendorShopWidget::HandleSellItemBatchResult(const FSellItemBatchResultData
 	if (!Result.errorCode.IsEmpty())
 	{
 		const FText Friendly = GetVendorErrorText(Result.errorCode);
-		ShowStatus(FString::Printf(TEXT("Sell failed: %s"), *Friendly.ToString()));
+		ShowStatus(FText::Format(LOCTEXT("SellFailed", "Sell failed: {0}"), Friendly));
 		RefreshSellCartDisplay();
 		RefreshInventoryDisplay();
 		return;
@@ -175,9 +183,11 @@ void UVendorShopWidget::HandleSellItemBatchResult(const FSellItemBatchResultData
     if (Result.items.Num() > 0)
         FirstItemName = ResolveItemNameFromInventory(Result.items[0].inventoryItemId);
     if (Result.items.Num() <= 1)
-        ShowStatus(FString::Printf(TEXT("Sold %s  (+%d g)"), *FirstItemName, Result.totalGoldReceived));
+        ShowStatus(FText::Format(LOCTEXT("SoldGain", "Sold {0}  (+{1} g)"),
+            FText::FromString(FirstItemName), FText::AsNumber(Result.totalGoldReceived)));
     else
-        ShowStatus(FString::Printf(TEXT("Sold %s [+%d more]  (+%d g)"), *FirstItemName, Result.items.Num() - 1, Result.totalGoldReceived));
+        ShowStatus(FText::Format(LOCTEXT("SoldMoreGain", "Sold {0} [+{1} more]  (+{2} g)"),
+            FText::FromString(FirstItemName), FText::AsNumber(Result.items.Num() - 1), FText::AsNumber(Result.totalGoldReceived)));
 
     // Update CachedInventory quantities based on what was actually sold.
     // Only subtract if the item still exists — getPlayerInventory may have already
@@ -232,12 +242,14 @@ void UVendorShopWidget::HandleInventoryUpdated(const FCharacterInventoryStruct& 
 
 void UVendorShopWidget::HandleCloseButtonClicked() { CloseShop(); }
 
-void UVendorShopWidget::ShowStatus(const FString& Msg)
+void UVendorShopWidget::ShowStatus(const FText& Msg)
 {
     if (Status_Text)
     {
-        Status_Text->SetText(FText::FromString(Msg));
+        Status_Text->SetText(Msg);
         Status_Text->SetVisibility(ESlateVisibility::Visible);
     }
 }
+
+#undef LOCTEXT_NAMESPACE
 

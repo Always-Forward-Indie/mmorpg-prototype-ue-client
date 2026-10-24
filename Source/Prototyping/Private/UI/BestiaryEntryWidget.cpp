@@ -13,6 +13,9 @@
 #include "MyGameInstance.h"
 #include "Services/LocalizationSubsystem.h"
 
+// S5b: kill-count chrome gathered via LOCTEXT.
+#define LOCTEXT_NAMESPACE "BestiaryEntry"
+
 void UBestiaryEntryWidget::NativeConstruct()
 {
     Super::NativeConstruct();
@@ -131,8 +134,8 @@ void UBestiaryEntryWidget::DisplayEntry(const FBestiaryEntryStruct& Entry)
     // Kill count
     if (Kill_Count_Text)
     {
-        Kill_Count_Text->SetText(FText::FromString(
-            FString::Printf(TEXT("Kills: %d"), Entry.killCount)));
+        Kill_Count_Text->SetText(FText::Format(LOCTEXT("KillsValue", "Kills: {0}"),
+            FText::AsNumber(Entry.killCount)));
     }
 
     // Rebuild tiers
@@ -254,4 +257,6 @@ void UBestiaryEntryWidget::HandleLocaleChanged(const FString& NewLocale)
         DisplayEntry(CurrentEntry);
     }
 }
+
+#undef LOCTEXT_NAMESPACE
 

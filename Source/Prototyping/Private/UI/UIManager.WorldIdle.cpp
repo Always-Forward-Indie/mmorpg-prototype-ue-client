@@ -39,7 +39,6 @@
 #include "UI/ChatWidget.h"
 #include "UI/GameMenuBarWidget.h"
 #include "UI/GameMenuWidget.h"
-#include "UI/AudioSettingsWidget.h"
 #include "UI/W_SettingsWidget.h"
 #include "UI/NotificationToastWidget.h"
 #include "UI/NotificationZoneBannerWidget.h"

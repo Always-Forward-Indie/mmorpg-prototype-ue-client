@@ -68,6 +68,11 @@ protected:
 	UPROPERTY(Transient, meta = (BindWidgetAnim))
 	class UWidgetAnimation* ProgressAnimation;
 
+	// Optional cancel button (BindWidgetOptional): when present in Blueprint,
+	// click-to-cancel is wired automatically in NativeConstruct (ESC always works).
+	UPROPERTY(meta = (BindWidgetOptional))
+	class UButton* Cancel_Button = nullptr;
+
 private:
 	// Current progress value
 	float CurrentProgress;

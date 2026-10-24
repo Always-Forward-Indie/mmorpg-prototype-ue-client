@@ -46,7 +46,6 @@ class UBestiaryNetworkHandler;
 class UChatManager;
 class UGameMenuWidget;
 class UGameMenuBarWidget;
-class UAudioSettingsWidget;
 class UW_SettingsWidget;
 class UAudioManager;
 class UNotificationToastWidget;
@@ -278,9 +277,6 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UGameMenuWidget* GetGameMenuWidget() const { return GameMenuWidget; }
-
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
-	UAudioSettingsWidget* GetAudioSettingsWidget() const { return AudioSettingsWidget; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UW_SettingsWidget* GetGameSettingsWidget() const { return GameSettingsWidget; }
@@ -552,9 +548,6 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	FString BugReportUrl;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
-	TSubclassOf<UAudioSettingsWidget> AudioSettingsWidgetClass;
-
 	/** Full tabbed settings window (WBP_Settings, subclass of UW_SettingsWidget).
 	 *  Opened when the player clicks Settings in the in-game pause menu. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
@@ -670,9 +663,6 @@ protected:
 	UGameMenuWidget* GameMenuWidget;
 
 	UPROPERTY()
-	UAudioSettingsWidget* AudioSettingsWidget;
-
-	UPROPERTY()
 	UW_SettingsWidget* GameSettingsWidget;
 
 	// Notification widget instances
@@ -768,7 +758,7 @@ public:
 	UFUNCTION() void OnMenuBarEmoteClicked();
 	UFUNCTION() void HandleGameMenuResumeClicked();
 	UFUNCTION() void HandleSettingsClicked();
-	UFUNCTION() void HandleAudioSettingsClosed();
+	UFUNCTION() void HandleSettingsClosed();
 	UFUNCTION() void HandleExitToLoginClicked();
 	UFUNCTION() void HandleExitToDesktopClicked();
 	UFUNCTION() void HandleBugReportClicked();

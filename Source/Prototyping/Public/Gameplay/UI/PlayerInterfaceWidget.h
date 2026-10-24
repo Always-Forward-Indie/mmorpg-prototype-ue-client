@@ -80,6 +80,12 @@ protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Player Interface")
     UMobTargetFrameWidget* MobTargetFrameWidget = nullptr;
 
+    // Second target frame for boss encounters (BindWidgetOptional).
+    // Place a UMobTargetFrameWidget named 'BossTargetFrameWidget' in W_PlayerInterface;
+    // it reuses the full mob-frame API (SetMobInfo/UpdateHP/ClearTarget).
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Player Interface")
+    UMobTargetFrameWidget* BossTargetFrameWidget = nullptr;
+
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Player Interface")
     UNameplateCanvasWidget* NameplateCanvasWidget = nullptr;
 
@@ -150,6 +156,10 @@ public:
     /** Returns the mob target frame widget, if available (may be nullptr). */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Interface")
     UMobTargetFrameWidget* GetMobTargetFrameWidget() const { return MobTargetFrameWidget; }
+
+    /** Returns the boss target frame widget, if available (may be nullptr). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Interface")
+    UMobTargetFrameWidget* GetBossTargetFrameWidget() const { return BossTargetFrameWidget; }
 
     /** Returns the nameplate canvas widget, if available (may be nullptr). */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Interface")

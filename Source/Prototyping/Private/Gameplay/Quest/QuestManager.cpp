@@ -99,6 +99,9 @@ void UQuestManager::OnQuestFailed(const FQuestFailedData& Data)
     if (FQuestProgressData* Existing = QuestJournal.Find(Data.questId))
     {
         Existing->state = TEXT("failed");
+        // Refresh journal/tracker views: they subscribe to OnQuestUpdated only,
+        // so re-broadcast the updated progress (single owner: this cache).
+        OnQuestUpdatedDelegate.Broadcast(*Existing);
     }
 
     UE_LOG(LogTemp, Log, TEXT("QuestManager: Quest failed – id=%d key=%s"), Data.questId, *Data.clientQuestKey);

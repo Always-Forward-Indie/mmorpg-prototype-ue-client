@@ -2,6 +2,7 @@
 
 // S5: widget chrome gathered via LOCTEXT.
 #define LOCTEXT_NAMESPACE "HarvestProgress"
+#include "Components/Button.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Animation/WidgetAnimation.h"
@@ -16,6 +17,13 @@ void UHarvestProgressWidget::NativeConstruct()
 	CurrentProgress = 0.0f;
 	bIsVisible = false;
 	HarvestManager = nullptr;
+
+	// Optional cancel button (bind a Button named 'Cancel_Button' in Blueprint
+	// to get click-to-cancel in addition to ESC). Gracefully skipped when absent.
+	if (Cancel_Button)
+	{
+		Cancel_Button->OnClicked.AddDynamic(this, &UHarvestProgressWidget::CancelHarvest);
+	}
 
 	// Enable focus to handle keyboard input (ESC key)
 	// Use the setter method instead of direct access

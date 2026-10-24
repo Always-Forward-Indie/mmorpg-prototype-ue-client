@@ -40,7 +40,6 @@
 #include "UI/ChatWidget.h"
 #include "UI/GameMenuBarWidget.h"
 #include "UI/GameMenuWidget.h"
-#include "UI/AudioSettingsWidget.h"
 #include "UI/W_SettingsWidget.h"
 #include "UI/NotificationToastWidget.h"
 #include "UI/NotificationZoneBannerWidget.h"
@@ -120,8 +119,9 @@ void UUIManager::HandleSettingsClicked()
 		GameSettingsWidget = CreateWidget<UW_SettingsWidget>(GetWorld(), GameSettingsWidgetClass);
 		if (GameSettingsWidget)
 		{
-			// Z-order 210 — same level as the old audio settings widget, above the game menu (200).
+			// Z-order 210 — above the game menu (200).
 			GameSettingsWidget->AddToViewport(210);
+			GameSettingsWidget->OnSettingsWindowClosed.AddDynamic(this, &UUIManager::HandleSettingsClosed);
 			UE_LOG(LogTemp, Log, TEXT("UIManager: GameSettingsWidget created"));
 		}
 	}
@@ -132,10 +132,9 @@ void UUIManager::HandleSettingsClicked()
 	}
 }
 
-void UUIManager::HandleAudioSettingsClosed()
+void UUIManager::HandleSettingsClosed()
 {
-	if (AudioSettingsWidget)
-		AudioSettingsWidget->SetVisibility(ESlateVisibility::Collapsed);
+	UpdateCursorAndInputMode();
 }
 
 void UUIManager::HandleExitToLoginClicked()

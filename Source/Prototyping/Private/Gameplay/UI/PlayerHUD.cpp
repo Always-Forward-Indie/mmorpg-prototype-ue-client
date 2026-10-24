@@ -1,6 +1,8 @@
 #include "Gameplay/UI/PlayerHUD.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
+#include "Components/Image.h"
+#include "Engine/Texture2D.h"
 
 void UPlayerHUD::NativeConstruct()
 {
@@ -133,6 +135,12 @@ bool UPlayerHUD::IsHUDReady() const
 {
 	return HealthBar != nullptr && HealthBarTextValue != nullptr
 		&& ManaBar != nullptr && ManaBarTextValue != nullptr;
+}
+
+void UPlayerHUD::SetPortrait(UTexture2D* PortraitTexture)
+{
+	if (!Portrait_Image || !PortraitTexture) return;
+	Portrait_Image->SetBrushFromTexture(PortraitTexture);
 }
 
 void UPlayerHUD::TickBar(float& DisplayedPct, float TargetPct, float DeltaTime)

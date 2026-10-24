@@ -110,6 +110,7 @@ void UEquipmentWidget::BindToEquipmentManager(UEquipmentManager* InEquipmentMana
     {
         EquipmentManager->OnEquipmentStateChangedDelegate.RemoveDynamic(this, &UEquipmentWidget::HandleEquipmentStateChanged);
         EquipmentManager->OnEquipResultReceivedDelegate  .RemoveDynamic(this, &UEquipmentWidget::HandleEquipResultReceived);
+        OnEquipSlotUnequipRequested.RemoveDynamic(this, &UEquipmentWidget::HandleUnequipRequested);
     }
 
     EquipmentManager = InEquipmentManager;
@@ -117,6 +118,7 @@ void UEquipmentWidget::BindToEquipmentManager(UEquipmentManager* InEquipmentMana
 
     EquipmentManager->OnEquipmentStateChangedDelegate.AddDynamic(this, &UEquipmentWidget::HandleEquipmentStateChanged);
     EquipmentManager->OnEquipResultReceivedDelegate  .AddDynamic(this, &UEquipmentWidget::HandleEquipResultReceived);
+    OnEquipSlotUnequipRequested.AddDynamic(this, &UEquipmentWidget::HandleUnequipRequested);
 
     RefreshEquipmentDisplay();
 }
@@ -207,6 +209,22 @@ void UEquipmentWidget::HandleSlotRightClicked(const FString& SlotSlug)
     const FEquipmentSlotData* SlotData = CachedState.slots.Find(SlotSlug);
     if (SlotData && SlotData->bIsOccupied)
         OnEquipSlotUnequipRequested.Broadcast(SlotSlug);
+}
+
+void UEquipmentWidget::HandleUnequipRequested(const FString& SlotSlug)
+{
+    if (!EquipmentManager || !InventoryManager)
+    {
+        UE_LOG(LogTemp, Error, TEXT("EquipmentWidget: cannot unequip '%s' - managers not bound"), *SlotSlug);
+        return;
+    }
+    const int32 CharacterId = InventoryManager->GetInventory().characterId;
+    if (CharacterId <= 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("EquipmentWidget: cannot unequip '%s' - invalid characterId"), *SlotSlug);
+        return;
+    }
+    EquipmentManager->RequestUnequipItem(CharacterId, SlotSlug);
 }
 
 void UEquipmentWidget::HandleSlotHovered(const FString& SlotSlug, bool bHovered)

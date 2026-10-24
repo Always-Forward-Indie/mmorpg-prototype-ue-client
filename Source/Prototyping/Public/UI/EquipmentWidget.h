@@ -90,6 +90,10 @@ protected:
     UFUNCTION() void HandleSlotClicked(const FString& SlotSlug);
     UFUNCTION() void HandleSlotRightClicked(const FString& SlotSlug);
     UFUNCTION() void HandleSlotHovered(const FString& SlotSlug, bool bHovered);
+    // Default C++ consumer of OnEquipSlotUnequipRequested: sends the unequip
+    // request through the bound EquipmentManager (single owner of the request).
+    // Blueprint may additionally bind OnEquipSlotUnequipRequested for visuals.
+    UFUNCTION() void HandleUnequipRequested(const FString& SlotSlug);
 
     // ---- Required BindWidget slot widgets ----
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget)) UEquipmentSlotWidget* Slot_Head     = nullptr;

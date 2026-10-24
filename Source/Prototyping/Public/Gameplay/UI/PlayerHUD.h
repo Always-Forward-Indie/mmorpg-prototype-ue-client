@@ -16,6 +16,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "HUD")
 	void SetMana(float NewMana, float MaxMana);
 
+	// Optional player portrait (BindWidgetOptional UImage named 'Portrait_Image'
+	// in the HUD Blueprint). No-op when the image is not bound.
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	void SetPortrait(class UTexture2D* PortraitTexture);
+
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	class UImage* GetPortraitImage() const { return Portrait_Image; }
+
 	UFUNCTION(BlueprintCallable, Category = "HUD")
 	class UProgressBar* GetHealthBar() const { return HealthBar; }
 	UFUNCTION(BlueprintCallable, Category = "HUD")
@@ -40,6 +48,10 @@ protected:
 
 	UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "HUD")
 	class UTextBlock* ManaBarTextValue;
+
+	// Optional player portrait image (BindWidgetOptional, named 'Portrait_Image').
+	UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "HUD")
+	class UImage* Portrait_Image = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD|Animation")
 	float BarInterpSpeed = 1.5f;

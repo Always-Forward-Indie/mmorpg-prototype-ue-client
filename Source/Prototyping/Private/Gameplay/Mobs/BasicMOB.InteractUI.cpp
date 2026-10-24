@@ -10,6 +10,7 @@
 #include "Gameplay/Items/HarvestManager.h"
 #include "MyGameInstance.h"
 #include "Services/LocalizationSubsystem.h"
+#include "Utils/JSONParser.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
 #include "Gameplay/UI/DamageTextWidget.h"
 #include "UI/UIManager.h"
@@ -74,7 +75,8 @@ void ABasicMOB::ForceUpdateUI()
 			MaxHealth = HealthAttr->attributeValue;
 		}
 
-		// Resolve localised name from slug; fall back to server-provided name
+		// Resolve localised name from slug; fall back to server-provided name,
+		// then to a humanised slug (server omits names since protocol S1a).
 		FString DisplayName = MOBData.mobName;
 		if (!MOBData.mobSlug.IsEmpty())
 		{
@@ -83,10 +85,12 @@ void ABasicMOB::ForceUpdateUI()
 				if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
 				{
 					FText Localized = Loc->GetMobDisplayName(MOBData.mobSlug);
-					if (!Localized.IsEmpty())
+					if (!Localized.IsEmpty() && Localized.ToString() != MOBData.mobSlug)
 						DisplayName = Localized.ToString();
 				}
 			}
+			if (DisplayName.IsEmpty())
+				DisplayName = JSONParser::HumanizeSlugForDisplay(MOBData.mobSlug);
 		}
 
 		MobHeadInfo->UpdateInfo(

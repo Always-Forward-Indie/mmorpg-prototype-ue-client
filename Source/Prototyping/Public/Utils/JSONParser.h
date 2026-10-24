@@ -38,6 +38,10 @@ public:
     static FString ResolveErrorCode(const FString& JsonString);
     static FString ResolveErrorCode(const TSharedPtr<FJsonObject>& Root);
 
+    // Last-resort display text for a slug when the server omits the name and the
+    // locale table has no row ("forest_wolf" -> "Forest wolf"). Never used for logic.
+    static FString HumanizeSlugForDisplay(const FString& Slug);
+
     // New method to deserialize network header with time sync data
     static FNetworkHeaderStruct DeserializeNetworkHeader(const FString& JsonString);
 

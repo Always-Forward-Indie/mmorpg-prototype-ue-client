@@ -468,6 +468,14 @@ return FString();
 return ResolveErrorCode(Root);
 }
 
+FString JSONParser::HumanizeSlugForDisplay(const FString& Slug)
+{
+	if (Slug.IsEmpty()) return FString();
+	FString Out = Slug.Replace(TEXT("_"), TEXT(" "));
+	Out[0] = FChar::ToUpper(Out[0]);
+	return Out;
+}
+
 // deserialize EventType from a json string
  FString JSONParser::DeserializeEventTypeData(const FString& JsonString)
  {

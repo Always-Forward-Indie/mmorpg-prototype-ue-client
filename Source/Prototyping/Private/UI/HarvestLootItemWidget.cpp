@@ -6,6 +6,8 @@
 #include "Engine/Engine.h"
 #include "Engine/AssetManager.h"
 #include "MyGameInstance.h"
+#include "Services/LocalizationSubsystem.h"
+#include "Utils/JSONParser.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "Data/ItemStruct.h"
 
@@ -89,9 +91,24 @@ void UHarvestLootItemWidget::UpdateItemDisplay()
 		}
 
 		FString ItemName = CurrentItemData.name;
+		if (ItemName.IsEmpty() || ItemName == CurrentItemData.itemSlug)
+		{
+			// S1a: server omits display names; resolve via locale by slug.
+			if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+			{
+				if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+				{
+					FText LocalName = Loc->GetItemDisplayName(CurrentItemData.itemSlug);
+					if (!LocalName.IsEmpty() && LocalName.ToString() != CurrentItemData.itemSlug)
+						ItemName = LocalName.ToString();
+				}
+			}
+		}
 		if (ItemName.IsEmpty())
 		{
-			ItemName = FString::Printf(TEXT("Item %d"), CurrentItemData.itemId);
+			ItemName = !CurrentItemData.itemSlug.IsEmpty()
+				? JSONParser::HumanizeSlugForDisplay(CurrentItemData.itemSlug)
+				: FString::Printf(TEXT("Item %d"), CurrentItemData.itemId);
 		}
 		TextBlock_ItemName->SetText(FText::FromString(ItemName));
 		
@@ -144,6 +161,15 @@ void UHarvestLootItemWidget::UpdateItemDisplay()
 		else
 		{
 			FString Description = CurrentItemData.description;
+			if (Description.IsEmpty())
+			{
+				// S1a: server omits descriptions; resolve via locale by slug.
+				if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+				{
+					if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+						Description = Loc->GetItemDescription(CurrentItemData.itemSlug).ToString();
+				}
+			}
 			if (Description.IsEmpty())
 			{
 				Description = TEXT("A harvested item");

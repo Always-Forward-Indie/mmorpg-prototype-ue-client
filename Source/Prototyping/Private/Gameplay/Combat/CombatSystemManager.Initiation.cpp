@@ -43,6 +43,22 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
         }
     }
 
+    // S1a: server no longer sends display strings (skillName/animationName).
+    // Resolve them from the local skill catalog; keep packet values as override.
+    FString SkillNameForUI = SkillData.skillName;
+    FString AnimNameForUI = SkillData.animationName;
+    if ((SkillNameForUI.IsEmpty() || AnimNameForUI.IsEmpty()) && GameInstance)
+    {
+        if (USkillDefinitionRepository* SkillRepo = GameInstance->GetSkillDefinitionRepository())
+        {
+            const FSkillDefinitionData& Def = SkillRepo->GetDefinition(SkillData.skillSlug);
+            if (SkillNameForUI.IsEmpty() && !Def.displayName.IsEmpty())
+                SkillNameForUI = Def.displayName.ToString();
+            if (AnimNameForUI.IsEmpty() && !Def.animationName.IsEmpty())
+                AnimNameForUI = Def.animationName;
+        }
+    }
+
     // Find caster
     ECasterType CasterType = MapNetCasterType(SkillData.casterType, SkillData.casterTypeString);
     TScriptInterface<ICombatable> Caster = FindCombatableById(SkillData.casterId, CasterType);
@@ -59,11 +75,11 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
         // is set when StartAttack() reads it to choose the phase-based or classic anim path.
         if (SkillData.castTime > 0.0f)
         {
-            ICombatable::Execute_ShowCastBar(CasterObject, SkillData.castTime, SkillData.skillName);
+            ICombatable::Execute_ShowCastBar(CasterObject, SkillData.castTime, SkillNameForUI);
         }
 
         // Play animation on caster (animationDuration drives PlayRate)
-        ICombatable::Execute_PlaySkillAnimation(CasterObject, SkillData.animationName, SkillData.skillSlug, SkillData.animationDuration);
+        ICombatable::Execute_PlaySkillAnimation(CasterObject, AnimNameForUI, SkillData.skillSlug, SkillData.animationDuration);
 
 		// Set target if specified
 		if (SkillData.targetId > 0)
@@ -85,7 +101,8 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
 
 ECasterType UCombatSystemManager::MapNetCasterType(int32 Net, const FString& Str)
 {
-    // String-based mapping takes priority (always present in server packets)
+    // String-based mapping first (older server packets); int enum is authoritative
+    // since protocol S1a and is the fallback when the string is absent.
     if (Str.Equals(TEXT("PLAYER"), ESearchCase::IgnoreCase)) return ECasterType::Player;
     if (Str.Equals(TEXT("MOB"),    ESearchCase::IgnoreCase)) return ECasterType::Mob;
     if (Str.Equals(TEXT("NPC"),    ESearchCase::IgnoreCase)) return ECasterType::NPC;

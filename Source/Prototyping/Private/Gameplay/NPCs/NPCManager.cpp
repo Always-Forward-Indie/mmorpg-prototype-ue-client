@@ -406,9 +406,9 @@ bool UNPCManager::ValidateNPCData(const FNPCStruct& NPCData) const
 		return false;
 	}
 
-	if (NPCData.name.IsEmpty())
+	if (NPCData.name.IsEmpty() && NPCData.slug.IsEmpty())
 	{
-		UE_LOG(LogTemp, Error, TEXT("NPCManager: Empty NPC name for ID: %d"), NPCData.id);
+		UE_LOG(LogTemp, Error, TEXT("NPCManager: Empty NPC name and slug for ID: %d"), NPCData.id);
 		return false;
 	}
 

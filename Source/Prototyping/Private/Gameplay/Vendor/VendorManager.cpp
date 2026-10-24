@@ -225,10 +225,10 @@ void UVendorManager::ResolveShopStatics(FVendorShopData& Shop)
     if (!ItemMgr) return;
     for (FVendorShopItemData& Entry : Shop.items)
     {
-        // Slim S2.4 entries carry dynamics only (price/stock); statics come
-        // from the versioned itemCatalog. Skip rows that already have them
-        // (old servers) and unknown templates.
-        if (!Entry.slug.IsEmpty() || Entry.itemId <= 0) continue;
+        // S2.4 slim rows carry dynamics (+slug) only; statics come from the
+        // versioned itemCatalog. Full rows (old servers) already have them.
+        if (Entry.itemId <= 0) continue;
+        if (!Entry.itemTypeSlug.IsEmpty() && !Entry.raritySlug.IsEmpty()) continue;
         FInventoryItemStruct Stats;
         if (!ItemMgr->GetCatalogStats(Entry.itemId, Stats)) continue;
         Entry.slug = Stats.slug;

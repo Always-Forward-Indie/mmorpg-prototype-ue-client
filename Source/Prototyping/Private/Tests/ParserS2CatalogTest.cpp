@@ -119,16 +119,17 @@ bool FVendorSlimContractTest::RunTest(const FString& Parameters)
     if (!Handler) return false;
     FVendorShopData Shop = Handler->ParseVendorShop(ParserContract_ParseObj(
         TEXT("{\"npcId\":1,\"npcSlug\":\"vendor_gor\",\"goldBalance\":500,\"items\":["
-        "{\"itemId\":46,\"priceBuy\":12,\"priceSell\":4,\"stockCurrent\":7,\"stockMax\":20},"
-        "{\"itemId\":2,\"priceBuy\":150,\"priceSell\":60,\"stockCurrent\":1,\"stockMax\":1}]}")));
+        "{\"itemId\":46,\"slug\":\"health_potion\",\"priceBuy\":12,\"priceSell\":4,\"stockCurrent\":7,\"stockMax\":20},"
+        "{\"itemId\":2,\"slug\":\"old_oak_shield\",\"priceBuy\":150,\"priceSell\":60,\"stockCurrent\":1,\"stockMax\":1}]}")));
     TestEqual(TEXT("npc kept"), Shop.npcId, 1);
     TestEqual(TEXT("two rows"), Shop.items.Num(), 2);
     if (Shop.items.Num() == 2)
     {
         TestEqual(TEXT("row item"), Shop.items[0].itemId, 46);
+        TestEqual(TEXT("row slug kept (self-identifying)"), Shop.items[0].slug, FString(TEXT("health_potion")));
         TestEqual(TEXT("row price"), Shop.items[0].priceBuy, 12);
         TestEqual(TEXT("row stock"), Shop.items[0].stockCurrent, 7);
-        TestTrue(TEXT("row slim: no slug"), Shop.items[0].slug.IsEmpty());
+        TestTrue(TEXT("row slim: no type"), Shop.items[0].itemTypeSlug.IsEmpty());
         TestEqual(TEXT("row2 stock"), Shop.items[1].stockMax, 1);
     }
     return true;

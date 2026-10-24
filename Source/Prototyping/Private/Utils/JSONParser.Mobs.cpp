@@ -190,6 +190,9 @@ FMOBStruct JSONParser::DeserializeMobData(const TSharedPtr<FJsonObject>& MobObje
 	MobObject->TryGetStringField(TEXT("slug"), Mob.mobSlug);
 	MobObject->TryGetStringField(TEXT("race"), Mob.mobRace);
 	MobObject->TryGetNumberField(TEXT("level"), Mob.mobLevel);
+	MobObject->TryGetStringField(TEXT("rankCode"), Mob.mobRankCode);
+	MobObject->TryGetBoolField(TEXT("isChampion"), Mob.bIsChampion);
+	MobObject->TryGetStringField(TEXT("championKind"), Mob.championKind);
 	MobObject->TryGetBoolField(TEXT("isAggressive"), Mob.bIsAggressive);
 	MobObject->TryGetBoolField(TEXT("isDead"), Mob.bIsDead);
 

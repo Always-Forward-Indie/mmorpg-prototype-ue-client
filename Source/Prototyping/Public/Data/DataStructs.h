@@ -258,6 +258,12 @@ struct FMOBStruct {
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
     int mobLevel = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+    FString mobRankCode = TEXT("normal");
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+    bool bIsChampion = false;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
+    FString championKind = TEXT("");
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
     int mobCurrentHealth = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Data Struct")
     int mobCurrentMana = 0;

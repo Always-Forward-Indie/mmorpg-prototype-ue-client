@@ -230,3 +230,26 @@ bool FSpawnZonesListContractTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("null empty"), JSONParser::DeserializeSpawnZonesList(nullptr).Num(), 0);
     return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMobRankContractTest, "MMO.Protocol.MobRankContract",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+
+bool FMobRankContractTest::RunTest(const FString& Parameters)
+{
+    // S2.5: machine-readable champion markers ride the spawn entry.
+    FMOBStruct Champ = JSONParser::DeserializeMobData(ParserContract_ParseObj(
+        TEXT("{\"id\":6,\"uid\":4243,\"slug\":\"ForestFox\",\"level\":3,"
+        "\"rankCode\":\"champion\",\"isChampion\":true,\"championKind\":\"threshold\","
+        "\"stats\":{\"health\":{\"current\":210,\"max\":210}}}")));
+    TestEqual(TEXT("rank kept"), Champ.mobRankCode, FString(TEXT("champion")));
+    TestTrue(TEXT("champion flag"), Champ.bIsChampion);
+    TestEqual(TEXT("kind kept"), Champ.championKind, FString(TEXT("threshold")));
+
+    // Normal mobs: defaults, no crash.
+    FMOBStruct Normal = JSONParser::DeserializeMobData(ParserContract_ParseObj(
+        TEXT("{\"id\":6,\"uid\":4244,\"slug\":\"ForestFox\"}")));
+    TestEqual(TEXT("default rank"), Normal.mobRankCode, FString(TEXT("normal")));
+    TestFalse(TEXT("not champion"), Normal.bIsChampion);
+    TestTrue(TEXT("kind empty"), Normal.championKind.IsEmpty());
+    return true;
+}

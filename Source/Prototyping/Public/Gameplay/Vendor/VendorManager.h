@@ -85,4 +85,7 @@ private:
     UMyGameInstance* GameInstance = nullptr;
 
     void SendPacket(const FString& JsonPayload);
+
+    // S2.4: fill slim shop rows (price/stock only) from the itemCatalog.
+    void ResolveShopStatics(FVendorShopData& Shop);
 };

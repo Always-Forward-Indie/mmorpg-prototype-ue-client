@@ -1,4 +1,5 @@
 #include "Gameplay/Vendor/VendorManager.h"
+#include "Gameplay/Items/ItemManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
 #include "Dom/JsonObject.h"
@@ -206,13 +207,53 @@ void UVendorManager::RequestSellItemBatch(int32 CharacterId, int32 NpcId,
 }
 
 // ---------------------------------------------------------------------------
-// Incoming — called by VendorNetworkHandler
+// Incoming ï¿½ called by VendorNetworkHandler
 // ---------------------------------------------------------------------------
 
 void UVendorManager::OnVendorShopReceived(const FVendorShopData& ShopData)
 {
-    CurrentShop = ShopData;
-    OnVendorShopOpenedDelegate.Broadcast(ShopData);
+    FVendorShopData Resolved = ShopData;
+    ResolveShopStatics(Resolved);
+    CurrentShop = Resolved;
+    OnVendorShopOpenedDelegate.Broadcast(Resolved);
+}
+
+void UVendorManager::ResolveShopStatics(FVendorShopData& Shop)
+{
+    if (!GameInstance) return;
+    UItemManager* ItemMgr = GameInstance->GetItemManager();
+    if (!ItemMgr) return;
+    for (FVendorShopItemData& Entry : Shop.items)
+    {
+        // Slim S2.4 entries carry dynamics only (price/stock); statics come
+        // from the versioned itemCatalog. Skip rows that already have them
+        // (old servers) and unknown templates.
+        if (!Entry.slug.IsEmpty() || Entry.itemId <= 0) continue;
+        FInventoryItemStruct Stats;
+        if (!ItemMgr->GetCatalogStats(Entry.itemId, Stats)) continue;
+        Entry.slug = Stats.slug;
+        Entry.itemSlug = Stats.slug;
+        Entry.itemType = Stats.item_type_id;
+        Entry.itemTypeSlug = Stats.itemTypeSlug;
+        Entry.rarityId = Stats.rarityId;
+        Entry.raritySlug = Stats.raritySlug;
+        Entry.stackMax = Stats.stackSize;
+        Entry.weight = Stats.weight;
+        Entry.equipSlotSlug = Stats.equipSlotSlug;
+        Entry.levelRequirement = Stats.levelRequirement;
+        Entry.setSlug = Stats.setSlug;
+        Entry.masterySlug = Stats.masterySlug;
+        Entry.isDurable = Stats.isDurable;
+        Entry.isTradable = Stats.isTradable;
+        Entry.isEquippable = Stats.isEquippable;
+        Entry.isUsable = Stats.isUsable;
+        Entry.isTwoHanded = Stats.isTwoHanded;
+        Entry.isQuestItem = Stats.isQuestItem;
+        Entry.isContainer = Stats.isContainer;
+        Entry.useEffects = Stats.useEffects;
+        Entry.attributes = Stats.attributes;
+        // itemName/description stay empty: UI resolves via Loc/humanized slug.
+    }
 }
 
 void UVendorManager::OnBuyItemResultReceived(const FBuyItemResultData& Result)

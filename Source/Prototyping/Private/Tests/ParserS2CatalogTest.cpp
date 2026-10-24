@@ -1,5 +1,6 @@
 #include "Misc/AutomationTest.h"
 #include "Gameplay/Items/ItemManager.h"
+#include "Gameplay/Vendor/VendorNetworkHandler.h"
 #include "Utils/JSONParser.h"
 #include "ParserContractHelpers.h"
 
@@ -104,5 +105,31 @@ bool FDropResolveContractTest::RunTest(const FString& Parameters)
         TEXT("{\"uid\":703,\"itemId\":46,\"item\":{\"id\":46,\"slug\":\"server_name\"}}")));
     Mgr->ResolveDropStats(Full);
     TestEqual(TEXT("filled kept"), Full.item.slug, FString(TEXT("server_name")));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FVendorSlimContractTest, "MMO.Protocol.VendorSlimContract",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+
+bool FVendorSlimContractTest::RunTest(const FString& Parameters)
+{
+    // S2.4 slim shop entry: dynamics only, no template keys at all.
+    UVendorNetworkHandler* Handler = NewObject<UVendorNetworkHandler>(GetTransientPackage());
+    TestTrue(TEXT("handler created"), Handler != nullptr);
+    if (!Handler) return false;
+    FVendorShopData Shop = Handler->ParseVendorShop(ParserContract_ParseObj(
+        TEXT("{\"npcId\":1,\"npcSlug\":\"vendor_gor\",\"goldBalance\":500,\"items\":["
+        "{\"itemId\":46,\"priceBuy\":12,\"priceSell\":4,\"stockCurrent\":7,\"stockMax\":20},"
+        "{\"itemId\":2,\"priceBuy\":150,\"priceSell\":60,\"stockCurrent\":1,\"stockMax\":1}]}")));
+    TestEqual(TEXT("npc kept"), Shop.npcId, 1);
+    TestEqual(TEXT("two rows"), Shop.items.Num(), 2);
+    if (Shop.items.Num() == 2)
+    {
+        TestEqual(TEXT("row item"), Shop.items[0].itemId, 46);
+        TestEqual(TEXT("row price"), Shop.items[0].priceBuy, 12);
+        TestEqual(TEXT("row stock"), Shop.items[0].stockCurrent, 7);
+        TestTrue(TEXT("row slim: no slug"), Shop.items[0].slug.IsEmpty());
+        TestEqual(TEXT("row2 stock"), Shop.items[1].stockMax, 1);
+    }
     return true;
 }

@@ -22,15 +22,16 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Vendor Network")
     void UnsubscribeFromNetworkEvents();
 
-private:
-    UFUNCTION()
-    void HandleChunkServerData(const FString& ReceivedData);
-
+    // Pure packet parsers (public for Automation contract specs).
     FVendorShopData         ParseVendorShop(const TSharedPtr<FJsonObject>& Body) const;
     FBuyItemResultData       ParseBuyItemResult(const TSharedPtr<FJsonObject>& Body, const FString& Message) const;
     FSellItemResultData      ParseSellItemResult(const TSharedPtr<FJsonObject>& Body, const FString& Message) const;
     FBuyItemBatchResultData  ParseBuyItemBatchResult(const TSharedPtr<FJsonObject>& Body, const FString& Message) const;
     FSellItemBatchResultData ParseSellItemBatchResult(const TSharedPtr<FJsonObject>& Body, const FString& Message) const;
+
+private:
+    UFUNCTION()
+    void HandleChunkServerData(const FString& ReceivedData);
 
     UPROPERTY()
     UVendorManager* VendorManager = nullptr;

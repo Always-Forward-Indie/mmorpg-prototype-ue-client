@@ -1,4 +1,6 @@
 #include "UI/EmoteItemWidget.h"
+#include "Services/LocalizationSubsystem.h"
+#include "Utils/JSONParser.h"
 #include "Data/EmoteDefinitionTable.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
@@ -55,17 +57,25 @@ void UEmoteItemWidget::SetEmoteData(const FEmoteDefinitionData& InEmoteDef, UDat
         }
     }
 
-    // Name — prefer localized name from table, fall back to server displayName
+    // Name — S3c: codebook table row wins when filled; existing curated
+    // row/server names cover unfilled tables; humanised slug last.
     if (EmoteName_Text)
     {
-        if (Row && !Row->LocalizedName.IsEmpty())
+        FText Name;
+        if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
         {
-            EmoteName_Text->SetText(Row->LocalizedName);
+            const FText LocName = Loc->GetEmoteDisplayName(InEmoteDef.slug);
+            const FString Human = JSONParser::HumanizeSlugForDisplay(InEmoteDef.slug);
+            if (!LocName.IsEmpty() && LocName.ToString() != InEmoteDef.slug && LocName.ToString() != Human)
+                Name = LocName;
         }
-        else
-        {
-            EmoteName_Text->SetText(FText::FromString(InEmoteDef.displayName));
-        }
+        if (Name.IsEmpty() && Row && !Row->LocalizedName.IsEmpty())
+            Name = Row->LocalizedName;
+        if (Name.IsEmpty() && !InEmoteDef.displayName.IsEmpty())
+            Name = FText::FromString(InEmoteDef.displayName);
+        if (Name.IsEmpty())
+            Name = FText::FromString(JSONParser::HumanizeSlugForDisplay(InEmoteDef.slug));
+        EmoteName_Text->SetText(Name);
     }
 }
 

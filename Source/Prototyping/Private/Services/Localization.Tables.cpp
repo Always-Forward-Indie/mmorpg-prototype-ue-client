@@ -2,6 +2,7 @@
 #include "Data/LocalizationDataAsset.h"
 #include "Engine/DataTable.h"
 #include "Engine/World.h"
+#include "Utils/JSONParser.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Internationalization/Internationalization.h"
 
@@ -103,6 +104,41 @@ UDataTable* ULocalizationSubsystem::GetItemSetLocaleTable() const
     return CachedItemSetLocaleTable;
 }
 
+UDataTable* ULocalizationSubsystem::GetSkillLocaleTable() const
+{
+    if (!CachedSkillLocaleTable && LocalizationData)
+        CachedSkillLocaleTable = LocalizationData->SkillLocale.Get();
+    return CachedSkillLocaleTable;
+}
+
+UDataTable* ULocalizationSubsystem::GetEmoteLocaleTable() const
+{
+    if (!CachedEmoteLocaleTable && LocalizationData)
+        CachedEmoteLocaleTable = LocalizationData->EmoteLocale.Get();
+    return CachedEmoteLocaleTable;
+}
+
+UDataTable* ULocalizationSubsystem::GetClassLocaleTable() const
+{
+    if (!CachedClassLocaleTable && LocalizationData)
+        CachedClassLocaleTable = LocalizationData->ClassLocale.Get();
+    return CachedClassLocaleTable;
+}
+
+UDataTable* ULocalizationSubsystem::GetRaceLocaleTable() const
+{
+    if (!CachedRaceLocaleTable && LocalizationData)
+        CachedRaceLocaleTable = LocalizationData->RaceLocale.Get();
+    return CachedRaceLocaleTable;
+}
+
+UDataTable* ULocalizationSubsystem::GetGenderLocaleTable() const
+{
+    if (!CachedGenderLocaleTable && LocalizationData)
+        CachedGenderLocaleTable = LocalizationData->GenderLocale.Get();
+    return CachedGenderLocaleTable;
+}
+
 UDataTable* ULocalizationSubsystem::GetNotificationLocaleTable() const
 {
     if (!CachedNotificationLocaleTable && LocalizationData)
@@ -124,6 +160,15 @@ ULocalizationSubsystem* ULocalizationSubsystem::Get(const UObject* WorldContext)
             return GI->GetSubsystem<ULocalizationSubsystem>();
     }
     return nullptr;
+}
+
+FText ULocalizationSubsystem::PickTableOrServer(const FText& TableText, const FString& KeySlug, const FString& ServerText)
+{
+    if (!TableText.IsEmpty() && TableText.ToString() != JSONParser::HumanizeSlugForDisplay(KeySlug))
+        return TableText;
+    if (!ServerText.IsEmpty())
+        return FText::FromString(ServerText);
+    return FText::FromString(JSONParser::HumanizeSlugForDisplay(KeySlug));
 }
 
 // ?? Quests ????????????????????????????????????????????????????????????????????

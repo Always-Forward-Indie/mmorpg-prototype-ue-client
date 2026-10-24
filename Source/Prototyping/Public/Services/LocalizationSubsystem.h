@@ -54,6 +54,12 @@ public:
      * Single source for the GetWorld->GameInstance->Subsystem dance. */
     static ULocalizationSubsystem* Get(const UObject* WorldContext);
 
+    /** Arbitrate codebook table text vs a server-provided display string.
+     * Table row wins when present (differs from the humanised fallback);
+     * server text covers unfilled tables/old servers; humanised slug last.
+     * Centralises the S3c transition rule so call sites stay one-liners. */
+    static FText PickTableOrServer(const FText& TableText, const FString& KeySlug, const FString& ServerText);
+
     /** Broadcast when the locale changes so open widgets can refresh their text. */
     UPROPERTY(BlueprintAssignable, Category = "Localization|Events")
     FOnLocaleChanged OnLocaleChanged;
@@ -291,6 +297,36 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Codebook")
     FText GetItemSetDisplayName(const FString& ItemSetSlug) const;
 
+    // -- Codebook statics, wave 2 (S3c) -----------------------------------------
+
+    /** Localised skill name. Key = skill slug. Falls back to humanised slug. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Codebook")
+    FText GetSkillDisplayName(const FString& SkillSlug) const;
+
+    /** Localised skill description. Key = skill slug. Empty when unknown. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Codebook")
+    FText GetSkillDescription(const FString& SkillSlug) const;
+
+    /** Localised emote name. Key = emote slug. Falls back to humanised slug. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Codebook")
+    FText GetEmoteDisplayName(const FString& EmoteSlug) const;
+
+    /** Localised class name. Key = class slug. Falls back to humanised slug. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Codebook")
+    FText GetClassDisplayName(const FString& ClassSlug) const;
+
+    /** Localised class description. Key = class slug. Empty when unknown. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Codebook")
+    FText GetClassDescription(const FString& ClassSlug) const;
+
+    /** Localised race name. Key = race slug. Falls back to humanised slug. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Codebook")
+    FText GetRaceDisplayName(const FString& RaceSlug) const;
+
+    /** Localised gender name. Key = gender slug. Falls back to humanised slug. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Localization|Codebook")
+    FText GetGenderDisplayName(const FString& GenderSlug) const;
+
 private:
     UPROPERTY()
     ULocalizationDataAsset* LocalizationData = nullptr;
@@ -326,6 +362,11 @@ private:
     UPROPERTY() mutable UDataTable* CachedRarityLocaleTable       = nullptr;
     UPROPERTY() mutable UDataTable* CachedEquipSlotLocaleTable    = nullptr;
     UPROPERTY() mutable UDataTable* CachedItemSetLocaleTable      = nullptr;
+    UPROPERTY() mutable UDataTable* CachedSkillLocaleTable        = nullptr;
+    UPROPERTY() mutable UDataTable* CachedEmoteLocaleTable        = nullptr;
+    UPROPERTY() mutable UDataTable* CachedClassLocaleTable        = nullptr;
+    UPROPERTY() mutable UDataTable* CachedRaceLocaleTable         = nullptr;
+    UPROPERTY() mutable UDataTable* CachedGenderLocaleTable       = nullptr;
 
     UDataTable* GetQuestTable()              const;
     UDataTable* GetQuestStepTable()          const;
@@ -347,6 +388,11 @@ private:
     UDataTable* GetRarityLocaleTable()       const;
     UDataTable* GetEquipSlotLocaleTable()    const;
     UDataTable* GetItemSetLocaleTable()      const;
+    UDataTable* GetSkillLocaleTable()        const;
+    UDataTable* GetEmoteLocaleTable()        const;
+    UDataTable* GetClassLocaleTable()        const;
+    UDataTable* GetRaceLocaleTable()         const;
+    UDataTable* GetGenderLocaleTable()       const;
 
     static FText FallbackText(const FString& Key);
 };

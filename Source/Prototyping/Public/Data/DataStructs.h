@@ -4203,6 +4203,70 @@ struct PROTOTYPING_API FItemSetLocaleDefinition : public FTableRowBase
     FItemSetLocaleDefinition() {}
 };
 
+// S3c: skill / emote / class / race / gender display names (RU/EN split;
+// single-language repos stay the visual/mechanical source of truth).
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FSkillLocaleDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Locale")
+    FText displayName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Locale", meta = (MultiLine = "true"))
+    FText description;
+
+    FSkillLocaleDefinition() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FEmoteLocaleDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Emote Locale")
+    FText displayName;
+
+    FEmoteLocaleDefinition() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FClassLocaleDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Class Locale")
+    FText displayName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Class Locale", meta = (MultiLine = "true"))
+    FText description;
+
+    FClassLocaleDefinition() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FRaceLocaleDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Race Locale")
+    FText displayName;
+
+    FRaceLocaleDefinition() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FGenderLocaleDefinition : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gender Locale")
+    FText displayName;
+
+    FGenderLocaleDefinition() {}
+};
+
 USTRUCT(BlueprintType)
 struct PROTOTYPING_API FNotificationLocaleDefinition : public FTableRowBase
 {

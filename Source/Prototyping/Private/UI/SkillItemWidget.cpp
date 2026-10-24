@@ -1,4 +1,5 @@
 #include "UI/SkillItemWidget.h"
+#include "Services/LocalizationSubsystem.h"
 #include "UI/SkillDragDropOperation.h"
 #include "UI/SkillDragVisualWidget.h"
 #include "Components/Border.h"
@@ -314,11 +315,15 @@ void USkillItemWidget::UpdateVisualDisplay()
         }
         else
         {
-            // Show name in full layout mode
+            // Show name in full layout mode (S3c: codebook table, repo, slug).
+            const FString& Slug = CurrentSkillData.networkData.skillSlug;
             FText DisplayName = CurrentSkillData.definitionData.displayName;
+            if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
+                DisplayName = ULocalizationSubsystem::PickTableOrServer(
+                    Loc->GetSkillDisplayName(Slug), Slug, CurrentSkillData.definitionData.displayName.ToString());
             if (DisplayName.IsEmpty())
             {
-                DisplayName = FText::FromString(CurrentSkillData.networkData.skillSlug);
+                DisplayName = FText::FromString(Slug);
             }
             SkillNameText->SetText(DisplayName);
             SkillNameText->SetVisibility(ESlateVisibility::Visible);
@@ -334,8 +339,15 @@ void USkillItemWidget::UpdateVisualDisplay()
         }
         else
         {
-            // Show description in full layout mode
-            SkillDescriptionText->SetText(CurrentSkillData.definitionData.description);
+            // Show description in full layout mode (S3c: localized first).
+            FText Desc = CurrentSkillData.definitionData.description;
+            if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
+            {
+                const FText LocDesc = Loc->GetSkillDescription(CurrentSkillData.networkData.skillSlug);
+                if (!LocDesc.IsEmpty())
+                    Desc = LocDesc;
+            }
+            SkillDescriptionText->SetText(Desc);
             SkillDescriptionText->SetVisibility(ESlateVisibility::Visible);
         }
     }

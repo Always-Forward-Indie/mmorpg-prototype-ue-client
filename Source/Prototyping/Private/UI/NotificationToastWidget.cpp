@@ -271,7 +271,15 @@ void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& 
     {
         const FString SkillSlug = Notification.dataFields.FindRef(TEXT("skillSlug"));
         OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : FText::FromString(TEXT("Skill Learned"));
-        OutBody  = FText::FromString(SkillSlug);
+        // S3c: skill name via codebook table, slug as fallback.
+        FText SkillName = FText::FromString(SkillSlug);
+        if (Loc && !SkillSlug.IsEmpty())
+        {
+            const FText LocSkill = Loc->GetSkillDisplayName(SkillSlug);
+            if (!LocSkill.IsEmpty())
+                SkillName = LocSkill;
+        }
+        OutBody = SkillName;
     }
     else if (Type == TEXT("learn_skill_failed"))
     {

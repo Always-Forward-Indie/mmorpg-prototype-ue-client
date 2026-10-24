@@ -3,6 +3,7 @@
 #include "Gameplay/Player/TitleManager.h"
 #include "Gameplay/Player/MasteryManager.h"
 #include "Services/LocalizationSubsystem.h"
+#include "Utils/JSONParser.h"
 #include "Components/VerticalBox.h"
 #include "Components/ScrollBox.h"
 #include "Components/TextBlock.h"
@@ -121,8 +122,17 @@ void UPlayerStatsWidget::RefreshAttributes(const FPlayerStatsUpdateStruct& Stats
         const int32 EffInt = static_cast<int32>(Attr.effective);
         const int32 Bonus = EffInt - static_cast<int32>(Attr.base);
 
-        // Prefer server-provided display name; fall back to slug if absent
-        const FString Label = Attr.name.IsEmpty() ? Attr.slug : Attr.name;
+        // S3c: codebook table wins when it holds a real row; server name covers
+        // unfilled tables/old servers; humanised slug is the last resort.
+        FString Label = Attr.name;
+        if (!Attr.slug.IsEmpty())
+        {
+            if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
+                Label = ULocalizationSubsystem::PickTableOrServer(
+                    Loc->GetAttributeDisplayName(Attr.slug), Attr.slug, Attr.name).ToString();
+        }
+        if (Label.IsEmpty())
+            Label = JSONParser::HumanizeSlugForDisplay(Attr.slug);
 
         FString Line;
         if (Bonus > 0)

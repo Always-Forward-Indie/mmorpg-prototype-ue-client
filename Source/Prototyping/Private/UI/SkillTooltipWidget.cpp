@@ -1,4 +1,5 @@
 #include "UI/SkillTooltipWidget.h"
+#include "Services/LocalizationSubsystem.h"
 #include "Components/ScrollBox.h"
 #include "Components/TextBlock.h"
 #include "Components/Border.h"
@@ -118,13 +119,18 @@ void USkillTooltipWidget::UpdateTooltipContent()
 
 void USkillTooltipWidget::UpdateSkillHeader()
 {
-    // Update skill name
+    // Update skill name: S3c codebook table row wins when filled, repo
+    // definition second, slug last (repo is single-language, table is RU/EN).
     if (SkillNameText)
     {
+        const FString& Slug = CurrentSkillData.networkData.skillSlug;
         FText DisplayName = CurrentSkillData.definitionData.displayName;
+        if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
+            DisplayName = ULocalizationSubsystem::PickTableOrServer(
+                Loc->GetSkillDisplayName(Slug), Slug, CurrentSkillData.definitionData.displayName.ToString());
         if (DisplayName.IsEmpty())
         {
-            DisplayName = FText::FromString(CurrentSkillData.networkData.skillSlug);
+            DisplayName = FText::FromString(Slug);
         }
         SkillNameText->SetText(DisplayName);
         
@@ -150,7 +156,15 @@ void USkillTooltipWidget::UpdateSkillDescription()
 {
     if (SkillDescriptionText)
     {
-        SkillDescriptionText->SetText(CurrentSkillData.definitionData.description);
+        // S3c: localized description first, repo second.
+        FText Desc = CurrentSkillData.definitionData.description;
+        if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
+        {
+            const FText LocDesc = Loc->GetSkillDescription(CurrentSkillData.networkData.skillSlug);
+            if (!LocDesc.IsEmpty())
+                Desc = LocDesc;
+        }
+        SkillDescriptionText->SetText(Desc);
     }
 }
 

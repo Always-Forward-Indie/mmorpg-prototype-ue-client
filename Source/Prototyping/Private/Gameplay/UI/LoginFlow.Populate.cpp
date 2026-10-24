@@ -1,6 +1,7 @@
 // Login Flow Widget — Implementation
 
 #include "Gameplay/UI/LoginFlowWidget.h"
+#include "Services/LocalizationSubsystem.h"
 #include "Gameplay/UI/DeleteConfirmWidget.h"
 #include "MyGameInstance.h"
 #include "Authentication/AuthenticationManager.h"
@@ -31,9 +32,16 @@ void ULoginFlowWidget::PopulateCharacterList(const TArray<FLoginCharacterEntry>&
 
 			if (Item)
 			{
-				// Build display string: "Name — Class Lv.X"
+				// Build display string: "Name — Class Lv.X" (class arrives as slug).
+				FText ClassName = FText::FromString(Entry.CharacterClass);
+				if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
+				{
+					const FText LocClass = Loc->GetClassDisplayName(Entry.CharacterClass);
+					if (!LocClass.IsEmpty())
+						ClassName = LocClass;
+				}
 				const FString DisplayStr = FString::Printf(TEXT("%s — %s Lv.%d"),
-					*Entry.CharacterName, *Entry.CharacterClass, Entry.CharacterLevel);
+					*Entry.CharacterName, *ClassName.ToString(), Entry.CharacterLevel);
 				Item->SetCharacterItemData(DisplayStr, Entry.CharacterId);
 				CharacterSelectListView->AddItem(Item);
 			}
@@ -53,21 +61,21 @@ void ULoginFlowWidget::PopulateCreationOptions(const FCharacterCreationOptions& 
 {
 	CachedCreationOptions = Options;
 
-	// Populate class combo
+	// Populate class combo (S3c: localized display, slug resolved on use)
 	if (CharCreate_ClassComboBox)
 	{
 		CharCreate_ClassComboBox->ClearOptions();
 		for (const FCharacterClassOption& Cls : Options.Classes)
 		{
-			CharCreate_ClassComboBox->AddOption(Cls.Name);
+			CharCreate_ClassComboBox->AddOption(GetClassDisplayName(Cls));
 		}
 		if (Options.Classes.Num() > 0)
 		{
-			CharCreate_ClassComboBox->SetSelectedOption(Options.Classes[0].Name);
+			CharCreate_ClassComboBox->SetSelectedOption(GetClassDisplayName(Options.Classes[0]));
 			// Fire initial description
 			if (CharCreate_ClassDescription)
 			{
-				CharCreate_ClassDescription->SetText(FText::FromString(Options.Classes[0].Description));
+				CharCreate_ClassDescription->SetText(GetClassDescription(Options.Classes[0].Slug, Options.Classes[0].Description));
 			}
 		}
 	}
@@ -78,28 +86,105 @@ void ULoginFlowWidget::PopulateCreationOptions(const FCharacterCreationOptions& 
 		CharCreate_RaceComboBox->ClearOptions();
 		for (const FCharacterRaceOption& Race : Options.Races)
 		{
-			CharCreate_RaceComboBox->AddOption(Race.Name);
+			CharCreate_RaceComboBox->AddOption(GetRaceDisplayName(Race));
 		}
 		if (Options.Races.Num() > 0)
 		{
-			CharCreate_RaceComboBox->SetSelectedOption(Options.Races[0].Name);
+			CharCreate_RaceComboBox->SetSelectedOption(GetRaceDisplayName(Options.Races[0]));
 		}
 	}
 
-	// Populate gender combo (show Label = "Male"/"Female"; Name holds the slug)
+	// Populate gender combo
 	if (CharCreate_GenderComboBox)
 	{
 		CharCreate_GenderComboBox->ClearOptions();
 		for (const FCharacterGenderOption& Gender : Options.Genders)
 		{
-			CharCreate_GenderComboBox->AddOption(Gender.Label.IsEmpty() ? Gender.Name : Gender.Label);
+			CharCreate_GenderComboBox->AddOption(GetGenderDisplayName(Gender));
 		}
 		if (Options.Genders.Num() > 0)
 		{
-			const FString FirstLabel = Options.Genders[0].Label.IsEmpty() ? Options.Genders[0].Name : Options.Genders[0].Label;
-			CharCreate_GenderComboBox->SetSelectedOption(FirstLabel);
+			CharCreate_GenderComboBox->SetSelectedOption(GetGenderDisplayName(Options.Genders[0]));
 		}
 	}
+}
+
+FString ULoginFlowWidget::GetClassDisplayName(const FCharacterClassOption& Cls) const
+{
+	if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
+	{
+		const FText LocName = Loc->GetClassDisplayName(Cls.Slug);
+		if (!LocName.IsEmpty() && LocName.ToString() != Cls.Slug)
+			return LocName.ToString();
+	}
+	return Cls.Name.IsEmpty() ? Cls.Slug : Cls.Name;
+}
+
+FText ULoginFlowWidget::GetClassDescription(const FString& ClassSlug, const FString& ServerDescription) const
+{
+	if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
+	{
+		const FText LocDesc = Loc->GetClassDescription(ClassSlug);
+		if (!LocDesc.IsEmpty())
+			return LocDesc;
+	}
+	return FText::FromString(ServerDescription);
+}
+
+FString ULoginFlowWidget::GetRaceDisplayName(const FCharacterRaceOption& Race) const
+{
+	if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
+	{
+		const FText LocName = Loc->GetRaceDisplayName(Race.Slug);
+		if (!LocName.IsEmpty() && LocName.ToString() != Race.Slug)
+			return LocName.ToString();
+	}
+	return Race.Name.IsEmpty() ? Race.Slug : Race.Name;
+}
+
+FString ULoginFlowWidget::GetGenderDisplayName(const FCharacterGenderOption& Gender) const
+{
+	if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
+	{
+		const FText LocName = Loc->GetGenderDisplayName(Gender.Name);
+		if (!LocName.IsEmpty() && LocName.ToString() != Gender.Name)
+			return LocName.ToString();
+	}
+	if (!Gender.Label.IsEmpty())
+		return Gender.Label;
+	return Gender.Name;
+}
+
+bool ULoginFlowWidget::ResolveCreationSlugs(const FString& ClassDisplay, const FString& RaceDisplay,
+	const FString& GenderDisplay, FString& OutClassSlug, FString& OutRaceSlug, FString& OutGenderSlug) const
+{
+	OutClassSlug = OutRaceSlug = OutGenderSlug = TEXT("");
+	for (const FCharacterClassOption& Cls : CachedCreationOptions.Classes)
+	{
+		if (ClassDisplay == Cls.Name || ClassDisplay == Cls.Slug || ClassDisplay == GetClassDisplayName(Cls))
+		{
+			OutClassSlug = Cls.Slug;
+			break;
+		}
+	}
+	for (const FCharacterRaceOption& Race : CachedCreationOptions.Races)
+	{
+		if (RaceDisplay == Race.Name || RaceDisplay == Race.Slug || RaceDisplay == GetRaceDisplayName(Race))
+		{
+			OutRaceSlug = Race.Slug;
+			break;
+		}
+	}
+	for (const FCharacterGenderOption& Gender : CachedCreationOptions.Genders)
+	{
+		const FString GenderDisplay = GetGenderDisplayName(Gender);
+		if (GenderDisplay == GenderDisplay || GenderDisplay == Gender.Label || GenderDisplay == Gender.Name)
+		{
+			OutGenderSlug = Gender.Name;
+			break;
+		}
+	}
+	return !OutClassSlug.IsEmpty() && !OutRaceSlug.IsEmpty() && !OutGenderSlug.IsEmpty();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -323,7 +408,11 @@ void ULoginFlowWidget::UpdateCreatePreviewFromCombos()
 
 	if (!ClassName.IsEmpty() && !RaceName.IsEmpty() && !GenderName.IsEmpty())
 	{
-		PM->UpdateCreatePreview(ClassName, RaceName, GenderName);
+		// Preview visuals key on slugs: resolve first (also fixes a latent
+		// mismatch where display names flowed into slug-keyed lookups).
+		FString ClassSlug, RaceSlug, GenderSlug;
+		if (ResolveCreationSlugs(ClassName, RaceName, GenderName, ClassSlug, RaceSlug, GenderSlug))
+			PM->UpdateCreatePreview(ClassSlug, RaceSlug, GenderSlug);
 	}
 }
 

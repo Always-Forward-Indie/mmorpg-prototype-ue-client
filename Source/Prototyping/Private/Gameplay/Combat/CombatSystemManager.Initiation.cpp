@@ -1,4 +1,5 @@
 #include "Gameplay/Combat/CombatSystemManager.h"
+#include "Services/LocalizationSubsystem.h"
 #include "Gameplay/Combat/ISkillEffectHandler.h"
 #include "Gameplay/Combat/ICombatable.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
@@ -43,10 +44,20 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
         }
     }
 
-    // S1a: server no longer sends display strings (skillName/animationName).
-    // Resolve them from the local skill catalog; keep packet values as override.
+    // S1a+S3c: server no longer sends display strings (skillName/animationName).
+    // Resolve them locally: codebook table first, skill catalog second.
+    // Keep packet values as override.
     FString SkillNameForUI = SkillData.skillName;
     FString AnimNameForUI = SkillData.animationName;
+    ULocalizationSubsystem* Loc = GameInstance ? GameInstance->GetSubsystem<ULocalizationSubsystem>() : nullptr;
+    if (SkillNameForUI.IsEmpty() && Loc)
+    {
+        // Table row wins when filled (differs from humanised fallback);
+        // otherwise the repo lookup below keeps the curated single-language name.
+        const FText LocSkill = Loc->GetSkillDisplayName(SkillData.skillSlug);
+        if (!LocSkill.IsEmpty() && LocSkill.ToString() != JSONParser::HumanizeSlugForDisplay(SkillData.skillSlug))
+            SkillNameForUI = LocSkill.ToString();
+    }
     if ((SkillNameForUI.IsEmpty() || AnimNameForUI.IsEmpty()) && GameInstance)
     {
         if (USkillDefinitionRepository* SkillRepo = GameInstance->GetSkillDefinitionRepository())

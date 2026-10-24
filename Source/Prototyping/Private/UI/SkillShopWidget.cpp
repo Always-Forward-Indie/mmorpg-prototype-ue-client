@@ -1,4 +1,5 @@
 #include "UI/SkillShopWidget.h"
+#include "Services/LocalizationSubsystem.h"
 #include "UI/SkillShopRowWidget.h"
 #include "Gameplay/SkillShop/SkillShopManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
@@ -192,7 +193,12 @@ void USkillShopWidget::HandleSkillShopOpened(const FSkillShopData& ShopData)
 
 void USkillShopWidget::HandleSkillLearned(const FLearnSkillResultData& Result)
 {
-    ShowStatus(FString::Printf(TEXT("Learned: %s"), *Result.skillName));
+    // S3c: learned-skill name via codebook table, server name as fallback.
+    FText LearnedName = FText::FromString(Result.skillName.IsEmpty() ? Result.skillSlug : Result.skillName);
+    if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
+        LearnedName = ULocalizationSubsystem::PickTableOrServer(
+            Loc->GetSkillDisplayName(Result.skillSlug), Result.skillSlug, Result.skillName);
+    ShowStatus(FString::Printf(TEXT("Learned: %s"), *LearnedName.ToString()));
 
     // Refresh the shop display from the updated manager state
     if (SkillShopManager)

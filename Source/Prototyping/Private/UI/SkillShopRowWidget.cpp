@@ -1,4 +1,5 @@
 #include "UI/SkillShopRowWidget.h"
+#include "Services/LocalizationSubsystem.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
@@ -10,10 +11,15 @@ void USkillShopRowWidget::NativeConstruct()
 
 void USkillShopRowWidget::PopulateFromSkillData(const FSkillShopSkillData& Skill)
 {
-    // --- Name ---
+    // --- Name: S3c codebook table wins when filled, server name covers the rest.
     if (Skill_Name_Text)
-        Skill_Name_Text->SetText(FText::FromString(
-            Skill.skillName.IsEmpty() ? Skill.skillSlug : Skill.skillName));
+    {
+        FText Name = FText::FromString(Skill.skillName.IsEmpty() ? Skill.skillSlug : Skill.skillName);
+        if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
+            Name = ULocalizationSubsystem::PickTableOrServer(
+                Loc->GetSkillDisplayName(Skill.skillSlug), Skill.skillSlug, Skill.skillName);
+        Skill_Name_Text->SetText(Name);
+    }
 
     // --- Required level ---
     if (Skill_Level_Text)
@@ -85,9 +91,18 @@ void USkillShopRowWidget::PopulateFromSkillData(const FSkillShopSkillData& Skill
         }
     }
 
-    // --- Description ---
+    // --- Description: S3c localized first, server second.
     if (Skill_Desc_Text)
-        Skill_Desc_Text->SetText(FText::FromString(Skill.description));
+    {
+        FText Desc = FText::FromString(Skill.description);
+        if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
+        {
+            const FText LocDesc = Loc->GetSkillDescription(Skill.skillSlug);
+            if (!LocDesc.IsEmpty())
+                Desc = LocDesc;
+        }
+        Skill_Desc_Text->SetText(Desc);
+    }
 
     // --- Status label ---
     if (Status_Text)

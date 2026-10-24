@@ -39,25 +39,9 @@ void ULoginFlowWidget::HandleCharCreateClicked()
 		return;
 	}
 
-	// Resolve display names → slugs (server looks up by slug since v0.1.12)
-	FString ClassSlug;
-	for (const FCharacterClassOption& Cls : CachedCreationOptions.Classes)
-	{
-		if (Cls.Name == ClassName) { ClassSlug = Cls.Slug; break; }
-	}
-
-	FString RaceSlug;
-	for (const FCharacterRaceOption& Race : CachedCreationOptions.Races)
-	{
-		if (Race.Name == RaceName) { RaceSlug = Race.Slug; break; }
-	}
-
-	// Gender ComboBox stores Label ("Male"); Gender.Name holds the slug ("male")
-	FString GenderSlug;
-	for (const FCharacterGenderOption& Gender : CachedCreationOptions.Genders)
-	{
-		if (Gender.Label == GenderLabel) { GenderSlug = Gender.Name; break; }
-	}
+	// Resolve display names → slugs via triple-match (localized/server/slug).
+	FString ClassSlug, RaceSlug, GenderSlug;
+	ResolveCreationSlugs(ClassName, RaceName, GenderLabel, ClassSlug, RaceSlug, GenderSlug);
 
 	if (ClassSlug.IsEmpty() || RaceSlug.IsEmpty() || GenderSlug.IsEmpty())
 	{
@@ -96,12 +80,12 @@ void ULoginFlowWidget::HandleClassSelectionChanged(FString SelectedItem, ESelect
 {
 	if (CharCreate_ClassDescription)
 	{
-		// Find description from cached options
+		// Find description from cached options (match by display or slug)
 		for (const FCharacterClassOption& Cls : CachedCreationOptions.Classes)
 		{
-			if (Cls.Name == SelectedItem)
+			if (SelectedItem == Cls.Name || SelectedItem == Cls.Slug || SelectedItem == GetClassDisplayName(Cls))
 			{
-				CharCreate_ClassDescription->SetText(FText::FromString(Cls.Description));
+				CharCreate_ClassDescription->SetText(GetClassDescription(Cls.Slug, Cls.Description));
 				break;
 			}
 		}

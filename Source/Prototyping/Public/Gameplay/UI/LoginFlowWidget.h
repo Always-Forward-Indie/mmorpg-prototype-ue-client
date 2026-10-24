@@ -291,6 +291,17 @@ private:
 	/** Get the CharacterPreviewManager from GameInstance. */
 	UCharacterPreviewManager* GetPreviewManager() const;
 
+	// S3c: localized combo display + slug resolution. Combos show Loc names;
+	// every consumer resolves back to slugs via triple-match (localized
+	// display, server name, raw slug), so localization never breaks submit.
+	FString GetClassDisplayName(const FCharacterClassOption& Cls) const;
+	FText GetClassDescription(const FString& ClassSlug, const FString& ServerDescription) const;
+	FString GetRaceDisplayName(const FCharacterRaceOption& Race) const;
+	FString GetGenderDisplayName(const FCharacterGenderOption& Gender) const;
+	bool ResolveCreationSlugs(const FString& ClassDisplay, const FString& RaceDisplay,
+		const FString& GenderDisplay, FString& OutClassSlug, FString& OutRaceSlug,
+		FString& OutGenderSlug) const;
+
 	// ── State ────────────────────────────────────────────────────────────────
 
 	UPROPERTY()

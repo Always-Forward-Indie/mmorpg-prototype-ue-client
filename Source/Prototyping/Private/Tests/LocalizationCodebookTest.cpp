@@ -28,5 +28,25 @@ bool FCodebookFallbackContractTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("set"), Loc->GetItemSetDisplayName(TEXT("wolf_pack")).ToString(), FString(TEXT("Wolf pack")));
     TestTrue(TEXT("empty in empty out"), Loc->GetAttributeDisplayName(TEXT("")).IsEmpty());
     TestTrue(TEXT("empty type"), Loc->GetItemTypeDisplayName(TEXT("")).IsEmpty());
+
+    // S3c wave 2: skill / emote / class / race / gender fall back the same way.
+    TestEqual(TEXT("skill"), Loc->GetSkillDisplayName(TEXT("power_slash")).ToString(), FString(TEXT("Power slash")));
+    TestTrue(TEXT("skill desc empty"), Loc->GetSkillDescription(TEXT("power_slash")).IsEmpty());
+    TestEqual(TEXT("emote"), Loc->GetEmoteDisplayName(TEXT("dance_wild")).ToString(), FString(TEXT("Dance wild")));
+    TestEqual(TEXT("class"), Loc->GetClassDisplayName(TEXT("warrior")).ToString(), FString(TEXT("Warrior")));
+    TestTrue(TEXT("class desc empty"), Loc->GetClassDescription(TEXT("warrior")).IsEmpty());
+    TestEqual(TEXT("race"), Loc->GetRaceDisplayName(TEXT("human")).ToString(), FString(TEXT("Human")));
+    TestEqual(TEXT("gender"), Loc->GetGenderDisplayName(TEXT("male")).ToString(), FString(TEXT("Male")));
+
+    // PickTableOrServer arbitration: table row wins, server covers misses.
+    TestEqual(TEXT("pick table"),
+        ULocalizationSubsystem::PickTableOrServer(FText::FromString(TEXT("Table Text")), TEXT("slug"), TEXT("Server")).ToString(),
+        FString(TEXT("Table Text")));
+    TestEqual(TEXT("pick server"),
+        ULocalizationSubsystem::PickTableOrServer(FText::FromString(TEXT("Slug")), TEXT("slug"), TEXT("Server")).ToString(),
+        FString(TEXT("Server")));
+    TestEqual(TEXT("pick humanized"),
+        ULocalizationSubsystem::PickTableOrServer(FText::GetEmpty(), TEXT("my_slug"), TEXT("")).ToString(),
+        FString(TEXT("My slug")));
     return true;
 }

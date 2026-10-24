@@ -146,4 +146,26 @@ public:
     // Maps item-set slug -> FItemSetLocaleDefinition (display name).
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Codebook")
     TObjectPtr<UDataTable> ItemSetLocale;
+
+    // -- Codebook statics, wave 2 (S3c) ----------------------------------------
+
+    // Maps skill slug -> FSkillLocaleDefinition (display name + description).
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Codebook")
+    TObjectPtr<UDataTable> SkillLocale;
+
+    // Maps emote slug -> FEmoteLocaleDefinition (display name).
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Codebook")
+    TObjectPtr<UDataTable> EmoteLocale;
+
+    // Maps class slug -> FClassLocaleDefinition (display name + description).
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Codebook")
+    TObjectPtr<UDataTable> ClassLocale;
+
+    // Maps race slug -> FRaceLocaleDefinition (display name).
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Codebook")
+    TObjectPtr<UDataTable> RaceLocale;
+
+    // Maps gender slug -> FGenderLocaleDefinition (display name).
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Localization|Codebook")
+    TObjectPtr<UDataTable> GenderLocale;
 };

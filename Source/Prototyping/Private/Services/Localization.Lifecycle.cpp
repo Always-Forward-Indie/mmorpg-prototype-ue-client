@@ -33,6 +33,11 @@ void ULocalizationSubsystem::SetLocalizationData(ULocalizationDataAsset* InAsset
     CachedRarityLocaleTable       = nullptr;
     CachedEquipSlotLocaleTable    = nullptr;
     CachedItemSetLocaleTable      = nullptr;
+    CachedSkillLocaleTable        = nullptr;
+    CachedEmoteLocaleTable        = nullptr;
+    CachedClassLocaleTable        = nullptr;
+    CachedRaceLocaleTable         = nullptr;
+    CachedGenderLocaleTable       = nullptr;
 
     UE_LOG(LogTemp, Log, TEXT("LocalizationSubsystem: data asset %s"),
         InAsset ? TEXT("assigned") : TEXT("cleared"));

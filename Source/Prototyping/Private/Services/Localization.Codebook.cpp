@@ -82,3 +82,106 @@ FText ULocalizationSubsystem::GetItemSetDisplayName(const FString& ItemSetSlug) 
     }
     return FText::FromString(JSONParser::HumanizeSlugForDisplay(ItemSetSlug));
 }
+
+FText ULocalizationSubsystem::GetSkillDisplayName(const FString& SkillSlug) const
+{
+    if (SkillSlug.IsEmpty()) return FText::GetEmpty();
+    if (UDataTable* Table = GetSkillLocaleTable())
+    {
+        if (const FSkillLocaleDefinition* Row =
+                Table->FindRow<FSkillLocaleDefinition>(FName(*SkillSlug), TEXT("GetSkillDisplayName"), false))
+        {
+            if (Row && !Row->displayName.IsEmpty())
+                return Row->displayName;
+        }
+    }
+    return FText::FromString(JSONParser::HumanizeSlugForDisplay(SkillSlug));
+}
+
+FText ULocalizationSubsystem::GetSkillDescription(const FString& SkillSlug) const
+{
+    if (SkillSlug.IsEmpty()) return FText::GetEmpty();
+    if (UDataTable* Table = GetSkillLocaleTable())
+    {
+        if (const FSkillLocaleDefinition* Row =
+                Table->FindRow<FSkillLocaleDefinition>(FName(*SkillSlug), TEXT("GetSkillDescription"), false))
+        {
+            if (Row) return Row->description;
+        }
+    }
+    return FText::GetEmpty();
+}
+
+FText ULocalizationSubsystem::GetEmoteDisplayName(const FString& EmoteSlug) const
+{
+    if (EmoteSlug.IsEmpty()) return FText::GetEmpty();
+    if (UDataTable* Table = GetEmoteLocaleTable())
+    {
+        if (const FEmoteLocaleDefinition* Row =
+                Table->FindRow<FEmoteLocaleDefinition>(FName(*EmoteSlug), TEXT("GetEmoteDisplayName"), false))
+        {
+            if (Row && !Row->displayName.IsEmpty())
+                return Row->displayName;
+        }
+    }
+    return FText::FromString(JSONParser::HumanizeSlugForDisplay(EmoteSlug));
+}
+
+FText ULocalizationSubsystem::GetClassDisplayName(const FString& ClassSlug) const
+{
+    if (ClassSlug.IsEmpty()) return FText::GetEmpty();
+    if (UDataTable* Table = GetClassLocaleTable())
+    {
+        if (const FClassLocaleDefinition* Row =
+                Table->FindRow<FClassLocaleDefinition>(FName(*ClassSlug), TEXT("GetClassDisplayName"), false))
+        {
+            if (Row && !Row->displayName.IsEmpty())
+                return Row->displayName;
+        }
+    }
+    return FText::FromString(JSONParser::HumanizeSlugForDisplay(ClassSlug));
+}
+
+FText ULocalizationSubsystem::GetClassDescription(const FString& ClassSlug) const
+{
+    if (ClassSlug.IsEmpty()) return FText::GetEmpty();
+    if (UDataTable* Table = GetClassLocaleTable())
+    {
+        if (const FClassLocaleDefinition* Row =
+                Table->FindRow<FClassLocaleDefinition>(FName(*ClassSlug), TEXT("GetClassDescription"), false))
+        {
+            if (Row) return Row->description;
+        }
+    }
+    return FText::GetEmpty();
+}
+
+FText ULocalizationSubsystem::GetRaceDisplayName(const FString& RaceSlug) const
+{
+    if (RaceSlug.IsEmpty()) return FText::GetEmpty();
+    if (UDataTable* Table = GetRaceLocaleTable())
+    {
+        if (const FRaceLocaleDefinition* Row =
+                Table->FindRow<FRaceLocaleDefinition>(FName(*RaceSlug), TEXT("GetRaceDisplayName"), false))
+        {
+            if (Row && !Row->displayName.IsEmpty())
+                return Row->displayName;
+        }
+    }
+    return FText::FromString(JSONParser::HumanizeSlugForDisplay(RaceSlug));
+}
+
+FText ULocalizationSubsystem::GetGenderDisplayName(const FString& GenderSlug) const
+{
+    if (GenderSlug.IsEmpty()) return FText::GetEmpty();
+    if (UDataTable* Table = GetGenderLocaleTable())
+    {
+        if (const FGenderLocaleDefinition* Row =
+                Table->FindRow<FGenderLocaleDefinition>(FName(*GenderSlug), TEXT("GetGenderDisplayName"), false))
+        {
+            if (Row && !Row->displayName.IsEmpty())
+                return Row->displayName;
+        }
+    }
+    return FText::FromString(JSONParser::HumanizeSlugForDisplay(GenderSlug));
+}

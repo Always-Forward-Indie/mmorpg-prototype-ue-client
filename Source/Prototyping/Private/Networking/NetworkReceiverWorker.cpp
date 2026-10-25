@@ -216,82 +216,30 @@ uint32 NetworkReceiverWorker::Run()
             //int64 PreciseClientRecvMs = TimeSyncService ? TimeSyncService->GetCurrentClientTimeMs() : 0;
             
             // Append received bytes to the accumulation buffer, then extract
-            // complete '\n'-delimited packets via the canonical FNetFraming
-            // helper (byte-level split keeps multi-byte UTF-8 split across
-            // Recv() chunks intact; empty lines ignored, oversized dropped).
+            // complete length-prefixed frames via the canonical FNetFraming
+            // helper (v2: the length IS the boundary; UTF-8 decodes only on
+            // complete messages so split codepoints stay intact).
             AccumulatedBuffer.Append(ReceiveBuffer.GetData(), BytesRead);
 
-            TArray<TArray<uint8>> RawLines;
-            FNetFraming::ExtractRawLines(AccumulatedBuffer, RawLines, *SocketTag);
-            for (const TArray<uint8>& RawLine : RawLines)
+            TArray<FString> Messages;
+            const int32 Extracted = FNetFraming::ExtractFramedMessages(AccumulatedBuffer, Messages, *SocketTag);
+            if (Extracted < 0)
             {
-                if (RawLine.Num() == 0)
+                // Fatal framing violation: stream position is unrecoverable.
+                // Flag the drop so the game thread runs the bounded reconnect
+                // (fresh workers = clean reassembly state by construction).
+                if (!bDropObserved.exchange(true))
+                {
+                    UE_LOG(LogConnection, Error, TEXT("NetworkReceiverWorker: %s framing violation, tearing down link."), *SocketTag);
+                }
+                break;
+            }
+            for (const FString& ReceivedString : Messages)
+            {
+                if (ReceivedString.IsEmpty())
                 {
                     continue;
                 }
-                // wireFrag frames route raw payload bytes to the reassembler
-                // (server slices by bytes; per-frame decode would corrupt
-                // split UTF-8). Everything else decodes as before.
-                FString ReceivedString;
-                // Route by the full line: live senders emit keys
-                // alphabetically, so the header (with eventType) may sit at
-                // the END of a ~6KB frame — the 256-byte peek window would
-                // miss it. Only wireFrag lines go to the reassembler.
-                if (FNetFraming::PeekEventType(RawLine.GetData(), RawLine.Num(), RawLine.Num()).Equals(TEXT("wireFrag")))
-                {
-                    // Frame payloads are JSON-escaped strings: decode first
-                    // (mirrors the server, which parses frames as JSON),
-                    // then feed raw bytes to the reassembler.
-                    FNetFraming::FWireFragFramePos Frame;
-                    TArray<uint8> Payload;
-                    if (FNetFraming::ParseWireFragFrame(RawLine.GetData(), RawLine.Num(), Frame)
-                        && FNetFraming::UnescapeJsonString(RawLine.GetData() + Frame.PayloadBegin, Frame.PayloadLen, Payload))
-                    {
-                        const FWireFragReassembler::FFeedResult Fed = FragReassembler.Feed(
-                            Frame.StreamId, Frame.Index, Frame.Total,
-                            Payload.Num() > 0 ? Payload.GetData() : nullptr, Payload.Num(),
-                            FPlatformTime::Seconds());
-                        if (Fed.bComplete && Fed.Message.Num() > 0)
-                        {
-                            FragStats.OnFrameFed();
-                            FragStats.OnStreamCompleted(Fed.Message.Num());
-                            UE_LOG(LogNetPacket, Warning, TEXT("wireFrag reassembled: stream=%llu frames=%llu bytes=%d socket=%s"),
-                                Frame.StreamId, Frame.Total, Fed.Message.Num(), *SocketTag);
-                            FUTF8ToTCHAR Converter(reinterpret_cast<const ANSICHAR*>(Fed.Message.GetData()), Fed.Message.Num());
-                            ReceivedString = FString(Converter.Length(), Converter.Get());
-                            ReceivedString.TrimStartAndEndInline();
-                        }
-                        else if (Fed.bDropped)
-                        {
-                            FragStats.OnFrameMalformed();
-                        }
-                        else
-                        {
-                            FragStats.OnFrameFed();
-                        }
-                    }
-                    else
-                    {
-                        FragStats.OnFrameMalformed();
-                    }
-                    if (ReceivedString.IsEmpty())
-                    {
-                        // Incomplete stream or malformed frame: nothing to
-                        // deliver yet. Swallow the line.
-                        continue;
-                    }
-                }
-                else
-                {
-                    FUTF8ToTCHAR Converter(reinterpret_cast<const ANSICHAR*>(RawLine.GetData()), RawLine.Num());
-                    ReceivedString = FString(Converter.Length(), Converter.Get());
-                    ReceivedString.TrimStartAndEndInline();
-                    if (ReceivedString.IsEmpty())
-                    {
-                        continue;
-                    }
-                }
-
 
                 // t3 ������ ��������� �����, �� ������ �����:
                 const int64 PerPacketT3 = TimeSyncService.IsValid() ? TimeSyncService.Get()->GetCurrentClientTimeMs() : 0;
@@ -300,10 +248,6 @@ uint32 NetworkReceiverWorker::Run()
 
                 // ��������� ������ � �������
                 DataQueue.Enqueue(TimestampedString);
-            }
-            if (FragReassembler.PendingStreams() > 0)
-            {
-                FragReassembler.ReapIdle(FPlatformTime::Seconds());
             }
         }
         else

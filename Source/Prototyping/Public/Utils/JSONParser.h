@@ -88,6 +88,12 @@ public:
     // sender uses this single helper — no forked inline copies.
     static void AddFragOptIn(TMap<FString, TSharedPtr<FJsonValue>>& BodyData);
 
+    // Protocol framing version (S14): marks a join body with {"framing":[2]}
+    // (highest first). The server answers the agreed version in the join
+    // response; transport mode itself is sniffed from the first bytes.
+    // Same single-helper rule as AddFragOptIn.
+    static void AddFramingOptIn(TMap<FString, TSharedPtr<FJsonValue>>& BodyData);
+
     // Helper method to get TimeSyncService instance
     static UTimeSyncService* GetTimeSyncService();
 

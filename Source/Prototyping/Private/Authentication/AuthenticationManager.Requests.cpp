@@ -25,6 +25,9 @@ void UAuthenticationManager::SendLoginRequest(const FString& Username, const FSt
 	BodyData.Add("password", MakeShareable(new FJsonValueString(Password)));
 	BodyData.Add("clientVersion", MakeShareable(new FJsonValueString(
 		gameInstance ? gameInstance->ClientVersion : TEXT("0.1.0"))));
+	// Protocol framing (S14): declare v2 support (transport mode itself is
+	// sniffed by the server from the first bytes).
+	JSONParser::AddFramingOptIn(BodyData);
 
 	FString JsonString = JSONParser::SerializeJsonWithTimeSync(
 		"authentificationClient", HeaderData, BodyData,
@@ -56,6 +59,9 @@ void UAuthenticationManager::SendRegisterRequest(const FString& Username, const 
 	BodyData.Add("password", MakeShareable(new FJsonValueString(Password)));
 	BodyData.Add("clientVersion", MakeShareable(new FJsonValueString(
 		gameInstance ? gameInstance->ClientVersion : TEXT("0.1.0"))));
+	// Protocol framing (S14): declare v2 support (transport mode itself is
+	// sniffed by the server from the first bytes).
+	JSONParser::AddFramingOptIn(BodyData);
 	if (!Email.IsEmpty())
 	{
 		BodyData.Add("email", MakeShareable(new FJsonValueString(Email)));

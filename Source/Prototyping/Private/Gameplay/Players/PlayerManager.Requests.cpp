@@ -46,6 +46,10 @@ void UPlayerManager::SendJoinGameRequest(const FClientDataStruct& ClientData)
 	const int32 CharId = ClientData.characterData.characterId;
 	BodyData.Add("characterId", MakeShareable(new FJsonValueNumber(CharId)));
 
+	// Protocol framing (S14): declare v2 support (transport mode itself is
+	// sniffed by the server from the first bytes).
+	JSONParser::AddFramingOptIn(BodyData);
+
 	// Use TimeSyncService for automatic clientSendMs with correct server type
 	FString JsonString = JSONParser::SerializeJsonWithTimeSync("joinGameClient", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::GameServer);
 
@@ -69,6 +73,9 @@ void UPlayerManager::SendJoinClientChunkRequest(const FClientDataStruct& ClientD
 	// Transport capability (S13-C1): opt in from the FIRST message so the
 	// server knows before any fat response is queued.
 	JSONParser::AddFragOptIn(BodyData);
+	// Protocol framing (S14): declare v2 support (transport mode itself is
+	// sniffed by the server from the first bytes).
+	JSONParser::AddFramingOptIn(BodyData);
 
 	// Add the client ID and hash to the header data per protocol
 	HeaderData.Add("clientId", MakeShareable(new FJsonValueNumber(ClientData.clientId)));
@@ -103,6 +110,8 @@ void UPlayerManager::SendPlayerReadyRequest(const FClientDataStruct& ClientData)
 	// lines for sockets that opt in here (single helper for all join
 	// messages — the flag is learned from the first one carrying it).
 	JSONParser::AddFragOptIn(BodyData);
+	// Protocol framing (S14): declare v2 support.
+	JSONParser::AddFramingOptIn(BodyData);
 
 	FString JsonString = JSONParser::SerializeJsonWithTimeSync("playerReady", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::ChunkServer);
 
@@ -147,6 +156,8 @@ void UPlayerManager::SendJoinCharacterChunkRequest(const FClientDataStruct& Clie
 	// Transport capability (S13-C1): duplicate the opt-in here too — every
 	// chunk-bound join message carries it, the server learns from the first.
 	JSONParser::AddFragOptIn(BodyData);
+	// Protocol framing (S14): declare v2 support.
+	JSONParser::AddFramingOptIn(BodyData);
 
 	// Use TimeSyncService for automatic clientSendMs with correct server type
 	FString JsonString = JSONParser::SerializeJsonWithTimeSync("joinGameCharacter", HeaderData, BodyData, gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::ChunkServer);

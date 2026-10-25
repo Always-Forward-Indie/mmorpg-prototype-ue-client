@@ -19,8 +19,9 @@ bool NetworkSenderWorker::Init()
 
 void NetworkSenderWorker::EnqueueDataForSending(const FString& Data)
 {
-	FString DelimitedData = Data + TEXT("\n"); // Using "\n" as data packet delimiter
-    DataQueue.Enqueue(DelimitedData);
+    // v2 framing is applied in Run() after UTF-8 conversion (the length
+    // prefix counts UTF-8 bytes). Queued payload is the raw JSON.
+    DataQueue.Enqueue(Data);
 }
 
 void NetworkSenderWorker::SetTimeSyncService(UTimeSyncService* InTimeSyncService)
@@ -108,10 +109,21 @@ uint32 NetworkSenderWorker::Run()
             // 1) ��������� ���������
             FString UpdatedData = UpdateClientSendTimestamp(Data);
 
-            // 2) ����������� ����� ���� \n ��� �����������
-            if (!UpdatedData.EndsWith(TEXT("\n")))
+            // 2) v2 framing: [u32 LE byte-length][UTF-8 JSON], no delimiter.
+            // Length counts UTF-8 bytes (multi-byte codepoints stay whole —
+            // the receiver decodes only complete frames).
+            FTCHARToUTF8 ConvertedData(*UpdatedData);
+            const int32 Utf8Len = ConvertedData.Length();
+            TArray<uint8> SendBuffer;
+            SendBuffer.SetNumUninitialized(4 + Utf8Len);
+            const uint32 LenPrefix = static_cast<uint32>(Utf8Len);
+            SendBuffer[0] = static_cast<uint8>(LenPrefix & 0xFF);
+            SendBuffer[1] = static_cast<uint8>((LenPrefix >> 8) & 0xFF);
+            SendBuffer[2] = static_cast<uint8>((LenPrefix >> 16) & 0xFF);
+            SendBuffer[3] = static_cast<uint8>((LenPrefix >> 24) & 0xFF);
+            if (Utf8Len > 0)
             {
-                UpdatedData.AppendChar(TEXT('\n'));
+                FMemory::Memcpy(SendBuffer.GetData() + 4, ConvertedData.Get(), Utf8Len);
             }
 
             // 3) Guard: re-check bRunThread and socket before the blocking Send()
@@ -119,9 +131,6 @@ uint32 NetworkSenderWorker::Run()
             {
                 break;
             }
-
-            FTCHARToUTF8 ConvertedData(*UpdatedData);
-            TArray<uint8> SendBuffer(reinterpret_cast<const uint8*>(ConvertedData.Get()), ConvertedData.Length());
 
             int32 BytesSent = 0;
             bool bSuccessful = CurrentSocket->Send(SendBuffer.GetData(), SendBuffer.Num(), BytesSent);

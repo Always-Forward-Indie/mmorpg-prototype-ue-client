@@ -557,3 +557,10 @@ void JSONParser::AddFragOptIn(TMap<FString, TSharedPtr<FJsonValue>>& BodyData)
 	BodyData.Add(TEXT("frag"), MakeShareable(new FJsonValueBoolean(true)));
 }
 
+void JSONParser::AddFramingOptIn(TMap<FString, TSharedPtr<FJsonValue>>& BodyData)
+{
+	TArray<TSharedPtr<FJsonValue>> Versions;
+	Versions.Add(MakeShareable(new FJsonValueNumber(2)));
+	BodyData.Add(TEXT("framing"), MakeShareable(new FJsonValueArray(Versions)));
+}
+

@@ -67,17 +67,19 @@ This document describes the new combat system architecture that follows SOLID pr
       "animationDuration": 1.0,
       "castTime": 0.0,
       "casterId": 3,
-      "casterType": 1,
-      "casterTypeString": "PLAYER",
+      "casterType": 2,
       "targetId": 1000001,
       "targetType": 3,
-      "targetTypeString": "MOB",
       "skillEffectType": "damage",
       "skillSchool": "physical",
       "success": true
     }
   }
 }
+
+// Wire note: `casterType`/`targetType` are `ECasterType` ints (`Player=2`,
+// `Mob=3`, see `DataStructs.h:400`). `*TypeString` fields are NOT sent —
+// the client parses them only if present.
 
 // Combat Result
 {
@@ -86,11 +88,9 @@ This document describes the new combat system architecture that follows SOLID pr
     "skillResult": {
       "skillName": "Basic Attack",
       "casterId": 3,
-      "casterType": 1,
-      "casterTypeString": "PLAYER",
+      "casterType": 2,
       "targetId": 1000001,
       "targetType": 3,
-      "targetTypeString": "MOB",
       "damage": 3,
       "finalTargetHealth": 97,
       "finalTargetMana": 0,

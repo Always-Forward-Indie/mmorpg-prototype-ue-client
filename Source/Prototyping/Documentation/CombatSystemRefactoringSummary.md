@@ -45,11 +45,9 @@ The system now supports the modern server packet format:
       "animationName": "skill_basic_attack",
       "animationDuration": 1.0,
       "casterId": 3,
-      "casterType": 1,
-      "casterTypeString": "PLAYER",
+      "casterType": 2,
       "targetId": 1000001,
       "targetType": 3,
-      "targetTypeString": "MOB",
       "skillEffectType": "damage",
       "skillSchool": "physical",
       "success": true
@@ -57,6 +55,8 @@ The system now supports the modern server packet format:
   }
 }
 ```
+
+> Wire note: `casterType`/`targetType` are `ECasterType` ints (`Player=2`, `Mob=3`, see `DataStructs.h:400`). `*TypeString` fields are NOT sent — the client parses them only if present.
 
 ### Combat Result
 ```json

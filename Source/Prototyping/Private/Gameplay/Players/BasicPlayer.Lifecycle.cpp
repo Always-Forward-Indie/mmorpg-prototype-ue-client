@@ -201,46 +201,60 @@ Super::BeginPlay();
 			UE_LOG(LogGameplay, Warning, TEXT("HarvestManager initialized for local player"));
 		}
 
-		// Initialize UI manager with slight delay to ensure everything is ready
-		if (UIManager)
+		// UI init is event-driven (PossessedBy -> InitializeLocalUI), not wall-clock.
+		// Remote pawns are never possessed locally, so no timer is needed.
+	}
+}
+
+void ABasicPlayer::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+
+	// At possession time isOtherClient is final (spawn path sets it before
+	// FinishSpawning) and the controller exists. The DevMode default-pawn
+	// flow also goes through Possess, so offline bots are covered.
+	InitializeLocalUI();
+}
+
+void ABasicPlayer::InitializeLocalUI()
+{
+	// Event-driven init (PossessedBy): isOtherClient is final here because the
+	// spawn path sets it before FinishSpawning. Remote pawns are never possessed
+	// locally — belt-and-braces early-out. Once-guarded: Possess fires once,
+	// the 3.0s fallback below is harmless on double-fire (bUIInitDone check).
+	if (playerData.isOtherClient || bUIInitStarted || !UIManager)
+	{
+		return;
+	}
+	bUIInitStarted = true;
+
+	if (InventoryManager)
+	{
+		// Get PlayerController
+		APlayerController* PC = Cast<APlayerController>(GetController());
+		
+		// Get HarvestManager from GameInstance
+		UHarvestManager* HarvestManager = MyGameInstance ? MyGameInstance->GetHarvestManager() : nullptr;
+
+	//get ExperienceManager from GameInstance
+		UExperienceManager* ExperienceManager = MyGameInstance ? MyGameInstance->GetExperienceManager() : nullptr;
+
+		// Subscribe to level-up events so we can play LevelUpSound
+		if (ExperienceManager && !playerData.isOtherClient)
 		{
-			GetWorld()->GetTimerManager().SetTimer(UIInitTimerHandle, [this]()
-			{
-				// Guard: skip UI initialization for other-client (remote) players.
-				// isOtherClient is false at BeginPlay time but may be set to true before
-				// the timer fires when this actor represents another connected client.
-				if (playerData.isOtherClient)
-				{
-					return;
-				}
+			ExperienceManager->OnLevelUp.AddDynamic(this, &ABasicPlayer::HandleLevelUp);
+		}
 
-				if (InventoryManager)
-				{
-					// Get PlayerController
-					APlayerController* PC = Cast<APlayerController>(GetController());
-					
-					// Get HarvestManager from GameInstance
-					UHarvestManager* HarvestManager = MyGameInstance ? MyGameInstance->GetHarvestManager() : nullptr;
-
-				//get ExperienceManager from GameInstance
-					UExperienceManager* ExperienceManager = MyGameInstance ? MyGameInstance->GetExperienceManager() : nullptr;
-
-					// Subscribe to level-up events so we can play LevelUpSound
-					if (ExperienceManager && !playerData.isOtherClient)
-					{
-						ExperienceManager->OnLevelUp.AddDynamic(this, &ABasicPlayer::HandleLevelUp);
-					}
-
-					// Subscribe to effectTick to show floating heal/regen numbers above this player.
-					// Applied for ALL players (both local and others) so HoT ticks on remote
-					// characters also show a number floating over their heads.
-					if (MyGameInstance && MyGameInstance->PlayerStatsNetworkHandler)
-					{
-						MyGameInstance->PlayerStatsNetworkHandler->OnEffectTick.AddDynamic(
-							this, &ABasicPlayer::HandleEffectTickFCT);
-					}
-					
-					// Get SkillManager from GameInstance
+		// Subscribe to effectTick to show floating heal/regen numbers above this player.
+		// Applied for ALL players (both local and others) so HoT ticks on remote
+		// characters also show a number floating over their heads.
+		if (MyGameInstance && MyGameInstance->PlayerStatsNetworkHandler)
+		{
+			MyGameInstance->PlayerStatsNetworkHandler->OnEffectTick.AddDynamic(
+				this, &ABasicPlayer::HandleEffectTickFCT);
+		}
+		
+		// Get SkillManager from GameInstance
                     UPlayerSkillManager* SkillManager = MyGameInstance ? MyGameInstance->GetPlayerSkillManager() : nullptr;
 
                     // Auto-attack: when the server confirms a skill initiation, schedule
@@ -249,217 +263,214 @@ Super::BeginPlay();
                     {
                         SkillManager->OnSkillCastConfirmed.AddDynamic(this, &ABasicPlayer::HandleSkillInitiatedForAutoAttack);
                     }
-					
-					// Pass input action references for data-driven pre-input handling
-					// Must happen BEFORE Initialize so the listener never sees a null action.
-					UIManager->SetAltCursorAction(AltCursorAction);
+		
+		// Pass input action references for data-driven pre-input handling
+		// Must happen BEFORE Initialize so the listener never sees a null action.
+		UIManager->SetAltCursorAction(AltCursorAction);
 
-					// Register the Slate pre-input listener for Alt key (data-driven via QueryKeysMappedToAction).
-					UIManager->RegisterPreInputListener();
+		// Register the Slate pre-input listener for Alt key (data-driven via QueryKeysMappedToAction).
+		UIManager->RegisterPreInputListener();
 
-					// Initialize UIManager with all managers
-					UIManager->Initialize(InventoryManager, HarvestManager, ExperienceManager, SkillManager);
-					
-					// Set PlayerController reference immediately after Initialize
-					if (PC)
-					{
-						UIManager->SetPlayerController(PC);
-						UE_LOG(LogGameplay, Warning, TEXT("UIManager: PlayerController set during initialization"));
+		// Initialize UIManager with all managers
+		UIManager->Initialize(InventoryManager, HarvestManager, ExperienceManager, SkillManager);
+		
+		// Set PlayerController reference immediately after Initialize
+		if (PC)
+		{
+			UIManager->SetPlayerController(PC);
+			UE_LOG(LogGameplay, Warning, TEXT("UIManager: PlayerController set during initialization"));
 
-						UIManager->InitFTCManager(PC);
-						UE_LOG(LogGameplay, Warning, TEXT("UIManager: Init called for FCT system"));
+			UIManager->InitFTCManager(PC);
+			UE_LOG(LogGameplay, Warning, TEXT("UIManager: Init called for FCT system"));
 
                         PlayerHUD = UIManager->GetPlayerInterfaceWidget()->GetPlayerHUD();
 
-						// Flush any stats that arrived before the HUD was ready.
-						RefreshHUD();
+			// Flush any stats that arrived before the HUD was ready.
+			RefreshHUD();
 
-						// Subscribe to StatsManager so effectTick and other paths that
-						// bypass ProcessStatsUpdate still update playerData and the HUD.
-						if (UPlayerStatsManager* StatsMgr = MyGameInstance ? MyGameInstance->GetPlayerStatsManager() : nullptr)
-						{
-							StatsMgr->OnStatsUpdated.AddDynamic(this, &ABasicPlayer::HandleStatsManagerUpdate);
+			// Subscribe to StatsManager so effectTick and other paths that
+			// bypass ProcessStatsUpdate still update playerData and the HUD.
+			if (UPlayerStatsManager* StatsMgr = MyGameInstance ? MyGameInstance->GetPlayerStatsManager() : nullptr)
+			{
+				StatsMgr->OnStatsUpdated.AddDynamic(this, &ABasicPlayer::HandleStatsManagerUpdate);
 
-							// stats_update packets arrive before UIManager is ready (boundListeners=0 at
-							// broadcast time). Replay the cached stats now so AEW shows effects immediately.
-							const FPlayerStatsUpdateStruct& Cached = StatsMgr->GetCachedStats();
-							if (Cached.characterId > 0)
-							{
-								HandleStatsManagerUpdate(Cached);
-							}
-						}
-					}
-					else
-					{
-						UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to get PlayerController during initialization"));
-					}
-					
-					UE_LOG(LogGameplay, Warning, TEXT("UIManager initialized with all managers including SkillManager"));
-
-					// Initialize experience widget for this character.
-					// ExperienceManager already has correct progression data
-					// (including expForCurrentLevel) set by SpawnPlayerForClient
-					// before BeginPlay fires.
-					if (ExperienceManager && playerData.characterData.characterId > 0)
-					{
-						UIManager->InitializeExperienceWidget(playerData.characterData.characterId);
-
-						UE_LOG(LogGameplay, Warning, TEXT("ExperienceWidget initialized for character %d"), 
-							playerData.characterData.characterId);
-					}
-
-					// Initialize skill widgets if SkillManager is available
-					if (SkillManager)
-					{
-						UIManager->InitializeSkillWidgets();
-						UE_LOG(LogGameplay, Warning, TEXT("Skill widgets initialized"));
-					}
-
-				// Bind dialogue and quest widgets to their managers
-					UDialogueManager* DlgMgr   = MyGameInstance ? MyGameInstance->GetDialogueManager()  : nullptr;
-					UQuestManager*    QuestMgr  = MyGameInstance ? MyGameInstance->GetQuestManager()     : nullptr;
-					UIManager->InitializeDialogueAndQuestWidgets(DlgMgr, QuestMgr);
-
-				// Bind equipment / vendor / repair / trade widgets to their managers
-					UIManager->InitializeItemSystemWidgets(
-						MyGameInstance ? MyGameInstance->GetEquipmentManager() : nullptr,
-						MyGameInstance ? MyGameInstance->GetVendorManager()    : nullptr,
-						MyGameInstance ? MyGameInstance->GetRepairManager()    : nullptr,
-						MyGameInstance ? MyGameInstance->GetTradeManager()     : nullptr);
-
-			// Bind skill shop widget to the skill shop manager
-				UIManager->InitializeSkillShopWidget(
-					MyGameInstance ? MyGameInstance->GetSkillShopManager() : nullptr);
-
-			// Bind character stats widget to the stats manager
-				UIManager->InitializeStatsWidget(
-					MyGameInstance ? MyGameInstance->GetPlayerStatsManager() : nullptr);
-
-				// Bind progression managers (title + mastery) and character name to stats widget
-				if (UPlayerStatsWidget* SW = UIManager->GetPlayerStatsWidget())
+				// stats_update packets arrive before UIManager is ready (boundListeners=0 at
+				// broadcast time). Replay the cached stats now so AEW shows effects immediately.
+				const FPlayerStatsUpdateStruct& Cached = StatsMgr->GetCachedStats();
+				if (Cached.characterId > 0)
 				{
-					SW->BindToProgressionManagers(
-						MyGameInstance ? MyGameInstance->GetTitleManager()   : nullptr,
-						MyGameInstance ? MyGameInstance->GetMasteryManager() : nullptr);
-					SW->SetCharacterName(playerData.characterData.characterName);
+					HandleStatsManagerUpdate(Cached);
 				}
+			}
+		}
+		else
+		{
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to get PlayerController during initialization"));
+		}
+		
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager initialized with all managers including SkillManager"));
 
-				// Bind titles window
-				UIManager->InitializeTitlesWidget(
-					MyGameInstance ? MyGameInstance->GetTitleManager()          : nullptr,
-					MyGameInstance ? MyGameInstance->GetTitleNetworkHandler()   : nullptr,
+		// Initialize experience widget for this character.
+		// ExperienceManager already has correct progression data
+		// (including expForCurrentLevel) set by SpawnPlayerForClient
+		// before BeginPlay fires.
+		if (ExperienceManager && playerData.characterData.characterId > 0)
+		{
+			UIManager->InitializeExperienceWidget(playerData.characterData.characterId);
+
+			UE_LOG(LogGameplay, Warning, TEXT("ExperienceWidget initialized for character %d"), 
+				playerData.characterData.characterId);
+		}
+
+		// Initialize skill widgets if SkillManager is available
+		if (SkillManager)
+		{
+			UIManager->InitializeSkillWidgets();
+			UE_LOG(LogGameplay, Warning, TEXT("Skill widgets initialized"));
+		}
+
+	// Bind dialogue and quest widgets to their managers
+		UDialogueManager* DlgMgr   = MyGameInstance ? MyGameInstance->GetDialogueManager()  : nullptr;
+		UQuestManager*    QuestMgr  = MyGameInstance ? MyGameInstance->GetQuestManager()     : nullptr;
+		UIManager->InitializeDialogueAndQuestWidgets(DlgMgr, QuestMgr);
+
+	// Bind equipment / vendor / repair / trade widgets to their managers
+		UIManager->InitializeItemSystemWidgets(
+			MyGameInstance ? MyGameInstance->GetEquipmentManager() : nullptr,
+			MyGameInstance ? MyGameInstance->GetVendorManager()    : nullptr,
+			MyGameInstance ? MyGameInstance->GetRepairManager()    : nullptr,
+			MyGameInstance ? MyGameInstance->GetTradeManager()     : nullptr);
+
+// Bind skill shop widget to the skill shop manager
+	UIManager->InitializeSkillShopWidget(
+		MyGameInstance ? MyGameInstance->GetSkillShopManager() : nullptr);
+
+// Bind character stats widget to the stats manager
+	UIManager->InitializeStatsWidget(
+		MyGameInstance ? MyGameInstance->GetPlayerStatsManager() : nullptr);
+
+	// Bind progression managers (title + mastery) and character name to stats widget
+	if (UPlayerStatsWidget* SW = UIManager->GetPlayerStatsWidget())
+	{
+		SW->BindToProgressionManagers(
+			MyGameInstance ? MyGameInstance->GetTitleManager()   : nullptr,
+			MyGameInstance ? MyGameInstance->GetMasteryManager() : nullptr);
+		SW->SetCharacterName(playerData.characterData.characterName);
+	}
+
+	// Bind titles window
+	UIManager->InitializeTitlesWidget(
+		MyGameInstance ? MyGameInstance->GetTitleManager()          : nullptr,
+		MyGameInstance ? MyGameInstance->GetTitleNetworkHandler()   : nullptr,
+		playerData.characterData.characterId);
+
+	// Bind reputation window
+	UIManager->InitializeReputationWidget(
+		MyGameInstance ? MyGameInstance->GetReputationManager() : nullptr);
+
+	// Bind emote list window
+	UIManager->InitializeEmoteListWidget(
+		MyGameInstance ? MyGameInstance->GetEmoteManager()        : nullptr,
+		MyGameInstance ? MyGameInstance->GetEmoteNetworkHandler() : nullptr,
+		playerData.characterData.characterId);
+
+	// Initialize world notification system (bestiary + toast/zone/etc.)
+	if (MyGameInstance && MyGameInstance->GetBestiaryNetworkHandler())
+		{
+			UIManager->InitializeNotificationSystem(MyGameInstance->GetBestiaryNetworkHandler());
+			UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: WorldNotificationManager initialized"));
+
+			// Request the bestiary overview so the mob list is populated on login.
+			// Skipped in DevMode offline (no chunk to ask — avoids an
+			// Error for an expected offline state).
+			if (playerData.characterData.characterId > 0 && MyGameInstance && !MyGameInstance->DevModeConfig.bEnabled)
+			{
+				MyGameInstance->GetBestiaryNetworkHandler()->RequestBestiaryOverview(
 					playerData.characterData.characterId);
-
-				// Bind reputation window
-				UIManager->InitializeReputationWidget(
-					MyGameInstance ? MyGameInstance->GetReputationManager() : nullptr);
-
-				// Bind emote list window
-				UIManager->InitializeEmoteListWidget(
-					MyGameInstance ? MyGameInstance->GetEmoteManager()        : nullptr,
-					MyGameInstance ? MyGameInstance->GetEmoteNetworkHandler() : nullptr,
+				UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: Requested bestiary overview for character %d"),
 					playerData.characterData.characterId);
+			}
+		}
 
-				// Initialize world notification system (bestiary + toast/zone/etc.)
-				if (MyGameInstance && MyGameInstance->GetBestiaryNetworkHandler())
-					{
-						UIManager->InitializeNotificationSystem(MyGameInstance->GetBestiaryNetworkHandler());
-						UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: WorldNotificationManager initialized"));
+	// Initialize WIO (World Interactive Objects) widgets
+	if (MyGameInstance && MyGameInstance->GetWorldObjectManager())
+	{
+		UIManager->InitializeWIOWidgets(MyGameInstance->GetWorldObjectManager());
+		UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: WIO widgets initialized"));
+	}
 
-						// Request the bestiary overview so the mob list is populated on login.
-						// Skipped in DevMode offline (no chunk to ask — avoids an
-						// Error for an expected offline state).
-						if (playerData.characterData.characterId > 0 && MyGameInstance && !MyGameInstance->DevModeConfig.bEnabled)
-						{
-							MyGameInstance->GetBestiaryNetworkHandler()->RequestBestiaryOverview(
-								playerData.characterData.characterId);
-							UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: Requested bestiary overview for character %d"),
-								playerData.characterData.characterId);
-						}
-					}
+// Subscribe to weight status and initialize equipment visuals
+	if (UEquipmentManager* EqMgr = MyGameInstance ? MyGameInstance->GetEquipmentManager() : nullptr)
+	{
+		EqMgr->OnWeightStatusChangedDelegate.AddDynamic(this, &ABasicPlayer::HandleWeightStatusChanged);
+		UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Subscribed to weight status events"));
 
-				// Initialize WIO (World Interactive Objects) widgets
-				if (MyGameInstance && MyGameInstance->GetWorldObjectManager())
-				{
-					UIManager->InitializeWIOWidgets(MyGameInstance->GetWorldObjectManager());
-					UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: WIO widgets initialized"));
-				}
+		// Initialize equipment visual component so equipped items appear on the mesh
+		if (EquipmentVisualComponent)
+		{
+			UItemManager* ItemMgr = MyGameInstance->GetItemManager();
+			EquipmentVisualComponent->Initialize(EqMgr, ItemMgr);
+			UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: EquipmentVisualComponent initialized"));
+		}
 
-			// Subscribe to weight status and initialize equipment visuals
-				if (UEquipmentManager* EqMgr = MyGameInstance ? MyGameInstance->GetEquipmentManager() : nullptr)
-				{
-					EqMgr->OnWeightStatusChangedDelegate.AddDynamic(this, &ABasicPlayer::HandleWeightStatusChanged);
-					UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Subscribed to weight status events"));
+		// Bind cosmetic component to live equipment manager so visibility
+		// (hair hidden by helmet, etc.) updates automatically on equip/unequip.
+		if (CosmeticVisualComponent)
+		{
+			CosmeticVisualComponent->BindEquipmentManager(EqMgr);
+			UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: CosmeticVisualComponent bound to EquipmentManager"));
+		}
 
-					// Initialize equipment visual component so equipped items appear on the mesh
-					if (EquipmentVisualComponent)
-					{
-						UItemManager* ItemMgr = MyGameInstance->GetItemManager();
-						EquipmentVisualComponent->Initialize(EqMgr, ItemMgr);
-						UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: EquipmentVisualComponent initialized"));
-					}
-
-					// Bind cosmetic component to live equipment manager so visibility
-					// (hair hidden by helmet, etc.) updates automatically on equip/unequip.
-					if (CosmeticVisualComponent)
-					{
-						CosmeticVisualComponent->BindEquipmentManager(EqMgr);
-						UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: CosmeticVisualComponent bound to EquipmentManager"));
-					}
-
-					// Explicitly request equipment state from server.
-					// EQUIPMENT_STATE may arrive before the visual component binds its delegate,
-					// but Initialize() above already replays the cached state.
-					// This request ensures we get up-to-date data even if the server
-					// does not push EQUIPMENT_STATE automatically on join.
-					if (playerData.characterData.characterId > 0)
-					{
-						EqMgr->RequestGetEquipment(playerData.characterData.characterId);
-						UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Requested equipment state for character %d"),
-							playerData.characterData.characterId);
-					}
-				}
-
-				// Subscribe to ChatManager: routes each received message to the sender's nameplate bubble.
-				if (UChatManager* ChatMgr = MyGameInstance ? MyGameInstance->GetChatManager() : nullptr)
-				{
-					ChatMgr->OnChatMessageReceived.AddDynamic(this, &ABasicPlayer::HandleChatMessageForBubble);
-				}
-
-				// For the LOCAL player: when they equip/remove a title, push the new display name
-				// to their nameplate so other viewers see it immediately.
-				if (!playerData.isOtherClient)
-				{
-					if (UTitleManager* TitleMgr = MyGameInstance ? MyGameInstance->GetTitleManager() : nullptr)
-					{
-						TitleMgr->OnTitlesUpdated.AddDynamic(this, &ABasicPlayer::HandleTitlesUpdated);
-					}
-				}
-
-				// The death screen will be shown automatically via the pending mechanism
-				// in UIManager if the character spawned as dead (SetDead_Implementation
-				// already called in SpawnPlayerForClient before this timer fires).
-				}
-
-				// Subscribe to UIManager's deferred ready signal.
-				// OnUIManagerInitialized is broadcast one game-thread tick AFTER
-				// PlayerInterfaceWidget->AddToViewport(), which guarantees the
-				// render thread has already received the widget before we signal
-				// the loading-screen countdown to start.
-				UIManager->OnUIManagerInitialized.AddDynamic(this, &ABasicPlayer::HandleUIManagerInitialized);
-				UE_LOG(LogGameplay, Warning, TEXT("[LOADSEQ] UIInitTimer: subscribed to OnUIManagerInitialized"));
-
-				// Fallback: if the Slate NativeTick broadcast never arrives (window
-				// throttled while the loading screen is up), drive the gate directly.
-				// HandleUIManagerInitialized is once-guarded, so a race is harmless.
-				GetWorld()->GetTimerManager().SetTimer(UIInitFallbackTimerHandle, [this]()
-				{
-					if (playerData.isOtherClient || bUIInitDone) { return; }
-					UE_LOG(LogGameplay, Warning, TEXT("[LOADSEQ] UIInitFallback: NativeTick signal missing — firing HandleUIManagerInitialized directly"));
-					HandleUIManagerInitialized();
-				}, 3.0f, false);
-                
-			}, 0.5f, false);
+		// Explicitly request equipment state from server.
+		// EQUIPMENT_STATE may arrive before the visual component binds its delegate,
+		// but Initialize() above already replays the cached state.
+		// This request ensures we get up-to-date data even if the server
+		// does not push EQUIPMENT_STATE automatically on join.
+		if (playerData.characterData.characterId > 0)
+		{
+			EqMgr->RequestGetEquipment(playerData.characterData.characterId);
+			UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Requested equipment state for character %d"),
+				playerData.characterData.characterId);
 		}
 	}
+
+	// Subscribe to ChatManager: routes each received message to the sender's nameplate bubble.
+	if (UChatManager* ChatMgr = MyGameInstance ? MyGameInstance->GetChatManager() : nullptr)
+	{
+		ChatMgr->OnChatMessageReceived.AddDynamic(this, &ABasicPlayer::HandleChatMessageForBubble);
+	}
+
+	// For the LOCAL player: when they equip/remove a title, push the new display name
+	// to their nameplate so other viewers see it immediately.
+	if (!playerData.isOtherClient)
+	{
+		if (UTitleManager* TitleMgr = MyGameInstance ? MyGameInstance->GetTitleManager() : nullptr)
+		{
+			TitleMgr->OnTitlesUpdated.AddDynamic(this, &ABasicPlayer::HandleTitlesUpdated);
+		}
+	}
+
+	// The death screen will be shown automatically via the pending mechanism
+	// in UIManager if the character spawned as dead (SetDead_Implementation
+	// already called in SpawnPlayerForClient before this timer fires).
+	}
+
+	// Subscribe to UIManager's deferred ready signal.
+	// OnUIManagerInitialized is broadcast one game-thread tick AFTER
+	// PlayerInterfaceWidget->AddToViewport(), which guarantees the
+	// render thread has already received the widget before we signal
+	// the loading-screen countdown to start.
+	UIManager->OnUIManagerInitialized.AddDynamic(this, &ABasicPlayer::HandleUIManagerInitialized);
+	UE_LOG(LogGameplay, Warning, TEXT("[LOADSEQ] UIInitTimer: subscribed to OnUIManagerInitialized"));
+
+	// Fallback: if the Slate NativeTick broadcast never arrives (window
+	// throttled while the loading screen is up), drive the gate directly.
+	// HandleUIManagerInitialized is once-guarded, so a race is harmless.
+	GetWorld()->GetTimerManager().SetTimer(UIInitFallbackTimerHandle, [this]()
+	{
+		if (playerData.isOtherClient || bUIInitDone) { return; }
+		UE_LOG(LogGameplay, Warning, TEXT("[LOADSEQ] UIInitFallback: NativeTick signal missing — firing HandleUIManagerInitialized directly"));
+		HandleUIManagerInitialized();
+	}, 3.0f, false);
+                
 }

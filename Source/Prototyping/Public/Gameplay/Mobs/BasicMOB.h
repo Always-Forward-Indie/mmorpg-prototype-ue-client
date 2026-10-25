@@ -297,10 +297,6 @@ public:
 	UFUNCTION()
 	void HandleLocaleChanged(const FString& NewLocale);
 
-	// Initialize UI with delay
-	UFUNCTION()
-	void InitializeUIDelayed();
-
 	void Die();
 
 	public:

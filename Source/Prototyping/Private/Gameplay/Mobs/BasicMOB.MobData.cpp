@@ -3,6 +3,7 @@
 
 #include "Gameplay/Mobs/BasicMOB.h"
 #include "Prototyping.h"
+#include "Gameplay/UI/W_MOBHeadInfoWidget.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Mobs/MOBAnimInstance.h"
@@ -98,6 +99,17 @@ void ABasicMOB::SetMOBData(const FMOBStruct& Data)
 		}
 
 		// ������������� ��������� UI ��� ������ ��������� ������
+		// Bind the head widget now that data is present (was: 0.1s wall-clock timer).
+		// Idempotent: MobHeadInfo widget object exists after construction.
+		if (!HeadWidget && IsValid(MobHeadInfo))
+		{
+			HeadWidget = Cast<UW_MOBHeadInfoWidget>(MobHeadInfo->GetUserWidgetObject());
+			if (HeadWidget)
+			{
+				MobHeadInfo->SetVisibility(false);
+			}
+		}
+
 		ForceUpdateUI();
 	}
 	else

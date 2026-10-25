@@ -287,9 +287,6 @@ protected:
 	bool bIsRestoringRotation = false;
 
 private:
-	// Initialize UI with delay
-	void InitializeUIDelayed();
-
 	// Idle sound scheduling
 	void ScheduleNextIdleSound();
 	FTimerHandle IdleSoundTimerHandle;

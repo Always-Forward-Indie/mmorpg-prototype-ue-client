@@ -134,9 +134,6 @@ private:
 	// Gameplay-side cast lock timer: fires HideCastBar_Implementation after cast finishes
 	FTimerHandle CastBarTimerHandle;
 
-	// Timer for deferred UI initialization in BeginPlay
-	FTimerHandle UIInitTimerHandle;
-
 	// Fallback: fires HandleUIManagerInitialized directly if the Slate
 	// NativeTick broadcast never arrives (e.g. throttled window while the
 	// loading screen is up). Guarded by bUIInitDone so a double-fire is a no-op.
@@ -146,7 +143,10 @@ private:
 	// fire it more than once per spawn even if Tick runs before the flag is acked.
 	bool bSpawnNotified = false;
 
-	// Set to true by UIInitTimer after all widgets are ready. Tick checks this
+	// Set to true by InitializeLocalUI on first run (PossessedBy-driven).
+	bool bUIInitStarted = false;
+
+	// Set to true by HandleUIManagerInitialized after all widgets are ready. Tick checks this
 	// before firing NotifyPlayerSpawned so the flag is raised only after both
 	// the camera has had at least one real Tick and the UI is fully constructed.
 	bool bUIInitDone = false;
@@ -378,6 +378,15 @@ private:
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
+
+	// Possession replaces the 0.5s wall-clock UIInitTimer: the spawn path
+	// (SpawnActorDeferred + PC->Possess, or engine default-pawn spawn in
+	// DevMode) guarantees isOtherClient is final and the controller exists.
+	virtual void PossessedBy(AController* NewController) override;
+
+	// Deferred UI init extracted from the old UIInitTimer lambda (idempotent
+	// via bUIInitDone; remote players return early on isOtherClient).
+	void InitializeLocalUI();
 
 	// Called when the actor is being destroyed
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;

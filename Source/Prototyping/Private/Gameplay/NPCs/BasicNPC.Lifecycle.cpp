@@ -141,13 +141,6 @@ void ABasicNPC::BeginPlay()
 		}
 	}
 
-	// Initialize UI with delay to ensure all data is loaded
-	if (GetWorld())
-	{
-		FTimerHandle TimerHandle;
-		GetWorld()->GetTimerManager().SetTimer(TimerHandle, this, &ABasicNPC::InitializeUIDelayed, 0.1f, false);
-	}
-
 	// HeadWidget = Cast<UW_NPCHeadInfoWidget>(NPCHeadInfo->GetUserWidgetObject());
 }
 

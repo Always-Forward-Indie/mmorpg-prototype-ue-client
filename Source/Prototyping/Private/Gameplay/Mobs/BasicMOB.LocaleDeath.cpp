@@ -34,25 +34,6 @@ void ABasicMOB::HandleLocaleChanged(const FString& NewLocale)
 }
 
 
-void ABasicMOB::InitializeUIDelayed()
-{
-	if (!IsValid(this) || IsActorBeingDestroyed()) return;
-
-	if (MOBData.mobID != 0 && !bUIInitialized)
-	{
-		ForceUpdateUI();
-	}
-
-	if (!HeadWidget && IsValid(MobHeadInfo))
-	{
-		HeadWidget = Cast<UW_MOBHeadInfoWidget>(MobHeadInfo->GetUserWidgetObject());
-		if (HeadWidget)
-		{
-			MobHeadInfo->SetVisibility(false);
-		}
-	}
-}
-
 void ABasicMOB::Die()
 {
 	if (bHasDied) return;

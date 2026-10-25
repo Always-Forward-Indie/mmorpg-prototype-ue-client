@@ -296,7 +296,7 @@ public:
 	void NotifyStatsReceived();
 
 	// Called by BasicPlayer once the local pawn is physically present in the game world
-	// (UIInitTimer has fired, all widgets are up). Triggers the frame-counter gate.
+	// (InitializeLocalUI has run, all widgets are up). Triggers the frame-counter gate.
 	void NotifyPlayerSpawned();
 
 private:

@@ -113,26 +113,3 @@ void ABasicNPC::ForceUpdateUI()
 	*/
 }
 
-void ABasicNPC::InitializeUIDelayed()
-{
-	// Placeholder for delayed UI initialization - will be implemented when UI components are added
-	/*
-	// Try to initialize UI if we have data
-	if (NPCData.id != 0 && !bUIInitialized)
-	{
-		UE_LOG(LogGameplay, Verbose, TEXT("InitializeUIDelayed for NPC %s (ID:%d)"), *NPCData.name, NPCData.id);
-		ForceUpdateUI();
-	}
-	
-	// Initialize HeadWidget if not already done
-	if (!HeadWidget && NPCHeadInfo)
-	{
-		// HeadWidget = Cast<UW_NPCHeadInfoWidget>(NPCHeadInfo->GetUserWidgetObject());
-		if (HeadWidget && NPCHeadInfo)
-		{
-			NPCHeadInfo->SetVisibility(true);
-			UE_LOG(LogGameplay, Verbose, TEXT("InitializeUIDelayed: Successfully initialized HeadWidget for NPC %s"), *NPCData.name);
-		}
-	}
-	*/
-}

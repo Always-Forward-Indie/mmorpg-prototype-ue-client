@@ -178,8 +178,8 @@ bool ULoginFlowWidget::ResolveCreationSlugs(const FString& ClassDisplay, const F
 	}
 	for (const FCharacterGenderOption& Gender : CachedCreationOptions.Genders)
 	{
-		const FString GenderDisplay = GetGenderDisplayName(Gender);
-		if (GenderDisplay == GenderDisplay || GenderDisplay == Gender.Label || GenderDisplay == Gender.Name)
+		const FString RowDisplay = GetGenderDisplayName(Gender);
+		if (RowDisplay == GenderDisplay || RowDisplay == Gender.Label || RowDisplay == Gender.Name)
 		{
 			OutGenderSlug = Gender.Name;
 			break;

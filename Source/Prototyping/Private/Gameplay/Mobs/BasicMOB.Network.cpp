@@ -57,13 +57,6 @@ void ABasicMOB::BeginPlay()
 		}
 	}
 
-	// �������������� UI � ��������� ���������, ����� ���������, ��� ��� ������ ���������
-	if (GetWorld())
-	{
-		FTimerHandle TimerHandle;
-		GetWorld()->GetTimerManager().SetTimer(TimerHandle, this, &ABasicMOB::InitializeUIDelayed, 0.1f, false);
-	}
-
 	HeadWidget = Cast<UW_MOBHeadInfoWidget>(MobHeadInfo->GetUserWidgetObject());
 
 	if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))

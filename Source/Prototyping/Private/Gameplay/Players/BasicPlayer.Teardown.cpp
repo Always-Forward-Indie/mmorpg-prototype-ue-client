@@ -81,7 +81,6 @@ void ABasicPlayer::EndPlay(const EEndPlayReason::Type EndPlayReason)
     // Clear any pending timers to avoid use-after-free in lambdas
     if (GetWorld())
     {
-        GetWorld()->GetTimerManager().ClearTimer(UIInitTimerHandle);
         GetWorld()->GetTimerManager().ClearTimer(UIInitFallbackTimerHandle);
         GetWorld()->GetTimerManager().ClearTimer(AutoAttackRetryTimerHandle);
         GetWorld()->GetTimerManager().ClearTimer(HitPointTimerHandle);

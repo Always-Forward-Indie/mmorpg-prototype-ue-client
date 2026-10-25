@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Data/DataStructs.h"
+#include "Utils/NetCore/InterpBufferRule.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "EnhancedInputComponent.h"
@@ -687,6 +688,18 @@ public:
 	// Until then, UpdateRemotePlayerMovement does a hard snap instead of lerp
 	// so the actor never slides from world-origin (0,0,0) to the spawn point.
 	bool bHasReceivedFirstPosition = false;
+
+	// Snapshot interpolation buffer (S10): server positions with receipt
+	// timestamps. The tick renders the delayed sample (interpolation) and
+	// falls back to dead reckoning while the buffer is too short.
+	TArray<FInterpSnapshot> MoveSnapshotBuf;
+
+	// Record one server position into the snapshot buffer (remote only).
+	void PushMoveSnapshot(const FVector& Pos, float Yaw);
+
+	// Render-delayed sample of the buffered trajectory. False when fewer than
+	// 2 snapshots are buffered (caller uses dead reckoning instead).
+	bool SampleMoveTarget(FVector& OutPos) const;
 
 
 	public:

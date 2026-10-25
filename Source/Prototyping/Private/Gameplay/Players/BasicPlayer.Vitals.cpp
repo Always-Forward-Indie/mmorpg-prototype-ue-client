@@ -326,6 +326,36 @@ void ABasicPlayer::SetPlayerAttributes(TMap<FString, FAttributeDataStruct> Attri
 }
 
 // set player coordinates
+void ABasicPlayer::PushMoveSnapshot(const FVector& Pos, float Yaw)
+{
+	FInterpSnapshot S;
+	S.TimeSec = FPlatformTime::Seconds();
+	S.X = (float)Pos.X;
+	S.Y = (float)Pos.Y;
+	S.Z = (float)Pos.Z;
+	S.Yaw = Yaw;
+	FInterpBufferRule::InsertSorted(MoveSnapshotBuf, S);
+}
+
+bool ABasicPlayer::SampleMoveTarget(FVector& OutPos) const
+{
+	const double RenderDelay = FInterpBufferRule::RenderDelaySec(ServerPositionUpdateInterval);
+	const double RenderTime = FPlatformTime::Seconds() - RenderDelay;
+	int32 A = INDEX_NONE, B = INDEX_NONE;
+	float Alpha = 0.0f;
+	if (!FInterpBufferRule::Sample(MoveSnapshotBuf, RenderTime, A, B, Alpha))
+	{
+		return false;
+	}
+	const FInterpSnapshot& SA = MoveSnapshotBuf[A];
+	const FInterpSnapshot& SB = MoveSnapshotBuf[B];
+	OutPos = FVector(
+		FMath::Lerp(SA.X, SB.X, Alpha),
+		FMath::Lerp(SA.Y, SB.Y, Alpha),
+		FMath::Lerp(SA.Z, SB.Z, Alpha));
+	return true;
+}
+
 void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ, bool bIsFalling)
 {
     playerData.characterData.characterPosition.positionX = x;
@@ -352,6 +382,9 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ, boo
         LastReceivedRotation      = FRotator(0.0, rotZ, 0.0);
         TargetReceivedRotation    = FRotator(0.0, rotZ, 0.0);
         TimeSinceLastPositionUpdate = 0.0f;
+        // Seed the snapshot buffer so interpolation starts from here.
+        MoveSnapshotBuf.Reset();
+        PushMoveSnapshot(NewTarget, (float)rotZ);
         return;
     }
 
@@ -405,6 +438,9 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ, boo
             bRemoteIsMoving            = false;
             RemoteIdleTime             = 0.0f;
             TimeSinceLastPositionUpdate = 0.0f;
+            // Buffered past positions no longer describe this location.
+            MoveSnapshotBuf.Reset();
+            PushMoveSnapshot(NewTarget, (float)rotZ);
             return;
         }
 
@@ -459,6 +495,12 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ, boo
     TargetReceivedRotation = FRotator(0, rotZ, 0);
 
     TimeSinceLastPositionUpdate = 0.0f;
+
+    // Buffer the authoritative target for render-delayed interpolation.
+    if (playerData.isOtherClient)
+    {
+        PushMoveSnapshot(NewTarget, (float)rotZ);
+    }
 }
 
 

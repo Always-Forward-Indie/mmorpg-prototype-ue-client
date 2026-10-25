@@ -139,11 +139,14 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     TimeSinceLastPositionUpdate += DeltaTime;
 
     // -----------------------------------------------------------------------
-    // 1. Position: dead reckoning (open-loop, no correction)
-    //    Velocity is recalculated every packet from consecutive server positions
-    //    and applied every tick.  Drift is bounded to one interval — the next
-    //    packet resets the velocity.  No correction means no back-step.
-    //    Velocity decays when the server stops sending displacement packets.
+    // 1. Position: render-delayed snapshot interpolation (S10) with
+    //    dead-reckoning fallback.
+    //    While the snapshot buffer is healthy the actor is placed exactly on
+    //    the sampled trajectory — no open-loop extrapolation past the latest
+    //    packet, hence no jitter overshoot and no GapCorrection oscillation.
+    //    While the buffer is short (stream start) or stale (long stall),
+    //    open-loop dead reckoning keeps the actor moving; the next packets
+    //    refill the buffer and interpolation resumes seamlessly.
     // -----------------------------------------------------------------------
     const FVector EffectiveVel = bRemoteIsMoving ? RemoteVelocity
         : FMath::VInterpTo(RemoteVelocity, FVector::ZeroVector, DeltaTime, 3.0f);
@@ -153,10 +156,21 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     }
 
     const FVector CurrentPos   = GetActorLocation();
-    FVector NewPosition        = CurrentPos + EffectiveVel * DeltaTime;
-    // XY is dead reckoning; Z is interpolated toward the server height
+    FVector SampledTarget;
+    const bool bHaveSample = SampleMoveTarget(SampledTarget);
+    FVector NewPosition;
+    if (bHaveSample)
+    {
+        NewPosition = SampledTarget;
+    }
+    else
+    {
+        NewPosition = CurrentPos + EffectiveVel * DeltaTime;
+    }
+    // XY is placement; Z is interpolated toward the server height
     // so the actor steps onto rocks/stairs naturally.
-    NewPosition.Z = FMath::FInterpTo(CurrentPos.Z, TargetReceivedPosition.Z, DeltaTime, 12.0f);
+    const FVector HeightRef = bHaveSample ? SampledTarget : TargetReceivedPosition;
+    NewPosition.Z = FMath::FInterpTo(CurrentPos.Z, HeightRef.Z, DeltaTime, 12.0f);
 
     const float DistToTarget = FVector::Dist(CurrentPos, TargetReceivedPosition);
 
@@ -164,6 +178,8 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     {
         // Hard-snap on large gaps (teleport / zone change).
         SetActorLocation(TargetReceivedPosition, false, nullptr, ETeleportType::TeleportPhysics);
+        // Buffered past positions no longer describe this location.
+        MoveSnapshotBuf.Reset();
     }
     else
     {

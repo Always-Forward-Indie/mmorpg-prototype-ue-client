@@ -110,6 +110,14 @@ bool UDevModeBotBrain::Tick_VendorSell(UWorld* World, ABasicPlayer* Player, doub
             }
             return true;
         }
+        if (bVendorNegativePhase)
+        {
+            // Negative run: no selling (it would fund the buy under test).
+            Step = EBotStep::VendorBuy;
+            ShopLegStartTime = Now;
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT negative mode: skipping sell leg"));
+            return true;
+        }
         if (!bSellRequested)
         {
             Vend->RequestSellItem(CharId, VendorNpcId, SellInstanceId, 1, Player->GetActorLocation());
@@ -169,6 +177,58 @@ bool UDevModeBotBrain::Tick_VendorBuy(UWorld* World, ABasicPlayer* Player, doubl
             Goods.Add(G);
         }
         GoldBeforeBuy = GetGold();
+        if (bVendorNegativePhase && !bNegativeBuyRequested)
+        {
+            // S12 refusal probe: gold is 0 by pre-run setup, so even the
+            // cheapest row is unaffordable. Request it anyway — the server
+            // must refuse (error packet) and change nothing.
+            int32 CheapestIdx = INDEX_NONE;
+            int32 CheapestPrice = TNumericLimits<int32>::Max();
+            for (int32 i = 0; i < Goods.Num(); ++i)
+            {
+                if (Goods[i].PriceBuy < CheapestPrice)
+                {
+                    CheapestPrice = Goods[i].PriceBuy;
+                    CheapestIdx = i;
+                }
+            }
+            if (CheapestIdx == INDEX_NONE)
+            {
+                Finish(false, TEXT("negative-empty-shop"));
+                return true;
+            }
+            NegativeBuyItemId = Goods[CheapestIdx].ItemId;
+            NegativeBuyQtyBefore = SumQtyByItemId(NegativeBuyItemId);
+            Vend->RequestBuyItem(CharId, VendorNpcId, NegativeBuyItemId, 1, Player->GetActorLocation());
+            bNegativeBuyRequested = true;
+            NegativeBuyRequestTime = Now;
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT negative buy requested item=%d (gold=%d, price=%d) — expecting refusal"),
+                NegativeBuyItemId, GoldBeforeBuy, CheapestPrice);
+            return true;
+        }
+        if (bVendorNegativePhase)
+        {
+            // Bought despite zero gold = server wrongly synced: loud FAIL.
+            if (SumQtyByItemId(NegativeBuyItemId) > NegativeBuyQtyBefore)
+            {
+                BotAssert(false, TEXT("negative-buy-refused"), GetGold(), GoldBeforeBuy);
+                Finish(false, TEXT("negative-buy-wrongly-synced"));
+                return true;
+            }
+            if (GetGold() == 0 && Now - NegativeBuyRequestTime > 20.0)
+            {
+                BotAssert(true, TEXT("negative-buy-refused"), 1, 1);
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT negative buy refused as expected (gold still 0, qty unchanged)"));
+                Finish(true, TEXT("negative-proven"));
+                return true;
+            }
+            if (Now - ShopLegStartTime > ShopTimeoutSec)
+            {
+                BotAssert(false, TEXT("negative-buy-refused"), GetGold(), 0);
+                Finish(false, TEXT("negative-timeout"));
+            }
+            return true;
+        }
         const int32 BuyIdx = FVendorSyncRule::FindCheapestAffordableIndex(Goods, GoldBeforeBuy);
         if (BuyIdx == INDEX_NONE)
         {

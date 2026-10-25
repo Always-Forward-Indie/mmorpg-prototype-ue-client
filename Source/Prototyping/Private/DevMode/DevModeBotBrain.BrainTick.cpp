@@ -10,6 +10,7 @@
 #include "Gameplay/Items/HarvestManager.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Gameplay/Repair/RepairManager.h"
+#include "Gameplay/Trade/TradeManager.h"
 #include "Gameplay/Chat/ChatManager.h"
 #include "Gameplay/Dialogue/DialogueManager.h"
 #include "Gameplay/Quest/QuestManager.h"
@@ -45,6 +46,32 @@ void UDevModeBotBrain::MaybeDropSocketMidRun(double Now)
         return;
     }
     const double Elapsed = Now - RunStartSec;
+    // Trade runs have no kills: drop once the session is live instead.
+    // Minimum settle time first (replica of the kill leg), then reset the
+    // trade leg so PASS needs a fresh post-rejoin trade.
+    if (bTradePhase)
+    {
+        UTradeManager* TradeMgr = GameInstance ? GameInstance->GetTradeManager() : nullptr;
+        const bool bSessionLive = TradeMgr && TradeMgr->IsInTrade();
+        if (Elapsed < DropSocketAfterSec || !bSessionLive)
+        {
+            return;
+        }
+        bDropSocketDone = true;
+        bTradeInviteSent = false;
+        bTradeOfferSent = false;
+        bTradeConfirmSent = false;
+        bTradeGoldBaselined = false;
+        Step = EBotStep::TradeElect;
+        TradeLegStartTime = Now;
+        UE_LOG(LogGameplay, Warning, TEXT("%s socket DROP requested (trade test, restarting trade leg post-rejoin)"),
+            *TombstonePrefix);
+        if (GameInstance && GameInstance->GetNetworkManager())
+        {
+            GameInstance->GetNetworkManager()->DropChunkSocketForTest();
+        }
+        return;
+    }
     // Minimum settle time first; then drop right after the first confirmed
     // kill (the fight is proven real), or at the max wait as a fallback so
     // a bad spot fails loud instead of hanging the global budget.

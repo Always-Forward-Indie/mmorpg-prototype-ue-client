@@ -244,6 +244,14 @@ bool UDevModeBotBrain::Tick_TradeInvite(UWorld* World, ABasicPlayer* Player, dou
         {
             BotAssert(true, TEXT("trade-invited"), 1, 1);
             BotShot(TEXT("trade-invite"));
+            // Authoritative baseline: the session echo carries live balances
+            // (immune to stale/dropped inventory snapshots).
+            if (!bTradeGoldBaselined)
+            {
+                GoldBeforeTrade = Trade->GetCurrentState().myGoldBalance;
+                bTradeGoldBaselined = true;
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT trade baseline gold=%d (session echo)"), GoldBeforeTrade);
+            }
             Step = EBotStep::TradeOffer;
             TradeLegStartTime = Now;
             return true;
@@ -263,11 +271,51 @@ bool UDevModeBotBrain::Tick_TradeAccept(UWorld* World, ABasicPlayer* Player, dou
             Finish(false, TEXT("no-trade"));
             return true;
         }
+        if (!bTradeBogusAcceptSent)
+        {
+            // S12 no_pending_invite probe: answer with OUR OWN id first.
+            // The server matches invites on the initiator id, so this must
+            // come back as tradeCancelled reason=no_pending_invite (surfaced
+            // by TradeNetworkHandler as a cancel). Proven once; the normal
+            // accept below then proceeds untouched.
+            const int32 OwnCharId = GameInstance->GetCurrentCharacterID();
+            Trade->RespondToTradeInvite(OwnCharId, true);
+            bTradeBogusAcceptSent = true;
+            TradeBogusAcceptTime = Now;
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT trade bogus accept sent (expecting no_pending_invite cancel)"));
+            return true;
+        }
+        if (!bTradeBogusAcceptProven)
+        {
+            const FString Reason = Trade->GetLastCancelData().reason;
+            if (Reason.Contains(TEXT("no_pending_invite")))
+            {
+                bTradeBogusAcceptProven = true;
+                BotAssert(true, TEXT("trade-bogus-cancelled"), 1, 1);
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT bogus accept correctly cancelled: %s"), *Reason);
+            }
+            else if (Now - TradeBogusAcceptTime > 15.0)
+            {
+                BotAssert(false, TEXT("trade-bogus-cancelled"), 0, 1);
+                Finish(false, TEXT("bogus-accept-timeout"));
+                return true;
+            }
+            else
+            {
+                return true;
+            }
+        }
         if (Trade->IsInTrade())
         {
             // Invite accepted (or the peer was faster) — session is live.
             BotAssert(true, TEXT("trade-accepted"), 1, 1);
             BotShot(TEXT("trade-accept"));
+            if (!bTradeGoldBaselined)
+            {
+                GoldBeforeTrade = Trade->GetCurrentState().myGoldBalance;
+                bTradeGoldBaselined = true;
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT trade baseline gold=%d (session echo)"), GoldBeforeTrade);
+            }
             Step = EBotStep::TradeOffer;
             TradeLegStartTime = Now;
             return true;
@@ -298,12 +346,22 @@ bool UDevModeBotBrain::Tick_TradeOffer(UWorld* World, ABasicPlayer* Player, doub
         const int32 OwnCharId = GameInstance->GetCurrentCharacterID();
         if (!bTradeOfferSent)
         {
-            // Baseline at the last responsible moment: a balance change
-            // landing between election and the offer (e.g. the batch grant)
-            // would poison the gold-moved assert (proven live 22.10:
-            // baseline 125 vs actual 134). Election only guarantees a
-            // non-empty snapshot; the offer pins the number.
-            GoldBeforeTrade = GetGold();
+            // Baseline prefers the session echo (see Invite/Accept); only
+            // fall back to the inventory snapshot when no echo seen yet
+            // (snapshot can be stale post-rejoin or dropped oversized).
+            if (!bTradeGoldBaselined)
+            {
+                if (Trade->IsInTrade())
+                {
+                    GoldBeforeTrade = Trade->GetCurrentState().myGoldBalance;
+                    bTradeGoldBaselined = true;
+                    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT trade baseline gold=%d (session echo, offer leg)"), GoldBeforeTrade);
+                }
+                else
+                {
+                    GoldBeforeTrade = GetGold();
+                }
+            }
             // Same-socket FIFO: the offer is processed before our confirm
             // below, so no echo wait is needed here. Initiator moves 1 gold,
             // acceptor offers nothing — the gold delta is the trade proof.
@@ -334,10 +392,13 @@ bool UDevModeBotBrain::Tick_TradeConfirm(UWorld* World, ABasicPlayer* Player, do
             UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT trade confirmed"));
             return true;
         }
-        // Completion proof is the authoritative gold snapshot (the session
-        // row is wiped on tradeComplete, so only the balance persists).
+        // Completion proof is the live balance: while the session is up the
+        // authoritative session echo owns it (immune to stale/dropped
+        // inventory snapshots — proven live 25.10); once the session is
+        // wiped on tradeComplete, the inventory snapshot (fed by the resync
+        // loop below) owns it.
         const bool bInitiator = FTradeStatusRule::ShouldInitiateTrade(OwnCharId, TradePeerCharId);
-        const int32 GoldNow = GetGold();
+        const int32 GoldNow = Trade->IsInTrade() ? Trade->GetCurrentState().myGoldBalance : GetGold();
         const int32 GoldWant = bInitiator ? GoldBeforeTrade - 1 : GoldBeforeTrade + 1;
         if (GoldNow == GoldWant)
         {

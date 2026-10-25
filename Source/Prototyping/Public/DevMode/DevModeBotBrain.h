@@ -126,6 +126,10 @@ public:
     int32 VendorNpcId = 1;
     FVector VendorPos = FVector(585.0f, -3300.0f, 200.0f);
     float ShopTimeoutSec = 60.0f;
+    // S12 commerce refusal probe: live_vendor_negative drains no gold (DB
+    // pre-run), opens the shop and attempts the cheapest buy, which must be
+    // refused with state unchanged. Set alongside bVendorPhase.
+    bool bVendorNegativePhase = false;
     float HarvestTimeoutSec = 90.0f;
     // ---- Phase C: social + quests (set before Start) ----
     // Chat rides on cross_visibility: after peer-visible, both clients send
@@ -536,6 +540,11 @@ private:
     int32 RepairInstanceId = 0;
     int32 RepairMaxDur = 0;
     int32 GoldBeforeRepair = 0;
+    // S12 negative-run runtime state (flag lives with the scenario flags).
+    bool bNegativeBuyRequested = false;
+    double NegativeBuyRequestTime = 0.0;
+    int32 NegativeBuyItemId = 0;
+    int32 NegativeBuyQtyBefore = 0;
     // ---- Phase C state ----
     double ChatLegStartTime = 0.0;
     bool bChatSent = false;
@@ -546,6 +555,19 @@ private:
     bool bTradeOfferSent = false;
     bool bTradeConfirmSent = false;
     int32 GoldBeforeTrade = 0;
+    // S12 trade assert hardening: the BASELINE comes from the trade SESSION
+    // echo (authoritative + fresh by construction), never from the inventory
+    // snapshot (which can be stale post-rejoin or dropped as an oversized
+    // packet — both poisoned live_trade 2026-10-25). Completion is read from
+    // the live session echo while up, live inventory once wiped.
+    bool bTradeGoldBaselined = false;
+    // S12 no_pending_invite probe: the acceptor FIRST answers with its own
+    // id (the server matches invites on the initiator id, so ours answers
+    // no_pending_invite surfaced as tradeCancelled). Proven once, then the
+    // normal accept proceeds.
+    bool bTradeBogusAcceptSent = false;
+    bool bTradeBogusAcceptProven = false;
+    double TradeBogusAcceptTime = 0.0;
     // Invite convergence: the server invite TTL is 60s but the peer's
     // client starts ~35s later (stagger + load). Re-send while no
     // session — same pattern as the chat resend. Each send refreshes TTL.

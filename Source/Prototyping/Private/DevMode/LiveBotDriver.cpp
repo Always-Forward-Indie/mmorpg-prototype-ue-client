@@ -279,6 +279,14 @@ void ULiveBotDriver::PollTick()
                 Brain->TargetKills = 0;
                 Brain->bVendorPhase = true;
             }
+            else if (Scenario.Equals(TEXT("live_vendor_negative"), ESearchCase::IgnoreCase))
+            {
+                // S12 refusal probe: gold is 0 by pre-run DB drain, the shop
+                // opens normally, the cheapest buy must be refused.
+                Brain->TargetKills = 0;
+                Brain->bVendorPhase = true;
+                Brain->bVendorNegativePhase = true;
+            }
             else if (Scenario.Equals(TEXT("live_quest_turnin"), ESearchCase::IgnoreCase))
             {
                 // Full chain (dialogue + 2 real kills + harvest + loot +
@@ -319,6 +327,10 @@ void ULiveBotDriver::PollTick()
                 Brain->bTradePhase = true;
                 Brain->bChatPhase = false;
                 Brain->GlobalTimeoutSec = 420.0f;
+                // S12: drop mid-trade once the session is live (see
+                // MaybeDropSocketMidRun trade branch); PASS needs a fresh
+                // post-rejoin trade.
+                Brain->bDropSocketMidRun = true;
             }
             else if (Scenario.Equals(TEXT("live_char_create_delete"), ESearchCase::IgnoreCase))
             {

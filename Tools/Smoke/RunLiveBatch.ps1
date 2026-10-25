@@ -325,6 +325,16 @@ $Scenarios = @(
     @{ Name = "live_harvest_run";    Login = $Login2; Pass = $Pass2; Char = 615; Park = @(4700, -900, 300);   Ready = $null; Timeout = 420 },
     @{ Name = "live_death_respawn";  Login = $Login2; Pass = $Pass2; Char = 615; Park = @(4700, -900, 300);   Ready = "sethp 615 1;spawn 3 0 0"; Timeout = 420 },
     @{ Name = "live_equip";          Login = $Login2; Pass = $Pass2; Char = 615; Park = @(700, -3200, 300);   Ready = $null; Timeout = 420 },
+    # Full commerce chain (S12): sell junk -> buy cheapest -> repair. Needs a
+    # damaged EQUIPPED sword on 615: run live_equip (equips granted sword 29)
+    # then live_death_respawn (death penalty damages it), then this. Junk to
+    # sell + gold are on 615 already (dev-stand state, not code).
+    @{ Name = "live_vendor_repair"; Login = $Login2; Pass = $Pass2; Char = 615; Park = @(700, -3200, 300); Ready = $null; Timeout = 420 },
+    # S12 refusal probe: expects gold == 0 at shop open (DB-drained pre-run,
+    # restored after: UPDATE player_inventory SET quantity=0 WHERE
+    # character_id=615 AND item_id=16). Cheapest buy must be refused, state
+    # unchanged, no crash. Needs inventory snapshot loaded (any prior run).
+    @{ Name = "live_vendor_negative"; Login = $Login2; Pass = $Pass2; Char = 615; Park = @(700, -3200, 300); Ready = $null; Timeout = 300 },
     @{ Name = "live_level";          Login = $Login1; Pass = $Pass1; Char = 614; Park = @(700, -3200, 300);   Ready = "GRANTXP"; Timeout = 420 },
     @{ Name = "live_titles_emotes";  Login = $Login2; Pass = $Pass2; Char = 615; Park = @(700, -3200, 300);   Ready = $null; Timeout = 420 },
     @{ Name = "live_skills";         Login = $Login2; Pass = $Pass2; Char = 615; Park = @(-634, 2160, 300);   Ready = "spawn 6"; Timeout = 480 },

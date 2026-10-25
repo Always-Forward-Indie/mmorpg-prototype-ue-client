@@ -64,6 +64,11 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Trade")
     bool HasPendingInvite() const { return bHasPendingInvite; }
 
+    // Last cancel payload (S12 negative-path tests: the server answers a
+    // bogus accept with tradeCancelled reason=no_pending_invite).
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Trade")
+    FTradeCancelledData GetLastCancelData() const { return LastCancelData; }
+
     // --- Called by TradeNetworkHandler ---
 
     void OnTradeInviteReceived(const FTradeInviteData& Invite);
@@ -94,6 +99,8 @@ private:
     FTradeInviteData PendingInvite;
     FString          CurrentSessionId;
     bool             bHasPendingInvite = false;
+    // Last cancel payload (S12: bogus-accept negative probe reads this).
+    FTradeCancelledData LastCancelData;
 
     UPROPERTY()
     UNetworkManager* NetworkManager = nullptr;

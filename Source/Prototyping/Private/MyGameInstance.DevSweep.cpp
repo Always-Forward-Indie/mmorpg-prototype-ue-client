@@ -113,6 +113,7 @@ void UMyGameInstance::MaybeStartLiveBot()
 		&& !LiveBotScenario.Equals(TEXT("live_death_respawn"), ESearchCase::IgnoreCase)
 		&& !LiveBotScenario.Equals(TEXT("live_harvest_run"), ESearchCase::IgnoreCase)
 		&& !LiveBotScenario.Equals(TEXT("live_vendor_repair"), ESearchCase::IgnoreCase)
+		&& !LiveBotScenario.Equals(TEXT("live_vendor_negative"), ESearchCase::IgnoreCase)
 		&& !LiveBotScenario.Equals(TEXT("live_quest_turnin"), ESearchCase::IgnoreCase)
 		&& !LiveBotScenario.Equals(TEXT("live_skills"), ESearchCase::IgnoreCase)
 		&& !LiveBotScenario.Equals(TEXT("live_equip"), ESearchCase::IgnoreCase)
@@ -124,7 +125,7 @@ void UMyGameInstance::MaybeStartLiveBot()
 		&& !LiveBotScenario.Equals(TEXT("live_travel_roundtrip"), ESearchCase::IgnoreCase)
 		&& !LiveBotScenario.Equals(TEXT("live_reconnect"), ESearchCase::IgnoreCase))
 	{
-		UE_LOG(LogGameplay, Warning, TEXT("LiveBot: unknown scenario '%s' (use live_patrol_kill|live_cross_visibility|live_loot_pickup|live_death_respawn|live_harvest_run|live_vendor_repair|live_quest_turnin|live_skills|live_equip|live_level|live_titles_emotes|live_char_create_delete|live_back_to_login|live_travel_roundtrip|live_reconnect|live_trade)"), *LiveBotScenario);
+		UE_LOG(LogGameplay, Warning, TEXT("LiveBot: unknown scenario '%s' (use live_patrol_kill|live_cross_visibility|live_loot_pickup|live_death_respawn|live_harvest_run|live_vendor_repair|live_vendor_negative|live_quest_turnin|live_skills|live_equip|live_level|live_titles_emotes|live_char_create_delete|live_back_to_login|live_travel_roundtrip|live_reconnect|live_trade)"), *LiveBotScenario);
 		return;
 	}
 	ULiveBotDriver* Driver = LiveBotDriver;

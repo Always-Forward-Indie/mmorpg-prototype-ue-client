@@ -205,6 +205,7 @@ void UTradeManager::OnTradeDeclined(const FTradeDeclinedData& Data)
 
 void UTradeManager::OnTradeCancelled(const FTradeCancelledData& Data)
 {
+    LastCancelData = Data;
     if (FTradeStatusRule::ShouldClearSession(TEXT("tradeCancelled")))
     {
         ClearSession();

@@ -7,6 +7,7 @@
 #include "Gameplay/Mobs/BasicMOB.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Players/PlayerAnimInstance.h"
+#include "Gameplay/Mobs/MOBManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
 #include "UI/HarvestProgressWidget.h"
@@ -195,18 +196,11 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 					HarvesterCharId, BroadcastCorpseUID);
 
 				// Update the corresponding BasicMOB actor's harvesting state
-				if (worldContext && BroadcastCorpseUID > 0)
+				if (worldContext && BroadcastCorpseUID > 0 && gameInstance && gameInstance->GetMOBManager())
 				{
-					TArray<AActor*> FoundMobs;
-					UGameplayStatics::GetAllActorsOfClass(worldContext, ABasicMOB::StaticClass(), FoundMobs);
-					for (AActor* Actor : FoundMobs)
+					if (ABasicMOB* Mob = Cast<ABasicMOB>(gameInstance->GetMOBManager()->FindMobActor(BroadcastCorpseUID)))
 					{
-						ABasicMOB* Mob = Cast<ABasicMOB>(Actor);
-						if (Mob && FCString::Atoi(*Mob->GetMOBUId()) == BroadcastCorpseUID)
-						{
-							Mob->SetCurrentHarvesterId(HarvesterCharId);
-							break;
-						}
+						Mob->SetCurrentHarvesterId(HarvesterCharId);
 					}
 				}
 
@@ -246,19 +240,12 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 				UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: harvestCompleteBroadcast charId=%d corpseUID=%d"),
 					HarvesterCharId, BroadcastCorpseUID);
 
-				if (worldContext && BroadcastCorpseUID > 0)
+				if (worldContext && BroadcastCorpseUID > 0 && gameInstance && gameInstance->GetMOBManager())
 				{
-					TArray<AActor*> FoundMobs;
-					UGameplayStatics::GetAllActorsOfClass(worldContext, ABasicMOB::StaticClass(), FoundMobs);
-					for (AActor* Actor : FoundMobs)
+					if (ABasicMOB* Mob = Cast<ABasicMOB>(gameInstance->GetMOBManager()->FindMobActor(BroadcastCorpseUID)))
 					{
-						ABasicMOB* Mob = Cast<ABasicMOB>(Actor);
-						if (Mob && FCString::Atoi(*Mob->GetMOBUId()) == BroadcastCorpseUID)
-						{
-							Mob->SetCurrentHarvesterId(0);
-							Mob->SetHarvested(true);
-							break;
-						}
+						Mob->SetCurrentHarvesterId(0);
+						Mob->SetHarvested(true);
 					}
 				}
 
@@ -299,18 +286,11 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 					CancelledCharId, BroadcastCorpseUID);
 
 				// Clear harvester state on the MOB actor
-				if (worldContext && BroadcastCorpseUID > 0)
+				if (worldContext && BroadcastCorpseUID > 0 && gameInstance && gameInstance->GetMOBManager())
 				{
-					TArray<AActor*> FoundMobs;
-					UGameplayStatics::GetAllActorsOfClass(worldContext, ABasicMOB::StaticClass(), FoundMobs);
-					for (AActor* Actor : FoundMobs)
+					if (ABasicMOB* Mob = Cast<ABasicMOB>(gameInstance->GetMOBManager()->FindMobActor(BroadcastCorpseUID)))
 					{
-						ABasicMOB* Mob = Cast<ABasicMOB>(Actor);
-						if (Mob && FCString::Atoi(*Mob->GetMOBUId()) == BroadcastCorpseUID)
-						{
-							Mob->SetCurrentHarvesterId(0);
-							break;
-						}
+						Mob->SetCurrentHarvesterId(0);
 					}
 				}
 
@@ -365,18 +345,11 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 
 				KnownEmptyCorpses.Remove(RemovedCorpseUID);
 
-				if (worldContext && RemovedCorpseUID > 0)
+				if (worldContext && RemovedCorpseUID > 0 && gameInstance && gameInstance->GetMOBManager())
 				{
-					TArray<AActor*> FoundMobs;
-					UGameplayStatics::GetAllActorsOfClass(worldContext, ABasicMOB::StaticClass(), FoundMobs);
-					for (AActor* Actor : FoundMobs)
+					if (ABasicMOB* Mob = Cast<ABasicMOB>(gameInstance->GetMOBManager()->FindMobActor(RemovedCorpseUID)))
 					{
-						ABasicMOB* Mob = Cast<ABasicMOB>(Actor);
-						if (Mob && FCString::Atoi(*Mob->GetMOBUId()) == RemovedCorpseUID)
-						{
-							Mob->Destroy();
-							break;
-						}
+						Mob->Destroy();
 					}
 				}
 

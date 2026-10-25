@@ -8,6 +8,8 @@
 #include <Kismet/GameplayStatics.h>
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Gameplay/Mobs/MOBManager.h"
+#include "MyGameInstance.h"
 #include "CrashDiagnostics.h"
 
 void UMOBMovementComponent::SetTargetType(const FString& NewTargetType)
@@ -53,28 +55,18 @@ AActor* UMOBMovementComponent::FindTargetActor(int32 TargetId, FString TargetTyp
     UWorld* World = GetWorld();
     if (!World) return nullptr;
 
-    TArray<AActor*> FoundActors;
+    // O(1) registry lookup — replaces GetAllActorsOfClass + tag scan.
+    UMyGameInstance* GI = Cast<UMyGameInstance>(World->GetGameInstance());
+    UMOBManager* MobMgr = GI ? GI->GetMOBManager() : nullptr;
+    if (!MobMgr) return nullptr;
 
-    if (TargetType.Equals("Player", ESearchCase::IgnoreCase))
+    if (TargetType.Equals(TEXT("Player"), ESearchCase::IgnoreCase))
     {
-        UGameplayStatics::GetAllActorsOfClass(World, ABasicPlayer::StaticClass(), FoundActors);
+        return MobMgr->FindPlayerActor(TargetId);
     }
-    else if (TargetType.Equals("Mob", ESearchCase::IgnoreCase))
+    if (TargetType.Equals(TEXT("Mob"), ESearchCase::IgnoreCase))
     {
-        UGameplayStatics::GetAllActorsOfClass(World, ABasicMOB::StaticClass(), FoundActors);
-    }
-    else
-    {
-        return nullptr;
-    }
-
-    const FName TargetIdTag = FName(*FString::FromInt(TargetId));
-    for (AActor* Actor : FoundActors)
-    {
-        if (Actor && Actor->ActorHasTag(TargetIdTag))
-        {
-            return Actor;
-        }
+        return MobMgr->FindMobActor(TargetId);
     }
 
     return nullptr;

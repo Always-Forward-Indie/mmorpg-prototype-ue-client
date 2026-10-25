@@ -10,6 +10,7 @@
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Audio/AudioManager.h"
 #include "Gameplay/Items/ItemManager.h"
+#include "Utils/NetCore/ProximityRule.h"
 #include "Utils/AudioSpawnHelpers.h"
 #include "CrashDiagnostics.h"
 
@@ -37,28 +38,26 @@ void UInventoryManager::PickupNearbyItem()
 
 	FVector PlayerLocation = PC->GetPawn()->GetActorLocation();
 
-	// Find all dropped item actors in the world
-	TArray<AActor*> FoundItems;
-	UGameplayStatics::GetAllActorsOfClass(worldContext, ADroppedItemActor::StaticClass(), FoundItems);
-
+	// Iterate the dropped-item registry (O(registered items), no world scan).
 	ADroppedItemActor* ClosestItem = nullptr;
 	float ClosestDistance = FLT_MAX;
 
-	// Find the closest item within pickup range
-	for (AActor* Actor : FoundItems)
+	if (UItemManager* Items = gameInstance ? gameInstance->GetItemManager() : nullptr)
 	{
-		ADroppedItemActor* DroppedItem = Cast<ADroppedItemActor>(Actor);
-		if (DroppedItem && DroppedItem->CanBePickedUp())
+		Items->ForEachDroppedItem([&](ADroppedItemActor* DroppedItem)
 		{
-			float Distance = FVector::Dist(PlayerLocation, DroppedItem->GetActorLocation());
-			float ItemPickupRadius = DroppedItem->GetPickupRadius();
-
-			if (Distance <= ItemPickupRadius && Distance < ClosestDistance)
+			if (DroppedItem && DroppedItem->CanBePickedUp())
 			{
-				ClosestDistance = Distance;
-				ClosestItem = DroppedItem;
+				const float Distance = FVector::Dist(PlayerLocation, DroppedItem->GetActorLocation());
+				const float ItemPickupRadius = DroppedItem->GetPickupRadius();
+
+				if (FProximityRule::IsInRange(Distance, ItemPickupRadius) && Distance < ClosestDistance)
+				{
+					ClosestDistance = Distance;
+					ClosestItem = DroppedItem;
+				}
 			}
-		}
+		});
 	}
 
 	// Attempt to pickup the closest item
@@ -180,27 +179,25 @@ ADroppedItemActor* UInventoryManager::GetNearestDroppedItem(float MaxDistance) c
 
 	FVector PlayerLocation = PC->GetPawn()->GetActorLocation();
 
-	// Find all dropped item actors in the world
-	TArray<AActor*> FoundItems;
-	UGameplayStatics::GetAllActorsOfClass(worldContext, ADroppedItemActor::StaticClass(), FoundItems);
-
+	// Iterate the dropped-item registry (O(registered items), no world scan).
 	ADroppedItemActor* ClosestItem = nullptr;
 	float ClosestDistance = MaxDistance + 1.f;
 
-	// Find the closest item within range
-	for (AActor* Actor : FoundItems)
+	if (UItemManager* Items = gameInstance ? gameInstance->GetItemManager() : nullptr)
 	{
-		ADroppedItemActor* DroppedItem = Cast<ADroppedItemActor>(Actor);
-		if (DroppedItem && DroppedItem->CanBePickedUp())
+		Items->ForEachDroppedItem([&](ADroppedItemActor* DroppedItem)
 		{
-			float Distance = FVector::Dist(PlayerLocation, DroppedItem->GetActorLocation());
-
-			if (Distance <= DroppedItem->GetPickupRadius() && Distance <= ClosestDistance)
+			if (DroppedItem && DroppedItem->CanBePickedUp())
 			{
-				ClosestDistance = Distance;
-				ClosestItem = DroppedItem;
+				const float Distance = FVector::Dist(PlayerLocation, DroppedItem->GetActorLocation());
+
+				if (FProximityRule::IsInRange(Distance, DroppedItem->GetPickupRadius()) && Distance <= ClosestDistance)
+				{
+					ClosestDistance = Distance;
+					ClosestItem = DroppedItem;
+				}
 			}
-		}
+		});
 	}
 
 	return ClosestItem;
@@ -224,24 +221,22 @@ TArray<ADroppedItemActor*> UInventoryManager::GetAllDroppedItemsInRange(float Ma
 
 	FVector PlayerLocation = PC->GetPawn()->GetActorLocation();
 
-	// Find all dropped item actors in the world
-	TArray<AActor*> FoundItems;
-	UGameplayStatics::GetAllActorsOfClass(worldContext, ADroppedItemActor::StaticClass(), FoundItems);
-
-	// Collect all items within range
-	for (AActor* Actor : FoundItems)
+	// Iterate the dropped-item registry (O(registered items), no world scan).
+	if (UItemManager* Items = gameInstance ? gameInstance->GetItemManager() : nullptr)
 	{
-		ADroppedItemActor* DroppedItem = Cast<ADroppedItemActor>(Actor);
-		if (DroppedItem && DroppedItem->CanBePickedUp())
+		Items->ForEachDroppedItem([&](ADroppedItemActor* DroppedItem)
 		{
-			float Distance = FVector::Dist(PlayerLocation, DroppedItem->GetActorLocation());
-			float ItemPickupRadius = FMath::Min(MaxDistance, DroppedItem->GetPickupRadius());
-
-			if (Distance <= ItemPickupRadius)
+			if (DroppedItem && DroppedItem->CanBePickedUp())
 			{
-				ItemsInRange.Add(DroppedItem);
+				const float Distance = FVector::Dist(PlayerLocation, DroppedItem->GetActorLocation());
+				const float ItemPickupRadius = FMath::Min(MaxDistance, DroppedItem->GetPickupRadius());
+
+				if (FProximityRule::IsInRange(Distance, ItemPickupRadius))
+				{
+					ItemsInRange.Add(DroppedItem);
+				}
 			}
-		}
+		});
 	}
 
 	// Sort by distance (closest first)

@@ -333,49 +333,13 @@ void ABasicPlayer::UpdateProximityHint()
 		}
 	}
 
-	{
-		const float R = CursorInteractionComponent ? CursorInteractionComponent->GetItemPickupRange() : 180.f;
-		TArray<AActor*> FoundItems;
-		UGameplayStatics::GetAllActorsOfClass(GetWorld(), ADroppedItemActor::StaticClass(), FoundItems);
-		for (AActor* Actor : FoundItems)
-		{
-			ADroppedItemActor* Item = Cast<ADroppedItemActor>(Actor);
-			if (Item && Item->CanBePickedUp())
-			{
-				const float D = FVector::Dist(MyLoc, Item->GetActorLocation());
-				if (D <= Item->GetPickupRadius() && D < NearestDist)
-				{
-					Nearest = Item; NearestType = EInteractableType::DroppedItem; NearestDist = D;
-				}
-			}
-		}
-	}
-
+	if (UNPCManager* NpcMgr = MyGameInstance ? MyGameInstance->GetNPCManager() : nullptr)
 	{
 		const float R = 250.f;
-		for (TActorIterator<ABasicNPC> It(GetWorld()); It; ++It)
+		if (ABasicNPC* NPC = NpcMgr->GetNearestNPC(MyLoc, R))
 		{
-			if (ABasicNPC* NPC = *It)
-			{
-				const float D = FVector::Dist(MyLoc, NPC->GetActorLocation());
-				if (D <= R && D < NearestDist)
-				{
-					Nearest = NPC; NearestType = EInteractableType::NPC; NearestDist = D;
-				}
-			}
-		}
-	}
-
-	if (InventoryManager)
-	{
-		const float R = CursorInteractionComponent ? CursorInteractionComponent->GetItemPickupRange() : 180.f;
-		if (ADroppedItemActor* Item = InventoryManager->GetNearestDroppedItem(R))
-		{
-			const float D = FVector::Dist(MyLoc, Item->GetActorLocation());
-			if (D < NearestDist)
-			{
-				Nearest = Item; NearestType = EInteractableType::DroppedItem; NearestDist = D;
-			}
+			const float D = FVector::Dist(MyLoc, NPC->GetActorLocation());
+			if (D < NearestDist) { Nearest = NPC; NearestType = EInteractableType::NPC; NearestDist = D; }
 		}
 	}
 

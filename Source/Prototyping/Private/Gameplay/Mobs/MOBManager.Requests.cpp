@@ -45,54 +45,42 @@ void UMOBManager::UpdateMobHealth(const FCombatResultData& ResultData)
 		return;
 	}
 
-	// Find the mob in the world by ID
-	FString MobUidStr = FString::FromInt(ResultData.TargetId);
-	
-	if (MOBExists(worldContext, FName(MobUidStr)))
+	// Find the mob by ID (O(1) registry lookup)
+	if (ABasicMOB* MOB = Cast<ABasicMOB>(FindMobActor(ResultData.TargetId)))
 	{
-		TArray<AActor*> FoundActors;
-		UGameplayStatics::GetAllActorsWithTag(worldContext, FName(MobUidStr), FoundActors);
-
-		if (FoundActors.Num() > 0)
+		// Update the mob's health
+		MOB->SetMOBCurrentHealth(ResultData.RemainingHealth);
+		
+		// Set the damaged flag
+		MOB->SetMobIsDamaged(ResultData.bIsDamaged);
+		
+		// If the mob died, handle death
+		if (ResultData.bTargetDied)
 		{
-			ABasicMOB* MOB = Cast<ABasicMOB>(FoundActors[0]);
-			if (MOB)
-			{
-				// Update the mob's health
-				MOB->SetMOBCurrentHealth(ResultData.RemainingHealth);
-				
-				// Set the damaged flag
-				MOB->SetMobIsDamaged(ResultData.bIsDamaged);
-				
-				// If the mob died, handle death
-				if (ResultData.bTargetDied)
-				{
-					MOB->SetMOBIsDead(true);
-					
-					// Trigger visual death animation/effect
-					MOB->Die();
-				}
-				
-				// Force update UI to show new health
-				MOB->ForceUpdateUI();
-				
-				// Notify game instance about mob health update
-				if (gameInstance)
-				{
-					gameInstance->UpdateMobHealth(
-						ResultData.TargetId,
-						ResultData.RemainingHealth,
-						ResultData.RemainingMana,
-						ResultData.bTargetDied,
-						ResultData.bIsDamaged,
-						ResultData.DamageDealt
-					);
-				}
-				
-				UE_LOG(LogGameplay, Warning, TEXT("MOB %s health updated: %d, IsDead: %s"),
-					*MOB->GetMobName(), MOB->GetMOBCurrentHealth(), ResultData.bTargetDied ? TEXT("True") : TEXT("False"));
-			}
+			MOB->SetMOBIsDead(true);
+			
+			// Trigger visual death animation/effect
+			MOB->Die();
 		}
+		
+		// Force update UI to show new health
+		MOB->ForceUpdateUI();
+		
+		// Notify game instance about mob health update
+		if (gameInstance)
+		{
+			gameInstance->UpdateMobHealth(
+				ResultData.TargetId,
+				ResultData.RemainingHealth,
+				ResultData.RemainingMana,
+				ResultData.bTargetDied,
+				ResultData.bIsDamaged,
+				ResultData.DamageDealt
+			);
+		}
+		
+		UE_LOG(LogGameplay, Warning, TEXT("MOB %s health updated: %d, IsDead: %s"),
+			*MOB->GetMobName(), MOB->GetMOBCurrentHealth(), ResultData.bTargetDied ? TEXT("True") : TEXT("False"));
 	}
 	else
 	{

@@ -23,6 +23,7 @@
 #include "CrashDiagnostics.h"
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "Gameplay/NPCs/NPCManager.h"
+#include "Gameplay/Mobs/MOBManager.h"
 #include "Gameplay/Items/DroppedItemActor.h"
 #include "Gameplay/Dialogue/DialogueManager.h"
 #include "Gameplay/Quest/QuestManager.h"
@@ -103,41 +104,41 @@ void ABasicPlayer::CheckForNPC()
     ABasicNPC* HitNPC = bHit ? Cast<ABasicNPC>(Hit.GetActor()) : nullptr;
 
     // Fallback: find the NPC closest to the camera crosshair within range
+    // (registry iteration, O(registered NPCs) — no world scan).
     if (!HitNPC)
     {
-        TArray<AActor*> AllNPCs;
-        UGameplayStatics::GetAllActorsOfClass(GetWorld(), ABasicNPC::StaticClass(), AllNPCs);
-
-        ABasicNPC* BestNPC = nullptr;
-        float BestDot = 0.97f; // ~14 degree cone around crosshair
-
-        for (AActor* Actor : AllNPCs)
+        if (UNPCManager* NpcMgr = MyGameInstance ? MyGameInstance->GetNPCManager() : nullptr)
         {
-            ABasicNPC* NPC = Cast<ABasicNPC>(Actor);
-            if (!NPC) continue;
+            ABasicNPC* BestNPC = nullptr;
+            float BestDot = 0.97f; // ~14 degree cone around crosshair
 
-            const float Dist = FVector::Dist(CameraLocation, NPC->GetActorLocation());
-            if (Dist > TraceDistance) continue;
-
-            const FVector ToNPC = (NPC->GetActorLocation() - CameraLocation).GetSafeNormal();
-            const float Dot = FVector::DotProduct(CameraForward, ToNPC);
-            if (Dot > BestDot)
+            for (ABasicNPC* NPC : NpcMgr->GetInteractableNPCs())
             {
-                // LOS check: is the NPC actually visible through world geometry?
-                FHitResult LOSHit;
-                FCollisionQueryParams LOSParams;
-                LOSParams.AddIgnoredActor(this);
-                LOSParams.AddIgnoredActor(NPC);
-                const bool bBlocked = GetWorld()->LineTraceSingleByChannel(
-                    LOSHit, CameraLocation, NPC->GetActorLocation(), ECC_Visibility, LOSParams);
-                if (!bBlocked)
+                if (!IsValid(NPC)) continue;
+
+                const float Dist = FVector::Dist(CameraLocation, NPC->GetActorLocation());
+                if (Dist > TraceDistance) continue;
+
+                const FVector ToNPC = (NPC->GetActorLocation() - CameraLocation).GetSafeNormal();
+                const float Dot = FVector::DotProduct(CameraForward, ToNPC);
+                if (Dot > BestDot)
                 {
-                    BestDot = Dot;
-                    BestNPC = NPC;
+                    // LOS check: is the NPC actually visible through world geometry?
+                    FHitResult LOSHit;
+                    FCollisionQueryParams LOSParams;
+                    LOSParams.AddIgnoredActor(this);
+                    LOSParams.AddIgnoredActor(NPC);
+                    const bool bBlocked = GetWorld()->LineTraceSingleByChannel(
+                        LOSHit, CameraLocation, NPC->GetActorLocation(), ECC_Visibility, LOSParams);
+                    if (!bBlocked)
+                    {
+                        BestDot = Dot;
+                        BestNPC = NPC;
+                    }
                 }
             }
+            HitNPC = BestNPC;
         }
-        HitNPC = BestNPC;
     }
 
     if (HitNPC && !HitNPC->IsNPCInteractable())
@@ -284,37 +285,38 @@ void ABasicPlayer::CheckForMOB()
         }
     }
 
-    // Fallback: dot-product cone search (handles meshes that block ECC_Pawn poorly)
+    // Fallback: dot-product cone search (handles meshes that block ECC_Pawn poorly).
+    // Registry iteration, O(registered mobs) — no world scan.
     if (!SoftTarget)
     {
-        float BestDot = 0.97f; // ~14 degree cone around crosshair
-        TArray<AActor*> AllMOBs;
-        UGameplayStatics::GetAllActorsOfClass(GetWorld(), ABasicMOB::StaticClass(), AllMOBs);
-        for (AActor* Actor : AllMOBs)
+        if (UMOBManager* MobMgr = MyGameInstance ? MyGameInstance->GetMOBManager() : nullptr)
         {
-            ABasicMOB* Mob = Cast<ABasicMOB>(Actor);
-            if (!Mob || Mob->GetMOBIsDead()) continue;
-
-            const float Dist = FVector::Dist(CameraLocation, Mob->GetActorLocation());
-            if (Dist > TraceDistance) continue;
-
-            const FVector ToMob = (Mob->GetActorLocation() - CameraLocation).GetSafeNormal();
-            const float Dot = FVector::DotProduct(CameraForward, ToMob);
-            if (Dot > BestDot)
+            float BestDot = 0.97f; // ~14 degree cone around crosshair
+            MobMgr->ForEachMob([&](ABasicMOB* Mob)
             {
-                // LOS check: is the mob actually visible through world geometry?
-                FHitResult LOSHit;
-                FCollisionQueryParams LOSParams;
-                LOSParams.AddIgnoredActor(this);
-                LOSParams.AddIgnoredActor(Mob);
-                const bool bBlocked = GetWorld()->LineTraceSingleByChannel(
-                    LOSHit, CameraLocation, Mob->GetActorLocation(), ECC_Visibility, LOSParams);
-                if (!bBlocked)
+                if (!Mob || Mob->GetMOBIsDead()) return;
+
+                const float Dist = FVector::Dist(CameraLocation, Mob->GetActorLocation());
+                if (Dist > TraceDistance) return;
+
+                const FVector ToMob = (Mob->GetActorLocation() - CameraLocation).GetSafeNormal();
+                const float Dot = FVector::DotProduct(CameraForward, ToMob);
+                if (Dot > BestDot)
                 {
-                    BestDot = Dot;
-                    SoftTarget = Mob;
+                    // LOS check: is the mob actually visible through world geometry?
+                    FHitResult LOSHit;
+                    FCollisionQueryParams LOSParams;
+                    LOSParams.AddIgnoredActor(this);
+                    LOSParams.AddIgnoredActor(Mob);
+                    const bool bBlocked = GetWorld()->LineTraceSingleByChannel(
+                        LOSHit, CameraLocation, Mob->GetActorLocation(), ECC_Visibility, LOSParams);
+                    if (!bBlocked)
+                    {
+                        BestDot = Dot;
+                        SoftTarget = Mob;
+                    }
                 }
-            }
+            });
         }
     }
 

@@ -181,7 +181,7 @@ void USpawnZoneManager::CreateSpawnZone(const FSpawnZoneStruct& SpawnZoneData)
 	}
 }
 
-// Check if a Spawn Zone exists in the world
+// Check if a Spawn Zone exists in the registry (tag match, no world scan)
 bool USpawnZoneManager::SpawnZoneExists(UWorld* World, const FName& Tag)
 {
 	if (!World || !World->IsValidLowLevel())
@@ -190,9 +190,12 @@ bool USpawnZoneManager::SpawnZoneExists(UWorld* World, const FName& Tag)
 		return false;
 	}
 
-	TArray<AActor*> FoundActors;
-	UGameplayStatics::GetAllActorsWithTag(World, Tag, FoundActors);
-
-	// If the array is not empty, then actors with the tag exist
-	return FoundActors.Num() > 0;
+	for (AMobSpawnZone* Zone : SpawnZones)
+	{
+		if (IsValid(Zone) && Zone->ActorHasTag(Tag))
+		{
+			return true;
+		}
+	}
+	return false;
 }

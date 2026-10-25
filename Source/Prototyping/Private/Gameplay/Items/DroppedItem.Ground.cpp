@@ -4,6 +4,8 @@
 #include "Gameplay/Items/DroppedItemActor.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Items/ItemManager.h"
+#include "Gameplay/Mobs/MOBManager.h"
+#include "Gameplay/NPCs/NPCManager.h"
 #include "Gameplay/Mobs/BasicMOB.h"
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -44,10 +46,28 @@ QueryParams.AddIgnoredActor(LocalPawn);
 }
 
 TArray<AActor*> PawnsToIgnore;
-UGameplayStatics::GetAllActorsOfClass(World, ABasicPlayer::StaticClass(), PawnsToIgnore);
-UGameplayStatics::GetAllActorsOfClass(World, ABasicMOB::StaticClass(),    PawnsToIgnore);
-UGameplayStatics::GetAllActorsOfClass(World, ABasicNPC::StaticClass(),    PawnsToIgnore);
-UGameplayStatics::GetAllActorsOfClass(World, ADroppedItemActor::StaticClass(), PawnsToIgnore);
+// Registry iteration (O(registered actors)) instead of 4 world scans.
+// Ground trace skips pawn hits in the loop below, so this list is only
+// an optimization to reduce hit processing.
+if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+{
+if (UNPCManager* Npcs = GI->GetNPCManager())
+{
+for (ABasicNPC* Npc : Npcs->GetAllNPCs())
+{
+PawnsToIgnore.Add(Npc);
+}
+}
+if (UMOBManager* Mobs = GI->GetMOBManager())
+{
+Mobs->ForEachMob([&](ABasicMOB* Mob) { PawnsToIgnore.Add(Mob); });
+Mobs->ForEachPlayer([&](ABasicPlayer* Player) { PawnsToIgnore.Add(Player); });
+}
+if (UItemManager* Items = GI->GetItemManager())
+{
+Items->ForEachDroppedItem([&](ADroppedItemActor* Drop) { PawnsToIgnore.Add(Drop); });
+}
+}
 QueryParams.AddIgnoredActors(PawnsToIgnore);
 
 TArray<FHitResult> Hits;

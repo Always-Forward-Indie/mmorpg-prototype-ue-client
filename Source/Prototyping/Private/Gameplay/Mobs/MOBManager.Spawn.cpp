@@ -86,7 +86,7 @@ void UMOBManager::SpawnMOB(const FMOBStruct& MOBData)
 	}
 }
 
-// Check if a MOB exists in the world
+// Check if a MOB exists in the registry (tag = mobUniqueID string).
 bool UMOBManager::MOBExists(UWorld* World, const FName& Tag)
 {
 	if (!World || !World->IsValidLowLevel())
@@ -95,11 +95,9 @@ bool UMOBManager::MOBExists(UWorld* World, const FName& Tag)
 		return false;
 	}
 
-	TArray<AActor*> FoundActors;
-	UGameplayStatics::GetAllActorsWithTag(World, Tag, FoundActors);
-
-	// If the array is not empty, then actors with the tag exist
-	return FoundActors.Num() > 0;
+	const int32 MobUID = FCString::Atoi(*Tag.ToString());
+	const TWeakObjectPtr<ABasicMOB>* Found = MobActorRegistry.Find(MobUID);
+	return Found && Found->IsValid();
 }
 
 AActor* UMOBManager::FindMobActor(int32 MobUID) const
@@ -109,12 +107,39 @@ AActor* UMOBManager::FindMobActor(int32 MobUID) const
 	{
 		return Found->Get();
 	}
-	// Fallback: tag-based search
-	if (!worldContext) return nullptr;
-	const FName UIDTag = FName(*FString::FromInt(MobUID));
-	TArray<AActor*> FoundActors;
-	UGameplayStatics::GetAllActorsWithTag(worldContext, UIDTag, FoundActors);
-	return FoundActors.Num() > 0 ? FoundActors[0] : nullptr;
+	return nullptr;
+}
+
+AActor* UMOBManager::FindPlayerActor(int32 PlayerId) const
+{
+	const TWeakObjectPtr<ABasicPlayer>* Found = PlayerRegistry.Find(PlayerId);
+	if (Found && Found->IsValid())
+	{
+		return Found->Get();
+	}
+	return nullptr;
+}
+
+void UMOBManager::ForEachMob(TFunctionRef<void(ABasicMOB*)> Fn) const
+{
+	for (const auto& Pair : MobActorRegistry)
+	{
+		if (Pair.Value.IsValid())
+		{
+			Fn(Pair.Value.Get());
+		}
+	}
+}
+
+void UMOBManager::ForEachPlayer(TFunctionRef<void(ABasicPlayer*)> Fn) const
+{
+	for (const auto& Pair : PlayerRegistry)
+	{
+		if (Pair.Value.IsValid())
+		{
+			Fn(Pair.Value.Get());
+		}
+	}
 }
 
 void UMOBManager::RegisterMob(int32 MobUID, ABasicMOB* MobActor)

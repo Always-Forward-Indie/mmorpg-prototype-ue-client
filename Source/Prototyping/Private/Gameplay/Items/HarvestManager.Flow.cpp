@@ -7,6 +7,8 @@
 #include "Gameplay/Mobs/BasicMOB.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Players/PlayerAnimInstance.h"
+#include "Gameplay/Mobs/MOBManager.h"
+#include "Utils/NetCore/ProximityRule.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
 #include "UI/HarvestProgressWidget.h"
@@ -273,27 +275,24 @@ ABasicMOB* UHarvestManager::GetNearestHarvestableCorpse(float MaxDistance) const
 
 	FVector PlayerLocation = PC->GetPawn()->GetActorLocation();
 
-	// Find all MOB actors in the world
-	TArray<AActor*> FoundMobs;
-	UGameplayStatics::GetAllActorsOfClass(worldContext, ABasicMOB::StaticClass(), FoundMobs);
-
+	// Iterate the mob registry (O(registered mobs), no world scan).
 	ABasicMOB* ClosestCorpse = nullptr;
 	float ClosestDistance = MaxDistance;
 
-	// Find the closest harvestable mob within range
-	for (AActor* Actor : FoundMobs)
+	if (UMOBManager* MobMgr = gameInstance ? gameInstance->GetMOBManager() : nullptr)
 	{
-		ABasicMOB* Mob = Cast<ABasicMOB>(Actor);
-		if (Mob && Mob->CanBeHarvested())
+		MobMgr->ForEachMob([&](ABasicMOB* Mob)
 		{
-			float Distance = FVector::Dist(PlayerLocation, Mob->GetActorLocation());
-
-			if (Distance <= MaxDistance && Distance < ClosestDistance)
+			if (Mob && Mob->CanBeHarvested())
 			{
-				ClosestDistance = Distance;
-				ClosestCorpse = Mob;
+				const float Distance = FVector::Dist(PlayerLocation, Mob->GetActorLocation());
+				if (FProximityRule::IsInRange(Distance, MaxDistance) && Distance < ClosestDistance)
+				{
+					ClosestDistance = Distance;
+					ClosestCorpse = Mob;
+				}
 			}
-		}
+		});
 	}
 
 	return ClosestCorpse;

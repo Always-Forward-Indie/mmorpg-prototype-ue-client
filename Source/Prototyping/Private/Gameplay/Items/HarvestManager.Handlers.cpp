@@ -5,6 +5,7 @@
 #include "Utils/JSONParser.h"
 #include "Engine/World.h"
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Gameplay/Mobs/MOBManager.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Players/PlayerAnimInstance.h"
 #include "Kismet/GameplayStatics.h"
@@ -61,21 +62,13 @@ void UHarvestManager::HandleHarvestComplete(const FHarvestCompleteStruct& Harves
 	else
 		KnownEmptyCorpses.Remove(HarvestData.corpseId);
 
-	// Mark the mob as harvested
-	if (worldContext)
+	// Mark the mob as harvested (O(1) registry lookup)
+	if (worldContext && gameInstance && gameInstance->GetMOBManager())
 	{
-		FString CorpseUIDStr = FString::FromInt(HarvestData.corpseId);
-		TArray<AActor*> FoundActors;
-		UGameplayStatics::GetAllActorsWithTag(worldContext, FName(*CorpseUIDStr), FoundActors);
-
-		if (FoundActors.Num() > 0)
+		if (ABasicMOB* Mob = Cast<ABasicMOB>(gameInstance->GetMOBManager()->FindMobActor(HarvestData.corpseId)))
 		{
-			ABasicMOB* Mob = Cast<ABasicMOB>(FoundActors[0]);
-			if (Mob)
-			{
-				Mob->SetHarvested(true);
-				UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Marked mob %s as harvested"), *Mob->GetMobName());
-			}
+			Mob->SetHarvested(true);
+			UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Marked mob %s as harvested"), *Mob->GetMobName());
 		}
 	}
 

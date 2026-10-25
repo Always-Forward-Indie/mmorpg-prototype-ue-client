@@ -59,6 +59,16 @@ class PROTOTYPING_API UMOBManager : public UObject
 		UFUNCTION(BlueprintCallable, Category = "MOBManager")
 		AActor* FindMobActor(int32 MobUID) const;
 
+		/** Find the spawned player actor for a given character ID. Returns nullptr if not found. */
+		UFUNCTION(BlueprintCallable, Category = "MOBManager")
+		AActor* FindPlayerActor(int32 PlayerId) const;
+
+		/** Iterate all live registered mobs (skips stale entries). Replaces GetAllActorsOfClass scans. */
+		void ForEachMob(TFunctionRef<void(class ABasicMOB*)> Fn) const;
+
+		/** Iterate all live registered players (skips stale entries). Replaces GetAllActorsOfClass scans. */
+		void ForEachPlayer(TFunctionRef<void(class ABasicPlayer*)> Fn) const;
+
 		/** Register a spawned mob actor in the UID-to-actor map. */
 		void RegisterMob(int32 MobUID, class ABasicMOB* MobActor);
 

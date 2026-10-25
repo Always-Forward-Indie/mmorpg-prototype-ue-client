@@ -58,17 +58,9 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 		TArray<FMOBStruct> MobsData = JSONParser::DeserializeMobsList(Body);
 		for (FMOBStruct MobData : MobsData)
 		{
-			if (MOBExists(worldContext, FName(MobData.mobUniqueID)))
+			if (ABasicMOB* MOB = Cast<ABasicMOB>(FindMobActor(FCString::Atoi(*MobData.mobUniqueID))))
 			{
-				TArray<AActor*> FoundActors;
-				UGameplayStatics::GetAllActorsWithTag(worldContext, FName(MobData.mobUniqueID), FoundActors);
-
-				if (FoundActors.Num() > 0)
-				{
-					ABasicMOB* MOB = Cast<ABasicMOB>(FoundActors[0]);
-
-					MOB->OnReceiveServerPacket(MobData.mobPosition);
-				}
+				MOB->OnReceiveServerPacket(MobData.mobPosition);
 			}
 		}
 	}
@@ -192,18 +184,8 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 			TargetLostData.mobId, TargetLostData.mobUID, TargetLostData.lostTargetPlayerId,
 			TargetLostData.position.positionX, TargetLostData.position.positionY, TargetLostData.position.positionZ);
 
-		FString MobUidStr = FString::FromInt(TargetLostData.mobUID);
-
-		if (MOBExists(worldContext, FName(MobUidStr)))
+		if (ABasicMOB* MOB = Cast<ABasicMOB>(FindMobActor(TargetLostData.mobUID)))
 		{
-			TArray<AActor*> FoundActors;
-			UGameplayStatics::GetAllActorsWithTag(worldContext, FName(MobUidStr), FoundActors);
-
-			if (FoundActors.Num() > 0)
-			{
-				ABasicMOB* MOB = Cast<ABasicMOB>(FoundActors[0]);
-					if (MOB)
-					{
 						// ���������� ���� ����
 						MOB->SetMobTargetId(0);
 						MOB->SetMobTargetType("");
@@ -233,8 +215,6 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 
 						UE_LOG(LogGameplay, Warning, TEXT("MOB %s (UID: %d) target cleared and position updated"),
 							*MOB->GetMobName(), TargetLostData.mobUID);
-					}
-			}
 		}
 		else
 		{

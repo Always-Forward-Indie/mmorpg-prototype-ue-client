@@ -7,6 +7,7 @@
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Players/PlayerAnimInstance.h"
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Gameplay/Mobs/MOBManager.h"
 #include "Utils/JSONParser.h"
 #include "MyGameInstance.h"
 #include "Networking/NetworkManager.h"
@@ -53,21 +54,16 @@ ADroppedItemActor* UItemManager::SpawnDroppedItem(const FDroppedItemStruct& Drop
 	if (!DroppedItem.droppedByMobUID.IsEmpty())
 	{
 		const int32 MobUID = FCString::Atoi(*DroppedItem.droppedByMobUID);
-		if (MobUID > 0)
+		if (MobUID > 0 && gameInstance && gameInstance->GetMOBManager())
 		{
-			TArray<AActor*> MobActors;
-			UGameplayStatics::GetAllActorsWithTag(worldContext, FName(*DroppedItem.droppedByMobUID), MobActors);
-			if (MobActors.Num() > 0)
+			if (ABasicMOB* Mob = Cast<ABasicMOB>(gameInstance->GetMOBManager()->FindMobActor(MobUID)))
 			{
-				if (ABasicMOB* Mob = Cast<ABasicMOB>(MobActors[0]))
+				if (!Mob->GetMOBIsDead())
 				{
-					if (!Mob->GetMOBIsDead())
-					{
-						UE_LOG(LogGameplay, Verbose, TEXT("ItemManager: deferring item uid=%d \u2014 mob %d still alive"),
-							DroppedItem.uid, MobUID);
-						PendingMobDrops.FindOrAdd(MobUID).Add(DroppedItem);
-						return nullptr;
-					}
+					UE_LOG(LogGameplay, Verbose, TEXT("ItemManager: deferring item uid=%d \u2014 mob %d still alive"),
+						DroppedItem.uid, MobUID);
+					PendingMobDrops.FindOrAdd(MobUID).Add(DroppedItem);
+					return nullptr;
 				}
 			}
 		}
@@ -124,14 +120,25 @@ ADroppedItemActor* UItemManager::SpawnDroppedItem(const FDroppedItemStruct& Drop
 	return nullptr;
 }
 
+void UItemManager::ForEachDroppedItem(TFunctionRef<void(ADroppedItemActor*)> Fn) const
+{
+	for (const auto& Pair : DroppedItemsMap)
+	{
+		if (IsValid(Pair.Value))
+		{
+			Fn(Pair.Value);
+		}
+	}
+}
+
 bool UItemManager::ItemExists(UWorld* World, int32 ItemUID)
 {
-	// Check if the item exists in our map
-	if (DroppedItemsMap.Contains(ItemUID) && DroppedItemsMap[ItemUID] != nullptr)
+	// Check if the item exists in our map (IsValid: raw != nullptr is unsafe on destroyed UObjects)
+	if (DroppedItemsMap.Contains(ItemUID) && IsValid(DroppedItemsMap[ItemUID]))
 	{
 		return true;
 	}
-	
+
 	return false;
 }
 

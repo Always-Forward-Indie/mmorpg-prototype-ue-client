@@ -1,6 +1,8 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
 #include "Prototyping.h"
+#include "Gameplay/Mobs/BasicMOB.h"
+#include "Gameplay/Mobs/MOBManager.h"
 #include "Components/ArrowComponent.h"
 #include "ShaderCompiler.h"
 #include "ContentStreaming.h"
@@ -116,24 +118,19 @@ void UMyGameInstance::PlayCombatAnimation(const FCombatAnimationData& AnimationD
 	}
 	else
 	{
-		// Check if it's a MOB
-		// Convert the character ID to a string to match how MOB UIDs are stored
-		FString MobUid = FString::FromInt(AnimationData.CharacterId);
-		
-		TArray<AActor*> FoundActors;
-		UGameplayStatics::GetAllActorsWithTag(GetWorld(), FName(*MobUid), FoundActors);
-		
-		if (FoundActors.Num() > 0)
+		// Check if it's a MOB (O(1) registry lookup by UID)
+		ABasicMOB* MOB = nullptr;
+		if (MOBManager)
 		{
-			ABasicMOB* MOB = Cast<ABasicMOB>(FoundActors[0]);
-			if (MOB)
-			{
-				// Play animation on the MOB
-				UE_LOG(LogGameplay, Warning, TEXT("Playing animation on MOB %s: %s"), 
-					*MOB->GetMobName(), *AnimationData.AnimationName);
-				// TODO: Implement animation playing in BasicMOB class
-				// MOB->PlayAnimation(AnimationData.AnimationName);
-			}
+			MOB = Cast<ABasicMOB>(MOBManager->FindMobActor(AnimationData.CharacterId));
+		}
+		if (MOB)
+		{
+			// Play animation on the MOB
+			UE_LOG(LogGameplay, Warning, TEXT("Playing animation on MOB %s: %s"), 
+				*MOB->GetMobName(), *AnimationData.AnimationName);
+			// TODO: Implement animation playing in BasicMOB class
+			// MOB->PlayAnimation(AnimationData.AnimationName);
 		}
 	}
 }

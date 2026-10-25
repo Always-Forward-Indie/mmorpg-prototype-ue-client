@@ -62,6 +62,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Item Manager")
 	bool ItemExists(UWorld* World, int32 ItemUID);
 
+	/** Iterate all live dropped-item actors (skips stale entries). Replaces GetAllActorsOfClass scans. */
+	void ForEachDroppedItem(TFunctionRef<void(ADroppedItemActor*)> Fn) const;
+
 	// Attempt to pick up an item
 	UFUNCTION(BlueprintCallable, Category = "Item Manager")
 	void SendPickUpItemRequest(int32 ItemUID);

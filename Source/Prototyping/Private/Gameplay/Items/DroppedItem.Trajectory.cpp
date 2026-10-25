@@ -6,6 +6,7 @@
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Gameplay/Mobs/MOBManager.h"
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Components/StaticMeshComponent.h"
@@ -93,19 +94,22 @@ void ADroppedItemActor::TryStartTrajectoryFromMob()
 		return;
 	}
 
-	// Find the mob that dropped this item
-	TArray<AActor*> FoundActors;
-	UGameplayStatics::GetAllActorsWithTag(GetWorld(), FName(*ItemData.droppedByMobUID), FoundActors);
+	// Find the mob that dropped this item (O(1) registry lookup)
+	ABasicMOB* SourceMob = nullptr;
+	if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+	{
+		if (UMOBManager* MobMgr = GI->GetMOBManager())
+		{
+			SourceMob = Cast<ABasicMOB>(MobMgr->FindMobActor(FCString::Atoi(*ItemData.droppedByMobUID)));
+		}
+	}
 
 	UE_LOG(LogDropSnap, Log,
-		TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | mobUID='%s' | foundActors=%d"),
-		*ItemData.item.name, *ItemData.droppedByMobUID, FoundActors.Num());
+		TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | mobUID='%s' | found=%d"),
+		*ItemData.item.name, *ItemData.droppedByMobUID, SourceMob != nullptr);
 
-	if (FoundActors.Num() > 0)
+	if (SourceMob)
 	{
-		ABasicMOB* SourceMob = Cast<ABasicMOB>(FoundActors[0]);
-		if (SourceMob)
-		{
 			// Use the center of the mob's skeletal mesh bounding box as the throw origin.
 			// GetActorLocation() returns the capsule center which may differ from the mesh center.
 			FVector MobLocation = SourceMob->GetActorLocation();
@@ -122,17 +126,9 @@ void ADroppedItemActor::TryStartTrajectoryFromMob()
 		else
 		{
 			UE_LOG(LogDropSnap, Warning,
-				TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | actor found but Cast<ABasicMOB> failed пїЅ falling back to SnapToGround"),
-				*ItemData.item.name);
+				TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | mob '%s' NOT found in registry - falling back to SnapToGround"),
+				*ItemData.item.name, *ItemData.droppedByMobUID);
 			SnapToGround();
 		}
-	}
-	else
-	{
-		UE_LOG(LogDropSnap, Warning,
-			TEXT("[DropSnap] TryStartTrajectoryFromMob '%s' | mob '%s' NOT found in world пїЅ falling back to SnapToGround"),
-			*ItemData.item.name, *ItemData.droppedByMobUID);
-		SnapToGround();
-	}
 }
 

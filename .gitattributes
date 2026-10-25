@@ -1,0 +1,15 @@
+# Line-ending normalization (added S13, 26.10: stops worktree-wide phantom
+# diffs where the whole tree shows modified from CR/LF flips with zero
+# content change). Blobs are LF; checkouts use native endings.
+* text=auto
+
+# Windows-only scripts must stay CRLF wherever they are checked out.
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Unreal binary assets must never be touched by normalization.
+*.uasset binary
+*.umap binary
+*.png binary
+*.locres binary
+*.locmeta binary

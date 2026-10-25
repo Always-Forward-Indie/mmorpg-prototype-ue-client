@@ -21,6 +21,9 @@ GitHub-hosted runners:
 6. No LogTemp (S01): no UE_LOG(LogTemp in Source/Prototyping — use the
    project categories from Source/Prototyping/Prototyping.h
    (LogConnection / LogNetPacket / LogPing / LogGameplay / LogGameAudio).
+7. No world scans in hot paths (S02): no GetAllActorsOfClass /
+   GetAllActorsWithTag calls under Private/Gameplay/{Players,Items,Mobs} —
+   use the manager registries (MOBManager / NPCManager / ItemManager) instead.
 
 Exit 0 = all green, exit 1 = red (blocks the PR).
 Usage: python3 Tools/CI/check_client_gates.py [--root <repo root>]
@@ -175,8 +178,27 @@ def main() -> int:
         if logtemp_re.search(text):
             failures.append(
                 f"LogTemp banned: {path.relative_to(root).as_posix()} uses "
-                "UE_LOG(LogTemp — use LogConnection/LogNetPacket/LogPing/LogGameplay/LogAudio"
+                "UE_LOG(LogTemp — use LogConnection/LogNetPacket/LogPing/LogGameplay/LogGameAudio"
             )
+
+    # 7. No world scans in hot paths (S02): GetAllActorsOfClass/WithTag are
+    # banned under Private/Gameplay/{Players,Items,Mobs} — use the registries.
+    scan_re = re.compile(r"GetAllActors(OfClass|WithTag)\s*\(")
+    hot_dirs = [src / "Private" / "Gameplay" / d for d in ("Players", "Items", "Mobs")]
+    for hot in hot_dirs:
+        if not hot.is_dir():
+            continue
+        for path in sorted(hot.rglob("*.cpp")) + sorted(hot.rglob("*.h")):
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError as exc:
+                failures.append(f"cannot read {path}: {exc}")
+                continue
+            if scan_re.search(text):
+                failures.append(
+                    f"world scan banned: {path.relative_to(root).as_posix()} calls "
+                    "GetAllActors* — use MOBManager/NPCManager/ItemManager registries (S02)"
+                )
 
     if failures:
         print("CLIENT GATES: FAIL")

@@ -277,6 +277,10 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 			// Stamp the owner character ID on the global InventoryManager so it only
 			// processes packets for our local character, not other players on the same feed.
 			InventoryManager->SetOwnerCharacterId(PlayerData.characterData.characterId);
+			// Prefetch only: races the frag handshake, so its response may be
+			// stale. The authoritative refresh happens on playerReady ACK
+			// (NotifyPlayerReadyAck, S13-C2). Keep both — this one fills the
+			// UI early, the ACK one guarantees correctness.
 			InventoryManager->RequestInventoryData(PlayerData.characterData.characterId);
 			UE_LOG(LogConnection, Warning, TEXT("SpawnPlayerForClient: Requested inventory for CharID=%d"), PlayerData.characterData.characterId);
 		}

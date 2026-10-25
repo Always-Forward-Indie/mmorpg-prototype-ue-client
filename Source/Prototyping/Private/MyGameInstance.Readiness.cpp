@@ -97,6 +97,8 @@
 #include "Framework/Application/IInputProcessor.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Utils/NetCore/TravelGate.h"
+#include "Utils/NetCore/InventoryRefreshRule.h"
+#include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/CoreDelegates.h"
@@ -315,6 +317,19 @@ void UMyGameInstance::NotifyPlayerReadyAck()
 	if (!bPendingSpawnDispatched) { return; }
 	ReadyFlags |= ReadyFlag_PlayerReadyAck;
 	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] FLAG PlayerReadyAck set (mask=0x%02X, bGameWorldReady=%d)"), ReadyFlags, bGameWorldReady);
+	// S13-C2: deterministic post-ready inventory refresh. The spawn-time
+	// request races the capability handshake; this one cannot — the ACK
+	// proves the server learned frag:true, so the response is guaranteed
+	// fragmentable. Idempotent: exactly one request per ACK, rejoins
+	// refresh deliberately (post-rejoin state may be wiped).
+	const int32 CharId = GetCurrentCharacterID();
+	if (FInventoryRefreshRule::ShouldRequestOnReadyAck(CharId))
+	{
+		if (UInventoryManager* Inv = GetInventoryManager())
+		{
+			Inv->RequestInventoryData(CharId);
+		}
+	}
 	CheckAllReadyFlags();
 }
 

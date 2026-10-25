@@ -341,6 +341,23 @@ struct FMobMoveEntryStruct
 	FMobMoveEntryStruct() {}
 };
 
+// Parsed mobMoveUpdate entry: mob UID paired with its lightweight move entry.
+// Lives here (next to FMobMoveEntryStruct) so JSONParser.h stays dependency-free (S07);
+// JSONParser re-exports it as JSONParser::FMobMovePacketEntry for compatibility.
+USTRUCT(BlueprintType)
+struct FMobMovePacketEntry
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Move Packet")
+	int32 uid = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mob Move Packet")
+	FMobMoveEntryStruct moveEntry;
+
+	FMobMovePacketEntry() {}
+};
+
 // New Combat System Data Structures for the new server format
 
 UENUM(BlueprintType)

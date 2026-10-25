@@ -2,6 +2,8 @@
 
 
 #include "Utils/JSONParser.h"
+#include "Data/DataStructs.h"
+#include "Authentication/LoginFlowTypes.h"
 #include "Prototyping.h"
 #include "Services/TimeSyncService.h"
 #include "MyGameInstance.h"

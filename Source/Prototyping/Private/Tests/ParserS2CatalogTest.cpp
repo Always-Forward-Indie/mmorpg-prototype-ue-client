@@ -2,6 +2,10 @@
 #include "Gameplay/Items/ItemManager.h"
 #include "Gameplay/Vendor/VendorNetworkHandler.h"
 #include "Utils/JSONParser.h"
+#include "Data/DataStructs.h"
+#include "Data/ItemStruct.h"
+#include "Data/WIODataStructs.h"
+#include "Authentication/LoginFlowTypes.h"
 #include "ParserContractHelpers.h"
 
 // S2.1 contract: versioned item stat catalog. Same-version chunks accumulate,

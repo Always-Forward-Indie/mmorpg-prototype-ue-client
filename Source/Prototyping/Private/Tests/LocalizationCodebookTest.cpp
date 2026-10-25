@@ -1,6 +1,10 @@
 #include "Misc/AutomationTest.h"
 #include "Services/LocalizationSubsystem.h"
 #include "Utils/JSONParser.h"
+#include "Data/DataStructs.h"
+#include "Data/ItemStruct.h"
+#include "Data/WIODataStructs.h"
+#include "Authentication/LoginFlowTypes.h"
 
 // S3a codebook contract: attribute / item-type / rarity / equip-slot /
 // item-set getters resolve display names by slug. With no tables assigned

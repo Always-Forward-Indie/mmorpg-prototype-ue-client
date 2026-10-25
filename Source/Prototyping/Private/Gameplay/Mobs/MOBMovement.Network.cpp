@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/MOBMovementComponent.h"
+#include "Data/DataStructs.h"
 #include "GameFramework/Character.h"
 #include "Components/CapsuleComponent.h"
 #include "DrawDebugHelpers.h"

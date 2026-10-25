@@ -2,13 +2,15 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
-#include "Data/DataStructs.h"
-#include "Data/WIODataStructs.h"
 #include "Gameplay/Interaction/IWorldInteractable.h"
 #include "InputActionValue.h"
-#include "UI/InventoryWidget.h"
-#include "Camera/CameraShakeBase.h"
 #include "UIManager.generated.h"
+
+// Forward declarations (S07): this header only names widget/manager types.
+class UInventoryWidget;
+class UCameraShakeBase;
+class APlayerController;
+class UWidget;
 
 // Forward declarations
 struct FKeyEvent;
@@ -809,6 +811,9 @@ private:
 
 	/** Recursively checks if any child of Widget is under MousePos and Visible. */
 	static bool DoesWidgetTreeHaveHoveredChild(UWidget* Widget, const FVector2f& MousePos);
+
+	/** Builds the FWindowVisibilityRule mask from the b*Visible flags. */
+	uint32 BuildVisibilityMask() const;
 
 	/** Slate pre-input handler: toggles cursor on Alt press (fallback when Enhanced Input can't reach Alt). */
 	void OnPreInputKeyDown(const FKeyEvent& InKeyEvent);

@@ -3,10 +3,65 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Data/DataStructs.h"
-#include "Data/ItemStruct.h"
-#include "Data/WIODataStructs.h"
-#include "Authentication/LoginFlowTypes.h"
+#include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
+#include "Networking/NetworkDispatcher.h"
+
+// Forward declarations (S07): this header only declares functions, so it
+// names data structs without defining them. Definitions live in the .cpps
+// that use them. Keeps incremental builds fast.
+struct FClientDataStruct;
+struct FMessageDataStruct;
+struct FNetworkHeaderStruct;
+struct FPositionDataStruct;
+struct FAttributeDataStruct;
+struct FCharacterDataStruct;
+struct FSpawnZoneStruct;
+struct FMOBStruct;
+struct FMobMoveEntryStruct;
+struct FSkillInitiationData;
+struct FSkillResultData;
+struct FAppliedEffectData;
+struct FItemAttributeStruct;
+struct FItemBaseStruct;
+struct FDroppedItemStruct;
+struct FItemDropResponseStruct;
+struct FInventoryItemStruct;
+struct FCharacterInventoryStruct;
+struct FInventoryUpdateStruct;
+struct FMobTargetLostStruct;
+struct FHarvestItemStruct;
+struct FHarvestStartedStruct;
+struct FHarvestCompleteStruct;
+struct FHarvestErrorStruct;
+struct FCorpseLootPickupResponseStruct;
+struct FCorpseLootPickupErrorStruct;
+struct FCorpseLootInspectResponseStruct;
+struct FCorpseLootInspectErrorStruct;
+struct FExperienceUpdateStruct;
+struct FPlayerProgressionStruct;
+struct FExperienceGainEventStruct;
+struct FPlayerStatsUpdateStruct;
+struct FPlayerSkillNetworkData;
+struct FPlayerSkillsInitializationData;
+struct FNPCStatsStruct;
+struct FNPCHealthManaStruct;
+struct FNPCStruct;
+struct FNPCSpawnDataStruct;
+struct FEffectTickData;
+struct FActiveEffectEntry;
+struct FWorldObjectData;
+struct FWIOInteractResult;
+struct FWIOStateUpdate;
+struct FWIOChannelCancelled;
+struct FLoginCharacterEntry;
+struct FCharacterCreationOptions;
+// Global packet entry (defined in Data/DataStructs.h); re-exported as
+// JSONParser::FMobMovePacketEntry for compatibility.
+struct FMobMovePacketEntry;
+enum class ESkillEffectType : uint8;
+enum class ESkillSchool : uint8;
+enum class ECasterType : uint8;
 #include "Networking/NetworkDispatcher.h"
 
 // Forward declaration
@@ -93,13 +148,11 @@ public:
 
     static TArray<FMOBStruct> DeserializeMobsList(const TSharedPtr<FJsonObject>& Body);
 
-    // Parse a mobMoveUpdate packet � returns an array of lightweight move entries
+    // Parse a mobMoveUpdate packet — returns an array of lightweight move entries
     // paired with their mob UID. Body is the "body" JSON object.
-    struct FMobMovePacketEntry
-    {
-        int32               uid          = 0;
-        FMobMoveEntryStruct moveEntry;
-    };
+    // FMobMovePacketEntry lives in DataStructs.h (complete type needed for the
+    // value member); re-exported here so existing JSONParser:: qualifications keep working.
+    using FMobMovePacketEntry = ::FMobMovePacketEntry;
     static TArray<FMobMovePacketEntry> DeserializeMobMoveUpdate(const TSharedPtr<FJsonObject>& Body, int64 ServerSendMs);
 
     // Item data parsers

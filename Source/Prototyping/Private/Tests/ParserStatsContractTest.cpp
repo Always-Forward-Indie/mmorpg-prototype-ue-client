@@ -1,5 +1,9 @@
 #include "Misc/AutomationTest.h"
 #include "Utils/JSONParser.h"
+#include "Data/DataStructs.h"
+#include "Data/ItemStruct.h"
+#include "Data/WIODataStructs.h"
+#include "Authentication/LoginFlowTypes.h"
 #include "ParserContractHelpers.h"
 
 // Contract specs for stats_update (via its single owner PlayerAttributeParser)

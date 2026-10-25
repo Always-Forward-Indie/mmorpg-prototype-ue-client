@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/MOBManager.h"
+#include "Data/DataStructs.h"
 #include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"

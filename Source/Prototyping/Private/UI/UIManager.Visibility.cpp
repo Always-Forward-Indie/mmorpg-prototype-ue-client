@@ -1,5 +1,6 @@
 #include "UI/UIManager.h"
 #include "Prototyping.h"
+#include "Utils/NetCore/WindowVisibilityRule.h"
 #include "Blueprint/WidgetTree.h"
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
@@ -290,11 +291,30 @@ bool UUIManager::HasUIWindowOpen() const
 {
 	// True only when an actual panel window is open and consuming cursor input.
 	// Intentionally excludes bAltCursorActive so world interaction is never blocked
-	// just because the cursor is always shown.
-    return bInventoryVisible || bSkillsPanelVisible || bHarvestLootVisible
-        || bDialogueVisible || bQuestJournalVisible
-        || bVendorShopVisible || bRepairShopVisible || bSkillShopVisible || bTradeVisible || bEquipmentVisible
-        || bPlayerStatsVisible || bBestiaryVisible || bTitlesVisible || bReputationVisible || bEmoteListVisible;
+	// just because the cursor is always shown. Policy lives in FWindowVisibilityRule.
+	return FWindowVisibilityRule::HasUIWindowOpen(BuildVisibilityMask());
+}
+
+uint32 UUIManager::BuildVisibilityMask() const
+{
+	using R = FWindowVisibilityRule;
+	uint32 Flags = 0;
+	if (bInventoryVisible)    Flags |= R::Inventory;
+	if (bSkillsPanelVisible)  Flags |= R::SkillsPanel;
+	if (bHarvestLootVisible)  Flags |= R::HarvestLoot;
+	if (bDialogueVisible)     Flags |= R::Dialogue;
+	if (bQuestJournalVisible) Flags |= R::QuestJournal;
+	if (bVendorShopVisible)   Flags |= R::VendorShop;
+	if (bRepairShopVisible)   Flags |= R::RepairShop;
+	if (bSkillShopVisible)    Flags |= R::SkillShop;
+	if (bTradeVisible)        Flags |= R::Trade;
+	if (bEquipmentVisible)    Flags |= R::Equipment;
+	if (bPlayerStatsVisible)  Flags |= R::PlayerStats;
+	if (bBestiaryVisible)     Flags |= R::Bestiary;
+	if (bTitlesVisible)       Flags |= R::Titles;
+	if (bReputationVisible)   Flags |= R::Reputation;
+	if (bEmoteListVisible)    Flags |= R::EmoteList;
+	return Flags;
 }
 
 bool UUIManager::HasModalWindowOpen() const
@@ -303,7 +323,7 @@ bool UUIManager::HasModalWindowOpen() const
 	// Non-modal windows (inventory, stats, skills, etc.) let UMG hit-testing
 	// handle click-through: clicks on UI elements are consumed, clicks on
 	// transparent/empty areas pass through to the game world.
-    return bDialogueVisible || bTradeVisible || bHarvestLootVisible;
+	return FWindowVisibilityRule::HasModalWindowOpen(BuildVisibilityMask());
 }
 
 bool UUIManager::HasCursorOverWindowContent() const

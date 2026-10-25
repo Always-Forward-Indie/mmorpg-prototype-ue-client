@@ -1,5 +1,9 @@
 #include "Misc/AutomationTest.h"
 #include "Utils/JSONParser.h"
+#include "Data/DataStructs.h"
+#include "Data/ItemStruct.h"
+#include "Data/WIODataStructs.h"
+#include "Authentication/LoginFlowTypes.h"
 #include "ParserContractHelpers.h"
 
 // S1a contract: server omits display strings (name/*Name/*String); client

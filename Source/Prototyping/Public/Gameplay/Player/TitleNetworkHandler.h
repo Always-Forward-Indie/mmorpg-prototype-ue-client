@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "Data/DataStructs.h"
+#include "Networking/NetworkDispatcher.h"
 #include "TitleNetworkHandler.generated.h"
 
 class UTitleManager;
@@ -49,8 +50,9 @@ public:
     void RequestEquipTitle(int32 CharacterId, const FString& TitleSlug);
 
 private:
-    UFUNCTION()
-    void HandleChunkServerData(const FString& ReceivedData);
+    // Packet entry (S05): single-parse path via the per-eventType dispatcher.
+    // Replaces HandleChunkServerData (which re-parsed every packet twice).
+    void HandleChunkPacket(const FParsedPacket& Packet);
 
     /** Handle player_titles_update — own character title state from server. */
     void HandleOwnTitlesUpdate(const TSharedPtr<FJsonObject>& Root);

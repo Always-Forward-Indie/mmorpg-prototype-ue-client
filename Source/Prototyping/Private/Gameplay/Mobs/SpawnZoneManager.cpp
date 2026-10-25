@@ -4,6 +4,7 @@
 #include "Gameplay/Mobs/SpawnZoneManager.h"
 #include "Prototyping.h"
 #include "MyGameInstance.h"
+#include "Services/TimeSyncService.h"
 #include "CrashDiagnostics.h"
 
 USpawnZoneManager::USpawnZoneManager(const FObjectInitializer& ObjectInitializer)
@@ -47,8 +48,9 @@ void USpawnZoneManager::SubscribeToNetworkManager()
 		{
 			UE_LOG(LogGameplay, Warning, TEXT("Network Manager is valid"));
 
-			networkManager->OnChunkServerDataReceived.RemoveDynamic(this, &USpawnZoneManager::ProcessGameServerData);
-			networkManager->OnChunkServerDataReceived.AddDynamic(this, &USpawnZoneManager::ProcessGameServerData);
+			// Single-parse path (S05): dispatcher fallback delivers the parsed packet.
+			networkManager->DispatcherFor(EServerType::ChunkServer).RemoveFallbackHandler(this);
+			networkManager->DispatcherFor(EServerType::ChunkServer).AddFallbackHandler(this, &USpawnZoneManager::HandleChunkPacket);
 		}
 		else
 		{
@@ -71,9 +73,9 @@ void USpawnZoneManager::ClearWorldState()
 	SpawnZones.Empty();
 }
 
-void USpawnZoneManager::ProcessGameServerData(const FString& ReceivedData)
+void USpawnZoneManager::HandleChunkPacket(const FParsedPacket& Packet)
 {
-    CRASH_GUARD("SpawnZoneManager::ProcessGameServerData");
+    CRASH_GUARD("SpawnZoneManager::HandleChunkPacket");
     if (!worldContext) return;
 
 
@@ -84,7 +86,7 @@ void USpawnZoneManager::ProcessGameServerData(const FString& ReceivedData)
 	//}
 
 	// Deserialize the received JSON string to get MessageData struct
-	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
+	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(Packet);
 
 	//log the event type
 	UE_LOG(LogGameplay, Warning, TEXT("SpawnZoneManager: Received event type: %s"), *MessageData.eventType);

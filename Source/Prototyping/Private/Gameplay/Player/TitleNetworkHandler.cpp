@@ -1,5 +1,6 @@
 #include "Gameplay/Player/TitleNetworkHandler.h"
 #include "Prototyping.h"
+#include "Services/TimeSyncService.h"
 #include "Gameplay/Player/TitleManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
@@ -26,14 +27,18 @@ void UTitleNetworkHandler::Initialize(UTitleManager* InManager, UNetworkManager*
 void UTitleNetworkHandler::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UTitleNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    Dispatcher.AddHandler(TEXT("player_titles_update"), this, &UTitleNetworkHandler::HandleChunkPacket);
+    Dispatcher.AddHandler(TEXT("PLAYER_TITLE_CHANGED"), this, &UTitleNetworkHandler::HandleChunkPacket);
     bIsSubscribed = true;
 }
 
 void UTitleNetworkHandler::UnsubscribeFromNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || !bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UTitleNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    Dispatcher.RemoveHandler(TEXT("player_titles_update"), this);
+    Dispatcher.RemoveHandler(TEXT("PLAYER_TITLE_CHANGED"), this);
     bIsSubscribed = false;
 }
 
@@ -86,21 +91,18 @@ void UTitleNetworkHandler::RequestEquipTitle(int32 CharacterId, const FString& T
 // Inbound: player_titles_update
 // ---------------------------------------------------------------------------
 
-void UTitleNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+void UTitleNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
 {
-    if (ReceivedData.IsEmpty() || !Manager) return;
+    // Single-parse path (S05): EventType/Root come from PollLink, no re-parse.
+    if (!Packet.bValid || !Packet.Root.IsValid() || !Manager) return;
 
-    FMessageDataStruct Msg = JSONParser::DeserializeMessageData(ReceivedData);
+    const TSharedPtr<FJsonObject>& Root = Packet.Root;
 
-    TSharedPtr<FJsonObject> Root;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
-
-    if (Msg.eventType == TEXT("player_titles_update"))
+    if (Packet.EventType == TEXT("player_titles_update"))
     {
         HandleOwnTitlesUpdate(Root);
     }
-    else if (Msg.eventType == TEXT("PLAYER_TITLE_CHANGED"))
+    else if (Packet.EventType == TEXT("PLAYER_TITLE_CHANGED"))
     {
         HandleRemoteTitleChanged(Root);
     }

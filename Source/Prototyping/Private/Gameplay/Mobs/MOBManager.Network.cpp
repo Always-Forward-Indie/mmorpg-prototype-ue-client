@@ -7,29 +7,35 @@
 #include "Gameplay/Players/BasicPlayer.h"
 #include "CrashDiagnostics.h"
 
-void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
+void UMOBManager::HandleChunkPacket(const FParsedPacket& Packet)
 {
-    CRASH_GUARD("MOBManager::ProcessGameServerData");
+    CRASH_GUARD("MOBManager::HandleChunkPacket");
     if (!worldContext) return;
 
-    FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
-	UE_LOG(LogGameplay, Warning, TEXT("MOBManager: Received event type: %s"), *MessageData.eventType);
+	// Single-parse path (S05): EventType/Status/Body come from PollLink, no re-parse.
+	if (!Packet.bValid || !Packet.Root.IsValid()) return;
+
+	// Compat: effectTick still deserializes from the raw string (no Body overload exists).
+	const FString& ReceivedData = Packet.Raw;
+
+	const FString& EventType = Packet.EventType;
+	const FString& Status = Packet.Status;
+	const TSharedPtr<FJsonObject>& Root = Packet.Root;
+	const TSharedPtr<FJsonObject>& Body = Packet.Body;
+
+	UE_LOG(LogGameplay, Warning, TEXT("MOBManager: Received event type: %s"), *EventType);
 
 	// Check if this is a combat event - if so, let CombatNetworkHandler handle it
-	//if (IsCombatEvent(MessageData.eventType))
+	//if (IsCombatEvent(EventType))
 	//{
 	//	// Combat events are handled by CombatNetworkHandler which is already subscribed to the same event
 	//	// No need to process them here
 	//	return;
 	//}
 
-	TSharedPtr<FJsonObject> Root;
-	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
+	// (no re-parse: Root/Body come from the dispatcher packet)
 
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
-
-	if (MessageData.eventType == "spawnMobsInZone" && MessageData.status == "success")
+	if (EventType == "spawnMobsInZone" && Status == "success")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("MOBManager: Received spawnMobsInZone event"));
 		TArray<FMOBStruct> MobsData = JSONParser::DeserializeMobsList(Body);
@@ -38,13 +44,13 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 			SpawnMOB(MobData);
 		}
 	}
-	else if (MessageData.eventType == "getMOBData" && MessageData.status == "success")
+	else if (EventType == "getMOBData" && Status == "success")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("Received getMOBData event"));
 		// Deserialize the JSON string into a single MOB data
 		FMOBStruct MobData = JSONParser::DeserializeMobData(Body->GetObjectField(TEXT("mob")));
 	}
-	else if (MessageData.eventType == "zoneMoveMobs" && MessageData.status == "success")
+	else if (EventType == "zoneMoveMobs" && Status == "success")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("Received moveMOB event"));
 
@@ -64,7 +70,7 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 			}
 		}
 	}
-	else if (MessageData.eventType == "mobDeath" && MessageData.status == "success")
+	else if (EventType == "mobDeath" && Status == "success")
 	{
 		int32 MobUID = 0;
 		if (!Body.IsValid() || !Body->TryGetNumberField(TEXT("mobUID"), MobUID) || MobUID <= 0)
@@ -98,7 +104,7 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 
 		MOB->Destroy();
 	}
-	else if (MessageData.eventType == "mobMoveUpdate" && MessageData.status == "success")
+	else if (EventType == "mobMoveUpdate" && Status == "success")
 	{
 		if (!worldContext || !worldContext->IsValidLowLevel()) return;
 
@@ -133,7 +139,7 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 			}
 		}
 	}
-	else if (MessageData.eventType == "mobHealthUpdate")
+	else if (EventType == "mobHealthUpdate")
 	{
 		UE_LOG(LogGameplay, Verbose, TEXT("MOBManager: Received mobHealthUpdate event"));
 
@@ -168,7 +174,7 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 			}
 		}
 	}
-	else if (MessageData.eventType == "mobTargetLost" && MessageData.status == "success")
+	else if (EventType == "mobTargetLost" && Status == "success")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("MOBManager: Received mob target lost event"));
 
@@ -221,7 +227,7 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 			UE_LOG(LogGameplay, Warning, TEXT("Mob with UID %d not found for target lost event"), TargetLostData.mobUID);
 		}
 	}
-	else if (MessageData.eventType == "effectTick")
+	else if (EventType == "effectTick")
 	{
 		// Route effectTick to the target mob so its HP bar and visual feedback updates.
 		// Player effectTick is already handled by PlayerStatsNetworkHandler; here we only
@@ -238,7 +244,7 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 			}
 		}
 	}
-	else if (MessageData.eventType == "corpseRemoved")
+	else if (EventType == "corpseRemoved")
 	{
 		if (!worldContext || !worldContext->IsValidLowLevel())
 		{
@@ -289,7 +295,7 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 		MOB->Destroy();
 		RemovedCorpseUIDs.Add(CorpseUID);
 	}
-	else if (MessageData.eventType == "mobCellLeft")
+	else if (EventType == "mobCellLeft")
 	{
 		// Interest v2 evict: server lists UIDs standing in cells we just left.
 		// Over-inclusive by design — unknown UIDs are dropped silently (no crash).
@@ -338,7 +344,7 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 			MOB->Destroy();
 		}
 	}
-	else if (MessageData.eventType == "world_notification")
+	else if (EventType == "world_notification")
 	{
 		// Champion despawn arrives wrapped in world_notification (channel screen_center).
 		// Only the actor removal is handled here; the visual toast is routed by WorldNotificationManager.

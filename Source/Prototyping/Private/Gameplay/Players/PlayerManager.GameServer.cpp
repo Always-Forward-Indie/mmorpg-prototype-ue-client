@@ -11,14 +11,14 @@
 #include "Prototyping.h"
 #include "CrashDiagnostics.h"
 
-void UPlayerManager::ProcessGameServerData(const FString& ReceivedData)
+void UPlayerManager::ProcessGamePacket(const FParsedPacket& Packet)
 {
-	CRASH_GUARD("PlayerManager::ProcessGameServerData");
+	CRASH_GUARD("PlayerManager::ProcessGamePacket");
 
-	// Deserialize the received JSON string to get MessageData struct
-	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
+	// Single-parse path (S05): MessageData/ClientData come from PollLink, no re-parse.
+	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(Packet);
 	// Deserialize the received JSON string to get ClientData struct
-	FClientDataStruct ClientData = JSONParser::DeserializeClientData(ReceivedData);
+	FClientDataStruct ClientData = JSONParser::DeserializeClientData(Packet.Root);
 
 
 	// If the data is a response to a join game request on Game Server

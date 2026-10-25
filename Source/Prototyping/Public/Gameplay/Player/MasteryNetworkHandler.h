@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "Data/DataStructs.h"
+#include "Networking/NetworkDispatcher.h"
 #include "MasteryNetworkHandler.generated.h"
 
 class UMasteryManager;
@@ -32,8 +33,9 @@ public:
     void UnsubscribeFromNetworkEvents();
 
 private:
-    UFUNCTION()
-    void HandleChunkServerData(const FString& ReceivedData);
+    // Packet entry (S05): single-parse path via the per-eventType dispatcher.
+    // Replaces HandleChunkServerData (which re-parsed every packet twice).
+    void HandleChunkPacket(const FParsedPacket& Packet);
 
     FPlayerMasteriesState ParseMasteriesState(const TSharedPtr<FJsonObject>& Body) const;
     FMasteryUpdateData    ParseMasteryUpdate (const TSharedPtr<FJsonObject>& Body) const;

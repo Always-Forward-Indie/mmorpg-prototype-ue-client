@@ -1,5 +1,6 @@
 #include "Gameplay/Emotes/EmoteNetworkHandler.h"
 #include "Prototyping.h"
+#include "Services/TimeSyncService.h"
 #include "Gameplay/Emotes/EmoteManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
@@ -24,14 +25,18 @@ void UEmoteNetworkHandler::Initialize(UEmoteManager* InManager, UNetworkManager*
 void UEmoteNetworkHandler::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UEmoteNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    Dispatcher.AddHandler(TEXT("player_emotes"), this, &UEmoteNetworkHandler::HandleChunkPacket);
+    Dispatcher.AddHandler(TEXT("emoteAction"), this, &UEmoteNetworkHandler::HandleChunkPacket);
     bIsSubscribed = true;
 }
 
 void UEmoteNetworkHandler::UnsubscribeFromNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || !bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UEmoteNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    Dispatcher.RemoveHandler(TEXT("player_emotes"), this);
+    Dispatcher.RemoveHandler(TEXT("emoteAction"), this);
     bIsSubscribed = false;
 }
 
@@ -67,31 +72,22 @@ void UEmoteNetworkHandler::RequestUseEmote(const FString& EmoteSlug)
 // Inbound
 // ---------------------------------------------------------------------------
 
-void UEmoteNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+void UEmoteNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
 {
-    if (ReceivedData.IsEmpty() || !Manager) return;
+    // Single-parse path (S05): EventType/Root come from PollLink, no re-parse.
+    if (!Packet.bValid || !Packet.Root.IsValid() || !Manager) return;
 
-    FMessageDataStruct Msg = JSONParser::DeserializeMessageData(ReceivedData);
+    const TSharedPtr<FJsonObject>& Root = Packet.Root;
 
-    if (Msg.eventType == TEXT("player_emotes"))
+    if (Packet.EventType == TEXT("player_emotes"))
     {
-        TSharedPtr<FJsonObject> Root;
-        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-        if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
-        {
-            HandlePlayerEmotes(Root);
-        }
+        HandlePlayerEmotes(Root);
         return;
     }
 
-    if (Msg.eventType == TEXT("emoteAction"))
+    if (Packet.EventType == TEXT("emoteAction"))
     {
-        TSharedPtr<FJsonObject> Root;
-        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-        if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
-        {
-            HandleEmoteAction(Root);
-        }
+        HandleEmoteAction(Root);
         return;
     }
 }

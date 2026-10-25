@@ -7,6 +7,7 @@
 #include "UI/NotificationAtmosphereWidget.h"
 #include "Gameplay/Bestiary/BestiaryNetworkHandler.h"
 #include "Networking/NetworkManager.h"
+#include "Services/TimeSyncService.h"
 #include "Utils/JSONParser.h"
 #include "MyGameInstance.h"
 #include "Dom/JsonObject.h"
@@ -90,8 +91,12 @@ void UWorldNotificationManager::SubscribeToNetworkEvents()
 
     if (bIsSubscribed) return;
 
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UWorldNotificationManager::HandleChunkServerData);
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UWorldNotificationManager::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.RemoveHandler(EventType, this);
+        Dispatcher.AddHandler(EventType, this, &UWorldNotificationManager::HandleChunkPacket);
+    }
     bIsSubscribed = true;
 
     UE_LOG(LogGameplay, Verbose, TEXT("WorldNotificationManager: Subscribed to network events"));
@@ -108,8 +113,12 @@ void UWorldNotificationManager::SubscribeToNetworkEvents_Early(UNetworkManager* 
     if (bIsSubscribed) return;
 
     NetworkManager = InNetworkManager;
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UWorldNotificationManager::HandleChunkServerData);
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UWorldNotificationManager::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.RemoveHandler(EventType, this);
+        Dispatcher.AddHandler(EventType, this, &UWorldNotificationManager::HandleChunkPacket);
+    }
     bIsSubscribed = true;
 
     UE_LOG(LogGameplay, Verbose, TEXT("WorldNotificationManager: Subscribed early to network events (buffering until Initialize)"));
@@ -118,17 +127,43 @@ void UWorldNotificationManager::SubscribeToNetworkEvents_Early(UNetworkManager* 
 void UWorldNotificationManager::UnsubscribeFromNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || !bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UWorldNotificationManager::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.RemoveHandler(EventType, this);
+    }
     bIsSubscribed = false;
 }
 
-void UWorldNotificationManager::HandleChunkServerData(const FString& ReceivedData)
+// EventTypes owned by this handler (single list drives dispatcher registration).
+const TArray<FString>& UWorldNotificationManager::HandledEvents()
 {
-    if (ReceivedData.IsEmpty()) return;
+    static const TArray<FString> Events = {
+        TEXT("world_notification"),
+        TEXT("quest_offered"),
+        TEXT("quest_turned_in"),
+        TEXT("quest_failed"),
+        TEXT("item_received"),
+        TEXT("exp_received"),
+        TEXT("gold_received"),
+        TEXT("skill_learned"),
+        TEXT("learn_skill_failed"),
+        TEXT("reputationChanged")
+    };
+    return Events;
+}
 
-    FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
+void UWorldNotificationManager::HandleChunkPacket(const FParsedPacket& Packet)
+{
+    if (!Packet.bValid || !Packet.Root.IsValid()) return;
 
-    if (MessageData.eventType == TEXT("world_notification"))
+    // Compat: the pending buffer and sub-parsers still take the raw string (S05b converts them).
+    const FString& ReceivedData = Packet.Raw;
+
+    // Single-parse path (S05): EventType comes from PollLink, no re-parse.
+    const FString& EventType = Packet.EventType;
+
+    if (EventType == TEXT("world_notification"))
     {
         if (!bIsInitialized)
         {
@@ -142,26 +177,14 @@ void UWorldNotificationManager::HandleChunkServerData(const FString& ReceivedDat
 
     // Dialogue action notifications arrive with their own eventType.
     // Route them to the toast widget as visual feedback.
-    static const TSet<FString> DialogueActionTypes = {
-        TEXT("quest_offered"),
-        TEXT("quest_turned_in"),
-        TEXT("quest_failed"),
-        TEXT("item_received"),
-        TEXT("exp_received"),
-        TEXT("gold_received"),
-        TEXT("skill_learned"),
-        TEXT("learn_skill_failed"),
-        TEXT("reputationChanged")
-    };
-
-    if (DialogueActionTypes.Contains(MessageData.eventType))
+    if (HandledEvents().Contains(EventType))
     {
         if (!bIsInitialized)
         {
             PendingRawNotifications.Add(ReceivedData);
             return;
         }
-        ProcessDialogueActionNotification(ReceivedData, MessageData.eventType);
+        ProcessDialogueActionNotification(ReceivedData, EventType);
     }
 }
 

@@ -92,8 +92,9 @@ public:
 
 	// ── Incoming response processing ─────────────────────────────────────────
 
-	UFUNCTION()
-	void ProcessLoginResponse(const FString& ReceivedData);
+	// Single-parse packet entry (S05): login-link dispatcher fallback.
+	// Replaces ProcessLoginResponse (which re-parsed every packet).
+	void ProcessLoginPacket(const FParsedPacket& Packet);
 
 	// ── Validation (legacy — kept for API compat, but LoginFlowWidget uses LoginFlowTypes) ──
 	bool IsLoginValueValid(const FString& Login);

@@ -19,13 +19,27 @@
 
 void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 {
-	CRASH_GUARD("ItemManager::ProcessGameServerData");
+	// Legacy FString entry kept for FlushPendingEvents; the live path is
+	// HandleChunkPacket via the dispatcher fallback (single parse in PollLink).
+	HandleChunkPacket(JSONParser::ParsePacket(ReceivedData));
+}
+
+void UItemManager::HandleChunkPacket(const FParsedPacket& Packet)
+{
+	CRASH_GUARD("ItemManager::HandleChunkPacket");
 	if (!worldContext)
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("ItemManager: No world context — queuing network event for later processing"));
-		PendingNetworkEvents.Add(ReceivedData);
+		PendingNetworkEvents.Add(Packet.Raw);
 		return;
 	}
+
+	// Single-parse path (S05): EventType/Status/Body come from PollLink, no re-parse.
+	if (!Packet.bValid || !Packet.Root.IsValid()) return;
+
+	const FString& EventType = Packet.EventType;
+	const FString& Status = Packet.Status;
+	const TSharedPtr<FJsonObject>& Body = Packet.Body;
 
 	// Process time sync data first
 	//if (gameInstance && gameInstance->GetTimeSyncService())
@@ -33,16 +47,9 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 	//	JSONParser::ProcessTimeSyncFromHeader(ReceivedData, gameInstance->GetTimeSyncService());
 	//}
 
-	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
-	UE_LOG(LogGameplay, Warning, TEXT("ItemManager: Received event type: %s"), *MessageData.eventType);
+	UE_LOG(LogGameplay, Warning, TEXT("ItemManager: Received event type: %s"), *EventType);
 
-	TSharedPtr<FJsonObject> Root;
-	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
-
-	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
-
-	if (MessageData.eventType == "itemDrop" && MessageData.status == "success")
+	if (EventType == "itemDrop" && Status == "success")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("ItemManager: Received itemDrop event"));
 		FItemDropResponseStruct ItemDropResponse = JSONParser::DeserializeItemDropResponse(Body);
@@ -53,7 +60,7 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 		}
 		HandleItemDrop(ItemDropResponse);
 	}
-	else if (MessageData.eventType == "nearbyItems")
+	else if (EventType == "nearbyItems")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("ItemManager: Received nearbyItems event"));
 		// Body contains { "items": [ DroppedItemStruct... ] } - same shape as itemDrop
@@ -66,7 +73,7 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 				SpawnDroppedItem(DroppedItem);
 		}
 	}
-	else if (MessageData.eventType == "itemPickup" && MessageData.status == "success")
+	else if (EventType == "itemPickup" && Status == "success")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("ItemManager: Received pickUpItem event"));
 
@@ -163,7 +170,7 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 			OnPickupPointFired();
 		}
 	}
-	else if (MessageData.eventType == "itemPickup" && MessageData.status != "success")
+	else if (EventType == "itemPickup" && Status != "success")
 	{
 		int32 FailedUID = -1;
 		Body->TryGetNumberField(TEXT("droppedItemUID"), FailedUID);
@@ -213,7 +220,7 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 		PendingPickupItemUIDs.Empty();
 		PendingPickupItems.Empty();
 	}
-	else if (MessageData.eventType == "itemRemove")
+	else if (EventType == "itemRemove")
 	{
 		const TArray<TSharedPtr<FJsonValue>>* UidsArray = nullptr;
 		if (Body->TryGetArrayField(TEXT("uids"), UidsArray))
@@ -234,7 +241,7 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 			}
 		}
 	}
-	else if (MessageData.eventType == "itemCatalog" && MessageData.status == "success")
+	else if (EventType == "itemCatalog" && Status == "success")
 	{
 		// S2.1: versioned item stat templates. Entries reuse the inventory-record
 		// wrapper ({itemId, item:{...}}) so the shared parser applies as-is.

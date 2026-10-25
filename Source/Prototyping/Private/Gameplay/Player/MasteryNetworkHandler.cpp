@@ -1,5 +1,6 @@
 #include "Gameplay/Player/MasteryNetworkHandler.h"
 #include "Prototyping.h"
+#include "Services/TimeSyncService.h"
 #include "Gameplay/Player/MasteryManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
@@ -24,40 +25,38 @@ void UMasteryNetworkHandler::Initialize(UMasteryManager* InManager, UNetworkMana
 void UMasteryNetworkHandler::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UMasteryNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    Dispatcher.AddHandler(TEXT("player_masteries"), this, &UMasteryNetworkHandler::HandleChunkPacket);
+    Dispatcher.AddHandler(TEXT("mastery_update"), this, &UMasteryNetworkHandler::HandleChunkPacket);
     bIsSubscribed = true;
 }
 
 void UMasteryNetworkHandler::UnsubscribeFromNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || !bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UMasteryNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    Dispatcher.RemoveHandler(TEXT("player_masteries"), this);
+    Dispatcher.RemoveHandler(TEXT("mastery_update"), this);
     bIsSubscribed = false;
 }
 
-void UMasteryNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+void UMasteryNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
 {
-    if (ReceivedData.IsEmpty() || !Manager) return;
+    // Single-parse path (S05): EventType/Body come from PollLink, no re-parse.
+    if (!Packet.bValid || !Manager || !Packet.Body.IsValid()) return;
 
-    FMessageDataStruct Msg = JSONParser::DeserializeMessageData(ReceivedData);
-    if (Msg.eventType != TEXT("player_masteries") && Msg.eventType != TEXT("mastery_update")) return;
+    const FString& EventType = Packet.EventType;
+    const TSharedPtr<FJsonObject>& Body = Packet.Body;
 
-    TSharedPtr<FJsonObject> Root;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
-
-    const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
-    if (!Root->TryGetObjectField(TEXT("body"), BodyPtr)) return;
-
-    if (Msg.eventType == TEXT("player_masteries"))
+    if (EventType == TEXT("player_masteries"))
     {
-        FPlayerMasteriesState State = ParseMasteriesState(*BodyPtr);
+        FPlayerMasteriesState State = ParseMasteriesState(Body);
         if (LocalCharacterId > 0 && State.characterId > 0 && State.characterId != LocalCharacterId) return;
         Manager->ApplyMasteriesState(State);
     }
     else // mastery_update
     {
-        FMasteryUpdateData Update = ParseMasteryUpdate(*BodyPtr);
+        FMasteryUpdateData Update = ParseMasteryUpdate(Body);
         if (LocalCharacterId > 0 && Update.characterId > 0 && Update.characterId != LocalCharacterId) return;
         Manager->ApplyMasteryUpdate(Update);
     }

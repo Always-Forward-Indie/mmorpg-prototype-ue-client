@@ -1,5 +1,6 @@
 #include "Gameplay/Player/ReputationNetworkHandler.h"
 #include "Prototyping.h"
+#include "Services/TimeSyncService.h"
 #include "Gameplay/Player/ReputationManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
@@ -24,40 +25,38 @@ void UReputationNetworkHandler::Initialize(UReputationManager* InManager, UNetwo
 void UReputationNetworkHandler::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UReputationNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    Dispatcher.AddHandler(TEXT("player_reputations"), this, &UReputationNetworkHandler::HandleChunkPacket);
+    Dispatcher.AddHandler(TEXT("reputation_update"), this, &UReputationNetworkHandler::HandleChunkPacket);
     bIsSubscribed = true;
 }
 
 void UReputationNetworkHandler::UnsubscribeFromNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || !bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UReputationNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    Dispatcher.RemoveHandler(TEXT("player_reputations"), this);
+    Dispatcher.RemoveHandler(TEXT("reputation_update"), this);
     bIsSubscribed = false;
 }
 
-void UReputationNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+void UReputationNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
 {
-    if (ReceivedData.IsEmpty() || !Manager) return;
+    // Single-parse path (S05): EventType/Body come from PollLink, no re-parse.
+    if (!Packet.bValid || !Manager || !Packet.Body.IsValid()) return;
 
-    FMessageDataStruct Msg = JSONParser::DeserializeMessageData(ReceivedData);
-    if (Msg.eventType != TEXT("player_reputations") && Msg.eventType != TEXT("reputation_update")) return;
+    const FString& EventType = Packet.EventType;
+    const TSharedPtr<FJsonObject>& Body = Packet.Body;
 
-    TSharedPtr<FJsonObject> Root;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
-
-    const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
-    if (!Root->TryGetObjectField(TEXT("body"), BodyPtr)) return;
-
-    if (Msg.eventType == TEXT("player_reputations"))
+    if (EventType == TEXT("player_reputations"))
     {
-        FPlayerReputationsState State = ParseReputationsState(*BodyPtr);
+        FPlayerReputationsState State = ParseReputationsState(Body);
         if (LocalCharacterId > 0 && State.characterId > 0 && State.characterId != LocalCharacterId) return;
         Manager->ApplyReputationsState(State);
     }
     else // reputation_update
     {
-        FReputationUpdateData Update = ParseReputationUpdate(*BodyPtr);
+        FReputationUpdateData Update = ParseReputationUpdate(Body);
         if (LocalCharacterId > 0 && Update.characterId > 0 && Update.characterId != LocalCharacterId) return;
         Manager->ApplyReputationUpdate(Update);
     }

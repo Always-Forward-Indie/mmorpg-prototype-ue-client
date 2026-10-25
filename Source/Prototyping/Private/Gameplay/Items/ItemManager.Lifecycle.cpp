@@ -10,6 +10,7 @@
 #include "Utils/JSONParser.h"
 #include "MyGameInstance.h"
 #include "Networking/NetworkManager.h"
+#include "Services/TimeSyncService.h"
 #include "UI/UIManager.h"
 #include "UI/WorldNotificationManager.h"
 #include "UI/NotificationToastWidget.h"
@@ -76,9 +77,10 @@ void UItemManager::SubscribeToNetworkManager()
 		{
 			UE_LOG(LogGameplay, Warning, TEXT("ItemManager: Network Manager is valid"));
 
-			// Subscribe to the network manager's events
-			networkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UItemManager::ProcessGameServerData);
-			networkManager->OnChunkServerDataReceived.AddDynamic(this, &UItemManager::ProcessGameServerData);
+			// Subscribe to the network manager's events.
+			// Single-parse path (S05): dispatcher fallback delivers the parsed packet.
+			networkManager->DispatcherFor(EServerType::ChunkServer).RemoveFallbackHandler(this);
+			networkManager->DispatcherFor(EServerType::ChunkServer).AddFallbackHandler(this, &UItemManager::HandleChunkPacket);
 		}
 		else
 		{

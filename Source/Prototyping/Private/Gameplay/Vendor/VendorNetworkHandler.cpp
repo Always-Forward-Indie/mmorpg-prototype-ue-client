@@ -1,6 +1,7 @@
 #include "Gameplay/Vendor/VendorNetworkHandler.h"
 #include "Prototyping.h"
 #include "Gameplay/Vendor/VendorManager.h"
+#include "Services/TimeSyncService.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
 #include "Dom/JsonObject.h"
@@ -21,34 +22,37 @@ void UVendorNetworkHandler::Initialize(UVendorManager* InVendorManager, UNetwork
 void UVendorNetworkHandler::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UVendorNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.AddHandler(EventType, this, &UVendorNetworkHandler::HandleChunkPacket);
+    }
     bIsSubscribed = true;
 }
 
 void UVendorNetworkHandler::UnsubscribeFromNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || !bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UVendorNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.RemoveHandler(EventType, this);
+    }
     bIsSubscribed = false;
 }
 
-void UVendorNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+void UVendorNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
 {
-    if (ReceivedData.IsEmpty() || !VendorManager) return;
+    if (!VendorManager) return;
 
-    FMessageDataStruct Msg = JSONParser::DeserializeMessageData(ReceivedData);
-    const FString& EventType = Msg.eventType;
+    // Single-parse path (S05): EventType comes pre-parsed from the dispatcher.
+    const FString& EventType = Packet.EventType;
 
-    static const TArray<FString> HandledEvents = {
-        TEXT("openVendorShop"), TEXT("vendorShop"),
-        TEXT("buyItemResult"),  TEXT("sellItemResult"),
-        TEXT("buyItemBatchResult"), TEXT("sellItemBatchResult")
-    };
-    if (!HandledEvents.Contains(EventType)) return;
+    if (!HandledEvents().Contains(EventType)) return;
 
-    TSharedPtr<FJsonObject> Root;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
+    // Single-parse path (S05): Root/Body come pre-parsed from the dispatcher.
+    const TSharedPtr<FJsonObject>& Root = Packet.Root;
+    if (!Root.IsValid()) return;
 
     FString Message;
     const TSharedPtr<FJsonObject>* HeaderPtr = nullptr;
@@ -83,6 +87,17 @@ void UVendorNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
     {
         VendorManager->OnSellItemBatchResultReceived(ParseSellItemBatchResult(Body, Message));
     }
+}
+
+// EventTypes owned by this handler (single list drives dispatcher registration).
+const TArray<FString>& UVendorNetworkHandler::HandledEvents()
+{
+    static const TArray<FString> Events = {
+        TEXT("openVendorShop"), TEXT("vendorShop"),
+        TEXT("buyItemResult"),  TEXT("sellItemResult"),
+        TEXT("buyItemBatchResult"), TEXT("sellItemBatchResult")
+    };
+    return Events;
 }
 
 // ---------------------------------------------------------------------------

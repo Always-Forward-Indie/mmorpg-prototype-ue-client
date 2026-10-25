@@ -42,8 +42,8 @@ class PROTOTYPING_API UMOBManager : public UObject
 		void Initialize(UNetworkManager* NetworkManager);
 		void SubscribeToNetworkManager();
 		void SetWorldContext(UWorld* World);
-		UFUNCTION()
-		void ProcessGameServerData(const FString& ReceivedData);
+		// Packet entry (S05): single-parse path via the dispatcher fallback.
+		void HandleChunkPacket(const FParsedPacket& Packet);
 		void SendGetMobData(const FClientDataStruct& ClientData);
 		void SetGameInstance(UMyGameInstance* GameInstance);
 

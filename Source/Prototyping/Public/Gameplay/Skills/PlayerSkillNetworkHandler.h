@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "Data/DataStructs.h"
+#include "Networking/NetworkDispatcher.h"
 #include "PlayerSkillNetworkHandler.generated.h"
 
 // Forward declarations
@@ -47,19 +48,19 @@ public:
     void SendSetSkillBarSlot(int32 SlotIndex, const FString& SkillSlug, int32 CharacterId);
 
 protected:
-    // Network event handlers
-    UFUNCTION()
-    void HandleChunkServerData(const FString& ReceivedData);
+    // Packet entry (S05): single-parse path via the dispatcher fallback.
+    // Replaces HandleChunkServerData (which re-parsed every packet).
+    void HandleChunkPacket(const FParsedPacket& Packet);
 
     // Skill-specific event handlers
-    void HandleInitializePlayerSkills(const FString& JsonData);
-    void HandleSetSkillCooldowns(const FString& JsonData);
-    void HandleSkillCooldownUpdate(const FString& JsonData);
-    void HandleSkillLevelUpdate(const FString& JsonData);
+    void HandleInitializePlayerSkills(const FParsedPacket& Packet);
+    void HandleSetSkillCooldowns(const FParsedPacket& Packet);
+    void HandleSkillCooldownUpdate(const FParsedPacket& Packet);
+    void HandleSkillLevelUpdate(const FParsedPacket& Packet);
 
     // Skill-bar event handlers
-    void HandleSkillBarState(const FString& JsonData);
-    void HandleSkillBarSlotUpdated(const FString& JsonData);
+    void HandleSkillBarState(const FParsedPacket& Packet);
+    void HandleSkillBarSlotUpdated(const FParsedPacket& Packet);
 
     // Dependencies
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Dependencies")

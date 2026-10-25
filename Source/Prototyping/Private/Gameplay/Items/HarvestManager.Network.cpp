@@ -15,10 +15,17 @@
 #include "TimerManager.h"
 #include "CrashDiagnostics.h"
 
-void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
+void UHarvestManager::HandleChunkPacket(const FParsedPacket& Packet)
 {
-	CRASH_GUARD("HarvestManager::ProcessGameServerData");
+	CRASH_GUARD("HarvestManager::HandleChunkPacket");
 	if (!worldContext) return;
+
+	// Single-parse path (S05): EventType/Status/Body come from PollLink, no re-parse.
+	if (!Packet.bValid || !Packet.Root.IsValid()) return;
+
+	const FString& EventType = Packet.EventType;
+	const FString& Status = Packet.Status;
+	const TSharedPtr<FJsonObject>& Body = Packet.Body;
 
 	// Process time sync data first
 	//if (gameInstance && gameInstance->GetTimeSyncService())
@@ -26,14 +33,13 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 	//	JSONParser::ProcessTimeSyncFromHeader(ReceivedData, gameInstance->GetTimeSyncService());
 	//}
 
-	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
-	UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received event type: %s"), *MessageData.eventType);
+	UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received event type: %s"), *EventType);
 
 	// Handle harvest started response
-	if (MessageData.eventType == "harvestStarted" && MessageData.status == "success")
+	if (EventType == "harvestStarted" && Status == "success")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received harvest started"));
-		FHarvestStartedStruct HarvestData = JSONParser::DeserializeHarvestStarted(ReceivedData);
+		FHarvestStartedStruct HarvestData = JSONParser::DeserializeHarvestStarted(Body);
 		
 		// Validate harvest data before proceeding
 		if (HarvestData.duration <= 0)
@@ -82,17 +88,17 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Harvest started event processing completed"));
 	}
 	// Handle harvest complete response
-	else if (MessageData.eventType == "harvestComplete" && MessageData.status == "success")
+	else if (EventType == "harvestComplete" && Status == "success")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received harvest complete"));
-		FHarvestCompleteStruct HarvestData = JSONParser::DeserializeHarvestComplete(ReceivedData);
+		FHarvestCompleteStruct HarvestData = JSONParser::DeserializeHarvestComplete(Body);
 		HandleHarvestComplete(HarvestData);
 	}
 	// Handle harvest error
-	else if (MessageData.eventType == "harvestError" && MessageData.status == "error")
+	else if (EventType == "harvestError" && Status == "error")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received harvest error"));
-		FHarvestErrorStruct ErrorData = JSONParser::DeserializeHarvestError(ReceivedData);
+		FHarvestErrorStruct ErrorData = JSONParser::DeserializeHarvestError(Body);
 		
 		// Cancel local harvest
 		CancelHarvest();
@@ -107,17 +113,17 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 		OnHarvestError.Broadcast(ErrorData);
 	}
 	// Handle loot pickup success
-	else if (MessageData.eventType == "corpseLootPickup" && MessageData.status == "success")
+	else if (EventType == "corpseLootPickup" && Status == "success")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received loot pickup success"));
-		FCorpseLootPickupResponseStruct PickupData = JSONParser::DeserializeCorpseLootPickupResponse(ReceivedData);
+		FCorpseLootPickupResponseStruct PickupData = JSONParser::DeserializeCorpseLootPickupResponse(Body);
 		HandleLootPickupResponse(PickupData);
 	}
 	// Handle loot pickup error
-	else if (MessageData.eventType == "corpseLootPickup" && MessageData.status == "error")
+	else if (EventType == "corpseLootPickup" && Status == "error")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received loot pickup error"));
-		FCorpseLootPickupErrorStruct ErrorData = JSONParser::DeserializeCorpseLootPickupError(ReceivedData);
+		FCorpseLootPickupErrorStruct ErrorData = JSONParser::DeserializeCorpseLootPickupError(Body);
 		
 		// Show error message
 		if (GEngine)
@@ -129,17 +135,17 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 		OnLootPickupError.Broadcast(ErrorData);
 	}
 	// Handle loot inspect success
-	else if (MessageData.eventType == "corpseLootInspect" && MessageData.status == "success")
+	else if (EventType == "corpseLootInspect" && Status == "success")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received loot inspect success"));
-		FCorpseLootInspectResponseStruct InspectData = JSONParser::DeserializeCorpseLootInspectResponse(ReceivedData);
+		FCorpseLootInspectResponseStruct InspectData = JSONParser::DeserializeCorpseLootInspectResponse(Body);
 		HandleLootInspectResponse(InspectData);
 	}
 	// Handle loot inspect error
-	else if (MessageData.eventType == "corpseLootInspect" && MessageData.status == "error")
+	else if (EventType == "corpseLootInspect" && Status == "error")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received loot inspect error"));
-		FCorpseLootInspectErrorStruct ErrorData = JSONParser::DeserializeCorpseLootInspectError(ReceivedData);
+		FCorpseLootInspectErrorStruct ErrorData = JSONParser::DeserializeCorpseLootInspectError(Body);
 		
 		// Show error message based on error code
 		FString ErrorMessage = TEXT("Loot Inspect Error");
@@ -172,21 +178,18 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 		OnLootInspectError.Broadcast(ErrorData);
 	}
 	// harvestCancelled — unicast confirmation to the player who sent harvestCancel
-	else if (MessageData.eventType == "harvestCancelled")
+	else if (EventType == "harvestCancelled")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received harvestCancelled (server confirmed our cancel)"));
 		// The cancel was already applied locally in CancelHarvest(); nothing more to do here.
 	}
 	// harvestStartBroadcast — another player started harvesting on a corpse
-	else if (MessageData.eventType == "harvestStartBroadcast")
+	else if (EventType == "harvestStartBroadcast")
 	{
-		TSharedPtr<FJsonObject> Root;
-		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-		if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
+		// Single-parse path (S05): Body comes from the dispatcher, no re-parse.
+		const TSharedPtr<FJsonObject>* BodyPtr = &Body;
+		if (BodyPtr && (*BodyPtr).IsValid())
 		{
-			const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
-			if (Root->TryGetObjectField(TEXT("body"), BodyPtr))
-			{
 				int32 HarvesterCharId = 0;
 				int32 BroadcastCorpseUID = 0;
 				(*BodyPtr)->TryGetNumberField(TEXT("characterId"), HarvesterCharId);
@@ -219,19 +222,15 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 						}
 					}
 				}
-			}
 		}
 	}
 	// harvestCompleteBroadcast — another player finished harvesting a corpse
-	else if (MessageData.eventType == "harvestCompleteBroadcast")
+	else if (EventType == "harvestCompleteBroadcast")
 	{
-		TSharedPtr<FJsonObject> Root;
-		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-		if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
+		// Single-parse path (S05): Body comes from the dispatcher, no re-parse.
+		const TSharedPtr<FJsonObject>* BodyPtr = &Body;
+		if (BodyPtr && (*BodyPtr).IsValid())
 		{
-			const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
-			if (Root->TryGetObjectField(TEXT("body"), BodyPtr))
-			{
 				int32 HarvesterCharId = 0;
 				int32 BroadcastCorpseUID = 0;
 				(*BodyPtr)->TryGetNumberField(TEXT("characterId"), HarvesterCharId);
@@ -264,19 +263,15 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 						}
 					}
 				}
-			}
 		}
 	}
 	// harvestCancelBroadcast — any player's harvest was cancelled (includes yourself via server-side interrupt)
-	else if (MessageData.eventType == "harvestCancelBroadcast")
+	else if (EventType == "harvestCancelBroadcast")
 	{
-		TSharedPtr<FJsonObject> Root;
-		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-		if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
+		// Single-parse path (S05): Body comes from the dispatcher, no re-parse.
+		const TSharedPtr<FJsonObject>* BodyPtr = &Body;
+		if (BodyPtr && (*BodyPtr).IsValid())
 		{
-			const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
-			if (Root->TryGetObjectField(TEXT("body"), BodyPtr))
-			{
 				int32 CancelledCharId  = 0;
 				int32 BroadcastCorpseUID = 0;
 				(*BodyPtr)->TryGetNumberField(TEXT("characterId"), CancelledCharId);
@@ -325,19 +320,15 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 						}
 					}
 				}
-			}
 		}
 	}
 	// corpseRemoved — server despawned the corpse; hide / destroy the corresponding MOB actor
-	else if (MessageData.eventType == "corpseRemoved")
+	else if (EventType == "corpseRemoved")
 	{
-		TSharedPtr<FJsonObject> Root;
-		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-		if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
+		// Single-parse path (S05): Body comes from the dispatcher, no re-parse.
+		const TSharedPtr<FJsonObject>* BodyPtr = &Body;
+		if (BodyPtr && (*BodyPtr).IsValid())
 		{
-			const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
-			if (Root->TryGetObjectField(TEXT("body"), BodyPtr))
-			{
 				int32 RemovedCorpseUID = 0;
 				(*BodyPtr)->TryGetNumberField(TEXT("corpseUID"), RemovedCorpseUID);
 
@@ -370,7 +361,6 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 				CurrentAvailableLoot.Empty();
 				CurrentCorpseUID = 0;
 				HideLootWindow();
-			}
 			}
 		}
 	}

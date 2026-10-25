@@ -47,8 +47,9 @@ public:
 	void SubscribeToNetworkManager();
 	void SetWorldContext(UWorld* World);
 
-	UFUNCTION()
-	void ProcessGameServerData(const FString& ReceivedData);
+	// Single-parse game entry (S05): routes via FNetworkDispatcher fallback.
+	// Replaces ProcessGameServerData (which re-parsed every packet twice).
+	void ProcessGamePacket(const FParsedPacket& Packet);
 	UFUNCTION()
 	void ProcessChunkServerData(const FString& ReceivedData);
 	// Single-parse chunk entry (S05): Routes via FNetworkDispatcher fallback.

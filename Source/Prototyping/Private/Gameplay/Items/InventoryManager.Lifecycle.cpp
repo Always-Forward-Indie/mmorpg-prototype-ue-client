@@ -1,5 +1,6 @@
 ﻿#include "Gameplay/Items/InventoryManager.h"
 #include "Networking/NetworkManager.h"
+#include "Services/TimeSyncService.h"
 #include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Items/HarvestManager.h"
@@ -77,9 +78,10 @@ void UInventoryManager::SubscribeToNetworkManager()
 		{
 			UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Network Manager is valid"));
 
-			// Subscribe to the network manager's events
-			networkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UInventoryManager::ProcessGameServerData);
-			networkManager->OnChunkServerDataReceived.AddDynamic(this, &UInventoryManager::ProcessGameServerData);
+			// Subscribe to the network manager's events.
+			// Single-parse path (S05): dispatcher fallback delivers the parsed packet.
+			networkManager->DispatcherFor(EServerType::ChunkServer).RemoveFallbackHandler(this);
+			networkManager->DispatcherFor(EServerType::ChunkServer).AddFallbackHandler(this, &UInventoryManager::HandleChunkPacket);
 		}
 		else
 		{

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "Data/DataStructs.h"
+#include "Networking/NetworkDispatcher.h"
 #include "NPCNetworkHandler.generated.h"
 
 // Forward declarations
@@ -38,15 +39,18 @@ public:
     bool IsNPCEvent(const FString& EventType) const;
 
 protected:
-    // Network event handlers
-    UFUNCTION()
-    void HandleChunkServerData(const FString& ReceivedData);
+    // Packet entry (S05): single-parse path via the per-eventType dispatcher.
+    // Replaces HandleChunkServerData (which re-parsed every packet to filter).
+    void HandleChunkPacket(const FParsedPacket& Packet);
 
     // NPC-specific event handlers
     void HandleNPCSpawn(const FString& JsonData);
     void HandleNPCUpdate(const FString& JsonData);
     void HandleNPCRemove(const FString& JsonData);
     void HandleNPCInteraction(const FString& JsonData);
+
+    // EventTypes owned by this handler (single list drives dispatcher registration).
+    static const TArray<FString>& HandledEvents();
 
     // Data validation
     bool ValidateNPCEventData(const FString& JsonData) const;

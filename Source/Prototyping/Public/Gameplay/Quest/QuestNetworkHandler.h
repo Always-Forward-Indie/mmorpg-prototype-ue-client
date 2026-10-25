@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "Data/DataStructs.h"
+#include "Networking/NetworkDispatcher.h"
 #include "QuestNetworkHandler.generated.h"
 
 // Forward declarations
@@ -38,8 +39,11 @@ public:
     void UnsubscribeFromNetworkEvents();
 
 private:
-    UFUNCTION()
-    void HandleChunkServerData(const FString& ReceivedData);
+    // Packet entry (S05): single-parse path via the per-eventType dispatcher.
+    void HandleChunkPacket(const FParsedPacket& Packet);
+
+    // EventTypes owned by this handler (single list drives dispatcher registration).
+    static const TArray<FString>& HandledEvents();
 
     // Parsers
     FQuestProgressData      ParseQuestUpdate(const TSharedPtr<FJsonObject>& Body)      const;

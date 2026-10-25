@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "Data/DataStructs.h"
+#include "Networking/NetworkDispatcher.h"
 #include "CombatNetworkHandler.generated.h"
 
 // Forward declarations
@@ -29,9 +30,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Combat Network")
     void SubscribeToNetworkManager();
 
-    // Network event handlers
-    UFUNCTION()
-    void ProcessChunkServerData(const FString& ReceivedData);
+    // Packet entry (S05): single-parse path via the dispatcher fallback.
+    // Replaces ProcessChunkServerData (which re-parsed every packet to filter).
+    void HandleChunkPacket(const FParsedPacket& Packet);
 
 protected:
     // Handle specific combat events

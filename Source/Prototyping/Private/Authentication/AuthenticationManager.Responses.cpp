@@ -4,12 +4,16 @@
 #include "Prototyping.h"
 #include "MyGameInstance.h"
 
-void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
+void UAuthenticationManager::ProcessLoginPacket(const FParsedPacket& Packet)
 {
+	// Compat alias: the login-flow Deserialize* helpers below have no Root
+	// overloads (S05b converts them) — kept for those branches only.
+	const FString& ReceivedData = Packet.Raw;
+
 	UE_LOG(LogNetPacket, Verbose, TEXT("Login Server Response: %s"), *ReceivedData);
 
-	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
-	FClientDataStruct ClientData   = JSONParser::DeserializeClientData(ReceivedData);
+	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(Packet);
+	FClientDataStruct ClientData   = JSONParser::DeserializeClientData(Packet.Root);
 
 	// ── Global Unauthorized check ────────────────────────────────────────────
 	if (HandleUnauthorized(MessageData.status, MessageData.message, MessageData.errorCode))
@@ -178,17 +182,11 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 	{
 		if (MessageData.status == "success")
 		{
-			// Parse characterId from body
+			// Parse characterId from body (already parsed — no re-parse)
 			int32 NewCharId = 0;
-			TSharedPtr<FJsonObject> JsonObj;
-			TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-			if (FJsonSerializer::Deserialize(Reader, JsonObj) && JsonObj.IsValid())
+			if (Packet.Body.IsValid())
 			{
-				const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
-				if (JsonObj->TryGetObjectField(TEXT("body"), BodyPtr) && BodyPtr)
-				{
-					(*BodyPtr)->TryGetNumberField(TEXT("characterId"), NewCharId);
-				}
+				Packet.Body->TryGetNumberField(TEXT("characterId"), NewCharId);
 			}
 
 			UE_LOG(LogConnection, Warning, TEXT("Character created: ID=%d"), NewCharId);
@@ -216,16 +214,11 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 	// ══════════════════════════════════════════════════════════════════════════
 	if (MessageData.eventType == "deleteCharacter")
 	{
+		// Parse characterId from body (already parsed — no re-parse)
 		int32 DeletedCharId = 0;
-		TSharedPtr<FJsonObject> JsonObj;
-		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-		if (FJsonSerializer::Deserialize(Reader, JsonObj) && JsonObj.IsValid())
+		if (Packet.Body.IsValid())
 		{
-			const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
-			if (JsonObj->TryGetObjectField(TEXT("body"), BodyPtr) && BodyPtr)
-			{
-				(*BodyPtr)->TryGetNumberField(TEXT("characterId"), DeletedCharId);
-			}
+			Packet.Body->TryGetNumberField(TEXT("characterId"), DeletedCharId);
 		}
 
 		if (MessageData.status == "success")

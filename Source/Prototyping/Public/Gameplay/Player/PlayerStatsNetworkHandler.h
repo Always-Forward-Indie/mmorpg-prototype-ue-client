@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "Data/DataStructs.h"
+#include "Networking/NetworkDispatcher.h"
 #include "PlayerStatsNetworkHandler.generated.h"
 
 class UPlayerStatsManager;
@@ -48,8 +49,9 @@ public:
     FOnEffectTick OnEffectTick;
 
 private:
-UFUNCTION()
-void HandleChunkServerData(const FString& ReceivedData);
+// Packet entry (S05): single-parse path via the dispatcher fallback.
+// Replaces HandleChunkServerData (which re-parsed every packet twice).
+void HandleChunkPacket(const FParsedPacket& Packet);
 
 FPlayerStatsUpdateStruct ParseStatsUpdate(const TSharedPtr<FJsonObject>& Body) const;
 void HandleSetPlayerActiveEffects(const FString& ReceivedData) const;

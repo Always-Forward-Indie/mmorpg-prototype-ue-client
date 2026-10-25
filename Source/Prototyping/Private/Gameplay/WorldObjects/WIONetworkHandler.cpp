@@ -2,6 +2,7 @@
 #include "Prototyping.h"
 #include "Gameplay/WorldObjects/WorldObjectManager.h"
 #include "Networking/NetworkManager.h"
+#include "Services/TimeSyncService.h"
 #include "Utils/JSONParser.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
@@ -33,7 +34,11 @@ void UWIONetworkHandler::SubscribeToNetworkEvents()
 	{
 		return;
 	}
-	NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UWIONetworkHandler::HandleChunkServerData);
+	FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+	for (const FString& EventType : HandledEvents())
+	{
+		Dispatcher.AddHandler(EventType, this, &UWIONetworkHandler::HandleChunkPacket);
+	}
 	bIsSubscribed = true;
 }
 
@@ -43,63 +48,55 @@ void UWIONetworkHandler::UnsubscribeFromNetworkEvents()
 	{
 		return;
 	}
-	NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UWIONetworkHandler::HandleChunkServerData);
+	FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+	for (const FString& EventType : HandledEvents())
+	{
+		Dispatcher.RemoveHandler(EventType, this);
+	}
 	bIsSubscribed = false;
 }
 
-void UWIONetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+// EventTypes owned by this handler (single list drives dispatcher registration).
+const TArray<FString>& UWIONetworkHandler::HandledEvents()
 {
-	if (ReceivedData.IsEmpty() || !WorldObjectManager)
+	static const TArray<FString> Events = {
+		TEXT("spawnWorldObjects"),
+		TEXT("worldObjectInteractResult"),
+		TEXT("worldObjectStateUpdate"),
+		TEXT("worldObjectChannelCancelled")
+	};
+	return Events;
+}
+
+void UWIONetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
+{
+	if (!Packet.bValid || !WorldObjectManager || !Packet.Body.IsValid())
 	{
 		return;
 	}
 
-	// Quick event type extraction before full parse
-	FMessageDataStruct Msg = JSONParser::DeserializeMessageData(ReceivedData);
-	const FString& EventType = Msg.eventType;
-
-	if (EventType != TEXT("spawnWorldObjects") &&
-		EventType != TEXT("worldObjectInteractResult") &&
-		EventType != TEXT("worldObjectStateUpdate") &&
-		EventType != TEXT("worldObjectChannelCancelled"))
-	{
-		return;
-	}
-
-	// Full JSON parse
-	TSharedPtr<FJsonObject> Root;
-	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
-	{
-		UE_LOG(LogNetPacket, Error, TEXT("WIONetworkHandler: Failed to parse JSON for event %s"), *EventType);
-		return;
-	}
-
-	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
-	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr)
-	{
-		UE_LOG(LogNetPacket, Error, TEXT("WIONetworkHandler: Missing body in event %s"), *EventType);
-		return;
-	}
+	// Single-parse path (S05): EventType/Body come from PollLink, no re-parse.
+	const FString& EventType = Packet.EventType;
+	const TSharedPtr<FJsonObject>& Body = Packet.Body;
 
 	if (EventType == TEXT("spawnWorldObjects"))
 	{
-		TArray<FWorldObjectData> Objects = JSONParser::DeserializeWorldObjectsList(*BodyPtr);
+		TArray<FWorldObjectData> Objects = JSONParser::DeserializeWorldObjectsList(Body);
 		WorldObjectManager->HandleSpawnWorldObjects(Objects);
 	}
 	else if (EventType == TEXT("worldObjectInteractResult"))
 	{
-		FWIOInteractResult Result = JSONParser::DeserializeWIOInteractResult(*BodyPtr);
+		FWIOInteractResult Result = JSONParser::DeserializeWIOInteractResult(Body);
 		WorldObjectManager->HandleInteractResult(Result);
 	}
 	else if (EventType == TEXT("worldObjectStateUpdate"))
 	{
-		FWIOStateUpdate Update = JSONParser::DeserializeWIOStateUpdate(*BodyPtr);
+		FWIOStateUpdate Update = JSONParser::DeserializeWIOStateUpdate(Body);
 		WorldObjectManager->HandleStateUpdate(Update);
 	}
 	else if (EventType == TEXT("worldObjectChannelCancelled"))
 	{
-		FWIOChannelCancelled Cancelled = JSONParser::DeserializeWIOChannelCancelled(*BodyPtr);
+		FWIOChannelCancelled Cancelled = JSONParser::DeserializeWIOChannelCancelled(Body);
 		WorldObjectManager->HandleChannelCancelled(Cancelled.ObjectId);
 	}
 }

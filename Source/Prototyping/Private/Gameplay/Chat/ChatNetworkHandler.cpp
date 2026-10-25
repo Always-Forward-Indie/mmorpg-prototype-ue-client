@@ -1,6 +1,7 @@
 #include "Gameplay/Chat/ChatNetworkHandler.h"
 #include "Prototyping.h"
 #include "Gameplay/Chat/ChatManager.h"
+#include "Services/TimeSyncService.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
 #include "Dom/JsonObject.h"
@@ -33,7 +34,11 @@ void UChatNetworkHandler::SubscribeToNetworkEvents()
     {
         return;
     }
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UChatNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.AddHandler(EventType, this, &UChatNetworkHandler::HandleChunkPacket);
+    }
     bIsSubscribed = true;
 }
 
@@ -43,27 +48,30 @@ void UChatNetworkHandler::UnsubscribeFromNetworkEvents()
     {
         return;
     }
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UChatNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.RemoveHandler(EventType, this);
+    }
     bIsSubscribed = false;
 }
 
-void UChatNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+void UChatNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
 {
-    if (ReceivedData.IsEmpty() || !ChatManager)
+    if (!ChatManager)
     {
         return;
     }
 
-    // Quick check before full parse
-    FMessageDataStruct Msg = JSONParser::DeserializeMessageData(ReceivedData);
-    if (Msg.eventType != TEXT("chatMessage"))
+    // Quick check before full parse (S05: EventType comes pre-parsed, no re-parse)
+    if (Packet.EventType != TEXT("chatMessage"))
     {
         return;
     }
 
-    TSharedPtr<FJsonObject> Root;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+    // Single-parse path (S05): Root comes pre-parsed from the dispatcher.
+    const TSharedPtr<FJsonObject>& Root = Packet.Root;
+    if (!Root.IsValid())
     {
         UE_LOG(LogNetPacket, Error, TEXT("ChatNetworkHandler: Failed to parse JSON"));
         return;
@@ -71,6 +79,13 @@ void UChatNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
 
     FChatMessageStruct Message = ParseChatMessage(Root);
     ChatManager->OnMessageReceived(Message);
+}
+
+// EventTypes owned by this handler (single list drives dispatcher registration).
+const TArray<FString>& UChatNetworkHandler::HandledEvents()
+{
+    static const TArray<FString> Events = { TEXT("chatMessage") };
+    return Events;
 }
 
 FChatMessageStruct UChatNetworkHandler::ParseChatMessage(const TSharedPtr<FJsonObject>& Root) const

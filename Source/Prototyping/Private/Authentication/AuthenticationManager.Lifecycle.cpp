@@ -2,6 +2,7 @@
 
 #include "Authentication/AuthenticationManager.h"
 #include "Prototyping.h"
+#include "Services/TimeSyncService.h"
 #include "MyGameInstance.h"
 #include "Utils/NetCore/AuthValidation.h"
 
@@ -53,8 +54,8 @@ void UAuthenticationManager::SubscribeToNetworkManager()
 		if (IsValid(networkManager))
 		{
 			UE_LOG(LogConnection, Verbose, TEXT("Network Manager is valid"));
-			networkManager->OnLoginServerDataReceived.RemoveDynamic(this, &UAuthenticationManager::ProcessLoginResponse);
-			networkManager->OnLoginServerDataReceived.AddDynamic(this, &UAuthenticationManager::ProcessLoginResponse);
+			networkManager->DispatcherFor(EServerType::LoginServer).RemoveFallbackHandler(this);
+			networkManager->DispatcherFor(EServerType::LoginServer).AddFallbackHandler(this, &UAuthenticationManager::ProcessLoginPacket);
 		}
 		else
 		{

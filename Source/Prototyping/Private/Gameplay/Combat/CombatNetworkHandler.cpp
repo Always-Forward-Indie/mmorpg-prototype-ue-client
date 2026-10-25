@@ -1,6 +1,7 @@
 #include "Gameplay/Combat/CombatNetworkHandler.h"
 #include "Prototyping.h"
 #include "Gameplay/Combat/CombatSystemManager.h"
+#include "Services/TimeSyncService.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
 
@@ -32,16 +33,23 @@ void UCombatNetworkHandler::SubscribeToNetworkManager()
         return;
     }
 
-    // Subscribe to chunk server data for combat events
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UCombatNetworkHandler::ProcessChunkServerData);
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UCombatNetworkHandler::ProcessChunkServerData);
+    // Subscribe to chunk server data for combat events.
+    // Single-parse path (S05): dispatcher fallback delivers every parsed packet;
+    // the entry below filters by eventType. Stale owners are skipped by weak
+    // pointers, and this handler has no Unsubscribe counterpart by design.
+    NetworkManager->DispatcherFor(EServerType::ChunkServer).RemoveFallbackHandler(this);
+    NetworkManager->DispatcherFor(EServerType::ChunkServer).AddFallbackHandler(this, &UCombatNetworkHandler::HandleChunkPacket);
 
     UE_LOG(LogGameplay, Warning, TEXT("CombatNetworkHandler: Subscribed to network events"));
 }
 
-void UCombatNetworkHandler::ProcessChunkServerData(const FString& ReceivedData)
+void UCombatNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
 {
-    FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
+    // Compat alias: sub-handlers below still take the raw string (S05b converts them).
+    const FString& ReceivedData = Packet.Raw;
+
+    // Single-parse path (S05): MessageData comes from the pre-parsed packet, no re-parse.
+    FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(Packet);
     
     LogNetworkEvent("Received", FString::Printf(TEXT("Event: %s, Status: %s"), 
         *MessageData.eventType, *MessageData.status));

@@ -1,6 +1,7 @@
 #include "Gameplay/Items/HarvestManager.h"
 #include "Prototyping.h"
 #include "Networking/NetworkManager.h"
+#include "Services/TimeSyncService.h"
 #include "MyGameInstance.h"
 #include "Utils/JSONParser.h"
 #include "Engine/World.h"
@@ -132,9 +133,10 @@ void UHarvestManager::SubscribeToNetworkManager()
 		{
 			UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Network Manager is valid"));
 
-			// Subscribe to the network manager's events
-			networkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UHarvestManager::ProcessGameServerData);
-			networkManager->OnChunkServerDataReceived.AddDynamic(this, &UHarvestManager::ProcessGameServerData);
+			// Subscribe to the network manager's events.
+			// Single-parse path (S05): dispatcher fallback delivers the parsed packet.
+			networkManager->DispatcherFor(EServerType::ChunkServer).RemoveFallbackHandler(this);
+			networkManager->DispatcherFor(EServerType::ChunkServer).AddFallbackHandler(this, &UHarvestManager::HandleChunkPacket);
 		}
 		else
 		{

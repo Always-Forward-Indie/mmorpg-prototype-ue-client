@@ -5,6 +5,7 @@
 #include "Gameplay/NPCs/NPCAmbientSpeechComponent.h"
 #include "MyGameInstance.h"
 #include "EngineUtils.h"
+#include "Services/TimeSyncService.h"
 #include "Networking/NetworkManager.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -25,33 +26,41 @@ void UAmbientSpeechNetworkHandler::Initialize(UAmbientSpeechManager* InManager, 
 void UAmbientSpeechNetworkHandler::SubscribeToNetworkEvents()
 {
     if (bIsSubscribed || !NetworkManager) return;
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UAmbientSpeechNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.AddHandler(EventType, this, &UAmbientSpeechNetworkHandler::HandleChunkPacket);
+    }
     bIsSubscribed = true;
 }
 
 void UAmbientSpeechNetworkHandler::UnsubscribeFromNetworkEvents()
 {
     if (!bIsSubscribed || !NetworkManager) return;
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UAmbientSpeechNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.RemoveHandler(EventType, this);
+    }
     bIsSubscribed = false;
 }
 
-void UAmbientSpeechNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+void UAmbientSpeechNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
 {
-    TSharedPtr<FJsonObject> Root;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
-
-    const TSharedPtr<FJsonObject>* HeaderObj = nullptr;
-    if (!Root->TryGetObjectField(TEXT("header"), HeaderObj)) return;
-
-    FString EventType;
-    if (!(*HeaderObj)->TryGetStringField(TEXT("eventType"), EventType)) return;
-
-    if (EventType == TEXT("NPC_AMBIENT_POOLS"))
+    // Single-parse path (S05): EventType comes pre-parsed from the dispatcher.
+    if (Packet.EventType == TEXT("NPC_AMBIENT_POOLS"))
     {
+        // Compat alias: HandleAmbientPools below still takes the raw string (S05b converts it).
+        const FString& ReceivedData = Packet.Raw;
         HandleAmbientPools(ReceivedData);
     }
+}
+
+// EventTypes owned by this handler (single list drives dispatcher registration).
+const TArray<FString>& UAmbientSpeechNetworkHandler::HandledEvents()
+{
+    static const TArray<FString> Events = { TEXT("NPC_AMBIENT_POOLS") };
+    return Events;
 }
 
 void UAmbientSpeechNetworkHandler::HandleAmbientPools(const FString& JsonData)

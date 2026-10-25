@@ -3,6 +3,7 @@
 #include "Gameplay/Quest/QuestNetworkHandler.h"
 #include "Gameplay/Quest/QuestManager.h"
 #include "Networking/NetworkManager.h"
+#include "Services/TimeSyncService.h"
 #include "Utils/JSONParser.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
@@ -35,7 +36,12 @@ void UQuestNetworkHandler::SubscribeToNetworkEvents()
     {
         return;
     }
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UQuestNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.RemoveHandler(EventType, this);
+        Dispatcher.AddHandler(EventType, this, &UQuestNetworkHandler::HandleChunkPacket);
+    }
     bIsSubscribed = true;
 }
 
@@ -45,45 +51,35 @@ void UQuestNetworkHandler::UnsubscribeFromNetworkEvents()
     {
         return;
     }
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UQuestNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.RemoveHandler(EventType, this);
+    }
     bIsSubscribed = false;
 }
 
-void UQuestNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+// EventTypes owned by this handler (single list drives dispatcher registration).
+const TArray<FString>& UQuestNetworkHandler::HandledEvents()
 {
-    if (ReceivedData.IsEmpty() || !QuestManager)
-    {
-        return;
-    }
-
-    FMessageDataStruct Msg = JSONParser::DeserializeMessageData(ReceivedData);
-    const FString& EventType = Msg.eventType;
-
-    static const TArray<FString> HandledEvents = {
+    static const TArray<FString> Events = {
         TEXT("QUEST_UPDATE"), TEXT("quest_offered"), TEXT("quest_turned_in"),
         TEXT("quest_failed"), TEXT("exp_received"), TEXT("item_received"),
         TEXT("gold_received"), TEXT("reputationChanged")
     };
+    return Events;
+}
 
-    if (!HandledEvents.Contains(EventType))
+void UQuestNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
+{
+    if (!Packet.bValid || !QuestManager || !Packet.Body.IsValid())
     {
         return;
     }
 
-    TSharedPtr<FJsonObject> Root;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
-    {
-        UE_LOG(LogNetPacket, Error, TEXT("QuestNetworkHandler: Failed to parse JSON for event %s"), *EventType);
-        return;
-    }
-
-    const TSharedPtr<FJsonObject>* BodyPtr;
-    if (!Root->TryGetObjectField(TEXT("body"), BodyPtr))
-    {
-        return;
-    }
-    const TSharedPtr<FJsonObject>& Body = *BodyPtr;
+    // Single-parse path (S05): EventType/Body come from PollLink, no re-parse.
+    const FString& EventType = Packet.EventType;
+    const TSharedPtr<FJsonObject>& Body = Packet.Body;
 
     if (EventType == TEXT("QUEST_UPDATE"))
     {

@@ -4,6 +4,7 @@
 #include "Gameplay/Mobs/MOBManager.h"
 #include "Prototyping.h"
 #include "MyGameInstance.h"
+#include "Services/TimeSyncService.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "CrashDiagnostics.h"
 
@@ -50,9 +51,10 @@ void UMOBManager::SubscribeToNetworkManager()
 		{
 			UE_LOG(LogGameplay, Warning, TEXT("Network Manager is valid"));
 
-			// Subscribe to the network manager's events for chunk server data
-			networkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UMOBManager::ProcessGameServerData);
-			networkManager->OnChunkServerDataReceived.AddDynamic(this, &UMOBManager::ProcessGameServerData);
+			// Subscribe to the network manager's events for chunk server data.
+			// Single-parse path (S05): dispatcher fallback delivers the parsed packet.
+			networkManager->DispatcherFor(EServerType::ChunkServer).RemoveFallbackHandler(this);
+			networkManager->DispatcherFor(EServerType::ChunkServer).AddFallbackHandler(this, &UMOBManager::HandleChunkPacket);
 		}
 		else
 		{

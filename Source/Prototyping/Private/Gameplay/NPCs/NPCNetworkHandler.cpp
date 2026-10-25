@@ -1,5 +1,6 @@
 #include "Gameplay/NPCs/NPCNetworkHandler.h"
 #include "Prototyping.h"
+#include "Services/TimeSyncService.h"
 #include "Gameplay/NPCs/NPCManager.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
@@ -43,9 +44,13 @@ void UNPCNetworkHandler::SubscribeToNetworkEvents()
         return;
     }
 
-    // Subscribe to chunk server data (where NPC events come from)
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UNPCNetworkHandler::HandleChunkServerData);
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UNPCNetworkHandler::HandleChunkServerData);
+    // Single-parse path (S05): per-eventType dispatcher delivers parsed packets.
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.RemoveHandler(EventType, this);
+        Dispatcher.AddHandler(EventType, this, &UNPCNetworkHandler::HandleChunkPacket);
+    }
 
     bIsSubscribed = true;
     LogNetworkEvent(TEXT("Subscription"), TEXT("Subscribed to network events"));
@@ -64,7 +69,11 @@ void UNPCNetworkHandler::UnsubscribeFromNetworkEvents()
     }
 
     // Unsubscribe from chunk server data
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UNPCNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.RemoveHandler(EventType, this);
+    }
 
     bIsSubscribed = false;
     LogNetworkEvent(TEXT("Unsubscription"), TEXT("Unsubscribed from network events"));
@@ -81,30 +90,36 @@ bool UNPCNetworkHandler::IsNPCEvent(const FString& EventType) const
            EventType == TEXT("npcQuest");
 }
 
-void UNPCNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+void UNPCNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
 {
-    if (ReceivedData.IsEmpty())
+    if (Packet.Raw.IsEmpty())
     {
         UE_LOG(LogNetPacket, Warning, TEXT("NPCNetworkHandler: Received empty data"));
         return;
     }
+    if (!Packet.bValid || !Packet.Root.IsValid())
+    {
+        return; // Not a valid message, ignore
+    }
 
-    // Parse message data to get event type
-    FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
-    
-    if (MessageData.eventType.IsEmpty())
+    // Single-parse path (S05): EventType comes pre-parsed from the dispatcher.
+    const FString& EventType = Packet.EventType;
+    if (EventType.IsEmpty())
     {
         return; // Not a valid message, ignore
     }
 
     // Check if this is an NPC-related event
-    if (!IsNPCEvent(MessageData.eventType))
+    if (!IsNPCEvent(EventType))
     {
         return; // Not an NPC event, ignore
     }
 
     LogNetworkEvent(TEXT("Event Received"), 
-        FString::Printf(TEXT("Processing %s event"), *MessageData.eventType));
+        FString::Printf(TEXT("Processing %s event"), *EventType));
+
+    // Compat alias: sub-handlers below still take the raw string (S05b converts them).
+    const FString& ReceivedData = Packet.Raw;
 
     // Validate event data before processing
     if (!ValidateNPCEventData(ReceivedData))
@@ -114,26 +129,36 @@ void UNPCNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
     }
 
     // Process the specific NPC event
-    if (MessageData.eventType == TEXT("spawnNPCs"))
+    if (EventType == TEXT("spawnNPCs"))
     {
         HandleNPCSpawn(ReceivedData);
     }
-    else if (MessageData.eventType == TEXT("updateNPC"))
+    else if (EventType == TEXT("updateNPC"))
     {
         HandleNPCUpdate(ReceivedData);
     }
-    else if (MessageData.eventType == TEXT("removeNPC"))
+    else if (EventType == TEXT("removeNPC"))
     {
         HandleNPCRemove(ReceivedData);
     }
-    else if (MessageData.eventType == TEXT("npcInteraction"))
+    else if (EventType == TEXT("npcInteraction"))
     {
         HandleNPCInteraction(ReceivedData);
     }
     else
     {
-        UE_LOG(LogGameplay, Warning, TEXT("NPCNetworkHandler: Unknown NPC event type: %s"), *MessageData.eventType);
+        UE_LOG(LogGameplay, Warning, TEXT("NPCNetworkHandler: Unknown NPC event type: %s"), *EventType);
     }
+}
+
+// EventTypes owned by this handler (single list drives dispatcher registration).
+const TArray<FString>& UNPCNetworkHandler::HandledEvents()
+{
+    static const TArray<FString> Events = {
+        TEXT("spawnNPCs"), TEXT("updateNPC"), TEXT("removeNPC"),
+        TEXT("npcInteraction"), TEXT("npcDialogue"), TEXT("npcQuest")
+    };
+    return Events;
 }
 
 void UNPCNetworkHandler::HandleNPCSpawn(const FString& JsonData)

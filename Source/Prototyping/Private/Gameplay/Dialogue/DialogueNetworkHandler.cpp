@@ -2,6 +2,7 @@
 #include "Prototyping.h"
 #include "Gameplay/Dialogue/DialogueNetworkHandler.h"
 #include "Gameplay/Dialogue/DialogueManager.h"
+#include "Services/TimeSyncService.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
 #include "Dom/JsonObject.h"
@@ -34,7 +35,11 @@ void UDialogueNetworkHandler::SubscribeToNetworkEvents()
     {
         return;
     }
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UDialogueNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.AddHandler(EventType, this, &UDialogueNetworkHandler::HandleChunkPacket);
+    }
     bIsSubscribed = true;
 }
 
@@ -44,20 +49,23 @@ void UDialogueNetworkHandler::UnsubscribeFromNetworkEvents()
     {
         return;
     }
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UDialogueNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.RemoveHandler(EventType, this);
+    }
     bIsSubscribed = false;
 }
 
-void UDialogueNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+void UDialogueNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
 {
-    if (ReceivedData.IsEmpty() || !DialogueManager)
+    if (!DialogueManager)
     {
         return;
     }
 
-    // Quick event type check before full parse
-    FMessageDataStruct Msg = JSONParser::DeserializeMessageData(ReceivedData);
-    const FString& EventType = Msg.eventType;
+    // Quick event type check before full parse (S05: EventType comes pre-parsed, no re-parse)
+    const FString& EventType = Packet.EventType;
 
     if (EventType != TEXT("DIALOGUE_NODE") &&
         EventType != TEXT("DIALOGUE_CLOSE") &&
@@ -66,10 +74,9 @@ void UDialogueNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
         return;
     }
 
-    // Full JSON parse
-    TSharedPtr<FJsonObject> Root;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+    // Single-parse path (S05): Root comes pre-parsed from the dispatcher.
+    const TSharedPtr<FJsonObject>& Root = Packet.Root;
+    if (!Root.IsValid())
     {
         UE_LOG(LogNetPacket, Error, TEXT("DialogueNetworkHandler: Failed to parse JSON for event %s"), *EventType);
         return;
@@ -95,6 +102,15 @@ void UDialogueNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
         FDialogueErrorData ErrorData = ParseDialogueError(Root);
         DialogueManager->OnErrorReceived(ErrorData);
     }
+}
+
+// EventTypes owned by this handler (single list drives dispatcher registration).
+const TArray<FString>& UDialogueNetworkHandler::HandledEvents()
+{
+    static const TArray<FString> Events = {
+        TEXT("DIALOGUE_NODE"), TEXT("DIALOGUE_CLOSE"), TEXT("dialogueError")
+    };
+    return Events;
 }
 
 FDialogueNodeData UDialogueNetworkHandler::ParseDialogueNode(const TSharedPtr<FJsonObject>& Root) const

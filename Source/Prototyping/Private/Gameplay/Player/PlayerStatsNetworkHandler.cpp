@@ -1,5 +1,6 @@
 #include "Gameplay/Player/PlayerStatsNetworkHandler.h"
 #include "Prototyping.h"
+#include "Services/TimeSyncService.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
@@ -26,20 +27,21 @@ void UPlayerStatsNetworkHandler::Initialize(UPlayerStatsManager* InStatsManager,
 void UPlayerStatsNetworkHandler::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UPlayerStatsNetworkHandler::HandleChunkServerData);
+    NetworkManager->DispatcherFor(EServerType::ChunkServer).AddFallbackHandler(this, &UPlayerStatsNetworkHandler::HandleChunkPacket);
     bIsSubscribed = true;
 }
 
 void UPlayerStatsNetworkHandler::UnsubscribeFromNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || !bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UPlayerStatsNetworkHandler::HandleChunkServerData);
+    NetworkManager->DispatcherFor(EServerType::ChunkServer).RemoveFallbackHandler(this);
     bIsSubscribed = false;
 }
 
-void UPlayerStatsNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+void UPlayerStatsNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
 {
-    if (ReceivedData.IsEmpty()) return;
+    // Single-parse path (S05): EventType/Body come from PollLink, no re-parse.
+    if (!Packet.bValid) return;
 
     if (!StatsManager)
     {
@@ -47,21 +49,20 @@ void UPlayerStatsNetworkHandler::HandleChunkServerData(const FString& ReceivedDa
         return;
     }
 
-    FMessageDataStruct Msg = JSONParser::DeserializeMessageData(ReceivedData);
+    // Compat alias: DeserializeEffectTick / DeserializeActiveEffectsPacket have
+    // no Root overloads (S05b converts them) — kept for those two branches only.
+    const FString& ReceivedData = Packet.Raw;
 
-    if (Msg.eventType == TEXT("stats_update"))
+    const FString& EventType = Packet.EventType;
+
+    if (EventType == TEXT("stats_update"))
     {
         UE_LOG(LogGameplay, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: stats_update received (bFirstStatsDelivered=%d, localCharId=%d)"),
             bFirstStatsDelivered, LocalCharacterId);
 
-        TSharedPtr<FJsonObject> Root;
-        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-        if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
+        if (!Packet.Body.IsValid()) return;
 
-        const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
-        if (!Root->TryGetObjectField(TEXT("body"), BodyPtr)) return;
-
-        FPlayerStatsUpdateStruct Stats = ParseStatsUpdate(*BodyPtr);
+        FPlayerStatsUpdateStruct Stats = ParseStatsUpdate(Packet.Body);
 
         UE_LOG(LogGameplay, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: stats_update charId=%d hp=%d/%d"),
             Stats.characterId, Stats.healthCurrent, Stats.healthMax);
@@ -103,11 +104,11 @@ void UPlayerStatsNetworkHandler::HandleChunkServerData(const FString& ReceivedDa
             }
         }
     }
-    else if (Msg.eventType == TEXT("setPlayerActiveEffects"))
+    else if (EventType == TEXT("setPlayerActiveEffects"))
     {
         HandleSetPlayerActiveEffects(ReceivedData);
     }
-    else if (Msg.eventType == TEXT("effectTick"))
+    else if (EventType == TEXT("effectTick"))
     {
         // Parse and broadcast the DoT/HoT tick so game objects can update HP and show floating text
         FEffectTickData TickData = JSONParser::DeserializeEffectTick(ReceivedData);

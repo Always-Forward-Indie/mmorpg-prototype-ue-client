@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "Data/DataStructs.h"
+#include "Networking/NetworkDispatcher.h"
 #include "VendorNetworkHandler.generated.h"
 
 class UNetworkManager;
@@ -30,8 +31,12 @@ public:
     FSellItemBatchResultData ParseSellItemBatchResult(const TSharedPtr<FJsonObject>& Body, const FString& Message) const;
 
 private:
-    UFUNCTION()
-    void HandleChunkServerData(const FString& ReceivedData);
+    // Packet entry (S05): single-parse path via the per-eventType dispatcher.
+    // Replaces HandleChunkServerData (which re-parsed every packet to filter).
+    void HandleChunkPacket(const FParsedPacket& Packet);
+
+    // EventTypes owned by this handler (single list drives dispatcher registration).
+    static const TArray<FString>& HandledEvents();
 
     UPROPERTY()
     UVendorManager* VendorManager = nullptr;

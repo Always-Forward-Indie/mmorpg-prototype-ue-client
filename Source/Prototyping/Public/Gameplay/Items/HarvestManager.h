@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/World.h"
 #include "Data/DataStructs.h"
+#include "Networking/NetworkDispatcher.h"
 #include "HarvestManager.generated.h"
 
 // Forward declarations
@@ -154,9 +155,8 @@ public:
 	FOnLootInspectError OnLootInspectError;
 
 protected:
-	// Network data processing
-	UFUNCTION()
-	void ProcessGameServerData(const FString& ReceivedData);
+	// Packet entry (S05): single-parse path via the dispatcher fallback.
+	void HandleChunkPacket(const FParsedPacket& Packet);
 
 	// Send harvest start request
 	void SendHarvestStartRequest(int32 CorpseUID);

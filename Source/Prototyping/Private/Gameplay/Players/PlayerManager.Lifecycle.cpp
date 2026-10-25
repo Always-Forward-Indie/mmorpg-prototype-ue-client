@@ -69,9 +69,11 @@ void UPlayerManager::SubscribeToNetworkManager()
 {
 	if (networkManager != nullptr && IsValid(networkManager))
 	{
-		// Subscribe to the network manager's events for game server
-		networkManager->OnGameServerDataReceived.RemoveDynamic(this, &UPlayerManager::ProcessGameServerData);
-		networkManager->OnGameServerDataReceived.AddDynamic(this, &UPlayerManager::ProcessGameServerData);
+		// Subscribe to the network manager's events for game server.
+		// Single-parse path (S05): dispatcher fallback delivers the parsed
+		// packet; the legacy FString broadcast is no longer needed here.
+		networkManager->DispatcherFor(EServerType::GameServer).RemoveFallbackHandler(this);
+		networkManager->DispatcherFor(EServerType::GameServer).AddFallbackHandler(this, &UPlayerManager::ProcessGamePacket);
 
 		// Subscribe to the network manager's events for chunk server data.
 		// Single-parse path (S05): dispatcher fallback delivers the parsed

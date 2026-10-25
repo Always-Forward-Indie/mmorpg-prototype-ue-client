@@ -1,6 +1,7 @@
 #include "Gameplay/Equipment/EquipmentNetworkHandler.h"
 #include "Prototyping.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
+#include "Services/TimeSyncService.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
 #include "Dom/JsonObject.h"
@@ -21,34 +22,37 @@ void UEquipmentNetworkHandler::Initialize(UEquipmentManager* InEquipmentManager,
 void UEquipmentNetworkHandler::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UEquipmentNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.AddHandler(EventType, this, &UEquipmentNetworkHandler::HandleChunkPacket);
+    }
     bIsSubscribed = true;
 }
 
 void UEquipmentNetworkHandler::UnsubscribeFromNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || !bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UEquipmentNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.RemoveHandler(EventType, this);
+    }
     bIsSubscribed = false;
 }
 
-void UEquipmentNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+void UEquipmentNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
 {
-    if (ReceivedData.IsEmpty() || !EquipmentManager) return;
+    if (!EquipmentManager) return;
 
-    FMessageDataStruct Msg = JSONParser::DeserializeMessageData(ReceivedData);
-    const FString& EventType = Msg.eventType;
+    // Single-parse path (S05): EventType/Status come pre-parsed from the dispatcher.
+    const FString& EventType = Packet.EventType;
 
-    static const TArray<FString> HandledEvents = {
-        TEXT("EQUIPMENT_STATE"), TEXT("EQUIP_RESULT"),
-        TEXT("WEIGHT_STATUS"),   TEXT("charAttributesUpdate"),
-        TEXT("PLAYER_EQUIPMENT_UPDATE"), TEXT("useItem")
-    };
-    if (!HandledEvents.Contains(EventType)) return;
+    if (!HandledEvents().Contains(EventType)) return;
 
-    TSharedPtr<FJsonObject> Root;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
+    // Single-parse path (S05): Root/Body come pre-parsed from the dispatcher.
+    const TSharedPtr<FJsonObject>& Root = Packet.Root;
+    if (!Root.IsValid()) return;
 
     const TSharedPtr<FJsonObject>* HeaderPtr = nullptr;
     Root->TryGetObjectField(TEXT("header"), HeaderPtr);
@@ -71,7 +75,7 @@ void UEquipmentNetworkHandler::HandleChunkServerData(const FString& ReceivedData
     {
         // InventoryManager owns useItem success; surface only errors here
         // (e.g. body.reason == "cooldown") so they are not silently dropped.
-        if (Msg.status.Equals(TEXT("error"), ESearchCase::IgnoreCase))
+        if (Packet.Status.Equals(TEXT("error"), ESearchCase::IgnoreCase))
         {
             FString UseReason;
             Body->TryGetStringField(TEXT("reason"), UseReason);
@@ -101,6 +105,17 @@ void UEquipmentNetworkHandler::HandleChunkServerData(const FString& ReceivedData
     {
         EquipmentManager->OnRemoteEquipmentStateReceived(ParseEquipmentState(Body));
     }
+}
+
+// EventTypes owned by this handler (single list drives dispatcher registration).
+const TArray<FString>& UEquipmentNetworkHandler::HandledEvents()
+{
+    static const TArray<FString> Events = {
+        TEXT("EQUIPMENT_STATE"), TEXT("EQUIP_RESULT"),
+        TEXT("WEIGHT_STATUS"),   TEXT("charAttributesUpdate"),
+        TEXT("PLAYER_EQUIPMENT_UPDATE"), TEXT("useItem")
+    };
+    return Events;
 }
 
 // ---------------------------------------------------------------------------

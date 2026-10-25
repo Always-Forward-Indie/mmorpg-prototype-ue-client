@@ -2,6 +2,7 @@
 #include "Prototyping.h"
 #include "Gameplay/SkillShop/SkillShopManager.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
+#include "Services/TimeSyncService.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
 #include "Dom/JsonObject.h"
@@ -25,23 +26,31 @@ void USkillShopNetworkHandler::Initialize(USkillShopManager* InSkillShopManager,
 void USkillShopNetworkHandler::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &USkillShopNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.AddHandler(EventType, this, &USkillShopNetworkHandler::HandleChunkPacket);
+    }
     bIsSubscribed = true;
 }
 
 void USkillShopNetworkHandler::UnsubscribeFromNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || !bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &USkillShopNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.RemoveHandler(EventType, this);
+    }
     bIsSubscribed = false;
 }
 
-void USkillShopNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+void USkillShopNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
 {
-    if (ReceivedData.IsEmpty() || !SkillShopManager) return;
+    if (!SkillShopManager) return;
 
-    FMessageDataStruct Msg = JSONParser::DeserializeMessageData(ReceivedData);
-    const FString& EventType = Msg.eventType;
+    // Single-parse path (S05): EventType comes pre-parsed from the dispatcher.
+    const FString& EventType = Packet.EventType;
 
     // Server sends 'skillShop' for direct openSkillShop requests
     // and 'openSkillShop' when triggered from a dialogue action — treat both the same.
@@ -53,9 +62,12 @@ void USkillShopNetworkHandler::HandleChunkServerData(const FString& ReceivedData
         return;
     }
 
-    TSharedPtr<FJsonObject> Root;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
+    // Compat alias: verbose logs below print the raw packet (log text unchanged).
+    const FString& ReceivedData = Packet.Raw;
+
+    // Single-parse path (S05): Root comes pre-parsed from the dispatcher.
+    const TSharedPtr<FJsonObject>& Root = Packet.Root;
+    if (!Root.IsValid()) return;
 
     if (EventType == TEXT("skillShop") || EventType == TEXT("openSkillShop"))
     {
@@ -130,6 +142,16 @@ void USkillShopNetworkHandler::HandleChunkServerData(const FString& ReceivedData
 
         SkillShopManager->OnSkillLearnFailedReceived(SkillSlug, Reason);
     }
+}
+
+// EventTypes owned by this handler (single list drives dispatcher registration).
+const TArray<FString>& USkillShopNetworkHandler::HandledEvents()
+{
+    static const TArray<FString> Events = {
+        TEXT("skillShop"), TEXT("openSkillShop"),
+        TEXT("skill_learned"), TEXT("learn_skill_failed")
+    };
+    return Events;
 }
 
 // ---------------------------------------------------------------------------

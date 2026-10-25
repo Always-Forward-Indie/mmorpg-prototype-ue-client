@@ -8,6 +8,7 @@
 #include "Engine/DataTable.h"
 #include "Engine/StreamableManager.h"
 #include "Engine/AssetManager.h"
+#include "Networking/NetworkDispatcher.h"
 #include "ItemManager.generated.h"
 
 // Forward declarations
@@ -46,9 +47,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Item Manager")
 	void SubscribeToNetworkManager();
 
-	// Process game server data
+	// Process game server data (legacy FString entry; kept for FlushPendingEvents — forwards to HandleChunkPacket)
 	UFUNCTION()
 	void ProcessGameServerData(const FString& ReceivedData);
+
+	// Packet entry (S05): single-parse path via the dispatcher fallback.
+	void HandleChunkPacket(const FParsedPacket& Packet);
 
 	// Handle dropped items
 	UFUNCTION(BlueprintCallable, Category = "Item Manager")

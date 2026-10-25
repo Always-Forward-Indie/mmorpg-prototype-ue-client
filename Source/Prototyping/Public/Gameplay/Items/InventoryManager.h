@@ -160,9 +160,8 @@ protected:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 private:
-	// Network callback function
-	UFUNCTION()
-	void ProcessGameServerData(const FString& ReceivedData);
+	// Packet entry (S05): single-parse path via the dispatcher fallback.
+	void HandleChunkPacket(const FParsedPacket& Packet);
 
 	// Process inventory data from server
 	void ProcessInventoryData(const FString& JsonData);

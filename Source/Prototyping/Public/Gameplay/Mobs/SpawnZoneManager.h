@@ -41,8 +41,8 @@ class PROTOTYPING_API USpawnZoneManager : public UObject
 		void Initialize(UNetworkManager* NetworkManager);
 		void SetWorldContext(UWorld* World);
 		void SubscribeToNetworkManager();
-		UFUNCTION()
-		void ProcessGameServerData(const FString& ReceivedData);
+		// Packet entry (S05): single-parse path via the dispatcher fallback.
+		void HandleChunkPacket(const FParsedPacket& Packet);
 		void SendGetSpawnZonesData(const FClientDataStruct& ClientData);
 		void SetGameInstance(UMyGameInstance* GameInstance);
 		UFUNCTION(BlueprintCallable, Category = "SpawnZoneManager")

@@ -14,10 +14,20 @@
 #include "Utils/AudioSpawnHelpers.h"
 #include "CrashDiagnostics.h"
 
-void UInventoryManager::ProcessGameServerData(const FString& ReceivedData)
+void UInventoryManager::HandleChunkPacket(const FParsedPacket& Packet)
 {
-	CRASH_GUARD("InventoryManager::ProcessGameServerData");
+	CRASH_GUARD("InventoryManager::HandleChunkPacket");
 	if (!gameInstance) return;
+
+	// Single-parse path (S05): EventType/Status/Body come from PollLink, no re-parse.
+	if (!Packet.bValid || !Packet.Root.IsValid()) return;
+
+	// Compat: ProcessInventoryData/ProcessInventoryUpdate still take the raw string (S05b converts them).
+	const FString& ReceivedData = Packet.Raw;
+
+	const FString& EventType = Packet.EventType;
+	const FString& Status = Packet.Status;
+	const TSharedPtr<FJsonObject>& Body = Packet.Body;
 
 	// Process time sync data first
 	//if (gameInstance && gameInstance->GetTimeSyncService())
@@ -25,36 +35,30 @@ void UInventoryManager::ProcessGameServerData(const FString& ReceivedData)
 	//	JSONParser::ProcessTimeSyncFromHeader(ReceivedData, gameInstance->GetTimeSyncService());
 	//}
 
-	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
-	UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Received event type: %s"), *MessageData.eventType);
+	UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Received event type: %s"), *EventType);
 
 	// Handle inventory data response
-	if (MessageData.eventType == "getPlayerInventory" && MessageData.status == "success")
+	if (EventType == "getPlayerInventory" && Status == "success")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Received inventory data"));
 		ProcessInventoryData(ReceivedData);
 	}
 	// Handle inventory update events
-	else if (MessageData.eventType == "INVENTORY_UPDATE" && MessageData.status == "success")
+	else if (EventType == "INVENTORY_UPDATE" && Status == "success")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Received inventory update"));
 		ProcessInventoryUpdate(ReceivedData);
 	}
 	// Handle use item response
-	else if (MessageData.eventType == "useItem" && MessageData.status == "success")
+	else if (EventType == "useItem" && Status == "success")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Item used successfully"));
 		ProcessInventoryUpdate(ReceivedData);
 
 		int32 UsedItemId = 0;
-		TSharedPtr<FJsonObject> Root;
-		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-		if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
+		if (Body.IsValid())
 		{
-			if (TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body")))
-			{
-				UsedItemId = Body->GetIntegerField(TEXT("itemId"));
-			}
+			UsedItemId = Body->GetIntegerField(TEXT("itemId"));
 		}
 
 		if (UsedItemId > 0 && gameInstance)
@@ -78,30 +82,25 @@ void UInventoryManager::ProcessGameServerData(const FString& ReceivedData)
 		}
 	}
 	// Handle drop item response
-	else if (MessageData.eventType == "dropItem" && MessageData.status == "success")
+	else if (EventType == "dropItem" && Status == "success")
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Item dropped successfully"));
 		ProcessInventoryUpdate(ReceivedData);
 	}
 	// Handle weapon kill count update (item soul system — server pushes new count on every kill)
-	else if (MessageData.eventType == "world_notification")
+	else if (EventType == "world_notification")
 	{
-		TSharedPtr<FJsonObject> Root;
-		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-		if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
+		if (Body.IsValid())
 		{
-			const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
-			if (Root->TryGetObjectField(TEXT("body"), BodyPtr) && (*BodyPtr).IsValid())
+			FString NotifType;
+			Body->TryGetStringField(TEXT("notificationType"), NotifType);
+			if (NotifType == TEXT("weapon_kill_count_update"))
 			{
-				FString NotifType;
-				(*BodyPtr)->TryGetStringField(TEXT("notificationType"), NotifType);
-				if (NotifType == TEXT("weapon_kill_count_update"))
+				const TSharedPtr<FJsonObject>* DataPtr = nullptr;
+				if (Body->TryGetObjectField(TEXT("data"), DataPtr) && (*DataPtr).IsValid())
 				{
-					const TSharedPtr<FJsonObject>* DataPtr = nullptr;
-					if ((*BodyPtr)->TryGetObjectField(TEXT("data"), DataPtr) && (*DataPtr).IsValid())
-					{
-						int32 InventoryItemId = (*DataPtr)->GetIntegerField(TEXT("inventoryItemId"));
-						int32 NewKillCount    = (*DataPtr)->GetIntegerField(TEXT("killCount"));
+					int32 InventoryItemId = (*DataPtr)->GetIntegerField(TEXT("inventoryItemId"));
+					int32 NewKillCount    = (*DataPtr)->GetIntegerField(TEXT("killCount"));
 						if (InventoryItemId > 0)
 						{
 							for (FInventoryItemStruct& Item : CurrentInventory.items)
@@ -115,7 +114,6 @@ void UInventoryManager::ProcessGameServerData(const FString& ReceivedData)
 								}
 							}
 						}
-					}
 				}
 			}
 		}

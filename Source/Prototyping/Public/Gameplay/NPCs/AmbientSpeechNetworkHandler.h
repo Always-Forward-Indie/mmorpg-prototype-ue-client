@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "Data/DataStructs.h"
+#include "Networking/NetworkDispatcher.h"
 #include "AmbientSpeechNetworkHandler.generated.h"
 
 class UAmbientSpeechManager;
@@ -38,10 +39,14 @@ public:
     void UnsubscribeFromNetworkEvents();
 
 protected:
-    UFUNCTION()
-    void HandleChunkServerData(const FString& ReceivedData);
+    // Packet entry (S05): single-parse path via the per-eventType dispatcher.
+    // Replaces HandleChunkServerData (which re-parsed every packet to filter).
+    void HandleChunkPacket(const FParsedPacket& Packet);
 
 private:
+    // EventTypes owned by this handler (single list drives dispatcher registration).
+    static const TArray<FString>& HandledEvents();
+
     void HandleAmbientPools(const FString& JsonData);
 
     /** Parse one pool object {"priority":0,"lines":[...]} */

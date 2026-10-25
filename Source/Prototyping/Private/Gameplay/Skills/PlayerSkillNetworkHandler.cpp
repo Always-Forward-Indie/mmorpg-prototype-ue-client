@@ -57,9 +57,9 @@ void UPlayerSkillNetworkHandler::SubscribeToNetworkEvents()
         return;
     }
 
-    // Subscribe to chunk server data
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UPlayerSkillNetworkHandler::HandleChunkServerData);
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UPlayerSkillNetworkHandler::HandleChunkServerData);
+    // Subscribe to chunk server data (single-parse dispatcher fallback)
+    NetworkManager->DispatcherFor(EServerType::ChunkServer).RemoveFallbackHandler(this);
+    NetworkManager->DispatcherFor(EServerType::ChunkServer).AddFallbackHandler(this, &UPlayerSkillNetworkHandler::HandleChunkPacket);
 
     bIsSubscribed = true;
     UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillNetworkHandler: Subscribed to network events"));
@@ -72,55 +72,59 @@ void UPlayerSkillNetworkHandler::UnsubscribeFromNetworkEvents()
         return;
     }
 
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UPlayerSkillNetworkHandler::HandleChunkServerData);
+    NetworkManager->DispatcherFor(EServerType::ChunkServer).RemoveFallbackHandler(this);
     
     bIsSubscribed = false;
     UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillNetworkHandler: Unsubscribed from network events"));
 }
 
-void UPlayerSkillNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+void UPlayerSkillNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
 {
-    FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
-    
-    LogNetworkEvent("Received", FString::Printf(TEXT("Event: %s, Status: %s"), 
-        *MessageData.eventType, *MessageData.status));
+    // Single-parse path (S05): EventType/Status/Body come from PollLink, no re-parse.
+    if (!Packet.bValid) return;
+
+    const FString& EventType = Packet.EventType;
+    const FString& Status = Packet.Status;
+
+    LogNetworkEvent("Received", FString::Printf(TEXT("Event: %s, Status: %s"),
+        *EventType, *Status));
 
     // Only process successful events
-    if (MessageData.status != TEXT("success"))
+    if (Status != TEXT("success"))
     {
-        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillNetworkHandler: Received non-success event: %s"), 
-            *MessageData.status);
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillNetworkHandler: Received non-success event: %s"),
+            *Status);
         return;
     }
 
     // Handle skill-related events
-    if (MessageData.eventType == TEXT("initializePlayerSkills"))
+    if (EventType == TEXT("initializePlayerSkills"))
     {
-        HandleInitializePlayerSkills(ReceivedData);
+        HandleInitializePlayerSkills(Packet);
     }
-    else if (MessageData.eventType == TEXT("setSkillCooldowns"))
+    else if (EventType == TEXT("setSkillCooldowns"))
     {
-        HandleSetSkillCooldowns(ReceivedData);
+        HandleSetSkillCooldowns(Packet);
     }
-    else if (MessageData.eventType == TEXT("skillCooldownUpdate"))
+    else if (EventType == TEXT("skillCooldownUpdate"))
     {
-        HandleSkillCooldownUpdate(ReceivedData);
+        HandleSkillCooldownUpdate(Packet);
     }
-    else if (MessageData.eventType == TEXT("skillLevelUpdate"))
+    else if (EventType == TEXT("skillLevelUpdate"))
     {
-        HandleSkillLevelUpdate(ReceivedData);
+        HandleSkillLevelUpdate(Packet);
     }
-    else if (MessageData.eventType == TEXT("skillBarState"))
+    else if (EventType == TEXT("skillBarState"))
     {
-        HandleSkillBarState(ReceivedData);
+        HandleSkillBarState(Packet);
     }
-    else if (MessageData.eventType == TEXT("skillBarSlotUpdated"))
+    else if (EventType == TEXT("skillBarSlotUpdated"))
     {
-        HandleSkillBarSlotUpdated(ReceivedData);
+        HandleSkillBarSlotUpdated(Packet);
     }
 }
 
-void UPlayerSkillNetworkHandler::HandleInitializePlayerSkills(const FString& JsonData)
+void UPlayerSkillNetworkHandler::HandleInitializePlayerSkills(const FParsedPacket& Packet)
 {
     if (!SkillManager)
     {
@@ -128,8 +132,12 @@ void UPlayerSkillNetworkHandler::HandleInitializePlayerSkills(const FString& Jso
         return;
     }
 
-    // Parse the JSON data for player skills initialization
-    FPlayerSkillsInitializationData SkillsData = JSONParser::DeserializePlayerSkillsInitialization(JsonData);
+    // Parse the JSON data for player skills initialization (Body overload — no re-parse)
+    FPlayerSkillsInitializationData SkillsData;
+    if (Packet.Body.IsValid())
+    {
+        SkillsData = JSONParser::DeserializePlayerSkillsInitialization(Packet.Body);
+    }
     
     if (SkillsData.characterId <= 0)
     {
@@ -154,7 +162,7 @@ void UPlayerSkillNetworkHandler::HandleInitializePlayerSkills(const FString& Jso
 // skills still on cooldown from their previous session.
 // Each entry: { skillSlug, remainingMs } — time LEFT, not full duration.
 // ---------------------------------------------------------------------------
-void UPlayerSkillNetworkHandler::HandleSetSkillCooldowns(const FString& JsonData)
+void UPlayerSkillNetworkHandler::HandleSetSkillCooldowns(const FParsedPacket& Packet)
 {
     if (!SkillManager)
     {
@@ -162,9 +170,8 @@ void UPlayerSkillNetworkHandler::HandleSetSkillCooldowns(const FString& JsonData
         return;
     }
 
-    TSharedPtr<FJsonObject> Root;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonData);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+    const TSharedPtr<FJsonObject>& Root = Packet.Root;
+    if (!Root.IsValid())
     {
         UE_LOG(LogNetPacket, Error, TEXT("PlayerSkillNetworkHandler: HandleSetSkillCooldowns - failed to parse JSON"));
         return;
@@ -208,14 +215,14 @@ void UPlayerSkillNetworkHandler::HandleSetSkillCooldowns(const FString& JsonData
     SkillManager->ApplyServerCooldowns(Cooldowns);
 }
 
-void UPlayerSkillNetworkHandler::HandleSkillCooldownUpdate(const FString& JsonData)
+void UPlayerSkillNetworkHandler::HandleSkillCooldownUpdate(const FParsedPacket& Packet)
 {
     // TODO: Implement skill cooldown updates from server
     // This would be used if server sends cooldown sync messages
     LogNetworkEvent("Skill Cooldown Update", TEXT("Processing cooldown update"));
 }
 
-void UPlayerSkillNetworkHandler::HandleSkillLevelUpdate(const FString& JsonData)
+void UPlayerSkillNetworkHandler::HandleSkillLevelUpdate(const FParsedPacket& Packet)
 {
     // TODO: Implement skill level updates from server
     // This would be used when skills level up
@@ -232,7 +239,7 @@ void UPlayerSkillNetworkHandler::SetGameInstance(UMyGameInstance* InGameInstance
 // Server guarantees initializePlayerSkills arrives BEFORE this packet,
 // so SkillManager already knows all learned skills.
 // ---------------------------------------------------------------------------
-void UPlayerSkillNetworkHandler::HandleSkillBarState(const FString& JsonData)
+void UPlayerSkillNetworkHandler::HandleSkillBarState(const FParsedPacket& Packet)
 {
     if (!SkillManager)
     {
@@ -240,9 +247,8 @@ void UPlayerSkillNetworkHandler::HandleSkillBarState(const FString& JsonData)
         return;
     }
 
-    TSharedPtr<FJsonObject> Root;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonData);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+    const TSharedPtr<FJsonObject>& Root = Packet.Root;
+    if (!Root.IsValid())
     {
         UE_LOG(LogNetPacket, Error, TEXT("PlayerSkillNetworkHandler: HandleSkillBarState - failed to parse JSON"));
         return;
@@ -286,11 +292,10 @@ void UPlayerSkillNetworkHandler::HandleSkillBarState(const FString& JsonData)
 // ---------------------------------------------------------------------------
 // Inbound: skillBarSlotUpdated — ACK from server after setSkillBarSlot
 // ---------------------------------------------------------------------------
-void UPlayerSkillNetworkHandler::HandleSkillBarSlotUpdated(const FString& JsonData)
+void UPlayerSkillNetworkHandler::HandleSkillBarSlotUpdated(const FParsedPacket& Packet)
 {
-    TSharedPtr<FJsonObject> Root;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonData);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
+    const TSharedPtr<FJsonObject>& Root = Packet.Root;
+    if (!Root.IsValid()) return;
 
     const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
     if (!Root->TryGetObjectField(TEXT("body"), BodyPtr)) return;

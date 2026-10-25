@@ -1,6 +1,7 @@
 #include "Gameplay/Repair/RepairNetworkHandler.h"
 #include "Prototyping.h"
 #include "Gameplay/Repair/RepairManager.h"
+#include "Services/TimeSyncService.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
 #include "Dom/JsonObject.h"
@@ -21,40 +22,44 @@ void URepairNetworkHandler::Initialize(URepairManager* InRepairManager, UNetwork
 void URepairNetworkHandler::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &URepairNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.AddHandler(EventType, this, &URepairNetworkHandler::HandleChunkPacket);
+    }
     bIsSubscribed = true;
 }
 
 void URepairNetworkHandler::UnsubscribeFromNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || !bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &URepairNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.RemoveHandler(EventType, this);
+    }
     bIsSubscribed = false;
 }
 
-void URepairNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+void URepairNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
 {
-    if (ReceivedData.IsEmpty() || !RepairManager) return;
+    if (!RepairManager) return;
 
-    FMessageDataStruct Msg = JSONParser::DeserializeMessageData(ReceivedData);
-    const FString& EventType = Msg.eventType;
+    // Single-parse path (S05): EventType/Status come pre-parsed from the dispatcher.
+    const FString& EventType = Packet.EventType;
 
-    static const TArray<FString> HandledEvents = {
-        TEXT("openRepairShop"), TEXT("repairShop"), TEXT("repairItemResult"), TEXT("repairAllResult"),
-        TEXT("repairItem"), TEXT("repairAll")
-    };
-    if (!HandledEvents.Contains(EventType)) return;
+    if (!HandledEvents().Contains(EventType)) return;
 
-    TSharedPtr<FJsonObject> Root;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
+    // Single-parse path (S05): Root/Body come pre-parsed from the dispatcher.
+    const TSharedPtr<FJsonObject>& Root = Packet.Root;
+    if (!Root.IsValid()) return;
 
     FString Message;
     // Centralized error resolution: body.errorCode wins, header.message is the fallback.
     // Success packets carry neither; normalize those to "success" for the parsers below.
     // Note: repair errors reuse the request eventType ("repairItem"/"repairAll"/"repairShop").
     const FString ResolvedCode = JSONParser::ResolveErrorCode(Root);
-    const bool bIsRepairError = Msg.status.Equals(TEXT("error"), ESearchCase::IgnoreCase)
+    const bool bIsRepairError = Packet.Status.Equals(TEXT("error"), ESearchCase::IgnoreCase)
         || (!ResolvedCode.IsEmpty() && !ResolvedCode.Equals(TEXT("success"), ESearchCase::IgnoreCase));
     Message = bIsRepairError ? ResolvedCode : TEXT("success");
 
@@ -80,6 +85,16 @@ void URepairNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
     {
         RepairManager->OnRepairAllResultReceived(ParseRepairAllResult(Body, Message));
     }
+}
+
+// EventTypes owned by this handler (single list drives dispatcher registration).
+const TArray<FString>& URepairNetworkHandler::HandledEvents()
+{
+    static const TArray<FString> Events = {
+        TEXT("openRepairShop"), TEXT("repairShop"), TEXT("repairItemResult"), TEXT("repairAllResult"),
+        TEXT("repairItem"), TEXT("repairAll")
+    };
+    return Events;
 }
 
 // ---------------------------------------------------------------------------

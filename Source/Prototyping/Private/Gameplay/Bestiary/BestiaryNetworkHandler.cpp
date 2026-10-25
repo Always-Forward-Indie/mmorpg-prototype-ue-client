@@ -48,8 +48,12 @@ void UBestiaryNetworkHandler::SubscribeToNetworkEvents()
     if (bIsSubscribed)
         return;
 
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UBestiaryNetworkHandler::HandleChunkServerData);
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UBestiaryNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.RemoveHandler(EventType, this);
+        Dispatcher.AddHandler(EventType, this, &UBestiaryNetworkHandler::HandleChunkPacket);
+    }
     bIsSubscribed = true;
 
     UE_LOG(LogGameplay, Verbose, TEXT("BestiaryNetworkHandler: Subscribed to network events"));
@@ -60,7 +64,11 @@ void UBestiaryNetworkHandler::UnsubscribeFromNetworkEvents()
     if (!NetworkManager || !IsValid(NetworkManager) || !bIsSubscribed)
         return;
 
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UBestiaryNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.RemoveHandler(EventType, this);
+    }
     bIsSubscribed = false;
 }
 
@@ -153,48 +161,59 @@ TArray<FBestiaryOverviewEntryStruct> UBestiaryNetworkHandler::ConsumePendingOver
 }
 
 
-void UBestiaryNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+// EventTypes owned by this handler (single list drives dispatcher registration).
+const TArray<FString>& UBestiaryNetworkHandler::HandledEvents()
 {
-    if (ReceivedData.IsEmpty())
+    static const TArray<FString> Events = {
+        TEXT("getBestiaryOverview"),
+        TEXT("getBestiaryEntry"),
+        TEXT("world_notification")
+    };
+    return Events;
+}
+
+void UBestiaryNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
+{
+    if (!Packet.bValid || !Packet.Root.IsValid())
         return;
 
-    FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
+    // Compat: response sub-parsers still take the raw string (S05b converts them).
+    const FString& ReceivedData = Packet.Raw;
 
-    if (MessageData.eventType == TEXT("getBestiaryOverview") && MessageData.status == TEXT("success"))
+    // Single-parse path (S05): EventType/Status/Body come from PollLink, no re-parse.
+    const FString& EventType = Packet.EventType;
+    const FString& Status = Packet.Status;
+    const TSharedPtr<FJsonObject>& Body = Packet.Body;
+
+    if (EventType == TEXT("getBestiaryOverview") && Status == TEXT("success"))
     {
         ProcessBestiaryOverviewResponse(ReceivedData);
     }
-    else if (MessageData.eventType == TEXT("getBestiaryEntry") && MessageData.status == TEXT("success"))
+    else if (EventType == TEXT("getBestiaryEntry") && Status == TEXT("success"))
     {
         ProcessBestiaryEntryResponse(ReceivedData);
     }
-    else if (MessageData.eventType == TEXT("world_notification"))
+    else if (EventType == TEXT("world_notification"))
     {
         // Parse just enough to detect bestiary_tier_unlocked
-        TSharedPtr<FJsonObject> Root;
-        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-        if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
-            return;
-
-        const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
-        if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !(*BodyPtr).IsValid())
+        if (!Body.IsValid())
             return;
 
         FString NotifType;
-        (*BodyPtr)->TryGetStringField(TEXT("notificationType"), NotifType);
+        Body->TryGetStringField(TEXT("notificationType"), NotifType);
 
         if (NotifType == TEXT("bestiary_tier_unlocked") || NotifType == TEXT("bestiary_kill_update"))
         {
             FWorldNotificationStruct Notif;
-            (*BodyPtr)->TryGetNumberField(TEXT("characterId"),      Notif.characterId);
-            (*BodyPtr)->TryGetStringField(TEXT("notificationId"),   Notif.notificationId);
+            Body->TryGetNumberField(TEXT("characterId"),      Notif.characterId);
+            Body->TryGetStringField(TEXT("notificationId"),   Notif.notificationId);
             Notif.notificationType = NotifType;
-            (*BodyPtr)->TryGetStringField(TEXT("priority"),         Notif.priority);
-            (*BodyPtr)->TryGetStringField(TEXT("channel"),          Notif.channel);
-            (*BodyPtr)->TryGetStringField(TEXT("text"), Notif.text);
+            Body->TryGetStringField(TEXT("priority"),         Notif.priority);
+            Body->TryGetStringField(TEXT("channel"),          Notif.channel);
+            Body->TryGetStringField(TEXT("text"), Notif.text);
 
             const TSharedPtr<FJsonObject>* DataPtr = nullptr;
-            if ((*BodyPtr)->TryGetObjectField(TEXT("data"), DataPtr) && (*DataPtr).IsValid())
+            if (Body->TryGetObjectField(TEXT("data"), DataPtr) && (*DataPtr).IsValid())
             {
                 for (const auto& Pair : (*DataPtr)->Values)
                 {

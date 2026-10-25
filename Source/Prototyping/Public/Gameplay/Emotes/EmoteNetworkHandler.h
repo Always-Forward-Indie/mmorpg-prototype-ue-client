@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "Data/DataStructs.h"
+#include "Networking/NetworkDispatcher.h"
 #include "EmoteNetworkHandler.generated.h"
 
 class UEmoteManager;
@@ -42,8 +43,9 @@ public:
     void RequestUseEmote(const FString& EmoteSlug);
 
 private:
-    UFUNCTION()
-    void HandleChunkServerData(const FString& ReceivedData);
+    // Packet entry (S05): single-parse path via the per-eventType dispatcher.
+    // Replaces HandleChunkServerData (which re-parsed every packet twice).
+    void HandleChunkPacket(const FParsedPacket& Packet);
 
     void HandlePlayerEmotes(const TSharedPtr<FJsonObject>& Root);
     void HandleEmoteAction (const TSharedPtr<FJsonObject>& Root);

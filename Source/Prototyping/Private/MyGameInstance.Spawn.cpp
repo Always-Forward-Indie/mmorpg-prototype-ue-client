@@ -1,5 +1,8 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Gameplay/Mobs/MOBManager.h"
+#include "Gameplay/Items/InventoryManager.h"
+#include "Components/CapsuleComponent.h"
 #include "Prototyping.h"
 #include "Components/ArrowComponent.h"
 #include "ShaderCompiler.h"

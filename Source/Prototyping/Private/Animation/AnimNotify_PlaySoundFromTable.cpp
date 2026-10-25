@@ -8,6 +8,7 @@
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraSystem.h"
 #include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 
 UAnimNotify_PlaySoundFromTable::UAnimNotify_PlaySoundFromTable()
 {

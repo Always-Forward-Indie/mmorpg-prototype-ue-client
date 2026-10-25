@@ -1,5 +1,7 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Authentication/AuthenticationManager.h"
+#include "Gameplay/Players/PlayerManager.h"
 #include "Prototyping.h"
 #include "Components/ArrowComponent.h"
 #include "ShaderCompiler.h"

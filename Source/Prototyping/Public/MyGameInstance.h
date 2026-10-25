@@ -1,47 +1,54 @@
 #pragma once
 
 #include "CoreMinimal.h"
-
-#include "Networking/NetworkManager.h"
-#include "Networking/PingManager.h"
-#include "Authentication/AuthenticationManager.h"
-#include "Gameplay/Players/PlayerManager.h"
-#include "Gameplay/Mobs/MOBManager.h"
-#include "Gameplay/Mobs/SpawnZoneManager.h"
-#include "Gameplay/Items/ItemManager.h"
-#include "Gameplay/Items/InventoryManager.h"
-#include "UI/UIManager.h"
-#include "Services/TimeSyncService.h"
-#include "Audio/AudioManager.h"
-#include "Audio/AudioConfigDataAsset.h"
-#include "DevMode/DevModeDataProvider.h"
-#include "Gameplay/Idle/IdleTimeoutManager.h"
-
-#include <Kismet/GameplayStatics.h>
-#include "Blueprint/UserWidget.h"
-#include "Components/AudioComponent.h"
-#include "Sound/SoundCue.h"
-#include "TimerManager.h"
 #include "Engine/GameInstance.h"
-#include "EngineUtils.h" 
-#include "Widgets/SWeakWidget.h"
-#include "MoviePlayer.h"
-#include "PCGComponent.h"
-
-#include "Gameplay/Players/MyCameraActor.h"
-#include "Gameplay/Players/BasicPlayer.h"
-#include "Gameplay/UI/LoginWidget.h"
-#include "Gameplay/UI/LoginFlowWidget.h"
-#include "Gameplay/UI/W_LoginScreenOverlayWidget.h"
-#include "Gameplay/UI/W_LoginLogoWidget.h"
-#include "Gameplay/UI/SocialLinksWidget.h"
-#include "UI/W_SettingsWidget.h"
-#include "Gameplay/UI/CharacterListItem.h"
-#include "Gameplay/UI/MonitorStatsWidget.h"
-#include "Components/ListView.h"
-#include "Utils/JSONParser.h"
+#include "Data/DataStructs.h"
+#include "DevMode/DevModeDataProvider.h"
 #include "Utils/NetCore/ReadinessGate.h"
 #include "Utils/NetCore/JoinGuard.h"
+#include "UI/W_SettingsWidget.h"
+
+// Forward declarations (S06): this header is included by nearly every TU,
+// so it only names manager/widget/actor types — definitions live in the
+// .cpps that use them. Keeps incremental builds fast.
+class UNetworkManager;
+class UPingManager;
+class UAuthenticationManager;
+class UPlayerManager;
+class UMOBManager;
+class USpawnZoneManager;
+class UItemManager;
+class UInventoryManager;
+class UUIManager;
+class UTimeSyncService;
+class UAudioManager;
+class UAudioConfigDataAsset;
+class UIdleTimeoutManager;
+class UDevModeConsoleCommands;
+class ULiveBotDriver;
+class UDevModeBotBrain;
+class UCharacterPreviewManager;
+class UWorldInteractionConfig;
+class UWorldObjectManager;
+class ULocalizationDataAsset;
+class UUserWidget;
+class UAudioComponent;
+class USoundBase;
+class UWorld;
+class APlayerController;
+class UDataTable;
+class AMyCameraActor;
+class ABasicPlayer;
+class ULoginWidget;
+class ULoginFlowWidget;
+class UW_LoginScreenOverlayWidget;
+class UW_LoginLogoWidget;
+class USocialLinksWidget;
+class UCharacterListItem;
+class UMonitorStatsWidget;
+class UMessageBoxPopup;
+class AWorldInteractiveObjectActor;
+struct FTimerHandle;
 #include "MyGameInstance.generated.h"
 
 // Process-level World Partition transition slot: how many PIE instances are

@@ -2,6 +2,7 @@
 
 #include "Gameplay/Characters/CharacterPreviewManager.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Players/MyCameraActor.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Equipment/EquipmentVisualComponent.h"
 #include "Gameplay/Players/CosmeticVisualComponent.h"

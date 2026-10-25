@@ -8,6 +8,7 @@
 #include "Gameplay/Player/ExperienceManager.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Players/BasicPlayer.h"
 #include "Prototyping.h"
 #include "CrashDiagnostics.h"
 

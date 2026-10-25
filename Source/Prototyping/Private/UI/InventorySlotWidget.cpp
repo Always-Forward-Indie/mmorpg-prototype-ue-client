@@ -7,6 +7,7 @@
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Engine/Engine.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Items/ItemManager.h"
 
 UInventorySlotWidget::UInventorySlotWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -166,7 +167,7 @@ void UInventorySlotWidget::UpdateSlotAppearance()
 		BorderColor = SelectedBorderColor;
 		ImgSelected->SetVisibility(ESlateVisibility::Visible);
 		//ImgBase->SetColorAndOpacity(HasItem()
-		//	? FLinearColor(1.06f, 1.06f, 1.06f, 1.f)   // +6% яркости
+		//	? FLinearColor(1.06f, 1.06f, 1.06f, 1.f)   // +6% пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 		//	: FLinearColor(1.f, 1.f, 1.f, 1.f));
 	}
 	else if (!bIsSelected)

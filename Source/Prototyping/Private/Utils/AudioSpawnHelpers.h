@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/AudioComponent.h"
 #include "Sound/SoundAttenuation.h"

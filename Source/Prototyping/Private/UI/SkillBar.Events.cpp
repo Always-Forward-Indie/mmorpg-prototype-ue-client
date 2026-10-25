@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillBarWidget.h"
 #include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/Skills/PlayerSkillNetworkHandler.h"

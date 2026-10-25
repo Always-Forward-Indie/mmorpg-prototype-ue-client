@@ -2,6 +2,7 @@
 #include "Prototyping.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Items/InventoryManager.h"
 #include "Utils/JSONParser.h"
 #include "Engine/World.h"
 #include "Gameplay/Mobs/BasicMOB.h"

@@ -1,6 +1,6 @@
 #include "UI/UIManager.h"
 #include "Prototyping.h"
-#include "UI/UIManager.h"
+#include "Blueprint/WidgetTree.h"
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
 #include "UI/HarvestLootWidget.h"

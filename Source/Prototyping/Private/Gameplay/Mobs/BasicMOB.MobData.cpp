@@ -11,6 +11,7 @@
 #include "Gameplay/Items/ItemManager.h"
 #include "Gameplay/Items/HarvestManager.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Mobs/MOBManager.h"
 #include "Services/LocalizationSubsystem.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
 #include "Gameplay/UI/DamageTextWidget.h"

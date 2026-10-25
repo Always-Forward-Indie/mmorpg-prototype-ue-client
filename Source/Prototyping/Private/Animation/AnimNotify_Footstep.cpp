@@ -8,6 +8,7 @@
 #include "Engine/DataTable.h"
 #include "Data/EntityAudioData.h"
 #include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Mobs/BasicMOB.h"
 #include "Gameplay/NPCs/BasicNPC.h"

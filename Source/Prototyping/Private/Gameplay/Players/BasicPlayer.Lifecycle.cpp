@@ -5,6 +5,8 @@
 #include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
+#include "Gameplay/Mobs/MOBManager.h"
 #include "Gameplay/Players/PlayerManager.h"
 #include "UI/UIManager.h"
 #include "UI/NotificationToastWidget.h"

@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Items/ItemManager.h"
+#include "Gameplay/Items/InventoryManager.h"
 #include "Prototyping.h"
 #include "Gameplay/Items/DroppedItemActor.h"
 #include "Gameplay/Players/BasicPlayer.h"

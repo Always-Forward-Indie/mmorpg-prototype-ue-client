@@ -13,6 +13,7 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/CanvasPanelSlot.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Items/ItemManager.h"
 #include "Services/LocalizationSubsystem.h"
 
 void UItemTooltipWidget::UpdateTooltipPosition(FVector2D /*ScreenPosUnused*/)

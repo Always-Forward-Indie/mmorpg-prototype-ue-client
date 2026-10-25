@@ -253,10 +253,26 @@ uint32 NetworkReceiverWorker::Run()
                             FPlatformTime::Seconds());
                         if (Fed.bComplete && Fed.Message.Num() > 0)
                         {
+                            FragStats.OnFrameFed();
+                            FragStats.OnStreamCompleted(Fed.Message.Num());
+                            UE_LOG(LogNetPacket, Warning, TEXT("wireFrag reassembled: stream=%llu frames=%llu bytes=%d socket=%s"),
+                                Frame.StreamId, Frame.Total, Fed.Message.Num(), *SocketTag);
                             FUTF8ToTCHAR Converter(reinterpret_cast<const ANSICHAR*>(Fed.Message.GetData()), Fed.Message.Num());
                             ReceivedString = FString(Converter.Length(), Converter.Get());
                             ReceivedString.TrimStartAndEndInline();
                         }
+                        else if (Fed.bDropped)
+                        {
+                            FragStats.OnFrameMalformed();
+                        }
+                        else
+                        {
+                            FragStats.OnFrameFed();
+                        }
+                    }
+                    else
+                    {
+                        FragStats.OnFrameMalformed();
                     }
                     if (ReceivedString.IsEmpty())
                     {

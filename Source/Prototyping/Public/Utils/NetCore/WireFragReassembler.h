@@ -67,3 +67,25 @@ private:
 	};
 	TMap<uint64, FStream> Streams;
 };
+
+/**
+ * Reassembly observability (S13-C3): success must be as loud as failure.
+ * Drops already log Error inside FNetFraming; completions were silent.
+ * Pure counters so Automation specs can pin the transitions; the single
+ * owner is the receiver worker (game thread reads them only after the
+ * worker thread joined in TeardownLink — no atomics needed).
+ */
+struct PROTOTYPING_API FWireFragStats
+{
+	uint64 FramesSeen = 0;
+	uint64 StreamsCompleted = 0;
+	uint64 FramesMalformed = 0;
+	uint64 BytesReassembled = 0;
+
+	/** A wireFrag line arrived and parsed (completing or not). */
+	void OnFrameFed() { ++FramesSeen; }
+	/** A wireFrag line failed parse/unescape or violated limits. */
+	void OnFrameMalformed() { ++FramesMalformed; }
+	/** A stream completed: frames were already counted in FramesSeen. */
+	void OnStreamCompleted(int32 ReassembledBytes) { ++StreamsCompleted; BytesReassembled += static_cast<uint64>(ReassembledBytes); }
+};

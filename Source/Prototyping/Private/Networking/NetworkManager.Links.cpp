@@ -262,6 +262,20 @@ void UNetworkManager::TeardownLink(EServerType Type)
 		L.Socket = nullptr;
 	}
 
+	// Reassembly observability (S13-C3): per-link wireFrag totals. The worker
+	// thread joined above, so its counters are safe to read. Quiet when
+	// nothing fragmented (Log, not Warning — teardown is routine).
+	if (L.Receiver)
+	{
+		const FWireFragStats& Stats = L.Receiver->GetFragStats();
+		if (Stats.StreamsCompleted > 0 || Stats.FramesMalformed > 0)
+		{
+			UE_LOG(LogConnection, Log, TEXT("Link %s teardown: wireFrag streams=%llu frames=%llu malformed=%llu bytes=%llu"),
+				*L.Receiver->GetSocketTag(), Stats.StreamsCompleted, Stats.FramesSeen,
+				Stats.FramesMalformed, Stats.BytesReassembled);
+		}
+	}
+
 	delete L.Receiver; L.Receiver = nullptr;
 	delete L.Sender; L.Sender = nullptr;
 	L.ConnectPending = false;

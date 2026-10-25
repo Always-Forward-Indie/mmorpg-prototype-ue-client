@@ -30,6 +30,9 @@ private:
 	// Transport reassembly for wireFrag frames (server fragments oversize
 	// lines for frag-capable sockets). Single-owner: only Run() touches it.
 	FWireFragReassembler FragReassembler;
+	// Reassembly observability (S13-C3): fed by Run() only; the game thread
+	// reads the snapshot after the worker thread joined in TeardownLink.
+	FWireFragStats FragStats;
 
 public:
     // Constructor
@@ -45,6 +48,11 @@ public:
 
     // Tag this worker's socket for seam-observability (drop logs name the peer).
     void SetSocketTag(const TCHAR* InTag);
+
+    // Reassembly counters snapshot (S13-C3). Read only after the worker
+    // thread joined (TeardownLink) — Run() is the sole writer.
+    const FWireFragStats& GetFragStats() const { return FragStats; }
+    const FString& GetSocketTag() const { return SocketTag; }
 
     // Atomically clear the socket pointer so Run() stops calling Recv()
     // on the socket object. Must be called BEFORE ISocketSubsystem::DestroySocket()

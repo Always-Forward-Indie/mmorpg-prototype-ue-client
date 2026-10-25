@@ -24,6 +24,9 @@ UNetworkManager::UNetworkManager(const FObjectInitializer& ObjectInitializer)
 	InstanceId = FPlatformAtomics::InterlockedIncrement(&GNetworkManagerNextInstanceId);
 	UE_LOG(LogConnection, Log, TEXT("Network Manager Constructor called"));
 
+	// Link tags / budgets first; IP/Port come from server_config.json below.
+	InitLinks();
+
 	FString ConfigFilePath;
 
 	// Detect whether we are running in the Unreal Editor or a packaged game
@@ -50,18 +53,18 @@ UNetworkManager::UNetworkManager(const FObjectInitializer& ObjectInitializer)
 
 		if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
 		{
-			LoginServerIP = JsonObject->GetObjectField(TEXT("LoginServer"))->GetStringField(TEXT("IP"));
-			LoginServerPort = JsonObject->GetObjectField(TEXT("LoginServer"))->GetIntegerField(TEXT("Port"));
+			LinkFor(EServerType::LoginServer).IP = JsonObject->GetObjectField(TEXT("LoginServer"))->GetStringField(TEXT("IP"));
+			LinkFor(EServerType::LoginServer).Port = JsonObject->GetObjectField(TEXT("LoginServer"))->GetIntegerField(TEXT("Port"));
 
-			GameServerIP = JsonObject->GetObjectField(TEXT("GameServer"))->GetStringField(TEXT("IP"));
-			GameServerPort = JsonObject->GetObjectField(TEXT("GameServer"))->GetIntegerField(TEXT("Port"));
+			LinkFor(EServerType::GameServer).IP = JsonObject->GetObjectField(TEXT("GameServer"))->GetStringField(TEXT("IP"));
+			LinkFor(EServerType::GameServer).Port = JsonObject->GetObjectField(TEXT("GameServer"))->GetIntegerField(TEXT("Port"));
 
-			ChunkServerIP = JsonObject->GetObjectField(TEXT("ChunkServer"))->GetStringField(TEXT("IP"));
-			ChunkServerPort = JsonObject->GetObjectField(TEXT("ChunkServer"))->GetIntegerField(TEXT("Port"));
+			LinkFor(EServerType::ChunkServer).IP = JsonObject->GetObjectField(TEXT("ChunkServer"))->GetStringField(TEXT("IP"));
+			LinkFor(EServerType::ChunkServer).Port = JsonObject->GetObjectField(TEXT("ChunkServer"))->GetIntegerField(TEXT("Port"));
 
-			UE_LOG(LogConnection, Log, TEXT("Login Server: %s:%d"), *LoginServerIP, LoginServerPort);
-			UE_LOG(LogConnection, Log, TEXT("Game Server: %s:%d"), *GameServerIP, GameServerPort);
-			UE_LOG(LogConnection, Log, TEXT("Chunk Server: %s:%d"), *ChunkServerIP, ChunkServerPort);
+			UE_LOG(LogConnection, Log, TEXT("Login Server: %s:%d"), *LinkFor(EServerType::LoginServer).IP, LinkFor(EServerType::LoginServer).Port);
+			UE_LOG(LogConnection, Log, TEXT("Game Server: %s:%d"), *LinkFor(EServerType::GameServer).IP, LinkFor(EServerType::GameServer).Port);
+			UE_LOG(LogConnection, Log, TEXT("Chunk Server: %s:%d"), *LinkFor(EServerType::ChunkServer).IP, LinkFor(EServerType::ChunkServer).Port);
 		}
 		else
 		{
@@ -86,57 +89,36 @@ void UNetworkManager::SetMessageBoxPopupClass(TSubclassOf<UMessageBoxPopup> InMe
 
 void UNetworkManager::StartPollingLoginServer()
 {
-	const float PollIntervalLoginServerData = 0.0001f; // Adjust as necessary
-	if (WorldContext)
-	{
-		WorldContext->GetTimerManager().ClearTimer(NetworkLoginServerPollTimerHandle);
-		WorldContext->GetTimerManager().SetTimer(NetworkLoginServerPollTimerHandle, this, &UNetworkManager::PollLoginServerNetworkData, PollIntervalLoginServerData, true);
-		UE_LOG(LogConnection, Verbose, TEXT("Polling timer for login server data set up successfully."));
-	}
+	// World-TimerManager polling is gone (S04): one core ticker serves all
+	// links and survives level transitions. Kept for call-site compatibility.
+	EnsureTicker();
+	UE_LOG(LogConnection, Verbose, TEXT("Polling (core ticker) ensured for login server data."));
 }
 
 void UNetworkManager::StartPollingGameServer()
 {
-	const float PollIntervalGameServerData = 0.001f; // Adjust as necessary
-	if (WorldContext)
-	{
-		WorldContext->GetTimerManager().ClearTimer(NetworkGameServerPollTimerHandle);
-		WorldContext->GetTimerManager().SetTimer(NetworkGameServerPollTimerHandle, this, &UNetworkManager::PollGameServerNetworkData, PollIntervalGameServerData, true);
-		UE_LOG(LogConnection, Verbose, TEXT("Polling timer for game server data set up successfully."));
-	}
+	EnsureTicker();
+	UE_LOG(LogConnection, Verbose, TEXT("Polling (core ticker) ensured for game server data."));
 }
 
 // start polling data from chunk server
 void UNetworkManager::StartPollingChunkServer()
 {
-	const float PollIntervalChunkServerData = 0.001f; // Adjust as necessary
-	if (WorldContext)
-	{
-		WorldContext->GetTimerManager().ClearTimer(NetworkChunkServerPollTimerHandle);
-		WorldContext->GetTimerManager().SetTimer(NetworkChunkServerPollTimerHandle, this, &UNetworkManager::PollChunkServerNetworkData, PollIntervalChunkServerData, true);
-		UE_LOG(LogConnection, Verbose, TEXT("Polling timer for chunk server data set up successfully."));
-	}
+	EnsureTicker();
+	UE_LOG(LogConnection, Verbose, TEXT("Polling (core ticker) ensured for chunk server data."));
 }
 
 void UNetworkManager::RestartPolling()
 {
 	if (!WorldContext)
 	{
-		UE_LOG(LogConnection, Error, TEXT("NetworkManager::RestartPolling - WorldContext is null, cannot restart polling timers"));
+		UE_LOG(LogConnection, Error, TEXT("NetworkManager::RestartPolling - WorldContext is null, cannot restart polling"));
 		return;
 	}
 
-	UE_LOG(LogConnection, Log, TEXT("NetworkManager::RestartPolling - Re-registering poll timers in new world"));
-
-	// The old TimerManager is gone after level transition - register fresh timers
-	// in the new world's TimerManager. ClearTimer on a stale handle is a no-op so
-	// it is safe to call even if the handle references the destroyed old world.
-	NetworkLoginServerPollTimerHandle.Invalidate();
-	NetworkGameServerPollTimerHandle.Invalidate();
-	NetworkChunkServerPollTimerHandle.Invalidate();
-
-	StartPollingLoginServer();
-	StartPollingGameServer();
-	StartPollingChunkServer();
+	// Nothing to re-register: the core ticker never belonged to the old
+	// world. Ensure it is running (no-op when it already is).
+	UE_LOG(LogConnection, Log, TEXT("NetworkManager::RestartPolling - core ticker survives travel, ensuring it runs"));
+	EnsureTicker();
 }
 

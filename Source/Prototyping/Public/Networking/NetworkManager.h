@@ -9,8 +9,13 @@
 #include "Networking.h"
 #include "Networking/NetworkReceiverWorker.h"
 #include "Networking/NetworkSenderWorker.h"
+#include "Containers/Ticker.h"
 #include <Gameplay/UI/MessageBoxPopup.h>
 #include "NetworkManager.generated.h"
+
+// Declared in Services/TimeSyncService.h (kept forward here to avoid
+// pulling the generated time-sync header into every includer).
+enum class EServerType : uint8;
 
 // Forward declarations
 class UTimeSyncService;
@@ -44,64 +49,57 @@ private:
 	UPROPERTY()
 	UWorld* WorldContext = nullptr;
 
-	// Unique ID for this manager instance � used to make thread names unique
+	// Unique ID for this manager instance — used to make thread names unique
 	// across multiple PIE instances so FRunnableThread::Kill targets the right thread.
 	int32 InstanceId = 0;
 
-	// Login server details
-	FString LoginServerIP;
-	int32 LoginServerPort;
-	FSocket* LoginServerSocket;
-	bool bIsLoginSocketConnected;
+	// One link per EServerType (Login=0, Game=1, Chunk=2). Owns the socket,
+	// the receiver/sender workers + threads, and the handshake state.
+	// Replaces the old tripled Login/Game/Chunk field sets (S04): a single
+	// ConnectLink/PollLink/TeardownLink implementation serves all three.
+	struct FServerLink
+	{
+		FString IP;
+		int32 Port = 0;
+		// "Login" / "Game" / "Chunk" — log lines, thread names, popup routing.
+		FString Tag;
+		FSocket* Socket = nullptr;
+		NetworkReceiverWorker* Receiver = nullptr;
+		FRunnableThread* ReceiverThread = nullptr;
+		NetworkSenderWorker* Sender = nullptr;
+		FRunnableThread* SenderThread = nullptr;
+		// Handshake in flight: the core ticker runs CheckHandshake every 1.0s
+		// until workers are up (connect-time) or the budget is spent (popup).
+		// Replaces the old per-socket world-TimerManager connect timers, which
+		// died on level transitions and left handshakes stuck forever.
+		bool ConnectPending = false;
+		int32 RetryCount = 0;
+		int32 MaxRetries = 3;
+		double LastHandshakeCheckSec = 0.0;
+	};
 
-	NetworkReceiverWorker* ReceiverLoginServerWorker;
-	FRunnableThread* ReceiverLoginServerThread;
+	FServerLink Links[3];
+	static int32 LinkIndex(EServerType Type) { return static_cast<int32>(Type); }
+	FServerLink& LinkFor(EServerType Type) { return Links[LinkIndex(Type)]; }
+	const FServerLink& LinkFor(EServerType Type) const { return Links[LinkIndex(Type)]; }
 
-	NetworkSenderWorker* SenderLoginServerWorker;
-	FRunnableThread* SenderLoginServerThread;
+	// Core-ticker handle for poll+handshake (world-independent). Replaces the
+	// old world-TimerManager poll/connect timers: the ticker survives level
+	// transitions, so handshakes resume automatically and no RestartPolling
+	// re-registration is needed. Drained packets still require WorldContext
+	// (same as before — queues buffer while travelling).
+	FTSTicker::FDelegateHandle PollTickerHandle;
 
-	// Chunk server details
-	FString ChunkServerIP;
-	int32 ChunkServerPort;
-	FSocket* ChunkServerSocket;
-	bool bIsChunkSocketConnected;
-
-	NetworkReceiverWorker* ReceiverChunkServerWorker;
-	FRunnableThread* ReceiverChunkServerThread;
-
-	NetworkSenderWorker* SenderChunkServerWorker;
-	FRunnableThread* SenderChunkServerThread;
-
-	// timers chunk server
-	FTimerHandle NetworkChunkServerPollTimerHandle;
-	FTimerHandle ChunkServerConnectionTimerHandle;
-
-	int32 ChunkConnectionRetryCount = 0;
-	const int32 MaxChunkRetries = 3;
-
-	// Game server details
-	FString GameServerIP;
-	int32 GameServerPort;
-	FSocket* GameServerSocket;
-	bool bIsGameSocketConnected;
-
-	NetworkReceiverWorker* ReceiverGameServerWorker;
-	FRunnableThread* ReceiverGameServerThread;
-
-	NetworkSenderWorker* SenderGameServerWorker;
-	FRunnableThread* SenderGameServerThread;
-
-	// timers
-	FTimerHandle NetworkLoginServerPollTimerHandle;
-	FTimerHandle NetworkGameServerPollTimerHandle;
-
-	FTimerHandle LoginServerConnectionTimerHandle;
-	FTimerHandle GameServerConnectionTimerHandle;
-
-	int32 LoginConnectionRetryCount = 0;
-	int32 GameConnectionRetryCount = 0;
-	const int32 MaxLoginRetries = 3; 
-	const int32 MaxGameRetries = 3;
+	// Unified internals: one implementation for all three links.
+	void InitLinks();
+	void EnsureTicker();
+	bool TickLinks(float DeltaTime);
+	void ConnectLink(EServerType Type);
+	void CheckHandshake(EServerType Type);
+	void PollLink(EServerType Type);
+	void TeardownLink(EServerType Type);
+	void SendViaLink(EServerType Type, const FString& Data);
+	bool IsLinkConnected(EServerType Type) const;
 
 	// Guard against double Shutdown() calls (GameInstance::Shutdown + destructor)
 	bool bIsShutDown = false;

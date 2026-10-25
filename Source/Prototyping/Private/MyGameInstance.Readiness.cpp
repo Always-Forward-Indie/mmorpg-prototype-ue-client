@@ -96,6 +96,7 @@
 
 #include "Framework/Application/IInputProcessor.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Utils/NetCore/TravelGate.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/CoreDelegates.h"
@@ -146,6 +147,7 @@ void UMyGameInstance::CheckGameWorldReady()
 		// forever.  After the timeout, remove it IF the world IS ready — the player
 		// would rather see the loaded world than a stuck loading screen.
 		ReadyFlags = 0;
+		AnnouncedGatesMask = 0;
 		LoadingScreenShownTime = FPlatformTime::Seconds();
 		FTSTicker::GetCoreTicker().RemoveTicker(LoadingScreenSafetyTimerHandle);
 		LoadingScreenSafetyTimerHandle = FTSTicker::GetCoreTicker().AddTicker(
@@ -172,9 +174,15 @@ void UMyGameInstance::CheckGameWorldReady()
 		return;
 	}
 
-	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Gate2 PASS: Pawn='%s' possessed at Pos=(%.0f,%.0f,%.0f)"),
-		*Pawn->GetName(),
-		Pawn->GetActorLocation().X, Pawn->GetActorLocation().Y, Pawn->GetActorLocation().Z);
+	// Gate PASS logs are once-per-travel (S08): this ticker polls every 33ms,
+	// so an unguarded Warning here spams at 30Hz while later gates wait.
+	if (!(AnnouncedGatesMask & (1u << 2)))
+	{
+		AnnouncedGatesMask |= (1u << 2);
+		UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Gate2 PASS: Pawn='%s' possessed at Pos=(%.0f,%.0f,%.0f)"),
+			*Pawn->GetName(),
+			Pawn->GetActorLocation().X, Pawn->GetActorLocation().Y, Pawn->GetActorLocation().Z);
+	}
 
 	// Gate 3: World Partition streaming must be complete so no geometry pops in
 	// during the first rendered frame after the loading screen disappears.
@@ -185,7 +193,11 @@ void UMyGameInstance::CheckGameWorldReady()
 			UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] Gate3 WAIT: World Partition still streaming..."));
 			return;
 		}
-		UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Gate3 PASS: World Partition streaming complete"));
+		if (!(AnnouncedGatesMask & (1u << 3)))
+		{
+			AnnouncedGatesMask |= (1u << 3);
+			UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Gate3 PASS: World Partition streaming complete"));
+		}
 	}
 	else
 	{
@@ -200,7 +212,11 @@ void UMyGameInstance::CheckGameWorldReady()
 		UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] Gate4 WAIT: shader compiler still running..."));
 		return;
 	}
-	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Gate4 PASS: shader compiler idle"));
+	if (!(AnnouncedGatesMask & (1u << 4)))
+	{
+		AnnouncedGatesMask |= (1u << 4);
+		UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Gate4 PASS: shader compiler idle"));
+	}
 #endif
 
 	// Gate 5: Texture streaming — prevent mip pop-in on first rendered
@@ -212,7 +228,11 @@ void UMyGameInstance::CheckGameWorldReady()
 			UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] Gate5 WAIT: %d streaming requests still pending..."), PendingStreaming);
 			return;
 		}
-		UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Gate5 PASS: texture streaming complete"));
+		if (!(AnnouncedGatesMask & (1u << 5)))
+		{
+			AnnouncedGatesMask |= (1u << 5);
+			UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Gate5 PASS: texture streaming complete"));
+		}
 	}
 
 	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] 5. All gates passed — calling OnGameWorldReady"));
@@ -388,8 +408,9 @@ void UMyGameInstance::StartFrameCountdown()
 			if (!bLoadingScreenRemovePending.Load())
 			{
 				// Wall-clock safety net: if the render thread is stalled (window
-				// unfocused), force-remove after 3 s so the player isn't stuck.
-				if (FPlatformTime::Seconds() - FrameCountdownStartTime < 3.0) { return true; }
+				// unfocused), force-remove after the frame-countdown timeout so
+				// the player isn't stuck. Threshold owned by FTravelGate.
+				if (!FTravelGate::ShouldGiveUpFrameCountdown(FPlatformTime::Seconds() - FrameCountdownStartTime)) { return true; }
 				UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] SAFETY: frame countdown timed out after 3 s � force-removing loading screen"));
 				bLoadingScreenRemovePending.Store(true);
 			}

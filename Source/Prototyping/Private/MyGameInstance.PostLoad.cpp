@@ -103,6 +103,7 @@
 
 #include "Framework/Application/IInputProcessor.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Utils/NetCore/TravelGate.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/CoreDelegates.h"
@@ -123,9 +124,17 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 	{
 		const double TravelElapsed = FPlatformTime::Seconds() - LoadTravelStartTime;
 		const uint64 TravelFrames = GFrameCounter - LoadTravelStartFrame;
-		UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Travel DONE: map '%s' took %.1fs wall-clock (%llu frames, avg %.1f fps)"),
-			*LevelBeingLoaded.ToString(), TravelElapsed, TravelFrames,
-			TravelElapsed > 0.0 ? (double)TravelFrames / TravelElapsed : 0.0);
+		const double TravelFps = TravelElapsed > 0.0 ? (double)TravelFrames / TravelElapsed : 0.0;
+		if (FTravelGate::HasTravelStalled(TravelElapsed, TravelFrames))
+		{
+			UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Travel DONE THROTTLED: map '%s' took %.1fs wall-clock (%llu frames, avg %.1f fps) — engine travel starved (unfocused window / RHI fence)"),
+				*LevelBeingLoaded.ToString(), TravelElapsed, TravelFrames, TravelFps);
+		}
+		else
+		{
+			UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] Travel DONE: map '%s' took %.1fs wall-clock (%llu frames, avg %.1f fps)"),
+				*LevelBeingLoaded.ToString(), TravelElapsed, TravelFrames, TravelFps);
+		}
 		LoadTravelStartTime = 0.0;
 	}
 
@@ -459,9 +468,11 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 			LoadingScreenHardSafetyTickerHandle = FTSTicker::GetCoreTicker().AddTicker(
 				FTickerDelegate::CreateLambda([this](float) -> bool
 				{
-					if (!LoadingScreenWidget) { return false; }
+					// Readiness phase uses the plain-UMG overlay; the movie widget
+					// may already be gone while the overlay is still up.
+					if (!LoadingScreenWidget && !LoadingScreenOverlayWidget) { return false; }
 					const double Elapsed = FPlatformTime::Seconds() - LoadingScreenWatchdogStartTime;
-					if (Elapsed < 8.0) { return true; }
+					if (!FTravelGate::IsHardWatchdogExpired(Elapsed)) { return true; }
 					UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] HARD SAFETY: %.1fs wall-clock elapsed — force-removing loading screen (gates/flags may have stalled)"), Elapsed);
 					RemoveLoadingScreen();
 					return false;

@@ -193,6 +193,7 @@ void UMyGameInstance::ReturnToLoginLevel()
 	bGameWorldReady = false;
 	bTransitioningToGameWorld = false;
 	ReadyFlags = 0;
+	AnnouncedGatesMask = 0;
 	ConnectedPlayers.Empty();
 	SpawnedPlayers.Empty();
 	Player = nullptr;
@@ -327,6 +328,7 @@ void UMyGameInstance::TransitionToGameWorld()
 	bGameWorldReady = false;
 	bPendingSpawnDispatched = false;
 	ReadyFlags = 0;
+	AnnouncedGatesMask = 0;
 	RenderedFrameCount.Store(0);
 	bLoadingScreenRemovePending.Store(false);
 

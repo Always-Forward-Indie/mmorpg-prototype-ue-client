@@ -142,6 +142,11 @@ FDateTime ReceiveTimeLoginServer;
 	static constexpr uint8 ReadyFlag_AllRequired    = FReadinessGate::AllRequired; // StatsReceived excluded
 	uint8 ReadyFlags = 0;
 
+	// One-shot gate announcements per travel (S08): CheckGameWorldReady polls
+	// every 33ms, so Gate PASS logs would spam at 30Hz while later gates wait.
+	// Bit N = gate N already announced; reset together with ReadyFlags.
+	uint8 AnnouncedGatesMask = 0;
+
 	// Wall-clock moment the safety net was armed (game-world load started).
 	// Logged on hide so slow loads can be measured instead of guessed.
 	double LoadingScreenShownTime = 0.0;

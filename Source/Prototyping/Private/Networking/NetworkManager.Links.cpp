@@ -172,12 +172,20 @@ void UNetworkManager::PollLink(EServerType Type)
 	FString ReceivedData;
 	while (L.Receiver && L.Receiver->GetData(ReceivedData))
 	{
+		// Single parse per packet (S05): the parsed form feeds time-sync,
+		// the per-eventType dispatcher, and the legacy FString broadcast.
+		const FParsedPacket Packet = JSONParser::ParsePacket(ReceivedData);
+
 		UE_LOG(LogNetPacket, Verbose, TEXT("Received %s Server data: %s"), *L.Tag, *ReceivedData);
 
-		// Process time sync data before broadcasting
-		ProcessIncomingData(ReceivedData);
+		// Process time sync data (no re-parse — works on the parsed packet)
+		ProcessIncomingPacket(Packet);
 
-		// Trigger the event or delegate call
+		// Route to packet handlers registered for this eventType.
+		DispatcherFor(Type).Dispatch(Packet);
+
+		// Legacy compat broadcast (Blueprints + not-yet-migrated handlers).
+		// Migrated handlers unsubscribe from this once they register above.
 		switch (Type)
 		{
 		case EServerType::LoginServer:
@@ -257,6 +265,34 @@ void UNetworkManager::TeardownLink(EServerType Type)
 	delete L.Receiver; L.Receiver = nullptr;
 	delete L.Sender; L.Sender = nullptr;
 	L.ConnectPending = false;
+}
+
+FNetworkDispatcher& UNetworkManager::DispatcherFor(EServerType Type)
+{
+	switch (Type)
+	{
+	case EServerType::LoginServer:
+		return LoginDispatcher;
+	case EServerType::GameServer:
+		return GameDispatcher;
+	case EServerType::ChunkServer:
+	default:
+		return ChunkDispatcher;
+	}
+}
+
+const FNetworkDispatcher& UNetworkManager::DispatcherFor(EServerType Type) const
+{
+	switch (Type)
+	{
+	case EServerType::LoginServer:
+		return LoginDispatcher;
+	case EServerType::GameServer:
+		return GameDispatcher;
+	case EServerType::ChunkServer:
+	default:
+		return ChunkDispatcher;
+	}
 }
 
 void UNetworkManager::SendViaLink(EServerType Type, const FString& Data)

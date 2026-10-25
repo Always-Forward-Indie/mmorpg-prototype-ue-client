@@ -9,6 +9,7 @@
 #include "Networking.h"
 #include "Networking/NetworkReceiverWorker.h"
 #include "Networking/NetworkSenderWorker.h"
+#include "Networking/NetworkDispatcher.h"
 #include "Containers/Ticker.h"
 #include <Gameplay/UI/MessageBoxPopup.h>
 #include "NetworkManager.generated.h"
@@ -82,6 +83,11 @@ private:
 	static int32 LinkIndex(EServerType Type) { return static_cast<int32>(Type); }
 	FServerLink& LinkFor(EServerType Type) { return Links[LinkIndex(Type)]; }
 	const FServerLink& LinkFor(EServerType Type) const { return Links[LinkIndex(Type)]; }
+
+	// Per-connection packet routers (S05), parallel to Links[].
+	FNetworkDispatcher LoginDispatcher;
+	FNetworkDispatcher GameDispatcher;
+	FNetworkDispatcher ChunkDispatcher;
 
 	// Core-ticker handle for poll+handshake (world-independent). Replaces the
 	// old world-TimerManager poll/connect timers: the ticker survives level
@@ -162,6 +168,16 @@ public:
 
     // Process incoming data and extract time sync information
     void ProcessIncomingData(const FString& ReceivedData);
+
+    // Parsed-packet twin (S05): same time-sync extraction on an already-parsed
+    // packet, no re-parse. Used by PollLink.
+    void ProcessIncomingPacket(const FParsedPacket& Packet);
+
+    // Per-connection eventType routers (S05). Handlers register packet
+    // callbacks here instead of re-parsing the FString broadcast to filter.
+    // Unmigrated events keep the FString broadcast (incremental migration).
+    FNetworkDispatcher& DispatcherFor(EServerType Type);
+    const FNetworkDispatcher& DispatcherFor(EServerType Type) const;
 
     // Get TimeSyncService instance
     UTimeSyncService* GetTimeSyncService();

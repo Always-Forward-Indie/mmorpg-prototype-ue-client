@@ -32,7 +32,7 @@ from pathlib import Path
 FAIL_BUDGET = 700
 WARN_BUDGET = 500
 
-PROD_INCLUDE = re.compile(r'#include\s+"(Utils/(NetCore/|JSONParser\.h)|Services/LocalizationSubsystem\.h)')
+PROD_INCLUDE = re.compile(r'#include\s+"(Utils/(NetCore/|JSONParser\.h)|Networking/NetworkDispatcher\.h|Services/LocalizationSubsystem\.h)')
 PROD_CALL = re.compile(r"\b([A-Z]\w*)::(\w+)")
 RULE_STRUCT = re.compile(r"\bstruct\s+(?:\w+\s+)?(F\w*Rule\w*)\b")
 CALL_BLOCKLIST_PREFIX = ("Test",)

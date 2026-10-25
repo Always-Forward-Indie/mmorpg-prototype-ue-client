@@ -39,29 +39,29 @@ void UPlayerManager::HandleChunkServerSocketConnected()
 
 void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 {
-	CRASH_GUARD("PlayerManager::ProcessChunkServerData");
+	// Legacy FString entry kept for compat; the live path is ProcessChunkPacket
+	// via the dispatcher fallback (single parse in PollLink).
+	ProcessChunkPacket(JSONParser::ParsePacket(ReceivedData));
+}
 
-	// Проверяем валидность данных перед парсингом
-	if (ReceivedData.IsEmpty())
+void UPlayerManager::ProcessChunkPacket(const FParsedPacket& Packet)
+{
+	CRASH_GUARD("PlayerManager::ProcessChunkPacket");
+
+	// Compat alias: a few branches below still take the raw string (S05b converts them).
+	const FString& ReceivedData = Packet.Raw;
+
+	// Single-parse path (S05): Root/Body/EventType come from PollLink.
+	if (!Packet.bValid || !Packet.Root.IsValid())
 	{
 		UE_LOG(LogConnection, Error, TEXT("PlayerManager: Received empty data"));
 		return;
 	}
 
-	// Парсим JSON данные с проверкой валидности
-	TSharedPtr<FJsonObject> Root;
-	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
-	{
-		UE_LOG(LogConnection, Error, TEXT("PlayerManager: Failed to parse JSON data"));
-		return;
-	}
-
-	// Безопасно получаем body
 	TSharedPtr<FJsonObject> Body;
-	if (Root->HasField(TEXT("body")))
+	if (Packet.Root->HasField(TEXT("body")))
 	{
-		Body = Root->GetObjectField(TEXT("body"));
+		Body = Packet.Root->GetObjectField(TEXT("body"));
 		if (!Body.IsValid())
 		{
 			UE_LOG(LogConnection, Error, TEXT("PlayerManager: Invalid body object"));
@@ -69,8 +69,8 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 		}
 	}
 
-	// Deserialize the received JSON string to get MessageData struct
-	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
+	// Deserialize the packet to get MessageData struct (no re-parse: works on Root)
+	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(Packet);
 
 	// Проверяем валидность MessageData
 	if (MessageData.eventType.IsEmpty())
@@ -79,8 +79,8 @@ void UPlayerManager::ProcessChunkServerData(const FString& ReceivedData)
 		return;
 	}
 
-	// Deserialize the received JSON string to get ClientData struct
-	FClientDataStruct ClientData = JSONParser::DeserializeClientData(ReceivedData);
+	// Deserialize client data from the parsed root (no re-parse)
+	FClientDataStruct ClientData = JSONParser::DeserializeClientData(Packet.Root);
 	
 	// Deserialize character data only if body and character field exist
 	FCharacterDataStruct CharacterData;

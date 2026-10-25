@@ -60,10 +60,13 @@ UNetworkManager::~UNetworkManager()
 
 void UNetworkManager::ProcessIncomingData(const FString& ReceivedData)
 {
-	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
+	ProcessIncomingPacket(JSONParser::ParsePacket(ReceivedData));
+}
 
+void UNetworkManager::ProcessIncomingPacket(const FParsedPacket& Packet)
+{
 	if (UTimeSyncService* TimeSyncService = GetTimeSyncService())
 	{
-		JSONParser::ProcessTimeSyncFromHeader(ReceivedData, TimeSyncService);
+		JSONParser::ProcessTimeSyncFromPacket(Packet, TimeSyncService);
 	}
 }

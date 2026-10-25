@@ -51,6 +51,9 @@ public:
 	void ProcessGameServerData(const FString& ReceivedData);
 	UFUNCTION()
 	void ProcessChunkServerData(const FString& ReceivedData);
+	// Single-parse chunk entry (S05): Routes via FNetworkDispatcher fallback.
+	// Replaces the triple-parse head of ProcessChunkServerData.
+	void ProcessChunkPacket(const FParsedPacket& Packet);
 	// Rejoin after a mid-session chunk reconnect: the socket is new, so the
 	// server forgot us — resend Phase 1 (joinGameClient) to rebind. Fires on
 	// every chunk connect but no-ops unless the game world is already live

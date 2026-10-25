@@ -3,6 +3,7 @@
 
 
 #include "Gameplay/Players/PlayerManager.h"
+#include "Services/TimeSyncService.h"
 #include "Gameplay/Combat/CombatSystemManager.h"
 #include "Gameplay/Combat/CombatNetworkHandler.h"
 #include "Gameplay/Player/ExperienceManager.h"
@@ -72,9 +73,11 @@ void UPlayerManager::SubscribeToNetworkManager()
 		networkManager->OnGameServerDataReceived.RemoveDynamic(this, &UPlayerManager::ProcessGameServerData);
 		networkManager->OnGameServerDataReceived.AddDynamic(this, &UPlayerManager::ProcessGameServerData);
 
-		// Subscribe to the network manager's events for chunk server data
-		networkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UPlayerManager::ProcessChunkServerData);
-		networkManager->OnChunkServerDataReceived.AddDynamic(this, &UPlayerManager::ProcessChunkServerData);
+		// Subscribe to the network manager's events for chunk server data.
+		// Single-parse path (S05): dispatcher fallback delivers the parsed
+		// packet; the legacy FString broadcast is no longer needed here.
+		networkManager->DispatcherFor(EServerType::ChunkServer).RemoveFallbackHandler(this);
+		networkManager->DispatcherFor(EServerType::ChunkServer).AddFallbackHandler(this, &UPlayerManager::ProcessChunkPacket);
 		// Rejoin trigger for mid-session reconnects (idempotent: Remove first).
 		networkManager->OnChunkServerSocketConnected.RemoveDynamic(this, &UPlayerManager::HandleChunkServerSocketConnected);
 		networkManager->OnChunkServerSocketConnected.AddDynamic(this, &UPlayerManager::HandleChunkServerSocketConnected);

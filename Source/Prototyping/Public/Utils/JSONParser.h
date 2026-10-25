@@ -7,6 +7,7 @@
 #include "Data/ItemStruct.h"
 #include "Data/WIODataStructs.h"
 #include "Authentication/LoginFlowTypes.h"
+#include "Networking/NetworkDispatcher.h"
 
 // Forward declaration
 class UTimeSyncService;
@@ -30,7 +31,18 @@ public:
     static UTimeSyncService* GetTimeSyncService();
 
     static FClientDataStruct DeserializeClientData(const FString& JsonString);
+
+    // Root-based twin (S05): same field reads on an already-parsed object, no re-parse.
+    static FClientDataStruct DeserializeClientData(const TSharedPtr<FJsonObject>& Root);
     static FMessageDataStruct DeserializeMessageData(const FString& JsonString);
+
+    // Root-based twin (S05): same field reads on an already-parsed packet, no re-parse.
+    static FMessageDataStruct DeserializeMessageData(const FParsedPacket& Packet);
+
+    // Single-parse entry point (S05): parses once, shares Root/Body with the
+    // dispatcher and the time-sync path. Quiet defaults on garbage (same
+    // contract as DeserializeMessageData — truncated packets yield invalid).
+    static FParsedPacket ParsePacket(const FString& JsonString);
     static FString DeserializeEventTypeData(const FString& JsonString);
 
     // Central error-code resolution: prefers body.errorCode, falls back to header.message.
@@ -45,8 +57,14 @@ public:
     // New method to deserialize network header with time sync data
     static FNetworkHeaderStruct DeserializeNetworkHeader(const FString& JsonString);
 
+    // Root-based twin (S05): same field reads on an already-parsed object, no re-parse.
+    static FNetworkHeaderStruct DeserializeNetworkHeader(const TSharedPtr<FJsonObject>& Root);
+
     // Helper method to process time sync from network headers
     static void ProcessTimeSyncFromHeader(const FString& JsonString, UTimeSyncService* TimeSyncService);
+
+    // Parsed-packet twin (S05): same logic on an already-parsed packet, no re-parse.
+    static void ProcessTimeSyncFromPacket(const FParsedPacket& Packet, UTimeSyncService* TimeSyncService);
 
     static FPositionDataStruct DeserializePositionData(const TSharedPtr<FJsonObject>& PosObj);
     static TMap<FString, FAttributeDataStruct> DeserializeAttributesArray(const TArray<TSharedPtr<FJsonValue>>& JsonArray);

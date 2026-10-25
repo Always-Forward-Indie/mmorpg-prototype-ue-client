@@ -12,15 +12,25 @@
 // Deserialize network header with time sync data
 FNetworkHeaderStruct JSONParser::DeserializeNetworkHeader(const FString& JsonString)
 {
-    TSharedPtr<FJsonObject> JsonObject;
-    FNetworkHeaderStruct NetworkHeader;
+	TSharedPtr<FJsonObject> JsonObject;
+	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+	if (!FJsonSerializer::Deserialize(Reader, JsonObject) || !JsonObject.IsValid())
+	{
+		return FNetworkHeaderStruct();
+	}
+	return DeserializeNetworkHeader(JsonObject);
+}
 
-    // Convert the string to a JSON object
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
-    if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
-    {
-        const TSharedPtr<FJsonObject>* HeaderObject = nullptr;
-        if (JsonObject->TryGetObjectField(TEXT("header"), HeaderObject) && HeaderObject != nullptr)
+FNetworkHeaderStruct JSONParser::DeserializeNetworkHeader(const TSharedPtr<FJsonObject>& JsonObject)
+{
+	FNetworkHeaderStruct NetworkHeader;
+	if (!JsonObject.IsValid())
+	{
+		return NetworkHeader;
+	}
+
+	const TSharedPtr<FJsonObject>* HeaderObject = nullptr;
+		if (JsonObject->TryGetObjectField(TEXT("header"), HeaderObject) && HeaderObject != nullptr)
         {
                 (*HeaderObject)->TryGetStringField(TEXT("eventType"), NetworkHeader.eventType);
 
@@ -69,7 +79,6 @@ FNetworkHeaderStruct JSONParser::DeserializeNetworkHeader(const FString& JsonStr
                 (*TimestampsObject)->TryGetStringField(TEXT("requestIdEcho"), NetworkHeader.requestId);
             }
         }
-    }
 
     return NetworkHeader;
 }
@@ -81,7 +90,17 @@ void JSONParser::ProcessTimeSyncFromHeader(const FString& JsonString, UTimeSyncS
 		return;
 	}
 
-	FNetworkHeaderStruct NetworkHeader = DeserializeNetworkHeader(JsonString);
+	ProcessTimeSyncFromPacket(ParsePacket(JsonString), TimeSyncService);
+}
+
+void JSONParser::ProcessTimeSyncFromPacket(const FParsedPacket& Packet, UTimeSyncService* TimeSyncService)
+{
+	if (!TimeSyncService || !Packet.bValid || !Packet.Root.IsValid())
+	{
+		return;
+	}
+
+	FNetworkHeaderStruct NetworkHeader = DeserializeNetworkHeader(Packet.Root);
 
 	// Prefer requestIdEcho (server response); fall back to requestId.
 	FString RequestIdToUse;

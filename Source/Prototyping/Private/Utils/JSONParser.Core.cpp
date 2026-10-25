@@ -335,29 +335,78 @@ FClientDataStruct JSONParser::DeserializeClientData(const FString& JsonString)
 	 TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	 if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
 	 {
-		 const TSharedPtr<FJsonObject>* HeaderObject = nullptr;
-		 if (JsonObject->TryGetObjectField(TEXT("header"), HeaderObject) && HeaderObject != nullptr)
-		 {
-			 	(*HeaderObject)->TryGetNumberField(TEXT("clientId"), ClientData.clientId);
-
-			 	(*HeaderObject)->TryGetStringField(TEXT("hash"), ClientData.hash);
-		 }
+		 return DeserializeClientData(JsonObject);
 	 }
 
 	 return ClientData;
  }
 
+ // deserialize ClientData from an already-parsed root (S05: no re-parse)
+FClientDataStruct JSONParser::DeserializeClientData(const TSharedPtr<FJsonObject>& JsonObject)
+ {
+	 FClientDataStruct ClientData;
+	 if (!JsonObject.IsValid())
+	 {
+		 return ClientData;
+	 }
+
+	 const TSharedPtr<FJsonObject>* HeaderObject = nullptr;
+	 if (JsonObject->TryGetObjectField(TEXT("header"), HeaderObject) && HeaderObject != nullptr)
+	 {
+		 	(*HeaderObject)->TryGetNumberField(TEXT("clientId"), ClientData.clientId);
+
+		 	(*HeaderObject)->TryGetStringField(TEXT("hash"), ClientData.hash);
+	 }
+
+	 return ClientData;
+ }
+
+ // Single-parse entry point (S05): one deserialize, shares Root/Body.
+ FParsedPacket JSONParser::ParsePacket(const FString& JsonString)
+ {
+ 	FParsedPacket Packet;
+ 	Packet.Raw = JsonString;
+
+ 	// Crash-proofing: truncated/dropped packets yield invalid, never AV
+ 	// (same quiet-defaults contract as DeserializeMessageData).
+ 	TSharedPtr<FJsonObject> Root;
+ 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+ 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+ 	{
+ 		return Packet;
+ 	}
+ 	Packet.Root = Root;
+
+ 	const TSharedPtr<FJsonObject>* HeaderPtr = nullptr;
+ 	if (Root->TryGetObjectField(TEXT("header"), HeaderPtr) && HeaderPtr && (*HeaderPtr).IsValid())
+ 	{
+ 		(*HeaderPtr)->TryGetStringField(TEXT("eventType"), Packet.EventType);
+ 		(*HeaderPtr)->TryGetStringField(TEXT("status"), Packet.Status);
+ 		(*HeaderPtr)->TryGetStringField(TEXT("message"), Packet.Message);
+ 	}
+
+ 	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
+ 	if (Root->TryGetObjectField(TEXT("body"), BodyPtr) && BodyPtr && (*BodyPtr).IsValid())
+ 	{
+ 		Packet.Body = *BodyPtr;
+ 	}
+
+ 	Packet.bValid = !Packet.EventType.IsEmpty();
+ 	return Packet;
+ }
+
  // deserialize MessageData from a json string
  FMessageDataStruct JSONParser::DeserializeMessageData(const FString& JsonString)
 {
-	TSharedPtr<FJsonObject> JsonObject;
-	FMessageDataStruct MessageData;
+	return DeserializeMessageData(ParsePacket(JsonString));
+}
 
-	// Crash-proofing: a truncated/dropped packet must yield defaults, never AV.
-	// (Hot per-packet path: quiet defaults, no error-level log; time-sync
-	// quality surfaces problems via the SampleRule instead.)
-	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
-	if (!FJsonSerializer::Deserialize(Reader, JsonObject) || !JsonObject.IsValid())
+// deserialize MessageData from an already-parsed packet (S05: no re-parse)
+FMessageDataStruct JSONParser::DeserializeMessageData(const FParsedPacket& Packet)
+{
+	FMessageDataStruct MessageData;
+	const TSharedPtr<FJsonObject>& JsonObject = Packet.Root;
+	if (!JsonObject.IsValid())
 	{
 		return MessageData;
 	}

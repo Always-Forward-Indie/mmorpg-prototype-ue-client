@@ -1,5 +1,6 @@
 #include "Gameplay/Trade/TradeNetworkHandler.h"
 #include "Prototyping.h"
+#include "Services/TimeSyncService.h"
 #include "Gameplay/Trade/TradeManager.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
@@ -21,50 +22,54 @@ void UTradeNetworkHandler::Initialize(UTradeManager* InTradeManager, UNetworkMan
 void UTradeNetworkHandler::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UTradeNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.AddHandler(EventType, this, &UTradeNetworkHandler::HandleChunkPacket);
+    }
     bIsSubscribed = true;
 }
 
 void UTradeNetworkHandler::UnsubscribeFromNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager) || !bIsSubscribed) return;
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UTradeNetworkHandler::HandleChunkServerData);
+    FNetworkDispatcher& Dispatcher = NetworkManager->DispatcherFor(EServerType::ChunkServer);
+    for (const FString& EventType : HandledEvents())
+    {
+        Dispatcher.RemoveHandler(EventType, this);
+    }
     bIsSubscribed = false;
 }
 
-void UTradeNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+// EventTypes owned by this handler (single list drives dispatcher registration).
+const TArray<FString>& UTradeNetworkHandler::HandledEvents()
 {
-    if (ReceivedData.IsEmpty() || !TradeManager) return;
-
-    FMessageDataStruct Msg = JSONParser::DeserializeMessageData(ReceivedData);
-    const FString& EventType = Msg.eventType;
-
-    static const TArray<FString> HandledEvents = {
+    static const TArray<FString> Events = {
         TEXT("tradeInvite"), TEXT("tradeState"),   TEXT("tradeDeclined"),
         TEXT("tradeCancelled"), TEXT("tradeComplete"), TEXT("tradeRequest"), TEXT("tradeAccept"), TEXT("tradeDecline"), TEXT("tradeOfferUpdate"), TEXT("tradeConfirm"), TEXT("tradeCancel")
     };
-    if (!HandledEvents.Contains(EventType)) return;
+    return Events;
+}
 
-    TSharedPtr<FJsonObject> Root;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-    if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) return;
+void UTradeNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
+{
+    if (!Packet.bValid || !TradeManager || !Packet.Body.IsValid()) return;
 
-    const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
-    if (!Root->TryGetObjectField(TEXT("body"), BodyPtr)) return;
-    const TSharedPtr<FJsonObject>& Body = *BodyPtr;
+    const FString& EventType = Packet.EventType;
+    const TSharedPtr<FJsonObject>& Body = Packet.Body;
 
     if      (EventType == TEXT("tradeInvite"))    TradeManager->OnTradeInviteReceived(ParseTradeInvite(Body));
     else if (EventType == TEXT("tradeState"))     TradeManager->OnTradeStateReceived(ParseTradeState(Body));
     else if (EventType == TEXT("tradeDeclined"))  TradeManager->OnTradeDeclined(ParseTradeDeclined(Body));
     else if (EventType == TEXT("tradeCancelled")) TradeManager->OnTradeCancelled(ParseTradeCancelled(Body));
     else if (EventType == TEXT("tradeComplete"))  TradeManager->OnTradeCompleted(ParseTradeComplete(Body));
-else if (Msg.status.Equals(TEXT("error"), ESearchCase::IgnoreCase))
+else if (Packet.Status.Equals(TEXT("error"), ESearchCase::IgnoreCase))
 {
 // Request-echo errors (e.g. no_pending_invite on tradeAccept): surface as cancel with reason.
 FTradeCancelledData ReqError;
 Body->TryGetStringField(TEXT("sessionId"), ReqError.sessionId);
-ReqError.reason = JSONParser::ResolveErrorCode(Root);
-if (ReqError.reason.IsEmpty()) ReqError.reason = Msg.message;
+ReqError.reason = JSONParser::ResolveErrorCode(Packet.Root);
+if (ReqError.reason.IsEmpty()) ReqError.reason = Packet.Message;
 TradeManager->OnTradeCancelled(ReqError);
 }
 }

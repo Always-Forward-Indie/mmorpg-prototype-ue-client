@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "Data/DataStructs.h"
+#include "Networking/NetworkDispatcher.h"
 #include "TradeNetworkHandler.generated.h"
 
 class UNetworkManager;
@@ -23,8 +24,12 @@ public:
     void UnsubscribeFromNetworkEvents();
 
 private:
-    UFUNCTION()
-    void HandleChunkServerData(const FString& ReceivedData);
+    // Packet entry (S05): single-parse path via the per-eventType dispatcher.
+    // Replaces HandleChunkServerData (which re-parsed every packet twice).
+    void HandleChunkPacket(const FParsedPacket& Packet);
+
+    // EventTypes owned by this handler (single list drives dispatcher registration).
+    static const TArray<FString>& HandledEvents();
 
     FTradeInviteData   ParseTradeInvite(const TSharedPtr<FJsonObject>& Body) const;
     FTradeStateData    ParseTradeState(const TSharedPtr<FJsonObject>& Body) const;

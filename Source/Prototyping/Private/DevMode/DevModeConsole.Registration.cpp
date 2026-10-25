@@ -1,4 +1,5 @@
 #include "DevMode/DevModeConsoleCommands.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeBotBrain.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Mobs/MOBManager.h"
@@ -107,7 +108,7 @@ void UDevModeConsoleCommands::RegisterCommands(UMyGameInstance* InGameInstance)
                         && !A[0].Equals(TEXT("harvest_run"), ESearchCase::IgnoreCase)
                         && !A[0].Equals(TEXT("periphery"), ESearchCase::IgnoreCase)))
                 {
-                    UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.bot <combat_patrol|loot_pickup|death_respawn|harvest_run|periphery>"));
+                    UE_LOG(LogGameplay, Warning, TEXT("Usage: devmode.bot <combat_patrol|loot_pickup|death_respawn|harvest_run|periphery>"));
                     return;
                 }
                 Cmd->StartBotBrain(A[0].ToLower());
@@ -149,7 +150,7 @@ void UDevModeConsoleCommands::RegisterCommands(UMyGameInstance* InGameInstance)
             if (UDevModeConsoleCommands* Cmd = WeakThis.Get()) { Cmd->Cmd_DropSocket(A); }
         }));
 
-    UE_LOG(LogTemp, Log, TEXT("DevMode: %d console commands registered"), RegisteredCommandNames.Num());
+    UE_LOG(LogGameplay, Verbose, TEXT("DevMode: %d console commands registered"), RegisteredCommandNames.Num());
 }
 
 void UDevModeConsoleCommands::BeginDestroy()

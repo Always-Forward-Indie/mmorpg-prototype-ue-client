@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillSlotWidget.h"
 #include "UI/SkillSlotWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
@@ -17,7 +18,7 @@ void USkillSlotWidget::OnSkillButtonClicked()
     if (bIsEnabled && !AssignedSkillSlug.IsEmpty())
     {
         OnSkillSlotClicked.Broadcast(SlotIndex, AssignedSkillSlug);
-        UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget: Clicked slot %d with skill %s"), SlotIndex, *AssignedSkillSlug);
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillSlotWidget: Clicked slot %d with skill %s"), SlotIndex, *AssignedSkillSlug);
     }
 }
 

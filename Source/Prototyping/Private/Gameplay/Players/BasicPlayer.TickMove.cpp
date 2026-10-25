@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -84,7 +85,7 @@ void ABasicPlayer::Tick(float DeltaTime)
     if (!playerData.isOtherClient && bUIInitDone && !bSpawnNotified && MyGameInstance)
     {
         bSpawnNotified = true;
-        UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Tick: NotifyPlayerSpawned fired. Pawn Pos=(%.0f,%.0f,%.0f)"),
+        UE_LOG(LogGameplay, Warning, TEXT("[LOADSEQ] Tick: NotifyPlayerSpawned fired. Pawn Pos=(%.0f,%.0f,%.0f)"),
             GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z);
         MyGameInstance->NotifyPlayerSpawned();
     }
@@ -100,7 +101,7 @@ void ABasicPlayer::Tick(float DeltaTime)
             APlayerController* DbgPC = Cast<APlayerController>(GetController());
             FRotator CR = DbgPC ? DbgPC->GetControlRotation() : FRotator::ZeroRotator;
             FVector  CamLoc = FollowCamera->GetComponentLocation();
-            UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] CamTick#%d CameraLoc=(%.0f,%.0f,%.0f) ControlRot=(P=%.1f Y=%.1f) bUIInitDone=%d bSpawnNotified=%d"),
+            UE_LOG(LogGameplay, Warning, TEXT("[LOADSEQ] CamTick#%d CameraLoc=(%.0f,%.0f,%.0f) ControlRot=(P=%.1f Y=%.1f) bUIInitDone=%d bSpawnNotified=%d"),
                 sCamLogCount, CamLoc.X, CamLoc.Y, CamLoc.Z, CR.Pitch, CR.Yaw,
                 bUIInitDone ? 1 : 0, bSpawnNotified ? 1 : 0);
         }
@@ -250,7 +251,7 @@ void ABasicPlayer::Move(const FInputActionValue& Value)
                                            PendingInteraction == EPendingInteraction::PickupItem);
         if (!bIsNonCombatApproach)
         {
-            UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Auto-attack interrupted by manual movement"));
+            UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Auto-attack interrupted by manual movement"));
             StopAutoAttack();
             // Clear combat-facing rotation so the character doesn't run sideways
             // toward the former locked target when the player moves manually.

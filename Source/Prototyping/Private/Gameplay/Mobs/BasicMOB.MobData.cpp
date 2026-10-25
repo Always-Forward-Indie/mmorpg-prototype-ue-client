@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Prototyping.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Mobs/MOBAnimInstance.h"
@@ -47,7 +48,7 @@ void ABasicMOB::SetMOBData(const FMOBStruct& Data)
 		bIsNaturallyAggressive = Data.bIsAggressive;
 		MOBDataUpdated.Broadcast();
 		
-		UE_LOG(LogTemp, Warning, TEXT("MOB Data set for %s (ID:%d, UID:%s): HP=%d, MP=%d"), 
+		UE_LOG(LogGameplay, Warning, TEXT("MOB Data set for %s (ID:%d, UID:%s): HP=%d, MP=%d"), 
 			*MOBData.mobName, MOBData.mobID, *MOBData.mobUniqueID, MOBData.mobCurrentHealth, MOBData.mobCurrentMana);
 
 		// Register with MOB registry so mobMoveUpdate packets can find this actor by UID.
@@ -81,18 +82,18 @@ void ABasicMOB::SetMOBData(const FMOBStruct& Data)
 						CombatableInterface.SetInterface(this);
 						
 						CombatManager->RegisterCombatable(CombatableInterface);
-						UE_LOG(LogTemp, Warning, TEXT("MOB %d (UID:%s) registered with combat system"), ActorId, *MOBData.mobUniqueID);
+						UE_LOG(LogGameplay, Warning, TEXT("MOB %d (UID:%s) registered with combat system"), ActorId, *MOBData.mobUniqueID);
 					}
 					else
 					{
-						UE_LOG(LogTemp, Error, TEXT("MOB %d (UID:%s) is invalid or being destroyed, not registering"), ActorId, *MOBData.mobUniqueID);
+						UE_LOG(LogGameplay, Error, TEXT("MOB %d (UID:%s) is invalid or being destroyed, not registering"), ActorId, *MOBData.mobUniqueID);
 					}
 				}
 			}
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("MOB has invalid ActorId (%d) from UID '%s', not registering with combat system"), 
+			UE_LOG(LogGameplay, Error, TEXT("MOB has invalid ActorId (%d) from UID '%s', not registering with combat system"), 
 				ActorId, *MOBData.mobUniqueID);
 		}
 
@@ -103,15 +104,15 @@ void ABasicMOB::SetMOBData(const FMOBStruct& Data)
 	{
 		if (MOBData.mobID != 0)
 		{
-			UE_LOG(LogTemp, Error, TEXT("MOB Data already set for %s (ID:%d)"), *MOBData.mobName, MOBData.mobID);
+			UE_LOG(LogGameplay, Error, TEXT("MOB Data already set for %s (ID:%d)"), *MOBData.mobName, MOBData.mobID);
 		}
 		else if (Data.mobID <= 0)
 		{
-			UE_LOG(LogTemp, Error, TEXT("Invalid MOB ID (%d) provided"), Data.mobID);
+			UE_LOG(LogGameplay, Error, TEXT("Invalid MOB ID (%d) provided"), Data.mobID);
 		}
 		else if (Data.mobUniqueID.IsEmpty())
 		{
-			UE_LOG(LogTemp, Error, TEXT("Empty MOB UID provided for MOB ID %d"), Data.mobID);
+			UE_LOG(LogGameplay, Error, TEXT("Empty MOB UID provided for MOB ID %d"), Data.mobID);
 		}
 	}
 
@@ -197,7 +198,7 @@ void ABasicMOB::SetMOBAttributes(const FAttributesDataStruct& MOBAttributes)
 	// ���� UI ��� �� ��������������� � � ��� ���� ������, ������������� ��������� UI
 	if (!bUIInitialized && MOBData.mobID != 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("SetMOBAttributes: Force updating UI for MOB %s (ID:%d)"), *MOBData.mobName, MOBData.mobID);
+		UE_LOG(LogGameplay, Warning, TEXT("SetMOBAttributes: Force updating UI for MOB %s (ID:%d)"), *MOBData.mobName, MOBData.mobID);
 		ForceUpdateUI();
 	}
 }
@@ -209,7 +210,7 @@ void ABasicMOB::SetMOBAttribute(const FString& AttributeSlug, const FAttributeDa
 	// ���� ��������� �������� �������� (��������/����) � UI �� ���������������, ��������� UI
 	if (!bUIInitialized && MOBData.mobID != 0 && (AttributeSlug == TEXT("max_health") || AttributeSlug == TEXT("max_mana")))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("SetMOBAttribute: Force updating UI for MOB %s (ID:%d) after setting %s"), *MOBData.mobName, MOBData.mobID, *AttributeSlug);
+		UE_LOG(LogGameplay, Warning, TEXT("SetMOBAttribute: Force updating UI for MOB %s (ID:%d) after setting %s"), *MOBData.mobName, MOBData.mobID, *AttributeSlug);
 		ForceUpdateUI();
 	}
 }
@@ -247,7 +248,7 @@ void ABasicMOB::SetMobIsDamaged(const bool& bIsDamaged)
 				DamageFlagResetTimer,
 				[this]() {
 					MOBData.bIsGotDamage = false;
-					UE_LOG(LogTemp, Verbose, TEXT("Damage flag auto-reset for MOB %s (ID:%d)"), *MOBData.mobName, MOBData.mobID);
+					UE_LOG(LogGameplay, Verbose, TEXT("Damage flag auto-reset for MOB %s (ID:%d)"), *MOBData.mobName, MOBData.mobID);
 				},
 				DamageFlagResetTime,
 				false); // false = no looping

@@ -1,4 +1,5 @@
 #include "Gameplay/Combat/CombatSystemManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Combat/ISkillEffectHandler.h"
 #include "Gameplay/Combat/ICombatable.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
@@ -33,7 +34,7 @@ void UCombatSystemManager::FlushPendingResults(int32 CasterId, bool bSkipProject
     TArray<FPendingResult>* Queue = PendingSkillResults.Find(CasterId);
     if (!Queue || Queue->Num() == 0)
     {
-        UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: No pending results for caster %d"), CasterId);
+        UE_LOG(LogGameplay, Verbose, TEXT("CombatSystemManager: No pending results for caster %d"), CasterId);
         return;
     }
 
@@ -75,18 +76,18 @@ void UCombatSystemManager::FlushPendingResults(int32 CasterId, bool bSkipProject
 
     if (ResultsToApply.Num() == 0)
     {
-        UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: All %d pending result(s) for caster %d are waiting for projectile impact - not flushing"),
+        UE_LOG(LogGameplay, Verbose, TEXT("CombatSystemManager: All %d pending result(s) for caster %d are waiting for projectile impact - not flushing"),
             ResultsToRequeue.Num(), CasterId);
         return;
     }
 
     if (ResultsToApply.Num() > 1)
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Flushing %d pending results for caster %d - possible double-attack detected, applying all to avoid lost damage"),
+        UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Flushing %d pending results for caster %d - possible double-attack detected, applying all to avoid lost damage"),
             ResultsToApply.Num(), CasterId);
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Flushing %d pending result(s) for caster %d (%d requeued as projectile-waiters)"),
+    UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Flushing %d pending result(s) for caster %d (%d requeued as projectile-waiters)"),
         ResultsToApply.Num(), CasterId, ResultsToRequeue.Num());
 
     for (const FPendingResult& Pending : ResultsToApply)
@@ -111,7 +112,7 @@ void UCombatSystemManager::FlushPendingResults(int32 CasterId, bool bSkipProject
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Could not find target %d (%s) for deferred result"),
+            UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Could not find target %d (%s) for deferred result"),
                 SkillResult.targetId, *SkillResult.targetTypeString);
         }
 
@@ -162,7 +163,7 @@ void UCombatSystemManager::StartPendingResultTimeout(int32 CasterId)
             // Only flush if results are still pending (hit-point may have already fired)
             if (WeakSelf->PendingSkillResults.Contains(CasterId))
             {
-                UE_LOG(LogTemp, Warning,
+                UE_LOG(LogGameplay, Warning,
                     TEXT("CombatSystemManager: Safety timeout - flushing stale pending results for caster %d"),
                     CasterId);
                 // bSkipProjectileWaiters = false: the timeout is the last resort, flush everything.

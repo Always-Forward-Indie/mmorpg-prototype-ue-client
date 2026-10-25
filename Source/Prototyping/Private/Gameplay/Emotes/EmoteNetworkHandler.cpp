@@ -1,4 +1,5 @@
 #include "Gameplay/Emotes/EmoteNetworkHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/Emotes/EmoteManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
@@ -11,7 +12,7 @@ void UEmoteNetworkHandler::Initialize(UEmoteManager* InManager, UNetworkManager*
 {
     if (!InManager || !InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("EmoteNetworkHandler: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("EmoteNetworkHandler: Initialize called with null parameters"));
         return;
     }
     Manager          = InManager;
@@ -59,7 +60,7 @@ void UEmoteNetworkHandler::RequestUseEmote(const FString& EmoteSlug)
         GameInstance->GetTimeSyncService(), EServerType::ChunkServer);
 
     NetworkManager->SendDataToChunkServer(JsonString);
-    UE_LOG(LogTemp, Log, TEXT("EmoteNetworkHandler: Sent useEmote '%s'"), *EmoteSlug);
+    UE_LOG(LogGameplay, Verbose, TEXT("EmoteNetworkHandler: Sent useEmote '%s'"), *EmoteSlug);
 }
 
 // ---------------------------------------------------------------------------

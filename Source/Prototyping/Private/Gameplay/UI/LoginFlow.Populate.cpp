@@ -1,6 +1,7 @@
 // Login Flow Widget — Implementation
 
 #include "Gameplay/UI/LoginFlowWidget.h"
+#include "Prototyping.h"
 #include "Services/LocalizationSubsystem.h"
 #include "Gameplay/UI/DeleteConfirmWidget.h"
 #include "MyGameInstance.h"
@@ -357,7 +358,7 @@ void ULoginFlowWidget::ShowDeleteConfirmation()
 {
 	if (!DeleteConfirmWidgetClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("LoginFlowWidget: DeleteConfirmWidgetClass is not set! "
+		UE_LOG(LogGameplay, Error, TEXT("LoginFlowWidget: DeleteConfirmWidgetClass is not set! "
 			"Create a Blueprint child of UDeleteConfirmWidget and assign it in the LoginFlowWidget Blueprint defaults."));
 		return;
 	}

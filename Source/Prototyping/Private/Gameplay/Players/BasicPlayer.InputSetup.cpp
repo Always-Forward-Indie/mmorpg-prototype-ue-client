@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -79,7 +80,7 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
     UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent);
     if (EnhancedInputComponent && InputMappingContext)
     {
-        UE_LOG(LogTemp, Warning, TEXT("EnhancedInputComponent init"));
+        UE_LOG(LogGameplay, Warning, TEXT("EnhancedInputComponent init"));
         // Get the player controller
         APlayerController* PC = Cast<APlayerController>(GetController());
 
@@ -187,11 +188,11 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
         if (InteractAction)
         {
             EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &ABasicPlayer::OnInteractInput);
-            UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: InteractAction bound successfully"));
+            UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: InteractAction bound successfully"));
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("BasicPlayer: InteractAction is NULL - assign it in the player Blueprint (Details > Input > InteractAction)"));
+            UE_LOG(LogGameplay, Error, TEXT("BasicPlayer: InteractAction is NULL - assign it in the player Blueprint (Details > Input > InteractAction)"));
         }
 
         // Quest Journal toggle

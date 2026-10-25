@@ -1,4 +1,5 @@
 #include "DevMode/LiveBotDriver.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Authentication/AuthenticationManager.h"
 #include "Networking/NetworkManager.h"
@@ -16,7 +17,7 @@ void ULiveBotDriver::Start(UMyGameInstance* InGameInstance, const FString& InSce
     UWorld* World = GameInstance ? GameInstance->GetWorld() : nullptr;
     if (!GameInstance || !World)
     {
-        UE_LOG(LogTemp, Warning, TEXT("LIVEBOT_RESULT %s FAIL no-world"), *InScenario);
+        UE_LOG(LogGameplay, Warning, TEXT("LIVEBOT_RESULT %s FAIL no-world"), *InScenario);
         return;
     }
 
@@ -30,7 +31,7 @@ void ULiveBotDriver::Start(UMyGameInstance* InGameInstance, const FString& InSce
     }
     if (Login.IsEmpty() || Password.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("LIVEBOT_RESULT %s FAIL missing-creds (need -botlogin= -botpass=)"), *InScenario);
+        UE_LOG(LogGameplay, Warning, TEXT("LIVEBOT_RESULT %s FAIL missing-creds (need -botlogin= -botpass=)"), *InScenario);
         return;
     }
 
@@ -72,7 +73,7 @@ void ULiveBotDriver::Start(UMyGameInstance* InGameInstance, const FString& InSce
         }),
         0.5f);
 
-    UE_LOG(LogTemp, Warning, TEXT("LIVEBOT_BEGIN %s user='%s'"), *Scenario, *Login);
+    UE_LOG(LogGameplay, Warning, TEXT("LIVEBOT_BEGIN %s user='%s'"), *Scenario, *Login);
 }
 
 void ULiveBotDriver::Stop()
@@ -139,7 +140,7 @@ void ULiveBotDriver::PollTick()
             bLoginSent = true;
             Step = ELiveStep::WaitAuth;
             StepStartTime = Now;
-            UE_LOG(LogTemp, Warning, TEXT("LIVEBOT login sent user='%s'"), *Login);
+            UE_LOG(LogGameplay, Warning, TEXT("LIVEBOT login sent user='%s'"), *Login);
             return;
         }
         // Re-arm the connection every 10s: NetworkManager gives up after a few
@@ -147,7 +148,7 @@ void ULiveBotDriver::PollTick()
         if (Net && Now - LastConnectAttemptTime > 10.0)
         {
             LastConnectAttemptTime = Now;
-            UE_LOG(LogTemp, Warning, TEXT("LIVEBOT (re)connecting to login server..."));
+            UE_LOG(LogGameplay, Warning, TEXT("LIVEBOT (re)connecting to login server..."));
             Net->ConnectLoginServer();
         }
         if (Now - StepStartTime > ConnectTimeoutSec)
@@ -182,7 +183,7 @@ void ULiveBotDriver::PollTick()
         // flow for leg 2 with the same creds.
         if (LiveBrain && LiveBrain->bRoundtripLeg1Done)
         {
-            UE_LOG(LogTemp, Warning, TEXT("LIVEBOT roundtrip leg 1 done, starting leg 2"));
+            UE_LOG(LogGameplay, Warning, TEXT("LIVEBOT roundtrip leg 1 done, starting leg 2"));
             LiveBrain->Stop();
             Leg1CharId = GameInstance ? GameInstance->GetCurrentCharacterID() : 0;
             RoundtripLeg = 2;
@@ -214,7 +215,7 @@ void ULiveBotDriver::PollTick()
         {
             // Diagnostic: the run uses TrackedWorld (PostLoadMap-tracked), never
             // GameInstance->GetWorld() (stale across travel -> dead timers).
-            UE_LOG(LogTemp, Warning, TEXT("LIVEBOT world ready, starting brain (live mode: real damage, no teleport), world='%s'"),
+            UE_LOG(LogGameplay, Warning, TEXT("LIVEBOT world ready, starting brain (live mode: real damage, no teleport), world='%s'"),
                 *TrackedWorld->GetName());
             // Rooted on the driver (UPROPERTY): a bare local would be GC'd
             // mid-run, killing the brain timers silently (no tombstone).
@@ -377,7 +378,7 @@ void ULiveBotDriver::HandleLoginResponse(bool bSuccess, const FString& Message)
     if (!bRunning || !bLoginSent || Step != ELiveStep::WaitAuth) { return; }
     if (!bSuccess)
     {
-        UE_LOG(LogTemp, Warning, TEXT("LIVEBOT login rejected: %s"), *Message);
+        UE_LOG(LogGameplay, Warning, TEXT("LIVEBOT login rejected: %s"), *Message);
         Finish(false, TEXT("login-rejected"));
         return;
     }
@@ -392,7 +393,7 @@ void ULiveBotDriver::HandleLoginResponse(bool bSuccess, const FString& Message)
         bCharsRequested = true;
         Step = ELiveStep::WaitChars;
         StepStartTime = FPlatformTime::Seconds();
-        UE_LOG(LogTemp, Warning, TEXT("LIVEBOT authenticated, characters requested"));
+        UE_LOG(LogGameplay, Warning, TEXT("LIVEBOT authenticated, characters requested"));
     }
     else
     {
@@ -405,7 +406,7 @@ void ULiveBotDriver::HandleCharacterList(const TArray<FLoginCharacterEntry>& Cha
     if (!bRunning || Step != ELiveStep::WaitChars) { return; }
     if (Characters.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("LIVEBOT no characters (seed one first)"));
+        UE_LOG(LogGameplay, Warning, TEXT("LIVEBOT no characters (seed one first)"));
         Finish(false, TEXT("no-characters"));
         return;
     }
@@ -430,7 +431,7 @@ void ULiveBotDriver::HandleCharacterList(const TArray<FLoginCharacterEntry>& Cha
         }
         if (!bFound)
         {
-            UE_LOG(LogTemp, Warning, TEXT("LIVEBOT -botchar=%d not listed, using row 0"), ForcedCharId);
+            UE_LOG(LogGameplay, Warning, TEXT("LIVEBOT -botchar=%d not listed, using row 0"), ForcedCharId);
         }
     }
     if (bTravelRoundtrip && RoundtripLeg == 2)
@@ -450,7 +451,7 @@ void ULiveBotDriver::HandleCharacterList(const TArray<FLoginCharacterEntry>& Cha
     {
         Leg1CharId = CharId;
     }
-    UE_LOG(LogTemp, Warning, TEXT("LIVEBOT joining character %d ('%s')"),
+    UE_LOG(LogGameplay, Warning, TEXT("LIVEBOT joining character %d ('%s')"),
         CharId, CharName);
     GameInstance->SetCurrentCharacterID(CharId);
     GameInstance->JoinSelectedCharacterToGame();
@@ -468,7 +469,7 @@ void ULiveBotDriver::Finish(bool bPass, const FString& Reason)
 {
     if (!bRunning) { return; }
     Stop();
-    UE_LOG(LogTemp, Warning, TEXT("LIVEBOT_RESULT %s %s reason=%s"),
+    UE_LOG(LogGameplay, Warning, TEXT("LIVEBOT_RESULT %s %s reason=%s"),
         *Scenario, bPass ? TEXT("PASS") : TEXT("FAIL"), *Reason);
     QuitClient();
 }

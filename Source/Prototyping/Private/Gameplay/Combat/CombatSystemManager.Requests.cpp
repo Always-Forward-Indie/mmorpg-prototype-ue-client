@@ -1,4 +1,5 @@
 #include "Gameplay/Combat/CombatSystemManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Combat/ISkillEffectHandler.h"
 #include "Gameplay/Combat/ICombatable.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
@@ -18,7 +19,7 @@ void UCombatSystemManager::SendAttackRequest(int32 AttackerId, int32 TargetId, c
 {
     if (!GameInstance || !NetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("CombatSystemManager: Cannot send attack request - missing dependencies"));
+        UE_LOG(LogNetPacket, Error, TEXT("CombatSystemManager: Cannot send attack request - missing dependencies"));
         return;
     }
 
@@ -40,7 +41,7 @@ void UCombatSystemManager::SendAttackRequest(int32 AttackerId, int32 TargetId, c
     FString JsonString = JSONParser::SerializeJsonWithTimeSync(TEXT("playerAttack"), HeaderData, BodyData, GameInstance->GetTimeSyncService());
     NetworkManager->SendDataToChunkServer(JsonString);
 
-    UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Sent attack request - Attacker: %d, Target: %d, Skill: %s"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("CombatSystemManager: Sent attack request - Attacker: %d, Target: %d, Skill: %s"), 
         AttackerId, TargetId, *SkillSlug);
 }
 
@@ -48,7 +49,7 @@ void UCombatSystemManager::SendSkillUsageRequest(int32 TargetId, const FString& 
 {
     if (!GameInstance || !NetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("CombatSystemManager: Cannot send skill usage request - missing dependencies"));
+        UE_LOG(LogNetPacket, Error, TEXT("CombatSystemManager: Cannot send skill usage request - missing dependencies"));
         return;
     }
 
@@ -67,7 +68,7 @@ void UCombatSystemManager::SendSkillUsageRequest(int32 TargetId, const FString& 
     FString JsonString = JSONParser::SerializeJsonWithTimeSync(TEXT("skillUsage"), HeaderData, BodyData, GameInstance->GetTimeSyncService());
     NetworkManager->SendDataToChunkServer(JsonString);
 
-    UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Sent skillUsage request - Skill: %s, Target: %d, TargetType: %d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("CombatSystemManager: Sent skillUsage request - Skill: %s, Target: %d, TargetType: %d"),
         *SkillSlug, TargetId, static_cast<int32>(TargetType));
 }
 
@@ -80,7 +81,7 @@ TScriptInterface<ISkillEffectHandler> UCombatSystemManager::FindEffectHandler(ES
 
         if (!Entry.WeakObject.IsValid())
         {
-            UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Removing stale handler at index %d during search"), i);
+            UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Removing stale handler at index %d during search"), i);
             EffectHandlers.RemoveAt(i);
             i--;
             continue;
@@ -97,7 +98,7 @@ TScriptInterface<ISkillEffectHandler> UCombatSystemManager::FindEffectHandler(ES
         }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: No valid handler found for effect type: %s"),
+    UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: No valid handler found for effect type: %s"),
         *UEnum::GetValueAsString(EffectType));
     return TScriptInterface<ISkillEffectHandler>();
 }
@@ -106,7 +107,7 @@ void UCombatSystemManager::ApplySkillEffects(const FSkillResultData& SkillResult
 {
     if (!Target.GetInterface() || !Target.GetObject() || !IsValid(Target.GetObject()))
     {
-        UE_LOG(LogTemp, Error, TEXT("CombatSystemManager: Cannot apply skill effects to invalid target"));
+        UE_LOG(LogGameplay, Error, TEXT("CombatSystemManager: Cannot apply skill effects to invalid target"));
         return;
     }
 
@@ -119,12 +120,12 @@ void UCombatSystemManager::ApplySkillEffects(const FSkillResultData& SkillResult
         // ������� ��������� �������� �� ���������� ��������
         ISkillEffectHandler::Execute_ProcessSkillResult(HandlerObject, SkillResult, Target);
 
-        UE_LOG(LogTemp, Verbose, TEXT("CombatSystemManager: Successfully processed skill effect %s via handler"),
+        UE_LOG(LogGameplay, Verbose, TEXT("CombatSystemManager: Successfully processed skill effect %s via handler"),
             *UEnum::GetValueAsString(SkillResult.skillEffectType));
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: No handler found for effect type: %s"),
+        UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: No handler found for effect type: %s"),
             *UEnum::GetValueAsString(SkillResult.skillEffectType));
     }
 }
@@ -132,7 +133,7 @@ void UCombatSystemManager::ApplySkillEffects(const FSkillResultData& SkillResult
 
 void UCombatSystemManager::LogCombatEvent(const FString& Event, const FString& Details)
 {
-    UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager [%s]: %s"), *Event, *Details);
+    UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager [%s]: %s"), *Event, *Details);
 }
 
 FString UCombatSystemManager::CreateCombatableKey(int32 ActorId, ECasterType ActorType) const
@@ -142,7 +143,7 @@ FString UCombatSystemManager::CreateCombatableKey(int32 ActorId, ECasterType Act
 
 void UCombatSystemManager::NotifyHitPoint(int32 CasterId)
 {
-    UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: HitPoint notify from caster %d (animation path - skipping projectile waiters)"), CasterId);
+    UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: HitPoint notify from caster %d (animation path - skipping projectile waiters)"), CasterId);
     // bSkipProjectileWaiters = true: do not flush results that are waiting for a
     // projectile to physically land.  Prevents a parallel auto-attack's hit-point
     // from consuming the pending projectile result early.
@@ -151,7 +152,7 @@ void UCombatSystemManager::NotifyHitPoint(int32 CasterId)
 
 void UCombatSystemManager::NotifyProjectileImpact(int32 CasterId)
 {
-    UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Projectile impact for caster %d - flushing all pending results"), CasterId);
+    UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Projectile impact for caster %d - flushing all pending results"), CasterId);
 
     // Check BEFORE flushing whether a projectile-waiter result is already queued.
     // We need this to decide whether to store an early-impact marker after the flush.
@@ -180,7 +181,7 @@ void UCombatSystemManager::NotifyProjectileImpact(int32 CasterId)
     {
         double ImpactTime = WorldContext ? WorldContext->GetTimeSeconds() : 0.0;
         EarlyProjectileImpacts.Add(CasterId, ImpactTime);
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
             TEXT("CombatSystemManager: Projectile hit but no pending result yet for caster %d - stored early-impact marker (t=%.3f)"),
             CasterId, ImpactTime);
     }

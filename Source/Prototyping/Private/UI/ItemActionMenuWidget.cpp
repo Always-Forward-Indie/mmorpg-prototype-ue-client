@@ -1,4 +1,5 @@
 #include "UI/ItemActionMenuWidget.h"
+#include "Prototyping.h"
 #include "UI/ItemActionRowWidget.h"
 
 // S5: action labels gathered via LOCTEXT.
@@ -93,7 +94,7 @@ void UItemActionMenuWidget::RebuildActions()
 {
 	if (!ActionList)
 	{
-		UE_LOG(LogTemp, Error, TEXT("ItemActionMenuWidget: ActionList VerticalBox is not bound. "
+		UE_LOG(LogGameplay, Error, TEXT("ItemActionMenuWidget: ActionList VerticalBox is not bound. "
 			"Please add a VerticalBox named 'ActionList' to your Blueprint widget."));
 		return;
 	}

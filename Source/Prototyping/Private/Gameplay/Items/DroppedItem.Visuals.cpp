@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Items/DroppedItemActor.h"
+#include "Prototyping.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "Gameplay/Mobs/BasicMOB.h"
@@ -25,25 +26,25 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 {
 	if (!ItemMesh)
 	{
-		UE_LOG(LogTemp, Error, TEXT("ItemMesh component is null in DroppedItemActor"));
+		UE_LOG(LogGameplay, Error, TEXT("ItemMesh component is null in DroppedItemActor"));
 		return;
 	}
 
 	UMyGameInstance* GameInstance = Cast<UMyGameInstance>(UGameplayStatics::GetGameInstance(GetWorld()));
 	if (!GameInstance)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to get GameInstance in DroppedItemActor"));
+		UE_LOG(LogGameplay, Error, TEXT("Failed to get GameInstance in DroppedItemActor"));
 		return;
 	}
 
 	UItemManager* ItemManager = GameInstance->GetItemManager();
 	if (!ItemManager)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Item manager not found in DroppedItemActor"));
+		UE_LOG(LogGameplay, Error, TEXT("Item manager not found in DroppedItemActor"));
 		return;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("Setting up visuals for item %s (Slug: %s)"),
+	UE_LOG(LogGameplay, Verbose, TEXT("Setting up visuals for item %s (Slug: %s)"),
 		*ItemData.item.name, *ItemData.item.slug);
 
 	// пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
@@ -53,7 +54,7 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 	bool bAppliedMesh = false;
 	{
 		const FSoftObjectPath MeshPath = VisualData.ItemMesh.ToSoftObjectPath();
-		UE_LOG(LogTemp, Log, TEXT("Loot Mesh path: %s"), *MeshPath.ToString());
+		UE_LOG(LogGameplay, Verbose, TEXT("Loot Mesh path: %s"), *MeshPath.ToString());
 
 		if (MeshPath.IsValid())
 		{
@@ -65,7 +66,7 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 			}
 			else
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Failed to LoadSynchronous mesh: %s"), *MeshPath.ToString());
+				UE_LOG(LogGameplay, Warning, TEXT("Failed to LoadSynchronous mesh: %s"), *MeshPath.ToString());
 			}
 		}
 
@@ -87,7 +88,7 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 			{
 				ItemMesh->SetStaticMesh(DefaultMesh);
 				ItemMesh->SetRelativeScale3D(FVector(0.5f));
-				UE_LOG(LogTemp, Warning, TEXT("Applied fallback mesh: %s"), *FallbackPath);
+				UE_LOG(LogGameplay, Warning, TEXT("Applied fallback mesh: %s"), *FallbackPath);
 			}
 		}
 	}
@@ -95,7 +96,7 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 	// ---------- Material ----------
 	{
 		const FSoftObjectPath MatPath = VisualData.CustomMaterial.ToSoftObjectPath();
-		UE_LOG(LogTemp, Log, TEXT("Loot Material path: %s"), *MatPath.ToString());
+		UE_LOG(LogGameplay, Verbose, TEXT("Loot Material path: %s"), *MatPath.ToString());
 
 		if (MatPath.IsValid())
 		{
@@ -105,7 +106,7 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 			}
 			else
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Failed to LoadSynchronous material: %s"), *MatPath.ToString());
+				UE_LOG(LogGameplay, Warning, TEXT("Failed to LoadSynchronous material: %s"), *MatPath.ToString());
 			}
 		}
 		else
@@ -132,7 +133,7 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 	if (DropNiagaraComponent)
 	{
 		const FSoftObjectPath FXPath = VisualData.DropNiagaraSystem.ToSoftObjectPath();
-		UE_LOG(LogTemp, Log, TEXT("Loot DropNiagara path: %s"), *FXPath.ToString());
+		UE_LOG(LogGameplay, Verbose, TEXT("Loot DropNiagara path: %s"), *FXPath.ToString());
 
 		if (FXPath.IsValid())
 		{
@@ -143,7 +144,7 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 			}
 			else
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Failed to LoadSynchronous DropNiagaraSystem: %s"), *FXPath.ToString());
+				UE_LOG(LogGameplay, Warning, TEXT("Failed to LoadSynchronous DropNiagaraSystem: %s"), *FXPath.ToString());
 			}
 		}
 	}
@@ -151,7 +152,7 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 	// ---------- Drop SFX ----------
 	{
 		const FSoftObjectPath SndPath = VisualData.DropSound.ToSoftObjectPath();
-		UE_LOG(LogTemp, Log, TEXT("Loot DropSound path: %s"), *SndPath.ToString());
+		UE_LOG(LogGameplay, Verbose, TEXT("Loot DropSound path: %s"), *SndPath.ToString());
 
 		if (SndPath.IsValid())
 		{
@@ -162,13 +163,13 @@ void ADroppedItemActor::SetupItemVisuals_Implementation()
 			}
 			else
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Failed to LoadSynchronous sound: %s"), *SndPath.ToString());
+				UE_LOG(LogGameplay, Warning, TEXT("Failed to LoadSynchronous sound: %s"), *SndPath.ToString());
 			}
 		}
 	}
 
 	OnVisualsSetup();
-	UE_LOG(LogTemp, Log, TEXT("SetupItemVisuals completed for item %s (Slug: %s)"),
+	UE_LOG(LogGameplay, Verbose, TEXT("SetupItemVisuals completed for item %s (Slug: %s)"),
 		*ItemData.item.name, *ItemData.item.slug);
 }
 

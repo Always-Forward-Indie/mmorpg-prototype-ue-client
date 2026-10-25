@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/MOBManager.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "CrashDiagnostics.h"
@@ -10,7 +11,7 @@ void UMOBManager::SpawnMOB(const FMOBStruct& MOBData)
 {
 	if (!worldContext || !worldContext->IsValidLowLevel())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("MOBManager: No valid world context — queuing MOB %s for later spawn"), *MOBData.mobUniqueID);
+		UE_LOG(LogGameplay, Warning, TEXT("MOBManager: No valid world context — queuing MOB %s for later spawn"), *MOBData.mobUniqueID);
 		PendingMOBSpawns.Add(MOBData);
 		return;
 	}
@@ -18,7 +19,7 @@ void UMOBManager::SpawnMOB(const FMOBStruct& MOBData)
 	// If MOB exists in the world do not spawn it
 	if (MOBExists(worldContext, FName(MOBData.mobUniqueID)))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("MOB already exists in the world"));
+		UE_LOG(LogGameplay, Warning, TEXT("MOB already exists in the world"));
 		return;
 	}
 
@@ -26,7 +27,7 @@ void UMOBManager::SpawnMOB(const FMOBStruct& MOBData)
 	const int32 MobUID = FCString::Atoi(*MOBData.mobUniqueID);
 	if (MobUID > 0 && RemovedCorpseUIDs.Contains(MobUID))
 	{
-		UE_LOG(LogTemp, Log, TEXT("MOBManager: Skipping spawn for UID %d — corpse already removed"), MobUID);
+		UE_LOG(LogGameplay, Verbose, TEXT("MOBManager: Skipping spawn for UID %d — corpse already removed"), MobUID);
 		return;
 	}
 
@@ -39,7 +40,7 @@ void UMOBManager::SpawnMOB(const FMOBStruct& MOBData)
 
 		if (BasicMOBClass == nullptr)
 		{
-			UE_LOG(LogTemp, Error, TEXT("Basic MOB class not found"));
+			UE_LOG(LogGameplay, Error, TEXT("Basic MOB class not found"));
 			return;
 		}
 
@@ -54,7 +55,7 @@ void UMOBManager::SpawnMOB(const FMOBStruct& MOBData)
 
 		if (MOB == nullptr)
 		{
-			UE_LOG(LogTemp, Error, TEXT("MOB not spawned"));
+			UE_LOG(LogGameplay, Error, TEXT("MOB not spawned"));
 			return;
 		}
 
@@ -90,7 +91,7 @@ bool UMOBManager::MOBExists(UWorld* World, const FName& Tag)
 {
 	if (!World || !World->IsValidLowLevel())
 	{
-		UE_LOG(LogTemp, Error, TEXT("MOBManager::MOBExists: Invalid world context"));
+		UE_LOG(LogGameplay, Error, TEXT("MOBManager::MOBExists: Invalid world context"));
 		return false;
 	}
 
@@ -152,7 +153,7 @@ void UMOBManager::FlushPendingSpawns()
 {
 	if (PendingMOBSpawns.Num() == 0) return;
 
-	UE_LOG(LogTemp, Warning, TEXT("MOBManager: Flushing %d pending MOB spawns"), PendingMOBSpawns.Num());
+	UE_LOG(LogGameplay, Warning, TEXT("MOBManager: Flushing %d pending MOB spawns"), PendingMOBSpawns.Num());
 	TArray<FMOBStruct> Spawns = MoveTemp(PendingMOBSpawns);
 	PendingMOBSpawns.Empty();
 

@@ -1,4 +1,5 @@
 #include "UI/SkillDragVisualBlueprintWidget.h"
+#include "Prototyping.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "Components/Border.h"
@@ -12,7 +13,7 @@ USkillDragVisualBlueprintWidget::USkillDragVisualBlueprintWidget(const FObjectIn
     DragBorder = nullptr;
     DefaultSkillIcon = nullptr;
     
-    UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualBlueprintWidget: Constructor called"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDragVisualBlueprintWidget: Constructor called"));
 }
 
 void USkillDragVisualBlueprintWidget::NativeConstruct()
@@ -24,20 +25,20 @@ void USkillDragVisualBlueprintWidget::NativeConstruct()
     // Set initial visual properties
     SetRenderOpacity(DragOpacity.A);
     
-    UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualBlueprintWidget: NativeConstruct called"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDragVisualBlueprintWidget: NativeConstruct called"));
     
     // Verify that components are bound
     if (!SkillIcon)
     {
-        UE_LOG(LogTemp, Error, TEXT("SkillDragVisualBlueprintWidget: SkillIcon not bound! Make sure to bind it in Blueprint."));
+        UE_LOG(LogGameplay, Error, TEXT("SkillDragVisualBlueprintWidget: SkillIcon not bound! Make sure to bind it in Blueprint."));
     }
     if (!SkillNameText)
     {
-        UE_LOG(LogTemp, Error, TEXT("SkillDragVisualBlueprintWidget: SkillNameText not bound! Make sure to bind it in Blueprint."));
+        UE_LOG(LogGameplay, Error, TEXT("SkillDragVisualBlueprintWidget: SkillNameText not bound! Make sure to bind it in Blueprint."));
     }
     if (!DragBorder)
     {
-        UE_LOG(LogTemp, Error, TEXT("SkillDragVisualBlueprintWidget: DragBorder not bound! Make sure to bind it in Blueprint."));
+        UE_LOG(LogGameplay, Error, TEXT("SkillDragVisualBlueprintWidget: DragBorder not bound! Make sure to bind it in Blueprint."));
     }
     
     // Update visual display if we have skill data
@@ -51,7 +52,7 @@ void USkillDragVisualBlueprintWidget::SetSkillData(const FPlayerSkillData& Skill
 {
     CurrentSkillData = SkillData;
     
-    UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualBlueprintWidget: SetSkillData called for skill %s"), *SkillData.networkData.skillSlug);
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDragVisualBlueprintWidget: SetSkillData called for skill %s"), *SkillData.networkData.skillSlug);
     
     // Update visual display if components are available
     if (SkillIcon)
@@ -60,7 +61,7 @@ void USkillDragVisualBlueprintWidget::SetSkillData(const FPlayerSkillData& Skill
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualBlueprintWidget: Skill data set, but components not ready yet. Will update in NativeConstruct."));
+        UE_LOG(LogGameplay, Warning, TEXT("SkillDragVisualBlueprintWidget: Skill data set, but components not ready yet. Will update in NativeConstruct."));
     }
     
     // Call Blueprint event
@@ -69,7 +70,7 @@ void USkillDragVisualBlueprintWidget::SetSkillData(const FPlayerSkillData& Skill
 
 void USkillDragVisualBlueprintWidget::UpdateVisualDisplay()
 {
-    UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualBlueprintWidget: UpdateVisualDisplay called"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDragVisualBlueprintWidget: UpdateVisualDisplay called"));
     
     // Update skill icon
     if (SkillIcon)
@@ -84,7 +85,7 @@ void USkillDragVisualBlueprintWidget::UpdateVisualDisplay()
                 SkillIcon->SetBrushFromTexture(IconTexture);
                 SkillIcon->SetColorAndOpacity(DragOpacity);
                 bIconSet = true;
-                UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualBlueprintWidget: Set skill icon from texture"));
+                UE_LOG(LogGameplay, Verbose, TEXT("SkillDragVisualBlueprintWidget: Set skill icon from texture"));
             }
         }
         
@@ -94,7 +95,7 @@ void USkillDragVisualBlueprintWidget::UpdateVisualDisplay()
             SkillIcon->SetBrushFromTexture(DefaultSkillIcon);
             SkillIcon->SetColorAndOpacity(DragOpacity);
             bIconSet = true;
-            UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualBlueprintWidget: Set default skill icon"));
+            UE_LOG(LogGameplay, Verbose, TEXT("SkillDragVisualBlueprintWidget: Set default skill icon"));
         }
         
         // Fallback: create colored rectangle based on skill school
@@ -105,12 +106,12 @@ void USkillDragVisualBlueprintWidget::UpdateVisualDisplay()
             IconBrush.TintColor = FSlateColor(SchoolColor);
             IconBrush.DrawAs = ESlateBrushDrawType::RoundedBox;
             SkillIcon->SetBrush(IconBrush);
-            UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualBlueprintWidget: Set fallback colored icon"));
+            UE_LOG(LogGameplay, Verbose, TEXT("SkillDragVisualBlueprintWidget: Set fallback colored icon"));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualBlueprintWidget: SkillIcon widget is NULL - cannot update display"));
+        UE_LOG(LogGameplay, Warning, TEXT("SkillDragVisualBlueprintWidget: SkillIcon widget is NULL - cannot update display"));
     }
 
     // Update skill name
@@ -126,7 +127,7 @@ void USkillDragVisualBlueprintWidget::UpdateVisualDisplay()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualBlueprintWidget: SkillNameText widget is NULL - cannot update text"));
+        UE_LOG(LogGameplay, Warning, TEXT("SkillDragVisualBlueprintWidget: SkillNameText widget is NULL - cannot update text"));
     }
 
     // Update border
@@ -135,7 +136,7 @@ void USkillDragVisualBlueprintWidget::UpdateVisualDisplay()
         DragBorder->SetBrushColor(FLinearColor(1.0f, 1.0f, 1.0f, DragOpacity.A * 0.5f));
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualBlueprintWidget: Visual display updated successfully"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDragVisualBlueprintWidget: Visual display updated successfully"));
 }
 
 FLinearColor USkillDragVisualBlueprintWidget::GetSchoolColor(ESkillSchool School) const

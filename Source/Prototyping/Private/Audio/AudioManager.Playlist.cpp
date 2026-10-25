@@ -1,6 +1,7 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Audio/AudioManager.h"
+#include "Prototyping.h"
 #include "Audio/AudioConfigDataAsset.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
@@ -52,7 +53,7 @@ void UAudioManager::CrossfadeToTrack(USoundBase* Track, float FadeInTime, float 
 	UWorld* World = GetWorldSafe(WorldContextObject);
 	if (!World)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UAudioManager::CrossfadeToTrack: no valid world — cannot spawn audio components"));
+		UE_LOG(LogGameAudio, Warning, TEXT("UAudioManager::CrossfadeToTrack: no valid world — cannot spawn audio components"));
 		return;
 	}
 
@@ -67,11 +68,11 @@ void UAudioManager::CrossfadeToTrack(USoundBase* Track, float FadeInTime, float 
 				Comp->bAutoDestroy = false;
 				Comp->Stop();
 				if (MusicClass) { Comp->SoundClassOverride = MusicClass; }
-				UE_LOG(LogTemp, Log, TEXT("UAudioManager: spawned music component in world '%s'"), *World->GetName());
+				UE_LOG(LogGameAudio, Log, TEXT("UAudioManager: spawned music component in world '%s'"), *World->GetName());
 			}
 			else
 			{
-				UE_LOG(LogTemp, Warning, TEXT("UAudioManager::CrossfadeToTrack: SpawnSound2D returned null!"));
+				UE_LOG(LogGameAudio, Warning, TEXT("UAudioManager::CrossfadeToTrack: SpawnSound2D returned null!"));
 			}
 		}
 	};
@@ -80,7 +81,7 @@ void UAudioManager::CrossfadeToTrack(USoundBase* Track, float FadeInTime, float 
 
 	if (!MusicComponentA || !MusicComponentB)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UAudioManager::CrossfadeToTrack: failed to obtain both music components, aborting"));
+		UE_LOG(LogGameAudio, Error, TEXT("UAudioManager::CrossfadeToTrack: failed to obtain both music components, aborting"));
 		return;
 	}
 
@@ -97,7 +98,7 @@ void UAudioManager::CrossfadeToTrack(USoundBase* Track, float FadeInTime, float 
 	if (IsValid(Incoming))
 	{
 		Incoming->SetSound(Track);
-		UE_LOG(LogTemp, Log, TEXT("UAudioManager: playing track '%s' (FadeIn=%.1fs)"), *Track->GetName(), FadeInTime);
+		UE_LOG(LogGameAudio, Log, TEXT("UAudioManager: playing track '%s' (FadeIn=%.1fs)"), *Track->GetName(), FadeInTime);
 		(FadeInTime > 0.0f) ? Incoming->FadeIn(FadeInTime) : Incoming->Play();
 	}
 

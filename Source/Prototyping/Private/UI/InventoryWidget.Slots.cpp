@@ -1,4 +1,5 @@
 #include "UI/InventoryWidget.h"
+#include "Prototyping.h"
 #include "UI/InventorySlotWidget.h"
 #include "UI/ItemTooltipWidget.h"
 #include "UI/ItemActionMenuWidget.h"
@@ -29,7 +30,7 @@ void UInventoryWidget::OnSlotClicked(int32 SlotIndex)
 		FInventoryItemStruct Item = SlotWidget->GetItemData();
 		OnInventorySlotClicked.Broadcast(SlotIndex, Item);
 
-		UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Slot %d clicked - Item: %s"), SlotIndex, *Item.name);
+		UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Slot %d clicked - Item: %s"), SlotIndex, *Item.name);
 	}
 }
 
@@ -55,7 +56,7 @@ void UInventoryWidget::OnSlotRightClicked(int32 SlotIndex)
 	// Also broadcast so external listeners can react if needed
 	OnInventorySlotRightClicked.Broadcast(SlotIndex, Item);
 
-	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Context menu opened for slot %d � %s"), SlotIndex, *Item.name);
+	UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Context menu opened for slot %d � %s"), SlotIndex, *Item.name);
 }
 
 void UInventoryWidget::OnSlotHovered(int32 SlotIndex, bool bIsHovered)
@@ -94,12 +95,12 @@ void UInventoryWidget::OnInventoryUpdated(const FCharacterInventoryStruct& Updat
 void UInventoryWidget::OnItemAdded(const FInventoryItemStruct& Item, int32 Quantity)
 {
 	// Visual feedback for item addition could be added here
-	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Item added - %s x%d"), *Item.name, Quantity);
+	UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Item added - %s x%d"), *Item.name, Quantity);
 }
 
 void UInventoryWidget::OnItemRemoved(const FInventoryItemStruct& Item, int32 Quantity)
 {
 	// Visual feedback for item removal could be added here
-	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Item removed - %s x%d"), *Item.name, Quantity);
+	UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Item removed - %s x%d"), *Item.name, Quantity);
 }
 

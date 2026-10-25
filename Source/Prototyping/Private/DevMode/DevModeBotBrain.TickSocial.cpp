@@ -1,4 +1,5 @@
 #include "DevMode/DevModeBotBrain.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeConsoleCommands.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -73,7 +74,7 @@ bool UDevModeBotBrain::Tick_ChatExchange(UWorld* World, ABasicPlayer* Player, do
             if (PeerCloseSince <= 0.0)
             {
                 PeerCloseSince = Now;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT anchored at rendezvous, settling before speaking"));
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT anchored at rendezvous, settling before speaking"));
                 return true;
             }
             if (Now - PeerCloseSince < 3.0)
@@ -92,7 +93,7 @@ bool UDevModeBotBrain::Tick_ChatExchange(UWorld* World, ABasicPlayer* Player, do
             bChatSent = true;
             ChatLegStartTime = Now;
             LastChatResendTime = Now;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT chat sent hi-%d from (%.0f,%.0f,%.0f)"),
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT chat sent hi-%d from (%.0f,%.0f,%.0f)"),
                 OwnCharId, PlayerAt.X, PlayerAt.Y, PlayerAt.Z);
             return true;
         }
@@ -123,13 +124,13 @@ bool UDevModeBotBrain::Tick_ChatExchange(UWorld* World, ABasicPlayer* Player, do
             }
             BotAssert(bBubbleOk, TEXT("peer-bubble"), bBubbleOk ? 1 : 0, 1);
             BotShot(TEXT("chat"));
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT peer message received: %s"), *PeerChatText);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT peer message received: %s"), *PeerChatText);
         }
         else if (PeerChatText.IsEmpty() && Now - LastChatResendTime > 10.0)
         {
             Chat->SendChatMessage(TEXT("local"), FString::Printf(TEXT("hi-%d"), OwnCharId));
             LastChatResendTime = Now;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT chat re-sent hi-%d (peer msg not yet seen)"), OwnCharId);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT chat re-sent hi-%d (peer msg not yet seen)"), OwnCharId);
         }
         if (Now - ChatLegStartTime > ChatTimeoutSec)
         {
@@ -186,7 +187,7 @@ bool UDevModeBotBrain::Tick_TradeElect(UWorld* World, ABasicPlayer* Player, doub
                 {
                     LastInvResyncTime = Now;
                     Inv->RequestInventoryData(GameInstance->GetCurrentCharacterID());
-                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade waits for inventory snapshot"));
+                    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT trade waits for inventory snapshot"));
                 }
             }
             if (Now - TradeLegStartTime > TradeTimeoutSec)
@@ -199,13 +200,13 @@ bool UDevModeBotBrain::Tick_TradeElect(UWorld* World, ABasicPlayer* Player, doub
         if (FTradeStatusRule::ShouldInitiateTrade(OwnCharId, TradePeerCharId))
         {
             Step = EBotStep::TradeInvite;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade: inviting char %d (we are %d)"),
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT trade: inviting char %d (we are %d)"),
                 TradePeerCharId, OwnCharId);
         }
         else
         {
             Step = EBotStep::TradeAccept;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade: accepting from char %d (we are %d)"),
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT trade: accepting from char %d (we are %d)"),
                 TradePeerCharId, OwnCharId);
         }
         TradeLegStartTime = Now;
@@ -226,7 +227,7 @@ bool UDevModeBotBrain::Tick_TradeInvite(UWorld* World, ABasicPlayer* Player, dou
             Trade->RequestTrade(OwnCharId, TradePeerCharId, Player->GetActorLocation());
             bTradeInviteSent = true;
             LastInviteResendTime = Now;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade invite sent to char %d"), TradePeerCharId);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT trade invite sent to char %d"), TradePeerCharId);
             return true;
         }
         // Session id arrives on the tradeState echo — that is the invite proof.
@@ -237,7 +238,7 @@ bool UDevModeBotBrain::Tick_TradeInvite(UWorld* World, ABasicPlayer* Player, dou
         {
             LastInviteResendTime = Now;
             Trade->RequestTrade(OwnCharId, TradePeerCharId, Player->GetActorLocation());
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade invite re-sent to char %d"), TradePeerCharId);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT trade invite re-sent to char %d"), TradePeerCharId);
         }
         if (Trade->IsInTrade())
         {
@@ -276,7 +277,7 @@ bool UDevModeBotBrain::Tick_TradeAccept(UWorld* World, ABasicPlayer* Player, dou
             // Echo the INITIATOR's id (TradePeerCharId) — the server matches
             // the pending invite on it; our own id answers "no_pending_invite".
             Trade->RespondToTradeInvite(TradePeerCharId, true);
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade invite accepted"));
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT trade invite accepted"));
             return true;
         }
         if (Now - TradeLegStartTime > TradeTimeoutSec)
@@ -309,7 +310,7 @@ bool UDevModeBotBrain::Tick_TradeOffer(UWorld* World, ABasicPlayer* Player, doub
             const int32 OfferGold = FTradeStatusRule::ShouldInitiateTrade(OwnCharId, TradePeerCharId) ? 1 : 0;
             Trade->UpdateTradeOffer(OwnCharId, OfferGold, TArray<FTradeOfferItem>());
             bTradeOfferSent = true;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade offer sent: %d gold"), OfferGold);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT trade offer sent: %d gold"), OfferGold);
             Step = EBotStep::TradeConfirm;
             TradeLegStartTime = Now;
             return true;
@@ -330,7 +331,7 @@ bool UDevModeBotBrain::Tick_TradeConfirm(UWorld* World, ABasicPlayer* Player, do
         {
             Trade->ConfirmTrade(OwnCharId);
             bTradeConfirmSent = true;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade confirmed"));
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT trade confirmed"));
             return true;
         }
         // Completion proof is the authoritative gold snapshot (the session
@@ -358,7 +359,7 @@ bool UDevModeBotBrain::Tick_TradeConfirm(UWorld* World, ABasicPlayer* Player, do
                 {
                     LastInvResyncTime = Now;
                     Inv->RequestInventoryData(GameInstance->GetCurrentCharacterID());
-                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT trade session gone, re-requesting inventory"));
+                    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT trade session gone, re-requesting inventory"));
                 }
             }
             if (Now - TradeLegStartTime > TradeTimeoutSec)

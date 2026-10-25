@@ -1,6 +1,7 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Audio/AudioManager.h"
+#include "Prototyping.h"
 #include "Audio/AudioConfigDataAsset.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
@@ -55,7 +56,7 @@ void UAudioManager::SaveSettings()
 
 	GConfig->Flush(false, GGameUserSettingsIni);
 
-	UE_LOG(LogTemp, Log,
+	UE_LOG(LogGameAudio, Log,
 		TEXT("UAudioManager: settings saved - Master=%.2f Music=%.2f SFX=%.2f Ambient=%.2f UI=%.2f"),
 		CachedMasterVolume, CachedMusicVolume, CachedSFXVolume, CachedAmbientVolume, CachedUIVolume);
 }

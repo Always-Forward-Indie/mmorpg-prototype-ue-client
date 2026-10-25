@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -82,7 +83,7 @@ void ABasicPlayer::OnAttackInput()
     if (LockedTarget && bIsAutoAttacking)
     {
         StopAutoAttack();
-        UE_LOG(LogTemp, Warning, TEXT("Auto-attack cancelled"));
+        UE_LOG(LogGameplay, Warning, TEXT("Auto-attack cancelled"));
         return;
     }
 
@@ -90,7 +91,7 @@ void ABasicPlayer::OnAttackInput()
     // No implicit sweep-to-find-nearest: the player must explicitly target via cursor.
     if (!LockedTarget || LockedTarget->GetMOBIsDead())
     {
-        UE_LOG(LogTemp, Warning, TEXT("OnAttackInput: no live locked target"));
+        UE_LOG(LogGameplay, Warning, TEXT("OnAttackInput: no live locked target"));
         return;
     }
 

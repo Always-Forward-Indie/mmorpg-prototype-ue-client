@@ -1,4 +1,5 @@
 #include "Gameplay/Skills/PlayerSkillNetworkHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
@@ -20,39 +21,39 @@ void UPlayerSkillNetworkHandler::Initialize(UPlayerSkillManager* InSkillManager,
 {
     if (!InSkillManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillNetworkHandler: Cannot initialize with null SkillManager"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillNetworkHandler: Cannot initialize with null SkillManager"));
         return;
     }
 
     if (!InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillNetworkHandler: Cannot initialize with null NetworkManager"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillNetworkHandler: Cannot initialize with null NetworkManager"));
         return;
     }
 
     SkillManager = InSkillManager;
     NetworkManager = InNetworkManager;
 
-    UE_LOG(LogTemp, Log, TEXT("PlayerSkillNetworkHandler: Initialized successfully"));
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillNetworkHandler: Initialized successfully"));
 }
 
 void UPlayerSkillNetworkHandler::SubscribeToNetworkEvents()
 {
     if (!NetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillNetworkHandler: Cannot subscribe - NetworkManager is null"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillNetworkHandler: Cannot subscribe - NetworkManager is null"));
         return;
     }
 
     if (!IsValid(NetworkManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillNetworkHandler: Cannot subscribe - NetworkManager is not valid"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillNetworkHandler: Cannot subscribe - NetworkManager is not valid"));
         return;
     }
 
     if (bIsSubscribed)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillNetworkHandler: Already subscribed to network events"));
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillNetworkHandler: Already subscribed to network events"));
         return;
     }
 
@@ -61,7 +62,7 @@ void UPlayerSkillNetworkHandler::SubscribeToNetworkEvents()
     NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UPlayerSkillNetworkHandler::HandleChunkServerData);
 
     bIsSubscribed = true;
-    UE_LOG(LogTemp, Log, TEXT("PlayerSkillNetworkHandler: Subscribed to network events"));
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillNetworkHandler: Subscribed to network events"));
 }
 
 void UPlayerSkillNetworkHandler::UnsubscribeFromNetworkEvents()
@@ -74,7 +75,7 @@ void UPlayerSkillNetworkHandler::UnsubscribeFromNetworkEvents()
     NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UPlayerSkillNetworkHandler::HandleChunkServerData);
     
     bIsSubscribed = false;
-    UE_LOG(LogTemp, Log, TEXT("PlayerSkillNetworkHandler: Unsubscribed from network events"));
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillNetworkHandler: Unsubscribed from network events"));
 }
 
 void UPlayerSkillNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
@@ -87,7 +88,7 @@ void UPlayerSkillNetworkHandler::HandleChunkServerData(const FString& ReceivedDa
     // Only process successful events
     if (MessageData.status != TEXT("success"))
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillNetworkHandler: Received non-success event: %s"), 
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillNetworkHandler: Received non-success event: %s"), 
             *MessageData.status);
         return;
     }
@@ -123,7 +124,7 @@ void UPlayerSkillNetworkHandler::HandleInitializePlayerSkills(const FString& Jso
 {
     if (!SkillManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillNetworkHandler: SkillManager is null"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillNetworkHandler: SkillManager is null"));
         return;
     }
 
@@ -132,7 +133,7 @@ void UPlayerSkillNetworkHandler::HandleInitializePlayerSkills(const FString& Jso
     
     if (SkillsData.characterId <= 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillNetworkHandler: Invalid character ID in skills initialization"));
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillNetworkHandler: Invalid character ID in skills initialization"));
         return;
     }
 
@@ -143,7 +144,7 @@ void UPlayerSkillNetworkHandler::HandleInitializePlayerSkills(const FString& Jso
     // Initialize skills in the manager
     SkillManager->InitializePlayerSkills(SkillsData);
 
-    UE_LOG(LogTemp, Warning, TEXT("PlayerSkillNetworkHandler: Initialized %d skills for character %d"), 
+    UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillNetworkHandler: Initialized %d skills for character %d"), 
         SkillsData.skills.Num(), SkillsData.characterId);
 }
 
@@ -157,7 +158,7 @@ void UPlayerSkillNetworkHandler::HandleSetSkillCooldowns(const FString& JsonData
 {
     if (!SkillManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillNetworkHandler: HandleSetSkillCooldowns - SkillManager is null"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillNetworkHandler: HandleSetSkillCooldowns - SkillManager is null"));
         return;
     }
 
@@ -165,14 +166,14 @@ void UPlayerSkillNetworkHandler::HandleSetSkillCooldowns(const FString& JsonData
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonData);
     if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillNetworkHandler: HandleSetSkillCooldowns - failed to parse JSON"));
+        UE_LOG(LogNetPacket, Error, TEXT("PlayerSkillNetworkHandler: HandleSetSkillCooldowns - failed to parse JSON"));
         return;
     }
 
     const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
     if (!Root->TryGetObjectField(TEXT("body"), BodyPtr))
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillNetworkHandler: HandleSetSkillCooldowns - missing 'body' field"));
+        UE_LOG(LogNetPacket, Warning, TEXT("PlayerSkillNetworkHandler: HandleSetSkillCooldowns - missing 'body' field"));
         return;
     }
 
@@ -180,7 +181,7 @@ void UPlayerSkillNetworkHandler::HandleSetSkillCooldowns(const FString& JsonData
     if (!(*BodyPtr)->TryGetArrayField(TEXT("cooldowns"), CooldownsArr) || CooldownsArr->IsEmpty())
     {
         // Empty array is valid — no active cooldowns to restore
-        UE_LOG(LogTemp, Log, TEXT("PlayerSkillNetworkHandler: HandleSetSkillCooldowns - no cooldowns to restore"));
+        UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillNetworkHandler: HandleSetSkillCooldowns - no cooldowns to restore"));
         return;
     }
 
@@ -200,7 +201,7 @@ void UPlayerSkillNetworkHandler::HandleSetSkillCooldowns(const FString& JsonData
         Cooldowns.Add(Entry);
     }
 
-    UE_LOG(LogTemp, Log,
+    UE_LOG(LogGameplay, Verbose,
         TEXT("PlayerSkillNetworkHandler: HandleSetSkillCooldowns - restoring %d cooldowns"),
         Cooldowns.Num());
 
@@ -235,7 +236,7 @@ void UPlayerSkillNetworkHandler::HandleSkillBarState(const FString& JsonData)
 {
     if (!SkillManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillNetworkHandler: HandleSkillBarState - SkillManager is null"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillNetworkHandler: HandleSkillBarState - SkillManager is null"));
         return;
     }
 
@@ -243,14 +244,14 @@ void UPlayerSkillNetworkHandler::HandleSkillBarState(const FString& JsonData)
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonData);
     if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillNetworkHandler: HandleSkillBarState - failed to parse JSON"));
+        UE_LOG(LogNetPacket, Error, TEXT("PlayerSkillNetworkHandler: HandleSkillBarState - failed to parse JSON"));
         return;
     }
 
     const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
     if (!Root->TryGetObjectField(TEXT("body"), BodyPtr))
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillNetworkHandler: HandleSkillBarState - missing 'body' field"));
+        UE_LOG(LogNetPacket, Warning, TEXT("PlayerSkillNetworkHandler: HandleSkillBarState - missing 'body' field"));
         return;
     }
 
@@ -258,7 +259,7 @@ void UPlayerSkillNetworkHandler::HandleSkillBarState(const FString& JsonData)
     if (!(*BodyPtr)->TryGetArrayField(TEXT("slots"), SlotsArr))
     {
         // Empty bar is valid
-        UE_LOG(LogTemp, Log, TEXT("PlayerSkillNetworkHandler: HandleSkillBarState - empty skill bar"));
+        UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillNetworkHandler: HandleSkillBarState - empty skill bar"));
         return;
     }
 
@@ -279,7 +280,7 @@ void UPlayerSkillNetworkHandler::HandleSkillBarState(const FString& JsonData)
         ++LoadedSlots;
     }
 
-    UE_LOG(LogTemp, Log, TEXT("PlayerSkillNetworkHandler: HandleSkillBarState - loaded %d slots"), LoadedSlots);
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillNetworkHandler: HandleSkillBarState - loaded %d slots"), LoadedSlots);
 }
 
 // ---------------------------------------------------------------------------
@@ -299,7 +300,7 @@ void UPlayerSkillNetworkHandler::HandleSkillBarSlotUpdated(const FString& JsonDa
     (*BodyPtr)->TryGetNumberField(TEXT("slotIndex"), SlotIndex);
     (*BodyPtr)->TryGetStringField(TEXT("skillSlug"), SkillSlug);
 
-    UE_LOG(LogTemp, Log, TEXT("PlayerSkillNetworkHandler: skillBarSlotUpdated ACK - slot=%d skill='%s'"),
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillNetworkHandler: skillBarSlotUpdated ACK - slot=%d skill='%s'"),
         SlotIndex, *SkillSlug);
 }
 
@@ -310,7 +311,7 @@ void UPlayerSkillNetworkHandler::SendSetSkillBarSlot(int32 SlotIndex, const FStr
 {
     if (!NetworkManager || !GameInstance)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillNetworkHandler: SendSetSkillBarSlot - missing NetworkManager or GameInstance"));
+        UE_LOG(LogNetPacket, Warning, TEXT("PlayerSkillNetworkHandler: SendSetSkillBarSlot - missing NetworkManager or GameInstance"));
         return;
     }
 
@@ -330,27 +331,27 @@ void UPlayerSkillNetworkHandler::SendSetSkillBarSlot(int32 SlotIndex, const FStr
 
     NetworkManager->SendDataToChunkServer(JsonString);
 
-    UE_LOG(LogTemp, Log, TEXT("PlayerSkillNetworkHandler: Sent setSkillBarSlot - slot=%d skill='%s' char=%d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillNetworkHandler: Sent setSkillBarSlot - slot=%d skill='%s' char=%d"),
         SlotIndex, *SkillSlug, CharacterId);
 }
 
 void UPlayerSkillNetworkHandler::LogNetworkEvent(const FString& EventType, const FString& Details)
 {
-    UE_LOG(LogTemp, Log, TEXT("PlayerSkillNetworkHandler [%s]: %s"), *EventType, *Details);
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillNetworkHandler [%s]: %s"), *EventType, *Details);
 }
 
 bool UPlayerSkillNetworkHandler::ValidateEventData(const FMessageDataStruct& MessageData, const FString& ExpectedEventType)
 {
     if (MessageData.eventType != ExpectedEventType)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillNetworkHandler: Expected event type %s but got %s"), 
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillNetworkHandler: Expected event type %s but got %s"), 
             *ExpectedEventType, *MessageData.eventType);
         return false;
     }
 
     if (MessageData.status != TEXT("success"))
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillNetworkHandler: Event %s failed with status: %s"), 
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillNetworkHandler: Event %s failed with status: %s"), 
             *ExpectedEventType, *MessageData.status);
         return false;
     }

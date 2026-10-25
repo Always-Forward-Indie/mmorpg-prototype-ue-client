@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillSlotWidget.h"
 #include "UI/SkillSlotWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
@@ -32,11 +33,11 @@ void USkillSlotWidget::SlotInitialize(int32 InSlotIndex, UPlayerSkillManager* In
         FSkillSlotData SlotData = SkillManager->GetSkillSlot(SlotIndex);
         SetSlotData(SlotData);
 
-        UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget: Initialized slot %d with event subscriptions"), SlotIndex);
+        UE_LOG(LogGameplay, Log, TEXT("SkillSlotWidget: Initialized slot %d with event subscriptions"), SlotIndex);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget: Initialized slot %d without SkillManager"), SlotIndex);
+        UE_LOG(LogGameplay, Warning, TEXT("SkillSlotWidget: Initialized slot %d without SkillManager"), SlotIndex);
     }
 }
 
@@ -56,7 +57,7 @@ void USkillSlotWidget::SetSkillData(const FPlayerSkillData& SkillData)
             {
                 CooldownRemainingTime = SkillManager->GetSkillCooldownRemaining(AssignedSkillSlug);
             }
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogGameplay, Verbose,
                 TEXT("SkillSlotWidget[%d]: SetSkillData slug='%s' cooldownMs=%d total=%.1f onCD=%d remaining=%.1f"),
                 SlotIndex, *AssignedSkillSlug,
                 SkillData.networkData.cooldownMs, CooldownTotalTime,

@@ -1,4 +1,5 @@
 #include "UI/PlayerStatsWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "Gameplay/Player/TitleManager.h"
 #include "Gameplay/Player/MasteryManager.h"
@@ -24,7 +25,7 @@ void UPlayerStatsWidget::NativeConstruct()
         Close_Button->OnClicked.AddDynamic(this, &UPlayerStatsWidget::HandleCloseButtonClicked);
 
     // Diagnostic: log which optional bindings are resolved (helps catch missing Blueprint widgets)
-    UE_LOG(LogTemp, Log, TEXT("PlayerStatsWidget bindings: SP_Text=%s  Effects_Box=%s  Attributes_Box=%s  Mastery_ScrollBox=%s  CharacterName_Text=%s  EquippedTitle_Text=%s"),
+    UE_LOG(LogGameplay, Log, TEXT("PlayerStatsWidget bindings: SP_Text=%s  Effects_Box=%s  Attributes_Box=%s  Mastery_ScrollBox=%s  CharacterName_Text=%s  EquippedTitle_Text=%s"),
         SP_Text             ? TEXT("OK") : TEXT("NULL"),
         Effects_Box         ? TEXT("OK") : TEXT("NULL"),
         Attributes_Box      ? TEXT("OK") : TEXT("NULL"),

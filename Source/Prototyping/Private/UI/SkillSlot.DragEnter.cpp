@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillSlotWidget.h"
 #include "UI/SkillSlotWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
@@ -22,7 +23,7 @@ void USkillSlotWidget::NativeOnDragEnter(const FGeometry& G, const FDragDropEven
         return;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: DragEnter op=%p canAccept=%d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillSlotWidget[%d]: DragEnter op=%p canAccept=%d"),
         SlotIndex, Op, CanAcceptSkillDrop(SkillOp) ? 1 : 0);
 
     // Always accept the latest op pointer. Slate can re-enter (e.g., cursor moves

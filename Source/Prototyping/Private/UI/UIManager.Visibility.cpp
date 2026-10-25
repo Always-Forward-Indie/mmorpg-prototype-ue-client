@@ -1,4 +1,5 @@
 #include "UI/UIManager.h"
+#include "Prototyping.h"
 #include "UI/UIManager.h"
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
@@ -86,7 +87,7 @@ void UUIManager::OnAvailableSkillsVisibilityChanged(bool bIsVisible)
 	// ��������� ������ � ����� �����
 	UpdateCursorAndInputMode();
 	
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel visibility synced: %s"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Skills panel visibility synced: %s"), 
 		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
@@ -108,11 +109,11 @@ void UUIManager::HandlePlayerInterfaceReady()
 			if (Canvas)
 			{
 				NameplateManager->SetCanvasWidget(Canvas);
-				UE_LOG(LogTemp, Warning, TEXT("UIManager: NameplateManager created and bound to canvas widget"));
+				UE_LOG(LogGameplay, Verbose, TEXT("UIManager: NameplateManager created and bound to canvas widget"));
 			}
 			else
 			{
-				UE_LOG(LogTemp, Warning, TEXT("UIManager: NameplateManager created but NameplateCanvasWidget not found in PlayerInterfaceWidget. Add it to the WBP_PlayerInterface Blueprint."));
+				UE_LOG(LogGameplay, Warning, TEXT("UIManager: NameplateManager created but NameplateCanvasWidget not found in PlayerInterfaceWidget. Add it to the WBP_PlayerInterface Blueprint."));
 			}
 		}
 	}
@@ -126,11 +127,11 @@ void UUIManager::HandlePlayerInterfaceReady()
 		{
 			QuickBar->InitQuickBar(InventoryManager);
 			InventoryManager->OnInventoryUpdated.AddDynamic(QuickBar, &UItemQuickBarWidget::HandleInventoryUpdated);
-			UE_LOG(LogTemp, Warning, TEXT("UIManager: ItemQuickBar initialized"));
+			UE_LOG(LogGameplay, Warning, TEXT("UIManager: ItemQuickBar initialized"));
 		}
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] HandlePlayerInterfaceReady: OnUIManagerInitialized broadcast"));
+	UE_LOG(LogGameplay, Warning, TEXT("[LOADSEQ] HandlePlayerInterfaceReady: OnUIManagerInitialized broadcast"));
 }
 
 void UUIManager::OnInventoryVisibilityChanged(bool bIsVisible)
@@ -138,7 +139,7 @@ void UUIManager::OnInventoryVisibilityChanged(bool bIsVisible)
 	bInventoryVisible = bIsVisible;
 	UpdateCursorAndInputMode();
 	
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Inventory visibility synced: %s"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Inventory visibility synced: %s"), 
 		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
@@ -147,7 +148,7 @@ void UUIManager::OnHarvestLootVisibilityChanged(bool bIsVisible)
 	bHarvestLootVisible = bIsVisible;
 	UpdateCursorAndInputMode();
 	
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Harvest loot visibility synced: %s"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Harvest loot visibility synced: %s"), 
 		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
@@ -156,7 +157,7 @@ void UUIManager::OnDialogueVisibilityChanged(bool bIsVisible)
 	bDialogueVisible = bIsVisible;
 	UpdateCursorAndInputMode();
 	
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Dialogue visibility synced: %s"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Dialogue visibility synced: %s"), 
 		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
@@ -165,7 +166,7 @@ void UUIManager::OnQuestJournalVisibilityChanged(bool bIsVisible)
 	bQuestJournalVisible = bIsVisible;
 	UpdateCursorAndInputMode();
 	
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Quest journal visibility synced: %s"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Quest journal visibility synced: %s"), 
 		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
@@ -174,7 +175,7 @@ void UUIManager::OnVendorShopVisibilityChanged(bool bIsVisible)
 	bVendorShopVisible = bIsVisible;
 	UpdateCursorAndInputMode();
 	
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Vendor shop visibility synced: %s"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Vendor shop visibility synced: %s"), 
 		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
@@ -183,7 +184,7 @@ void UUIManager::OnRepairShopVisibilityChanged(bool bIsVisible)
 	bRepairShopVisible = bIsVisible;
 	UpdateCursorAndInputMode();
 	
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Repair shop visibility synced: %s"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Repair shop visibility synced: %s"), 
 		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
@@ -192,7 +193,7 @@ void UUIManager::OnSkillShopVisibilityChanged(bool bIsVisible)
 	bSkillShopVisible = bIsVisible;
 	UpdateCursorAndInputMode();
 
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Skill shop visibility synced: %s"),
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Skill shop visibility synced: %s"),
 		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
@@ -201,7 +202,7 @@ void UUIManager::OnTradeVisibilityChanged(bool bIsVisible)
 	bTradeVisible = bIsVisible;
 	UpdateCursorAndInputMode();
 	
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Trade visibility synced: %s"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Trade visibility synced: %s"), 
 		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
@@ -210,7 +211,7 @@ void UUIManager::OnEquipmentVisibilityChanged(bool bIsVisible)
 	bEquipmentVisible = bIsVisible;
 	UpdateCursorAndInputMode();
 	
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Equipment visibility synced: %s"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Equipment visibility synced: %s"), 
 		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
@@ -219,7 +220,7 @@ void UUIManager::OnPlayerStatsVisibilityChanged()
 	bPlayerStatsVisible = PlayerStatsWidget && PlayerStatsWidget->GetVisibility() == ESlateVisibility::SelfHitTestInvisible;
 	UpdateCursorAndInputMode();
 	
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Player stats visibility synced: %s"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Player stats visibility synced: %s"), 
 		bPlayerStatsVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
@@ -227,14 +228,14 @@ void UUIManager::OnTitlesVisibilityChanged()
 {
 	bTitlesVisible = TitlesWidget && TitlesWidget->GetVisibility() == ESlateVisibility::Visible;
 	UpdateCursorAndInputMode();
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Titles visibility synced: %s"), bTitlesVisible ? TEXT("Visible") : TEXT("Hidden"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Titles visibility synced: %s"), bTitlesVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
 void UUIManager::OnReputationVisibilityChanged()
 {
 	bReputationVisible = ReputationWidget && ReputationWidget->GetVisibility() == ESlateVisibility::Visible;
 	UpdateCursorAndInputMode();
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Reputation visibility synced: %s"), bReputationVisible ? TEXT("Visible") : TEXT("Hidden"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Reputation visibility synced: %s"), bReputationVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
 void UUIManager::OnBestiaryVisibilityChanged(bool bIsVisible)
@@ -242,7 +243,7 @@ void UUIManager::OnBestiaryVisibilityChanged(bool bIsVisible)
 	bBestiaryVisible = bIsVisible;
 	UpdateCursorAndInputMode();
 	
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Bestiary visibility synced: %s"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Bestiary visibility synced: %s"), 
 		bIsVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
@@ -250,7 +251,7 @@ void UUIManager::UpdateCursorAndInputMode()
 {
 	if (!PlayerController)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: Cannot update cursor - PlayerController not set"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: Cannot update cursor - PlayerController not set"));
 		return;
 	}
 
@@ -267,14 +268,14 @@ void UUIManager::UpdateCursorAndInputMode()
 			InputMode.SetHideCursorDuringCapture(false);
 			PlayerController->SetInputMode(InputMode);
 
-			UE_LOG(LogTemp, Warning, TEXT("UIManager: Cursor shown - Game+UI mode"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Cursor shown - Game+UI mode"));
 		}
 		else
 		{
 			FInputModeGameOnly InputMode;
 			PlayerController->SetInputMode(InputMode);
 
-			UE_LOG(LogTemp, Warning, TEXT("UIManager: Cursor hidden - Game only mode"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Cursor hidden - Game only mode"));
 		}
 	}
 
@@ -419,7 +420,7 @@ bool UUIManager::ShouldShowCursor() const
 		|| bPlayerStatsVisible || bBestiaryVisible || bTitlesVisible || bReputationVisible || bEmoteListVisible
 		|| bAltCursorActive || bGameMenuVisible || bDeathScreenVisible;
 	
-	UE_LOG(LogTemp, Verbose, TEXT("UIManager: Cursor check -> Show: %s"),
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Cursor check -> Show: %s"),
 		bAnyWidgetVisible ? TEXT("YES") : TEXT("NO"));
 	
 	return bAnyWidgetVisible;
@@ -465,7 +466,7 @@ void UUIManager::HideMobTargetFrame()
 
 void UUIManager::ToggleGameMenu()
 {
-	UE_LOG(LogTemp, Warning, TEXT("UIManager::ToggleGameMenu - GameMenuWidget: %s, IsMenuOpen: %s"),
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::ToggleGameMenu - GameMenuWidget: %s, IsMenuOpen: %s"),
 		GameMenuWidget ? TEXT("Valid") : TEXT("NULL"),
 		(GameMenuWidget && GameMenuWidget->IsMenuOpen()) ? TEXT("true") : TEXT("false"));
 
@@ -486,7 +487,7 @@ void UUIManager::ToggleGameMenu()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager::ToggleGameMenu - GameMenuWidget is NULL!"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager::ToggleGameMenu - GameMenuWidget is NULL!"));
 	}
 }
 

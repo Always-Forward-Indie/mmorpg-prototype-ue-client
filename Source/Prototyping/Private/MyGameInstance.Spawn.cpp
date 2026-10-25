@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Components/ArrowComponent.h"
 #include "ShaderCompiler.h"
 #include "ContentStreaming.h"
@@ -102,7 +103,7 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 {
 	if (!ConnectedPlayers.Contains(ClientID))
 	{
-		UE_LOG(LogTemp, Error, TEXT("SpawnPlayerForClient: ClientID %d not in ConnectedPlayers"), ClientID);
+		UE_LOG(LogConnection, Error, TEXT("SpawnPlayerForClient: ClientID %d not in ConnectedPlayers"), ClientID);
 		return;
 	}
 
@@ -111,7 +112,7 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 		ABasicPlayer* Existing = SpawnedPlayers[ClientID];
 		if (IsValid(Existing) && !Existing->IsActorBeingDestroyed())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("SpawnPlayerForClient: ClientID %d already spawned, skipping"), ClientID);
+			UE_LOG(LogConnection, Warning, TEXT("SpawnPlayerForClient: ClientID %d already spawned, skipping"), ClientID);
 			return;
 		}
 		SpawnedPlayers.Remove(ClientID);
@@ -137,7 +138,7 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 	ABasicPlayer* NewPlayer = GetWorld()->SpawnActorDeferred<ABasicPlayer>(MainPlayerClass, FTransform(SpawnRotation, SpawnLocation), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	if (!NewPlayer)
 	{
-		UE_LOG(LogTemp, Error, TEXT("SpawnPlayerForClient: Failed to spawn ABasicPlayer for ClientID %d"), ClientID);
+		UE_LOG(LogConnection, Error, TEXT("SpawnPlayerForClient: Failed to spawn ABasicPlayer for ClientID %d"), ClientID);
 		return;
 	}
 
@@ -150,7 +151,7 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 	// so BeginPlay initialises LastReceivedPosition = SpawnLocation (not local player pos).
 	UGameplayStatics::FinishSpawningActor(NewPlayer, FTransform(SpawnRotation, SpawnLocation));
 
-	UE_LOG(LogTemp, Warning, TEXT("SpawnPlayerForClient: Spawned ClientID=%d CharID=%d IsLocal=%d Pos=(%.0f,%.0f,%.0f)"),
+	UE_LOG(LogConnection, Warning, TEXT("SpawnPlayerForClient: Spawned ClientID=%d CharID=%d IsLocal=%d Pos=(%.0f,%.0f,%.0f)"),
 		ClientID, PlayerData.characterData.characterId, bIsLocal,
 		SpawnLocation.X, SpawnLocation.Y, SpawnLocation.Z);
 
@@ -187,7 +188,7 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 	if (PlayerData.characterData.bIsDead)
 	{
 		NewPlayer->SetDead_Implementation(true);
-		UE_LOG(LogTemp, Warning, TEXT("SpawnPlayerForClient: CharID=%d spawned as DEAD"), PlayerData.characterData.characterId);
+		UE_LOG(LogConnection, Warning, TEXT("SpawnPlayerForClient: CharID=%d spawned as DEAD"), PlayerData.characterData.characterId);
 	}
 
 	if (CombatSystemManager && PlayerData.characterData.characterId > 0 &&
@@ -197,7 +198,7 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 		CombatableInterface.SetObject(NewPlayer);
 		CombatableInterface.SetInterface(Cast<ICombatable>(NewPlayer));
 		CombatSystemManager->RegisterCombatable(CombatableInterface);
-		UE_LOG(LogTemp, Warning, TEXT("SpawnPlayerForClient: Registered CharID=%d with CombatSystem"), PlayerData.characterData.characterId);
+		UE_LOG(LogConnection, Warning, TEXT("SpawnPlayerForClient: Registered CharID=%d with CombatSystem"), PlayerData.characterData.characterId);
 	}
 
 	if (MOBManager && PlayerData.characterData.characterId > 0)
@@ -234,7 +235,7 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 		if (PlayerStatsManager->GetAttribute(TEXT("move_speed"), SpeedAttr) && SpeedAttr.effective > 0.f)
 		{
 			NewPlayer->ApplyServerMoveSpeed(SpeedAttr.effective);
-			UE_LOG(LogTemp, Log, TEXT("SpawnPlayerForClient: Applied cached move_speed=%.1f to CharID=%d"),
+			UE_LOG(LogConnection, Verbose, TEXT("SpawnPlayerForClient: Applied cached move_speed=%.1f to CharID=%d"),
 				SpeedAttr.effective, PlayerData.characterData.characterId);
 		}
 	}
@@ -252,12 +253,12 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 		APlayerController* PC = GetFirstLocalPlayerController(GetWorld());
 		if (PC)
 		{
-		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 3b. Calling PC->Possess(Player) � camera will switch NOW"));
+		UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] 3b. Calling PC->Possess(Player) � camera will switch NOW"));
 		PC->Possess(Player);
 		{
 			FRotator CR = PC->GetControlRotation();
 			FVector  CamLoc = Player->GetFollowCamera() ? Player->GetFollowCamera()->GetComponentLocation() : FVector::ZeroVector;
-			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 3c. PC->Possess done. Pawn=%s ControlRot=(P=%.1f Y=%.1f R=%.1f) CameraLoc=(%.0f,%.0f,%.0f)"),
+			UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] 3c. PC->Possess done. Pawn=%s ControlRot=(P=%.1f Y=%.1f R=%.1f) CameraLoc=(%.0f,%.0f,%.0f)"),
 				PC->GetPawn() ? *PC->GetPawn()->GetName() : TEXT("NULL"),
 				CR.Pitch, CR.Yaw, CR.Roll,
 				CamLoc.X, CamLoc.Y, CamLoc.Z);
@@ -265,7 +266,7 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("SpawnPlayerForClient: No local PlayerController for ClientID=%d"), ClientID);
+			UE_LOG(LogConnection, Error, TEXT("SpawnPlayerForClient: No local PlayerController for ClientID=%d"), ClientID);
 		}
 
 		if (InventoryManager)
@@ -274,7 +275,7 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 			// processes packets for our local character, not other players on the same feed.
 			InventoryManager->SetOwnerCharacterId(PlayerData.characterData.characterId);
 			InventoryManager->RequestInventoryData(PlayerData.characterData.characterId);
-			UE_LOG(LogTemp, Warning, TEXT("SpawnPlayerForClient: Requested inventory for CharID=%d"), PlayerData.characterData.characterId);
+			UE_LOG(LogConnection, Warning, TEXT("SpawnPlayerForClient: Requested inventory for CharID=%d"), PlayerData.characterData.characterId);
 		}
 	}
 	else
@@ -289,7 +290,7 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 			VisComp->InitializeForRemotePlayer(ItemManager);
 			EquipmentManager->OnRemoteEquipmentStateReceivedDelegate.AddDynamic(
 				VisComp, &UEquipmentVisualComponent::HandleRemoteEquipmentState);
-			UE_LOG(LogTemp, Log, TEXT("SpawnPlayerForClient: Equipment visuals bound for remote CharID=%d"), RemoteCharId);
+			UE_LOG(LogConnection, Verbose, TEXT("SpawnPlayerForClient: Equipment visuals bound for remote CharID=%d"), RemoteCharId);
 
 			// Bind cosmetic visual component to remote equipment updates so that
 			// helmets correctly hide hair for other players on the same screen.
@@ -308,7 +309,7 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 				if (Cached->slots.Num() > 0)
 				{
 					VisComp->HandleRemoteEquipmentState(*Cached);
-					UE_LOG(LogTemp, Log, TEXT("SpawnPlayerForClient: Replayed cached equipment for remote CharID=%d (%d slot(s))"),
+					UE_LOG(LogConnection, Verbose, TEXT("SpawnPlayerForClient: Replayed cached equipment for remote CharID=%d (%d slot(s))"),
 						RemoteCharId, Cached->slots.Num());
 
 					// Also replay to cosmetics so hair-hide is applied from the cached state.
@@ -320,7 +321,7 @@ void UMyGameInstance::SpawnPlayerForClient(int32 ClientID)
 
 	if (bReturningToLogin)
 	{
-		UE_LOG(LogTemp, Log, TEXT("OnStart: Returning to login, loading login level"));
+		UE_LOG(LogConnection, Verbose, TEXT("OnStart: Returning to login, loading login level"));
 		LoadLoginLevel();
 	}
 }

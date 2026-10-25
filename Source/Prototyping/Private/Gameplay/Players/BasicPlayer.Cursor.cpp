@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -267,7 +268,7 @@ void ABasicPlayer::DispatchCursorInteract(AActor* Target, EInteractableType Type
     case EInteractableType::RemotePlayer:
         if (CursorInteractionComponent)
             CursorInteractionComponent->SetVisualLock(Target, Type);
-        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Double-click on remote player вЂ” inspect not yet implemented"));
+        UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Double-click on remote player вЂ” inspect not yet implemented"));
         break;
 
     default:
@@ -456,7 +457,7 @@ Toast->ShowNotification(OverNotif);
     // Weight status is informational only (used by UI weight bar).
     // Movement speed is fully server-authoritative and arrives via move_speed in stats_update.
     // No client-side speed penalty is applied here.
-    UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Weight status updated вЂ” current=%.1f limit=%.1f overweight=%d (speed unchanged)"),
+    UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Weight status updated вЂ” current=%.1f limit=%.1f overweight=%d (speed unchanged)"),
         WeightStatus.currentWeight, WeightStatus.weightLimit, (int)WeightStatus.isOverweight);
 }
 

@@ -65,12 +65,12 @@ UNetworkManager::UNetworkManager(const FObjectInitializer& ObjectInitializer)
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("Failed to parse JSON config file."));
+			UE_LOG(LogConnection, Error, TEXT("Failed to parse JSON config file."));
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to load config file: %s"), *ConfigFilePath);
+		UE_LOG(LogConnection, Error, TEXT("Failed to load config file: %s"), *ConfigFilePath);
 	}
 }
 

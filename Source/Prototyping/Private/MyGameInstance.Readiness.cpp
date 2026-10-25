@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Components/ArrowComponent.h"
 #include "ShaderCompiler.h"
 #include "ContentStreaming.h"
@@ -113,7 +114,7 @@ void UMyGameInstance::CheckGameWorldReady()
 	APlayerController* PC = NewWorld->GetFirstPlayerController();
 	if (!PC)
 	{
-		UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] Gate1 WAIT: no PlayerController yet"));
+		UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] Gate1 WAIT: no PlayerController yet"));
 		return;
 	}
 
@@ -124,7 +125,7 @@ void UMyGameInstance::CheckGameWorldReady()
 	{
 		bPendingSpawnDispatched = true;
 
-		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 3. Gate1 PASS: PC ready � dispatching spawn (PendingClientId=%d)"), PendingSpawnClientId);
+		UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] 3. Gate1 PASS: PC ready � dispatching spawn (PendingClientId=%d)"), PendingSpawnClientId);
 
 		// World context / managers must be refreshed before spawning so the new
 		// world's TimerManager / network polling are active.
@@ -135,7 +136,7 @@ void UMyGameInstance::CheckGameWorldReady()
 		if (PlayerManager)
 		{
 			PlayerManager->SendPlayerReadyRequest(ClientData);
-			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 4. playerReady sent to server (Phase 3)"));
+			UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] 4. playerReady sent to server (Phase 3)"));
 		}
 
 		// Reset ready-flags and arm the safety fallback timer.
@@ -153,7 +154,7 @@ void UMyGameInstance::CheckGameWorldReady()
 				// ticks that produce them). The hard 8s watchdog normally fires first;
 				// this is the second net.
 				const double Elapsed = FPlatformTime::Seconds() - LoadingScreenShownTime;
-				UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] SAFETY: %.1fs elapsed without full flags (0x%02X/0x%02X) — force-removing loading screen"),
+				UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] SAFETY: %.1fs elapsed without full flags (0x%02X/0x%02X) — force-removing loading screen"),
 					Elapsed, ReadyFlags, ReadyFlag_AllRequired);
 				RemoveLoadingScreen();
 				return false;
@@ -165,11 +166,11 @@ void UMyGameInstance::CheckGameWorldReady()
 	APawn* Pawn = PC->GetPawn();
 	if (!Pawn)
 	{
-		UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] Gate2 WAIT: PC exists but no Pawn yet (Possess not done)"));
+		UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] Gate2 WAIT: PC exists but no Pawn yet (Possess not done)"));
 		return;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Gate2 PASS: Pawn='%s' possessed at Pos=(%.0f,%.0f,%.0f)"),
+	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Gate2 PASS: Pawn='%s' possessed at Pos=(%.0f,%.0f,%.0f)"),
 		*Pawn->GetName(),
 		Pawn->GetActorLocation().X, Pawn->GetActorLocation().Y, Pawn->GetActorLocation().Z);
 
@@ -179,14 +180,14 @@ void UMyGameInstance::CheckGameWorldReady()
 	{
 		if (!WPS->IsAllStreamingCompleted())
 		{
-			UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] Gate3 WAIT: World Partition still streaming..."));
+			UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] Gate3 WAIT: World Partition still streaming..."));
 			return;
 		}
-		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Gate3 PASS: World Partition streaming complete"));
+		UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Gate3 PASS: World Partition streaming complete"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Gate3 SKIP: no WorldPartitionSubsystem (not a WP map)"));
+		UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Gate3 SKIP: no WorldPartitionSubsystem (not a WP map)"));
 	}
 
 	// Gate 4: Shader compilation must be complete (relevant on first run / cold PSO cache
@@ -194,10 +195,10 @@ void UMyGameInstance::CheckGameWorldReady()
 #if !WITH_EDITOR
 	if (GShaderCompilingManager && GShaderCompilingManager->IsCompiling())
 	{
-		UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] Gate4 WAIT: shader compiler still running..."));
+		UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] Gate4 WAIT: shader compiler still running..."));
 		return;
 	}
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Gate4 PASS: shader compiler idle"));
+	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Gate4 PASS: shader compiler idle"));
 #endif
 
 	// Gate 5: Texture streaming — prevent mip pop-in on first rendered
@@ -206,13 +207,13 @@ void UMyGameInstance::CheckGameWorldReady()
 		const int32 PendingStreaming = IStreamingManager::Get().StreamAllResources(0.0f);
 		if (PendingStreaming > 0)
 		{
-			UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] Gate5 WAIT: %d streaming requests still pending..."), PendingStreaming);
+			UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] Gate5 WAIT: %d streaming requests still pending..."), PendingStreaming);
 			return;
 		}
-		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Gate5 PASS: texture streaming complete"));
+		UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Gate5 PASS: texture streaming complete"));
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 5. All gates passed — calling OnGameWorldReady"));
+	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] 5. All gates passed — calling OnGameWorldReady"));
 	OnGameWorldReady();
 }
 
@@ -226,14 +227,14 @@ void UMyGameInstance::OnGameWorldReady()
 	// Release the process-level World Partition transition slot so the next
 	// PIE instance (if it was waiting) can now proceed with its own OpenLevel.
 	FPlatformAtomics::InterlockedExchange(&GActiveWorldPartitionTransitions, 0);
-	UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] OnGameWorldReady: released WP transition slot"));
+	UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] OnGameWorldReady: released WP transition slot"));
 
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 6. OnGameWorldReady: bGameWorldReady=true, ReadyFlags=0x%02X � calling CheckAllReadyFlags"), ReadyFlags);
+	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] 6. OnGameWorldReady: bGameWorldReady=true, ReadyFlags=0x%02X � calling CheckAllReadyFlags"), ReadyFlags);
 
 	UWorld* GameWorld = GetWorld();
 	if (!GameWorld)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] OnGameWorldReady: GetWorld() is null!"));
+		UE_LOG(LogConnection, Error, TEXT("[LOADSEQ] OnGameWorldReady: GetWorld() is null!"));
 		return;
 	}
 
@@ -246,7 +247,7 @@ void UMyGameInstance::OnGameWorldReady()
 	// - spawn them now that the world is confirmed ready.
 	if (PendingRemotePlayerSpawns.Num() > 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] OnGameWorldReady: spawning %d deferred remote player(s)"), PendingRemotePlayerSpawns.Num());
+		UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] OnGameWorldReady: spawning %d deferred remote player(s)"), PendingRemotePlayerSpawns.Num());
 		for (const FClientDataStruct& RemoteData : PendingRemotePlayerSpawns)
 		{
 			AddPlayerData(RemoteData.clientId, RemoteData);
@@ -273,14 +274,14 @@ void UMyGameInstance::OnGameWorldReady()
 	// Attempt the frame countdown now in case we were the last gate to clear.
 	CheckAllReadyFlags();
 
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] OnGameWorldReady: complete"));
+	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] OnGameWorldReady: complete"));
 }
 
 void UMyGameInstance::NotifyPlayerReadyAck()
 {
 	if (!bPendingSpawnDispatched) { return; }
 	ReadyFlags |= ReadyFlag_PlayerReadyAck;
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] FLAG PlayerReadyAck set (mask=0x%02X, bGameWorldReady=%d)"), ReadyFlags, bGameWorldReady);
+	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] FLAG PlayerReadyAck set (mask=0x%02X, bGameWorldReady=%d)"), ReadyFlags, bGameWorldReady);
 	CheckAllReadyFlags();
 }
 
@@ -288,7 +289,7 @@ void UMyGameInstance::NotifyUIInitialized()
 {
 	if (!bPendingSpawnDispatched) { return; }
 	ReadyFlags |= ReadyFlag_UIInitialized;
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] FLAG UIInitialized set (mask=0x%02X, bGameWorldReady=%d)"), ReadyFlags, bGameWorldReady);
+	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] FLAG UIInitialized set (mask=0x%02X, bGameWorldReady=%d)"), ReadyFlags, bGameWorldReady);
 	CheckAllReadyFlags();
 }
 
@@ -296,7 +297,7 @@ void UMyGameInstance::NotifyStatsReceived()
 {
 	if (!bPendingSpawnDispatched) { return; }
 	ReadyFlags |= ReadyFlag_StatsReceived;
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] FLAG StatsReceived set (mask=0x%02X, bGameWorldReady=%d)"), ReadyFlags, bGameWorldReady);
+	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] FLAG StatsReceived set (mask=0x%02X, bGameWorldReady=%d)"), ReadyFlags, bGameWorldReady);
 	CheckAllReadyFlags();
 }
 
@@ -304,7 +305,7 @@ void UMyGameInstance::NotifyPlayerSpawned()
 {
 	if (!bPendingSpawnDispatched) { return; }
 	ReadyFlags |= ReadyFlag_PlayerSpawned;
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] FLAG PlayerSpawned set (mask=0x%02X, bGameWorldReady=%d)"), ReadyFlags, bGameWorldReady);
+	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] FLAG PlayerSpawned set (mask=0x%02X, bGameWorldReady=%d)"), ReadyFlags, bGameWorldReady);
 
 	// Pawn is now in the world — immediately trigger the initial overlap check on
 	// every MusicZoneActor so music starts without waiting for the 0.25 s poll tick.
@@ -321,7 +322,7 @@ void UMyGameInstance::NotifyPlayerSpawned()
 
 void UMyGameInstance::CheckAllReadyFlags()
 {
-	UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] CheckAllReadyFlags: mask=0x%02X required=0x%02X bGameWorldReady=%d frameCountdownActive=%d"),
+	UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] CheckAllReadyFlags: mask=0x%02X required=0x%02X bGameWorldReady=%d frameCountdownActive=%d"),
 		ReadyFlags, ReadyFlag_AllRequired, (int)bGameWorldReady, EndFrameDelegateHandle.IsValid() ? 1 : 0);
 
 	if (!FReadinessGate::AreAllRequiredSet(ReadyFlags)) { return; }
@@ -339,7 +340,7 @@ void UMyGameInstance::CheckAllReadyFlags()
 	if (EndFrameDelegateHandle.IsValid()) { return; }
 	if (!bGameWorldReady)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] CheckAllReadyFlags: all flags ready but Gate3 (WP streaming) not done yet"));
+		UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] CheckAllReadyFlags: all flags ready but Gate3 (WP streaming) not done yet"));
 		return;
 	}
 
@@ -349,7 +350,7 @@ void UMyGameInstance::CheckAllReadyFlags()
 		W->GetTimerManager().ClearTimer(RemoveLoadingScreenTimerHandle);
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 7. ALL flags set (0x%02X) + WP streamed � starting frame countdown (%d frames)"),
+	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] 7. ALL flags set (0x%02X) + WP streamed � starting frame countdown (%d frames)"),
 		ReadyFlags, MinRenderedFramesBeforeHide);
 	StartFrameCountdown();
 }
@@ -368,11 +369,11 @@ void UMyGameInstance::StartFrameCountdown()
 		if (bLoadingScreenRemovePending.Load()) { return; }
 
 		const int32 NewCount = RenderedFrameCount.IncrementExchange() + 1;
-		UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] RT Frame %d / %d"), NewCount, MinRenderedFramesBeforeHide);
+		UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] RT Frame %d / %d"), NewCount, MinRenderedFramesBeforeHide);
 
 		if (NewCount >= MinRenderedFramesBeforeHide)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 8. %d RT frames seen � signalling GT to remove loading screen"), MinRenderedFramesBeforeHide);
+			UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] 8. %d RT frames seen � signalling GT to remove loading screen"), MinRenderedFramesBeforeHide);
 			bLoadingScreenRemovePending.Store(true);
 		}
 	});
@@ -387,7 +388,7 @@ void UMyGameInstance::StartFrameCountdown()
 				// Wall-clock safety net: if the render thread is stalled (window
 				// unfocused), force-remove after 3 s so the player isn't stuck.
 				if (FPlatformTime::Seconds() - FrameCountdownStartTime < 3.0) { return true; }
-				UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] SAFETY: frame countdown timed out after 3 s � force-removing loading screen"));
+				UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] SAFETY: frame countdown timed out after 3 s � force-removing loading screen"));
 				bLoadingScreenRemovePending.Store(true);
 			}
 
@@ -397,7 +398,7 @@ void UMyGameInstance::StartFrameCountdown()
 				EndFrameDelegateHandle.Reset();
 			}
 
-			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 9. GT ticker: removing loading screen NOW"));
+			UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] 9. GT ticker: removing loading screen NOW"));
 			RemoveLoadingScreen();
 			return false;   // unregister ticker
 		}),

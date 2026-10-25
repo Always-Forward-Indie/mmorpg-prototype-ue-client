@@ -1,11 +1,12 @@
 #include "Gameplay/Player/PlayerStatsManager.h"
+#include "Prototyping.h"
 
 
 void UPlayerStatsManager::ApplyStatsUpdate(const FPlayerStatsUpdateStruct& InStats)
 {
     if (InStats.characterId <= 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerStatsManager: Ignoring stats update with invalid characterId"));
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerStatsManager: Ignoring stats update with invalid characterId"));
         return;
     }
 
@@ -85,11 +86,11 @@ void UPlayerStatsManager::ApplyStatsUpdate(const FPlayerStatsUpdateStruct& InSta
         CachedStats.weightMax     = InStats.weightMax;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[EFFECTS] PlayerStatsManager::ApplyStatsUpdate: broadcasting charId=%d effects=%d boundListeners=%d"),
+    UE_LOG(LogGameplay, Warning, TEXT("[EFFECTS] PlayerStatsManager::ApplyStatsUpdate: broadcasting charId=%d effects=%d boundListeners=%d"),
         CachedStats.characterId, CachedStats.activeEffects.Num(), OnStatsUpdated.IsBound() ? 1 : 0);
     OnStatsUpdated.Broadcast(CachedStats);
 
-    UE_LOG(LogTemp, Log, TEXT("PlayerStatsManager: Stats applied - CharId=%d Lv=%d HP=%d/%d MP=%d/%d XP=%d[%d-%d] SP=%d Attrs=%d Effects=%d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerStatsManager: Stats applied - CharId=%d Lv=%d HP=%d/%d MP=%d/%d XP=%d[%d-%d] SP=%d Attrs=%d Effects=%d"),
         CachedStats.characterId, CachedStats.level,
         CachedStats.healthCurrent, CachedStats.healthMax,
         CachedStats.manaCurrent,   CachedStats.manaMax,
@@ -105,7 +106,7 @@ void UPlayerStatsManager::ApplyActiveEffects(const TArray<FActiveEffectEntry>& I
     CachedStats.activeEffects = InEffects;
     OnActiveEffectsReceived.Broadcast(CachedStats.activeEffects);
 
-    UE_LOG(LogTemp, Log, TEXT("PlayerStatsManager: ActiveEffects applied � %d effects"), InEffects.Num());
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerStatsManager: ActiveEffects applied � %d effects"), InEffects.Num());
 }
 
 

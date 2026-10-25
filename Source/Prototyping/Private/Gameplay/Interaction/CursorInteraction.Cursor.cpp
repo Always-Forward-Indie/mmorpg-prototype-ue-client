@@ -1,5 +1,6 @@
 // Copyright Prototyping Project. All Rights Reserved.
 #include "Gameplay/Interaction/CursorInteractionComponent.h"
+#include "Prototyping.h"
 #include "Gameplay/Interaction/WorldInteractionConfig.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Mobs/BasicMOB.h"
@@ -58,7 +59,7 @@ void* UCursorInteractionComponent::BuildCursorHandle(const FCursorIconEntry& Ent
             }
             else
             {
-                UE_LOG(LogTemp, Warning,
+                UE_LOG(LogGameplay, Warning,
                     TEXT("CursorInteraction: Source.GetMipData failed for '%s' (fmt=%d). Falling back to BulkData."),
                     *Tex->GetName(), static_cast<int32>(SrcFmt));
                 Width = Height = 0;  // fall through to BulkData path
@@ -75,7 +76,7 @@ void* UCursorInteractionComponent::BuildCursorHandle(const FCursorIconEntry& Ent
         FTexturePlatformData* PlatformData = Tex->GetPlatformData();
         if (!PlatformData || PlatformData->Mips.Num() == 0)
         {
-            UE_LOG(LogTemp, Warning, TEXT("CursorInteraction: '%s' has no platform mip data."), *Tex->GetName());
+            UE_LOG(LogGameplay, Warning, TEXT("CursorInteraction: '%s' has no platform mip data."), *Tex->GetName());
             return nullptr;
         }
 
@@ -85,7 +86,7 @@ void* UCursorInteractionComponent::BuildCursorHandle(const FCursorIconEntry& Ent
 
         if (Mip0.BulkData.GetBulkDataSize() == 0)
         {
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogGameplay, Warning,
                 TEXT("CursorInteraction: '%s' mip0 BulkData is empty — set NeverStream=true."), *Tex->GetName());
             return nullptr;
         }
@@ -94,7 +95,7 @@ void* UCursorInteractionComponent::BuildCursorHandle(const FCursorIconEntry& Ent
         const int64 Actual   = Mip0.BulkData.GetBulkDataSize();
         if (Actual < Expected)
         {
-            UE_LOG(LogTemp, Error,
+            UE_LOG(LogGameplay, Error,
                 TEXT("CursorInteraction: '%s' mip0 has %lld bytes but %dx%d BGRA needs %lld — "
                      "texture is still compressed. Set CompressionSettings=UserInterface2D, "
                      "MipGenSettings=NoMipmaps, NeverStream=true, then re-save the asset."),
@@ -115,7 +116,7 @@ void* UCursorInteractionComponent::BuildCursorHandle(const FCursorIconEntry& Ent
 
     if (Width > 64 || Height > 64)
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
             TEXT("CursorInteraction: Cursor texture '%s' is %dx%d — resize to \u226464\u00d764 (32\u00d732 recommended)."),
             *Tex->GetName(), Width, Height);
     }
@@ -141,7 +142,7 @@ void* UCursorInteractionComponent::BuildCursorHandle(const FCursorIconEntry& Ent
         Pixels = MoveTemp(Scaled);
         Width  = DstSize;
         Height = DstSize;
-        UE_LOG(LogTemp, Log, TEXT("CursorInteraction: '%s' resampled to %dx%d."),
+        UE_LOG(LogGameplay, Verbose, TEXT("CursorInteraction: '%s' resampled to %dx%d."),
             *Tex->GetName(), Width, Height);
     }
 
@@ -239,7 +240,7 @@ void UCursorInteractionComponent::ResetCursorIcon()
         // visible immediately in PIE instead of requiring the user to click first.
         FSlateApplication::Get().SetAllUserFocusToGameViewport();
     }
-    UE_LOG(LogTemp, Log, TEXT("CursorInteraction: Cursor initialized on PC '%s'. CurrentMouseCursor=%d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("CursorInteraction: Cursor initialized on PC '%s'. CurrentMouseCursor=%d"),
         *PC->GetName(), (int32)PC->CurrentMouseCursor);
 }
 

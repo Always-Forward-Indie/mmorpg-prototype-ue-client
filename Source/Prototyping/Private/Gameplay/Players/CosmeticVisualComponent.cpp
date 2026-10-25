@@ -1,4 +1,5 @@
 #include "Gameplay/Players/CosmeticVisualComponent.h"
+#include "Prototyping.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "Data/CharacterCosmeticData.h"
 #include "Data/CharacterVisualData.h"
@@ -33,21 +34,21 @@ void UCosmeticVisualComponent::SetDefaultCosmetics(const FCharacterVisualDefinit
 {
 	CosmeticsTable = InCosmeticsTable;
 
-	UE_LOG(LogTemp, Log, TEXT("[Cosmetic] SetDefaultCosmetics called. Table=%s  HairSlug='%s'  FacialSlug='%s'"),
+	UE_LOG(LogGameplay, Verbose, TEXT("[Cosmetic] SetDefaultCosmetics called. Table=%s  HairSlug='%s'  FacialSlug='%s'"),
 		InCosmeticsTable ? *InCosmeticsTable->GetName() : TEXT("NULL — assign CharacterCosmeticsDataTable in GameInstance BP"),
 		*VisualDef.DefaultHairSlug.ToString(),
 		*VisualDef.DefaultFacialHairSlug.ToString());
 
 	if (!CosmeticsTable)
 	{
-		UE_LOG(LogTemp, Error,
+		UE_LOG(LogGameplay, Error,
 			TEXT("[Cosmetic] ABORT — CharacterCosmeticsDataTable is null. Open BP_GameInstance and assign the table."));
 		return;
 	}
 
 	if (VisualDef.DefaultHairSlug == NAME_None && VisualDef.DefaultFacialHairSlug == NAME_None)
 	{
-		UE_LOG(LogTemp, Warning,
+		UE_LOG(LogGameplay, Warning,
 			TEXT("[Cosmetic] Both DefaultHairSlug and DefaultFacialHairSlug are None — nothing to spawn. "
 			     "Fill them in DT_CharacterVisualDefinitions for this class+race+gender row."));
 	}
@@ -113,7 +114,7 @@ void UCosmeticVisualComponent::SetCosmeticSlot(FName CosmeticSlot, FName Cosmeti
 {
 	if (!CosmeticsTable)
 	{
-		UE_LOG(LogTemp, Warning,
+		UE_LOG(LogGameplay, Warning,
 			TEXT("CosmeticVisualComponent: SetCosmeticSlot called before SetDefaultCosmetics — "
 			     "CharacterCosmeticsDataTable must be set first"));
 		return;
@@ -138,7 +139,7 @@ void UCosmeticVisualComponent::SpawnCosmeticMesh(FName CosmeticSlug)
 	AActor* Owner = GetOwner();
 	if (!Owner) return;
 
-	UE_LOG(LogTemp, Log, TEXT("[Cosmetic] SpawnCosmeticMesh: slug='%s' owner='%s'"),
+	UE_LOG(LogGameplay, Verbose, TEXT("[Cosmetic] SpawnCosmeticMesh: slug='%s' owner='%s'"),
 		*CosmeticSlug.ToString(), *Owner->GetName());
 
 	const FCharacterCosmeticData* CosmeticData =
@@ -146,7 +147,7 @@ void UCosmeticVisualComponent::SpawnCosmeticMesh(FName CosmeticSlug)
 
 	if (!CosmeticData)
 	{
-		UE_LOG(LogTemp, Warning,
+		UE_LOG(LogGameplay, Warning,
 			TEXT("[Cosmetic] No row '%s' found in CharacterCosmeticsDataTable"),
 			*CosmeticSlug.ToString());
 		return;
@@ -155,14 +156,14 @@ void UCosmeticVisualComponent::SpawnCosmeticMesh(FName CosmeticSlug)
 	const FName SlotName = CosmeticData->CosmeticSlot;
 	if (SlotName == NAME_None)
 	{
-		UE_LOG(LogTemp, Warning,
+		UE_LOG(LogGameplay, Warning,
 			TEXT("[Cosmetic] Row '%s' has empty CosmeticSlot field"),
 			*CosmeticSlug.ToString());
 		return;
 	}
 
 	const bool bUseStatic = !CosmeticData->StaticMesh.IsNull();
-	UE_LOG(LogTemp, Log, TEXT("[Cosmetic] slug='%s' slot='%s' type=%s  staticPath='%s'  skelPath='%s'"),
+	UE_LOG(LogGameplay, Verbose, TEXT("[Cosmetic] slug='%s' slot='%s' type=%s  staticPath='%s'  skelPath='%s'"),
 		*CosmeticSlug.ToString(),
 		*SlotName.ToString(),
 		bUseStatic ? TEXT("StaticMesh") : TEXT("SkeletalMesh"),
@@ -187,7 +188,7 @@ void UCosmeticVisualComponent::SpawnCosmeticMesh(FName CosmeticSlug)
 		}
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[Cosmetic] BodyMesh found: %s  (has skeletal mesh asset: %s)"),
+	UE_LOG(LogGameplay, Verbose, TEXT("[Cosmetic] BodyMesh found: %s  (has skeletal mesh asset: %s)"),
 		BodyMesh ? TEXT("YES") : TEXT("NO — cosmetic will not follow skeleton"),
 		(BodyMesh && BodyMesh->GetSkeletalMeshAsset()) ? TEXT("YES") : TEXT("NO — body mesh asset still loading, socket attach will activate once it loads"));
 
@@ -204,20 +205,20 @@ void UCosmeticVisualComponent::SpawnCosmeticMesh(FName CosmeticSlug)
 		// world-space transform that can persist after the subsequent AttachToComponent.
 		if (BodyMesh && CosmeticData->AttachSocketName != NAME_None)
 		{
-			UE_LOG(LogTemp, Log, TEXT("[Cosmetic] StaticMesh: attaching to socket '%s' on body mesh"),
+			UE_LOG(LogGameplay, Verbose, TEXT("[Cosmetic] StaticMesh: attaching to socket '%s' on body mesh"),
 				*CosmeticData->AttachSocketName.ToString());
 			NewComp->SetupAttachment(BodyMesh, CosmeticData->AttachSocketName);
 		}
 		else if (BodyMesh)
 		{
-			UE_LOG(LogTemp, Warning,
+			UE_LOG(LogGameplay, Warning,
 				TEXT("[Cosmetic] Row '%s' — StaticMesh set but AttachSocketName is None, attaching to mesh root"),
 				*CosmeticSlug.ToString());
 			NewComp->SetupAttachment(BodyMesh);
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning,
+			UE_LOG(LogGameplay, Warning,
 				TEXT("[Cosmetic] Owner '%s' has no body SkeletalMeshComponent — StaticMesh '%s' attached to actor root"),
 				*Owner->GetName(), *CosmeticSlug.ToString());
 			NewComp->SetupAttachment(Owner->GetRootComponent());
@@ -233,7 +234,7 @@ void UCosmeticVisualComponent::SpawnCosmeticMesh(FName CosmeticSlug)
 
 		CosmeticMeshes.Add(SlotName, NewComp);
 
-		UE_LOG(LogTemp, Log, TEXT("[Cosmetic] StaticMeshComponent created and registered. Starting async load..."));
+		UE_LOG(LogGameplay, Verbose, TEXT("[Cosmetic] StaticMeshComponent created and registered. Starting async load..."));
 
 		TWeakObjectPtr<UStaticMeshComponent> WeakComp(NewComp);
 		TSoftObjectPtr<UStaticMesh> SoftMesh = CosmeticData->StaticMesh;
@@ -243,14 +244,14 @@ void UCosmeticVisualComponent::SpawnCosmeticMesh(FName CosmeticSlug)
 			{
 				if (!WeakComp.IsValid())
 				{
-					UE_LOG(LogTemp, Warning, TEXT("[Cosmetic] Async load done for '%s' but component is no longer valid"),
+					UE_LOG(LogGameplay, Warning, TEXT("[Cosmetic] Async load done for '%s' but component is no longer valid"),
 						*CosmeticSlug.ToString());
 					return;
 				}
 				UStaticMesh* LoadedMesh = SoftMesh.Get();
 				if (LoadedMesh)
 				{
-					UE_LOG(LogTemp, Log, TEXT("[Cosmetic] Async load SUCCESS for '%s': mesh='%s' visible=%s"),
+					UE_LOG(LogGameplay, Verbose, TEXT("[Cosmetic] Async load SUCCESS for '%s': mesh='%s' visible=%s"),
 						*CosmeticSlug.ToString(),
 						*LoadedMesh->GetName(),
 						WeakComp->IsVisible() ? TEXT("YES") : TEXT("NO"));
@@ -258,7 +259,7 @@ void UCosmeticVisualComponent::SpawnCosmeticMesh(FName CosmeticSlug)
 				}
 				else
 				{
-					UE_LOG(LogTemp, Error, TEXT("[Cosmetic] Async load FAILED for '%s' — asset path may be wrong or asset deleted"),
+					UE_LOG(LogGameplay, Error, TEXT("[Cosmetic] Async load FAILED for '%s' — asset path may be wrong or asset deleted"),
 						*CosmeticSlug.ToString());
 				}
 			});
@@ -283,12 +284,12 @@ void UCosmeticVisualComponent::SpawnCosmeticMesh(FName CosmeticSlug)
 		if (BodyMesh)
 		{
 			NewComp->SetLeaderPoseComponent(BodyMesh);
-			UE_LOG(LogTemp, Log, TEXT("[Cosmetic] SkeletalMesh: Leader Pose set to body mesh '%s'"),
+			UE_LOG(LogGameplay, Verbose, TEXT("[Cosmetic] SkeletalMesh: Leader Pose set to body mesh '%s'"),
 				*BodyMesh->GetName());
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning,
+			UE_LOG(LogGameplay, Warning,
 				TEXT("[Cosmetic] Owner '%s' has no body SkeletalMeshComponent — cosmetic '%s' will not animate"),
 				*Owner->GetName(), *CosmeticSlug.ToString());
 		}
@@ -305,14 +306,14 @@ void UCosmeticVisualComponent::SpawnCosmeticMesh(FName CosmeticSlug)
 				{
 					if (!WeakComp.IsValid())
 					{
-						UE_LOG(LogTemp, Warning, TEXT("[Cosmetic] Async load done for '%s' but component is no longer valid"),
+						UE_LOG(LogGameplay, Warning, TEXT("[Cosmetic] Async load done for '%s' but component is no longer valid"),
 							*CosmeticSlug.ToString());
 						return;
 					}
 					USkeletalMesh* LoadedMesh = SoftMesh.Get();
 					if (LoadedMesh)
 					{
-						UE_LOG(LogTemp, Log, TEXT("[Cosmetic] Async load SUCCESS for '%s': mesh='%s' visible=%s"),
+						UE_LOG(LogGameplay, Verbose, TEXT("[Cosmetic] Async load SUCCESS for '%s': mesh='%s' visible=%s"),
 							*CosmeticSlug.ToString(),
 							*LoadedMesh->GetName(),
 							WeakComp->IsVisible() ? TEXT("YES") : TEXT("NO"));
@@ -320,14 +321,14 @@ void UCosmeticVisualComponent::SpawnCosmeticMesh(FName CosmeticSlug)
 					}
 					else
 					{
-						UE_LOG(LogTemp, Error, TEXT("[Cosmetic] Async load FAILED for '%s' — asset path may be wrong or asset deleted"),
+						UE_LOG(LogGameplay, Error, TEXT("[Cosmetic] Async load FAILED for '%s' — asset path may be wrong or asset deleted"),
 							*CosmeticSlug.ToString());
 					}
 				});
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning,
+			UE_LOG(LogGameplay, Warning,
 				TEXT("[Cosmetic] Row '%s' has null SkeletalMesh and null StaticMesh — assign at least one mesh"),
 				*CosmeticSlug.ToString());
 		}

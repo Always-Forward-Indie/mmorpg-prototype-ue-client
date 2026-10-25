@@ -1,4 +1,5 @@
 #include "Gameplay/Player/MasteryNetworkHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/Player/MasteryManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
@@ -11,7 +12,7 @@ void UMasteryNetworkHandler::Initialize(UMasteryManager* InManager, UNetworkMana
 {
     if (!InManager || !InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("MasteryNetworkHandler: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("MasteryNetworkHandler: Initialize called with null parameters"));
         return;
     }
     Manager        = InManager;

@@ -1,4 +1,5 @@
 #include "Gameplay/Player/MasteryManager.h"
+#include "Prototyping.h"
 
 void UMasteryManager::ApplyMasteriesState(const FPlayerMasteriesState& InState)
 {
@@ -10,7 +11,7 @@ void UMasteryManager::ApplyMasteriesState(const FPlayerMasteriesState& InState)
         MasteryValues.Add(Entry.masterySlug, Entry.value);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("MasteryManager: Loaded %d mastery entries for character %d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("MasteryManager: Loaded %d mastery entries for character %d"),
         MasteryValues.Num(), CachedCharacterId);
 
     OnMasteriesLoaded.Broadcast(InState);
@@ -20,7 +21,7 @@ void UMasteryManager::ApplyMasteryUpdate(const FMasteryUpdateData& Update)
 {
     MasteryValues.Add(Update.masterySlug, Update.value);
 
-    UE_LOG(LogTemp, Log, TEXT("MasteryManager: %s -> %.1f"),
+    UE_LOG(LogGameplay, Verbose, TEXT("MasteryManager: %s -> %.1f"),
         *Update.masterySlug, Update.value);
 
     OnMasteryUpdated.Broadcast(Update);

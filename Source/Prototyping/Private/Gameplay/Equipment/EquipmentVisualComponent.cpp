@@ -1,4 +1,5 @@
 #include "Gameplay/Equipment/EquipmentVisualComponent.h"
+#include "Prototyping.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "Data/ItemStruct.h"
@@ -40,7 +41,7 @@ void UEquipmentVisualComponent::Initialize(UEquipmentManager* InEquipmentManager
 {
     if (!InEquipmentManager || !InItemManager)
     {
-        UE_LOG(LogTemp, Error,
+        UE_LOG(LogGameplay, Error,
                TEXT("EquipmentVisualComponent: Initialize called with null parameters"));
         return;
     }
@@ -57,18 +58,18 @@ void UEquipmentVisualComponent::Initialize(UEquipmentManager* InEquipmentManager
     // after the first EQUIPMENT_STATE packet was already processed)
     RefreshAllSlots(EquipmentManager->GetEquipmentState());
 
-    UE_LOG(LogTemp, Log, TEXT("EquipmentVisualComponent: Initialized"));
+    UE_LOG(LogGameplay, Verbose, TEXT("EquipmentVisualComponent: Initialized"));
 }
 
 void UEquipmentVisualComponent::InitializeForRemotePlayer(UItemManager* InItemManager)
 {
     if (!InItemManager)
     {
-        UE_LOG(LogTemp, Warning, TEXT("EquipmentVisualComponent: InitializeForRemotePlayer called with null ItemManager"));
+        UE_LOG(LogGameplay, Warning, TEXT("EquipmentVisualComponent: InitializeForRemotePlayer called with null ItemManager"));
         return;
     }
     ItemManager = InItemManager;
-    UE_LOG(LogTemp, Log, TEXT("EquipmentVisualComponent: Initialized for remote player (CharID=%d)"), OwnerCharacterId);
+    UE_LOG(LogGameplay, Verbose, TEXT("EquipmentVisualComponent: Initialized for remote player (CharID=%d)"), OwnerCharacterId);
 }
 
 void UEquipmentVisualComponent::HandleRemoteEquipmentState(const FEquipmentStateData& State)
@@ -76,12 +77,12 @@ void UEquipmentVisualComponent::HandleRemoteEquipmentState(const FEquipmentState
     // Filter: only process state for our specific remote character
     if (OwnerCharacterId <= 0 || State.characterId != OwnerCharacterId)
     {
-        UE_LOG(LogTemp, Log,
+        UE_LOG(LogGameplay, Verbose,
             TEXT("EquipmentVisualComponent: HandleRemoteEquipmentState skipped — OwnerCharID=%d vs State.charID=%d"),
             OwnerCharacterId, State.characterId);
         return;
     }
-    UE_LOG(LogTemp, Warning,
+    UE_LOG(LogGameplay, Warning,
         TEXT("EquipmentVisualComponent: HandleRemoteEquipmentState applying for CharID=%d (%d slot(s)) owner=%s"),
         State.characterId, State.slots.Num(),
         GetOwner() ? *GetOwner()->GetName() : TEXT("null"));
@@ -92,7 +93,7 @@ void UEquipmentVisualComponent::HandleRemoteEquipmentState(const FEquipmentState
 
 void UEquipmentVisualComponent::RefreshAllSlots(const FEquipmentStateData& State)
 {
-    UE_LOG(LogTemp, Log,
+    UE_LOG(LogGameplay, Verbose,
            TEXT("EquipmentVisualComponent: RefreshAllSlots called � %d slot(s) in state, owner=%s"),
            State.slots.Num(), GetOwner() ? *GetOwner()->GetName() : TEXT("null"));
 
@@ -158,14 +159,14 @@ USceneComponent* UEquipmentVisualComponent::AttachEquippedMesh(const FString& Sl
 {
     if (!ItemManager)
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
             TEXT("EquipmentVisualComponent: AttachEquippedMesh — ItemManager is null for slot '%s' item '%s'"),
             *SlotSlug, *ItemSlug);
         return nullptr;
     }
     if (!GetOwner())
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
             TEXT("EquipmentVisualComponent: AttachEquippedMesh — GetOwner() is null for slot '%s' item '%s'"),
             *SlotSlug, *ItemSlug);
         return nullptr;
@@ -176,7 +177,7 @@ USceneComponent* UEquipmentVisualComponent::AttachEquippedMesh(const FString& Sl
     // If no socket is defined, this item has no in-world visual when equipped
     if (VisualData.EquipSocketName == NAME_None)
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
                TEXT("EquipmentVisualComponent: '%s' has no EquipSocketName in ItemVisualsDataTable � skipping visual for slot '%s'. Check that ItemVisualsDataTable is assigned in GameInstance BP and the row for this slug exists."),
                *ItemSlug, *SlotSlug);
         // Still remove old component in case item was swapped with one that has no visual
@@ -189,7 +190,7 @@ USceneComponent* UEquipmentVisualComponent::AttachEquippedMesh(const FString& Sl
         GetOwner()->FindComponentByClass<USkeletalMeshComponent>();
     if (!CharMesh)
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
                TEXT("EquipmentVisualComponent: Owner has no USkeletalMeshComponent"));
         return nullptr;
     }
@@ -204,7 +205,7 @@ USceneComponent* UEquipmentVisualComponent::AttachEquippedMesh(const FString& Sl
 
     if (!bHasStaticMesh && !bHasSkelMesh)
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
                TEXT("EquipmentVisualComponent: '%s' found in DataTable but both EquippedStaticMesh and EquippedSkeletalMesh are null � assign at least one mesh in the DataTable row for slot '%s' to see the item on the character."),
                *ItemSlug, *SlotSlug);
         DestroySlotComponent(SlotSlug);
@@ -221,7 +222,7 @@ USceneComponent* UEquipmentVisualComponent::AttachEquippedMesh(const FString& Sl
         UStaticMesh* Mesh = VisualData.EquippedStaticMesh.LoadSynchronous();
         if (!Mesh)
         {
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogGameplay, Warning,
                    TEXT("EquipmentVisualComponent: Failed to load EquippedStaticMesh for '%s'"),
                    *ItemSlug);
             return nullptr;
@@ -243,7 +244,7 @@ USceneComponent* UEquipmentVisualComponent::AttachEquippedMesh(const FString& Sl
         USkeletalMesh* Mesh = VisualData.EquippedSkeletalMesh.LoadSynchronous();
         if (!Mesh)
         {
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogGameplay, Warning,
                    TEXT("EquipmentVisualComponent: Failed to load EquippedSkeletalMesh for '%s'"),
                    *ItemSlug);
             return nullptr;
@@ -265,7 +266,7 @@ USceneComponent* UEquipmentVisualComponent::AttachEquippedMesh(const FString& Sl
     {
         SlotComponents.Add(SlotSlug, NewComp);
         SlotItemSlugs.Add(SlotSlug, ItemSlug);
-        UE_LOG(LogTemp, Log,
+        UE_LOG(LogGameplay, Verbose,
                TEXT("EquipmentVisualComponent: Attached '%s' to socket '%s' for slot '%s'"),
                *ItemSlug, *VisualData.EquipSocketName.ToString(), *SlotSlug);
 
@@ -351,7 +352,7 @@ void UEquipmentVisualComponent::SpawnEquippedIdleVFX(const FString& SlotSlug,
 
             SlotVFXComponents.Add(SlotSlug, NC);
 
-            UE_LOG(LogTemp, Log,
+            UE_LOG(LogGameplay, Verbose,
                    TEXT("EquipmentVisualComponent: Spawned idle Niagara VFX for slot '%s' on socket '%s'"),
                    *SlotSlug, *VisualData.EquipSocketName.ToString());
         }

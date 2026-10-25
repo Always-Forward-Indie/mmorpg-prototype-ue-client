@@ -1,4 +1,5 @@
 #include "UI/SkillDragVisualWidget.h"
+#include "Prototyping.h"
 #include "Components/Image.h"
 #include "Components/SizeBox.h"
 #include "Blueprint/WidgetTree.h"
@@ -10,7 +11,7 @@ USkillDragVisualWidget::USkillDragVisualWidget(const FObjectInitializer& ObjectI
     SkillIcon = nullptr;
     DefaultSkillIcon = nullptr;
     
-    UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualWidget: Constructor called"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDragVisualWidget: Constructor called"));
 }
 
 void USkillDragVisualWidget::NativeConstruct()
@@ -29,7 +30,7 @@ void USkillDragVisualWidget::NativeConstruct()
     // Set initial visual properties
     SetRenderOpacity(DragOpacity.A);
     
-    UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualWidget: NativeConstruct called (bComponentsCreated=%d)"), bComponentsCreated ? 1 : 0);
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDragVisualWidget: NativeConstruct called (bComponentsCreated=%d)"), bComponentsCreated ? 1 : 0);
     
     // Update visual display now that components are created
     UpdateVisualDisplay();
@@ -47,7 +48,7 @@ void USkillDragVisualWidget::BuildComponentsOnce()
 
 void USkillDragVisualWidget::CreateDragVisualComponents()
 {
-    UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualWidget: Creating drag visual components"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDragVisualWidget: Creating drag visual components"));
 
     // Root with fixed size matching a skill slot (80x80). Square so the icon
     // sits under the cursor at the same scale as the source slot.
@@ -69,14 +70,14 @@ void USkillDragVisualWidget::CreateDragVisualComponents()
     SkillIcon->SetDesiredSizeOverride(FVector2D(80.f, 80.f));
     SkillIcon->SetColorAndOpacity(DragOpacity); // 0.8 alpha — standard drag-visual feel
 
-    UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualWidget: All components created successfully"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDragVisualWidget: All components created successfully"));
 }
 
 void USkillDragVisualWidget::SetSkillData(const FPlayerSkillData& SkillData)
 {
     CurrentSkillData = SkillData;
     
-    UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualWidget: SetSkillData called for skill %s"), *SkillData.networkData.skillSlug);
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDragVisualWidget: SetSkillData called for skill %s"), *SkillData.networkData.skillSlug);
     
     // Only update display if components are already created
     if (SkillIcon)
@@ -85,13 +86,13 @@ void USkillDragVisualWidget::SetSkillData(const FPlayerSkillData& SkillData)
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualWidget: Skill data set, but components not created yet. Will update in NativeConstruct."));
+        UE_LOG(LogGameplay, Warning, TEXT("SkillDragVisualWidget: Skill data set, but components not created yet. Will update in NativeConstruct."));
     }
 }
 
 void USkillDragVisualWidget::UpdateVisualDisplay()
 {
-    UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualWidget: UpdateVisualDisplay called"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDragVisualWidget: UpdateVisualDisplay called"));
     
     // Update skill icon
     if (SkillIcon)
@@ -106,7 +107,7 @@ void USkillDragVisualWidget::UpdateVisualDisplay()
                 SkillIcon->SetBrushFromTexture(IconTexture);
                 SkillIcon->SetColorAndOpacity(DragOpacity);
                 bIconSet = true;
-                UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualWidget: Set skill icon from texture"));
+                UE_LOG(LogGameplay, Verbose, TEXT("SkillDragVisualWidget: Set skill icon from texture"));
             }
         }
         
@@ -116,7 +117,7 @@ void USkillDragVisualWidget::UpdateVisualDisplay()
             SkillIcon->SetBrushFromTexture(DefaultSkillIcon);
             SkillIcon->SetColorAndOpacity(DragOpacity);
             bIconSet = true;
-            UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualWidget: Set default skill icon"));
+            UE_LOG(LogGameplay, Verbose, TEXT("SkillDragVisualWidget: Set default skill icon"));
         }
         
         // Fallback: create colored rectangle
@@ -126,13 +127,13 @@ void USkillDragVisualWidget::UpdateVisualDisplay()
             IconBrush.TintColor = FSlateColor(FLinearColor(0.5f, 0.5f, 1.0f, DragOpacity.A)); // Blue tint
             IconBrush.DrawAs = ESlateBrushDrawType::RoundedBox;
             SkillIcon->SetBrush(IconBrush);
-            UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualWidget: Set fallback colored icon"));
+            UE_LOG(LogGameplay, Verbose, TEXT("SkillDragVisualWidget: Set fallback colored icon"));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualWidget: SkillIcon widget is NULL - cannot update display"));
+        UE_LOG(LogGameplay, Warning, TEXT("SkillDragVisualWidget: SkillIcon widget is NULL - cannot update display"));
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("SkillDragVisualWidget: Visual display updated successfully"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDragVisualWidget: Visual display updated successfully"));
 }

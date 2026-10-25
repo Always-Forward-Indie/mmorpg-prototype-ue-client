@@ -1,4 +1,5 @@
 #include "DevMode/DevModeBotBrain.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeConsoleCommands.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -72,7 +73,7 @@ bool UDevModeBotBrain::Tick_ExpectDeath(UWorld* World, ABasicPlayer* Player, dou
             bProvoked = false;
             ChaseCheckTime = Now;
             ChaseCheckDist = Dist2D(PlayerAt, TargetMob->GetActorLocation());
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT offering target to '%s' (passive, dist %.0f)"),
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT offering target to '%s' (passive, dist %.0f)"),
                 *TargetMob->GetMobName(), ChaseCheckDist);
         }
         ABasicMOB* Killer = TargetMob.Get();
@@ -90,7 +91,7 @@ bool UDevModeBotBrain::Tick_ExpectDeath(UWorld* World, ABasicPlayer* Player, dou
                 {
                     const int32 StuckUID = FCString::Atoi(*Killer->GetMOBUId());
                     ExcludedKillerUIDs.Add(StuckUID);
-                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT killer '%s' unreachable (gain %.0f in %.0fs) — excluding uid=%d, switching"),
+                    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT killer '%s' unreachable (gain %.0f in %.0fs) — excluding uid=%d, switching"),
                         *Killer->GetMobName(), ChaseCheckDist - KillerDist, ChaseStallSec, StuckUID);
                     TargetMob.Reset();
                     return true;
@@ -115,7 +116,7 @@ bool UDevModeBotBrain::Tick_ExpectDeath(UWorld* World, ABasicPlayer* Player, dou
             Player->OnAttackInput();
             bProvoked = true;
             ProvokeTime = Now;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT provoked '%s' (one hit, standing down next)"),
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT provoked '%s' (one hit, standing down next)"),
                 *Killer->GetMobName());
         }
         else if (Player->bIsAutoAttacking && Now - ProvokeTime > 3.0)
@@ -133,7 +134,7 @@ bool UDevModeBotBrain::Tick_ExpectDeath(UWorld* World, ABasicPlayer* Player, dou
         {
             const int32 DummyUID = FCString::Atoi(*Killer->GetMOBUId());
             ExcludedKillerUIDs.Add(DummyUID);
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT killer '%s' dealt no damage in %.0fs — excluding uid=%d, switching"),
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT killer '%s' dealt no damage in %.0fs — excluding uid=%d, switching"),
                 *Killer->GetMobName(), KillerDummySec, DummyUID);
             TargetMob.Reset();
             DeathWatchHP = NowHP;
@@ -170,7 +171,7 @@ bool UDevModeBotBrain::Tick_AssertDead(UWorld* World, ABasicPlayer* Player, doub
         // checkpoint is lost (single-slot pipe, flush takes ~0.1-0.3s).
         if (FScreenshotRequest::IsScreenshotRequested() || !PendingShotName.IsEmpty())
         {
-            UE_LOG(LogTemp, Log, TEXT("DEVMODE_BOT death shot flushing, revive next tick"));
+            UE_LOG(LogGameplay, Verbose, TEXT("DEVMODE_BOT death shot flushing, revive next tick"));
             return true;
         }
         if (bStubDeath)
@@ -181,7 +182,7 @@ bool UDevModeBotBrain::Tick_AssertDead(UWorld* World, ABasicPlayer* Player, doub
         {
             Player->OnRespawnClicked();
             bRespawnRequested = true;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT respawn requested"));
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT respawn requested"));
         }
         RespawnLegStartTime = FPlatformTime::Seconds();
         Step = EBotStep::RespawnWait;
@@ -277,7 +278,7 @@ bool UDevModeBotBrain::Tick_RecoverRevive(UWorld* World, ABasicPlayer* Player, d
             LastChaseProgressTime = Now;
             Step = EBotStep::GotoWaypoint;
             StepStartTime = Now;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT recovered from stale death, starting run"));
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT recovered from stale death, starting run"));
             return true;
         }
         if (FPlatformTime::Seconds() - RespawnLegStartTime > RespawnTimeoutSec)

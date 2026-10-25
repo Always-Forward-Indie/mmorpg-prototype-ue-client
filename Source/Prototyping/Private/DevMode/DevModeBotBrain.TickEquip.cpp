@@ -1,4 +1,5 @@
 #include "DevMode/DevModeBotBrain.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeConsoleCommands.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -54,7 +55,7 @@ bool UDevModeBotBrain::Tick_EquipOn(UWorld* World, ABasicPlayer* Player, double 
             bWasPreEquipped = true;
             EquipInstanceId = Slot.inventoryItemId;
             EquipItemSlug = Slot.itemSlug;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT slot %s pre-equipped instance=%d, verifying"),
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT slot %s pre-equipped instance=%d, verifying"),
                 *EquipSlotSlug, EquipInstanceId);
         }
         if (EquipInstanceId <= 0)
@@ -75,7 +76,7 @@ bool UDevModeBotBrain::Tick_EquipOn(UWorld* World, ABasicPlayer* Player, double 
                         {
                             LastInvResyncTime = Now;
                             Inv->RequestInventoryData(GameInstance->GetCurrentCharacterID());
-                            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT no inventory yet, re-requesting"));
+                            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT no inventory yet, re-requesting"));
                         }
                     }
                     if (Now - CharLegStartTime > CharTimeoutSec)
@@ -88,7 +89,7 @@ bool UDevModeBotBrain::Tick_EquipOn(UWorld* World, ABasicPlayer* Player, double 
                 return true;
             }
             EqMgr->RequestEquipItem(CharId, EquipInstanceId);
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT equip requested instance=%d '%s'"),
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT equip requested instance=%d '%s'"),
                 EquipInstanceId, *EquipItemSlug);
             return true;
         }
@@ -106,7 +107,7 @@ bool UDevModeBotBrain::Tick_EquipOn(UWorld* World, ABasicPlayer* Player, double 
             BotShot(TEXT("equipped"));
             if (bRestorePass)
             {
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT pre-equipped item restored"));
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT pre-equipped item restored"));
                 Finish(Failures == 0, Failures == 0 ? TEXT("equip-done") : TEXT("assert-failures"));
                 return true;
             }
@@ -134,7 +135,7 @@ bool UDevModeBotBrain::Tick_EquipOff(UWorld* World, ABasicPlayer* Player, double
         {
             EqMgr->RequestUnequipItem(GameInstance->GetCurrentCharacterID(), EquipSlotSlug);
             bUnequipSent = true;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT unequip requested slot=%s"), *EquipSlotSlug);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT unequip requested slot=%s"), *EquipSlotSlug);
             return true;
         }
         const FEquipmentSlotData Slot = EqMgr->GetSlot(EquipSlotSlug);
@@ -152,7 +153,7 @@ bool UDevModeBotBrain::Tick_EquipOff(UWorld* World, ABasicPlayer* Player, double
                 EquipInstanceId = 0;
                 Step = EBotStep::EquipOn;
                 CharLegStartTime = Now;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT restoring pre-equipped item"));
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT restoring pre-equipped item"));
                 return true;
             }
             Finish(Failures == 0, Failures == 0 ? TEXT("equip-done") : TEXT("assert-failures"));
@@ -177,7 +178,7 @@ bool UDevModeBotBrain::Tick_LevelWait(UWorld* World, ABasicPlayer* Player, doubl
             BotAssert(true, TEXT("level-grew"), LevelNow, StartLevel + 1);
             BotAssert(true, TEXT("exp-grew"), 1, 1);
             BotShot(TEXT("levelup"));
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT leveled: %d -> %d exp %d -> %d"),
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT leveled: %d -> %d exp %d -> %d"),
                 StartLevel, LevelNow, StartExp, ExpNow);
             Finish(Failures == 0, Failures == 0 ? TEXT("level-done") : TEXT("assert-failures"));
             return true;

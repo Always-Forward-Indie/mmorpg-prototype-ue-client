@@ -1,4 +1,5 @@
 #include "DevMode/DevModeConsoleCommands.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeBotBrain.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Mobs/MOBManager.h"
@@ -26,12 +27,12 @@ void UDevModeConsoleCommands::Cmd_SpawnMob(const TArray<FString>& Args) const
 {
     if (!GameInstance || !GameInstance->MOBManager)
     {
-        UE_LOG(LogTemp, Warning, TEXT("devmode.spawnmob: MOBManager not available"));
+        UE_LOG(LogGameplay, Warning, TEXT("devmode.spawnmob: MOBManager not available"));
         return;
     }
     if (Args.Num() < 1)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.spawnmob <MobID>"));
+        UE_LOG(LogGameplay, Warning, TEXT("Usage: devmode.spawnmob <MobID>"));
         return;
     }
 
@@ -50,7 +51,7 @@ void UDevModeConsoleCommands::Cmd_SpawnMob(const TArray<FString>& Args) const
     FString JsonStr;
     if (!FFileHelper::LoadFileToString(JsonStr, *AbsPath))
     {
-        UE_LOG(LogTemp, Warning, TEXT("devmode.spawnmob: Could not read mob JSON"));
+        UE_LOG(LogGameplay, Warning, TEXT("devmode.spawnmob: Could not read mob JSON"));
         return;
     }
 
@@ -88,11 +89,11 @@ void UDevModeConsoleCommands::Cmd_SpawnMob(const TArray<FString>& Args) const
         }
 
         GameInstance->MOBManager->SpawnMOB(MobData);
-        UE_LOG(LogTemp, Log, TEXT("devmode.spawnmob: Spawned mob id=%d '%s'"), TargetMobID, *MobData.mobName);
+        UE_LOG(LogGameplay, Verbose, TEXT("devmode.spawnmob: Spawned mob id=%d '%s'"), TargetMobID, *MobData.mobName);
         return;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("devmode.spawnmob: No mob with mobID=%d in JSON"), TargetMobID);
+    UE_LOG(LogGameplay, Warning, TEXT("devmode.spawnmob: No mob with mobID=%d in JSON"), TargetMobID);
 }
 
 // ============================================================================
@@ -102,8 +103,8 @@ void UDevModeConsoleCommands::Cmd_SetCombatState(const TArray<FString>& Args) co
 {
     if (Args.Num() < 2)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.setcombatstate <MobUID> <State>"));
-        UE_LOG(LogTemp, Warning, TEXT("  States: 0=PATROL 1=CHASE 2=PREPARING_ATTACK 3=ATTACKING 4=COOLDOWN 5=RETURN 6=EVADING 7=FLEE"));
+        UE_LOG(LogGameplay, Warning, TEXT("Usage: devmode.setcombatstate <MobUID> <State>"));
+        UE_LOG(LogGameplay, Warning, TEXT("  States: 0=PATROL 1=CHASE 2=PREPARING_ATTACK 3=ATTACKING 4=COOLDOWN 5=RETURN 6=EVADING 7=FLEE"));
         return;
     }
 
@@ -115,19 +116,19 @@ void UDevModeConsoleCommands::Cmd_SetCombatState(const TArray<FString>& Args) co
     AActor* MobActor = GameInstance->MOBManager->FindMobActor(MobUID);
     if (!MobActor)
     {
-        UE_LOG(LogTemp, Warning, TEXT("devmode.setcombatstate: Mob UID=%d not found"), MobUID);
+        UE_LOG(LogGameplay, Warning, TEXT("devmode.setcombatstate: Mob UID=%d not found"), MobUID);
         return;
     }
 
     ABasicMOB* Mob = Cast<ABasicMOB>(MobActor);
     if (!Mob || !Mob->MOBMovementComponent)
     {
-        UE_LOG(LogTemp, Warning, TEXT("devmode.setcombatstate: No MOBMovementComponent on mob UID=%d"), MobUID);
+        UE_LOG(LogGameplay, Warning, TEXT("devmode.setcombatstate: No MOBMovementComponent on mob UID=%d"), MobUID);
         return;
     }
 
     Mob->MOBMovementComponent->SetCombatState(NewState);
-    UE_LOG(LogTemp, Log, TEXT("devmode.setcombatstate: Mob UID=%d -> state %d"), MobUID, NewState);
+    UE_LOG(LogGameplay, Verbose, TEXT("devmode.setcombatstate: Mob UID=%d -> state %d"), MobUID, NewState);
 }
 
 // ============================================================================
@@ -137,7 +138,7 @@ void UDevModeConsoleCommands::Cmd_Teleport(const TArray<FString>& Args) const
 {
     if (Args.Num() < 3)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.teleport <X> <Y> <Z>"));
+        UE_LOG(LogGameplay, Warning, TEXT("Usage: devmode.teleport <X> <Y> <Z>"));
         return;
     }
     if (!GameInstance || !GameInstance->Player) return;
@@ -147,7 +148,7 @@ void UDevModeConsoleCommands::Cmd_Teleport(const TArray<FString>& Args) const
     const float Z = FCString::Atof(*Args[2]);
 
     GameInstance->Player->SetActorLocation(FVector(X, Y, Z));
-    UE_LOG(LogTemp, Log, TEXT("devmode.teleport: Player teleported to (%.0f, %.0f, %.0f)"), X, Y, Z);
+    UE_LOG(LogGameplay, Verbose, TEXT("devmode.teleport: Player teleported to (%.0f, %.0f, %.0f)"), X, Y, Z);
     SnapPlayerToGround();
 }
 
@@ -170,11 +171,11 @@ void UDevModeConsoleCommands::SnapPlayerToGround() const
             HalfHeight = Capsule->GetScaledCapsuleHalfHeight();
         }
         Player->SetActorLocation(Hit.Location + FVector(0.0f, 0.0f, HalfHeight + 2.0f));
-        UE_LOG(LogTemp, Log, TEXT("devmode: player snapped to ground Z=%.0f"), Hit.Location.Z);
+        UE_LOG(LogGameplay, Verbose, TEXT("devmode: player snapped to ground Z=%.0f"), Hit.Location.Z);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("devmode: no ground under player, keeping position"));
+        UE_LOG(LogGameplay, Warning, TEXT("devmode: no ground under player, keeping position"));
     }
 }
 

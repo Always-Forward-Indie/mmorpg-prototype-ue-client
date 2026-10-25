@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/MOBMovementComponent.h"
+#include "Prototyping.h"
 #include "GameFramework/Character.h"
 #include "Components/CapsuleComponent.h"
 #include "DrawDebugHelpers.h"
@@ -36,7 +37,7 @@ FVector UMOBMovementComponent::TraceGround(const FVector& Location) const
         if (!bLoggedTrace)
         {
             bLoggedTrace = true;
-            UE_LOG(LogTemp, Warning, TEXT("[MOB] TraceGround: non-finite location (%.1f,%.1f,%.1f) — skipping ground trace"), Location.X, Location.Y, Location.Z);
+            UE_LOG(LogGameplay, Warning, TEXT("[MOB] TraceGround: non-finite location (%.1f,%.1f,%.1f) — skipping ground trace"), Location.X, Location.Y, Location.Z);
         }
         return FVector::ZeroVector;
     }
@@ -84,7 +85,7 @@ FVector UMOBMovementComponent::AdjustToGround(const FVector& Location, float Del
         {
             bLoggedAdjust = true;
             AActor* Owner = GetOwner();
-            UE_LOG(LogTemp, Warning, TEXT("[MOB] AdjustToGround: non-finite location (%.1f,%.1f,%.1f) on '%s' — skipping ground adjustment"),
+            UE_LOG(LogGameplay, Warning, TEXT("[MOB] AdjustToGround: non-finite location (%.1f,%.1f,%.1f) on '%s' — skipping ground adjustment"),
                 Location.X, Location.Y, Location.Z, Owner ? *Owner->GetName() : TEXT("null-owner"));
         }
         return AdjustedLocation;

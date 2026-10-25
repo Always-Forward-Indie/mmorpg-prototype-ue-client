@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -313,13 +314,13 @@ void ABasicPlayer::PlayCombatSoundEvent(ECombatSoundSlot Slot)
                     {
                         const float Dist = FVector::Dist(SpawnLoc, TargetActor->GetActorLocation());
                         CalcSpeed = FMath::Min(Dist / SwingSeconds, 2500.0f);
-                        UE_LOG(LogTemp, Log, TEXT("[PlayerAnim] CastRelease: dist=%.0f swing=%.3fs \xe2\u2020\u2019 projectile speed=%.0f"),
+                        UE_LOG(LogGameplay, Verbose, TEXT("[PlayerAnim] CastRelease: dist=%.0f swing=%.3fs \xe2\u2020\u2019 projectile speed=%.0f"),
                             Dist, SwingSeconds, CalcSpeed);
                     }
                     Proj->SetupProjectile(ActiveAnimSkillSlug, GetActorId_Implementation(), TargetActor, CalcSpeed);
                 }
 
-                UE_LOG(LogTemp, Log, TEXT("[PlayerAnim] CastRelease: spawned projectile '%s' for skill '%s'"),
+                UE_LOG(LogGameplay, Verbose, TEXT("[PlayerAnim] CastRelease: spawned projectile '%s' for skill '%s'"),
                     *ProjClass->GetName(), *ActiveAnimSkillSlug);
             }
         }

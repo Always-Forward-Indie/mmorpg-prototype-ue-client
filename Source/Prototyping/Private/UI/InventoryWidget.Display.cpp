@@ -1,4 +1,5 @@
 #include "UI/InventoryWidget.h"
+#include "Prototyping.h"
 #include "UI/InventorySlotWidget.h"
 #include "UI/ItemTooltipWidget.h"
 #include "UI/ItemActionMenuWidget.h"
@@ -38,7 +39,7 @@ void UInventoryWidget::UpdateInventoryDisplay(const FCharacterInventoryStruct& I
 	// Update inventory statistics
 	UpdateInventoryStats();
 
-	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Updated display with %d items"), Inventory.items.Num());
+	UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Updated display with %d items"), Inventory.items.Num());
 }
 
 void UInventoryWidget::SetInventorySize(int32 Rows, int32 Columns)
@@ -49,7 +50,7 @@ void UInventoryWidget::SetInventorySize(int32 Rows, int32 Columns)
 	// Recreate grid with new size
 	CreateInventoryGrid();
 
-	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Set inventory size to %dx%d"), InventoryRows, InventoryColumns);
+	UE_LOG(LogGameplay, Log, TEXT("InventoryWidget: Set inventory size to %dx%d"), InventoryRows, InventoryColumns);
 }
 
 void UInventoryWidget::SetInventoryVisible(bool bVisible)
@@ -74,7 +75,7 @@ void UInventoryWidget::SetInventoryVisible(bool bVisible)
 		HideTooltip();
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Set visibility to %s"), bVisible ? TEXT("Visible") : TEXT("Hidden"));
+	UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Set visibility to %s"), bVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
 void UInventoryWidget::ToggleInventory()
@@ -91,7 +92,7 @@ void UInventoryWidget::CreateInventoryGrid()
 {
 	if (!InventoryWrap || !InventorySlotWidgetClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("InventoryWidget: Cannot create wrap - missing components"));
+		UE_LOG(LogGameplay, Error, TEXT("InventoryWidget: Cannot create wrap - missing components"));
 		return;
 	}
 
@@ -126,7 +127,7 @@ void UInventoryWidget::CreateInventoryGrid()
 		InventorySlots.Add(SlotWidget);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Created %d inventory slots (WrapBox)"), InventorySlots.Num());
+	UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Created %d inventory slots (WrapBox)"), InventorySlots.Num());
 
 	// Update stats after creating grid
 	UpdateInventoryStats();

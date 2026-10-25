@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Authentication/AuthenticationManager.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Utils/NetCore/AuthValidation.h"
 
@@ -23,18 +24,18 @@ void UAuthenticationManager::Initialize(UNetworkManager* NetworkManager, UPingMa
 
 	if (gameInstance)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("GameInstance found"));
+		UE_LOG(LogConnection, Verbose, TEXT("GameInstance found"));
 		
 		// Set up PingManager with TimeSyncService integration
 		if (pingManager)
 		{
 			pingManager->SetTimeSyncService(gameInstance->GetTimeSyncService());
-			UE_LOG(LogTemp, Warning, TEXT("AuthenticationManager: PingManager configured with TimeSyncService"));
+			UE_LOG(LogConnection, Verbose, TEXT("AuthenticationManager: PingManager configured with TimeSyncService"));
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("GameInstance not found"));
+		UE_LOG(LogConnection, Error, TEXT("GameInstance not found"));
 	}
 
 	// Subscribe to the network manager's event
@@ -47,23 +48,23 @@ void UAuthenticationManager::SubscribeToNetworkManager()
 	// Subscribe to the network manager's event
 	if (networkManager != nullptr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Network Manager found and subscribed to LoginServerResponse delegate"));
+		UE_LOG(LogConnection, Verbose, TEXT("Network Manager found and subscribed to LoginServerResponse delegate"));
 
 		if (IsValid(networkManager))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Network Manager is valid"));
+			UE_LOG(LogConnection, Verbose, TEXT("Network Manager is valid"));
 			networkManager->OnLoginServerDataReceived.RemoveDynamic(this, &UAuthenticationManager::ProcessLoginResponse);
 			networkManager->OnLoginServerDataReceived.AddDynamic(this, &UAuthenticationManager::ProcessLoginResponse);
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("Network Manager is not valid"));
+			UE_LOG(LogConnection, Error, TEXT("Network Manager is not valid"));
 		}
 
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("Network Manager not found"));
+		UE_LOG(LogConnection, Error, TEXT("Network Manager not found"));
 	}
 }
 
@@ -97,13 +98,13 @@ void UAuthenticationManager::ClearRequestTimeout(FTimerHandle& Handle)
 
 void UAuthenticationManager::OnLoginRequestTimeout()
 {
-	UE_LOG(LogTemp, Error, TEXT("AuthManager: Login request timed out after %.0fs — broadcasting error"), RequestTimeoutSeconds);
+	UE_LOG(LogConnection, Error, TEXT("AuthManager: Login request timed out after %.0fs — broadcasting error"), RequestTimeoutSeconds);
 	OnLoginResponse.Broadcast(false, TEXT("ERR_TIMEOUT"));
 }
 
 void UAuthenticationManager::OnRegisterRequestTimeout()
 {
-	UE_LOG(LogTemp, Error, TEXT("AuthManager: Register request timed out after %.0fs — broadcasting error"), RequestTimeoutSeconds);
+	UE_LOG(LogConnection, Error, TEXT("AuthManager: Register request timed out after %.0fs — broadcasting error"), RequestTimeoutSeconds);
 	OnRegisterResponse.Broadcast(false, TEXT("ERR_TIMEOUT"));
 }
 
@@ -121,7 +122,7 @@ bool UAuthenticationManager::HandleUnauthorized(const FString& Status, const FSt
 {
 	if (Status == "error" && (Message == "Unauthorized" || ErrorCode == "Unauthorized"))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AuthManager: Session expired (Unauthorized)"));
+		UE_LOG(LogConnection, Warning, TEXT("AuthManager: Session expired (Unauthorized)"));
 		OnSessionExpired.Broadcast();
 		return true;
 	}
@@ -139,7 +140,7 @@ bool UAuthenticationManager::IsLoginValueValid(const FString& Login)
 	const EAuthValueError Error = FAuthValidation::ValidateLogin(Login);
 	if (Error == EAuthValueError::Empty)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Login could not be empty!"));
+		UE_LOG(LogConnection, Warning, TEXT("Login could not be empty!"));
 		if (gameInstance)
 		{
 			gameInstance->OnLoginResponseReceived.Broadcast(gameInstance->GetCurrentClientID(), "Login could not be empty!");
@@ -148,7 +149,7 @@ bool UAuthenticationManager::IsLoginValueValid(const FString& Login)
 	}
 	if (Error == EAuthValueError::TooShort)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Login is too short!"));
+		UE_LOG(LogConnection, Warning, TEXT("Login is too short!"));
 		if (gameInstance)
 		{
 			gameInstance->OnLoginResponseReceived.Broadcast(gameInstance->GetCurrentClientID(), "Login is too short!");
@@ -157,7 +158,7 @@ bool UAuthenticationManager::IsLoginValueValid(const FString& Login)
 	}
 	if (Error == EAuthValueError::TooLong)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Login is too long!"));
+		UE_LOG(LogConnection, Warning, TEXT("Login is too long!"));
 		if (gameInstance)
 		{
 			gameInstance->OnLoginResponseReceived.Broadcast(gameInstance->GetCurrentClientID(), "Login is too long!");
@@ -174,7 +175,7 @@ bool UAuthenticationManager::IsPasswordValueValid(const FString& Password)
 	const EAuthValueError Error = FAuthValidation::ValidatePassword(Password);
 	if (Error == EAuthValueError::Empty)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Password could not be empty!"));
+		UE_LOG(LogConnection, Warning, TEXT("Password could not be empty!"));
 		if (gameInstance)
 		{
 			gameInstance->OnLoginResponseReceived.Broadcast(gameInstance->GetCurrentClientID(), "Password could not be empty!");
@@ -184,7 +185,7 @@ bool UAuthenticationManager::IsPasswordValueValid(const FString& Password)
 	// FIXED: server expects 8–100 chars, not 3–20
 	if (Error == EAuthValueError::TooShort)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Password is too short!"));
+		UE_LOG(LogConnection, Warning, TEXT("Password is too short!"));
 		if (gameInstance)
 		{
 			gameInstance->OnLoginResponseReceived.Broadcast(gameInstance->GetCurrentClientID(), "Password must be at least 8 characters!");
@@ -193,7 +194,7 @@ bool UAuthenticationManager::IsPasswordValueValid(const FString& Password)
 	}
 	if (Error == EAuthValueError::TooLong)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Password is too long!"));
+		UE_LOG(LogConnection, Warning, TEXT("Password is too long!"));
 		if (gameInstance)
 		{
 			gameInstance->OnLoginResponseReceived.Broadcast(gameInstance->GetCurrentClientID(), "Password must be 100 characters or fewer!");

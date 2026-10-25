@@ -1,4 +1,5 @@
 #include "Gameplay/NPCs/BasicNPC.h"
+#include "Prototyping.h"
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/NPCs/NPCAnimInstance.h"
@@ -104,7 +105,7 @@ void ABasicNPC::SetupNPCAudio(FName NPCSlug)
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning,
+			UE_LOG(LogGameplay, Warning,
 				TEXT("ABasicNPC::SetupNPCAudio: AudioProfileId '%s' not found in EntityAudioProfilesTable for NPC '%s'. Falling back to legacy FNPCAudioData."),
 				*Def->AudioProfileId.ToString(), *NPCSlug.ToString());
 		}

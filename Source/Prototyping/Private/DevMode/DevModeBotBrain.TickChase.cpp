@@ -1,4 +1,5 @@
 #include "DevMode/DevModeBotBrain.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeConsoleCommands.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -97,7 +98,7 @@ bool UDevModeBotBrain::Tick_AssertKill(UWorld* World, ABasicPlayer* Player, doub
             CorpseUID = FCString::Atoi(*DeadMob->GetMOBUId());
         }
         ++Kills;
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT kill %d/%d confirmed"), Kills, TargetKills);
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT kill %d/%d confirmed"), Kills, TargetKills);
         BotShot(FString::Printf(TEXT("kill%d"), Kills));
 
         // Quest needs a harvest-only hide (45% per corpse) on top of the
@@ -110,7 +111,7 @@ bool UDevModeBotBrain::Tick_AssertKill(UWorld* World, ABasicPlayer* Player, doub
             LootLegStartTime = Now;
             LastChasePos = PlayerAt;
             LastChaseProgressTime = Now;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT quest kill %d/%d, resolving corpse (%.0f,%.0f)"),
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT quest kill %d/%d, resolving corpse (%.0f,%.0f)"),
                 Kills, TargetKills, LastKillLocation.X, LastKillLocation.Y);
             return true;
         }
@@ -124,7 +125,7 @@ bool UDevModeBotBrain::Tick_AssertKill(UWorld* World, ABasicPlayer* Player, doub
                 LootLegStartTime = Now;
                 LastChasePos = PlayerAt;
                 LastChaseProgressTime = Now;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT kills done, walking to corpse (%.0f,%.0f)"),
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT kills done, walking to corpse (%.0f,%.0f)"),
                     LastKillLocation.X, LastKillLocation.Y);
                 return true;
             }
@@ -171,7 +172,7 @@ bool UDevModeBotBrain::Tick_GotoWaypoint(UWorld* World, ABasicPlayer* Player, do
                     ToMob *= 150.0f;
                     Waypoint = PlayerAt + ToMob;
                     Waypoint.Z = PlayerAt.Z;
-                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT waypoint stalled (gain %.0f in %.0fs) — re-rolling toward '%s'"),
+                    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT waypoint stalled (gain %.0f in %.0fs) — re-rolling toward '%s'"),
                         WaypointCheckDist - WayDist, StuckTimeoutSec, *Near->GetMobName());
                 }
                 WaypointCheckTime = Now;
@@ -202,7 +203,7 @@ bool UDevModeBotBrain::Tick_GotoWaypoint(UWorld* World, ABasicPlayer* Player, do
                 CharLegStartTime = Now;
                 StartLevel = GetProgressionLevel();
                 StartExp = GetProgressionExp();
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT level baseline %d exp %d, waiting for grant"),
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT level baseline %d exp %d, waiting for grant"),
                     StartLevel, StartExp);
             }
             else if (bTitleEmotePhase)
@@ -254,7 +255,7 @@ bool UDevModeBotBrain::Tick_GotoWaypoint(UWorld* World, ABasicPlayer* Player, do
             StepStartTime = Now;
             LastChasePos = Player->GetActorLocation();
             LastChaseProgressTime = Now;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT waypoint reached (odometer %.0f)"), Odometer);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT waypoint reached (odometer %.0f)"), Odometer);
             BotShot(TEXT("waypoint"));
             return true;
         }
@@ -283,7 +284,7 @@ bool UDevModeBotBrain::Tick_GotoTarget(UWorld* World, ABasicPlayer* Player, doub
             if (ChaseCheckDist - Dist < ChaseMinGain)
             {
                 ExcludedKillerUIDs.Add(ChaseUID);
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT chase of '%s' stalled (gain %.0f in %.0fs) — excluding uid=%d"),
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT chase of '%s' stalled (gain %.0f in %.0fs) — excluding uid=%d"),
                     *Mob->GetMobName(), ChaseCheckDist - Dist, ChaseStallSec, ChaseUID);
                 TargetMob.Reset();
                 ChaseTargetUID = 0;
@@ -301,7 +302,7 @@ bool UDevModeBotBrain::Tick_GotoTarget(UWorld* World, ABasicPlayer* Player, doub
                 // back. No attack input — the kill must be server-side.
                 Step = EBotStep::ExpectDeath;
                 DeathLegStartTime = Now;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT in range of '%s', waiting for real damage (passive)"),
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT in range of '%s', waiting for real damage (passive)"),
                     *Mob->GetMobName());
                 return true;
             }
@@ -313,7 +314,7 @@ bool UDevModeBotBrain::Tick_GotoTarget(UWorld* World, ABasicPlayer* Player, doub
             CombatCheckHp = Mob->GetMOBCurrentHealth();
             StepStartTime = Now;
             Step = EBotStep::Combat;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT combat vs '%s' (dist %.0f, attack-loop=%d)"),
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT combat vs '%s' (dist %.0f, attack-loop=%d)"),
                 *Mob->GetMobName(), Dist, bAttackStarted ? 1 : 0);
             return true;
         }
@@ -353,7 +354,7 @@ bool UDevModeBotBrain::Tick_Combat(UWorld* World, ABasicPlayer* Player, double N
                 return true;
             }
 
-            UE_LOG(LogTemp, Warning, TEXT("%s_HIT_STUB '%s' (server-authoritative hit offline)"), *TombstonePrefix, *Mob->GetMobName());
+            UE_LOG(LogGameplay, Warning, TEXT("%s_HIT_STUB '%s' (server-authoritative hit offline)"), *TombstonePrefix, *Mob->GetMobName());
             Mob->SetMOBCurrentHealth(0);
             Mob->Die();
         }
@@ -377,7 +378,7 @@ bool UDevModeBotBrain::Tick_Combat(UWorld* World, ABasicPlayer* Player, double N
                 {
                     if (MobHpNow >= CombatCheckHp)
                     {
-                        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT combat stalled (no damage in 20s on '%s') — re-approaching"),
+                        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT combat stalled (no damage in 20s on '%s') — re-approaching"),
                             *Mob->GetMobName());
                         TargetMob.Reset();
                         Step = EBotStep::GotoTarget;

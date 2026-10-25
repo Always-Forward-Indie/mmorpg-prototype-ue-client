@@ -1,4 +1,5 @@
 #include "Gameplay/Trade/TradeManager.h"
+#include "Prototyping.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
 #include "Utils/NetCore/TradeStatusRule.h"
@@ -11,7 +12,7 @@ void UTradeManager::Initialize(UNetworkManager* InNetworkManager, UMyGameInstanc
 {
     if (!InNetworkManager || !InGameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("TradeManager: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("TradeManager: Initialize called with null parameters"));
         return;
     }
     NetworkManager = InNetworkManager;

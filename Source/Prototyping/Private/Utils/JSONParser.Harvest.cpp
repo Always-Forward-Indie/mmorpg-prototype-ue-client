@@ -2,6 +2,7 @@
 
 
 #include "Utils/JSONParser.h"
+#include "Prototyping.h"
 #include "Services/TimeSyncService.h"
 #include "MyGameInstance.h"
 #include "Engine/World.h"
@@ -69,14 +70,14 @@ FHarvestStartedStruct JSONParser::DeserializeHarvestStarted(const FString& JsonS
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeHarvestStarted failed to parse JSON"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeHarvestStarted failed to parse JSON"));
 		return FHarvestStartedStruct();
 	}
 
 	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
 	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeHarvestStarted missing body"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeHarvestStarted missing body"));
 		return FHarvestStartedStruct();
 	}
 
@@ -126,14 +127,14 @@ FHarvestCompleteStruct JSONParser::DeserializeHarvestComplete(const FString& Jso
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeHarvestComplete failed to parse JSON"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeHarvestComplete failed to parse JSON"));
 		return FHarvestCompleteStruct();
 	}
 
 	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
 	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeHarvestComplete missing body"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeHarvestComplete missing body"));
 		return FHarvestCompleteStruct();
 	}
 
@@ -166,14 +167,14 @@ FHarvestErrorStruct JSONParser::DeserializeHarvestError(const FString& JsonStrin
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeHarvestError failed to parse JSON"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeHarvestError failed to parse JSON"));
 		return FHarvestErrorStruct();
 	}
 
 	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
 	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeHarvestError missing body"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeHarvestError missing body"));
 		return FHarvestErrorStruct();
 	}
 
@@ -234,14 +235,14 @@ FCorpseLootPickupResponseStruct JSONParser::DeserializeCorpseLootPickupResponse(
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCorpseLootPickupResponse failed to parse JSON"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeCorpseLootPickupResponse failed to parse JSON"));
 		return FCorpseLootPickupResponseStruct();
 	}
 
 	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
 	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCorpseLootPickupResponse missing body"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeCorpseLootPickupResponse missing body"));
 		return FCorpseLootPickupResponseStruct();
 	}
 
@@ -268,14 +269,14 @@ FCorpseLootPickupErrorStruct JSONParser::DeserializeCorpseLootPickupError(const 
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCorpseLootPickupError failed to parse JSON"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeCorpseLootPickupError failed to parse JSON"));
 		return FCorpseLootPickupErrorStruct();
 	}
 
 	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
 	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCorpseLootPickupError missing body"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeCorpseLootPickupError missing body"));
 		return FCorpseLootPickupErrorStruct();
 	}
 
@@ -321,14 +322,14 @@ FCorpseLootInspectResponseStruct JSONParser::DeserializeCorpseLootInspectRespons
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCorpseLootInspectResponse failed to parse JSON"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeCorpseLootInspectResponse failed to parse JSON"));
 		return FCorpseLootInspectResponseStruct();
 	}
 
 	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
 	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCorpseLootInspectResponse missing body"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeCorpseLootInspectResponse missing body"));
 		return FCorpseLootInspectResponseStruct();
 	}
 
@@ -353,14 +354,14 @@ FCorpseLootInspectErrorStruct JSONParser::DeserializeCorpseLootInspectError(cons
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCorpseLootInspectError failed to parse JSON"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeCorpseLootInspectError failed to parse JSON"));
 		return FCorpseLootInspectErrorStruct();
 	}
 
 	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
 	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCorpseLootInspectError missing body"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeCorpseLootInspectError missing body"));
 		return FCorpseLootInspectErrorStruct();
 	}
 

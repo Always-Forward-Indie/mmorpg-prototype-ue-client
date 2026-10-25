@@ -1,4 +1,5 @@
 #include "Gameplay/Repair/RepairNetworkHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/Repair/RepairManager.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
@@ -10,7 +11,7 @@ void URepairNetworkHandler::Initialize(URepairManager* InRepairManager, UNetwork
 {
     if (!InRepairManager || !InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("RepairNetworkHandler: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("RepairNetworkHandler: Initialize called with null parameters"));
         return;
     }
     RepairManager  = InRepairManager;

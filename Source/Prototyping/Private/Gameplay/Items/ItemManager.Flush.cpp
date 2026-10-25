@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Items/ItemManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Items/DroppedItemActor.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Players/PlayerAnimInstance.h"
@@ -24,7 +25,7 @@ void UItemManager::FlushDropsForMob(int32 MobUID)
 	TArray<FDroppedItemStruct> ToSpawn = MoveTemp(*Pending);
 	PendingMobDrops.Remove(MobUID);
 
-	UE_LOG(LogTemp, Log, TEXT("ItemManager: FlushDropsForMob uid=%d — spawning %d deferred item(s)"),
+	UE_LOG(LogGameplay, Verbose, TEXT("ItemManager: FlushDropsForMob uid=%d — spawning %d deferred item(s)"),
 		MobUID, ToSpawn.Num());
 
 	for (const FDroppedItemStruct& Drop : ToSpawn)
@@ -39,14 +40,14 @@ void UItemManager::ClearWorldState()
 	PendingMobDrops.Empty();
 	PendingNetworkEvents.Empty();
 
-	UE_LOG(LogTemp, Log, TEXT("ItemManager: Cleared world state (dropped items map, pending mob drops, pending events)"));
+	UE_LOG(LogGameplay, Verbose, TEXT("ItemManager: Cleared world state (dropped items map, pending mob drops, pending events)"));
 }
 
 void UItemManager::FlushPendingEvents()
 {
 	if (PendingNetworkEvents.Num() == 0) return;
 
-	UE_LOG(LogTemp, Warning, TEXT("ItemManager: Flushing %d pending network events"), PendingNetworkEvents.Num());
+	UE_LOG(LogGameplay, Warning, TEXT("ItemManager: Flushing %d pending network events"), PendingNetworkEvents.Num());
 	TArray<FString> Events = MoveTemp(PendingNetworkEvents);
 	PendingNetworkEvents.Empty();
 

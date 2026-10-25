@@ -8,3 +8,5 @@ IMPLEMENT_PRIMARY_GAME_MODULE( FDefaultGameModuleImpl, Prototyping, "Prototyping
 DEFINE_LOG_CATEGORY(LogConnection);
 DEFINE_LOG_CATEGORY(LogNetPacket);
 DEFINE_LOG_CATEGORY(LogPing);
+DEFINE_LOG_CATEGORY(LogGameplay);
+DEFINE_LOG_CATEGORY(LogGameAudio);

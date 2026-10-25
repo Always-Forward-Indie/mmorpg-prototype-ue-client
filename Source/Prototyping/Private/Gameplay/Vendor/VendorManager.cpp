@@ -1,4 +1,5 @@
 #include "Gameplay/Vendor/VendorManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
@@ -10,7 +11,7 @@ void UVendorManager::Initialize(UNetworkManager* InNetworkManager, UMyGameInstan
 {
     if (!InNetworkManager || !InGameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("VendorManager: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("VendorManager: Initialize called with null parameters"));
         return;
     }
     NetworkManager = InNetworkManager;

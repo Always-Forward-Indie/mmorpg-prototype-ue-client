@@ -1,4 +1,5 @@
 #include "UI/HarvestLootWidget.h"
+#include "Prototyping.h"
 #include "Components/ScrollBox.h"
 #include "Components/WrapBox.h"
 #include "Components/WrapBoxSlot.h"
@@ -17,7 +18,7 @@ void UHarvestLootWidget::CreateLootItemWidgets()
 	UPanelWidget* Container = GetLootContainer();
 	if (!Container || !LootItemWidgetClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("HarvestLootWidget: Missing required components for creating loot widgets"));
+		UE_LOG(LogGameplay, Error, TEXT("HarvestLootWidget: Missing required components for creating loot widgets"));
 		return;
 	}
 
@@ -68,7 +69,7 @@ void UHarvestLootWidget::CreateLootItemWidgets()
 		}
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("HarvestLootWidget: Created %d loot item widgets using %s layout"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("HarvestLootWidget: Created %d loot item widgets using %s layout"), 
 		LootItemWidgets.Num(), bUseGridLayout ? TEXT("Grid") : TEXT("List"));
 }
 

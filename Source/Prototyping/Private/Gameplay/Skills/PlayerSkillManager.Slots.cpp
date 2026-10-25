@@ -1,4 +1,5 @@
 #include "Gameplay/Skills/PlayerSkillManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Combat/SkillSystemManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Services/TimeSyncService.h"
@@ -8,13 +9,13 @@ void UPlayerSkillManager::SetSkillSlot(int32 SlotIndex, const FString& SkillSlug
 {
     if (!ValidateSkillSlot(SlotIndex))
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Invalid slot index %d"), SlotIndex);
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Invalid slot index %d"), SlotIndex);
         return;
     }
 
     if (!SkillSlug.IsEmpty() && !HasSkill(SkillSlug))
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Cannot assign unknown skill %s to slot %d"), 
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Cannot assign unknown skill %s to slot %d"), 
             *SkillSlug, SlotIndex);
         return;
     }
@@ -41,7 +42,7 @@ void UPlayerSkillManager::SetSkillSlot(int32 SlotIndex, const FString& SkillSlug
 
     OnSkillSlotChanged.Broadcast(SlotIndex, SlotData);
 
-    UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Set skill slot %d to %s"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillManager: Set skill slot %d to %s"), 
         SlotIndex, *SkillSlug);
 }
 

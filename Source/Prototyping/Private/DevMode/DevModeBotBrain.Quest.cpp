@@ -1,4 +1,5 @@
 #include "DevMode/DevModeBotBrain.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeConsoleCommands.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -56,7 +57,7 @@ bool UDevModeBotBrain::EnsureDialogueOpen(int32 NpcId, double Now)
         Dlg->OpenDialogue(NpcId);
         bDialogueRequested = true;
         LastDialogueRequestTime = Now;
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT dialogue opened npc=%d"), NpcId);
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT dialogue opened npc=%d"), NpcId);
     }
     return false;
 }
@@ -119,11 +120,11 @@ void UDevModeBotBrain::QuestLootDone(double Now)
         if (Kills < 6)
         {
             ++TargetKills;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT no hide yet after %d kills, hunting on (need 2 + hide)"), Kills);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT no hide yet after %d kills, hunting on (need 2 + hide)"), Kills);
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT no hide in 6 kills, turning in anyway"));
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT no hide in 6 kills, turning in anyway"));
         }
     }
     if (Kills >= TargetKills && (bStubLoot || HasItemTemplate(57) || Kills >= 6))
@@ -135,7 +136,7 @@ void UDevModeBotBrain::QuestLootDone(double Now)
         DialogueClicks = 0;
         LastAdvanceNodeId = 0;
         GoldBeforeReward = GetGold();
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT objectives done, returning to turn in"));
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT objectives done, returning to turn in"));
         return;
     }
     // More kills to go: this corpse is resolved (looted or empty), hunt on.
@@ -151,5 +152,5 @@ void UDevModeBotBrain::QuestLootDone(double Now)
         LastChasePos = Player->GetActorLocation();
         LastChaseProgressTime = Now;
     }
-    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT corpse resolved, hunting next (%d/%d)"), Kills, TargetKills);
+    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT corpse resolved, hunting next (%d/%d)"), Kills, TargetKills);
 }

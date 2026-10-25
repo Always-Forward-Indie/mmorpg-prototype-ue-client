@@ -65,7 +65,7 @@ FString NetworkSenderWorker::UpdateClientSendTimestamp(const FString& JsonData)
     
     if (FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer))
     {
-        UE_LOG(LogTemp, VeryVerbose, TEXT("NetworkSenderWorker: Updated clientSendMs to %lld"), PreciseClientSendMs);
+        UE_LOG(LogPing, VeryVerbose, TEXT("NetworkSenderWorker: Updated clientSendMs to %lld"), PreciseClientSendMs);
         return UpdatedJsonString;
     }
 

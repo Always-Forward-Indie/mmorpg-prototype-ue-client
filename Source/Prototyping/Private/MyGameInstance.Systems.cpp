@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Components/ArrowComponent.h"
 #include "ShaderCompiler.h"
 #include "ContentStreaming.h"
@@ -102,7 +103,7 @@ void UMyGameInstance::InitNetworkingSetup()
 {
 	if (!NetworkManager || !AuthenticationManager || !PlayerManager || !PingManager)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("NetworkManager, AuthenticationManager, PlayerManager or PingManager is nullptr"));
+		UE_LOG(LogGameplay, Warning, TEXT("NetworkManager, AuthenticationManager, PlayerManager or PingManager is nullptr"));
 		//return;
 	}
 

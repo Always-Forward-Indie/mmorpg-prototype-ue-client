@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -112,7 +113,7 @@ void ABasicPlayer::SetDead_Implementation(bool bNewDead)
 
     if (bNewDead)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Player %d has died"), GetActorId_Implementation());
+        UE_LOG(LogGameplay, Warning, TEXT("Player %d has died"), GetActorId_Implementation());
         OnDeath_Implementation();
 
         // Immediately flush any pending skill results so queued damage/healing
@@ -123,7 +124,7 @@ void ABasicPlayer::SetDead_Implementation(bool bNewDead)
         {
             if (UCombatSystemManager* CSM = MyGameInstance->GetCombatSystemManager())
             {
-                UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Flushing pending skill results on death (caster=%d)"),
+                UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Flushing pending skill results on death (caster=%d)"),
                     GetActorId_Implementation());
                 CSM->FlushAllPendingForCaster(GetActorId_Implementation());
             }
@@ -156,13 +157,13 @@ void ABasicPlayer::SetDead_Implementation(bool bNewDead)
         }
         // Notify Blueprint AnimBP so it can exit the death state
         OnRevive();
-        UE_LOG(LogTemp, Warning, TEXT("Player %d has been revived"), GetActorId_Implementation());
+        UE_LOG(LogGameplay, Warning, TEXT("Player %d has been revived"), GetActorId_Implementation());
     }
 }
 
 void ABasicPlayer::OnDeath_Implementation()
 {
-    UE_LOG(LogTemp, Warning, TEXT("Player %s died"), *playerData.characterData.characterName);
+    UE_LOG(LogGameplay, Warning, TEXT("Player %s died"), *playerData.characterData.characterName);
 
     // Stop any ongoing auto-attack / approach cycle (#5)
     StopAutoAttack();
@@ -210,7 +211,7 @@ void ABasicPlayer::OnDeath_Implementation()
 
 void ABasicPlayer::OnRevive()
 {
-    UE_LOG(LogTemp, Log, TEXT("Player %d OnRevive"), GetActorId_Implementation());
+    UE_LOG(LogGameplay, Verbose, TEXT("Player %d OnRevive"), GetActorId_Implementation());
 
     // Notify AnimBP so it can transition out of the death state
     if (UPlayerAnimInstance* AnimInst = GetPlayerAnimInstance())
@@ -224,7 +225,7 @@ void ABasicPlayer::SetTarget_Implementation(int32 TargetId, ECasterType TargetTy
     CurrentTargetId = TargetId;
     CurrentTargetType = TargetType;
     
-    UE_LOG(LogTemp, Log, TEXT("Player %d set target: %d (%s)"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("Player %d set target: %d (%s)"), 
         GetActorId_Implementation(), TargetId, *UEnum::GetValueAsString(TargetType));
 }
 
@@ -233,12 +234,12 @@ void ABasicPlayer::ClearTarget_Implementation()
     CurrentTargetId = 0;
     CurrentTargetType = ECasterType::None;
     
-    UE_LOG(LogTemp, Log, TEXT("Player %d cleared target"), GetActorId_Implementation());
+    UE_LOG(LogGameplay, Verbose, TEXT("Player %d cleared target"), GetActorId_Implementation());
 }
 
 void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationName, const FString& SkillSlug, float Duration)
 {
-    UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] PlaySkillAnimation: player=%d anim='%s' slug='%s' duration=%.3fs"),
+    UE_LOG(LogGameplay, Warning, TEXT("[PlayerAnim] PlaySkillAnimation: player=%d anim='%s' slug='%s' duration=%.3fs"),
         GetActorId_Implementation(), *AnimationName, *SkillSlug, Duration);
 
     if (!MyGameInstance) return;
@@ -255,7 +256,7 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
 
     if (UPlayerAnimInstance* AnimInst = GetPlayerAnimInstance())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] AnimInstance found (%s), calling StartAttack"),
+        UE_LOG(LogGameplay, Warning, TEXT("[PlayerAnim] AnimInstance found (%s), calling StartAttack"),
             *AnimInst->GetClass()->GetName());
 
         // Remove any previous OnHitPoint binding so we never fire twice
@@ -377,7 +378,7 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
         // AnimBP parent class is not UPlayerAnimInstance пїЅ log the actual class so we can fix it
         if (GetMesh() && GetMesh()->GetAnimInstance())
         {
-            UE_LOG(LogTemp, Error,
+            UE_LOG(LogGameplay, Error,
                 TEXT("[PlayerAnim] GetPlayerAnimInstance() returned nullptr! "
                      "Actual AnimInstance class: %s. "
                      "Set Anim Class parent to UPlayerAnimInstance in the Anim BP."),
@@ -385,13 +386,13 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
         }
         else
         {
-            UE_LOG(LogTemp, Error,
+            UE_LOG(LogGameplay, Error,
                 TEXT("[PlayerAnim] GetPlayerAnimInstance() returned nullptr and no AnimInstance exists on mesh!"));
         }
 
         // Fallback: no AnimInstance assigned yet пїЅ schedule timer directly
         const float HitDelay = FMath::Max(Duration * 0.45f, 0.05f);
-        UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] FALLBACK timer: HitDelay=%.3fs"), HitDelay);
+        UE_LOG(LogGameplay, Warning, TEXT("[PlayerAnim] FALLBACK timer: HitDelay=%.3fs"), HitDelay);
         if (UWorld* World = GetWorld())
         {
             World->GetTimerManager().ClearTimer(HitPointTimerHandle);

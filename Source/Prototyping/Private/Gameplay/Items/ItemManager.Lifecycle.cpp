@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Items/ItemManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Items/DroppedItemActor.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Players/PlayerAnimInstance.h"
@@ -40,11 +41,11 @@ void UItemManager::Initialize(UNetworkManager* NetworkManager)
 
 		if (gameInstance)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("GameInstance found in ItemManager"));
+			UE_LOG(LogGameplay, Warning, TEXT("GameInstance found in ItemManager"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("GameInstance not found in ItemManager"));
+			UE_LOG(LogGameplay, Error, TEXT("GameInstance not found in ItemManager"));
 		}
 	}
 }
@@ -69,11 +70,11 @@ void UItemManager::SubscribeToNetworkManager()
 {
 	if (networkManager != nullptr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ItemManager: Network Manager found and subscribed to ChunkServerResponse delegate"));
+		UE_LOG(LogGameplay, Warning, TEXT("ItemManager: Network Manager found and subscribed to ChunkServerResponse delegate"));
 
 		if (IsValid(networkManager))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("ItemManager: Network Manager is valid"));
+			UE_LOG(LogGameplay, Warning, TEXT("ItemManager: Network Manager is valid"));
 
 			// Subscribe to the network manager's events
 			networkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UItemManager::ProcessGameServerData);
@@ -81,12 +82,12 @@ void UItemManager::SubscribeToNetworkManager()
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("ItemManager: Network Manager is not valid"));
+			UE_LOG(LogGameplay, Error, TEXT("ItemManager: Network Manager is not valid"));
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("ItemManager: Network manager not found"));
+		UE_LOG(LogGameplay, Error, TEXT("ItemManager: Network manager not found"));
 	}
 }
 

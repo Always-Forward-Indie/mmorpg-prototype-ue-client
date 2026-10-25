@@ -1,4 +1,5 @@
 #include "Gameplay/Combat/BuffEffectHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/Combat/ICombatable.h"
 
 UBuffEffectHandler::UBuffEffectHandler()
@@ -14,7 +15,7 @@ void UBuffEffectHandler::ProcessSkillResult_Implementation(const FSkillResultDat
 {
     if (!Target.GetInterface() || !Target.GetObject() || !IsValid(Target.GetObject()))
     {
-        UE_LOG(LogTemp, Error, TEXT("BuffEffectHandler: Target interface is null or invalid"));
+        UE_LOG(LogGameplay, Error, TEXT("BuffEffectHandler: Target interface is null or invalid"));
         return;
     }
 
@@ -23,13 +24,13 @@ void UBuffEffectHandler::ProcessSkillResult_Implementation(const FSkillResultDat
     bool bIsBuff = (SkillResult.skillEffectType == ESkillEffectType::Buff);
     FString EffectTypeName = bIsBuff ? TEXT("Buff") : TEXT("Debuff");
 
-    UE_LOG(LogTemp, Log, TEXT("BuffEffectHandler: Processing %s effects to target %d"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("BuffEffectHandler: Processing %s effects to target %d"), 
         *EffectTypeName, ICombatable::Execute_GetActorId(TargetObject));
 
     // Process each applied effect
     for (const FAppliedEffectData& Effect : SkillResult.appliedEffects)
     {
-        UE_LOG(LogTemp, Log, TEXT("BuffEffectHandler: Applying %s: %s (Value: %d, Duration: %.1f)"), 
+        UE_LOG(LogGameplay, Verbose, TEXT("BuffEffectHandler: Applying %s: %s (Value: %d, Duration: %.1f)"), 
             *EffectTypeName, *Effect.effectName, Effect.value, Effect.duration);
 
         // Apply the effect directly
@@ -41,13 +42,13 @@ void UBuffEffectHandler::ProcessSkillResult_Implementation(const FSkillResultDat
 
 void UBuffEffectHandler::ProcessBuffApplication(const FSkillResultData& SkillResult, UObject* TargetObject)
 {
-    UE_LOG(LogTemp, Log, TEXT("BuffEffectHandler: Processing buff application"));
+    UE_LOG(LogGameplay, Verbose, TEXT("BuffEffectHandler: Processing buff application"));
     // Buff-specific processing logic can be implemented here
 }
 
 void UBuffEffectHandler::ProcessDebuffApplication(const FSkillResultData& SkillResult, UObject* TargetObject)
 {
-    UE_LOG(LogTemp, Log, TEXT("BuffEffectHandler: Processing debuff application"));
+    UE_LOG(LogGameplay, Verbose, TEXT("BuffEffectHandler: Processing debuff application"));
     // Debuff-specific processing logic can be implemented here
 }
 
@@ -55,13 +56,13 @@ void UBuffEffectHandler::ApplyEffect(UObject* TargetObject, const FAppliedEffect
 {
     if (!TargetObject || !IsValid(TargetObject))
     {
-        UE_LOG(LogTemp, Error, TEXT("BuffEffectHandler::ApplyEffect: Target is null or invalid"));
+        UE_LOG(LogGameplay, Error, TEXT("BuffEffectHandler::ApplyEffect: Target is null or invalid"));
         return;
     }
 
     int32 TargetId = ICombatable::Execute_GetActorId(TargetObject);
     
-    UE_LOG(LogTemp, Log, TEXT("BuffEffectHandler: Applied %s effect '%s' to target %d"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("BuffEffectHandler: Applied %s effect '%s' to target %d"), 
         bIsBuff ? TEXT("Buff") : TEXT("Debuff"), *Effect.effectName, TargetId);
     
     // Show the buff/debuff effect on the target
@@ -79,13 +80,13 @@ void UBuffEffectHandler::RemoveConflictingEffects(UObject* TargetObject, const F
 {
     if (!TargetObject || !IsValid(TargetObject))
     {
-        UE_LOG(LogTemp, Error, TEXT("BuffEffectHandler::RemoveConflictingEffects: Target is null or invalid"));
+        UE_LOG(LogGameplay, Error, TEXT("BuffEffectHandler::RemoveConflictingEffects: Target is null or invalid"));
         return;
     }
 
     int32 TargetId = ICombatable::Execute_GetActorId(TargetObject);
     
-    UE_LOG(LogTemp, Log, TEXT("BuffEffectHandler: Checking for conflicting effects on target %d"), TargetId);
+    UE_LOG(LogGameplay, Verbose, TEXT("BuffEffectHandler: Checking for conflicting effects on target %d"), TargetId);
     
     // TODO: Implement conflict resolution logic
     // This would require tracking active effects somehow
@@ -106,6 +107,6 @@ bool UBuffEffectHandler::ShouldStackEffect(UObject* TargetObject, const FApplied
 
 void UBuffEffectHandler::LogBuffProcessing(const FSkillResultData& SkillResult, UObject* TargetObject)
 {
-    UE_LOG(LogTemp, Verbose, TEXT("BuffEffectHandler: Processed %d buff/debuff effects on target %d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("BuffEffectHandler: Processed %d buff/debuff effects on target %d"),
         SkillResult.appliedEffects.Num(), ICombatable::Execute_GetActorId(TargetObject));
 }

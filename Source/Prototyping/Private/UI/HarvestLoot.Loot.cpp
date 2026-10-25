@@ -1,4 +1,5 @@
 #include "UI/HarvestLootWidget.h"
+#include "Prototyping.h"
 #include "Components/ScrollBox.h"
 #include "Components/WrapBox.h"
 #include "Components/WrapBoxSlot.h"
@@ -18,7 +19,7 @@ void UHarvestLootWidget::SetLootItems(const TArray<FHarvestItemStruct>& LootItem
 	CreateLootItemWidgets();
 	UpdateItemCountDisplay();
 
-	UE_LOG(LogTemp, Warning, TEXT("HarvestLootWidget: Set %d loot items"), LootItems.Num());
+	UE_LOG(LogGameplay, Warning, TEXT("HarvestLootWidget: Set %d loot items"), LootItems.Num());
 }
 
 void UHarvestLootWidget::ClearLootItems()
@@ -46,7 +47,7 @@ void UHarvestLootWidget::ShowWidget()
 		// ���������� UIManager �� ��������� ���������
 		OnHarvestLootVisibilityChanged.Broadcast(true);
 		
-		UE_LOG(LogTemp, Warning, TEXT("HarvestLootWidget: Widget shown - Items: %d"), CurrentLootItems.Num());
+		UE_LOG(LogGameplay, Verbose, TEXT("HarvestLootWidget: Widget shown - Items: %d"), CurrentLootItems.Num());
 	}
 }
 
@@ -63,7 +64,7 @@ void UHarvestLootWidget::HideWidget()
 	// ���������� UIManager �� ��������� ���������
 	OnHarvestLootVisibilityChanged.Broadcast(false);
 	
-	UE_LOG(LogTemp, Warning, TEXT("HarvestLootWidget: Widget hidden"));
+	UE_LOG(LogGameplay, Verbose, TEXT("HarvestLootWidget: Widget hidden"));
 }
 
 void UHarvestLootWidget::UpdateRemainingLoot(const TArray<FHarvestItemStruct>& RemainingLoot)
@@ -78,7 +79,7 @@ void UHarvestLootWidget::UpdateRemainingLoot(const TArray<FHarvestItemStruct>& R
 
 void UHarvestLootWidget::OnPickupAllClicked()
 {
-	UE_LOG(LogTemp, Warning, TEXT("HarvestLootWidget: Pickup all clicked"));
+	UE_LOG(LogGameplay, Verbose, TEXT("HarvestLootWidget: Pickup all clicked"));
 
 	if (HarvestManager)
 	{
@@ -88,7 +89,7 @@ void UHarvestLootWidget::OnPickupAllClicked()
 
 void UHarvestLootWidget::OnCloseClicked()
 {
-	UE_LOG(LogTemp, Warning, TEXT("HarvestLootWidget: Close clicked"));
+	UE_LOG(LogGameplay, Verbose, TEXT("HarvestLootWidget: Close clicked"));
 	HideWidget();
 }
 
@@ -97,7 +98,7 @@ void UHarvestLootWidget::OnItemPickupRequested(int32 ItemId, int32 Quantity)
 	// Hide tooltip when item pickup is requested
 	HideTooltip();
 	
-	UE_LOG(LogTemp, Warning, TEXT("HarvestLootWidget: Item pickup requested - ID: %d, Quantity: %d"), ItemId, Quantity);
+	UE_LOG(LogGameplay, Verbose, TEXT("HarvestLootWidget: Item pickup requested - ID: %d, Quantity: %d"), ItemId, Quantity);
 
 	if (HarvestManager)
 	{

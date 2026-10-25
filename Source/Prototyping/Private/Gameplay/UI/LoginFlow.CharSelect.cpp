@@ -1,6 +1,7 @@
 // Login Flow Widget — Implementation
 
 #include "Gameplay/UI/LoginFlowWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/UI/DeleteConfirmWidget.h"
 #include "MyGameInstance.h"
 #include "Authentication/AuthenticationManager.h"
@@ -54,7 +55,7 @@ void ULoginFlowWidget::HandleCreateNewClicked()
 
 void ULoginFlowWidget::HandleDeleteClicked()
 {
-	UE_LOG(LogTemp, Warning, TEXT("LoginFlowWidget: HandleDeleteClicked — SelectedIdx=%d, CachedNum=%d, DeleteButton=%s, ConfirmWidgetClass=%s"),
+	UE_LOG(LogGameplay, Warning, TEXT("LoginFlowWidget: HandleDeleteClicked — SelectedIdx=%d, CachedNum=%d, DeleteButton=%s, ConfirmWidgetClass=%s"),
 		SelectedCharacterIndex, CachedCharacters.Num(),
 		CharSelect_DeleteButton ? TEXT("OK") : TEXT("NULL"),
 		DeleteConfirmWidgetClass ? *DeleteConfirmWidgetClass->GetName() : TEXT("NOT SET"));

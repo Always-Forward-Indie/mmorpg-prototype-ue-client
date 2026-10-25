@@ -91,8 +91,7 @@ bool NetworkReceiverWorker::ConsumeDropObserved()
 //        UpdatedJsonString.ReplaceInline(TEXT("\n"), TEXT(""));
 //        UpdatedJsonString.ReplaceInline(TEXT("\r"), TEXT(""));
 //        
-//        UE_LOG(LogTemp, VeryVerbose, TEXT("NetworkReceiverWorker: Added clientRecvMs %lld to packet: %s"), 
-//            ClientRecvMs, *UpdatedJsonString);
+
 //        
 //        return UpdatedJsonString;
 //    }

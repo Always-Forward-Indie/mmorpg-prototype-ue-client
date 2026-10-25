@@ -1,4 +1,5 @@
 #include "Services/LocalizationSubsystem.h"
+#include "Prototyping.h"
 #include "Data/LocalizationDataAsset.h"
 #include "Engine/DataTable.h"
 #include "Misc/ConfigCacheIni.h"
@@ -16,7 +17,7 @@ UDataTable* ULocalizationSubsystem::GetTitleLocaleTable() const
     if (!CachedTitleLocaleTable && LocalizationData)
         CachedTitleLocaleTable = LocalizationData->TitleLocale.Get();
 
-    UE_LOG(LogTemp, Warning, TEXT("[LOCALE] GetTitleLocaleTable: LocalizationData=%s Table=%s"),
+    UE_LOG(LogGameplay, Verbose, TEXT("[LOCALE] GetTitleLocaleTable: LocalizationData=%s Table=%s"),
         LocalizationData ? TEXT("valid") : TEXT("NULL"),
         CachedTitleLocaleTable ? *CachedTitleLocaleTable->GetName() : TEXT("NULL"));
 

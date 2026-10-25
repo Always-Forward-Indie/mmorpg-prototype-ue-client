@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Gameplay/UI/NameplateCanvasWidget.h"
+#include "Prototyping.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Blueprint/SlateBlueprintLibrary.h"
 #include "Components/CanvasPanelSlot.h"
@@ -19,25 +20,25 @@ void UNameplateCanvasWidget::RegisterPlayer(AActor*        Actor,
                                              bool           bIsDead,
                                              float          HeadOffsetZ)
 {
-    UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget::RegisterPlayer called for actor '%s' (name='%s')"), 
+    UE_LOG(LogGameplay, Warning, TEXT("NameplateCanvasWidget::RegisterPlayer called for actor '%s' (name='%s')"), 
         Actor ? *Actor->GetName() : TEXT("NULL"), *Name);
 
     if (!Actor || FindEntry(Actor))
     {
-        UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget::RegisterPlayer - actor is null or already registered"));
+        UE_LOG(LogGameplay, Warning, TEXT("NameplateCanvasWidget::RegisterPlayer - actor is null or already registered"));
         return;
     }
 
     if (!PlayerNameplateWidgetClass)
     {
-        UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget: PlayerNameplateWidgetClass is not set"));
+        UE_LOG(LogGameplay, Warning, TEXT("NameplateCanvasWidget: PlayerNameplateWidgetClass is not set"));
         return;
     }
 
     UUserWidget* RawWidget = AddWidgetToCanvas(PlayerNameplateWidgetClass);
     if (!RawWidget)
     {
-        UE_LOG(LogTemp, Error, TEXT("NameplateCanvasWidget::RegisterPlayer - AddWidgetToCanvas returned null"));
+        UE_LOG(LogGameplay, Error, TEXT("NameplateCanvasWidget::RegisterPlayer - AddWidgetToCanvas returned null"));
         return;
     }
 
@@ -48,7 +49,7 @@ void UNameplateCanvasWidget::RegisterPlayer(AActor*        Actor,
         // Explicitly hide the title row — title arrives later via SetPlayerTitle.
         // Prevents an empty text slot from showing when the player has no title.
         Nameplate->SetTitle(FText::GetEmpty());
-        UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget::RegisterPlayer - successfully created and initialized nameplate for '%s'"), *Name);
+        UE_LOG(LogGameplay, Warning, TEXT("NameplateCanvasWidget::RegisterPlayer - successfully created and initialized nameplate for '%s'"), *Name);
     }
 
     FNameplateEntry& Entry  = Entries.AddDefaulted_GetRef();
@@ -67,25 +68,25 @@ void UNameplateCanvasWidget::RegisterNPC(AActor*               Actor,
                                           float                 InteractRadius,
                                           float                 HeadOffsetZ)
 {
-    UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget::RegisterNPC called for actor '%s' (name='%s', type='%s')"), 
+    UE_LOG(LogGameplay, Warning, TEXT("NameplateCanvasWidget::RegisterNPC called for actor '%s' (name='%s', type='%s')"), 
         Actor ? *Actor->GetName() : TEXT("NULL"), *Name, *NPCType);
 
     if (!Actor || FindEntry(Actor))
     {
-        UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget::RegisterNPC - actor is null or already registered"));
+        UE_LOG(LogGameplay, Warning, TEXT("NameplateCanvasWidget::RegisterNPC - actor is null or already registered"));
         return;
     }
 
     if (!NPCNameplateWidgetClass)
     {
-        UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget: NPCNameplateWidgetClass is not set"));
+        UE_LOG(LogGameplay, Warning, TEXT("NameplateCanvasWidget: NPCNameplateWidgetClass is not set"));
         return;
     }
 
     UUserWidget* RawWidget = AddWidgetToCanvas(NPCNameplateWidgetClass);
     if (!RawWidget)
     {
-        UE_LOG(LogTemp, Error, TEXT("NameplateCanvasWidget::RegisterNPC - AddWidgetToCanvas returned null"));
+        UE_LOG(LogGameplay, Error, TEXT("NameplateCanvasWidget::RegisterNPC - AddWidgetToCanvas returned null"));
         return;
     }
 
@@ -93,7 +94,7 @@ void UNameplateCanvasWidget::RegisterNPC(AActor*               Actor,
     if (Nameplate)
     {
         Nameplate->SetNPCInfo(Name, NPCType, Level, InteractionState);
-        UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget::RegisterNPC - successfully created and initialized nameplate for '%s'"), *Name);
+        UE_LOG(LogGameplay, Warning, TEXT("NameplateCanvasWidget::RegisterNPC - successfully created and initialized nameplate for '%s'"), *Name);
     }
 
     FNameplateEntry& Entry  = Entries.AddDefaulted_GetRef();

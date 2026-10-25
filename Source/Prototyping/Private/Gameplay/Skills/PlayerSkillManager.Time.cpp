@@ -1,4 +1,5 @@
 #include "Gameplay/Skills/PlayerSkillManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Combat/SkillSystemManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Services/TimeSyncService.h"
@@ -88,7 +89,7 @@ void UPlayerSkillManager::ConvertServerClockCooldownsToWorldTime()
         S.cooldownEndTime = WorldNow + RemainingSec;
         S.bCooldownUsesServerClock = false;
 
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
             TEXT("PlayerSkillManager: Converted cooldown '%s' to world-time — remaining=%.1fs newEnd=%.3f"),
             *Pair.Key, RemainingSec, S.cooldownEndTime);
     }
@@ -101,9 +102,9 @@ void UPlayerSkillManager::ConvertServerClockCooldownsToWorldTime()
         GCDEndTime = WorldNow + RemainingSec;
         bGCDUsesServerClock = false;
 
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
             TEXT("PlayerSkillManager: Converted GCD to world-time — remaining=%.1fs"), RemainingSec);
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Server-clock cooldowns converted to world-time (time-sync lost)"));
+    UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Server-clock cooldowns converted to world-time (time-sync lost)"));
 }

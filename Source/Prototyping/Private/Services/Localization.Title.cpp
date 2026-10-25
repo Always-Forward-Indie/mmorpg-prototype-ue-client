@@ -1,4 +1,5 @@
 #include "Services/LocalizationSubsystem.h"
+#include "Prototyping.h"
 #include "Data/LocalizationDataAsset.h"
 #include "Engine/DataTable.h"
 #include "Misc/ConfigCacheIni.h"
@@ -13,7 +14,7 @@ FText ULocalizationSubsystem::GetTitleDisplayName(const FString& TitleSlug) cons
         FName(*TitleSlug), TEXT("GetTitleDisplayName"), false);
     const FText Result = (Row && !Row->displayName.IsEmpty()) ? Row->displayName : FallbackText(TitleSlug);
 
-    UE_LOG(LogTemp, Warning, TEXT("[LOCALE] GetTitleDisplayName('%s'): Row=%s Result='%s'"),
+    UE_LOG(LogGameplay, Verbose, TEXT("[LOCALE] GetTitleDisplayName('%s'): Row=%s Result='%s'"),
         *TitleSlug, Row ? TEXT("found") : TEXT("NULL"), *Result.ToString());
 
     return Result;

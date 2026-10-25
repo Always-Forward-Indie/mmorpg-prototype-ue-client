@@ -1,4 +1,5 @@
 #include "UI/UIManager.h"
+#include "Prototyping.h"
 #include "UI/UIManager.h"
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
@@ -80,11 +81,11 @@
 
 void UUIManager::InitializeDialogueAndQuestWidgets(UDialogueManager* InDialogueManager, UQuestManager* InQuestManager)
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeDialogueAndQuestWidgets - Starting initialization"));
+	UE_LOG(LogGameplay, Log, TEXT("UIManager::InitializeDialogueAndQuestWidgets - Starting initialization"));
 
 	if (!InDialogueManager || !InQuestManager)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager::InitializeDialogueAndQuestWidgets - DialogueManager or QuestManager is null!"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager::InitializeDialogueAndQuestWidgets - DialogueManager or QuestManager is null!"));
 		return;
 	}
 
@@ -98,16 +99,16 @@ void UUIManager::InitializeDialogueAndQuestWidgets(UDialogueManager* InDialogueM
 			DialogueWidget->SetVisibility(ESlateVisibility::Collapsed);
 			DialogueWidget->BindToDialogueManager(InDialogueManager);
 			DialogueWidget->OnDialogueVisibilityChanged.AddDynamic(this, &UUIManager::OnDialogueVisibilityChanged);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: DialogueWidget created and bound"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: DialogueWidget created and bound"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create DialogueWidget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create DialogueWidget"));
 		}
 	}
 	else if (!DialogueWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: DialogueWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: DialogueWidgetClass is not set in Blueprint"));
 	}
 
 	// Create quest journal widget if class is set
@@ -120,16 +121,16 @@ void UUIManager::InitializeDialogueAndQuestWidgets(UDialogueManager* InDialogueM
 			QuestJournalWidget->SetVisibility(ESlateVisibility::Collapsed);
 			QuestJournalWidget->BindToQuestManager(InQuestManager);
 			QuestJournalWidget->OnQuestJournalVisibilityChanged.AddDynamic(this, &UUIManager::OnQuestJournalVisibilityChanged);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: QuestJournalWidget created and bound"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: QuestJournalWidget created and bound"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create QuestJournalWidget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create QuestJournalWidget"));
 		}
 	}
 	else if (!QuestJournalWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: QuestJournalWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: QuestJournalWidgetClass is not set in Blueprint"));
 	}
 
 	// Create quest tracker widget if class is set (HUD overlay)
@@ -140,24 +141,24 @@ void UUIManager::InitializeDialogueAndQuestWidgets(UDialogueManager* InDialogueM
 		{
 			QuestTrackerWidget->AddToViewport(50); // Medium Z-order for HUD element
 			QuestTrackerWidget->BindToQuestManager(InQuestManager);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: QuestTrackerWidget created and bound"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: QuestTrackerWidget created and bound"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create QuestTrackerWidget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create QuestTrackerWidget"));
 		}
 	}
 	else if (!QuestTrackerWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: QuestTrackerWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: QuestTrackerWidgetClass is not set in Blueprint"));
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeDialogueAndQuestWidgets - Completed"));
+	UE_LOG(LogGameplay, Log, TEXT("UIManager::InitializeDialogueAndQuestWidgets - Completed"));
 }
 
 void UUIManager::InitializeItemSystemWidgets(UEquipmentManager* InEquipmentManager, UVendorManager* InVendorManager, URepairManager* InRepairManager, UTradeManager* InTradeManager)
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeItemSystemWidgets - Starting initialization"));
+	UE_LOG(LogGameplay, Log, TEXT("UIManager::InitializeItemSystemWidgets - Starting initialization"));
 
 	// Create equipment widget
 	if (EquipmentWidgetClass && !EquipmentWidget)
@@ -172,12 +173,12 @@ void UUIManager::InitializeItemSystemWidgets(UEquipmentManager* InEquipmentManag
 				EquipmentWidget->BindToEquipmentManager(InEquipmentManager, InventoryManager);
 			}
 			EquipmentWidget->OnEquipmentVisibilityChanged.AddDynamic(this, &UUIManager::OnEquipmentVisibilityChanged);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: EquipmentWidget created and bound"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: EquipmentWidget created and bound"));
 		}
 	}
 	else if (!EquipmentWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: EquipmentWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: EquipmentWidgetClass is not set in Blueprint"));
 	}
 
 	// Create vendor shop widget
@@ -193,12 +194,12 @@ void UUIManager::InitializeItemSystemWidgets(UEquipmentManager* InEquipmentManag
 				VendorShopWidget->BindToManagers(InVendorManager, InventoryManager);
 			}
 			VendorShopWidget->OnVendorShopVisibilityChanged.AddDynamic(this, &UUIManager::OnVendorShopVisibilityChanged);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: VendorShopWidget created and bound"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: VendorShopWidget created and bound"));
 		}
 	}
 	else if (!VendorShopWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: VendorShopWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: VendorShopWidgetClass is not set in Blueprint"));
 	}
 
 	// Create repair shop widget
@@ -220,12 +221,12 @@ void UUIManager::InitializeItemSystemWidgets(UEquipmentManager* InEquipmentManag
 				RepairShopWidget->BindToInventoryManager(InventoryManager);
 			}
 			RepairShopWidget->OnRepairShopVisibilityChanged.AddDynamic(this, &UUIManager::OnRepairShopVisibilityChanged);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: RepairShopWidget created and bound"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: RepairShopWidget created and bound"));
 		}
 	}
 	else if (!RepairShopWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: RepairShopWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: RepairShopWidgetClass is not set in Blueprint"));
 	}
 
 	// Create trade widget
@@ -241,24 +242,24 @@ void UUIManager::InitializeItemSystemWidgets(UEquipmentManager* InEquipmentManag
 				TradeWidget->BindToManagers(InTradeManager, InventoryManager);
 			}
 			TradeWidget->OnTradeVisibilityChanged.AddDynamic(this, &UUIManager::OnTradeVisibilityChanged);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: TradeWidget created and bound"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: TradeWidget created and bound"));
 		}
 	}
 	else if (!TradeWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: TradeWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: TradeWidgetClass is not set in Blueprint"));
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeItemSystemWidgets - Completed"));
+	UE_LOG(LogGameplay, Log, TEXT("UIManager::InitializeItemSystemWidgets - Completed"));
 }
 
 void UUIManager::InitializeSkillShopWidget(USkillShopManager* InSkillShopManager)
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeSkillShopWidget"));
+	UE_LOG(LogGameplay, Log, TEXT("UIManager::InitializeSkillShopWidget"));
 
 	if (!SkillShopWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: SkillShopWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: SkillShopWidgetClass is not set in Blueprint"));
 		return;
 	}
 
@@ -272,7 +273,7 @@ void UUIManager::InitializeSkillShopWidget(USkillShopManager* InSkillShopManager
 	SkillShopWidget = CreateWidget<USkillShopWidget>(GetWorld(), SkillShopWidgetClass);
 	if (!SkillShopWidget)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create SkillShopWidget"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create SkillShopWidget"));
 		return;
 	}
 
@@ -302,16 +303,16 @@ void UUIManager::InitializeSkillShopWidget(USkillShopManager* InSkillShopManager
 	}
 
 	SkillShopWidget->OnSkillShopVisibilityChanged.AddDynamic(this, &UUIManager::OnSkillShopVisibilityChanged);
-	UE_LOG(LogTemp, Log, TEXT("UIManager: SkillShopWidget created and bound"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: SkillShopWidget created and bound"));
 }
 
 void UUIManager::InitializeStatsWidget(UPlayerStatsManager* InStatsManager)
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeStatsWidget"));
+	UE_LOG(LogGameplay, Log, TEXT("UIManager::InitializeStatsWidget"));
 
 	if (!InStatsManager)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::InitializeStatsWidget - StatsManager is null"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager::InitializeStatsWidget - StatsManager is null"));
 		return;
 	}
 
@@ -324,16 +325,16 @@ void UUIManager::InitializeStatsWidget(UPlayerStatsManager* InStatsManager)
 			PlayerStatsWidget->SetVisibility(ESlateVisibility::Collapsed);
 			PlayerStatsWidget->BindToStatsManager(InStatsManager);
 			PlayerStatsWidget->OnStatsVisibilityChanged.AddDynamic(this, &UUIManager::OnPlayerStatsVisibilityChanged);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: PlayerStatsWidget created and bound"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: PlayerStatsWidget created and bound"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create PlayerStatsWidget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create PlayerStatsWidget"));
 		}
 	}
 	else if (!PlayerStatsWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: PlayerStatsWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: PlayerStatsWidgetClass is not set in Blueprint"));
 	}
 
 	// Also bind the HUD experience bar to the same stats manager so it updates
@@ -341,11 +342,11 @@ void UUIManager::InitializeStatsWidget(UPlayerStatsManager* InStatsManager)
 	if (UPlayerExperienceWidget* ExpWidget = GetPlayerExperienceWidget())
 	{
 		ExpWidget->BindToStatsManager(InStatsManager);
-		UE_LOG(LogTemp, Log, TEXT("UIManager: PlayerExperienceWidget bound to PlayerStatsManager"));
+		UE_LOG(LogGameplay, Verbose, TEXT("UIManager: PlayerExperienceWidget bound to PlayerStatsManager"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: PlayerExperienceWidget not available yet for StatsManager binding"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: PlayerExperienceWidget not available yet for StatsManager binding"));
 	}
 }
 

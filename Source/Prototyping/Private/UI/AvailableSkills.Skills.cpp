@@ -1,5 +1,6 @@
 ﻿#include "UI/AvailableSkillsWidget.h"
 #include "UI/AvailableSkillsWidget.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
@@ -25,7 +26,7 @@ void UAvailableSkillsWidget::SkillInitialize(UMyGameInstance* InGameInstance)
 {
     if (!InGameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("AvailableSkillsWidget: Cannot initialize with null GameInstance"));
+        UE_LOG(LogGameplay, Error, TEXT("AvailableSkillsWidget: Cannot initialize with null GameInstance"));
         return;
     }
 
@@ -36,11 +37,11 @@ void UAvailableSkillsWidget::SkillInitialize(UMyGameInstance* InGameInstance)
     {
         SubscribeToSkillManagerEvents();
         RefreshSkillList();
-        UE_LOG(LogTemp, Log, TEXT("AvailableSkillsWidget: Initialized with PlayerSkillManager"));
+        UE_LOG(LogGameplay, Log, TEXT("AvailableSkillsWidget: Initialized with PlayerSkillManager"));
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("AvailableSkillsWidget: PlayerSkillManager not available"));
+        UE_LOG(LogGameplay, Warning, TEXT("AvailableSkillsWidget: PlayerSkillManager not available"));
     }
 }
 
@@ -48,14 +49,14 @@ void UAvailableSkillsWidget::RefreshSkillList()
 {
     if (!SkillManager)
     {
-        UE_LOG(LogTemp, Warning, TEXT("AvailableSkillsWidget: Cannot refresh - SkillManager not available"));
+        UE_LOG(LogGameplay, Warning, TEXT("AvailableSkillsWidget: Cannot refresh - SkillManager not available"));
         return;
     }
 
     TArray<FPlayerSkillData> AllSkills = SkillManager->GetAllPlayerSkills();
     PopulateSkillList(AllSkills);
     
-    UE_LOG(LogTemp, Log, TEXT("AvailableSkillsWidget: Refreshed skill list with %d skills"), AllSkills.Num());
+    UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Refreshed skill list with %d skills"), AllSkills.Num());
 }
 
 void UAvailableSkillsWidget::ShowWidget()
@@ -75,7 +76,7 @@ void UAvailableSkillsWidget::ShowWidget()
             OnWidgetVisibilityChanged.Broadcast(true);
         }
         
-        UE_LOG(LogTemp, Warning, TEXT("AvailableSkillsWidget: Widget shown - Skills: %d"), SkillItemWidgets.Num());
+        UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Widget shown - Skills: %d"), SkillItemWidgets.Num());
     }
 }
 
@@ -96,7 +97,7 @@ void UAvailableSkillsWidget::HideWidget()
         OnWidgetVisibilityChanged.Broadcast(false);
     }
     
-    UE_LOG(LogTemp, Warning, TEXT("AvailableSkillsWidget: Widget hidden"));
+    UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Widget hidden"));
 }
 
 void UAvailableSkillsWidget::FilterSkillsByType(ESkillEffectType EffectType)
@@ -105,7 +106,7 @@ void UAvailableSkillsWidget::FilterSkillsByType(ESkillEffectType EffectType)
     bHasActiveFilters = (EffectType != ESkillEffectType::None) || (CurrentSchoolFilter != ESkillSchool::None);
     
     RefreshSkillList();
-    UE_LOG(LogTemp, Log, TEXT("AvailableSkillsWidget: Filtered by effect type: %d"), (int32)EffectType);
+    UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Filtered by effect type: %d"), (int32)EffectType);
 }
 
 void UAvailableSkillsWidget::FilterSkillsBySchool(ESkillSchool School)
@@ -114,7 +115,7 @@ void UAvailableSkillsWidget::FilterSkillsBySchool(ESkillSchool School)
     bHasActiveFilters = (CurrentEffectTypeFilter != ESkillEffectType::None) || (School != ESkillSchool::None);
     
     RefreshSkillList();
-    UE_LOG(LogTemp, Log, TEXT("AvailableSkillsWidget: Filtered by school: %d"), (int32)School);
+    UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Filtered by school: %d"), (int32)School);
 }
 
 void UAvailableSkillsWidget::ClearFilters()
@@ -124,18 +125,18 @@ void UAvailableSkillsWidget::ClearFilters()
     bHasActiveFilters = false;
     
     RefreshSkillList();
-    UE_LOG(LogTemp, Log, TEXT("AvailableSkillsWidget: Cleared all filters"));
+    UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Cleared all filters"));
 }
 
 void UAvailableSkillsWidget::OnClearFiltersClicked()
 {
-    UE_LOG(LogTemp, Warning, TEXT("AvailableSkillsWidget: Clear filters clicked"));
+    UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Clear filters clicked"));
     ClearFilters();
 }
 
 void UAvailableSkillsWidget::OnCloseClicked()
 {
-    UE_LOG(LogTemp, Warning, TEXT("AvailableSkillsWidget: Close clicked"));
+    UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Close clicked"));
     HideWidget();
     
     // Уведомляем UIManager об изменении видимости
@@ -147,14 +148,14 @@ void UAvailableSkillsWidget::OnCloseClicked()
 
 void UAvailableSkillsWidget::OnPlayerSkillsInitialized(const TArray<FPlayerSkillData>& Skills)
 {
-    UE_LOG(LogTemp, Log, TEXT("AvailableSkillsWidget: Player skills initialized, refreshing list"));
+    UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Player skills initialized, refreshing list"));
     PopulateSkillList(Skills);
 }
 
 void UAvailableSkillsWidget::OnSkillItemClicked(const FPlayerSkillData& SkillData)
 {
     OnSkillSelected.Broadcast(SkillData);
-    UE_LOG(LogTemp, Log, TEXT("AvailableSkillsWidget: Skill selected: %s"), *SkillData.networkData.skillSlug);
+    UE_LOG(LogGameplay, Log, TEXT("AvailableSkillsWidget: Skill selected: %s"), *SkillData.networkData.skillSlug);
 }
 
 void UAvailableSkillsWidget::OnSkillItemHovered(const FPlayerSkillData& SkillData, bool bIsHovered)
@@ -181,13 +182,13 @@ void UAvailableSkillsWidget::SubscribeToSkillManagerEvents()
 {
     if (!SkillManager)
     {
-        UE_LOG(LogTemp, Warning, TEXT("AvailableSkillsWidget: Cannot subscribe - SkillManager is null"));
+        UE_LOG(LogGameplay, Warning, TEXT("AvailableSkillsWidget: Cannot subscribe - SkillManager is null"));
         return;
     }
 
     SkillManager->OnSkillsInitialized.AddDynamic(this, &UAvailableSkillsWidget::OnPlayerSkillsInitialized);
 
-    UE_LOG(LogTemp, Warning, TEXT("AvailableSkillsWidget: Subscribed to SkillManager events"));
+    UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Subscribed to SkillManager events"));
 }
 
 void UAvailableSkillsWidget::UnsubscribeFromSkillManagerEvents()
@@ -200,7 +201,7 @@ void UAvailableSkillsWidget::UnsubscribeFromSkillManagerEvents()
     // Unsubscribe from skill manager events
     SkillManager->OnSkillsInitialized.RemoveDynamic(this, &UAvailableSkillsWidget::OnPlayerSkillsInitialized);
     
-    UE_LOG(LogTemp, Warning, TEXT("AvailableSkillsWidget: Unsubscribed from SkillManager events"));
+    UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Unsubscribed from SkillManager events"));
 }
 
 UPanelWidget* UAvailableSkillsWidget::GetSkillContainer() const

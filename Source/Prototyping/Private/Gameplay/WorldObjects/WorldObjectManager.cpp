@@ -1,4 +1,5 @@
 #include "Gameplay/WorldObjects/WorldObjectManager.h"
+#include "Prototyping.h"
 #include "Gameplay/WorldObjects/WorldInteractiveObjectActor.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
@@ -16,7 +17,7 @@ void UWorldObjectManager::Initialize(UNetworkManager* InNetworkManager, UMyGameI
 {
 	if (!InNetworkManager || !InGameInstance)
 	{
-		UE_LOG(LogTemp, Error, TEXT("WorldObjectManager: Initialize called with null parameters"));
+		UE_LOG(LogGameplay, Error, TEXT("WorldObjectManager: Initialize called with null parameters"));
 		return;
 	}
 
@@ -24,7 +25,7 @@ void UWorldObjectManager::Initialize(UNetworkManager* InNetworkManager, UMyGameI
 	GameInstance   = InGameInstance;
 	bIsInitialized = true;
 
-	UE_LOG(LogTemp, Log, TEXT("WorldObjectManager: Initialized"));
+	UE_LOG(LogGameplay, Verbose, TEXT("WorldObjectManager: Initialized"));
 }
 
 void UWorldObjectManager::SetWorldContext(UWorld* InWorld)
@@ -46,14 +47,14 @@ void UWorldObjectManager::SpawnWorldObjects(const TArray<FWorldObjectData>& Obje
 	}
 
 	OnWorldObjectsSpawned.Broadcast();
-	UE_LOG(LogTemp, Log, TEXT("WorldObjectManager: Spawned %d world objects"), Objects.Num());
+	UE_LOG(LogGameplay, Verbose, TEXT("WorldObjectManager: Spawned %d world objects"), Objects.Num());
 }
 
 AWorldInteractiveObjectActor* UWorldObjectManager::SpawnSingleObject(const FWorldObjectData& Data)
 {
 	if (!WorldContext)
 	{
-		UE_LOG(LogTemp, Error, TEXT("WorldObjectManager: Cannot spawn — no WorldContext"));
+		UE_LOG(LogGameplay, Error, TEXT("WorldObjectManager: Cannot spawn — no WorldContext"));
 		return nullptr;
 	}
 
@@ -74,7 +75,7 @@ AWorldInteractiveObjectActor* UWorldObjectManager::SpawnSingleObject(const FWorl
 			}
 			else
 			{
-				UE_LOG(LogTemp, Warning,
+				UE_LOG(LogGameplay, Warning,
 					TEXT("WorldObjectManager: DataTable row '%s' has ActorClass not derived from AWorldInteractiveObjectActor — using default"),
 					*Data.Slug);
 			}
@@ -83,7 +84,7 @@ AWorldInteractiveObjectActor* UWorldObjectManager::SpawnSingleObject(const FWorl
 
 	if (!ActorClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("WorldObjectManager: No actor class for slug '%s' and no DefaultActorClass set"), *Data.Slug);
+		UE_LOG(LogGameplay, Error, TEXT("WorldObjectManager: No actor class for slug '%s' and no DefaultActorClass set"), *Data.Slug);
 		return nullptr;
 	}
 
@@ -99,7 +100,7 @@ AWorldInteractiveObjectActor* UWorldObjectManager::SpawnSingleObject(const FWorl
 
 	if (!NewActor)
 	{
-		UE_LOG(LogTemp, Error, TEXT("WorldObjectManager: Failed to spawn actor for WIO id=%d slug='%s'"), Data.ObjectId, *Data.Slug);
+		UE_LOG(LogGameplay, Error, TEXT("WorldObjectManager: Failed to spawn actor for WIO id=%d slug='%s'"), Data.ObjectId, *Data.Slug);
 		return nullptr;
 	}
 
@@ -137,7 +138,7 @@ void UWorldObjectManager::RequestInteract(int32 ObjectId)
 {
 	if (!NetworkManager || !GameInstance)
 	{
-		UE_LOG(LogTemp, Error, TEXT("WorldObjectManager::RequestInteract: not initialized"));
+		UE_LOG(LogGameplay, Error, TEXT("WorldObjectManager::RequestInteract: not initialized"));
 		return;
 	}
 
@@ -145,7 +146,7 @@ void UWorldObjectManager::RequestInteract(int32 ObjectId)
 	const double Now = FPlatformTime::Seconds();
 	if (Now - LastInteractRequestTime < InteractCooldownSec)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("WorldObjectManager::RequestInteract: cooldown active, ignoring"));
+		UE_LOG(LogGameplay, Warning, TEXT("WorldObjectManager::RequestInteract: cooldown active, ignoring"));
 		return;
 	}
 	LastInteractRequestTime = Now;
@@ -176,7 +177,7 @@ void UWorldObjectManager::RequestInteract(int32 ObjectId)
 	NetworkManager->SendDataToChunkServer(Payload);
 
 	OnInteractionStarted.Broadcast(ObjectId);
-	UE_LOG(LogTemp, Log, TEXT("WorldObjectManager: Sent worldObjectInteract objectId=%d"), ObjectId);
+	UE_LOG(LogGameplay, Verbose, TEXT("WorldObjectManager: Sent worldObjectInteract objectId=%d"), ObjectId);
 }
 
 void UWorldObjectManager::RequestCancelChannel(int32 ObjectId)
@@ -221,7 +222,7 @@ void UWorldObjectManager::RequestCancelChannel(int32 ObjectId)
 	ChannelDuration       = 0.f;
 	ChannelStartTime      = 0.0;
 
-	UE_LOG(LogTemp, Log, TEXT("WorldObjectManager: Sent worldObjectChannelCancel objectId=%d"), ObjectId);
+	UE_LOG(LogGameplay, Verbose, TEXT("WorldObjectManager: Sent worldObjectChannelCancel objectId=%d"), ObjectId);
 }
 
 void UWorldObjectManager::CancelActiveChannel()
@@ -243,7 +244,7 @@ void UWorldObjectManager::HandleSpawnWorldObjects(const TArray<FWorldObjectData>
 
 void UWorldObjectManager::HandleInteractResult(const FWIOInteractResult& Result)
 {
-	UE_LOG(LogTemp, Log, TEXT("WorldObjectManager: InteractResult objectId=%d success=%d type=%s"),
+	UE_LOG(LogGameplay, Verbose, TEXT("WorldObjectManager: InteractResult objectId=%d success=%d type=%s"),
 		Result.ObjectId, Result.bSuccess, *Result.InteractionType);
 
 	if (Result.bSuccess)
@@ -277,7 +278,7 @@ void UWorldObjectManager::HandleInteractResult(const FWIOInteractResult& Result)
 
 void UWorldObjectManager::HandleStateUpdate(const FWIOStateUpdate& Update)
 {
-	UE_LOG(LogTemp, Log, TEXT("WorldObjectManager: StateUpdate objectId=%d state=%d respawnSec=%d"),
+	UE_LOG(LogGameplay, Verbose, TEXT("WorldObjectManager: StateUpdate objectId=%d state=%d respawnSec=%d"),
 		Update.ObjectId, static_cast<int32>(Update.NewState), Update.RespawnSec);
 
 	AWorldInteractiveObjectActor* Actor = GetObjectActorById(Update.ObjectId);
@@ -291,7 +292,7 @@ void UWorldObjectManager::HandleStateUpdate(const FWIOStateUpdate& Update)
 
 void UWorldObjectManager::HandleChannelCancelled(int32 ObjectId)
 {
-	UE_LOG(LogTemp, Log, TEXT("WorldObjectManager: ChannelCancelled objectId=%d"), ObjectId);
+	UE_LOG(LogGameplay, Verbose, TEXT("WorldObjectManager: ChannelCancelled objectId=%d"), ObjectId);
 
 	if (ActiveChannelObjectId == ObjectId)
 	{

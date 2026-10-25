@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillSlotWidget.h"
 #include "UI/SkillSlotWidget.h"
+#include "Prototyping.h"
 #include "Utils/NetCore/SkillDropRule.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Components/Button.h"
@@ -108,7 +109,7 @@ float USkillSlotWidget::GetCurrentTime() const
 
 void USkillSlotWidget::ForceResetDragState()
 {
-    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: ForceResetDragState wasDragging=%d wasMousePressed=%d wasHighlighted=%d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillSlotWidget[%d]: ForceResetDragState wasDragging=%d wasMousePressed=%d wasHighlighted=%d"),
         SlotIndex, bIsDragging ? 1 : 0, bMousePressed ? 1 : 0, bIsDropHighlighted ? 1 : 0);
 
     ActiveDragOp.Reset();

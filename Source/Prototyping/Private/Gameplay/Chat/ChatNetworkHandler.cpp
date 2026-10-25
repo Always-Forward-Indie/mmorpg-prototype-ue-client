@@ -1,4 +1,5 @@
 #include "Gameplay/Chat/ChatNetworkHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/Chat/ChatManager.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
@@ -14,7 +15,7 @@ void UChatNetworkHandler::Initialize(UChatManager* InChatManager, UNetworkManage
 {
     if (!InChatManager || !InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("ChatNetworkHandler: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("ChatNetworkHandler: Initialize called with null parameters"));
         return;
     }
     ChatManager    = InChatManager;
@@ -25,7 +26,7 @@ void UChatNetworkHandler::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("ChatNetworkHandler: Cannot subscribe - NetworkManager is null"));
+        UE_LOG(LogGameplay, Error, TEXT("ChatNetworkHandler: Cannot subscribe - NetworkManager is null"));
         return;
     }
     if (bIsSubscribed)
@@ -64,7 +65,7 @@ void UChatNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
     if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("ChatNetworkHandler: Failed to parse JSON"));
+        UE_LOG(LogNetPacket, Error, TEXT("ChatNetworkHandler: Failed to parse JSON"));
         return;
     }
 

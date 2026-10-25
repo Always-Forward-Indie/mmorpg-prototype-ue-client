@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Gameplay/Ambient/AmbientBehaviors.h"
+#include "Prototyping.h"
 #include "Gameplay/Ambient/AmbientCreatureActor.h"
 #include "Components/SplineComponent.h"
 #include "AIController.h"
@@ -47,7 +48,7 @@ void UAmbientBehavior_MoveToSplinePoint::Execute_Implementation(AAmbientCreature
 	USplineComponent* Spline = Owner->GetPathSpline();
 	if (!Spline)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UAmbientBehavior_MoveToSplinePoint: Owner '%s' has no PathSpline."), *Owner->GetName());
+		UE_LOG(LogGameplay, Warning, TEXT("UAmbientBehavior_MoveToSplinePoint: Owner '%s' has no PathSpline."), *Owner->GetName());
 		bArrived = true;
 		return;
 	}
@@ -55,7 +56,7 @@ void UAmbientBehavior_MoveToSplinePoint::Execute_Implementation(AAmbientCreature
 	const int32 NumPoints = Spline->GetNumberOfSplinePoints();
 	if (NumPoints == 0 || PointIndex >= NumPoints)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UAmbientBehavior_MoveToSplinePoint: PointIndex %d out of range (%d points)."), PointIndex, NumPoints);
+		UE_LOG(LogGameplay, Warning, TEXT("UAmbientBehavior_MoveToSplinePoint: PointIndex %d out of range (%d points)."), PointIndex, NumPoints);
 		bArrived = true;
 		return;
 	}
@@ -90,7 +91,7 @@ void UAmbientBehavior_MoveToRandomPoint::Execute_Implementation(AAmbientCreature
 	const UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(Owner->GetWorld());
 	if (!NavSys)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UAmbientBehavior_MoveToRandomPoint: No NavigationSystem found."));
+		UE_LOG(LogGameplay, Warning, TEXT("UAmbientBehavior_MoveToRandomPoint: No NavigationSystem found."));
 		bArrived = true;
 		return;
 	}
@@ -100,7 +101,7 @@ void UAmbientBehavior_MoveToRandomPoint::Execute_Implementation(AAmbientCreature
 	const bool bFound = NavSys->GetRandomReachablePointInRadius(Owner->GetHomeLocation(), SearchRadius, NavLoc, NavData);
 	if (!bFound)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UAmbientBehavior_MoveToRandomPoint: No reachable point found in radius %.0f."), SearchRadius);
+		UE_LOG(LogGameplay, Warning, TEXT("UAmbientBehavior_MoveToRandomPoint: No reachable point found in radius %.0f."), SearchRadius);
 		bArrived = true;
 		return;
 	}

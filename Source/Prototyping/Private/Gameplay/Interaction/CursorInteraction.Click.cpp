@@ -1,5 +1,6 @@
 // Copyright Prototyping Project. All Rights Reserved.
 #include "Gameplay/Interaction/CursorInteractionComponent.h"
+#include "Prototyping.h"
 #include "Gameplay/Interaction/WorldInteractionConfig.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Mobs/BasicMOB.h"
@@ -20,7 +21,7 @@ void UCursorInteractionComponent::HandleConfirmedClick()
 {
     AActor* Target = HoveredActor.Get();
 
-    UE_LOG(LogTemp, Log, TEXT("CursorInteraction: HandleConfirmedClick — HoveredActor=%s, ListenersSingle=%d, ListenersDouble=%d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("CursorInteraction: HandleConfirmedClick — HoveredActor=%s, ListenersSingle=%d, ListenersDouble=%d"),
         Target ? *Target->GetName() : TEXT("null"),
         OnSingleClicked.IsBound() ? 1 : 0,
         OnDoubleClicked.IsBound() ? 1 : 0);

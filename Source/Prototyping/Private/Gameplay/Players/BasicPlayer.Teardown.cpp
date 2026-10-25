@@ -3,6 +3,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -121,7 +122,7 @@ void ABasicPlayer::EndPlay(const EEndPlayReason::Type EndPlayReason)
                 CombatableInterface.SetInterface(this);
                 
                 CombatManager->UnregisterCombatable(CombatableInterface);
-                UE_LOG(LogTemp, Log, TEXT("Player %d unregistered from combat system"), GetActorId_Implementation());
+                UE_LOG(LogGameplay, Verbose, TEXT("Player %d unregistered from combat system"), GetActorId_Implementation());
             }
         }
     }

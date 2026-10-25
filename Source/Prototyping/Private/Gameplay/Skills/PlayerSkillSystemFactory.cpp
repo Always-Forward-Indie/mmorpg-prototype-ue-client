@@ -1,4 +1,5 @@
 #include "Gameplay/Skills/PlayerSkillSystemFactory.h"
+#include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Gameplay/Skills/PlayerSkillNetworkHandler.h"
@@ -22,11 +23,11 @@ UPlayerSkillManager* UPlayerSkillSystemFactory::CreatePlayerSkillManager(UObject
     if (SkillManager)
     {
         CreatedPlayerSkillManager = SkillManager;
-        UE_LOG(LogTemp, Log, TEXT("PlayerSkillSystemFactory: Created PlayerSkillManager"));
+        UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillSystemFactory: Created PlayerSkillManager"));
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillSystemFactory: Failed to create PlayerSkillManager"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillSystemFactory: Failed to create PlayerSkillManager"));
     }
     
     return SkillManager;
@@ -36,7 +37,7 @@ USkillDefinitionRepository* UPlayerSkillSystemFactory::CreateSkillDefinitionRepo
 {
     if (!SkillDefinitionsTable)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillSystemFactory: Cannot create SkillDefinitionRepository with null DataTable"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillSystemFactory: Cannot create SkillDefinitionRepository with null DataTable"));
         return nullptr;
     }
 
@@ -48,11 +49,11 @@ USkillDefinitionRepository* UPlayerSkillSystemFactory::CreateSkillDefinitionRepo
     {
         Repository->Initialize(SkillDefinitionsTable);
         CreatedDefinitionRepository = Repository;
-        UE_LOG(LogTemp, Log, TEXT("PlayerSkillSystemFactory: Created SkillDefinitionRepository"));
+        UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillSystemFactory: Created SkillDefinitionRepository"));
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillSystemFactory: Failed to create SkillDefinitionRepository"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillSystemFactory: Failed to create SkillDefinitionRepository"));
     }
     
     return Repository;
@@ -67,11 +68,11 @@ UPlayerSkillNetworkHandler* UPlayerSkillSystemFactory::CreatePlayerSkillNetworkH
     if (NetworkHandler)
     {
         CreatedNetworkHandler = NetworkHandler;
-        UE_LOG(LogTemp, Log, TEXT("PlayerSkillSystemFactory: Created PlayerSkillNetworkHandler"));
+        UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillSystemFactory: Created PlayerSkillNetworkHandler"));
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillSystemFactory: Failed to create PlayerSkillNetworkHandler"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillSystemFactory: Failed to create PlayerSkillNetworkHandler"));
     }
     
     return NetworkHandler;
@@ -92,7 +93,7 @@ bool UPlayerSkillSystemFactory::CreateCompletePlayerSkillSystem(
 
     if (!SkillDefinitionsTable)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillSystemFactory: SkillDefinitionsTable is required"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillSystemFactory: SkillDefinitionsTable is required"));
         return false;
     }
 
@@ -102,21 +103,21 @@ bool UPlayerSkillSystemFactory::CreateCompletePlayerSkillSystem(
     USkillDefinitionRepository* Repository = CreateSkillDefinitionRepository(SkillDefinitionsTable, ValidOuter);
     if (!Repository)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillSystemFactory: Failed to create SkillDefinitionRepository"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillSystemFactory: Failed to create SkillDefinitionRepository"));
         return false;
     }
 
     UPlayerSkillManager* SkillManager = CreatePlayerSkillManager(ValidOuter);
     if (!SkillManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillSystemFactory: Failed to create PlayerSkillManager"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillSystemFactory: Failed to create PlayerSkillManager"));
         return false;
     }
 
     UPlayerSkillNetworkHandler* NetworkHandler = CreatePlayerSkillNetworkHandler(ValidOuter);
     if (!NetworkHandler)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillSystemFactory: Failed to create PlayerSkillNetworkHandler"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillSystemFactory: Failed to create PlayerSkillNetworkHandler"));
         return false;
     }
 
@@ -130,7 +131,7 @@ bool UPlayerSkillSystemFactory::CreateCompletePlayerSkillSystem(
     // Subscribe to network events
     NetworkHandler->SubscribeToNetworkEvents();
 
-    UE_LOG(LogTemp, Warning, TEXT("PlayerSkillSystemFactory: Created complete player skill system successfully"));
+    UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillSystemFactory: Created complete player skill system successfully"));
     return true;
 }
 
@@ -153,7 +154,7 @@ void UPlayerSkillSystemFactory::CleanupCreatedComponents()
         CreatedDefinitionRepository = nullptr;
     }
 
-    UE_LOG(LogTemp, Log, TEXT("PlayerSkillSystemFactory: Cleaned up created components"));
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillSystemFactory: Cleaned up created components"));
 }
 
 UObject* UPlayerSkillSystemFactory::GetValidOuter(UObject* ProvidedOuter) const
@@ -171,25 +172,25 @@ bool UPlayerSkillSystemFactory::ValidateFactoryDependencies(USkillSystemManager*
 {
     if (!SkillSystemManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillSystemFactory: SkillSystemManager is required"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillSystemFactory: SkillSystemManager is required"));
         return false;
     }
 
     if (!NetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillSystemFactory: NetworkManager is required"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillSystemFactory: NetworkManager is required"));
         return false;
     }
 
     if (!IsValid(SkillSystemManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillSystemFactory: SkillSystemManager is not valid"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillSystemFactory: SkillSystemManager is not valid"));
         return false;
     }
 
     if (!IsValid(NetworkManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillSystemFactory: NetworkManager is not valid"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillSystemFactory: NetworkManager is not valid"));
         return false;
     }
 

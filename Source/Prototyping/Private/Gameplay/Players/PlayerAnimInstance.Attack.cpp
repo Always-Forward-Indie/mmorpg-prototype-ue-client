@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/PlayerAnimInstance.h"
+#include "Prototyping.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Animation/AnimMontage.h"
@@ -16,7 +17,7 @@ void UPlayerAnimInstance::StartAttack(const FSkillInitiationData& SkillData)
     // and stop the old montage so the new one can start cleanly.
     if (bIsAttacking)
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
             TEXT("[PlayerAnim] StartAttack superseding current animation (slot='%s' -> '%s')"),
             *CurrentAttackSlot.ToString(), *SkillData.animationName);
 
@@ -56,7 +57,7 @@ void UPlayerAnimInstance::StartAttack(const FSkillInitiationData& SkillData)
 
     UAnimMontage* Montage = ResolveMontage(CurrentAttackSlot);
 
-    UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] StartAttack: slot='%s' duration=%.3fs montage=%s"),
+    UE_LOG(LogGameplay, Warning, TEXT("[PlayerAnim] StartAttack: slot='%s' duration=%.3fs montage=%s"),
         *CurrentAttackSlot.ToString(), SkillData.animationDuration,
         Montage ? *Montage->GetName() : TEXT("nullptr (FALLBACK)"));
 
@@ -94,7 +95,7 @@ void UPlayerAnimInstance::StartAttack(const FSkillInitiationData& SkillData)
             CurrentAttackPlayRate = AutoRate;
             ActiveCastMontage    = Montage;
 
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogGameplay, Warning,
                 TEXT("[PlayerAnim] CastRelease section found — castTime=%.3fs loopLen=%.3fs autoRate=%.3f"),
                 CastTime, CastLoopLength, AutoRate);
 
@@ -125,7 +126,7 @@ void UPlayerAnimInstance::StartAttack(const FSkillInitiationData& SkillData)
             const float ActualDuration = (PlayRate > 0.0f) ? MontageLength / PlayRate : SkillData.animationDuration;
             const float HitDelay       = CalcHitDelay(Montage, PlayRate, ActualDuration);
 
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogGameplay, Warning,
                 TEXT("[PlayerAnim] Montage: length=%.3fs playRate=%.3f actualDuration=%.3fs hitDelay=%.3fs"),
                 MontageLength, PlayRate, ActualDuration, HitDelay);
 
@@ -146,11 +147,11 @@ void UPlayerAnimInstance::StartAttack(const FSkillInitiationData& SkillData)
         const float Duration = FMath::Max(SkillData.animationDuration, 0.1f);
         const float HitDelay = Duration * DefaultHitRatio;
 
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
             TEXT("[PlayerAnim] No montage for slot '%s'. Maps: %d entries, DefaultAttackMontage=%s"),
             *CurrentAttackSlot.ToString(), AttackMontageMap.Num(),
             DefaultAttackMontage ? *DefaultAttackMontage->GetName() : TEXT("nullptr"));
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
             TEXT("[PlayerAnim] FALLBACK timer: duration=%.3fs hitDelay=%.3fs"),
             Duration, HitDelay);
 
@@ -183,7 +184,7 @@ void UPlayerAnimInstance::FireHitPoint()
         World->GetTimerManager().ClearTimer(HitPointTimerHandle);
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] FireHitPoint: casterId=%d listeners=%d"),
+    UE_LOG(LogGameplay, Warning, TEXT("[PlayerAnim] FireHitPoint: casterId=%d listeners=%d"),
         CurrentCasterId, OnHitPoint.IsBound() ? 1 : 0);
 
     if (CurrentCasterId > 0)
@@ -204,7 +205,7 @@ void UPlayerAnimInstance::OnCastReleaseTimer()
     UAnimMontage* Montage = ActiveCastMontage.Get();
     if (!Montage)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] OnCastReleaseTimer: active montage is gone, skipping"));
+        UE_LOG(LogGameplay, Warning, TEXT("[PlayerAnim] OnCastReleaseTimer: active montage is gone, skipping"));
         return;
     }
 
@@ -214,14 +215,14 @@ void UPlayerAnimInstance::OnCastReleaseTimer()
     const FName CurrentSection = Montage_GetCurrentSection(Montage);
     if (CurrentSection != FName("CastRelease"))
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
             TEXT("[PlayerAnim] OnCastReleaseTimer: still in section '%s', forcing JumpToSection"),
             *CurrentSection.ToString());
         Montage_JumpToSection(FName("CastRelease"), Montage);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] OnCastReleaseTimer: in CastRelease, setting rate=1.0"));
+        UE_LOG(LogGameplay, Warning, TEXT("[PlayerAnim] OnCastReleaseTimer: in CastRelease, setting rate=1.0"));
     }
 
     // Ensure CastRelease always plays at the animator's intended 1.0x speed.

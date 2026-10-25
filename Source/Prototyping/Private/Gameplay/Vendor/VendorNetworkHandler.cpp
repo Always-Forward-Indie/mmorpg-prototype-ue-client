@@ -1,4 +1,5 @@
 #include "Gameplay/Vendor/VendorNetworkHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
@@ -10,7 +11,7 @@ void UVendorNetworkHandler::Initialize(UVendorManager* InVendorManager, UNetwork
 {
     if (!InVendorManager || !InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("VendorNetworkHandler: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("VendorNetworkHandler: Initialize called with null parameters"));
         return;
     }
     VendorManager  = InVendorManager;
@@ -63,7 +64,7 @@ void UVendorNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
     if (EventType == TEXT("openVendorShop") || EventType == TEXT("vendorShop"))
     {
         FVendorShopData ShopData = ParseVendorShop(Body);
-        UE_LOG(LogTemp, Warning, TEXT("VendorNetworkHandler: parsed shop npcId=%d items=%d"), ShopData.npcId, ShopData.items.Num());
+        UE_LOG(LogGameplay, Warning, TEXT("VendorNetworkHandler: parsed shop npcId=%d items=%d"), ShopData.npcId, ShopData.items.Num());
         VendorManager->OnVendorShopReceived(ShopData);
     }
     else if (EventType == TEXT("buyItemResult"))

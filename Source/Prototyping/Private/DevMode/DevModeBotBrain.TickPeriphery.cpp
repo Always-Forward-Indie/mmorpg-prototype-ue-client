@@ -1,4 +1,5 @@
 #include "DevMode/DevModeBotBrain.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeConsoleCommands.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -50,7 +51,7 @@ bool UDevModeBotBrain::Tick_TitleLeg(UWorld* World, ABasicPlayer* Player, double
         {
             TitleNet->RequestEquipTitle(GameInstance->GetCurrentCharacterID(), TEXT("first_hunter"));
             bTitleSent = true;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT equip title first_hunter"));
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT equip title first_hunter"));
             return true;
         }
         if (Titles->GetEquippedTitleSlug() == TEXT("first_hunter"))
@@ -91,7 +92,7 @@ bool UDevModeBotBrain::Tick_EmoteLeg(UWorld* World, ABasicPlayer* Player, double
             EmoteSlug = Owned[0].slug;
             EmoteNet->RequestUseEmote(EmoteSlug);
             bEmoteSent = true;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT emote %s sent"), *EmoteSlug);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT emote %s sent"), *EmoteSlug);
             return true;
         }
         // The server broadcasts back (sender in own range): our actor plays
@@ -132,7 +133,7 @@ bool UDevModeBotBrain::Tick_LocaleLeg(UWorld* World, ABasicPlayer* Player, doubl
         BotAssert(!NameRu.IsEmpty(), TEXT("locale-ru"), 1, 1);
         BotAssert(!NameEn.IsEmpty(), TEXT("locale-en"), 1, 1);
         BotAssert(Loc->GetCurrentLocale() == TEXT("en"), TEXT("locale-switch"), 1, 1);
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT locale ru='%s' en='%s'"),
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT locale ru='%s' en='%s'"),
             *NameRu.ToString(), *NameEn.ToString());
         Loc->SetLocale(SavedLocale);
         BotAssert(Loc->GetCurrentLocale() == SavedLocale, TEXT("locale-restore"), 1, 1);
@@ -154,7 +155,7 @@ bool UDevModeBotBrain::Tick_MusicLeg(UWorld* World, ABasicPlayer* Player, double
         }
         if (Audio->ZoneMusicMap.Num() < 2)
         {
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT music zones mapped: %d (need 2)"), Audio->ZoneMusicMap.Num());
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT music zones mapped: %d (need 2)"), Audio->ZoneMusicMap.Num());
             Finish(false, TEXT("no-music-zones"));
             return true;
         }

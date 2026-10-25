@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Prototyping.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Mobs/MOBAnimInstance.h"
@@ -196,7 +197,7 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning,
+			UE_LOG(LogGameplay, Warning,
 				TEXT("ABasicMOB::SetupMobAudio: AudioProfileId '%s' not found in EntityAudioProfilesTable for mob '%s'. Falling back to legacy FMobAudioData."),
 				*Definition->AudioProfileId.ToString(), *MobSlug.ToString());
 		}
@@ -325,7 +326,7 @@ void ABasicMOB::PlaySoundByName(FName SoundName)
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ABasicMOB::PlaySoundByName - Sound '%s' not found"), *SoundName.ToString());
+		UE_LOG(LogGameplay, Warning, TEXT("ABasicMOB::PlaySoundByName - Sound '%s' not found"), *SoundName.ToString());
 	}
 }
 

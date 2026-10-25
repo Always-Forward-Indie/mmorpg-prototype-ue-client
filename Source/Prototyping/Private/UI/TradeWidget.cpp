@@ -1,4 +1,5 @@
 #include "UI/TradeWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/Trade/TradeManager.h"
 #include "Utils/NetCore/TradeStatusRule.h"
 #include "Gameplay/Items/InventoryManager.h"
@@ -220,19 +221,19 @@ void UTradeWidget::HandleTradeStateUpdated(const FTradeStateData& State)
 
 void UTradeWidget::HandleTradeDeclined(const FTradeDeclinedData& Data)
 {
-    UE_LOG(LogTemp, Warning, TEXT("TradeWidget: Trade declined by %s"), *Data.byCharacterName);
+    UE_LOG(LogGameplay, Warning, TEXT("TradeWidget: Trade declined by %s"), *Data.byCharacterName);
     CloseTrade();
 }
 
 void UTradeWidget::HandleTradeCancelled(const FTradeCancelledData& Data)
 {
-    UE_LOG(LogTemp, Warning, TEXT("TradeWidget: Trade cancelled � %s"), *Data.reason);
+    UE_LOG(LogGameplay, Warning, TEXT("TradeWidget: Trade cancelled � %s"), *Data.reason);
     CloseTrade();
 }
 
 void UTradeWidget::HandleTradeCompleted(const FTradeCompleteData& Data)
 {
-    UE_LOG(LogTemp, Warning, TEXT("TradeWidget: Trade completed � session %s"), *Data.sessionId);
+    UE_LOG(LogGameplay, Warning, TEXT("TradeWidget: Trade completed � session %s"), *Data.sessionId);
     CloseTrade();
 }
 

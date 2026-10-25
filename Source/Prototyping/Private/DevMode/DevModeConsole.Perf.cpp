@@ -1,4 +1,5 @@
 #include "DevMode/DevModeConsoleCommands.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeBotBrain.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Mobs/MOBManager.h"
@@ -54,7 +55,7 @@ void UDevModeConsoleCommands::PerfMark(const FString& Phase) const
         Sorted.Sort();
         P95Ms = Sorted[FMath::Clamp(FMath::RoundToInt(Sorted.Num() * 0.95f), 0, Sorted.Num() - 1)] * 1000.0f;
     }
-    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_PERF phase=%s frames=%llu seconds=%.2f fps=%.1f p95ms=%.1f"),
+    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_PERF phase=%s frames=%llu seconds=%.2f fps=%.1f p95ms=%.1f"),
         *Phase, Frames, Sec, Fps, P95Ms);
     // Restart the window for the next phase; the sampler keeps ticking.
     PerfSamples.Reset();
@@ -77,12 +78,12 @@ void UDevModeConsoleCommands::ExpectGrounded() const
     const bool bGrounded = MC && MC->IsMovingOnGround();
     if (bGrounded)
     {
-        UE_LOG(LogTemp, Log, TEXT("DEVMODE_ASSERT PASS grounded eq 1 actual=1"));
+        UE_LOG(LogGameplay, Verbose, TEXT("DEVMODE_ASSERT PASS grounded eq 1 actual=1"));
     }
     else
     {
         const FVector At = Player ? Player->GetActorLocation() : FVector::ZeroVector;
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_ASSERT FAIL grounded eq 1 actual=0 at (%.0f,%.0f,%.0f)"), At.X, At.Y, At.Z);
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_ASSERT FAIL grounded eq 1 actual=0 at (%.0f,%.0f,%.0f)"), At.X, At.Y, At.Z);
         ++SweepFailures;
     }
 }
@@ -95,5 +96,5 @@ void UDevModeConsoleCommands::SweepShot(const FString& Tag) const
         return;
     }
     FScreenshotRequest::RequestScreenshot(FString::Printf(TEXT("DevSweep_%s"), *Tag), true, true);
-    UE_LOG(LogTemp, Log, TEXT("DEVMODE_SWEEP_SHOT %s"), *Tag);
+    UE_LOG(LogGameplay, Verbose, TEXT("DEVMODE_SWEEP_SHOT %s"), *Tag);
 }

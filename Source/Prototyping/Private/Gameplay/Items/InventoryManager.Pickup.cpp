@@ -1,5 +1,6 @@
 ﻿#include "Gameplay/Items/InventoryManager.h"
 #include "Networking/NetworkManager.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Items/HarvestManager.h"
 #include "Utils/JSONParser.h"
@@ -16,7 +17,7 @@ void UInventoryManager::PickupNearbyItem()
 {
 	if (!worldContext)
 	{
-		UE_LOG(LogTemp, Error, TEXT("InventoryManager: World context not found"));
+		UE_LOG(LogGameplay, Error, TEXT("InventoryManager: World context not found"));
 		return;
 	}
 
@@ -30,7 +31,7 @@ void UInventoryManager::PickupNearbyItem()
 	APlayerController* PC = worldContext->GetFirstPlayerController();
 	if (!PC || !PC->GetPawn())
 	{
-		UE_LOG(LogTemp, Error, TEXT("InventoryManager: Player pawn not found"));
+		UE_LOG(LogGameplay, Error, TEXT("InventoryManager: Player pawn not found"));
 		return;
 	}
 
@@ -63,7 +64,7 @@ void UInventoryManager::PickupNearbyItem()
 	// Attempt to pickup the closest item
 	if (ClosestItem)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Attempting to pickup item %s at distance %.2f"),
+		UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Attempting to pickup item %s at distance %.2f"),
 			*ClosestItem->GetItemName(), ClosestDistance);
 
 		// Rotate the player to face the item, then lock movement.
@@ -96,7 +97,7 @@ void UInventoryManager::PickupNearbyItem()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: No items within pickup range"));
+		UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: No items within pickup range"));
 		// Optionally broadcast a "no items found" event
 		OnNoItemsInRange.Broadcast();
 	}
@@ -106,13 +107,13 @@ void UInventoryManager::PickupSpecificItem(ADroppedItemActor* TargetItem)
 {
     if (!IsValid(TargetItem))
     {
-        UE_LOG(LogTemp, Warning, TEXT("InventoryManager: PickupSpecificItem - null target"));
+        UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: PickupSpecificItem - null target"));
         return;
     }
 
     if (!TargetItem->CanBePickedUp())
     {
-        UE_LOG(LogTemp, Warning, TEXT("InventoryManager: PickupSpecificItem - item cannot be picked up"));
+        UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: PickupSpecificItem - item cannot be picked up"));
         return;
     }
 
@@ -132,7 +133,7 @@ void UInventoryManager::PickupSpecificItem(ADroppedItemActor* TargetItem)
     // Prevent starting a pickup while harvesting a corpse
     if (gameInstance && gameInstance->GetHarvestManager() && gameInstance->GetHarvestManager()->IsHarvesting())
     {
-        UE_LOG(LogTemp, Warning, TEXT("InventoryManager: PickupSpecificItem blocked - player is harvesting"));
+        UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: PickupSpecificItem blocked - player is harvesting"));
         return;
     }
 
@@ -159,7 +160,7 @@ void UInventoryManager::PickupSpecificItem(ADroppedItemActor* TargetItem)
         Player->UnlockMovementAfterPickup();
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("InventoryManager: PickupSpecificItem %s - %s"),
+    UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: PickupSpecificItem %s - %s"),
         *TargetItem->GetItemName(), bSuccess ? TEXT("OK") : TEXT("FAILED"));
 }
 

@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Gameplay/Ambient/AmbientCreatureActor.h"
+#include "Prototyping.h"
 #include "Gameplay/Ambient/AmbientCreatureDefinition.h"
 #include "Gameplay/Ambient/AmbientScheduleAsset.h"
 #include "Gameplay/Ambient/AmbientBehaviorBase.h"
@@ -26,12 +27,12 @@ void AAmbientCreatureActor::MoveToLocation(const FVector& TargetLocation, float 
 	AAIController* AIC = Cast<AAIController>(GetController());
 	if (!AIC)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[AmbientCreature] '%s' — MoveToLocation: no AIController, skipping movement."), *GetName());
+		UE_LOG(LogGameplay, Warning, TEXT("[AmbientCreature] '%s' — MoveToLocation: no AIController, skipping movement."), *GetName());
 		OnArrived.ExecuteIfBound();
 		return;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[AmbientCreature] '%s' — MoveToLocation: target=(%.0f,%.0f,%.0f) acceptance=%.0f"),
+	UE_LOG(LogGameplay, Verbose, TEXT("[AmbientCreature] '%s' — MoveToLocation: target=(%.0f,%.0f,%.0f) acceptance=%.0f"),
 		*GetName(), TargetLocation.X, TargetLocation.Y, TargetLocation.Z, Acceptance);
 
 	// Log which NavMesh will be used for this move
@@ -42,13 +43,13 @@ void AAmbientCreatureActor::MoveToLocation(const FVector& TargetLocation, float 
 		ANavigationData* SelectedNavData = NavSys->GetNavDataForProps(AgentProps, GetActorLocation());
 		if (SelectedNavData)
 		{
-			UE_LOG(LogTemp, Log, TEXT("[AmbientCreature] '%s' — NavData selected: '%s' (AgentRadius=%.1f AgentHeight=%.1f)"),
+			UE_LOG(LogGameplay, Verbose, TEXT("[AmbientCreature] '%s' — NavData selected: '%s' (AgentRadius=%.1f AgentHeight=%.1f)"),
 				*GetName(), *SelectedNavData->GetName(),
 				AgentProps.AgentRadius, AgentProps.AgentHeight);
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[AmbientCreature] '%s' — No NavData found for AgentRadius=%.1f AgentHeight=%.1f — using default!"),
+			UE_LOG(LogGameplay, Warning, TEXT("[AmbientCreature] '%s' — No NavData found for AgentRadius=%.1f AgentHeight=%.1f — using default!"),
 				*GetName(), AgentProps.AgentRadius, AgentProps.AgentHeight);
 		}
 	}
@@ -60,7 +61,7 @@ void AAmbientCreatureActor::MoveToLocation(const FVector& TargetLocation, float 
 	{
 		// NavMesh missing or target unreachable — unbind and skip immediately
 		AIC->GetPathFollowingComponent()->OnRequestFinished.RemoveAll(this);
-		UE_LOG(LogTemp, Warning, TEXT("[AmbientCreature] '%s' — MoveToLocation FAILED (no NavMesh or unreachable). Add NavMeshBoundsVolume to this level!"), *GetName());
+		UE_LOG(LogGameplay, Warning, TEXT("[AmbientCreature] '%s' — MoveToLocation FAILED (no NavMesh or unreachable). Add NavMeshBoundsVolume to this level!"), *GetName());
 		PendingArrivalDelegate.ExecuteIfBound();
 		PendingArrivalDelegate.Unbind();
 	}
@@ -68,7 +69,7 @@ void AAmbientCreatureActor::MoveToLocation(const FVector& TargetLocation, float 
 	{
 		// Already at destination — unbind and complete immediately
 		AIC->GetPathFollowingComponent()->OnRequestFinished.RemoveAll(this);
-		UE_LOG(LogTemp, Log, TEXT("[AmbientCreature] '%s' — MoveToLocation: already at goal."), *GetName());
+		UE_LOG(LogGameplay, Verbose, TEXT("[AmbientCreature] '%s' — MoveToLocation: already at goal."), *GetName());
 		PendingArrivalDelegate.ExecuteIfBound();
 		PendingArrivalDelegate.Unbind();
 	}
@@ -99,7 +100,7 @@ void AAmbientCreatureActor::OnMoveCompleted(FAIRequestID RequestID, const FPathF
 		AIC->GetPathFollowingComponent()->OnRequestFinished.RemoveAll(this);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[AmbientCreature] '%s' — OnMoveCompleted: success=%s"),
+	UE_LOG(LogGameplay, Verbose, TEXT("[AmbientCreature] '%s' — OnMoveCompleted: success=%s"),
 		*GetName(), Result.IsSuccess() ? TEXT("true") : TEXT("false"));
 
 	PendingArrivalDelegate.ExecuteIfBound();

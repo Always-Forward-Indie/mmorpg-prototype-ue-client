@@ -1,4 +1,5 @@
 #include "Gameplay/Combat/CombatNetworkHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/Combat/CombatSystemManager.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
@@ -14,20 +15,20 @@ void UCombatNetworkHandler::Initialize(UCombatSystemManager* CombatManager, UNet
     CombatSystemManager = CombatManager;
     NetworkManager = InNetworkManager;
 
-    UE_LOG(LogTemp, Warning, TEXT("CombatNetworkHandler: Initialized"));
+    UE_LOG(LogGameplay, Warning, TEXT("CombatNetworkHandler: Initialized"));
 }
 
 void UCombatNetworkHandler::SubscribeToNetworkManager()
 {
     if (!NetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("CombatNetworkHandler: NetworkManager is null"));
+        UE_LOG(LogGameplay, Error, TEXT("CombatNetworkHandler: NetworkManager is null"));
         return;
     }
 
     if (!IsValid(NetworkManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("CombatNetworkHandler: NetworkManager is not valid"));
+        UE_LOG(LogGameplay, Error, TEXT("CombatNetworkHandler: NetworkManager is not valid"));
         return;
     }
 
@@ -35,7 +36,7 @@ void UCombatNetworkHandler::SubscribeToNetworkManager()
     NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UCombatNetworkHandler::ProcessChunkServerData);
     NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UCombatNetworkHandler::ProcessChunkServerData);
 
-    UE_LOG(LogTemp, Warning, TEXT("CombatNetworkHandler: Subscribed to network events"));
+    UE_LOG(LogGameplay, Warning, TEXT("CombatNetworkHandler: Subscribed to network events"));
 }
 
 void UCombatNetworkHandler::ProcessChunkServerData(const FString& ReceivedData)
@@ -48,7 +49,7 @@ void UCombatNetworkHandler::ProcessChunkServerData(const FString& ReceivedData)
     // Only process successful events (combat initiation/result packets always pass: failures carry body.errorCode)
     if (MessageData.status != TEXT("success") && MessageData.eventType != TEXT("combatInitiation") && MessageData.eventType != TEXT("healingInitiation") && MessageData.eventType != TEXT("buffInitiation") && MessageData.eventType != TEXT("debuffInitiation") && MessageData.eventType != TEXT("skillInitiation") && MessageData.eventType != TEXT("combatResult") && MessageData.eventType != TEXT("healingResult") && MessageData.eventType != TEXT("buffResult") && MessageData.eventType != TEXT("debuffResult") && MessageData.eventType != TEXT("skillResult") && MessageData.eventType != TEXT("skillExecutionResult") && MessageData.eventType != TEXT("combatAoeResult"))
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatNetworkHandler: Received non-success event: %s"), 
+        UE_LOG(LogGameplay, Warning, TEXT("CombatNetworkHandler: Received non-success event: %s"), 
             *MessageData.status);
         return;
     }
@@ -81,7 +82,7 @@ void UCombatNetworkHandler::HandleSkillInitiation(const FString& JsonData)
     
     if (!SkillData.success)
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatNetworkHandler: Skill initiation failed for skill %s (caster=%d, reason: %s, code: %s)"), 
+        UE_LOG(LogGameplay, Warning, TEXT("CombatNetworkHandler: Skill initiation failed for skill %s (caster=%d, reason: %s, code: %s)"), 
             *SkillData.skillName, SkillData.casterId, *SkillData.errorReason, *SkillData.errorCode);
 if (CombatSystemManager)
 {
@@ -115,7 +116,7 @@ CombatSystemManager->ProcessSkillResult(CcResult);
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("CombatNetworkHandler: CombatSystemManager is null"));
+        UE_LOG(LogGameplay, Error, TEXT("CombatNetworkHandler: CombatSystemManager is null"));
     }
 }
 
@@ -127,7 +128,7 @@ void UCombatNetworkHandler::HandleSkillResult(const FString& JsonData)
     // that must be shown to the player as floating text or handled by effect handlers.
     if (!SkillResult.success)
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatNetworkHandler: Skill result failed for skill %s (reason: %s)"), 
+        UE_LOG(LogGameplay, Warning, TEXT("CombatNetworkHandler: Skill result failed for skill %s (reason: %s)"), 
             *SkillResult.skillName, *SkillResult.errorReason);
         // Continue processing — fall through to ProcessSkillResult below
     }
@@ -162,11 +163,11 @@ CombatSystemManager->ProcessSkillResult(PerTarget);
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("CombatNetworkHandler: CombatSystemManager is null"));
+        UE_LOG(LogGameplay, Error, TEXT("CombatNetworkHandler: CombatSystemManager is null"));
     }
 }
 
 void UCombatNetworkHandler::LogNetworkEvent(const FString& Event, const FString& Details)
 {
-    UE_LOG(LogTemp, Log, TEXT("CombatNetworkHandler [%s]: %s"), *Event, *Details);
+    UE_LOG(LogGameplay, Verbose, TEXT("CombatNetworkHandler [%s]: %s"), *Event, *Details);
 }

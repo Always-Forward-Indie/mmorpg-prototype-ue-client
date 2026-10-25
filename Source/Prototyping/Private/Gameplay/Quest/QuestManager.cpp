@@ -1,4 +1,5 @@
 #include "Gameplay/Quest/QuestManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Quest/QuestManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
@@ -13,12 +14,12 @@ void UQuestManager::Initialize(UNetworkManager* InNetworkManager, UMyGameInstanc
 {
     if (!InNetworkManager || !InGameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("QuestManager: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("QuestManager: Initialize called with null parameters"));
         return;
     }
     NetworkManager = InNetworkManager;
     GameInstance   = InGameInstance;
-    UE_LOG(LogTemp, Log, TEXT("QuestManager: Initialized"));
+    UE_LOG(LogGameplay, Verbose, TEXT("QuestManager: Initialized"));
 }
 
 // ??? Called by QuestNetworkHandler ????????????????????????????????????????????
@@ -41,7 +42,7 @@ void UQuestManager::OnQuestUpdated(const FQuestProgressData& Data)
 
     QuestJournal.Add(Data.questId, Merged);
 
-    UE_LOG(LogTemp, Log, TEXT("QuestManager: Quest %d updated � state=%s step=%d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("QuestManager: Quest %d updated � state=%s step=%d"),
         Data.questId, *Data.state, Data.stepIndex);
 
     OnQuestUpdatedDelegate.Broadcast(Merged);
@@ -64,7 +65,7 @@ void UQuestManager::OnQuestUpdated(const FQuestProgressData& Data)
 
 void UQuestManager::OnQuestOffered(const FQuestOfferedData& Data)
 {
-    UE_LOG(LogTemp, Log, TEXT("QuestManager: Quest offered � id=%d key=%s"),
+    UE_LOG(LogGameplay, Verbose, TEXT("QuestManager: Quest offered � id=%d key=%s"),
         Data.questId, *Data.clientQuestKey);
 
     OnQuestOfferedDelegate.Broadcast(Data);
@@ -72,25 +73,25 @@ void UQuestManager::OnQuestOffered(const FQuestOfferedData& Data)
 
 void UQuestManager::OnQuestTurnedIn(const FQuestTurnedInData& Data)
 {
-    UE_LOG(LogTemp, Log, TEXT("QuestManager: Quest turned in � id=%d"), Data.questId);
+    UE_LOG(LogGameplay, Verbose, TEXT("QuestManager: Quest turned in � id=%d"), Data.questId);
     OnQuestTurnedInDelegate.Broadcast(Data);
 }
 
 void UQuestManager::OnExpReceived(const FExpReceivedData& Data)
 {
-    UE_LOG(LogTemp, Log, TEXT("QuestManager: EXP received � amount=%d"), Data.amount);
+    UE_LOG(LogGameplay, Verbose, TEXT("QuestManager: EXP received � amount=%d"), Data.amount);
     OnExpReceivedDelegate.Broadcast(Data);
 }
 
 void UQuestManager::OnItemReceived(const FItemReceivedData& Data)
 {
-    UE_LOG(LogTemp, Log, TEXT("QuestManager: Item received � id=%d qty=%d"), Data.itemId, Data.quantity);
+    UE_LOG(LogGameplay, Verbose, TEXT("QuestManager: Item received � id=%d qty=%d"), Data.itemId, Data.quantity);
     OnItemReceivedDelegate.Broadcast(Data);
 }
 
 void UQuestManager::OnGoldReceived(const FGoldReceivedData& Data)
 {
-    UE_LOG(LogTemp, Log, TEXT("QuestManager: Gold received � amount=%d"), Data.amount);
+    UE_LOG(LogGameplay, Verbose, TEXT("QuestManager: Gold received � amount=%d"), Data.amount);
     OnGoldReceivedDelegate.Broadcast(Data);
 }
 void UQuestManager::OnQuestFailed(const FQuestFailedData& Data)
@@ -104,7 +105,7 @@ void UQuestManager::OnQuestFailed(const FQuestFailedData& Data)
         OnQuestUpdatedDelegate.Broadcast(*Existing);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("QuestManager: Quest failed – id=%d key=%s"), Data.questId, *Data.clientQuestKey);
+    UE_LOG(LogGameplay, Verbose, TEXT("QuestManager: Quest failed – id=%d key=%s"), Data.questId, *Data.clientQuestKey);
     OnQuestFailedDelegate.Broadcast(Data);
 
     if (!Data.clientQuestKey.IsEmpty())
@@ -115,7 +116,7 @@ void UQuestManager::OnQuestFailed(const FQuestFailedData& Data)
 
 void UQuestManager::OnReputationChanged(const FReputationChangedData& Data)
 {
-    UE_LOG(LogTemp, Log, TEXT("QuestManager: Reputation changed – faction=%s delta=%d"), *Data.faction, Data.delta);
+    UE_LOG(LogGameplay, Verbose, TEXT("QuestManager: Reputation changed – faction=%s delta=%d"), *Data.faction, Data.delta);
     OnReputationChangedDelegate.Broadcast(Data);
 }
 // ??? Queries ??????????????????????????????????????????????????????????????????

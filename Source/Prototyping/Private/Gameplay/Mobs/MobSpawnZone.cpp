@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/MobSpawnZone.h"
+#include "Prototyping.h"
 #include <Gameplay/Players/BasicPlayer.h>
 
 // Sets default values
@@ -42,7 +43,7 @@ void AMobSpawnZone::ChangeSpawnZoneSize()
 	UBoxComponent* BoxComponent = Cast<UBoxComponent>(GetCollisionComponent());
 	if (!BoxComponent)
 	{
-		UE_LOG(LogTemp, Error, TEXT("BoxComponent not found"));
+		UE_LOG(LogGameplay, Error, TEXT("BoxComponent not found"));
 		return;
 	}
 
@@ -73,7 +74,7 @@ void AMobSpawnZone::SetSpawnZoneData(FSpawnZoneStruct Data)
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("Spawn Zone Data already set"));
+		UE_LOG(LogGameplay, Error, TEXT("Spawn Zone Data already set"));
 	}
 }
 
@@ -82,7 +83,7 @@ void AMobSpawnZone::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* 
 	if (OtherActor && (OtherActor != this))
 	{
 		// Handle overlap start logic here
-		UE_LOG(LogTemp, Warning, TEXT("Overlap Begin with %s"), *OtherActor->GetName());
+		UE_LOG(LogGameplay, Warning, TEXT("Overlap Begin with %s"), *OtherActor->GetName());
 
 		// check if the actor is a player
 		ABasicPlayer* Player = Cast<ABasicPlayer>(OtherActor);
@@ -104,7 +105,7 @@ void AMobSpawnZone::OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActor* Ot
 	if (OtherActor && (OtherActor != this))
 	{
 		// Handle overlap end logic here
-		UE_LOG(LogTemp, Warning, TEXT("Overlap End with %s"), *OtherActor->GetName());
+		UE_LOG(LogGameplay, Warning, TEXT("Overlap End with %s"), *OtherActor->GetName());
 
 		// check if the actor is a player
 		ABasicPlayer* Player = Cast<ABasicPlayer>(OtherActor);

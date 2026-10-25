@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Prototyping.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Mobs/MOBAnimInstance.h"
@@ -29,7 +30,7 @@
 
 void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, const FString& SkillSlug, float Duration)
 {
-    UE_LOG(LogTemp, Log, TEXT("MOB %d playing skill animation: %s (slug: %s, Duration: %.1f)"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("MOB %d playing skill animation: %s (slug: %s, Duration: %.1f)"), 
         GetActorId_Implementation(), *AnimationName, *SkillSlug, Duration);
 
     // Remember which skill is being cast so ShowDamageEffect can look up hitSound/hitEffect

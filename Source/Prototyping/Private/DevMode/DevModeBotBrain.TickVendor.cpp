@@ -1,4 +1,5 @@
 #include "DevMode/DevModeBotBrain.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeConsoleCommands.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -46,7 +47,7 @@ bool UDevModeBotBrain::Tick_VendorWalk(UWorld* World, ABasicPlayer* Player, doub
         {
             Step = EBotStep::VendorSell;
             ShopLegStartTime = Now;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT at vendor npc=%d, opening shop"), VendorNpcId);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT at vendor npc=%d, opening shop"), VendorNpcId);
             BotShot(TEXT("vendor"));
             return true;
         }
@@ -83,12 +84,12 @@ bool UDevModeBotBrain::Tick_VendorSell(UWorld* World, ABasicPlayer* Player, doub
                 {
                     // Empty-handed is an account state, not a bot failure:
                     // skip the sell leg, the buy leg still proves commerce.
-                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT no junk to sell, skipping sell leg"));
+                    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT no junk to sell, skipping sell leg"));
                     Step = EBotStep::VendorBuy;
                     ShopLegStartTime = Now;
                     return true;
                 }
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT shop open (npc=%d) gold=%d, selling instance=%d qty=%d"),
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT shop open (npc=%d) gold=%d, selling instance=%d qty=%d"),
                     VendorNpcId, GoldBeforeSell, SellInstanceId, SellStartQty);
                 break;
             }
@@ -96,7 +97,7 @@ bool UDevModeBotBrain::Tick_VendorSell(UWorld* World, ABasicPlayer* Player, doub
             {
                 Vend->RequestOpenVendorShop(CharId, VendorNpcId, Player->GetActorLocation());
                 bShopRequestSent = true;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT vendor shop requested npc=%d"), VendorNpcId);
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT vendor shop requested npc=%d"), VendorNpcId);
                 break;
             }
             case FVendorSyncRule::EOpenStep::AwaitOpen:
@@ -113,7 +114,7 @@ bool UDevModeBotBrain::Tick_VendorSell(UWorld* World, ABasicPlayer* Player, doub
         {
             Vend->RequestSellItem(CharId, VendorNpcId, SellInstanceId, 1, Player->GetActorLocation());
             bSellRequested = true;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT sell requested instance=%d"), SellInstanceId);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT sell requested instance=%d"), SellInstanceId);
             return true;
         }
         // Server pushes the post-sale inventory snapshot (same packet the
@@ -125,7 +126,7 @@ bool UDevModeBotBrain::Tick_VendorSell(UWorld* World, ABasicPlayer* Player, doub
             BotShot(TEXT("sold"));
             Step = EBotStep::VendorBuy;
             ShopLegStartTime = Now;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT sold: gold %d -> %d"), GoldBeforeSell, GetGold());
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT sold: gold %d -> %d"), GoldBeforeSell, GetGold());
             return true;
         }
         if (Now - ShopLegStartTime > ShopTimeoutSec)
@@ -171,7 +172,7 @@ bool UDevModeBotBrain::Tick_VendorBuy(UWorld* World, ABasicPlayer* Player, doubl
         const int32 BuyIdx = FVendorSyncRule::FindCheapestAffordableIndex(Goods, GoldBeforeBuy);
         if (BuyIdx == INDEX_NONE)
         {
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT nothing affordable (gold=%d), skipping buy"), GoldBeforeBuy);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT nothing affordable (gold=%d), skipping buy"), GoldBeforeBuy);
             Step = EBotStep::VendorRepair;
             ShopLegStartTime = Now;
             return true;
@@ -181,7 +182,7 @@ bool UDevModeBotBrain::Tick_VendorBuy(UWorld* World, ABasicPlayer* Player, doubl
         BuyQtyBefore = SumQtyByItemId(BuyItemId);
         Vend->RequestBuyItem(CharId, VendorNpcId, BuyItemId, 1, Player->GetActorLocation());
         bBuyRequested = true;
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT buy requested item=%d price=%d"), BuyItemId, BuyPrice);
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT buy requested item=%d price=%d"), BuyItemId, BuyPrice);
         return true;
     }
     // Server snapshot confirms the purchase: gold dropped by exactly the
@@ -193,7 +194,7 @@ bool UDevModeBotBrain::Tick_VendorBuy(UWorld* World, ABasicPlayer* Player, doubl
         BotShot(TEXT("bought"));
         Step = EBotStep::VendorRepair;
         ShopLegStartTime = Now;
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT bought item=%d for %d gold"), BuyItemId, BuyPrice);
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT bought item=%d for %d gold"), BuyItemId, BuyPrice);
         return true;
     }
     if (Now - ShopLegStartTime > ShopTimeoutSec)
@@ -245,7 +246,7 @@ bool UDevModeBotBrain::Tick_VendorRepair(UWorld* World, ABasicPlayer* Player, do
                     Finish(false, TEXT("no-damaged"));
                     return true;
                 }
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT repair shop open, target instance=%d maxdur=%d gold=%d"),
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT repair shop open, target instance=%d maxdur=%d gold=%d"),
                     RepairInstanceId, RepairMaxDur, GoldBeforeRepair);
                 break;
             }
@@ -253,7 +254,7 @@ bool UDevModeBotBrain::Tick_VendorRepair(UWorld* World, ABasicPlayer* Player, do
             {
                 Rep->RequestOpenRepairShop(CharId, VendorNpcId, Player->GetActorLocation());
                 bRepairShopRequestSent = true;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT repair shop requested npc=%d"), VendorNpcId);
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT repair shop requested npc=%d"), VendorNpcId);
                 break;
             }
             case FVendorSyncRule::EOpenStep::AwaitOpen:
@@ -270,7 +271,7 @@ bool UDevModeBotBrain::Tick_VendorRepair(UWorld* World, ABasicPlayer* Player, do
         {
             Rep->RequestRepairItem(CharId, VendorNpcId, RepairInstanceId, Player->GetActorLocation());
             bRepairRequested = true;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT repair requested instance=%d"), RepairInstanceId);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT repair requested instance=%d"), RepairInstanceId);
             return true;
         }
         // The repaired row drops OUT of the shop list (only damaged rows
@@ -282,7 +283,7 @@ bool UDevModeBotBrain::Tick_VendorRepair(UWorld* World, ABasicPlayer* Player, do
             BotAssert(true, TEXT("repair-durability-max"), NowDur, RepairMaxDur);
             BotAssert(GetGold() < GoldBeforeRepair, TEXT("repair-gold-down"), GetGold(), GoldBeforeRepair);
             BotShot(TEXT("repaired"));
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT repaired: durability %d, gold %d -> %d"),
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT repaired: durability %d, gold %d -> %d"),
                 NowDur, GoldBeforeRepair, GetGold());
             Finish(Failures == 0, Failures == 0 ? TEXT("vendor-done") : TEXT("assert-failures"));
             return true;

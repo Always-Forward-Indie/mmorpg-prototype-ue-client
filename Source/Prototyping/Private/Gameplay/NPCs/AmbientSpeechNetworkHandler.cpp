@@ -1,4 +1,5 @@
 #include "Gameplay/NPCs/AmbientSpeechNetworkHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/NPCs/AmbientSpeechManager.h"
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "Gameplay/NPCs/NPCAmbientSpeechComponent.h"
@@ -14,7 +15,7 @@ void UAmbientSpeechNetworkHandler::Initialize(UAmbientSpeechManager* InManager, 
 {
     if (!InManager || !InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("AmbientSpeechNetworkHandler: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("AmbientSpeechNetworkHandler: Initialize called with null parameters"));
         return;
     }
     AmbientSpeechManager = InManager;
@@ -93,7 +94,7 @@ void UAmbientSpeechNetworkHandler::HandleAmbientPools(const FString& JsonData)
         AmbientSpeechManager->SetAmbientSpeechPools(NpcData.npcId, NpcData);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("AmbientSpeechNetworkHandler: Stored pools for %d NPC(s)"), NpcsArr->Num());
+    UE_LOG(LogGameplay, Verbose, TEXT("AmbientSpeechNetworkHandler: Stored pools for %d NPC(s)"), NpcsArr->Num());
 
     // Backfill any BasicNPC actors that were already spawned before this event arrived
     if (UMyGameInstance* MyGI = Cast<UMyGameInstance>(AmbientSpeechManager->GetOuter()))
@@ -109,7 +110,7 @@ void UAmbientSpeechNetworkHandler::HandleAmbientPools(const FString& JsonData)
                     if (UNPCAmbientSpeechComponent* ASComp = NPC->FindComponentByClass<UNPCAmbientSpeechComponent>())
                     {
                         ASComp->SetAmbientData(OutData);
-                        UE_LOG(LogTemp, Log, TEXT("AmbientSpeechNetworkHandler: Backfilled ambient data for NPC %d"), NPC->GetNPCId());
+                        UE_LOG(LogGameplay, Verbose, TEXT("AmbientSpeechNetworkHandler: Backfilled ambient data for NPC %d"), NPC->GetNPCId());
                     }
                 }
             }

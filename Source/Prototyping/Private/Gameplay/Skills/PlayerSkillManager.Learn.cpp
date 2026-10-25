@@ -1,4 +1,5 @@
 #include "Gameplay/Skills/PlayerSkillManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Combat/SkillSystemManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Services/TimeSyncService.h"
@@ -7,13 +8,13 @@ void UPlayerSkillManager::AddLearnedSkill(const FPlayerSkillNetworkData& Network
 {
     if (NetworkData.skillSlug.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager::AddLearnedSkill: empty skillSlug, ignoring"));
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager::AddLearnedSkill: empty skillSlug, ignoring"));
         return;
     }
 
     if (PlayerSkills.Contains(NetworkData.skillSlug))
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager::AddLearnedSkill: skill '%s' already known, skipping"), *NetworkData.skillSlug);
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager::AddLearnedSkill: skill '%s' already known, skipping"), *NetworkData.skillSlug);
         return;
     }
 
@@ -41,6 +42,6 @@ void UPlayerSkillManager::AddLearnedSkill(const FPlayerSkillNetworkData& Network
     PlayerSkills.GenerateValueArray(AllSkills);
     OnSkillsInitialized.Broadcast(AllSkills);
 
-    UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager::AddLearnedSkill: skill '%s' added successfully"), *NetworkData.skillSlug);
+    UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager::AddLearnedSkill: skill '%s' added successfully"), *NetworkData.skillSlug);
 }
 

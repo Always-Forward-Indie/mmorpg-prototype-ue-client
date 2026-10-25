@@ -1,4 +1,5 @@
 #include "Gameplay/UI/ActiveEffectsWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/UI/ActiveEffectsWidget.h"
 #include "Gameplay/UI/EffectSlotWidget.h"
 #include "Components/HorizontalBox.h"
@@ -31,7 +32,7 @@ void UActiveEffectsWidget::NativeDestruct()
 
 void UActiveEffectsWidget::RefreshEffects(const TArray<FActiveEffectEntry>& Effects)
 {
-    UE_LOG(LogTemp, Warning, TEXT("[EFFECTS] UActiveEffectsWidget::RefreshEffects called with %d effects, Effects_Container=%s"),
+    UE_LOG(LogGameplay, Warning, TEXT("[EFFECTS] UActiveEffectsWidget::RefreshEffects called with %d effects, Effects_Container=%s"),
         Effects.Num(), Effects_Container ? TEXT("valid") : TEXT("NULL"));
     CachedEffects = Effects;
     RebuildSlots();
@@ -102,7 +103,7 @@ void UActiveEffectsWidget::GroupEffects(const TArray<FActiveEffectEntry>& InEffe
 
 void UActiveEffectsWidget::RebuildSlots()
 {
-    UE_LOG(LogTemp, Warning, TEXT("[EFFECTS] UActiveEffectsWidget::RebuildSlots: Effects_Container=%s CachedEffects=%d EffectSlotClass=%s"),
+    UE_LOG(LogGameplay, Warning, TEXT("[EFFECTS] UActiveEffectsWidget::RebuildSlots: Effects_Container=%s CachedEffects=%d EffectSlotClass=%s"),
         Effects_Container ? TEXT("valid") : TEXT("NULL"),
         CachedEffects.Num(),
         EffectSlotClass ? TEXT("valid") : TEXT("NULL"));

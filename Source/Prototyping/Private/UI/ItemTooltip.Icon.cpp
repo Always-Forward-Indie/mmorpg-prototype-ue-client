@@ -1,4 +1,5 @@
 #include "UI/ItemTooltipWidget.h"
+#include "Prototyping.h"
 #include "Components/TextBlock.h"
 #include "Components/Border.h"
 #include "Components/Image.h"
@@ -70,14 +71,14 @@ void UItemTooltipWidget::LoadItemIcon()
 	UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetWorld()->GetGameInstance());
 	if (!GameInstance)
 	{
-		UE_LOG(LogTemp, Error, TEXT("InventorySlotTooltipWidget: GameInstance not found"));
+		UE_LOG(LogGameplay, Error, TEXT("InventorySlotTooltipWidget: GameInstance not found"));
 		return;
 	}
 
 	UItemManager* ItemManager = GameInstance->GetItemManager();
 	if (!ItemManager)
 	{
-		UE_LOG(LogTemp, Error, TEXT("InventorySlotTooltipWidget: ItemManager not found"));
+		UE_LOG(LogGameplay, Error, TEXT("InventorySlotTooltipWidget: ItemManager not found"));
 		return;
 	}
 
@@ -123,7 +124,7 @@ void UItemTooltipWidget::LoadItemIcon()
 	// Show icon
 	ItemIcon->SetVisibility(ESlateVisibility::Visible);
 
-	UE_LOG(LogTemp, Warning, TEXT("InventorySlotTooltipWidget: Loading icon for item %s (ID: %d)"), *CurrentItem.name, CurrentItem.itemId);
+	UE_LOG(LogGameplay, Verbose, TEXT("InventorySlotTooltipWidget: Loading icon for item %s (ID: %d)"), *CurrentItem.name, CurrentItem.itemId);
 }
 
 void UItemTooltipWidget::SetIconTexture(UTexture2D* Texture)
@@ -135,8 +136,8 @@ void UItemTooltipWidget::SetIconTexture(UTexture2D* Texture)
 		//ItemIcon->SetColorAndOpacity(FLinearColor::White);
 		ItemIcon->SetRenderOpacity(1.0f);
 
-		UE_LOG(LogTemp, Log, TEXT("Set icon texture %s. Has alpha: %s"), *Texture->GetName(), Texture->HasAlphaChannel() ? TEXT("Yes") : TEXT("No"));
-		UE_LOG(LogTemp, Warning, TEXT("InventorySlotTooltipWidget: Set icon texture for item %s"), *CurrentItem.name);
+		UE_LOG(LogGameplay, Verbose, TEXT("Set icon texture %s. Has alpha: %s"), *Texture->GetName(), Texture->HasAlphaChannel() ? TEXT("Yes") : TEXT("No"));
+		UE_LOG(LogGameplay, Verbose, TEXT("InventorySlotTooltipWidget: Set icon texture for item %s"), *CurrentItem.name);
 	}
 }
 
@@ -200,7 +201,7 @@ void UItemTooltipWidget::ShowTooltip()
 	// For now, just set to visible
 	SetRenderOpacity(1.0f);
 
-	UE_LOG(LogTemp, Verbose, TEXT("ItemTooltipWidget: Showing tooltip for item %s"), *CurrentItem.name);
+	UE_LOG(LogGameplay, Verbose, TEXT("ItemTooltipWidget: Showing tooltip for item %s"), *CurrentItem.name);
 }
 
 void UItemTooltipWidget::HideTooltip()
@@ -218,6 +219,6 @@ void UItemTooltipWidget::HideTooltip()
 	SetVisibility(ESlateVisibility::Hidden);
 	SetRenderOpacity(0.0f);
 
-	UE_LOG(LogTemp, Verbose, TEXT("ItemTooltipWidget: Hiding tooltip"));
+	UE_LOG(LogGameplay, Verbose, TEXT("ItemTooltipWidget: Hiding tooltip"));
 }
 

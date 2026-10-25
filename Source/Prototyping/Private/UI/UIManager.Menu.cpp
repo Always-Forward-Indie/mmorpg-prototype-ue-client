@@ -1,4 +1,5 @@
 #include "UI/UIManager.h"
+#include "Prototyping.h"
 #include "UI/UIManager.h"
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
@@ -109,7 +110,7 @@ void UUIManager::HandleSettingsClicked()
 {
 	if (!GameSettingsWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::HandleSettingsClicked - GameSettingsWidgetClass not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager::HandleSettingsClicked - GameSettingsWidgetClass not set in Blueprint"));
 		return;
 	}
 
@@ -122,7 +123,7 @@ void UUIManager::HandleSettingsClicked()
 			// Z-order 210 — above the game menu (200).
 			GameSettingsWidget->AddToViewport(210);
 			GameSettingsWidget->OnSettingsWindowClosed.AddDynamic(this, &UUIManager::HandleSettingsClosed);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: GameSettingsWidget created"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: GameSettingsWidget created"));
 		}
 	}
 
@@ -139,7 +140,7 @@ void UUIManager::HandleSettingsClosed()
 
 void UUIManager::HandleExitToLoginClicked()
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::HandleExitToLoginClicked"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::HandleExitToLoginClicked"));
 	if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetWorld()->GetGameInstance()))
 	{
 		GI->ReturnToLoginLevel();
@@ -148,7 +149,7 @@ void UUIManager::HandleExitToLoginClicked()
 
 void UUIManager::HandleExitToDesktopClicked()
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::HandleExitToDesktopClicked"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::HandleExitToDesktopClicked"));
 	if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
 	{
 		UKismetSystemLibrary::QuitGame(GetWorld(), PC, EQuitPreference::Quit, false);
@@ -157,7 +158,7 @@ void UUIManager::HandleExitToDesktopClicked()
 
 void UUIManager::HandleBugReportClicked()
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::HandleBugReportClicked"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::HandleBugReportClicked"));
 	if (!BugReportUrl.IsEmpty())
 	{
 		FPlatformProcess::LaunchURL(*BugReportUrl, nullptr, nullptr);

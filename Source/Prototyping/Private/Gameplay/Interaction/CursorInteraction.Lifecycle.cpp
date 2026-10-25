@@ -1,5 +1,6 @@
 // Copyright Prototyping Project. All Rights Reserved.
 #include "Gameplay/Interaction/CursorInteractionComponent.h"
+#include "Prototyping.h"
 #include "Gameplay/Interaction/WorldInteractionConfig.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Mobs/BasicMOB.h"
@@ -30,12 +31,12 @@ void UCursorInteractionComponent::BeginPlay()
 
     if (!Config && EffectiveConfig)
     {
-        UE_LOG(LogTemp, Log, TEXT("CursorInteraction: No local Config — using GameInstance WorldInteractionConfig '%s'."),
+        UE_LOG(LogGameplay, Verbose, TEXT("CursorInteraction: No local Config — using GameInstance WorldInteractionConfig '%s'."),
             *EffectiveConfig->GetName());
     }
     else if (!EffectiveConfig)
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
             TEXT("CursorInteraction: No config found anywhere! "
                  "Assign DA_WorldInteractionConfig in BP_GameInstance (recommended) "
                  "or directly on CursorInteractionComponent in BP_BasicPlayer."));
@@ -52,7 +53,7 @@ void UCursorInteractionComponent::BeginPlay()
             {
                 PreloadedCursorHandles.Add(static_cast<EInteractableType>(Pair.Key), Pair.Value);
             }
-            UE_LOG(LogTemp, Log,
+            UE_LOG(LogGameplay, Verbose,
                 TEXT("CursorInteraction: Using GameInstance preloaded handles — Default=OK, Typed=%d"),
                 PreloadedCursorHandles.Num());
         }
@@ -60,7 +61,7 @@ void UCursorInteractionComponent::BeginPlay()
         {
             // GI didn't preload (config not assigned there); try locally.
             PreloadCursors();
-            UE_LOG(LogTemp, Log,
+            UE_LOG(LogGameplay, Verbose,
                 TEXT("CursorInteraction: Local preload — Default=%s, Typed=%d"),
                 PreloadedDefaultCursorHandle ? TEXT("OK") : TEXT("FAILED"),
                 PreloadedCursorHandles.Num());

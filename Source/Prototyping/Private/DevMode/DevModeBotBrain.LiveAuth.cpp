@@ -1,4 +1,5 @@
 #include "DevMode/DevModeBotBrain.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeConsoleCommands.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -40,7 +41,7 @@
 void UDevModeBotBrain::HandleCharListReceived(const TArray<FLoginCharacterEntry>& Characters)
 {
     CharListCache = Characters;
-    UE_LOG(LogTemp, Log, TEXT("DEVMODE_BOT char list: %d entries"), Characters.Num());
+    UE_LOG(LogGameplay, Verbose, TEXT("DEVMODE_BOT char list: %d entries"), Characters.Num());
 }
 
 void UDevModeBotBrain::HandleCreateResponse(bool bSuccess, const FString& Message, int32 CharacterId)
@@ -49,7 +50,7 @@ void UDevModeBotBrain::HandleCreateResponse(bool bSuccess, const FString& Messag
     {
         NewCharId = CharacterId;
         bListReqSent = false;
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT created id=%d"), CharacterId);
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT created id=%d"), CharacterId);
         return;
     }
     // Name taken (a previous run's leftover): rotate to the next letter.
@@ -59,7 +60,7 @@ void UDevModeBotBrain::HandleCreateResponse(bool bSuccess, const FString& Messag
         ++NameLetterIdx;
         CharName.Empty();
         bCreateSent = false;
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT name taken, rotating (%s)"), *Message);
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT name taken, rotating (%s)"), *Message);
         return;
     }
     CreateError = Message;
@@ -70,7 +71,7 @@ void UDevModeBotBrain::HandleDeleteResponse(bool bSuccess, const FString& Messag
     if (!bSuccess)
     {
         DeleteError = Message;
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT delete failed id=%d: %s"), CharacterId, *Message);
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT delete failed id=%d: %s"), CharacterId, *Message);
     }
 }
 
@@ -81,7 +82,7 @@ void UDevModeBotBrain::HandlePostLoadMapLogin(UWorld* LoadedWorld)
         return;
     }
     const FString MapName = LoadedWorld ? LoadedWorld->GetMapName() : TEXT("null");
-    UE_LOG(LogTemp, Warning, TEXT("%s post-travel map: %s"), *TombstonePrefix, *MapName);
+    UE_LOG(LogGameplay, Warning, TEXT("%s post-travel map: %s"), *TombstonePrefix, *MapName);
     if (MapName.Contains(TEXT("Login")))
     {
         BotAssert(true, TEXT("back-to-login"), 1, 1);

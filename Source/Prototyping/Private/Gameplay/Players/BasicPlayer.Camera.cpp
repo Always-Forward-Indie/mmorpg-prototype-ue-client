@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -132,7 +133,7 @@ void ABasicPlayer::OnLeftMouseReleased()
     }
     else
     {
-        UE_LOG(LogTemp, Log, TEXT("CursorInteraction: LMB click BLOCKED вЂ” drag=%d, comp=%s, UIBlocking=%d"),
+        UE_LOG(LogGameplay, Verbose, TEXT("CursorInteraction: LMB click BLOCKED вЂ” drag=%d, comp=%s, UIBlocking=%d"),
             bLMBDragActive ? 1 : 0,
             CursorInteractionComponent ? TEXT("OK") : TEXT("NULL"),
             IsUIBlockingInteraction() ? 1 : 0);

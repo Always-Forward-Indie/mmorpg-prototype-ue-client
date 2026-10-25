@@ -1,4 +1,5 @@
 #include "UI/UIManager.h"
+#include "Prototyping.h"
 #include "UI/UIManager.h"
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
@@ -82,11 +83,11 @@ void UUIManager::CreateUIWidgets()
 {
 	if (!GetWorld())
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager: Cannot create UI widgets - no world context"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager: Cannot create UI widgets - no world context"));
 		return;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Starting UI widgets creation"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Starting UI widgets creation"));
 
 	// Create player interface widget first (now includes experience widget)
 	CreatePlayerInterfaceWidget();
@@ -122,21 +123,20 @@ void UUIManager::CreateUIWidgets()
 		}
 	}
 	
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: All UI widgets created successfully"));
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: All UI widgets created successfully"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: All UI widgets created successfully"));
 }
 
 void UUIManager::CreatePlayerInterfaceWidget()
 {
 	if (!PlayerInterfaceWidgetClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager: PlayerInterfaceWidgetClass is not set"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager: PlayerInterfaceWidgetClass is not set"));
 		return;
 	}
 
 	if (PlayerInterfaceWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: Player interface widget already exists, removing old one"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: Player interface widget already exists, removing old one"));
 		PlayerInterfaceWidget->RemoveFromParent();
 		PlayerInterfaceWidget = nullptr;
 	}
@@ -145,7 +145,7 @@ void UUIManager::CreatePlayerInterfaceWidget()
 	PlayerInterfaceWidget = CreateWidget<UPlayerInterfaceWidget>(GetWorld(), PlayerInterfaceWidgetClass);
 	if (!PlayerInterfaceWidget)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create player interface widget"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create player interface widget"));
 		return;
 	}
 
@@ -167,11 +167,11 @@ void UUIManager::CreatePlayerInterfaceWidget()
 		// Setup skill bar
 		PlayerInterfaceWidget->SetupSkillBar(SkillBarSlots);
 		
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: Player interface widget created and initialized"));
+		UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Player interface widget created and initialized"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to get GameInstance for player interface widget"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to get GameInstance for player interface widget"));
 	}
 }
 
@@ -206,13 +206,13 @@ void UUIManager::CreateInventoryWidget()
 {
 	if (!InventoryWidgetClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager: InventoryWidgetClass is not set"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager: InventoryWidgetClass is not set"));
 		return;
 	}
 
 	if (InventoryWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: Inventory widget already exists, removing old one"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: Inventory widget already exists, removing old one"));
 		InventoryWidget->OnInventoryVisibilityChanged.RemoveDynamic(this, &UUIManager::OnInventoryVisibilityChanged);
 		InventoryWidget->RemoveFromParent();
 		InventoryWidget = nullptr;
@@ -222,7 +222,7 @@ void UUIManager::CreateInventoryWidget()
 	InventoryWidget = CreateWidget<UInventoryWidget>(GetWorld(), InventoryWidgetClass);
 	if (!InventoryWidget)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create inventory widget"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create inventory widget"));
 		return;
 	}
 
@@ -244,6 +244,6 @@ void UUIManager::CreateInventoryWidget()
 	// Hide initially
 	InventoryWidget->SetInventoryVisible(false);
 
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Inventory widget created and configured"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Inventory widget created and configured"));
 }
 

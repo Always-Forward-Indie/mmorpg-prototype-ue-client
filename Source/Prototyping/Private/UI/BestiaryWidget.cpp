@@ -1,4 +1,5 @@
 #include "UI/BestiaryWidget.h"
+#include "Prototyping.h"
 #include "UI/BestiaryWidget.h"
 #include "UI/BestiaryEntryWidget.h"
 #include "UI/BestiaryMobRowWidget.h"
@@ -67,7 +68,7 @@ void UBestiaryWidget::BindToBestiaryHandler(UBestiaryNetworkHandler* InHandler)
         // Replay any overview that arrived before this widget was bound
         if (BestiaryHandler->HasPendingOverview())
         {
-            UE_LOG(LogTemp, Log, TEXT("BestiaryWidget: Replaying pending overview received before bind"));
+            UE_LOG(LogGameplay, Verbose, TEXT("BestiaryWidget: Replaying pending overview received before bind"));
             HandleBestiaryOverviewReceived(BestiaryHandler->ConsumePendingOverview());
         }
     }
@@ -231,7 +232,7 @@ void UBestiaryWidget::RebuildMobList()
 {
     if (!Mob_List_Box)
     {
-        UE_LOG(LogTemp, Warning, TEXT("BestiaryWidget: RebuildMobList skipped - Mob_List_Box is null"));
+        UE_LOG(LogGameplay, Warning, TEXT("BestiaryWidget: RebuildMobList skipped - Mob_List_Box is null"));
         return;
     }
 
@@ -239,11 +240,11 @@ void UBestiaryWidget::RebuildMobList()
 
     if (!MobRowClass)
     {
-        UE_LOG(LogTemp, Warning, TEXT("BestiaryWidget: RebuildMobList skipped - MobRowClass is not set"));
+        UE_LOG(LogGameplay, Warning, TEXT("BestiaryWidget: RebuildMobList skipped - MobRowClass is not set"));
         return;
     }
 
-    UE_LOG(LogTemp, Log, TEXT("BestiaryWidget: Rebuilding mob list with %d entries"), CachedMobList.Num());
+    UE_LOG(LogGameplay, Verbose, TEXT("BestiaryWidget: Rebuilding mob list with %d entries"), CachedMobList.Num());
 
     for (const FBestiaryMobListEntry& Entry : CachedMobList)
     {

@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Components/ArrowComponent.h"
 #include "ShaderCompiler.h"
 #include "ContentStreaming.h"
@@ -103,7 +104,7 @@ void UMyGameInstance::MaybeStartLiveBot()
 	if (LiveBotScenario.IsEmpty()) { return; }
 	if (DevModeConfig.bEnabled)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("LiveBot: -bot-live ignored (DevMode is enabled — live runs need the online flow)"));
+		UE_LOG(LogGameplay, Warning, TEXT("LiveBot: -bot-live ignored (DevMode is enabled — live runs need the online flow)"));
 		return;
 	}
 	if (!LiveBotScenario.Equals(TEXT("live_patrol_kill"), ESearchCase::IgnoreCase)
@@ -123,13 +124,13 @@ void UMyGameInstance::MaybeStartLiveBot()
 		&& !LiveBotScenario.Equals(TEXT("live_travel_roundtrip"), ESearchCase::IgnoreCase)
 		&& !LiveBotScenario.Equals(TEXT("live_reconnect"), ESearchCase::IgnoreCase))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("LiveBot: unknown scenario '%s' (use live_patrol_kill|live_cross_visibility|live_loot_pickup|live_death_respawn|live_harvest_run|live_vendor_repair|live_quest_turnin|live_skills|live_equip|live_level|live_titles_emotes|live_char_create_delete|live_back_to_login|live_travel_roundtrip|live_reconnect|live_trade)"), *LiveBotScenario);
+		UE_LOG(LogGameplay, Warning, TEXT("LiveBot: unknown scenario '%s' (use live_patrol_kill|live_cross_visibility|live_loot_pickup|live_death_respawn|live_harvest_run|live_vendor_repair|live_quest_turnin|live_skills|live_equip|live_level|live_titles_emotes|live_char_create_delete|live_back_to_login|live_travel_roundtrip|live_reconnect|live_trade)"), *LiveBotScenario);
 		return;
 	}
 	ULiveBotDriver* Driver = LiveBotDriver;
 	if (Driver && Driver->IsRunning())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("LiveBot: driver already running"));
+		UE_LOG(LogGameplay, Warning, TEXT("LiveBot: driver already running"));
 		return;
 	}
 	if (!Driver)
@@ -147,7 +148,7 @@ void UMyGameInstance::RunDevModeAutoScenario()
 	{
 		return;
 	}
-	UE_LOG(LogTemp, Warning, TEXT("GameInstance: running DevMode auto-scenario '%s'"), *DevModeAutoScenario);
+	UE_LOG(LogGameplay, Warning, TEXT("GameInstance: running DevMode auto-scenario '%s'"), *DevModeAutoScenario);
 	bDevModeAutoQuit = true;
 	DevModeConsoleCommands->RunScenario(DevModeAutoScenario);
 }

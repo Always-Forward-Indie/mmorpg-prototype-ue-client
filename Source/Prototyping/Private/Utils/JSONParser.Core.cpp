@@ -2,6 +2,7 @@
 
 
 #include "Utils/JSONParser.h"
+#include "Prototyping.h"
 #include "Services/TimeSyncService.h"
 #include "MyGameInstance.h"
 #include "Engine/World.h"
@@ -276,7 +277,7 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 	 TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	 if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	 {
-		 UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCharacterData failed to parse JSON"));
+		 UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeCharacterData failed to parse JSON"));
 		 return FCharacterDataStruct();
 	 }
 	 const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
@@ -284,7 +285,7 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 	 if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid()
 		 || !(*BodyPtr)->TryGetObjectField(TEXT("character"), CharacterPtr) || !CharacterPtr || !(*CharacterPtr).IsValid())
 	 {
-		 UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCharacterData missing body/character"));
+		 UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeCharacterData missing body/character"));
 		 return FCharacterDataStruct();
 	 }
 	 return JSONParser::DeserializeCharacterData(*CharacterPtr);

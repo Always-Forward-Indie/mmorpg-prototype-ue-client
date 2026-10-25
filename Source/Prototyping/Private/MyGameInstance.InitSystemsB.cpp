@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Components/ArrowComponent.h"
 #include "ShaderCompiler.h"
 #include "ContentStreaming.h"
@@ -104,28 +105,28 @@ void UMyGameInstance::InitSocial()
 	if (DialogueManager)
 	{
 		DialogueManager->Initialize(GetNetworkManager(), this);
-		UE_LOG(LogTemp, Warning, TEXT("DialogueManager initialized"));
+		UE_LOG(LogGameplay, Warning, TEXT("DialogueManager initialized"));
 	}
 
 	if (DialogueNetworkHandler && DialogueManager)
 	{
 		DialogueNetworkHandler->Initialize(DialogueManager, GetNetworkManager());
 		DialogueNetworkHandler->SubscribeToNetworkEvents();
-		UE_LOG(LogTemp, Warning, TEXT("DialogueNetworkHandler initialized and subscribed"));
+		UE_LOG(LogGameplay, Warning, TEXT("DialogueNetworkHandler initialized and subscribed"));
 	}
 
 	// Initialize Quest System
 	if (QuestManager)
 	{
 		QuestManager->Initialize(GetNetworkManager(), this);
-		UE_LOG(LogTemp, Warning, TEXT("QuestManager initialized"));
+		UE_LOG(LogGameplay, Warning, TEXT("QuestManager initialized"));
 	}
 
 	if (QuestNetworkHandler && QuestManager)
 	{
 		QuestNetworkHandler->Initialize(QuestManager, GetNetworkManager());
 		QuestNetworkHandler->SubscribeToNetworkEvents();
-		UE_LOG(LogTemp, Warning, TEXT("QuestNetworkHandler initialized and subscribed"));
+		UE_LOG(LogGameplay, Warning, TEXT("QuestNetworkHandler initialized and subscribed"));
 	}
 
 }
@@ -136,42 +137,42 @@ void UMyGameInstance::InitEconomy()
 	if (EquipmentManager)
 	{
 		EquipmentManager->Initialize(GetNetworkManager(), this);
-		UE_LOG(LogTemp, Warning, TEXT("EquipmentManager initialized"));
+		UE_LOG(LogGameplay, Warning, TEXT("EquipmentManager initialized"));
 	}
 
 	if (EquipmentNetworkHandler && EquipmentManager)
 	{
 		EquipmentNetworkHandler->Initialize(EquipmentManager, GetNetworkManager());
 		EquipmentNetworkHandler->SubscribeToNetworkEvents();
-		UE_LOG(LogTemp, Warning, TEXT("EquipmentNetworkHandler initialized and subscribed"));
+		UE_LOG(LogGameplay, Warning, TEXT("EquipmentNetworkHandler initialized and subscribed"));
 	}
 
 	// Initialize Vendor System
 	if (VendorManager)
 	{
 		VendorManager->Initialize(GetNetworkManager(), this);
-		UE_LOG(LogTemp, Warning, TEXT("VendorManager initialized"));
+		UE_LOG(LogGameplay, Warning, TEXT("VendorManager initialized"));
 	}
 
 	if (VendorNetworkHandler && VendorManager)
 	{
 		VendorNetworkHandler->Initialize(VendorManager, GetNetworkManager());
 		VendorNetworkHandler->SubscribeToNetworkEvents();
-		UE_LOG(LogTemp, Warning, TEXT("VendorNetworkHandler initialized and subscribed"));
+		UE_LOG(LogGameplay, Warning, TEXT("VendorNetworkHandler initialized and subscribed"));
 	}
 
 	// Initialize Repair System
 	if (RepairManager)
 	{
 		RepairManager->Initialize(GetNetworkManager(), this);
-		UE_LOG(LogTemp, Warning, TEXT("RepairManager initialized"));
+		UE_LOG(LogGameplay, Warning, TEXT("RepairManager initialized"));
 	}
 
 	if (RepairNetworkHandler && RepairManager)
 	{
 		RepairNetworkHandler->Initialize(RepairManager, GetNetworkManager());
 		RepairNetworkHandler->SubscribeToNetworkEvents();
-		UE_LOG(LogTemp, Warning, TEXT("RepairNetworkHandler initialized and subscribed"));
+		UE_LOG(LogGameplay, Warning, TEXT("RepairNetworkHandler initialized and subscribed"));
 	}
 
 	// Initialize Skill Shop System (NPC trainer)
@@ -179,28 +180,28 @@ void UMyGameInstance::InitEconomy()
 	if (SkillShopManager)
 	{
 		SkillShopManager->Initialize(GetNetworkManager(), this);
-		UE_LOG(LogTemp, Warning, TEXT("SkillShopManager initialized"));
+		UE_LOG(LogGameplay, Warning, TEXT("SkillShopManager initialized"));
 	}
 
 	if (SkillShopNetworkHandler && SkillShopManager)
 	{
 		SkillShopNetworkHandler->Initialize(SkillShopManager, GetNetworkManager(), PlayerSkillManager);
 		SkillShopNetworkHandler->SubscribeToNetworkEvents();
-		UE_LOG(LogTemp, Warning, TEXT("SkillShopNetworkHandler initialized and subscribed"));
+		UE_LOG(LogGameplay, Warning, TEXT("SkillShopNetworkHandler initialized and subscribed"));
 	}
 
 	// Initialize Trade System
 	if (TradeManager)
 	{
 		TradeManager->Initialize(GetNetworkManager(), this);
-		UE_LOG(LogTemp, Warning, TEXT("TradeManager initialized"));
+		UE_LOG(LogGameplay, Warning, TEXT("TradeManager initialized"));
 	}
 
 	if (TradeNetworkHandler && TradeManager)
 	{
 		TradeNetworkHandler->Initialize(TradeManager, GetNetworkManager());
 		TradeNetworkHandler->SubscribeToNetworkEvents();
-		UE_LOG(LogTemp, Warning, TEXT("TradeNetworkHandler initialized and subscribed"));
+		UE_LOG(LogGameplay, Warning, TEXT("TradeNetworkHandler initialized and subscribed"));
 	}
 
 	// Initialize Bestiary System
@@ -208,7 +209,7 @@ void UMyGameInstance::InitEconomy()
 	{
 		BestiaryNetworkHandler->Initialize(this, GetNetworkManager());
 		BestiaryNetworkHandler->SubscribeToNetworkEvents();
-		UE_LOG(LogTemp, Warning, TEXT("BestiaryNetworkHandler initialized and subscribed"));
+		UE_LOG(LogGameplay, Warning, TEXT("BestiaryNetworkHandler initialized and subscribed"));
 	}
 
 }
@@ -220,7 +221,7 @@ void UMyGameInstance::InitCharacterNets()
 	{
 		PlayerStatsNetworkHandler->Initialize(PlayerStatsManager, GetNetworkManager(), this);
 		PlayerStatsNetworkHandler->SubscribeToNetworkEvents();
-		UE_LOG(LogTemp, Warning, TEXT("PlayerStatsNetworkHandler initialized and subscribed"));
+		UE_LOG(LogGameplay, Warning, TEXT("PlayerStatsNetworkHandler initialized and subscribed"));
 	}
 
 	// Initialize Mastery system
@@ -228,7 +229,7 @@ void UMyGameInstance::InitCharacterNets()
 	{
 		MasteryNetworkHandler->Initialize(MasteryManager, GetNetworkManager(), this);
 		MasteryNetworkHandler->SubscribeToNetworkEvents();
-		UE_LOG(LogTemp, Warning, TEXT("MasteryNetworkHandler initialized and subscribed"));
+		UE_LOG(LogGameplay, Warning, TEXT("MasteryNetworkHandler initialized and subscribed"));
 	}
 
 	// Initialize Reputation system
@@ -236,7 +237,7 @@ void UMyGameInstance::InitCharacterNets()
 	{
 		ReputationNetworkHandler->Initialize(ReputationManager, GetNetworkManager(), this);
 		ReputationNetworkHandler->SubscribeToNetworkEvents();
-		UE_LOG(LogTemp, Warning, TEXT("ReputationNetworkHandler initialized and subscribed"));
+		UE_LOG(LogGameplay, Warning, TEXT("ReputationNetworkHandler initialized and subscribed"));
 	}
 
 	// Initialize Titles system
@@ -244,7 +245,7 @@ void UMyGameInstance::InitCharacterNets()
 	{
 		TitleNetworkHandler->Initialize(TitleManager, GetNetworkManager(), this);
 		TitleNetworkHandler->SubscribeToNetworkEvents();
-		UE_LOG(LogTemp, Warning, TEXT("TitleNetworkHandler initialized and subscribed"));
+		UE_LOG(LogGameplay, Warning, TEXT("TitleNetworkHandler initialized and subscribed"));
 	}
 
 	// Initialize Emote system
@@ -256,7 +257,7 @@ void UMyGameInstance::InitCharacterNets()
 		// Route emoteAction broadcasts to the correct ABasicPlayer in the world
 		EmoteManager->OnEmoteActionReceived.AddDynamic(this, &UMyGameInstance::RouteEmoteActionToPlayer);
 
-		UE_LOG(LogTemp, Warning, TEXT("EmoteNetworkHandler initialized and subscribed"));
+		UE_LOG(LogGameplay, Warning, TEXT("EmoteNetworkHandler initialized and subscribed"));
 	}
 
 	// Initialize NPC Ambient Speech system
@@ -265,7 +266,7 @@ void UMyGameInstance::InitCharacterNets()
 		AmbientSpeechManager->Initialize(this);
 		AmbientSpeechNetworkHandler->Initialize(AmbientSpeechManager, GetNetworkManager());
 		AmbientSpeechNetworkHandler->SubscribeToNetworkEvents();
-		UE_LOG(LogTemp, Warning, TEXT("AmbientSpeechNetworkHandler initialized and subscribed"));
+		UE_LOG(LogGameplay, Warning, TEXT("AmbientSpeechNetworkHandler initialized and subscribed"));
 	}
 
 }
@@ -281,22 +282,22 @@ void UMyGameInstance::InitWorldObjects()
 		if (WIODefinitionTable)
 		{
 			WorldObjectManager->SetDefinitionTable(WIODefinitionTable);
-			UE_LOG(LogTemp, Warning, TEXT("WorldObjectManager: WIODefinitionTable assigned from GameInstance"));
+			UE_LOG(LogGameplay, Warning, TEXT("WorldObjectManager: WIODefinitionTable assigned from GameInstance"));
 		}
 		if (WIODefaultActorClass)
 		{
 			WorldObjectManager->DefaultActorClass = WIODefaultActorClass;
-			UE_LOG(LogTemp, Warning, TEXT("WorldObjectManager: WIODefaultActorClass assigned from GameInstance"));
+			UE_LOG(LogGameplay, Warning, TEXT("WorldObjectManager: WIODefaultActorClass assigned from GameInstance"));
 		}
 
-		UE_LOG(LogTemp, Warning, TEXT("WorldObjectManager initialized"));
+		UE_LOG(LogGameplay, Warning, TEXT("WorldObjectManager initialized"));
 	}
 
 	if (WIONetworkHandler && WorldObjectManager)
 	{
 		WIONetworkHandler->Initialize(WorldObjectManager, GetNetworkManager());
 		WIONetworkHandler->SubscribeToNetworkEvents();
-		UE_LOG(LogTemp, Warning, TEXT("WIONetworkHandler initialized and subscribed"));
+		UE_LOG(LogGameplay, Warning, TEXT("WIONetworkHandler initialized and subscribed"));
 	}
 
 }
@@ -307,14 +308,14 @@ void UMyGameInstance::InitChatSystems()
 	if (ChatManager)
 	{
 		ChatManager->Initialize(this, GetNetworkManager());
-		UE_LOG(LogTemp, Warning, TEXT("ChatManager initialized"));
+		UE_LOG(LogGameplay, Warning, TEXT("ChatManager initialized"));
 	}
 
 	if (ChatNetworkHandler && ChatManager)
 	{
 		ChatNetworkHandler->Initialize(ChatManager, GetNetworkManager());
 		ChatNetworkHandler->SubscribeToNetworkEvents();
-		UE_LOG(LogTemp, Warning, TEXT("ChatNetworkHandler initialized and subscribed"));
+		UE_LOG(LogGameplay, Warning, TEXT("ChatNetworkHandler initialized and subscribed"));
 	}
 
 	if (NetworkManager != nullptr) {

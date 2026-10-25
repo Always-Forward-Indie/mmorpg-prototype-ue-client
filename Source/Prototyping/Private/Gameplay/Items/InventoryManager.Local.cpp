@@ -1,5 +1,6 @@
 ﻿#include "Gameplay/Items/InventoryManager.h"
 #include "Networking/NetworkManager.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Items/HarvestManager.h"
 #include "Utils/JSONParser.h"
@@ -90,21 +91,21 @@ void UInventoryManager::UpdateLocalInventory(const FCharacterInventoryStruct& Ne
 	}
 
 	OnInventoryUpdated.Broadcast(CurrentInventory);
-	UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Inventory updated for character %d"), CurrentInventory.characterId);
+	UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Inventory updated for character %d"), CurrentInventory.characterId);
 }
 
 void UInventoryManager::RequestInventoryData(int32 CharacterId)
 {
 	if (!networkManager)
 	{
-		UE_LOG(LogTemp, Error, TEXT("InventoryManager: Network manager not found"));
+		UE_LOG(LogGameplay, Error, TEXT("InventoryManager: Network manager not found"));
 		OnInventoryLoadComplete.Broadcast(false);
 		return;
 	}
 
 	if (!gameInstance)
 	{
-		UE_LOG(LogTemp, Error, TEXT("InventoryManager: Game instance not found"));
+		UE_LOG(LogGameplay, Error, TEXT("InventoryManager: Game instance not found"));
 		OnInventoryLoadComplete.Broadcast(false);
 		return;
 	}
@@ -113,7 +114,7 @@ void UInventoryManager::RequestInventoryData(int32 CharacterId)
 	// ask — skip quietly instead of Erroring on the missing worker.
 	if (gameInstance->DevModeConfig.bEnabled)
 	{
-		UE_LOG(LogTemp, Verbose, TEXT("InventoryManager: skipping inventory request (DevMode offline)"));
+		UE_LOG(LogGameplay, Verbose, TEXT("InventoryManager: skipping inventory request (DevMode offline)"));
 		return;
 	}
 
@@ -138,6 +139,6 @@ void UInventoryManager::RequestInventoryData(int32 CharacterId)
 	// Send the request to the server
 	networkManager->SendDataToChunkServer(JsonString);
 	
-	UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Sent inventory request for character: %d"), CharacterId);
+	UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Sent inventory request for character: %d"), CharacterId);
 }
 

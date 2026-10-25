@@ -1,4 +1,5 @@
 #include "Gameplay/Skills/PlayerSkillManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Combat/SkillSystemManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Services/TimeSyncService.h"
@@ -7,7 +8,7 @@ bool UPlayerSkillManager::TryCastSkill(const FString& SkillSlug, int32 TargetId,
 {
     if (!CanCastSkill(SkillSlug))
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Cannot cast skill %s"), *SkillSlug);
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Cannot cast skill %s"), *SkillSlug);
         return false;
     }
 
@@ -16,7 +17,7 @@ bool UPlayerSkillManager::TryCastSkill(const FString& SkillSlug, int32 TargetId,
     ECasterType ResolvedTargetType = TargetType;
     if (!ResolveSkillTarget(SkillSlug, ResolvedTargetId, ResolvedTargetType))
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Invalid target for skill %s (targetId=%d, targetType=%d)"),
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Invalid target for skill %s (targetId=%d, targetType=%d)"),
             *SkillSlug, TargetId, static_cast<int32>(TargetType));
         return false;
     }
@@ -31,7 +32,7 @@ bool UPlayerSkillManager::TryCastSkill(const FString& SkillSlug, int32 TargetId,
         
         if (bSuccess)
         {
-            UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Sent skill request %s (target=%d, type=%d) - waiting for server confirmation"),
+            UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillManager: Sent skill request %s (target=%d, type=%d) - waiting for server confirmation"),
                 *SkillSlug, ResolvedTargetId, static_cast<int32>(ResolvedTargetType));
         }
         else
@@ -78,7 +79,7 @@ void UPlayerSkillManager::StartSkillCooldown(const FString& SkillSlug)
 {
     if (FPlayerSkillData* S = PlayerSkills.Find(SkillSlug)) {
         const double dur = static_cast<double>(S->networkData.cooldownMs) / 1000.0;
-        if (dur <= 0.0) { UE_LOG(LogTemp, Error, TEXT("Invalid cooldown")); return; }
+        if (dur <= 0.0) { UE_LOG(LogGameplay, Error, TEXT("Invalid cooldown")); return; }
 
         S->bCooldownUsesServerClock = true;              // ������ ��������
         const double now = GetServerSeconds();

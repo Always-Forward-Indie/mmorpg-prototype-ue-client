@@ -1,4 +1,5 @@
 #include "Gameplay/NPCs/BasicNPC.h"
+#include "Prototyping.h"
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/NPCs/NPCAnimInstance.h"
@@ -85,7 +86,7 @@ void ABasicNPC::ForceUpdateUI()
 		return;
 
 	// Update UI with current NPC data
-	UE_LOG(LogTemp, Log, TEXT("ForceUpdateUI for NPC %s (ID:%d): HP=%d/%d, MP=%d/%d"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("ForceUpdateUI for NPC %s (ID:%d): HP=%d/%d, MP=%d/%d"), 
 		*NPCData.name, NPCData.id, 
 		NPCData.stats.health.current, NPCData.stats.health.max,
 		NPCData.stats.mana.current, NPCData.stats.mana.max);
@@ -119,7 +120,7 @@ void ABasicNPC::InitializeUIDelayed()
 	// Try to initialize UI if we have data
 	if (NPCData.id != 0 && !bUIInitialized)
 	{
-		UE_LOG(LogTemp, Log, TEXT("InitializeUIDelayed for NPC %s (ID:%d)"), *NPCData.name, NPCData.id);
+		UE_LOG(LogGameplay, Verbose, TEXT("InitializeUIDelayed for NPC %s (ID:%d)"), *NPCData.name, NPCData.id);
 		ForceUpdateUI();
 	}
 	
@@ -130,7 +131,7 @@ void ABasicNPC::InitializeUIDelayed()
 		if (HeadWidget && NPCHeadInfo)
 		{
 			NPCHeadInfo->SetVisibility(true);
-			UE_LOG(LogTemp, Log, TEXT("InitializeUIDelayed: Successfully initialized HeadWidget for NPC %s"), *NPCData.name);
+			UE_LOG(LogGameplay, Verbose, TEXT("InitializeUIDelayed: Successfully initialized HeadWidget for NPC %s"), *NPCData.name);
 		}
 	}
 	*/

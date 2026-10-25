@@ -1,4 +1,5 @@
 #include "Gameplay/Player/ExperienceNetworkHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/Player/ExperienceManager.h"
 #include "MyGameInstance.h"
 #include "Networking/NetworkManager.h"
@@ -20,7 +21,7 @@ void UExperienceNetworkHandler::Initialize(UExperienceManager* InExperienceManag
 {
     if (!InExperienceManager || !InGameInstance || !InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("ExperienceNetworkHandler: Cannot initialize with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("ExperienceNetworkHandler: Cannot initialize with null parameters"));
         return;
     }
 
@@ -48,13 +49,13 @@ void UExperienceNetworkHandler::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("ExperienceNetworkHandler: Cannot subscribe - NetworkManager is null or invalid"));
+        UE_LOG(LogGameplay, Error, TEXT("ExperienceNetworkHandler: Cannot subscribe - NetworkManager is null or invalid"));
         return;
     }
 
     if (bIsSubscribed)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceNetworkHandler: Already subscribed to network events"));
+        UE_LOG(LogGameplay, Warning, TEXT("ExperienceNetworkHandler: Already subscribed to network events"));
         return;
     }
 
@@ -89,7 +90,7 @@ void UExperienceNetworkHandler::HandleChunkServerData(const FString& ReceivedDat
 {
     if (ReceivedData.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceNetworkHandler: Received empty data"));
+        UE_LOG(LogNetPacket, Warning, TEXT("ExperienceNetworkHandler: Received empty data"));
         return;
     }
 
@@ -142,7 +143,7 @@ void UExperienceNetworkHandler::HandleChunkServerData(const FString& ReceivedDat
         if (Prog.characterId > 0)
         {
             ExperienceManager->UpdateCharacterProgression(Prog.characterId, Prog);
-            UE_LOG(LogTemp, Warning, TEXT("ExperienceNetworkHandler: characterExperience applied for char %d Level=%d XP=%d [%d-%d]"),
+            UE_LOG(LogGameplay, Warning, TEXT("ExperienceNetworkHandler: characterExperience applied for char %d Level=%d XP=%d [%d-%d]"),
                 Prog.characterId, Prog.currentLevel, Prog.currentExperience,
                 Prog.expForCurrentLevel, Prog.expForNextLevel);
         }
@@ -176,7 +177,7 @@ void UExperienceNetworkHandler::ProcessExperienceUpdateEvent(const FString& Json
 {
     if (!ExperienceManager || !IsValid(ExperienceManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("ExperienceNetworkHandler: ExperienceManager is null or invalid"));
+        UE_LOG(LogGameplay, Error, TEXT("ExperienceNetworkHandler: ExperienceManager is null or invalid"));
         return;
     }
 
@@ -185,7 +186,7 @@ void UExperienceNetworkHandler::ProcessExperienceUpdateEvent(const FString& Json
     
     if (ExperienceUpdate.characterId <= 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceNetworkHandler: Invalid character ID in experience update"));
+        UE_LOG(LogGameplay, Warning, TEXT("ExperienceNetworkHandler: Invalid character ID in experience update"));
         return;
     }
 
@@ -236,7 +237,7 @@ void UExperienceNetworkHandler::ProcessProgressionUpdateEvent(const FString& Jso
 {
     if (!ExperienceManager || !IsValid(ExperienceManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("ExperienceNetworkHandler: ExperienceManager is null or invalid"));
+        UE_LOG(LogGameplay, Error, TEXT("ExperienceNetworkHandler: ExperienceManager is null or invalid"));
         return;
     }
 
@@ -245,7 +246,7 @@ void UExperienceNetworkHandler::ProcessProgressionUpdateEvent(const FString& Jso
     
     if (ExperienceUpdate.characterId <= 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceNetworkHandler: Invalid character ID in progression update"));
+        UE_LOG(LogGameplay, Warning, TEXT("ExperienceNetworkHandler: Invalid character ID in progression update"));
         return;
     }
 
@@ -271,7 +272,7 @@ FExperienceUpdateStruct UExperienceNetworkHandler::ParseExperienceUpdateFromJson
     
     if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("ExperienceNetworkHandler: Failed to parse JSON"));
+        UE_LOG(LogNetPacket, Error, TEXT("ExperienceNetworkHandler: Failed to parse JSON"));
         return ExperienceUpdate;
     }
 
@@ -279,14 +280,14 @@ FExperienceUpdateStruct UExperienceNetworkHandler::ParseExperienceUpdateFromJson
     TSharedPtr<FJsonObject> Body;
     if (!Root->HasField(TEXT("body")))
     {
-        UE_LOG(LogTemp, Error, TEXT("ExperienceNetworkHandler: No valid body in JSON"));
+        UE_LOG(LogNetPacket, Error, TEXT("ExperienceNetworkHandler: No valid body in JSON"));
         return ExperienceUpdate;
     }
     
     Body = Root->GetObjectField(TEXT("body"));
     if (!Body.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("ExperienceNetworkHandler: Invalid body object"));
+        UE_LOG(LogNetPacket, Error, TEXT("ExperienceNetworkHandler: Invalid body object"));
         return ExperienceUpdate;
     }
 
@@ -351,6 +352,6 @@ void UExperienceNetworkHandler::LogNetworkEvent(const FString& Event, const FStr
 {
     if (bDebugLogging)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceNetworkHandler [%s]: %s"), *Event, *Details);
+        UE_LOG(LogGameplay, Warning, TEXT("ExperienceNetworkHandler [%s]: %s"), *Event, *Details);
     }
 }

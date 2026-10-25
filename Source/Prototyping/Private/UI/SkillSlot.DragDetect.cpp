@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillSlotWidget.h"
 #include "UI/SkillSlotWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
@@ -14,17 +15,17 @@
 
 void USkillSlotWidget::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation)
 {
-    UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: NativeOnDragDetected ENTERED — slug='%s' bIsDragging=%d bMousePressed=%d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillSlotWidget[%d]: NativeOnDragDetected ENTERED — slug='%s' bIsDragging=%d bMousePressed=%d"),
         SlotIndex, *AssignedSkillSlug, bIsDragging ? 1 : 0, bMousePressed ? 1 : 0);
 
     if (AssignedSkillSlug.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: NativeOnDragDetected — slot is EMPTY, aborting"), SlotIndex);
+        UE_LOG(LogGameplay, Warning, TEXT("SkillSlotWidget[%d]: NativeOnDragDetected — slot is EMPTY, aborting"), SlotIndex);
         OutOperation = nullptr;
         return;
     }
 
-    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Drag detected for skill '%s'"), SlotIndex, *AssignedSkillSlug);
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillSlotWidget[%d]: Drag detected for skill '%s'"), SlotIndex, *AssignedSkillSlug);
 
     USkillDragDropOperation* DragDropOp = NewObject<USkillDragDropOperation>(this, USkillDragDropOperation::StaticClass());
     if (!DragDropOp)
@@ -56,7 +57,7 @@ void USkillSlotWidget::NativeOnDragDetected(const FGeometry& InGeometry, const F
         // layout/hit-testing of every sibling slot (root cause of the slot-to-slot
         // drag flicker and drop-on-self bug). Proceed with no visual instead.
         DragDropOp->DefaultDragVisual = nullptr;
-        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: CreateDragVisualWidget returned null — proceeding without drag visual"), SlotIndex);
+        UE_LOG(LogGameplay, Warning, TEXT("SkillSlotWidget[%d]: CreateDragVisualWidget returned null — proceeding without drag visual"), SlotIndex);
     }
 
     DragDropOp->Pivot = EDragPivot::MouseDown;
@@ -65,7 +66,7 @@ void USkillSlotWidget::NativeOnDragDetected(const FGeometry& InGeometry, const F
     OutOperation = DragDropOp;
     bIsDragging = true;
 
-    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Started dragging skill '%s' from slot"), SlotIndex, *AssignedSkillSlug);
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillSlotWidget[%d]: Started dragging skill '%s' from slot"), SlotIndex, *AssignedSkillSlug);
 }
 
 

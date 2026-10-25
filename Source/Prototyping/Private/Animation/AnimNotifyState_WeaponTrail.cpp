@@ -1,4 +1,5 @@
 #include "Animation/AnimNotifyState_WeaponTrail.h"
+#include "Prototyping.h"
 #include "Gameplay/Equipment/EquipmentVisualComponent.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "Data/ItemStruct.h"
@@ -64,7 +65,7 @@ void UAnimNotifyState_WeaponTrail::NotifyBegin(USkeletalMeshComponent* MeshComp,
 
 	ActiveTrailComponent = NC;
 
-	UE_LOG(LogTemp, Log, TEXT("AnimNotifyState_WeaponTrail: Started swing trail for '%s' on '%s'"),
+	UE_LOG(LogGameAudio, Verbose, TEXT("AnimNotifyState_WeaponTrail: Started swing trail for '%s' on '%s'"),
 		*ItemSlug, *Owner->GetName());
 }
 

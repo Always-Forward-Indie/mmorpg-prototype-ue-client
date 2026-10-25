@@ -1,4 +1,5 @@
 #include "Gameplay/Player/PlayerStatsNetworkHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
@@ -11,7 +12,7 @@ void UPlayerStatsNetworkHandler::Initialize(UPlayerStatsManager* InStatsManager,
 {
     if (!InStatsManager || !InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerStatsNetworkHandler: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerStatsNetworkHandler: Initialize called with null parameters"));
         return;
     }
     StatsManager   = InStatsManager;
@@ -42,7 +43,7 @@ void UPlayerStatsNetworkHandler::HandleChunkServerData(const FString& ReceivedDa
 
     if (!StatsManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("[EFFECTS] PlayerStatsNetworkHandler::HandleChunkServerData: StatsManager is NULL — handler is broken, check initialization"));
+        UE_LOG(LogGameplay, Error, TEXT("[EFFECTS] PlayerStatsNetworkHandler::HandleChunkServerData: StatsManager is NULL — handler is broken, check initialization"));
         return;
     }
 
@@ -50,7 +51,7 @@ void UPlayerStatsNetworkHandler::HandleChunkServerData(const FString& ReceivedDa
 
     if (Msg.eventType == TEXT("stats_update"))
     {
-        UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: stats_update received (bFirstStatsDelivered=%d, localCharId=%d)"),
+        UE_LOG(LogGameplay, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: stats_update received (bFirstStatsDelivered=%d, localCharId=%d)"),
             bFirstStatsDelivered, LocalCharacterId);
 
         TSharedPtr<FJsonObject> Root;
@@ -62,14 +63,14 @@ void UPlayerStatsNetworkHandler::HandleChunkServerData(const FString& ReceivedDa
 
         FPlayerStatsUpdateStruct Stats = ParseStatsUpdate(*BodyPtr);
 
-        UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: stats_update charId=%d hp=%d/%d"),
+        UE_LOG(LogGameplay, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: stats_update charId=%d hp=%d/%d"),
             Stats.characterId, Stats.healthCurrent, Stats.healthMax);
 
         // Only apply stats that belong to our local character.
         if (LocalCharacterId > 0 && Stats.characterId > 0 &&
             Stats.characterId != LocalCharacterId)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: charId mismatch (got %d, expected %d), skipping"),
+            UE_LOG(LogGameplay, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: charId mismatch (got %d, expected %d), skipping"),
                 Stats.characterId, LocalCharacterId);
             return;
         }
@@ -98,7 +99,7 @@ void UPlayerStatsNetworkHandler::HandleChunkServerData(const FString& ReceivedDa
             {
                 bFirstStatsDelivered = true;
                 GameInstance->NotifyStatsReceived();
-                UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: NotifyStatsReceived() fired (2nd full packet, effects confirmed)"));
+                UE_LOG(LogGameplay, Warning, TEXT("[LOADSEQ] PlayerStatsNetworkHandler: NotifyStatsReceived() fired (2nd full packet, effects confirmed)"));
             }
         }
     }

@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Prototyping.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Mobs/MOBAnimInstance.h"
@@ -36,7 +37,7 @@ void ABasicMOB::SetMobNameText(UTextRenderComponent* MobNameTextComponent, const
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("MobNameText not found"));
+		UE_LOG(LogGameplay, Error, TEXT("MobNameText not found"));
 	}
 }
 
@@ -51,7 +52,7 @@ void ABasicMOB::SetMobLevelText(UTextRenderComponent* MobLevelTextComponent, con
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("MobLevelText not found"));
+		UE_LOG(LogGameplay, Error, TEXT("MobLevelText not found"));
 	}
 }
 

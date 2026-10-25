@@ -1,4 +1,5 @@
 #include "Gameplay/Equipment/EquipmentNetworkHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
@@ -10,7 +11,7 @@ void UEquipmentNetworkHandler::Initialize(UEquipmentManager* InEquipmentManager,
 {
     if (!InEquipmentManager || !InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("EquipmentNetworkHandler: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("EquipmentNetworkHandler: Initialize called with null parameters"));
         return;
     }
     EquipmentManager = InEquipmentManager;
@@ -78,7 +79,7 @@ void UEquipmentNetworkHandler::HandleChunkServerData(const FString& ReceivedData
             {
                 UseReason = JSONParser::ResolveErrorCode(Root);
             }
-            UE_LOG(LogTemp, Warning, TEXT("EquipmentNetworkHandler: useItem failed reason='%s'"), *UseReason);
+            UE_LOG(LogGameplay, Warning, TEXT("EquipmentNetworkHandler: useItem failed reason='%s'"), *UseReason);
             FEquipResultData UseItemError;
             UseItemError.bSuccess = false;
             UseItemError.errorCode = UseReason;

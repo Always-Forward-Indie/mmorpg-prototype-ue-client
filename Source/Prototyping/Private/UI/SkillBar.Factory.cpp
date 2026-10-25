@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillBarWidget.h"
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/Skills/PlayerSkillNetworkHandler.h"
 #include "Components/HorizontalBox.h"
@@ -13,7 +14,7 @@ USkillSlotWidget* USkillBarWidget::CreateSkillSlotWidget(int32 SlotIndex)
 {
     if (!SkillSlotWidgetClass)
     {
-        UE_LOG(LogTemp, Error, TEXT("SkillBarWidget: SkillSlotWidgetClass not set"));
+        UE_LOG(LogGameplay, Error, TEXT("SkillBarWidget: SkillSlotWidgetClass not set"));
         return nullptr;
     }
 

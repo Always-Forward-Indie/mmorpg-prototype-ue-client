@@ -1,5 +1,6 @@
 ﻿#include "UI/AvailableSkillsWidget.h"
 #include "UI/AvailableSkillsWidget.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
@@ -31,7 +32,7 @@ FReply UAvailableSkillsWidget::NativeOnMouseButtonDown(const FGeometry& InGeomet
         bool bShouldStartDrag = false;
 
         // Debug: Log widget geometry information
-        UE_LOG(LogTemp, Warning, TEXT("AvailableSkillsWidget: Mouse click - Widget Geometry: Size(%f, %f), Pos(%f, %f)"), 
+        UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Mouse click - Widget Geometry: Size(%f, %f), Pos(%f, %f)"), 
             InGeometry.GetLocalSize().X, InGeometry.GetLocalSize().Y,
             InGeometry.GetAbsolutePosition().X, InGeometry.GetAbsolutePosition().Y);
 
@@ -41,7 +42,7 @@ FReply UAvailableSkillsWidget::NativeOnMouseButtonDown(const FGeometry& InGeomet
             const FGeometry DragHandleGeometry = DragHandle->GetCachedGeometry();
             
             // Debug: Log drag handle information
-            UE_LOG(LogTemp, Warning, TEXT("AvailableSkillsWidget: DragHandle found - Size(%f, %f), Pos(%f, %f), Visibility: %s"), 
+            UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: DragHandle found - Size(%f, %f), Pos(%f, %f), Visibility: %s"), 
                 DragHandleGeometry.GetLocalSize().X, DragHandleGeometry.GetLocalSize().Y,
                 DragHandleGeometry.GetAbsolutePosition().X, DragHandleGeometry.GetAbsolutePosition().Y,
                 *UEnum::GetValueAsString(DragHandle->GetVisibility()));
@@ -55,7 +56,7 @@ FReply UAvailableSkillsWidget::NativeOnMouseButtonDown(const FGeometry& InGeomet
             bShouldStartDrag = (LocalMousePos.X >= 0 && LocalMousePos.X <= DragHandleSize.X &&
                 LocalMousePos.Y >= 0 && LocalMousePos.Y <= DragHandleSize.Y);
             
-            UE_LOG(LogTemp, Warning, TEXT("AvailableSkillsWidget: DragHandle click check - ScreenPos: (%f, %f), LocalPos: (%f, %f), Size: (%f, %f), ShouldDrag: %s"), 
+            UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: DragHandle click check - ScreenPos: (%f, %f), LocalPos: (%f, %f), Size: (%f, %f), ShouldDrag: %s"), 
                 ScreenSpacePosition.X, ScreenSpacePosition.Y,
                 LocalMousePos.X, LocalMousePos.Y, 
                 DragHandleSize.X, DragHandleSize.Y, 
@@ -64,13 +65,13 @@ FReply UAvailableSkillsWidget::NativeOnMouseButtonDown(const FGeometry& InGeomet
             // Additional check: Is the DragHandle actually receiving input?
             if (DragHandleSize.X <= 0 || DragHandleSize.Y <= 0)
             {
-                UE_LOG(LogTemp, Error, TEXT("AvailableSkillsWidget: DragHandle has zero or negative size! This will prevent interaction."));
+                UE_LOG(LogGameplay, Error, TEXT("AvailableSkillsWidget: DragHandle has zero or negative size! This will prevent interaction."));
                 
                 // Fallback: Use title area for dragging (top 40 pixels of widget)
                 const FVector2D LocalClickPos = InGeometry.AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());
                 bShouldStartDrag = (LocalClickPos.Y >= 0 && LocalClickPos.Y <= 40.0f);
                 
-                UE_LOG(LogTemp, Warning, TEXT("AvailableSkillsWidget: Using fallback title area drag - LocalClick: (%f, %f), ShouldDrag: %s"), 
+                UE_LOG(LogGameplay, Warning, TEXT("AvailableSkillsWidget: Using fallback title area drag - LocalClick: (%f, %f), ShouldDrag: %s"), 
                     LocalClickPos.X, LocalClickPos.Y, bShouldStartDrag ? TEXT("true") : TEXT("false"));
             }
         }
@@ -80,7 +81,7 @@ FReply UAvailableSkillsWidget::NativeOnMouseButtonDown(const FGeometry& InGeomet
             const FVector2D LocalClickPos = InGeometry.AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());
             bShouldStartDrag = (LocalClickPos.Y >= 0 && LocalClickPos.Y <= 40.0f);
             
-            UE_LOG(LogTemp, Warning, TEXT("AvailableSkillsWidget: No DragHandle found, using title area - LocalClick: (%f, %f), ShouldDrag: %s"), 
+            UE_LOG(LogGameplay, Warning, TEXT("AvailableSkillsWidget: No DragHandle found, using title area - LocalClick: (%f, %f), ShouldDrag: %s"), 
                 LocalClickPos.X, LocalClickPos.Y, bShouldStartDrag ? TEXT("true") : TEXT("false"));
         }
 
@@ -93,7 +94,7 @@ FReply UAvailableSkillsWidget::NativeOnMouseButtonDown(const FGeometry& InGeomet
             DragOffset = MouseVP - CurrentViewportPosition;
             bDragging = true;
 
-            UE_LOG(LogTemp, Warning, TEXT("AvailableSkillsWidget: Starting drag - MouseVP: (%f, %f), CurrentPos: (%f, %f), Offset: (%f, %f)"), 
+            UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Starting drag - MouseVP: (%f, %f), CurrentPos: (%f, %f), Offset: (%f, %f)"), 
                 MouseVP.X, MouseVP.Y, CurrentViewportPosition.X, CurrentViewportPosition.Y, DragOffset.X, DragOffset.Y);
 
             if (TSharedPtr<SWidget> Slate = GetCachedWidget())
@@ -104,7 +105,7 @@ FReply UAvailableSkillsWidget::NativeOnMouseButtonDown(const FGeometry& InGeomet
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("AvailableSkillsWidget: Drag not started - mouse click outside drag area"));
+            UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Drag not started - mouse click outside drag area"));
         }
     }
     

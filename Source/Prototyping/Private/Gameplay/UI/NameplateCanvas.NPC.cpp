@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Gameplay/UI/NameplateCanvasWidget.h"
+#include "Prototyping.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Blueprint/SlateBlueprintLibrary.h"
 #include "Components/CanvasPanelSlot.h"
@@ -22,7 +23,7 @@ void UNameplateCanvasWidget::ShowNPCSpeechBubble(AActor* Actor, const FText& Tex
 
     if (!BubbleClass)
     {
-        UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget::ShowNPCSpeechBubble - no bubble widget class set"));
+        UE_LOG(LogGameplay, Warning, TEXT("NameplateCanvasWidget::ShowNPCSpeechBubble - no bubble widget class set"));
         return;
     }
 
@@ -36,7 +37,7 @@ void UNameplateCanvasWidget::ShowNPCSpeechBubble(AActor* Actor, const FText& Tex
         Bubble = Cast<UChatBubbleWidget>(RawWidget);
         if (!Bubble)
         {
-            UE_LOG(LogTemp, Error, TEXT("NameplateCanvasWidget::ShowNPCSpeechBubble - failed to create bubble widget"));
+            UE_LOG(LogGameplay, Error, TEXT("NameplateCanvasWidget::ShowNPCSpeechBubble - failed to create bubble widget"));
             return;
         }
         NPCSpeechBubbles.Add(WeakActor, Bubble);
@@ -95,14 +96,14 @@ UUserWidget* UNameplateCanvasWidget::AddWidgetToCanvas(TSubclassOf<UUserWidget> 
     APlayerController* PC = GetOwningPlayer();
     if (!PC)
     {
-        UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget::AddWidgetToCanvas � no owning PlayerController"));
+        UE_LOG(LogGameplay, Warning, TEXT("NameplateCanvasWidget::AddWidgetToCanvas � no owning PlayerController"));
         return nullptr;
     }
 
     UUserWidget* Widget = CreateWidget<UUserWidget>(PC, WidgetClass);
     if (!Widget)
     {
-        UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget::AddWidgetToCanvas � CreateWidget returned null for class %s"),
+        UE_LOG(LogGameplay, Warning, TEXT("NameplateCanvasWidget::AddWidgetToCanvas � CreateWidget returned null for class %s"),
             *WidgetClass->GetName());
         return nullptr;
     }

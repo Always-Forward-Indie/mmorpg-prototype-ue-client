@@ -1,4 +1,5 @@
 #include "Gameplay/Items/HarvestManager.h"
+#include "Prototyping.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
 #include "Utils/JSONParser.h"
@@ -20,7 +21,7 @@ void UHarvestManager::SetHarvestProgressWidget(UHarvestProgressWidget* InProgres
 	{
 		// Set the harvest manager reference in the widget
 		HarvestProgressWidget->SetHarvestManager(this);
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Harvest progress widget set and connected"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Harvest progress widget set and connected"));
 	}
 }
 
@@ -31,7 +32,7 @@ void UHarvestManager::SetHarvestLootWidget(UHarvestLootWidget* InLootWidget)
 	{
 		// Set the harvest manager reference in the widget
 		HarvestLootWidget->SetHarvestManager(this);
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Harvest loot widget set and connected"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Harvest loot widget set and connected"));
 	}
 }
 
@@ -40,11 +41,11 @@ void UHarvestManager::ShowHarvestProgress()
 	if (HarvestProgressWidget)
 	{
 		HarvestProgressWidget->ShowWidget();
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Showing harvest progress"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Showing harvest progress"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("HarvestManager: Cannot show harvest progress - widget is null"));
+		UE_LOG(LogGameplay, Error, TEXT("HarvestManager: Cannot show harvest progress - widget is null"));
 	}
 }
 
@@ -53,11 +54,11 @@ void UHarvestManager::HideHarvestProgress()
 	if (HarvestProgressWidget)
 	{
 		HarvestProgressWidget->HideWidget();
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Hiding harvest progress"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Hiding harvest progress"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("HarvestManager: Cannot hide harvest progress - widget is null"));
+		UE_LOG(LogGameplay, Error, TEXT("HarvestManager: Cannot hide harvest progress - widget is null"));
 	}
 }
 
@@ -67,11 +68,11 @@ void UHarvestManager::ShowLootWindow()
 	{
 		HarvestLootWidget->SetLootItems(CurrentAvailableLoot);
 		HarvestLootWidget->ShowWidget();
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Showing loot window"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Showing loot window"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("HarvestManager: Cannot show loot window - widget is null"));
+		UE_LOG(LogGameplay, Error, TEXT("HarvestManager: Cannot show loot window - widget is null"));
 	}
 }
 
@@ -80,11 +81,11 @@ void UHarvestManager::HideLootWindow()
 	if (HarvestLootWidget)
 	{
 		HarvestLootWidget->HideWidget();
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Hiding loot window"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Hiding loot window"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("HarvestManager: Cannot hide loot window - widget is null"));
+		UE_LOG(LogGameplay, Error, TEXT("HarvestManager: Cannot hide loot window - widget is null"));
 	}
 }
 

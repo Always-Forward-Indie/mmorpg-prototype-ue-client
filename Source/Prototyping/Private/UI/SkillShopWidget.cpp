@@ -1,4 +1,5 @@
 #include "UI/SkillShopWidget.h"
+#include "Prototyping.h"
 #include "Services/LocalizationSubsystem.h"
 #include "UI/SkillShopRowWidget.h"
 #include "Gameplay/SkillShop/SkillShopManager.h"
@@ -173,7 +174,7 @@ void USkillShopWidget::HandleSkillShopOpened(const FSkillShopData& ShopData)
 {
     CachedShop  = ShopData;
     ActiveNpcId = ShopData.npcId;   // must be set BEFORE RequestLearnSkill is called
-    UE_LOG(LogTemp, Log, TEXT("[SkillShopWidget] Shop opened: npcId=%d npcSlug='%s'"),
+    UE_LOG(LogGameplay, Verbose, TEXT("[SkillShopWidget] Shop opened: npcId=%d npcSlug='%s'"),
         ActiveNpcId, *ShopData.npcSlug);
 
     // Notify NPC that this shop window opened so the farewell counter stays balanced.
@@ -256,7 +257,7 @@ void USkillShopWidget::UpdateHeaderDisplay()
 
 void USkillShopWidget::PopulateSkillRows()
 {
-    UE_LOG(LogTemp, Warning, TEXT("[SkillShop] PopulateSkillRows called: skills=%d, Skill_List_Box=%s, SkillRowClass=%s"),
+    UE_LOG(LogGameplay, Verbose, TEXT("[SkillShop] PopulateSkillRows called: skills=%d, Skill_List_Box=%s, SkillRowClass=%s"),
         CachedShop.skills.Num(),
         Skill_List_Box ? TEXT("valid") : TEXT("NULL"),
         SkillRowClass ? TEXT("valid") : TEXT("NULL"));
@@ -273,7 +274,7 @@ void USkillShopWidget::PopulateSkillRows()
         SkillRepo = GI->GetSkillDefinitionRepository();
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[SkillShop] PopulateSkillRows: %d skills in shop, SkillRepo=%s"),
+    UE_LOG(LogGameplay, Verbose, TEXT("[SkillShop] PopulateSkillRows: %d skills in shop, SkillRepo=%s"),
         CachedShop.skills.Num(), SkillRepo ? TEXT("valid") : TEXT("NULL"));
 
     for (const FSkillShopSkillData& Skill : CachedShop.skills)
@@ -288,7 +289,7 @@ void USkillShopWidget::PopulateSkillRows()
         if (SkillRepo)
         {
             FSkillDefinitionData Def = SkillRepo->GetDefinition(Skill.skillSlug);
-            UE_LOG(LogTemp, Warning, TEXT("[SkillShop] Skill '%s' -> Def.displayName='%s', skillIcon valid=%s"),
+            UE_LOG(LogGameplay, Verbose, TEXT("[SkillShop] Skill '%s' -> Def.displayName='%s', skillIcon valid=%s"),
                 *Skill.skillSlug, *Def.displayName.ToString(), Def.skillIcon.IsValid() ? TEXT("yes") : TEXT("no"));
 
             // Override name with localised displayName from definition
@@ -302,11 +303,11 @@ void USkillShopWidget::PopulateSkillRows()
                 if (UTexture2D* IconTex = Def.skillIcon.LoadSynchronous())
                 {
                     Row->Skill_Icon_Image->SetBrushFromTexture(IconTex);
-                    UE_LOG(LogTemp, Warning, TEXT("[SkillShop]   Icon loaded: %s"), *IconTex->GetName());
+                    UE_LOG(LogGameplay, Verbose, TEXT("[SkillShop]   Icon loaded: %s"), *IconTex->GetName());
                 }
                 else
                 {
-                    UE_LOG(LogTemp, Warning, TEXT("[SkillShop]   Icon LoadSynchronous returned NULL"));
+                    UE_LOG(LogGameplay, Warning, TEXT("[SkillShop]   Icon LoadSynchronous returned NULL"));
                 }
             }
         }

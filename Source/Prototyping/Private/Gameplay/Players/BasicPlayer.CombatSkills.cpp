@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -140,7 +141,7 @@ void ABasicPlayer::TryCastSkillWithApproach(const FString& SkillSlug)
     AActor* TargetActor = GetLockedTargetActor();
     if (!TargetActor)
     {
-        UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: TryCastSkillWithApproach - no locked target"));
+        UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: TryCastSkillWithApproach - no locked target"));
         return;
     }
 
@@ -165,14 +166,14 @@ void ABasicPlayer::TryCastSkillWithApproach(const FString& SkillSlug)
     {
         bIsApproachingTarget = false;
         PendingSkillSlug.Empty();
-        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: TryCastSkillWithApproach - player target is dead"));
+        UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: TryCastSkillWithApproach - player target is dead"));
         return;
     }
 
     const float Dist = FVector::Dist(GetActorLocation(), TargetActor->GetActorLocation());
     const float EffectiveRange = GetSkillRange(SkillSlug);
 
-    UE_LOG(LogTemp, Log, TEXT("BasicPlayer: TryCastSkillWithApproach - skill=%s dist=%.0f range=%.0f"),
+    UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: TryCastSkillWithApproach - skill=%s dist=%.0f range=%.0f"),
         *SkillSlug, Dist, EffectiveRange);
 
     if (Dist <= EffectiveRange)
@@ -209,7 +210,7 @@ void ABasicPlayer::TryCastSkillWithApproach(const FString& SkillSlug)
         bIsAutoAttacking  = (SkillSlug == CurrentSkillName);
         bIsApproachingTarget = true;
 
-        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: TryCastSkillWithApproach - out of range (%.0f > %.0f), approaching for skill %s"),
+        UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: TryCastSkillWithApproach - out of range (%.0f > %.0f), approaching for skill %s"),
             Dist, EffectiveRange, *SkillSlug);
     }
 }
@@ -293,7 +294,7 @@ bool ABasicPlayer::AttackTarget(int32 TargetID, const FString& SkillSlug, int32 
 	{
 		if (PSM->TryCastSkill(SkillSlug, TargetID, TargetType))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: %d attacking target %d with %s"),
+			UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: %d attacking target %d with %s"),
 				GetActorId_Implementation(), TargetID, *SkillSlug);
 			return true;
 		}

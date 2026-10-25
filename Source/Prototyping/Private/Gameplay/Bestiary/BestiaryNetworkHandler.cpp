@@ -1,4 +1,5 @@
 #include "Gameplay/Bestiary/BestiaryNetworkHandler.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Networking/NetworkManager.h"
 #include "Services/TimeSyncService.h"
@@ -18,14 +19,14 @@ void UBestiaryNetworkHandler::Initialize(UMyGameInstance* InGameInstance, UNetwo
 {
     if (!InGameInstance || !InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("BestiaryNetworkHandler: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("BestiaryNetworkHandler: Initialize called with null parameters"));
         return;
     }
 
     GameInstance   = InGameInstance;
     NetworkManager = InNetworkManager;
 
-    UE_LOG(LogTemp, Log, TEXT("BestiaryNetworkHandler: Initialized"));
+    UE_LOG(LogGameplay, Verbose, TEXT("BestiaryNetworkHandler: Initialized"));
 }
 
 void UBestiaryNetworkHandler::Shutdown()
@@ -40,7 +41,7 @@ void UBestiaryNetworkHandler::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("BestiaryNetworkHandler: Cannot subscribe - NetworkManager invalid"));
+        UE_LOG(LogGameplay, Error, TEXT("BestiaryNetworkHandler: Cannot subscribe - NetworkManager invalid"));
         return;
     }
 
@@ -51,7 +52,7 @@ void UBestiaryNetworkHandler::SubscribeToNetworkEvents()
     NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UBestiaryNetworkHandler::HandleChunkServerData);
     bIsSubscribed = true;
 
-    UE_LOG(LogTemp, Log, TEXT("BestiaryNetworkHandler: Subscribed to network events"));
+    UE_LOG(LogGameplay, Verbose, TEXT("BestiaryNetworkHandler: Subscribed to network events"));
 }
 
 void UBestiaryNetworkHandler::UnsubscribeFromNetworkEvents()
@@ -68,13 +69,13 @@ void UBestiaryNetworkHandler::RequestBestiaryOverview(int32 CharacterId)
     // DevMode offline: no chunk to ask, overview stays empty by design.
     if (GameInstance && GameInstance->DevModeConfig.bEnabled)
     {
-        UE_LOG(LogTemp, Verbose, TEXT("BestiaryNetworkHandler: skipping overview request (DevMode offline)"));
+        UE_LOG(LogGameplay, Verbose, TEXT("BestiaryNetworkHandler: skipping overview request (DevMode offline)"));
         return;
     }
 
     if (!NetworkManager || !GameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("BestiaryNetworkHandler: Cannot request overview - missing dependencies"));
+        UE_LOG(LogNetPacket, Error, TEXT("BestiaryNetworkHandler: Cannot request overview - missing dependencies"));
         return;
     }
 
@@ -92,7 +93,7 @@ void UBestiaryNetworkHandler::RequestBestiaryOverview(int32 CharacterId)
 
     NetworkManager->SendDataToChunkServer(JsonString);
 
-    UE_LOG(LogTemp, Log, TEXT("BestiaryNetworkHandler: Sent getBestiaryOverview request for character %d"), CharacterId);
+    UE_LOG(LogGameplay, Verbose, TEXT("BestiaryNetworkHandler: Sent getBestiaryOverview request for character %d"), CharacterId);
 }
 
 void UBestiaryNetworkHandler::RequestBestiaryEntry(int32 CharacterId, const FString& MobSlug)
@@ -100,13 +101,13 @@ void UBestiaryNetworkHandler::RequestBestiaryEntry(int32 CharacterId, const FStr
     // DevMode offline: no chunk to ask, entry stays uncached by design.
     if (GameInstance && GameInstance->DevModeConfig.bEnabled)
     {
-        UE_LOG(LogTemp, Verbose, TEXT("BestiaryNetworkHandler: skipping entry request (DevMode offline)"));
+        UE_LOG(LogGameplay, Verbose, TEXT("BestiaryNetworkHandler: skipping entry request (DevMode offline)"));
         return;
     }
 
     if (!NetworkManager || !GameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("BestiaryNetworkHandler: Cannot request entry - missing dependencies"));
+        UE_LOG(LogNetPacket, Error, TEXT("BestiaryNetworkHandler: Cannot request entry - missing dependencies"));
         return;
     }
 
@@ -125,7 +126,7 @@ void UBestiaryNetworkHandler::RequestBestiaryEntry(int32 CharacterId, const FStr
 
     NetworkManager->SendDataToChunkServer(JsonString);
 
-    UE_LOG(LogTemp, Log, TEXT("BestiaryNetworkHandler: Sent getBestiaryEntry request for mob slug '%s'"), *MobSlug);
+    UE_LOG(LogGameplay, Verbose, TEXT("BestiaryNetworkHandler: Sent getBestiaryEntry request for mob slug '%s'"), *MobSlug);
 }
 
 bool UBestiaryNetworkHandler::HasCachedEntry(const FString& MobSlug) const
@@ -224,14 +225,14 @@ void UBestiaryNetworkHandler::ProcessBestiaryOverviewResponse(const FString& Jso
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonData);
     if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("BestiaryNetworkHandler: Failed to deserialize getBestiaryOverview response"));
+        UE_LOG(LogNetPacket, Error, TEXT("BestiaryNetworkHandler: Failed to deserialize getBestiaryOverview response"));
         return;
     }
 
     const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
     if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !(*BodyPtr).IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("BestiaryNetworkHandler: getBestiaryOverview response missing body"));
+        UE_LOG(LogNetPacket, Error, TEXT("BestiaryNetworkHandler: getBestiaryOverview response missing body"));
         return;
     }
 
@@ -253,7 +254,7 @@ void UBestiaryNetworkHandler::ProcessBestiaryOverviewResponse(const FString& Jso
         }
     }
 
-    UE_LOG(LogTemp, Log, TEXT("BestiaryNetworkHandler: Received overview with %d mob(s)"), Overview.Num());
+    UE_LOG(LogGameplay, Verbose, TEXT("BestiaryNetworkHandler: Received overview with %d mob(s)"), Overview.Num());
 
     // Cache in case BestiaryWidget binds after this broadcast
     PendingOverview = Overview;
@@ -268,21 +269,21 @@ void UBestiaryNetworkHandler::ProcessBestiaryEntryResponse(const FString& JsonDa
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonData);
     if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("BestiaryNetworkHandler: Failed to deserialize getBestiaryEntry response"));
+        UE_LOG(LogNetPacket, Error, TEXT("BestiaryNetworkHandler: Failed to deserialize getBestiaryEntry response"));
         return;
     }
 
     const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
     if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !(*BodyPtr).IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("BestiaryNetworkHandler: getBestiaryEntry response missing body"));
+        UE_LOG(LogNetPacket, Error, TEXT("BestiaryNetworkHandler: getBestiaryEntry response missing body"));
         return;
     }
 
     const TSharedPtr<FJsonObject>* EntryObjPtr = nullptr;
     if (!(*BodyPtr)->TryGetObjectField(TEXT("entry"), EntryObjPtr) || !(*EntryObjPtr).IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("BestiaryNetworkHandler: getBestiaryEntry response missing entry"));
+        UE_LOG(LogGameplay, Error, TEXT("BestiaryNetworkHandler: getBestiaryEntry response missing entry"));
         return;
     }
 
@@ -304,7 +305,7 @@ void UBestiaryNetworkHandler::ProcessBestiaryEntryResponse(const FString& JsonDa
     // Update cache (v1.2: keyed by mobSlug)
     EntryCache.Add(Entry.mobSlug, Entry);
 
-    UE_LOG(LogTemp, Log, TEXT("BestiaryNetworkHandler: Received entry for mob '%s', killCount=%d, tiers=%d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("BestiaryNetworkHandler: Received entry for mob '%s', killCount=%d, tiers=%d"),
         *Entry.mobSlug, Entry.killCount, Entry.tiers.Num());
 
     OnBestiaryEntryReceived.Broadcast(Entry);
@@ -419,7 +420,7 @@ void UBestiaryNetworkHandler::ProcessBestiaryTierUnlocked(const FWorldNotificati
     if (FBestiaryEntryStruct* Cached = EntryCache.Find(MobSlug))
         Cached->killCount = KillCount;
 
-    UE_LOG(LogTemp, Log, TEXT("BestiaryNetworkHandler: bestiary_tier_unlocked mob='%s' tier=%d (%s) killCount=%d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("BestiaryNetworkHandler: bestiary_tier_unlocked mob='%s' tier=%d (%s) killCount=%d"),
         *MobSlug, UnlockedTier, *CategorySlug, KillCount);
 
     // Invalidate cache so next UI open triggers a fresh request
@@ -439,7 +440,7 @@ void UBestiaryNetworkHandler::ProcessBestiaryKillUpdate(const FWorldNotification
 
     if (MobSlug.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("BestiaryNetworkHandler: bestiary_kill_update missing mobSlug"));
+        UE_LOG(LogGameplay, Warning, TEXT("BestiaryNetworkHandler: bestiary_kill_update missing mobSlug"));
         return;
     }
 
@@ -447,7 +448,7 @@ void UBestiaryNetworkHandler::ProcessBestiaryKillUpdate(const FWorldNotification
     if (FBestiaryEntryStruct* Cached = EntryCache.Find(MobSlug))
         Cached->killCount = KillCount;
 
-    UE_LOG(LogTemp, Verbose, TEXT("BestiaryNetworkHandler: bestiary_kill_update mob='%s' killCount=%d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("BestiaryNetworkHandler: bestiary_kill_update mob='%s' killCount=%d"),
         *MobSlug, KillCount);
 
     OnBestiaryKillCountUpdated.Broadcast(MobSlug, KillCount);

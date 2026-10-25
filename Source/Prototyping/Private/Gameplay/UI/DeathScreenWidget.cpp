@@ -1,4 +1,5 @@
 #include "Gameplay/UI/DeathScreenWidget.h"
+#include "Prototyping.h"
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
@@ -18,7 +19,7 @@ void UDeathScreenWidget::NativeConstruct()
     }
     else
     {
-        UE_LOG(LogTemp, Error,
+        UE_LOG(LogGameplay, Error,
             TEXT("DeathScreenWidget: Respawn_Button is not bound! Add a Button named 'Respawn_Button' to WBP_DeathScreen."));
     }
 
@@ -87,7 +88,7 @@ void UDeathScreenWidget::ShowDeathScreen(int32 ExperienceDebt)
         FSlateApplication::Get().ClearKeyboardFocus(EFocusCause::SetDirectly);
     }
 
-    UE_LOG(LogTemp, Warning,
+    UE_LOG(LogGameplay, Warning,
         TEXT("DeathScreenWidget: Death screen shown. XP Debt: %d"), ExperienceDebt);
 }
 
@@ -96,7 +97,7 @@ void UDeathScreenWidget::HideDeathScreen()
     PlayHideAnimation();
     SetVisibility(ESlateVisibility::Collapsed);
 
-    UE_LOG(LogTemp, Log, TEXT("DeathScreenWidget: Death screen hidden."));
+    UE_LOG(LogGameplay, Verbose, TEXT("DeathScreenWidget: Death screen hidden."));
 }
 
 void UDeathScreenWidget::SetRespawnButtonEnabled(bool bEnabled)
@@ -120,14 +121,14 @@ void UDeathScreenWidget::HandleRespawnClicked()
             &UDeathScreenWidget::OnRespawnTimeout, 10.0f, false);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("DeathScreenWidget: Respawn button clicked."));
+    UE_LOG(LogGameplay, Verbose, TEXT("DeathScreenWidget: Respawn button clicked."));
     OnRespawnRequested.Broadcast();
 }
 
 void UDeathScreenWidget::OnRespawnTimeout()
 {
     SetRespawnButtonEnabled(true);
-    UE_LOG(LogTemp, Warning, TEXT("DeathScreenWidget: Respawn timeout — server never responded, button re-enabled."));
+    UE_LOG(LogGameplay, Warning, TEXT("DeathScreenWidget: Respawn timeout — server never responded, button re-enabled."));
 }
 
 // ?????????????????????????????????????????????????????????????????????????????

@@ -1,4 +1,5 @@
 #include "Gameplay/Skills/PlayerSkillManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Combat/SkillSystemManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Services/TimeSyncService.h"
@@ -13,17 +14,17 @@ bool UPlayerSkillManager::ResolveSkillTarget(const FString& SkillSlug, int32& In
     switch (R.Outcome)
     {
     case ETargetResolveOutcome::MissingTarget:
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Skill %s requires a target (TargetOnly policy)"), *SkillSlug);
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Skill %s requires a target (TargetOnly policy)"), *SkillSlug);
         return false;
     case ETargetResolveOutcome::SelfTargetRejected:
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Skill %s cannot target self (TargetOnly policy)"), *SkillSlug);
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Skill %s cannot target self (TargetOnly policy)"), *SkillSlug);
         return false;
     case ETargetResolveOutcome::UnknownPolicy:
         return false;
     case ETargetResolveOutcome::OkFallback:
         InOutTargetId = R.TargetId;
         InOutTargetType = R.TargetType;
-        UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Skill %s has no target, defaulting to self"), *SkillSlug);
+        UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillManager: Skill %s has no target, defaulting to self"), *SkillSlug);
         return true;
     default:
         InOutTargetId = R.TargetId;
@@ -42,7 +43,7 @@ void UPlayerSkillManager::CastSkillBySlot(int32 SlotIndex, int32 TargetId, ECast
     const FSkillSlotData& SlotData = GetSkillSlot(SlotIndex);
     if (!SlotData.bIsAssigned)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: No skill assigned to slot %d"), SlotIndex);
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: No skill assigned to slot %d"), SlotIndex);
         return;
     }
 

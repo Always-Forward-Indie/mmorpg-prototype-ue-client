@@ -1,4 +1,5 @@
 #include "UI/InventorySlotWidget.h"
+#include "Prototyping.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
@@ -80,7 +81,7 @@ void UInventorySlotWidget::InitializeSlot(int32 InSlotIndex)
 	SlotIndex = InSlotIndex;
 	ClearSlot();
 	
-	UE_LOG(LogTemp, Verbose, TEXT("InventorySlotWidget: Initialized slot %d"), SlotIndex);
+	UE_LOG(LogGameplay, Verbose, TEXT("InventorySlotWidget: Initialized slot %d"), SlotIndex);
 }
 
 void UInventorySlotWidget::SetItemData(const FInventoryItemStruct& Item)
@@ -93,7 +94,7 @@ void UInventorySlotWidget::SetItemData(const FInventoryItemStruct& Item)
 	UpdateQuantityText();
 	UpdateSlotAppearance();
 
-	UE_LOG(LogTemp, Verbose, TEXT("InventorySlotWidget: Set item data for slot %d - %s"), SlotIndex, *Item.name);
+	UE_LOG(LogGameplay, Verbose, TEXT("InventorySlotWidget: Set item data for slot %d - %s"), SlotIndex, *Item.name);
 }
 
 void UInventorySlotWidget::ClearSlot()
@@ -220,14 +221,14 @@ void UInventorySlotWidget::LoadItemIcon()
 	UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetWorld()->GetGameInstance());
 	if (!GameInstance)
 	{
-		UE_LOG(LogTemp, Error, TEXT("InventorySlotWidget: GameInstance not found"));
+		UE_LOG(LogGameplay, Error, TEXT("InventorySlotWidget: GameInstance not found"));
 		return;
 	}
 
 	UItemManager* ItemManager = GameInstance->GetItemManager();
 	if (!ItemManager)
 	{
-		UE_LOG(LogTemp, Error, TEXT("InventorySlotWidget: ItemManager not found"));
+		UE_LOG(LogGameplay, Error, TEXT("InventorySlotWidget: ItemManager not found"));
 		return;
 	}
 
@@ -273,7 +274,7 @@ void UInventorySlotWidget::LoadItemIcon()
 	// Show icon
 	ItemIcon->SetVisibility(ESlateVisibility::Visible);
 
-	UE_LOG(LogTemp, Warning, TEXT("InventorySlotWidget: Loading icon for item %s (ID: %d)"), *CurrentItem.name, CurrentItem.itemId);
+	UE_LOG(LogGameplay, Verbose, TEXT("InventorySlotWidget: Loading icon for item %s (ID: %d)"), *CurrentItem.name, CurrentItem.itemId);
 }
 
 void UInventorySlotWidget::SetIconTexture(UTexture2D* Texture)
@@ -285,8 +286,8 @@ void UInventorySlotWidget::SetIconTexture(UTexture2D* Texture)
 		//ItemIcon->SetColorAndOpacity(FLinearColor::White);
 		ItemIcon->SetRenderOpacity(1.0f);
 
-		UE_LOG(LogTemp, Log, TEXT("Set icon texture %s. Has alpha: %s"), *Texture->GetName(), Texture->HasAlphaChannel() ? TEXT("Yes") : TEXT("No"));
-		UE_LOG(LogTemp, Warning, TEXT("InventorySlotWidget: Set icon texture for item %s"), *CurrentItem.name);
+		UE_LOG(LogGameplay, Verbose, TEXT("Set icon texture %s. Has alpha: %s"), *Texture->GetName(), Texture->HasAlphaChannel() ? TEXT("Yes") : TEXT("No"));
+		UE_LOG(LogGameplay, Verbose, TEXT("InventorySlotWidget: Set icon texture for item %s"), *CurrentItem.name);
 	}
 }
 

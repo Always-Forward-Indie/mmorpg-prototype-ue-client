@@ -1,4 +1,5 @@
 #include "Gameplay/Player/ReputationNetworkHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/Player/ReputationManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
@@ -11,7 +12,7 @@ void UReputationNetworkHandler::Initialize(UReputationManager* InManager, UNetwo
 {
     if (!InManager || !InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("ReputationNetworkHandler: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("ReputationNetworkHandler: Initialize called with null parameters"));
         return;
     }
     Manager          = InManager;

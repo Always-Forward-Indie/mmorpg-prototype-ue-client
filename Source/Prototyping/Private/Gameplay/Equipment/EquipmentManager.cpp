@@ -1,4 +1,5 @@
 #include "Gameplay/Equipment/EquipmentManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Equipment/EquipmentVisualComponent.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Items/InventoryManager.h"
@@ -15,12 +16,12 @@ void UEquipmentManager::Initialize(UNetworkManager* InNetworkManager, UMyGameIns
 {
     if (!InNetworkManager || !InGameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("EquipmentManager: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("EquipmentManager: Initialize called with null parameters"));
         return;
     }
     NetworkManager = InNetworkManager;
     GameInstance   = InGameInstance;
-    UE_LOG(LogTemp, Log, TEXT("EquipmentManager: Initialized"));
+    UE_LOG(LogGameplay, Verbose, TEXT("EquipmentManager: Initialized"));
 }
 
 void UEquipmentManager::SetInventoryManager(UInventoryManager* InInventoryManager)
@@ -56,7 +57,7 @@ void UEquipmentManager::RequestEquipItem(int32 CharacterId, int32 InventoryItemI
     FJsonSerializer::Serialize(Root.ToSharedRef(), Writer);
 
     SendPacket(Payload);
-    UE_LOG(LogTemp, Log, TEXT("EquipmentManager: Sent equipItem inventoryItemId=%d"), InventoryItemId);
+    UE_LOG(LogGameplay, Verbose, TEXT("EquipmentManager: Sent equipItem inventoryItemId=%d"), InventoryItemId);
 }
 
 void UEquipmentManager::RequestUnequipItem(int32 CharacterId, const FString& SlotSlug)
@@ -83,7 +84,7 @@ void UEquipmentManager::RequestUnequipItem(int32 CharacterId, const FString& Slo
     FJsonSerializer::Serialize(Root.ToSharedRef(), Writer);
 
     SendPacket(Payload);
-    UE_LOG(LogTemp, Log, TEXT("EquipmentManager: Sent unequipItem slot=%s"), *SlotSlug);
+    UE_LOG(LogGameplay, Verbose, TEXT("EquipmentManager: Sent unequipItem slot=%s"), *SlotSlug);
 }
 
 void UEquipmentManager::RequestGetEquipment(int32 CharacterId)
@@ -233,7 +234,7 @@ void UEquipmentManager::OnRemoteEquipmentStateReceived(const FEquipmentStateData
             UEquipmentVisualComponent* VisComp = RemotePlayer->GetEquipmentVisualComponent();
             if (VisComp && VisComp->GetOwnerCharacterId() == State.characterId)
             {
-                UE_LOG(LogTemp, Log,
+                UE_LOG(LogGameplay, Verbose,
                     TEXT("EquipmentManager: Direct equipment apply for remote CharID=%d (%d slot(s))"),
                     State.characterId, State.slots.Num());
                 VisComp->HandleRemoteEquipmentState(State);

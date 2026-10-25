@@ -1,4 +1,5 @@
 #include "Gameplay/NPCs/NPCManager.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
@@ -27,11 +28,11 @@ void UNPCManager::Initialize(UNetworkManager* NetworkManager)
 		
 		if (gameInstance)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("NPCManager: GameInstance found and initialized"));
+			UE_LOG(LogGameplay, Warning, TEXT("NPCManager: GameInstance found and initialized"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("NPCManager: GameInstance not found"));
+			UE_LOG(LogGameplay, Error, TEXT("NPCManager: GameInstance not found"));
 		}
 	}
 
@@ -49,7 +50,7 @@ void UNPCManager::Initialize(UNetworkManager* NetworkManager)
 		);
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("NPCManager: Initialized successfully"));
+	UE_LOG(LogGameplay, Warning, TEXT("NPCManager: Initialized successfully"));
 }
 
 void UNPCManager::SetWorldContext(UWorld* World)
@@ -69,7 +70,7 @@ void UNPCManager::SetWorldContext(UWorld* World)
 	}
 
 	worldContext = World;
-	UE_LOG(LogTemp, Warning, TEXT("NPCManager: World context set to %s"), World ? TEXT("Valid") : TEXT("NULL"));
+	UE_LOG(LogGameplay, Warning, TEXT("NPCManager: World context set to %s"), World ? TEXT("Valid") : TEXT("NULL"));
 
 	if (bWasNull && worldContext)
 	{
@@ -97,17 +98,17 @@ void UNPCManager::SubscribeToNetworkManager()
 {
 	if (!networkManager)
 	{
-		UE_LOG(LogTemp, Error, TEXT("NPCManager: Network manager not found"));
+		UE_LOG(LogGameplay, Error, TEXT("NPCManager: Network manager not found"));
 		return;
 	}
 
 	if (!IsValid(networkManager))
 	{
-		UE_LOG(LogTemp, Error, TEXT("NPCManager: Network Manager is not valid"));
+		UE_LOG(LogGameplay, Error, TEXT("NPCManager: Network Manager is not valid"));
 		return;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("NPCManager: Network Manager found - NPCNetworkHandler will handle network events"));
+	UE_LOG(LogGameplay, Warning, TEXT("NPCManager: Network Manager found - NPCNetworkHandler will handle network events"));
 
 	// NPCManager ������ �� ������������� �� ������� ������� ��������
 	// ��� ������� ������� �������������� ����� NPCNetworkHandler
@@ -118,27 +119,27 @@ void UNPCManager::ProcessGameServerData(const FString& ReceivedData)
 {
 	// ���� ����� ������ �� ������������
 	// ��� ��������� ������� ������ ���������� � NPCNetworkHandler
-	UE_LOG(LogTemp, Warning, TEXT("NPCManager::ProcessGameServerData called - this should not happen! Use NPCNetworkHandler instead."));
+	UE_LOG(LogGameplay, Warning, TEXT("NPCManager::ProcessGameServerData called - this should not happen! Use NPCNetworkHandler instead."));
 }
 
 void UNPCManager::SpawnNPC(const FNPCStruct& NPCData)
 {
 	if (!ValidateNPCData(NPCData))
 	{
-		UE_LOG(LogTemp, Error, TEXT("NPCManager: Invalid NPC data provided for NPC ID: %d"), NPCData.id);
+		UE_LOG(LogGameplay, Error, TEXT("NPCManager: Invalid NPC data provided for NPC ID: %d"), NPCData.id);
 		return;
 	}
 
 	if (!worldContext)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("NPCManager: No world context — queuing NPC %d (%s) for later spawn"), NPCData.id, *NPCData.name);
+		UE_LOG(LogGameplay, Warning, TEXT("NPCManager: No world context — queuing NPC %d (%s) for later spawn"), NPCData.id, *NPCData.name);
 		PendingNPCSpawns.Add(NPCData);
 		return;
 	}
 
 	if (SpawnedNPCs.Contains(NPCData.id))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("NPCManager: NPC with ID %d already exists"), NPCData.id);
+		UE_LOG(LogGameplay, Warning, TEXT("NPCManager: NPC with ID %d already exists"), NPCData.id);
 		return;
 	}
 
@@ -149,13 +150,13 @@ void UNPCManager::SpawnNPC(const FNPCStruct& NPCData)
 		
 		SpawnedNPC->SetNPCData(NPCData);
 		
-		UE_LOG(LogTemp, Warning, TEXT("NPCManager: Successfully spawned NPC %s (ID: %d)"), *NPCData.name, NPCData.id);
+		UE_LOG(LogGameplay, Warning, TEXT("NPCManager: Successfully spawned NPC %s (ID: %d)"), *NPCData.name, NPCData.id);
 		
 		OnNPCSpawned.Broadcast(SpawnedNPC);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("NPCManager: Failed to spawn NPC %s (ID: %d)"), *NPCData.name, NPCData.id);
+		UE_LOG(LogGameplay, Error, TEXT("NPCManager: Failed to spawn NPC %s (ID: %d)"), *NPCData.name, NPCData.id);
 	}
 }
 
@@ -181,14 +182,14 @@ void UNPCManager::RemoveNPC(int32 NPCId)
 		// Remove from map
 		SpawnedNPCs.Remove(NPCId);
 		
-		UE_LOG(LogTemp, Warning, TEXT("NPCManager: Removed NPC %s (ID: %d)"), *NPCName, NPCId);
+		UE_LOG(LogGameplay, Warning, TEXT("NPCManager: Removed NPC %s (ID: %d)"), *NPCName, NPCId);
 		
 		// Broadcast event
 		OnNPCRemoved.Broadcast(NPCId);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("NPCManager: NPC with ID %d not found for removal"), NPCId);
+		UE_LOG(LogGameplay, Warning, TEXT("NPCManager: NPC with ID %d not found for removal"), NPCId);
 	}
 }
 
@@ -202,7 +203,7 @@ void UNPCManager::RemoveAllNPCs()
 		RemoveNPC(NPCId);
 	}
 	
-	UE_LOG(LogTemp, Warning, TEXT("NPCManager: Removed all NPCs"));
+	UE_LOG(LogGameplay, Warning, TEXT("NPCManager: Removed all NPCs"));
 }
 
 void UNPCManager::ClearWorldState()
@@ -210,7 +211,7 @@ void UNPCManager::ClearWorldState()
 	RemoveAllNPCs();
 	PendingNPCSpawns.Empty();
 
-	UE_LOG(LogTemp, Log, TEXT("NPCManager: Cleared world state (spawned NPCs, pending spawns)"));
+	UE_LOG(LogGameplay, Verbose, TEXT("NPCManager: Cleared world state (spawned NPCs, pending spawns)"));
 }
 
 ABasicNPC* UNPCManager::GetNPCById(int32 NPCId) const
@@ -310,7 +311,7 @@ void UNPCManager::RequestNPCData(const FClientDataStruct& ClientData)
 {
 	if (!networkManager || !gameInstance)
 	{
-		UE_LOG(LogTemp, Error, TEXT("NPCManager: Cannot request NPC data - missing dependencies"));
+		UE_LOG(LogNetPacket, Error, TEXT("NPCManager: Cannot request NPC data - missing dependencies"));
 		return;
 	}
 
@@ -332,14 +333,14 @@ void UNPCManager::RequestNPCData(const FClientDataStruct& ClientData)
 	// Send to chunk server
 	networkManager->SendDataToChunkServer(JsonString);
 	
-	UE_LOG(LogTemp, Warning, TEXT("NPCManager: Sent NPC data request"));
+	UE_LOG(LogGameplay, Warning, TEXT("NPCManager: Sent NPC data request"));
 }
 
 ABasicNPC* UNPCManager::CreateNPCActor(const FNPCStruct& NPCData)
 {
 	if (!worldContext)
 	{
-		UE_LOG(LogTemp, Error, TEXT("NPCManager: Cannot spawn NPC - no world context"));
+		UE_LOG(LogGameplay, Error, TEXT("NPCManager: Cannot spawn NPC - no world context"));
 		return nullptr;
 	}
 
@@ -373,7 +374,7 @@ ABasicNPC* UNPCManager::CreateNPCActor(const FNPCStruct& NPCData)
 		if (NPCDefinitionTable)
 		{
 			SpawnedNPC->NPCDefinitionTable = NPCDefinitionTable;
-			UE_LOG(LogTemp, Log, TEXT("NPCManager: Assigned NPCDefinitionTable to NPC %s"), *NPCData.name);
+			UE_LOG(LogGameplay, Verbose, TEXT("NPCManager: Assigned NPCDefinitionTable to NPC %s"), *NPCData.name);
 		}
 		else
 		{
@@ -381,17 +382,17 @@ ABasicNPC* UNPCManager::CreateNPCActor(const FNPCStruct& NPCData)
 			if (gameInstance && gameInstance->GetNPCManager() && gameInstance->GetNPCManager()->GetNPCDefinitionTable())
 			{
 				SpawnedNPC->NPCDefinitionTable = gameInstance->GetNPCManager()->GetNPCDefinitionTable();
-				UE_LOG(LogTemp, Log, TEXT("NPCManager: Assigned NPCDefinitionTable from GameInstance to NPC %s"), *NPCData.name);
+				UE_LOG(LogGameplay, Verbose, TEXT("NPCManager: Assigned NPCDefinitionTable from GameInstance to NPC %s"), *NPCData.name);
 			}
 			else
 			{
-				UE_LOG(LogTemp, Warning, TEXT("NPCManager: NPCDefinitionTable not available anywhere, NPC %s will not have visual/audio setup"), *NPCData.name);
+				UE_LOG(LogGameplay, Warning, TEXT("NPCManager: NPCDefinitionTable not available anywhere, NPC %s will not have visual/audio setup"), *NPCData.name);
 			}
 		}
 
 		// Set a tag for easy identification
 		SpawnedNPC->Tags.Add(FName(*FString::Printf(TEXT("NPC_%d"), NPCData.id)));
-		UE_LOG(LogTemp, Log, TEXT("NPCManager: Created NPC actor for %s at location %s"), 
+		UE_LOG(LogGameplay, Verbose, TEXT("NPCManager: Created NPC actor for %s at location %s"), 
 			*NPCData.name, *SpawnLocation.ToString());
 	}
 
@@ -402,13 +403,13 @@ bool UNPCManager::ValidateNPCData(const FNPCStruct& NPCData) const
 {
 	if (NPCData.id <= 0)
 	{
-		UE_LOG(LogTemp, Error, TEXT("NPCManager: Invalid NPC ID: %d"), NPCData.id);
+		UE_LOG(LogGameplay, Error, TEXT("NPCManager: Invalid NPC ID: %d"), NPCData.id);
 		return false;
 	}
 
 	if (NPCData.name.IsEmpty() && NPCData.slug.IsEmpty())
 	{
-		UE_LOG(LogTemp, Error, TEXT("NPCManager: Empty NPC name and slug for ID: %d"), NPCData.id);
+		UE_LOG(LogGameplay, Error, TEXT("NPCManager: Empty NPC name and slug for ID: %d"), NPCData.id);
 		return false;
 	}
 
@@ -419,7 +420,7 @@ void UNPCManager::FlushPendingSpawns()
 {
 	if (PendingNPCSpawns.Num() == 0) return;
 
-	UE_LOG(LogTemp, Warning, TEXT("NPCManager: Flushing %d pending NPC spawns"), PendingNPCSpawns.Num());
+	UE_LOG(LogGameplay, Warning, TEXT("NPCManager: Flushing %d pending NPC spawns"), PendingNPCSpawns.Num());
 	TArray<FNPCStruct> Spawns = MoveTemp(PendingNPCSpawns);
 	PendingNPCSpawns.Empty();
 
@@ -451,11 +452,11 @@ void UNPCManager::CleanupInvalidNPCs()
 	for (int32 InvalidId : InvalidNPCIds)
 	{
 		SpawnedNPCs.Remove(InvalidId);
-		UE_LOG(LogTemp, Warning, TEXT("NPCManager: Cleaned up invalid NPC with ID: %d"), InvalidId);
+		UE_LOG(LogGameplay, Warning, TEXT("NPCManager: Cleaned up invalid NPC with ID: %d"), InvalidId);
 	}
 	
 	if (InvalidNPCIds.Num() > 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("NPCManager: Cleaned up %d invalid NPCs"), InvalidNPCIds.Num());
+		UE_LOG(LogGameplay, Warning, TEXT("NPCManager: Cleaned up %d invalid NPCs"), InvalidNPCIds.Num());
 	}
 }

@@ -1,11 +1,12 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Authentication/AuthenticationManager.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 
 void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 {
-	UE_LOG(LogTemp, Warning, TEXT("Login Server Response: %s"), *ReceivedData);
+	UE_LOG(LogNetPacket, Verbose, TEXT("Login Server Response: %s"), *ReceivedData);
 
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
 	FClientDataStruct ClientData   = JSONParser::DeserializeClientData(ReceivedData);
@@ -25,7 +26,7 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 
 		if (MessageData.errorCode == TEXT("ERR_VERSION_OUTDATED") || MessageData.errorCode == TEXT("ERR_VERSION_TOO_NEW"))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Version mismatch: %s (server=%s min=%s max=%s)"), *MessageData.errorCode, *MessageData.serverVersion, *MessageData.minClientVersion, *MessageData.maxClientVersion);
+			UE_LOG(LogConnection, Warning, TEXT("Version mismatch: %s (server=%s min=%s max=%s)"), *MessageData.errorCode, *MessageData.serverVersion, *MessageData.minClientVersion, *MessageData.maxClientVersion);
 			OnVersionMismatch.Broadcast(MessageData.errorCode);
 			OnVersionMismatchDetailed.Broadcast(MessageData.errorCode, MessageData.minClientVersion, MessageData.maxClientVersion, MessageData.serverVersion);
 			return;
@@ -33,7 +34,7 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 
 		if (MessageData.status == "success" && ClientData.clientId != 0 && !ClientData.hash.IsEmpty())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Login Success: Client ID: %d, Hash: %s"), ClientData.clientId, *ClientData.hash);
+			UE_LOG(LogConnection, Verbose, TEXT("Login Success: Client ID: %d"), ClientData.clientId);
 
 			if (gameInstance)
 			{
@@ -51,14 +52,14 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 		{
 			if (MessageData.errorCode == TEXT("ERR_ACCOUNT_BANNED"))
 			{
-				UE_LOG(LogTemp, Error, TEXT("Account banned: reason=%s expires=%s"), *MessageData.banReason, *MessageData.banExpiresAt);
+				UE_LOG(LogConnection, Error, TEXT("Account banned: reason=%s expires=%s"), *MessageData.banReason, *MessageData.banExpiresAt);
 				OnAccountBanned.Broadcast(MessageData.errorCode, MessageData.banReason, MessageData.banExpiresAt);
 			}
 			if (MessageData.errorCode == TEXT("ERR_DB"))
 			{
-				UE_LOG(LogTemp, Error, TEXT("Login Error: ERR_DB (transient — advise retry): %s"), *MessageData.message);
+				UE_LOG(LogConnection, Error, TEXT("Login Error: ERR_DB (transient — advise retry): %s"), *MessageData.message);
 			}
-			UE_LOG(LogTemp, Error, TEXT("Login Error: %s"), *MessageData.errorCode);
+			UE_LOG(LogConnection, Error, TEXT("Login Error: %s"), *MessageData.errorCode);
 			OnLoginResponse.Broadcast(false, MessageData.errorCode);
 		}
 		return;
@@ -73,7 +74,7 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 
 		if (MessageData.errorCode == TEXT("ERR_VERSION_OUTDATED") || MessageData.errorCode == TEXT("ERR_VERSION_TOO_NEW"))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Version mismatch: %s (server=%s min=%s max=%s)"), *MessageData.errorCode, *MessageData.serverVersion, *MessageData.minClientVersion, *MessageData.maxClientVersion);
+			UE_LOG(LogConnection, Warning, TEXT("Version mismatch: %s (server=%s min=%s max=%s)"), *MessageData.errorCode, *MessageData.serverVersion, *MessageData.minClientVersion, *MessageData.maxClientVersion);
 			OnVersionMismatch.Broadcast(MessageData.errorCode);
 			OnVersionMismatchDetailed.Broadcast(MessageData.errorCode, MessageData.minClientVersion, MessageData.maxClientVersion, MessageData.serverVersion);
 			return;
@@ -81,7 +82,7 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 
 		if (MessageData.status == "success" && ClientData.clientId != 0 && !ClientData.hash.IsEmpty())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Registration Success: Client ID: %d"), ClientData.clientId);
+			UE_LOG(LogConnection, Warning, TEXT("Registration Success: Client ID: %d"), ClientData.clientId);
 
 			if (gameInstance)
 			{
@@ -99,14 +100,14 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 		{
 			if (MessageData.errorCode == TEXT("ERR_ACCOUNT_BANNED"))
 			{
-				UE_LOG(LogTemp, Error, TEXT("Account banned: reason=%s expires=%s"), *MessageData.banReason, *MessageData.banExpiresAt);
+				UE_LOG(LogConnection, Error, TEXT("Account banned: reason=%s expires=%s"), *MessageData.banReason, *MessageData.banExpiresAt);
 				OnAccountBanned.Broadcast(MessageData.errorCode, MessageData.banReason, MessageData.banExpiresAt);
 			}
 			if (MessageData.errorCode == TEXT("ERR_DB"))
 			{
-				UE_LOG(LogTemp, Error, TEXT("Registration Error: ERR_DB (transient — advise retry): %s"), *MessageData.message);
+				UE_LOG(LogConnection, Error, TEXT("Registration Error: ERR_DB (transient — advise retry): %s"), *MessageData.message);
 			}
-			UE_LOG(LogTemp, Error, TEXT("Registration Error: %s"), *MessageData.errorCode);
+			UE_LOG(LogConnection, Error, TEXT("Registration Error: %s"), *MessageData.errorCode);
 			OnRegisterResponse.Broadcast(false, MessageData.errorCode);
 		}
 		return;
@@ -142,7 +143,7 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("Character list request failed: %s"), *MessageData.message);
+			UE_LOG(LogConnection, Error, TEXT("Character list request failed: %s"), *MessageData.message);
 			if (gameInstance)
 			{
 				gameInstance->OnLoginResponseReceived.Broadcast(ClientData.clientId, MessageData.message);
@@ -159,13 +160,13 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 		if (MessageData.status == "success")
 		{
 			FCharacterCreationOptions Options = JSONParser::DeserializeCharacterCreationOptions(ReceivedData);
-			UE_LOG(LogTemp, Warning, TEXT("Creation Options received: %d classes, %d races, %d genders"),
+			UE_LOG(LogConnection, Warning, TEXT("Creation Options received: %d classes, %d races, %d genders"),
 				Options.Classes.Num(), Options.Races.Num(), Options.Genders.Num());
 			OnCharacterCreationOptionsReceived.Broadcast(Options);
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("Creation options request failed: %s"), *MessageData.message);
+			UE_LOG(LogConnection, Error, TEXT("Creation options request failed: %s"), *MessageData.message);
 		}
 		return;
 	}
@@ -190,7 +191,7 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 				}
 			}
 
-			UE_LOG(LogTemp, Warning, TEXT("Character created: ID=%d"), NewCharId);
+			UE_LOG(LogConnection, Warning, TEXT("Character created: ID=%d"), NewCharId);
 			OnCreateCharacterResponse.Broadcast(true, MessageData.message, NewCharId);
 
 			// Re-request character list to refresh UI
@@ -204,7 +205,7 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("Character creation failed: %s"), *MessageData.message);
+			UE_LOG(LogConnection, Error, TEXT("Character creation failed: %s"), *MessageData.message);
 			OnCreateCharacterResponse.Broadcast(false, MessageData.message, 0);
 		}
 		return;
@@ -229,7 +230,7 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 
 		if (MessageData.status == "success")
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Character deleted: ID=%d"), DeletedCharId);
+			UE_LOG(LogConnection, Warning, TEXT("Character deleted: ID=%d"), DeletedCharId);
 			OnDeleteCharacterResponse.Broadcast(true, MessageData.message, DeletedCharId);
 
 			// Re-request character list to refresh the UI (mirrors createCharacter flow)
@@ -243,7 +244,7 @@ void UAuthenticationManager::ProcessLoginResponse(const FString& ReceivedData)
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("Character deletion failed: %s"), *MessageData.message);
+			UE_LOG(LogConnection, Error, TEXT("Character deletion failed: %s"), *MessageData.message);
 			OnDeleteCharacterResponse.Broadcast(false, MessageData.message, DeletedCharId);
 		}
 		return;
@@ -260,10 +261,10 @@ void UAuthenticationManager::StartPing()
 	{
 		pingManager->SetWorldContext(worldContext);
 		pingManager->StartPingUpdates();
-		UE_LOG(LogTemp, Warning, TEXT("AuthenticationManager: Started TimeSyncService-based ping updates"));
+		UE_LOG(LogConnection, Verbose, TEXT("AuthenticationManager: Started TimeSyncService-based ping updates"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AuthenticationManager: Cannot start ping - missing worldContext or pingManager"));
+		UE_LOG(LogConnection, Warning, TEXT("AuthenticationManager: Cannot start ping - missing worldContext or pingManager"));
 	}
 }

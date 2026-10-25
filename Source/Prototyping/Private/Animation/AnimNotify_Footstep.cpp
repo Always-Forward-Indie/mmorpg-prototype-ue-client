@@ -1,4 +1,5 @@
 #include "Animation/AnimNotify_Footstep.h"
+#include "Prototyping.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/AudioComponent.h"
 #include "GameFramework/Actor.h"
@@ -65,7 +66,7 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 		const FString OwnerName = GetNameSafe(Owner);
 		if (bHit)
 		{
-			UE_LOG(LogTemp, Log, TEXT("[Footstep] %s | %s | HIT actor=%s comp=%s dist=%.1f | PhysMat=%s"),
+			UE_LOG(LogGameAudio, Verbose, TEXT("[Footstep] %s | %s | HIT actor=%s comp=%s dist=%.1f | PhysMat=%s"),
 				*OwnerName, *FootSocketName.ToString(),
 				*GetNameSafe(Hit.GetActor()), *GetNameSafe(Hit.GetComponent()),
 				Hit.Distance,
@@ -73,7 +74,7 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[Footstep] %s | %s | MISS | TraceStart=%s TraceEnd=%s"),
+			UE_LOG(LogGameAudio, Verbose, TEXT("[Footstep] %s | %s | MISS | TraceStart=%s TraceEnd=%s"),
 				*OwnerName, *FootSocketName.ToString(),
 				*TraceStart.ToString(), *TraceEnd.ToString());
 		}
@@ -116,7 +117,7 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 			Row = FootstepTable->FindRow<FFootstepSoundData>(CompositeKey, TEXT("Footstep"));
 			if (GFootstepDebug >= 2 && Row)
 			{
-				UE_LOG(LogTemp, Log, TEXT("[Footstep]   Priority 1 HIT: key=%s, sounds=%d"),
+				UE_LOG(LogGameAudio, Verbose, TEXT("[Footstep]   Priority 1 HIT: key=%s, sounds=%d"),
 					*CompositeKey.ToString(), Row->FootstepSounds.Num());
 			}
 		}
@@ -127,7 +128,7 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 			Row = FootstepTable->FindRow<FFootstepSoundData>(PhysMatName, TEXT("Footstep"));
 			if (GFootstepDebug >= 2 && Row)
 			{
-				UE_LOG(LogTemp, Log, TEXT("[Footstep]   Priority 2 HIT: key=%s, sounds=%d"),
+				UE_LOG(LogGameAudio, Verbose, TEXT("[Footstep]   Priority 2 HIT: key=%s, sounds=%d"),
 					*PhysMatName.ToString(), Row->FootstepSounds.Num());
 			}
 		}
@@ -153,7 +154,7 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 		}
 		else if (GFootstepDebug >= 1)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[Footstep]   PhysMat=%s NOT found in DataTable (tried: %s%s)"),
+			UE_LOG(LogGameAudio, Warning, TEXT("[Footstep]   PhysMat=%s NOT found in DataTable (tried: %s%s)"),
 				*PhysMatName.ToString(),
 				!Footwear.IsNone() ? *(PhysMatName.ToString() + TEXT("_") + Footwear.ToString() + TEXT(", ")) : TEXT(""),
 				*PhysMatName.ToString());
@@ -166,7 +167,7 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 		SoundToPlay = DefaultFootstepSound.LoadSynchronous();
 		if (GFootstepDebug >= 1)
 		{
-			UE_LOG(LogTemp, Log, TEXT("[Footstep]   Priority 3: default notify sound"));
+			UE_LOG(LogGameAudio, Verbose, TEXT("[Footstep]   Priority 3: default notify sound"));
 		}
 	}
 
@@ -199,7 +200,7 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 
 		if (GFootstepDebug >= 1 && SoundToPlay)
 		{
-			UE_LOG(LogTemp, Log, TEXT("[Footstep]   Priority %d: entity fallback sounds"), ResolvedPriority);
+			UE_LOG(LogGameAudio, Verbose, TEXT("[Footstep]   Priority %d: entity fallback sounds"), ResolvedPriority);
 		}
 	}
 
@@ -207,12 +208,12 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 	{
 		if (SoundToPlay)
 		{
-			UE_LOG(LogTemp, Log, TEXT("[Footstep]   RESULT: priority=%d sound=%s volume=%.2f"),
+			UE_LOG(LogGameAudio, Verbose, TEXT("[Footstep]   RESULT: priority=%d sound=%s volume=%.2f"),
 				ResolvedPriority, *GetNameSafe(SoundToPlay), FinalVolume);
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[Footstep]   RESULT: NO SOUND - all priorities exhausted (PhysMat=%s, Table=%s, DefaultSound=%s, Footwear=%s)"),
+			UE_LOG(LogGameAudio, Warning, TEXT("[Footstep]   RESULT: NO SOUND - all priorities exhausted (PhysMat=%s, Table=%s, DefaultSound=%s, Footwear=%s)"),
 				*PhysMatName.ToString(),
 				FootstepTable ? TEXT("yes") : TEXT("no"),
 				DefaultFootstepSound.IsNull() ? TEXT("none") : TEXT("set"),

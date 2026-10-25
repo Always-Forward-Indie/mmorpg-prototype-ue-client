@@ -1,4 +1,5 @@
 #include "DevMode/DevModeConsoleCommands.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Networking/NetworkManager.h"
 
@@ -14,7 +15,7 @@ void UDevModeConsoleCommands::Cmd_DropSocket(const TArray<FString>& Args) const
 {
     if (Args.Num() < 1 || !Args[0].Equals(TEXT("chunk"), ESearchCase::IgnoreCase))
     {
-        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.dropsocket chunk"));
+        UE_LOG(LogGameplay, Warning, TEXT("Usage: devmode.dropsocket chunk"));
         return;
     }
     if (!GameInstance)
@@ -24,9 +25,9 @@ void UDevModeConsoleCommands::Cmd_DropSocket(const TArray<FString>& Args) const
     UNetworkManager* Net = GameInstance->GetNetworkManager();
     if (!Net)
     {
-        UE_LOG(LogTemp, Warning, TEXT("devmode.dropsocket: no NetworkManager"));
+        UE_LOG(LogGameplay, Warning, TEXT("devmode.dropsocket: no NetworkManager"));
         return;
     }
     Net->DropChunkSocketForTest();
-    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_DROPSOCKET chunk requested"));
+    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_DROPSOCKET chunk requested"));
 }

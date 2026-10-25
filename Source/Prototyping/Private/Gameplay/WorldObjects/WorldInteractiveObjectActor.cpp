@@ -1,4 +1,5 @@
 #include "Gameplay/WorldObjects/WorldInteractiveObjectActor.h"
+#include "Prototyping.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -90,7 +91,7 @@ void AWorldInteractiveObjectActor::InitializeFromServerData(const FWorldObjectDa
 	// Apply initial visual state
 	ApplyStateVisuals(InData.CurrentState);
 
-	UE_LOG(LogTemp, Log, TEXT("WIO Actor [%d] '%s' initialized — type=%d scope=%d state=%d radius=%.0f"),
+	UE_LOG(LogGameplay, Verbose, TEXT("WIO Actor [%d] '%s' initialized — type=%d scope=%d state=%d radius=%.0f"),
 		InData.ObjectId, *InData.Slug,
 		static_cast<int32>(InData.ObjectType),
 		static_cast<int32>(InData.Scope),

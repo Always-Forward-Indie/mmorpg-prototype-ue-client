@@ -1,4 +1,5 @@
 #include "Gameplay/Combat/HealingEffectHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/Combat/ICombatable.h"
 
 UHealingEffectHandler::UHealingEffectHandler()
@@ -14,7 +15,7 @@ void UHealingEffectHandler::ProcessSkillResult_Implementation(const FSkillResult
 {
     if (!Target.GetInterface() || !Target.GetObject() || !IsValid(Target.GetObject()))
     {
-        UE_LOG(LogTemp, Error, TEXT("HealingEffectHandler: Target interface is null or invalid"));
+        UE_LOG(LogGameplay, Error, TEXT("HealingEffectHandler: Target interface is null or invalid"));
         return;
     }
 
@@ -77,7 +78,7 @@ void UHealingEffectHandler::ProcessSkillResult_Implementation(const FSkillResult
     if (FinalHealing > ActualHealing)
     {
         int32 OverhealAmount = FinalHealing - ActualHealing;
-        UE_LOG(LogTemp, Log, TEXT("HealingEffectHandler: Overheal of %d prevented for target %d"), 
+        UE_LOG(LogGameplay, Verbose, TEXT("HealingEffectHandler: Overheal of %d prevented for target %d"), 
             OverhealAmount, ICombatable::Execute_GetActorId(TargetObject));
     }
 
@@ -86,19 +87,19 @@ void UHealingEffectHandler::ProcessSkillResult_Implementation(const FSkillResult
 
 void UHealingEffectHandler::ProcessCriticalHeal(const FSkillResultData& SkillResult, UObject* TargetObject)
 {
-    UE_LOG(LogTemp, Log, TEXT("HealingEffectHandler: Processing critical heal for %d healing"), SkillResult.healing);
+    UE_LOG(LogGameplay, Verbose, TEXT("HealingEffectHandler: Processing critical heal for %d healing"), SkillResult.healing);
     // Critical heal processing logic can be expanded here
 }
 
 void UHealingEffectHandler::ProcessHealingOverTime(const FSkillResultData& SkillResult, UObject* TargetObject)
 {
-    UE_LOG(LogTemp, Log, TEXT("HealingEffectHandler: Processing HOT effect"));
+    UE_LOG(LogGameplay, Verbose, TEXT("HealingEffectHandler: Processing HOT effect"));
     // HOT processing logic can be implemented here
 }
 
 void UHealingEffectHandler::LogHealingProcessing(const FSkillResultData& SkillResult, UObject* TargetObject)
 {
-    UE_LOG(LogTemp, Verbose, TEXT("HealingEffectHandler: Processed %d healing to target %d (Current HP: %d/%d)"),
+    UE_LOG(LogGameplay, Verbose, TEXT("HealingEffectHandler: Processed %d healing to target %d (Current HP: %d/%d)"),
         SkillResult.healing, ICombatable::Execute_GetActorId(TargetObject), 
         ICombatable::Execute_GetCurrentHealth(TargetObject), ICombatable::Execute_GetMaxHealth(TargetObject));
 }

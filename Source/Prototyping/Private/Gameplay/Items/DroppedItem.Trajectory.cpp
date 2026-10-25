@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Items/DroppedItemActor.h"
+#include "Prototyping.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "Gameplay/Mobs/BasicMOB.h"
@@ -36,7 +37,7 @@ void ADroppedItemActor::SetupTrajectoryAnimation(const FVector& SourceLocation)
 	// Store the target position with ground-aligned Z coordinate
 	TargetPosition = FVector(TargetXY.X, TargetXY.Y, GroundZ);
 
-	UE_LOG(LogTemp, Log, TEXT("Item %s target position adjusted to ground level: %s (Ground Z: %.2f)"),
+	UE_LOG(LogGameplay, Verbose, TEXT("Item %s target position adjusted to ground level: %s (Ground Z: %.2f)"),
 		*ItemData.item.name, *TargetPosition.ToString(), GroundZ);
 
 	// Calculate a random horizontal offset for the arc's apex
@@ -63,7 +64,7 @@ void ADroppedItemActor::SetupTrajectoryAnimation(const FVector& SourceLocation)
 		{
 			// Use custom ground rotation immediately
 			ItemMesh->SetRelativeRotation(VisualData.GroundRotation);
-			UE_LOG(LogTemp, Log, TEXT("Using custom ground rotation for trajectory item %s: %s"),
+			UE_LOG(LogGameplay, Verbose, TEXT("Using custom ground rotation for trajectory item %s: %s"),
 				*ItemData.item.name, *VisualData.GroundRotation.ToString());
 		}
 		else
@@ -75,12 +76,12 @@ void ADroppedItemActor::SetupTrajectoryAnimation(const FVector& SourceLocation)
 				FMath::RandRange(-5.0f, 5.0f)    // Small roll variation
 			);
 			ItemMesh->SetRelativeRotation(DefaultRotation);
-			UE_LOG(LogTemp, Log, TEXT("Using default rotation for trajectory item %s: %s"),
+			UE_LOG(LogGameplay, Verbose, TEXT("Using default rotation for trajectory item %s: %s"),
 				*ItemData.item.name, *DefaultRotation.ToString());
 		}
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("Starting drop trajectory for item %s from mob position %s to ground position %s"),
+	UE_LOG(LogGameplay, Verbose, TEXT("Starting drop trajectory for item %s from mob position %s to ground position %s"),
 		*ItemData.item.name, *InitialPosition.ToString(), *TargetPosition.ToString());
 }
 

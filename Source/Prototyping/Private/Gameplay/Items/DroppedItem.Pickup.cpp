@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Items/DroppedItemActor.h"
+#include "Prototyping.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "Gameplay/Mobs/BasicMOB.h"
@@ -25,7 +26,7 @@ bool ADroppedItemActor::AttemptPickup()
 {
 	if (!ItemData.canBePickedUp)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Item %s (ID:%d) cannot be picked up"), *ItemData.item.name, ItemData.uid);
+		UE_LOG(LogGameplay, Warning, TEXT("Item %s (ID:%d) cannot be picked up"), *ItemData.item.name, ItemData.uid);
 		return false;
 	}
 
@@ -34,14 +35,14 @@ bool ADroppedItemActor::AttemptPickup()
 	UMyGameInstance* GameInstance = Cast<UMyGameInstance>(UGameplayStatics::GetGameInstance(GetWorld()));
 	if (!GameInstance)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Game instance not found"));
+		UE_LOG(LogGameplay, Error, TEXT("Game instance not found"));
 		return false;
 	}
 
 	UItemManager* ItemManager = GameInstance->GetItemManager();
 	if (!ItemManager)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Item manager not found"));
+		UE_LOG(LogGameplay, Error, TEXT("Item manager not found"));
 		return false;
 	}
 
@@ -99,7 +100,7 @@ void ADroppedItemActor::PlayPickupEffect()
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("PlayPickupEffect: Failed to load PickupNiagaraSystem: %s"), *FXPath.ToString());
+			UE_LOG(LogGameplay, Warning, TEXT("PlayPickupEffect: Failed to load PickupNiagaraSystem: %s"), *FXPath.ToString());
 		}
 	}
 

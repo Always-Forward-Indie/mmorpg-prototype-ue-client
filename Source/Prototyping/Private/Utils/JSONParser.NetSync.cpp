@@ -2,6 +2,7 @@
 
 
 #include "Utils/JSONParser.h"
+#include "Prototyping.h"
 #include "Services/TimeSyncService.h"
 #include "MyGameInstance.h"
 #include "Engine/World.h"
@@ -102,11 +103,11 @@ void JSONParser::ProcessTimeSyncFromHeader(const FString& JsonString, UTimeSyncS
 
 		if (bUpdated)
 		{
-			UE_LOG(LogTemp, VeryVerbose, TEXT("JSONParser: Updated time sync for request: %s"), *RequestIdToUse);
+			UE_LOG(LogPing, VeryVerbose, TEXT("JSONParser: Updated time sync for request: %s"), *RequestIdToUse);
 		}
 		else
 		{
-			UE_LOG(LogTemp, VeryVerbose, TEXT("JSONParser: Time sync update failed or filtered for: %s"), *RequestIdToUse);
+			UE_LOG(LogPing, VeryVerbose, TEXT("JSONParser: Time sync update failed or filtered for: %s"), *RequestIdToUse);
 		}
 	}
 }

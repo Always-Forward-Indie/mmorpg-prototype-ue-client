@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillDragDropOperation.h"
 #include "UI/AvailableSkillsWidget.h"  // This contains USkillItemWidget definition
+#include "Prototyping.h"
 #include "UI/SkillSlotWidget.h"
 #include "UI/SkillDragVisualWidget.h"
 #include "UI/SkillDragVisualBlueprintWidget.h"
@@ -25,7 +26,7 @@ USkillDragDropOperation::USkillDragDropOperation()
     // override DragVisualWidgetClass with a Blueprint subclass.
     DragVisualWidgetClass = USkillDragVisualWidget::StaticClass();
 
-    UE_LOG(LogTemp, Warning, TEXT("SkillDragDropOperation: Constructor called"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDragDropOperation: Constructor called"));
 }
 
 void USkillDragDropOperation::SetSkillData(const FPlayerSkillData& InSkillData, USkillItemWidget* InSourceWidget)
@@ -33,16 +34,16 @@ void USkillDragDropOperation::SetSkillData(const FPlayerSkillData& InSkillData, 
     SkillData = InSkillData;
     SourceWidget = InSourceWidget;
     
-    UE_LOG(LogTemp, Warning, TEXT("SkillDragDropOperation: SetSkillData called for skill %s"), *SkillData.networkData.skillSlug);
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDragDropOperation: SetSkillData called for skill %s"), *SkillData.networkData.skillSlug);
 }
 
 void USkillDragDropOperation::CreateDefaultDragVisual()
 {
-    UE_LOG(LogTemp, Warning, TEXT("SkillDragDropOperation: CreateDefaultDragVisual called"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDragDropOperation: CreateDefaultDragVisual called"));
     
     if (!SourceWidget)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillDragDropOperation: No source widget available for drag visual"));
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillDragDropOperation: No source widget available for drag visual"));
         return;
     }
 
@@ -51,7 +52,7 @@ void USkillDragDropOperation::CreateDefaultDragVisual()
     if (CustomDragVisual)
     {
         DefaultDragVisual = CustomDragVisual;
-        UE_LOG(LogTemp, Warning, TEXT("SkillDragDropOperation: Created custom drag visual"));
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillDragDropOperation: Created custom drag visual"));
         return;
     }
 
@@ -65,16 +66,16 @@ void USkillDragDropOperation::CreateDefaultDragVisual()
     Pivot = EDragPivot::MouseDown;
     Offset = FVector2D::ZeroVector;
     
-    UE_LOG(LogTemp, Warning, TEXT("SkillDragDropOperation: No drag visual (proceeding without one)"));
+    UE_LOG(LogGameplay, Warning, TEXT("SkillDragDropOperation: No drag visual (proceeding without one)"));
 }
 
 UUserWidget* USkillDragDropOperation::CreateDragVisualWidget()
 {
-    UE_LOG(LogTemp, Warning, TEXT("SkillDragDropOperation: CreateDragVisualWidget called"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDragDropOperation: CreateDragVisualWidget called"));
 
     if (!DragVisualWidgetClass)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillDragDropOperation: No DragVisualWidgetClass"));
+        UE_LOG(LogGameplay, Warning, TEXT("SkillDragDropOperation: No DragVisualWidgetClass"));
         return nullptr;
     }
 
@@ -91,7 +92,7 @@ UUserWidget* USkillDragDropOperation::CreateDragVisualWidget()
 
     if (!OwningPlayer)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillDragDropOperation: No OwningPlayer available"));
+        UE_LOG(LogGameplay, Warning, TEXT("SkillDragDropOperation: No OwningPlayer available"));
         return nullptr;
     }
 
@@ -102,7 +103,7 @@ UUserWidget* USkillDragDropOperation::CreateDragVisualWidget()
     );
     if (!DragVisual)
     {
-        UE_LOG(LogTemp, Error, TEXT("SkillDragDropOperation: CreateWidget failed"));
+        UE_LOG(LogGameplay, Error, TEXT("SkillDragDropOperation: CreateWidget failed"));
         return nullptr;
     }
 
@@ -123,14 +124,14 @@ UUserWidget* USkillDragDropOperation::CreateDragVisualWidget()
         NativeVisual->BuildComponentsOnce();
         NativeVisual->SetSkillData(SkillData);
         NativeVisual->SetVisibility(ESlateVisibility::HitTestInvisible);
-        UE_LOG(LogTemp, Warning, TEXT("SkillDragDropOperation: Configured USkillDragVisualWidget drag visual"));
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillDragDropOperation: Configured USkillDragVisualWidget drag visual"));
         return NativeVisual;
     }
     if (USkillDragVisualBlueprintWidget* BpVisual = Cast<USkillDragVisualBlueprintWidget>(DragVisual))
     {
         BpVisual->SetSkillData(SkillData);
         BpVisual->SetVisibility(ESlateVisibility::HitTestInvisible);
-        UE_LOG(LogTemp, Warning, TEXT("SkillDragDropOperation: Configured USkillDragVisualBlueprintWidget drag visual"));
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillDragDropOperation: Configured USkillDragVisualBlueprintWidget drag visual"));
         return BpVisual;
     }
 
@@ -162,7 +163,7 @@ UUserWidget* USkillDragDropOperation::CreateDragVisualWidget()
     }
     
     DragVisual->SetVisibility(ESlateVisibility::HitTestInvisible);
-    UE_LOG(LogTemp, Warning, TEXT("SkillDragDropOperation: Configured drag visual widget (generic path)"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDragDropOperation: Configured drag visual widget (generic path)"));
 
     return DragVisual;
 }

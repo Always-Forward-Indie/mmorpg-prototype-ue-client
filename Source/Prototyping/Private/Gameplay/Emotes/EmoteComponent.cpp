@@ -1,4 +1,5 @@
 #include "Gameplay/Emotes/EmoteComponent.h"
+#include "Prototyping.h"
 #include "Data/EmoteDefinitionTable.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimInstance.h"
@@ -31,7 +32,7 @@ void UEmoteComponent::PlayEmoteBySlug(const FString& EmoteSlug, const FString& A
     ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
     if (!OwnerChar)
     {
-        UE_LOG(LogTemp, Warning, TEXT("EmoteComponent: Owner is not an ACharacter — cannot play emote '%s'"), *EmoteSlug);
+        UE_LOG(LogGameplay, Warning, TEXT("EmoteComponent: Owner is not an ACharacter — cannot play emote '%s'"), *EmoteSlug);
         return;
     }
 
@@ -44,7 +45,7 @@ void UEmoteComponent::PlayEmoteBySlug(const FString& EmoteSlug, const FString& A
     const FEmoteTableRow* Row = FindTableRow(EmoteSlug);
     if (!Row)
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
             TEXT("EmoteComponent: No DataTable row for emote slug '%s'. "
                  "Add a row to DT_EmoteDefinitions. AnimationName hint: '%s'"),
             *EmoteSlug, *AnimationName);
@@ -55,7 +56,7 @@ void UEmoteComponent::PlayEmoteBySlug(const FString& EmoteSlug, const FString& A
     UAnimMontage* Montage = Row->EmoteMontage.LoadSynchronous();
     if (!Montage)
     {
-        UE_LOG(LogTemp, Warning, TEXT("EmoteComponent: EmoteMontage not set in DT row for '%s'"), *EmoteSlug);
+        UE_LOG(LogGameplay, Warning, TEXT("EmoteComponent: EmoteMontage not set in DT row for '%s'"), *EmoteSlug);
         return;
     }
 
@@ -63,14 +64,14 @@ void UEmoteComponent::PlayEmoteBySlug(const FString& EmoteSlug, const FString& A
     UAnimInstance* AnimInst = OwnerChar->GetMesh() ? OwnerChar->GetMesh()->GetAnimInstance() : nullptr;
     if (!AnimInst)
     {
-        UE_LOG(LogTemp, Warning, TEXT("EmoteComponent: No AnimInstance on '%s'"), *GetOwner()->GetName());
+        UE_LOG(LogGameplay, Warning, TEXT("EmoteComponent: No AnimInstance on '%s'"), *GetOwner()->GetName());
         return;
     }
 
     const float Duration = OwnerChar->PlayAnimMontage(Montage, Row->PlayRate);
     if (Duration <= 0.f)
     {
-        UE_LOG(LogTemp, Warning, TEXT("EmoteComponent: PlayAnimMontage returned 0 for '%s' — check slot assignment"), *EmoteSlug);
+        UE_LOG(LogGameplay, Warning, TEXT("EmoteComponent: PlayAnimMontage returned 0 for '%s' — check slot assignment"), *EmoteSlug);
         return;
     }
 
@@ -116,7 +117,7 @@ void UEmoteComponent::PlayEmoteBySlug(const FString& EmoteSlug, const FString& A
     }
 
     OnEmoteStarted.Broadcast(EmoteSlug);
-    UE_LOG(LogTemp, Log, TEXT("EmoteComponent: Playing emote '%s' on '%s'"), *EmoteSlug, *GetOwner()->GetName());
+    UE_LOG(LogGameplay, Verbose, TEXT("EmoteComponent: Playing emote '%s' on '%s'"), *EmoteSlug, *GetOwner()->GetName());
 }
 
 void UEmoteComponent::StopCurrentEmote()
@@ -268,6 +269,6 @@ void UEmoteComponent::ClearEmoteState(bool bInterrupted)
     CurrentMontageAsset = nullptr;
 
     OnEmoteEnded.Broadcast(FinishedSlug);
-    UE_LOG(LogTemp, Log, TEXT("EmoteComponent: Emote '%s' ended (interrupted: %s)"),
+    UE_LOG(LogGameplay, Verbose, TEXT("EmoteComponent: Emote '%s' ended (interrupted: %s)"),
         *FinishedSlug, bInterrupted ? TEXT("yes") : TEXT("no"));
 }

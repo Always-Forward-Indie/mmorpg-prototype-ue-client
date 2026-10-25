@@ -1,4 +1,5 @@
 #include "DevMode/DevModeBotBrain.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeConsoleCommands.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -41,11 +42,11 @@ void UDevModeBotBrain::BotAssert(bool bPass, const FString& What, int32 Actual, 
 {
     if (bPass)
     {
-        UE_LOG(LogTemp, Log, TEXT("DEVMODE_ASSERT PASS bot-%s actual=%d"), *What, Actual);
+        UE_LOG(LogGameplay, Verbose, TEXT("DEVMODE_ASSERT PASS bot-%s actual=%d"), *What, Actual);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_ASSERT FAIL bot-%s actual=%d expected=%d"), *What, Actual, Expected);
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_ASSERT FAIL bot-%s actual=%d expected=%d"), *What, Actual, Expected);
         ++Failures;
     }
 }
@@ -67,11 +68,11 @@ void UDevModeBotBrain::BotShot(const FString& Tag) const
         // way). Park it; the per-frame SteerTick pump issues it the moment
         // the pipe is free.
         PendingShotName = Name;
-        UE_LOG(LogTemp, Log, TEXT("DEVMODE_BOT_SHOT_QUEUED %s_%s"), *ScenarioName, *Tag);
+        UE_LOG(LogGameplay, Verbose, TEXT("DEVMODE_BOT_SHOT_QUEUED %s_%s"), *ScenarioName, *Tag);
         return;
     }
     FScreenshotRequest::RequestScreenshot(Name, true, false);
-    UE_LOG(LogTemp, Log, TEXT("DEVMODE_BOT_SHOT %s_%s"), *ScenarioName, *Tag);
+    UE_LOG(LogGameplay, Verbose, TEXT("DEVMODE_BOT_SHOT %s_%s"), *ScenarioName, *Tag);
 }
 
 void UDevModeBotBrain::Finish(bool bPass, const FString& Reason)
@@ -87,12 +88,12 @@ void UDevModeBotBrain::Finish(bool bPass, const FString& Reason)
     if (!PendingShotName.IsEmpty() && !FScreenshotRequest::IsScreenshotRequested())
     {
         FScreenshotRequest::RequestScreenshot(PendingShotName, true, false);
-        UE_LOG(LogTemp, Log, TEXT("DEVMODE_BOT_SHOT_FLUSHED %s (finish)"), *PendingShotName);
+        UE_LOG(LogGameplay, Verbose, TEXT("DEVMODE_BOT_SHOT_FLUSHED %s (finish)"), *PendingShotName);
         PendingShotName.Empty();
     }
     const bool bOk = bPass && Failures == 0;
     Stop();
-    UE_LOG(LogTemp, Warning, TEXT("%s_RESULT %s %s kills=%d failures=%d reason=%s"),
+    UE_LOG(LogGameplay, Warning, TEXT("%s_RESULT %s %s kills=%d failures=%d reason=%s"),
         *TombstonePrefix, *ScenarioName, bOk ? TEXT("PASS") : TEXT("FAIL"), Kills, Failures, *Reason);
 
     // Auto-run paths (-devmode=<scenario>, -bot-live=<scenario>) quit so CI
@@ -159,12 +160,12 @@ bool UDevModeBotBrain::SpawnStubDrop(ABasicPlayer* Player)
     UItemManager* ItemManager = GameInstance->GetItemManager();
     if (!ItemManager)
     {
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT stub drop failed: no ItemManager"));
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT stub drop failed: no ItemManager"));
         return false;
     }
     if (GameInstance->GetDroppedItemActorClass() == nullptr)
     {
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT stub drop failed: no DroppedItemActorClass"));
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT stub drop failed: no DroppedItemActorClass"));
         return false;
     }
 
@@ -185,11 +186,11 @@ bool UDevModeBotBrain::SpawnStubDrop(ABasicPlayer* Player)
     ADroppedItemActor* Actor = ItemManager->SpawnDroppedItem(Drop);
     if (!IsValid(Actor))
     {
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT stub drop failed: SpawnDroppedItem returned null"));
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT stub drop failed: SpawnDroppedItem returned null"));
         return false;
     }
     LootDropActor = Actor;
-    UE_LOG(LogTemp, Warning, TEXT("%s_LOOT_STUB uid=%d 'Health Potion' at corpse (offline drop, real spawn path)"),
+    UE_LOG(LogGameplay, Warning, TEXT("%s_LOOT_STUB uid=%d 'Health Potion' at corpse (offline drop, real spawn path)"),
         *TombstonePrefix, LootDropUID);
     return true;
 }
@@ -227,7 +228,7 @@ void UDevModeBotBrain::ResolveStubLoot(ABasicPlayer* Player)
     }
     LootDropActor.Reset();
     bPickupRequested = true;
-    UE_LOG(LogTemp, Warning, TEXT("%s_LOOT_STUB resolved uid=%d into inventory (offline pickup)"),
+    UE_LOG(LogGameplay, Warning, TEXT("%s_LOOT_STUB resolved uid=%d into inventory (offline pickup)"),
         *TombstonePrefix, LootDropUID);
 }
 
@@ -239,7 +240,7 @@ void UDevModeBotBrain::ApplyStubDeath(ABasicPlayer* Player)
     // same call server-driven death takes. Only the damage is stubbed.
     Player->SetPlayerCurrentHPPoints(0);
     Player->SetDead_Implementation(true);
-    UE_LOG(LogTemp, Warning, TEXT("%s_DEATH_STUB player killed offline (real SetDead path)"),
+    UE_LOG(LogGameplay, Warning, TEXT("%s_DEATH_STUB player killed offline (real SetDead path)"),
         *TombstonePrefix);
 }
 
@@ -254,7 +255,7 @@ void UDevModeBotBrain::ApplyStubRevive(ABasicPlayer* Player)
     Player->SetActorLocation(RespawnPoint);
     Player->SetDead_Implementation(false);
     Player->SetPlayerCurrentHPPoints(MaxHP > 0 ? MaxHP : 1000);
-    UE_LOG(LogTemp, Warning, TEXT("%s_RESPAWN_STUB player revived at spawn hp=%d (real SetDead path)"),
+    UE_LOG(LogGameplay, Warning, TEXT("%s_RESPAWN_STUB player revived at spawn hp=%d (real SetDead path)"),
         *TombstonePrefix, Player->GetPlayerCurrentHPPoints());
 }
 

@@ -1,4 +1,5 @@
 #include "DevMode/DevModeBotBrain.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeConsoleCommands.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -46,7 +47,7 @@ bool UDevModeBotBrain::Tick_GotoRendezvous(UWorld* World, ABasicPlayer* Player, 
         {
             Step = EBotStep::AssertVisible;
             StepStartTime = Now;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT at rendezvous, waiting for peer"));
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT at rendezvous, waiting for peer"));
             BotShot(TEXT("rendezvous"));
             return true;
         }
@@ -82,7 +83,7 @@ bool UDevModeBotBrain::Tick_AssertVisible(UWorld* World, ABasicPlayer* Player, d
                 // the invite -> accept -> offer -> confirm chain on both sides.
                 Step = EBotStep::TradeElect;
                 TradeLegStartTime = Now;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT peer visible, starting trade election"));
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT peer visible, starting trade election"));
                 return true;
             }
             if (bChatPhase)
@@ -90,7 +91,7 @@ bool UDevModeBotBrain::Tick_AssertVisible(UWorld* World, ABasicPlayer* Player, d
                 // Social leg: stay at the rendezvous and talk next.
                 Step = EBotStep::ChatExchange;
                 ChatLegStartTime = Now;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT peer visible, starting chat exchange"));
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT peer visible, starting chat exchange"));
                 return true;
             }
             Finish(Failures == 0, Failures == 0 ? TEXT("peer-visible") : TEXT("assert-failures"));
@@ -114,7 +115,7 @@ bool UDevModeBotBrain::Tick_GotoCorpse(UWorld* World, ABasicPlayer* Player, doub
         {
             Step = EBotStep::LootPickup;
             StepStartTime = Now;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT at corpse, resolving pickup"));
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT at corpse, resolving pickup"));
             BotShot(TEXT("corpse"));
             return true;
         }
@@ -151,7 +152,7 @@ bool UDevModeBotBrain::Tick_LootPickup(UWorld* World, ABasicPlayer* Player, doub
                     if (!Corpse->HasBeenHarvested())
                     {
                         Corpse->SetHarvested(true);
-                        UE_LOG(LogTemp, Warning, TEXT("%s_HARVEST_STUB uid=%d marked harvested (offline progress)"),
+                        UE_LOG(LogGameplay, Warning, TEXT("%s_HARVEST_STUB uid=%d marked harvested (offline progress)"),
                             *TombstonePrefix, CorpseUID);
                     }
                 }
@@ -228,7 +229,7 @@ bool UDevModeBotBrain::Tick_LootPickup(UWorld* World, ABasicPlayer* Player, doub
                 Player->SetLockedTarget(Corpse);
                 Harvest->TryHarvestSpecificCorpse(Corpse);
                 bHarvestRequested = true;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT harvest requested on corpse uid=%d"), CorpseUID);
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT harvest requested on corpse uid=%d"), CorpseUID);
             }
             if (Now - LootLegStartTime > HarvestTimeoutSec)
             {
@@ -241,7 +242,7 @@ bool UDevModeBotBrain::Tick_LootPickup(UWorld* World, ABasicPlayer* Player, doub
         {
             Harvest->InspectCorpseLoot(CorpseUID);
             bInspectRequested = true;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT loot inspect requested uid=%d"), CorpseUID);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT loot inspect requested uid=%d"), CorpseUID);
             return true;
         }
         // Server-confirmed empty corpse is a CONTENT signal (no loot table),
@@ -252,7 +253,7 @@ bool UDevModeBotBrain::Tick_LootPickup(UWorld* World, ABasicPlayer* Player, doub
         {
             if (bQuestPhase)
             {
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT corpse uid=%d empty, moving on (%d/%d)"),
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT corpse uid=%d empty, moving on (%d/%d)"),
                     CorpseUID, Kills, TargetKills);
                 QuestLootDone(Now);
                 return true;
@@ -274,7 +275,7 @@ bool UDevModeBotBrain::Tick_LootPickup(UWorld* World, ABasicPlayer* Player, doub
         // inventory-growth poll below.
         if (!bPickupRequested)
         {
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT pickup-all requested (%d item(s))"),
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT pickup-all requested (%d item(s))"),
                 Harvest->GetCurrentAvailableLoot().Num());
             Harvest->PickupAllLoot();
             bPickupRequested = true;

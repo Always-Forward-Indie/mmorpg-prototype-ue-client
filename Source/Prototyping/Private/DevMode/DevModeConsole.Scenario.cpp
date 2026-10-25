@@ -1,4 +1,5 @@
 #include "DevMode/DevModeConsoleCommands.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeBotBrain.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Mobs/MOBManager.h"
@@ -23,7 +24,7 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
 {
     if (Args.Num() < 1)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.scenario <combat|reset|full_sweep|soak|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery>"));
+        UE_LOG(LogGameplay, Warning, TEXT("Usage: devmode.scenario <combat|reset|full_sweep|soak|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery>"));
         return;
     }
     if (!GameInstance) return;
@@ -49,12 +50,12 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
         {
             const FVector At = First->GetActorLocation() + FVector(-300.0f, 0.0f, 0.0f);
             GameInstance->Player->SetActorLocation(At);
-            UE_LOG(LogTemp, Log, TEXT("devmode.scenario combat: near '%s' at (%.0f,%.0f,%.0f)"),
+            UE_LOG(LogGameplay, Verbose, TEXT("devmode.scenario combat: near '%s' at (%.0f,%.0f,%.0f)"),
                 *First->GetMobName(), At.X, At.Y, At.Z);
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("devmode.scenario combat: no mob/player found"));
+            UE_LOG(LogGameplay, Warning, TEXT("devmode.scenario combat: no mob/player found"));
         }
     }
     else if (Name == TEXT("reset"))
@@ -65,7 +66,7 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
         {
             GameInstance->Player->SetActorLocation(FVector(0.0f, 0.0f, 90.0f));
         }
-        UE_LOG(LogTemp, Log, TEXT("devmode.scenario reset: world re-seeded, player at spawn"));
+        UE_LOG(LogGameplay, Verbose, TEXT("devmode.scenario reset: world re-seeded, player at spawn"));
     }
     else if (Name == TEXT("full_sweep"))
     {
@@ -98,11 +99,11 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
     else if (Name == TEXT("bot_vendor_repair"))
     {
         // Economy shops need the server round-trip — live only.
-        UE_LOG(LogTemp, Warning, TEXT("devmode.scenario: bot_vendor_repair is live-only (use -bot-live=live_vendor_repair with dev servers)"));
+        UE_LOG(LogGameplay, Warning, TEXT("devmode.scenario: bot_vendor_repair is live-only (use -bot-live=live_vendor_repair with dev servers)"));
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("devmode.scenario: unknown '%s' (use combat|reset|full_sweep|soak|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery)"), *Args[0]);
+        UE_LOG(LogGameplay, Warning, TEXT("devmode.scenario: unknown '%s' (use combat|reset|full_sweep|soak|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery)"), *Args[0]);
     }
 }
 
@@ -111,7 +112,7 @@ void UDevModeConsoleCommands::StartBotBrain(const FString& ScenarioName) const
     if (!GameInstance) return;
     if (GameInstance->DevModeBotBrain && GameInstance->DevModeBotBrain->IsRunning())
     {
-        UE_LOG(LogTemp, Warning, TEXT("devmode.bot: brain already running"));
+        UE_LOG(LogGameplay, Warning, TEXT("devmode.bot: brain already running"));
         return;
     }
     if (!GameInstance->DevModeBotBrain)
@@ -188,7 +189,7 @@ void UDevModeConsoleCommands::RunSweepPhase1() const
     // frame, so nothing is asserted here — phase 2 runs after cleanup.
     SweepFailures = 0;
     PerfReset();
-    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_SWEEP_BEGIN full_sweep"));
+    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_SWEEP_BEGIN full_sweep"));
     TArray<FString> NoArgs;
     Cmd_ReloadMobs(NoArgs);
     Cmd_ReloadInventory(NoArgs);
@@ -254,7 +255,7 @@ void UDevModeConsoleCommands::RunSweepPhase3() const
     SweepShot(TEXT("phase3-result"));
     PerfMark(TEXT("phase3-result"));
     PerfStop();
-    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_SWEEP_RESULT %s failures=%d"),
+    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_SWEEP_RESULT %s failures=%d"),
         SweepFailures == 0 ? TEXT("PASS") : TEXT("FAIL"), SweepFailures);
 }
 
@@ -264,7 +265,7 @@ void UDevModeConsoleCommands::StartSoakLoop() const
     if (bSoakLoop)
     {
         bSoakLoop = false;
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_SOAK_RESULT %s iters=%d"),
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_SOAK_RESULT %s iters=%d"),
             SweepFailures == 0 ? TEXT("PASS") : TEXT("FAIL"), SoakIter);
         return;
     }
@@ -277,7 +278,7 @@ void UDevModeConsoleCommands::StartSoakLoop() const
     SoakIter = 0;
     SweepFailures = 0;
     bSoakLoop = true;
-    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_SOAK_BEGIN iters=%d period=%.1fs"),
+    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_SOAK_BEGIN iters=%d period=%.1fs"),
         SoakMaxIters, SoakPeriodSec);
     RunSoakCycle();
 }
@@ -310,12 +311,12 @@ bool UDevModeConsoleCommands::SoakContinue() const
     const FPlatformMemoryStats Mem = FPlatformMemory::GetStats();
     const double UsedMB = (double)Mem.UsedPhysical / (1024.0 * 1024.0);
     const double PeakMB = (double)Mem.PeakUsedPhysical / (1024.0 * 1024.0);
-    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_SOAK iter=%d memMB=%.0f peakMB=%.0f"),
+    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_SOAK iter=%d memMB=%.0f peakMB=%.0f"),
         SoakIter, UsedMB, PeakMB);
     if (SoakMaxIters > 0 && SoakIter >= SoakMaxIters)
     {
         bSoakLoop = false;
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_SOAK_RESULT %s iters=%d"),
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_SOAK_RESULT %s iters=%d"),
             SweepFailures == 0 ? TEXT("PASS") : TEXT("FAIL"), SoakIter);
         return false;
     }

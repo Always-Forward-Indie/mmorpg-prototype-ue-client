@@ -1,4 +1,5 @@
 #include "DevMode/DevModeDataProvider.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Mobs/MOBManager.h"
 #include "Gameplay/Items/InventoryManager.h"
@@ -30,7 +31,7 @@ FString UDevModeDataProvider::ReadJsonFile(const FString& RelativePath) const
     FString JsonStr;
     if (!FFileHelper::LoadFileToString(JsonStr, *AbsPath))
     {
-        UE_LOG(LogTemp, Error, TEXT("DevModeDataProvider: Failed to read '%s'"), *AbsPath);
+        UE_LOG(LogGameplay, Error, TEXT("DevModeDataProvider: Failed to read '%s'"), *AbsPath);
         return FString();
     }
     return JsonStr;
@@ -48,7 +49,7 @@ bool UDevModeDataProvider::LoadPlayerData(FClientDataStruct& OutClientData) cons
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonStr);
     if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("DevModeDataProvider: Failed to parse player JSON"));
+        UE_LOG(LogNetPacket, Error, TEXT("DevModeDataProvider: Failed to parse player JSON"));
         return false;
     }
 
@@ -59,7 +60,7 @@ bool UDevModeDataProvider::LoadPlayerData(FClientDataStruct& OutClientData) cons
     const TSharedPtr<FJsonObject>* CharObj = nullptr;
     if (!Root->TryGetObjectField(TEXT("characterData"), CharObj) || !CharObj)
     {
-        UE_LOG(LogTemp, Error, TEXT("DevModeDataProvider: Missing 'characterData' in player JSON"));
+        UE_LOG(LogNetPacket, Error, TEXT("DevModeDataProvider: Missing 'characterData' in player JSON"));
         return false;
     }
 
@@ -103,7 +104,7 @@ bool UDevModeDataProvider::LoadPlayerData(FClientDataStruct& OutClientData) cons
         }
     }
 
-    UE_LOG(LogTemp, Log, TEXT("DevModeDataProvider: Loaded player '%s' (id=%d)"),
+    UE_LOG(LogGameplay, Verbose, TEXT("DevModeDataProvider: Loaded player '%s' (id=%d)"),
         *CD.characterName, CD.characterId);
     return true;
 }
@@ -172,7 +173,7 @@ void UDevModeDataProvider::PopulateMobs(UMOBManager* InMobManager) const
 {
     if (!InMobManager)
     {
-        UE_LOG(LogTemp, Warning, TEXT("DevModeDataProvider: PopulateMobs called with null MOBManager"));
+        UE_LOG(LogGameplay, Warning, TEXT("DevModeDataProvider: PopulateMobs called with null MOBManager"));
         return;
     }
 
@@ -200,7 +201,7 @@ void UDevModeDataProvider::PopulateMobs(UMOBManager* InMobManager) const
         }
     }
 
-    UE_LOG(LogTemp, Log, TEXT("DevModeDataProvider: Spawned %d test mobs"), Spawned);
+    UE_LOG(LogGameplay, Verbose, TEXT("DevModeDataProvider: Spawned %d test mobs"), Spawned);
 }
 
 // ============================================================================
@@ -255,7 +256,7 @@ void UDevModeDataProvider::PopulateInventory(UInventoryManager* InInventoryManag
 {
     if (!InInventoryManager)
     {
-        UE_LOG(LogTemp, Warning, TEXT("DevModeDataProvider: PopulateInventory called with null InventoryManager"));
+        UE_LOG(LogGameplay, Warning, TEXT("DevModeDataProvider: PopulateInventory called with null InventoryManager"));
         return;
     }
 
@@ -283,5 +284,5 @@ void UDevModeDataProvider::PopulateInventory(UInventoryManager* InInventoryManag
         }
     }
 
-    UE_LOG(LogTemp, Log, TEXT("DevModeDataProvider: Added %d items to inventory"), Added);
+    UE_LOG(LogGameplay, Verbose, TEXT("DevModeDataProvider: Added %d items to inventory"), Added);
 }

@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Components/ArrowComponent.h"
 #include "ShaderCompiler.h"
 #include "ContentStreaming.h"
@@ -100,7 +101,7 @@
 
 void UMyGameInstance::PlayCombatAnimation(const FCombatAnimationData& AnimationData)
 {
-	UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Playing combat animation %s for character ID %d"),
+	UE_LOG(LogGameplay, Verbose, TEXT("MyGameInstance: Playing combat animation %s for character ID %d"),
 		*AnimationData.AnimationName, AnimationData.CharacterId);
 
 	// Check if the character is the player
@@ -109,7 +110,7 @@ void UMyGameInstance::PlayCombatAnimation(const FCombatAnimationData& AnimationD
 	if (SourcePlayer)
 	{
 		// Play animation on the player character
-		UE_LOG(LogTemp, Warning, TEXT("Playing animation on player character: %s"), *AnimationData.AnimationName);
+		UE_LOG(LogGameplay, Warning, TEXT("Playing animation on player character: %s"), *AnimationData.AnimationName);
 		// TODO: Implement animation playing in BasicPlayer class
 		// SourcePlayer->PlayAnimation(AnimationData.AnimationName);
 	}
@@ -128,7 +129,7 @@ void UMyGameInstance::PlayCombatAnimation(const FCombatAnimationData& AnimationD
 			if (MOB)
 			{
 				// Play animation on the MOB
-				UE_LOG(LogTemp, Warning, TEXT("Playing animation on MOB %s: %s"), 
+				UE_LOG(LogGameplay, Warning, TEXT("Playing animation on MOB %s: %s"), 
 					*MOB->GetMobName(), *AnimationData.AnimationName);
 				// TODO: Implement animation playing in BasicMOB class
 				// MOB->PlayAnimation(AnimationData.AnimationName);
@@ -139,7 +140,7 @@ void UMyGameInstance::PlayCombatAnimation(const FCombatAnimationData& AnimationD
 
 void UMyGameInstance::ProcessCombatAction(const FCombatActionData& ActionData)
 {
-	UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Processing combat action %s from caster %d to target %d"),
+	UE_LOG(LogGameplay, Verbose, TEXT("MyGameInstance: Processing combat action %s from caster %d to target %d"),
 		*ActionData.ActionName, ActionData.CasterId, ActionData.TargetId);
 
 	// Find the source and target based on their IDs
@@ -148,7 +149,7 @@ void UMyGameInstance::ProcessCombatAction(const FCombatActionData& ActionData)
 	if (SourcePlayer)
 	{
 		// Handle action on player character (e.g., play attack animation)
-		UE_LOG(LogTemp, Warning, TEXT("Player %d performing action %s"), 
+		UE_LOG(LogGameplay, Verbose, TEXT("Player %d performing action %s"), 
 			ActionData.CasterId, *ActionData.ActionName);
 		// TODO: Implement action performing in BasicPlayer class
 		// SourcePlayer->PerformAction(ActionData.ActionName);
@@ -160,7 +161,7 @@ void UMyGameInstance::ProcessCombatAction(const FCombatActionData& ActionData)
 
 void UMyGameInstance::UpdateMobHealth(int32 TargetId, int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt)
 {
-	UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Updating mob health for ID %d: Health=%d, IsDead=%s, Damage=%d"),
+	UE_LOG(LogGameplay, Verbose, TEXT("MyGameInstance: Updating mob health for ID %d: Health=%d, IsDead=%s, Damage=%d"),
 		TargetId, NewHealth, bIsDead ? TEXT("True") : TEXT("False"), DamageDealt);
 
 	// Use new combat system to find and update MOB
@@ -186,7 +187,7 @@ void UMyGameInstance::UpdateMobHealth(int32 TargetId, int32 NewHealth, int32 New
 			//	MobInterface->ShowDamageEffect_Implementation(DamageDealt, false, ESkillSchool::Physical);
 			//}
 			
-			UE_LOG(LogTemp, Warning, TEXT("Updated MOB through combat system"));
+			UE_LOG(LogGameplay, Verbose, TEXT("Updated MOB through combat system"));
 			return;
 		}
 	}
@@ -195,7 +196,7 @@ void UMyGameInstance::UpdateMobHealth(int32 TargetId, int32 NewHealth, int32 New
 
 void UMyGameInstance::UpdatePlayerHealth(int32 TargetId, int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt)
 {
-	UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Updating player health for ID %d: Health=%d, IsDead=%s, Damage=%d"),
+	UE_LOG(LogGameplay, Verbose, TEXT("MyGameInstance: Updating player health for ID %d: Health=%d, IsDead=%s, Damage=%d"),
 		TargetId, NewHealth, bIsDead ? TEXT("True") : TEXT("False"), DamageDealt);
 
 	// Use new combat system to find and update Player
@@ -222,7 +223,7 @@ void UMyGameInstance::UpdatePlayerHealth(int32 TargetId, int32 NewHealth, int32 
 				PlayerInterface->SetDead_Implementation(true);
 			}
 			
-			UE_LOG(LogTemp, Warning, TEXT("Updated Player through combat system"));
+			UE_LOG(LogGameplay, Verbose, TEXT("Updated Player through combat system"));
 			return;
 		}
 	}
@@ -231,7 +232,7 @@ void UMyGameInstance::UpdatePlayerHealth(int32 TargetId, int32 NewHealth, int32 
 void UMyGameInstance::UpdateTargetHealth(int32 TargetId, int32 TargetType, const FString& TargetTypeString, 
 	int32 NewHealth, int32 NewMana, bool bIsDead, bool bIsDamaged, int32 DamageDealt)
 {
-	UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Updating target health for %s ID %d: Health=%d, IsDead=%s, Damage=%d"),
+	UE_LOG(LogGameplay, Verbose, TEXT("MyGameInstance: Updating target health for %s ID %d: Health=%d, IsDead=%s, Damage=%d"),
 		*TargetTypeString, TargetId, NewHealth, bIsDead ? TEXT("True") : TEXT("False"), DamageDealt);
 
 	// Route the update based on target type
@@ -250,7 +251,7 @@ void UMyGameInstance::UpdateTargetHealth(int32 TargetId, int32 TargetType, const
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Unknown target type: %s (Type %d) for target %d"), 
+		UE_LOG(LogGameplay, Warning, TEXT("Unknown target type: %s (Type %d) for target %d"), 
 			*TargetTypeString, TargetType, TargetId);
 	}
 }

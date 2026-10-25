@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/MOBAnimInstance.h"
+#include "Prototyping.h"
 #include "Gameplay/Mobs/BasicMOB.h"
 #include "Animation/AnimMontage.h"
 
@@ -183,7 +184,7 @@ void UMOBAnimInstance::NotifyHit()
 {
 	if (bIsDead)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOBAnim] NotifyHit skipped: mob is dead"));
+		UE_LOG(LogGameplay, Warning, TEXT("[MOBAnim] NotifyHit skipped: mob is dead"));
 		return;
 	}
 
@@ -215,7 +216,7 @@ void UMOBAnimInstance::NotifyHit()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOBAnim] NotifyHit: HitReactMontage is null, using 0.3s timer fallback"));
+		UE_LOG(LogGameplay, Warning, TEXT("[MOBAnim] NotifyHit: HitReactMontage is null, using 0.3s timer fallback"));
 		// No montage - clear after a fixed window
 		if (UWorld* World = GetWorld())
 		{
@@ -265,13 +266,13 @@ float UMOBAnimInstance::CalcHitDelay(const UAnimMontage* Montage, float PlayRate
 				// TriggerTime is in montage-seconds (at PlayRate=1).
 				// Divide by PlayRate to get wall-clock seconds.
 				const float WallClockTime = NotifyEvent.GetTriggerTime() / PlayRate;
-				UE_LOG(LogTemp, Log,
+				UE_LOG(LogGameplay, Verbose,
 					TEXT("[MOBAnim] HitDelay from notify '%s': montageTime=%.3fs playRate=%.3f wallClock=%.3fs"),
 					*NotifyName.ToString(), NotifyEvent.GetTriggerTime(), PlayRate, WallClockTime);
 				return WallClockTime;
 			}
 		}
-		UE_LOG(LogTemp, Log,
+		UE_LOG(LogGameplay, Verbose,
 			TEXT("[MOBAnim] No HitPoint notify found in montage '%s', using DefaultHitRatio fallback"),
 			*Montage->GetName());
 	}

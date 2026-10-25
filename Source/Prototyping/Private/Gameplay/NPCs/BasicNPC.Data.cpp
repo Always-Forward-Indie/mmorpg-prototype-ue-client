@@ -1,4 +1,5 @@
 #include "Gameplay/NPCs/BasicNPC.h"
+#include "Prototyping.h"
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/NPCs/NPCAnimInstance.h"
@@ -28,7 +29,7 @@ void ABasicNPC::SetNPCData(const FNPCStruct& Data)
 		NPCData = Data;
 		NPCDataUpdated.Broadcast();
 		
-		UE_LOG(LogTemp, Warning, TEXT("NPC Data set for %s (ID:%d): HP=%d, MP=%d"), 
+		UE_LOG(LogGameplay, Warning, TEXT("NPC Data set for %s (ID:%d): HP=%d, MP=%d"), 
 			*NPCData.name, NPCData.id, NPCData.stats.health.current, NPCData.stats.mana.current);
 
 		// Set actor location from NPC position data
@@ -77,18 +78,18 @@ void ABasicNPC::SetNPCData(const FNPCStruct& Data)
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("NPC slug is empty for NPC %s (ID:%d), visual/audio setup skipped"), *NPCData.name, NPCData.id);
+			UE_LOG(LogGameplay, Warning, TEXT("NPC slug is empty for NPC %s (ID:%d), visual/audio setup skipped"), *NPCData.name, NPCData.id);
 		}
 	}
 	else
 	{
 		if (NPCData.id != 0)
 		{
-			UE_LOG(LogTemp, Error, TEXT("NPC Data already set for %s (ID:%d)"), *NPCData.name, NPCData.id);
+			UE_LOG(LogGameplay, Error, TEXT("NPC Data already set for %s (ID:%d)"), *NPCData.name, NPCData.id);
 		}
 		else if (Data.id <= 0)
 		{
-			UE_LOG(LogTemp, Error, TEXT("Invalid NPC ID (%d) provided"), Data.id);
+			UE_LOG(LogGameplay, Error, TEXT("Invalid NPC ID (%d) provided"), Data.id);
 		}
 	}
 }
@@ -108,7 +109,7 @@ void ABasicNPC::UpdateNPCQuestData(const TArray<FNPCQuestEntry>& NewQuests)
 		NP->InitialiseFromNPCData(NPCData, true);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("NPC %s (ID:%d): Quest data updated, %d quests"),
+	UE_LOG(LogGameplay, Verbose, TEXT("NPC %s (ID:%d): Quest data updated, %d quests"),
 		*NPCData.name, NPCData.id, NewQuests.Num());
 }
 
@@ -179,7 +180,7 @@ void ABasicNPC::SetNPCStats(const FNPCHealthManaStruct& Stats)
 	LastHealth = Stats.health.current;
 	LastMana = Stats.mana.current;
 	
-	UE_LOG(LogTemp, Log, TEXT("NPC %s (ID:%d) stats updated: HP=%d/%d, MP=%d/%d"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("NPC %s (ID:%d) stats updated: HP=%d/%d, MP=%d/%d"), 
 		*NPCData.name, NPCData.id, Stats.health.current, Stats.health.max, Stats.mana.current, Stats.mana.max);
 }
 

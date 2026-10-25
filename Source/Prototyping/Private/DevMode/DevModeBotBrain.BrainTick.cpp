@@ -1,4 +1,5 @@
 #include "DevMode/DevModeBotBrain.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeConsoleCommands.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -58,13 +59,13 @@ void UDevModeBotBrain::MaybeDropSocketMidRun(double Now)
     Kills = 0;
     if (GameInstance && GameInstance->GetNetworkManager())
     {
-        UE_LOG(LogTemp, Warning, TEXT("%s socket DROP requested (reconnect test, discarded pre-drop kills=%d)"),
+        UE_LOG(LogGameplay, Warning, TEXT("%s socket DROP requested (reconnect test, discarded pre-drop kills=%d)"),
             *TombstonePrefix, Discarded);
         GameInstance->GetNetworkManager()->DropChunkSocketForTest();
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("%s socket DROP skipped (no NetworkManager)"), *TombstonePrefix);
+        UE_LOG(LogGameplay, Warning, TEXT("%s socket DROP skipped (no NetworkManager)"), *TombstonePrefix);
     }
 }
 
@@ -148,7 +149,7 @@ void UDevModeBotBrain::BrainTick()
                     if (Now - LastCloseWaitLogSec > 15.0)
                     {
                         LastCloseWaitLogSec = Now;
-                        UE_LOG(LogTemp, Warning, TEXT("%s waiting for close target (nearest %.0f > %.0f)"),
+                        UE_LOG(LogGameplay, Warning, TEXT("%s waiting for close target (nearest %.0f > %.0f)"),
                             *TombstonePrefix, PickDist, CloseTargetRadius);
                     }
                     if (Now - RunStartSec > NoCloseTargetTimeoutSec)
@@ -162,7 +163,7 @@ void UDevModeBotBrain::BrainTick()
             StepStartTime = Now;
             LastChasePos = Player->GetActorLocation();
             LastChaseProgressTime = Now;
-            UE_LOG(LogTemp, Log, TEXT("DEVMODE_BOT target '%s' at (%.0f,%.0f)"),
+            UE_LOG(LogGameplay, Verbose, TEXT("DEVMODE_BOT target '%s' at (%.0f,%.0f)"),
                 *TargetMob->GetMobName(), TargetMob->GetActorLocation().X, TargetMob->GetActorLocation().Y);
         }
     }

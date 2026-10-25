@@ -1,4 +1,5 @@
 #include "UI/InventoryWidget.h"
+#include "Prototyping.h"
 #include "UI/InventorySlotWidget.h"
 #include "UI/ItemTooltipWidget.h"
 #include "UI/ItemActionMenuWidget.h"
@@ -57,7 +58,7 @@ void UInventoryWidget::NativeConstruct()
 			FMath::Max(0.f, VPSizeInit.X - Size.X - Margin),
 			FMath::Max(0.f, VPSizeInit.Y - Size.Y - Margin));
 
-		UE_LOG(LogTemp, Warning, TEXT("InventoryWidget: Setting initial position to bottom-right: %s (Viewport: %dx%d, Size: %s)"),
+		UE_LOG(LogGameplay, Warning, TEXT("InventoryWidget: Setting initial position to bottom-right: %s (Viewport: %dx%d, Size: %s)"),
 			*CurrentViewportPosition.ToString(), W, H, *Size.ToString());
 
 		SetPositionInViewport(CurrentViewportPosition, false);
@@ -180,7 +181,7 @@ void UInventoryWidget::InitializeInventory(UInventoryManager* InInventoryManager
 {
 	if (!InInventoryManager)
 	{
-		UE_LOG(LogTemp, Error, TEXT("InventoryWidget: Cannot initialize with null InventoryManager"));
+		UE_LOG(LogGameplay, Error, TEXT("InventoryWidget: Cannot initialize with null InventoryManager"));
 		return;
 	}
 
@@ -205,6 +206,6 @@ void UInventoryWidget::InitializeInventory(UInventoryManager* InInventoryManager
 		UpdateInventoryDisplay(InventoryManager->GetInventory());
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("InventoryWidget: Successfully initialized with InventoryManager"));
+	UE_LOG(LogGameplay, Warning, TEXT("InventoryWidget: Successfully initialized with InventoryManager"));
 }
 

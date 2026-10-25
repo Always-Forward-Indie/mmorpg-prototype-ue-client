@@ -1,4 +1,5 @@
 #include "UI/InventoryWidget.h"
+#include "Prototyping.h"
 #include "UI/InventorySlotWidget.h"
 #include "UI/ItemTooltipWidget.h"
 #include "UI/ItemActionMenuWidget.h"
@@ -38,14 +39,14 @@ FReply UInventoryWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 			bShouldStartDrag = (LocalMousePos.X >= 0 && LocalMousePos.X <= DragHandleSize.X &&
 				LocalMousePos.Y >= 0 && LocalMousePos.Y <= DragHandleSize.Y);
 
-			UE_LOG(LogTemp, Warning, TEXT("InventoryWidget: DragHandle click test - LocalPos: %s, Size: %s, ShouldDrag: %s"),
+			UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: DragHandle click test - LocalPos: %s, Size: %s, ShouldDrag: %s"),
 				*LocalMousePos.ToString(), *DragHandleSize.ToString(), bShouldStartDrag ? TEXT("True") : TEXT("False"));
 		}
 		else
 		{
 			// ���� ��� DragHandle, ��������� �������������� �����
 			bShouldStartDrag = true;
-			UE_LOG(LogTemp, Warning, TEXT("InventoryWidget: No DragHandle, allowing drag from anywhere"));
+			UE_LOG(LogGameplay, Warning, TEXT("InventoryWidget: No DragHandle, allowing drag from anywhere"));
 		}
 
 		if (bShouldStartDrag)
@@ -61,7 +62,7 @@ FReply UInventoryWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 			DragOffset = MouseVP - CurrentPos;
 			bDragging = true;
 
-			UE_LOG(LogTemp, Warning, TEXT("InventoryWidget: Drag calculation - Mouse: %s, Current: %s, Offset: %s"),
+			UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Drag calculation - Mouse: %s, Current: %s, Offset: %s"),
 				*MouseVP.ToString(), *CurrentPos.ToString(), *DragOffset.ToString());
 
 			if (TSharedPtr<SWidget> Slate = GetCachedWidget())
@@ -72,7 +73,7 @@ FReply UInventoryWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("InventoryWidget: Click outside DragHandle area - drag not started"));
+			UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Click outside DragHandle area - drag not started"));
 		}
 	}
 	
@@ -104,7 +105,7 @@ FReply UInventoryWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FP
 {
 	if (bDragging)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("InventoryWidget: Mouse move during drag - Position: %s"),
+		UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Mouse move during drag - Position: %s"),
 			*InMouseEvent.GetScreenSpacePosition().ToString());
 		UpdateWindowDragPosition(InMouseEvent.GetScreenSpacePosition());
 		return FReply::Handled();
@@ -117,7 +118,7 @@ void UInventoryWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPos
 	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 	if (!PC)
 	{
-		UE_LOG(LogTemp, Error, TEXT("InventoryWidget: No PlayerController found for drag"));
+		UE_LOG(LogGameplay, Error, TEXT("InventoryWidget: No PlayerController found for drag"));
 		return;
 	}
 
@@ -140,7 +141,7 @@ void UInventoryWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPos
 	Pos.X = FMath::Clamp(Pos.X, DragPadding.Left, FMath::Max(DragPadding.Left, ViewportSize.X - Size.X - DragPadding.Right));
 	Pos.Y = FMath::Clamp(Pos.Y, DragPadding.Top, FMath::Max(DragPadding.Top, ViewportSize.Y - Size.Y - DragPadding.Bottom));
 
-	UE_LOG(LogTemp, Warning, TEXT("InventoryWidget: Previous position: %s, New position: %s"),
+	UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Previous position: %s, New position: %s"),
 		*CurrentViewportPosition.ToString(), *Pos.ToString());
 
 	// Update our tracked position

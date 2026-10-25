@@ -1,4 +1,5 @@
 #include "DevMode/DevModeBotBrain.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeConsoleCommands.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -42,13 +43,13 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     if (bRunning) { return; }
     GameInstance = InGameInstance;
     UWorld* World = InWorld ? InWorld : (GameInstance ? GameInstance->GetWorld() : nullptr);
-    UE_LOG(LogTemp, Warning, TEXT("%s world: %s (tearing=%d)"),
+    UE_LOG(LogGameplay, Warning, TEXT("%s world: %s (tearing=%d)"),
         TEXT("DEVMODE_BOT"), World ? *World->GetName() : TEXT("null"),
         World ? (World->bIsTearingDown ? 1 : 0) : -1);
     ABasicPlayer* Player = GameInstance ? GameInstance->Player : nullptr;
     if (!GameInstance || !World || !Player || World->bIsTearingDown)
     {
-        UE_LOG(LogTemp, Warning, TEXT("%s_RESULT %s FAIL no-player-or-world"),
+        UE_LOG(LogGameplay, Warning, TEXT("%s_RESULT %s FAIL no-player-or-world"),
             *TombstonePrefix, *ScenarioName);
         return;
     }
@@ -63,7 +64,7 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     // every other scenario needs its kill budget present up front.
     if (Alive < TargetKills)
     {
-        UE_LOG(LogTemp, Warning, TEXT("%s_RESULT %s FAIL need-%d-mobs-have-%d (run devmode.reloadmobs first)"),
+        UE_LOG(LogGameplay, Warning, TEXT("%s_RESULT %s FAIL need-%d-mobs-have-%d (run devmode.reloadmobs first)"),
             *TombstonePrefix, *ScenarioName, TargetKills, Alive);
         return;
     }
@@ -75,7 +76,7 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
         Player->SetActorLocation(FVector(0.0f, 0.0f, 90.0f));
     }
     RunStartPos = Player->GetActorLocation();
-    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT spawn at (%.0f,%.0f,%.0f)"),
+    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT spawn at (%.0f,%.0f,%.0f)"),
         RunStartPos.X, RunStartPos.Y, RunStartPos.Z);
     // Deterministic golden frames: re-seed mobs to JSON spots (boot aggro
     // lets them cluster around the player otherwise), then hold every mob's
@@ -100,7 +101,7 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
                 }
             }
         }
-        UE_LOG(LogTemp, Warning, TEXT("%s froze %d mob(s)"), *TombstonePrefix, Frozen);
+        UE_LOG(LogGameplay, Warning, TEXT("%s froze %d mob(s)"), *TombstonePrefix, Frozen);
     }
     // Offline revive target: the run spawn. Live respawn point is
     // server-authoritative (asserted as alive + HP, not position).
@@ -119,7 +120,7 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
         else
         {
             Player->OnRespawnClicked();
-            UE_LOG(LogTemp, Warning, TEXT("%s spawned dead — respawn requested (stale death recovery)"),
+            UE_LOG(LogGameplay, Warning, TEXT("%s spawned dead — respawn requested (stale death recovery)"),
                 *TombstonePrefix);
         }
     }
@@ -280,7 +281,7 @@ void UDevModeBotBrain::Start(UMyGameInstance* InGameInstance, UWorld* InWorld)
     SteerTickerHandle = FTSTicker::GetCoreTicker().AddTicker(
         FTickerDelegate::CreateUObject(this, &UDevModeBotBrain::SteerTick), 0.0f);
 
-    UE_LOG(LogTemp, Warning, TEXT("%s_BEGIN %s target-kills=%d"), *TombstonePrefix, *ScenarioName, TargetKills);
+    UE_LOG(LogGameplay, Warning, TEXT("%s_BEGIN %s target-kills=%d"), *TombstonePrefix, *ScenarioName, TargetKills);
 }
 
 void UDevModeBotBrain::Stop()
@@ -335,7 +336,7 @@ void UDevModeBotBrain::Stop()
 void UDevModeBotBrain::OnGlobalTimeout()
 {
     if (!bRunning) { return; }
-    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT global timeout %.0fs — aborting"), (double)GlobalTimeoutSec);
+    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT global timeout %.0fs — aborting"), (double)GlobalTimeoutSec);
     Finish(false, TEXT("global-timeout"));
 }
 

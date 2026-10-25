@@ -1,4 +1,5 @@
 #include "Gameplay/UI/CombatScreenFlashWidget.h"
+#include "Prototyping.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/CanvasPanel.h"
 #include "Engine/Texture2D.h"
@@ -22,7 +23,7 @@ void UCombatScreenFlashWidget::EnsureFlashImage()
 	UCanvasPanel* Root = Cast<UCanvasPanel>(GetRootWidget());
 	if (!Root)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("CombatScreenFlashWidget: Root widget is not a CanvasPanel, flash will not display."));
+		UE_LOG(LogGameplay, Warning, TEXT("CombatScreenFlashWidget: Root widget is not a CanvasPanel, flash will not display."));
 		return;
 	}
 

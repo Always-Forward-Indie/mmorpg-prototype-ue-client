@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Components/ArrowComponent.h"
 #include "ShaderCompiler.h"
 #include "ContentStreaming.h"
@@ -225,18 +226,18 @@ void UMyGameInstance::InitGameSystems()
 	if (AudioManager)
 	{
 		AudioManager->Init(this, AudioConfig);
-		UE_LOG(LogTemp, Log, TEXT("AudioManager created"));
+		UE_LOG(LogGameplay, Verbose, TEXT("AudioManager created"));
 	}
 
 	// Initialize the item manager with the visuals data table if available
 	if (ItemManager && ItemVisualsDataTable)
 	{
 		ItemManager->LoadItemVisualsDataTable(ItemVisualsDataTable);
-		UE_LOG(LogTemp, Log, TEXT("Initialized ItemManager with configured ItemVisualsDataTable"));
+		UE_LOG(LogGameplay, Verbose, TEXT("Initialized ItemManager with configured ItemVisualsDataTable"));
 	}
 	else if (ItemManager)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ItemVisualsDataTable not configured in editor - item visuals will use defaults"));
+		UE_LOG(LogGameplay, Warning, TEXT("ItemVisualsDataTable not configured in editor - item visuals will use defaults"));
 	}
 }
 
@@ -245,11 +246,11 @@ void UMyGameInstance::SetInventoryManager(UInventoryManager* NewInventoryManager
 	if (NewInventoryManager)
 	{
 		InventoryManager = NewInventoryManager;
-		UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Inventory Manager reference set"));
+		UE_LOG(LogGameplay, Warning, TEXT("MyGameInstance: Inventory Manager reference set"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Cannot set null Inventory Manager"));
+		UE_LOG(LogGameplay, Warning, TEXT("MyGameInstance: Cannot set null Inventory Manager"));
 	}
 }
 
@@ -272,7 +273,7 @@ void UMyGameInstance::ProcessTimeSyncData(const FMessageDataStruct& MessageData)
 		FString RequestId = MessageData.timestamp;
 		TimeSyncService->UpdateTimeSyncData(RequestId, MessageData.serverRecvMs, MessageData.serverSendMs);
 		
-		UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Updated time sync data - RequestId: %s, ServerRecv: %lld, ServerSend: %lld"),
+		UE_LOG(LogGameplay, Warning, TEXT("MyGameInstance: Updated time sync data - RequestId: %s, ServerRecv: %lld, ServerSend: %lld"),
 			*RequestId, MessageData.serverRecvMs, MessageData.serverSendMs);
 	}
 }
@@ -357,5 +358,5 @@ void UMyGameInstance::OnApplicationReactivated()
         SkillMgr->ConvertServerClockCooldownsToWorldTime();
     }
 
-    UE_LOG(LogTemp, Log, TEXT("GameInstance: Application reactivated — ping + time sync + cooldown conversion done"));
+    UE_LOG(LogGameplay, Verbose, TEXT("GameInstance: Application reactivated — ping + time sync + cooldown conversion done"));
 }

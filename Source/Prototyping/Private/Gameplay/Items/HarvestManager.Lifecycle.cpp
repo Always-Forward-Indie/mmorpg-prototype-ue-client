@@ -1,4 +1,5 @@
 #include "Gameplay/Items/HarvestManager.h"
+#include "Prototyping.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
 #include "Utils/JSONParser.h"
@@ -37,7 +38,7 @@ UHarvestManager::UHarvestManager()
 	// Initialize loot data
 	CurrentAvailableLoot.Empty();
 	
-	UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Constructor - UObject version"));
+	UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Constructor - UObject version"));
 }
 
 void UHarvestManager::BeginPlay()
@@ -61,14 +62,14 @@ void UHarvestManager::Tick(float DeltaTime)
 			float CurrentTime = World->GetTimeSeconds();
 			if (CurrentTime - LastTickLog > 1.0f) // Log every second
 			{
-				UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Tick - bIsHarvesting: %s, CurrentTime: %.2f, HarvestStartTime: %.2f, HarvestDuration: %.0f"), 
+				UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Tick - bIsHarvesting: %s, CurrentTime: %.2f, HarvestStartTime: %.2f, HarvestDuration: %.0f"), 
 					bIsHarvesting ? TEXT("true") : TEXT("false"), CurrentTime, HarvestStartTime, HarvestDuration);
 				LastTickLog = CurrentTime;
 			}
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("HarvestManager: Tick - GetValidWorld() returned null!"));
+			UE_LOG(LogGameplay, Error, TEXT("HarvestManager: Tick - GetValidWorld() returned null!"));
 		}
 		
 		UpdateHarvestProgress(DeltaTime);
@@ -86,11 +87,11 @@ void UHarvestManager::Initialize(UNetworkManager* NetworkManager)
 
 		if (gameInstance)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("HarvestManager: GameInstance found"));
+			UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: GameInstance found"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("HarvestManager: GameInstance not found"));
+			UE_LOG(LogGameplay, Error, TEXT("HarvestManager: GameInstance not found"));
 		}
 	}
 
@@ -107,7 +108,7 @@ void UHarvestManager::SetWorldContext(UWorld* World)
 	TickTimerHandle.Invalidate();
 
 	worldContext = World;
-	UE_LOG(LogTemp, Warning, TEXT("HarvestManager: World context set to %s"), World ? TEXT("Valid") : TEXT("NULL"));
+	UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: World context set to %s"), World ? TEXT("Valid") : TEXT("NULL"));
 
 	// Re-register the tick timer in the new world after a level transition
 	if (worldContext)
@@ -125,11 +126,11 @@ void UHarvestManager::SubscribeToNetworkManager()
 {
 	if (networkManager != nullptr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Network Manager found and subscribed to events"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Network Manager found and subscribed to events"));
 
 		if (IsValid(networkManager))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Network Manager is valid"));
+			UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Network Manager is valid"));
 
 			// Subscribe to the network manager's events
 			networkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UHarvestManager::ProcessGameServerData);
@@ -137,12 +138,12 @@ void UHarvestManager::SubscribeToNetworkManager()
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("HarvestManager: Network Manager is not valid"));
+			UE_LOG(LogGameplay, Error, TEXT("HarvestManager: Network Manager is not valid"));
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("HarvestManager: Network manager not found"));
+		UE_LOG(LogGameplay, Error, TEXT("HarvestManager: Network manager not found"));
 	}
 }
 

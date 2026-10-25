@@ -1,4 +1,5 @@
 #include "Gameplay/Items/HarvestManager.h"
+#include "Prototyping.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
 #include "Utils/JSONParser.h"
@@ -17,7 +18,7 @@ void UHarvestManager::UpdateHarvestProgress(float DeltaTime)
 {
 	if (!bIsHarvesting)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager::UpdateHarvestProgress - Not harvesting, returning early"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager::UpdateHarvestProgress - Not harvesting, returning early"));
 		return;
 	}
 
@@ -31,7 +32,7 @@ void UHarvestManager::UpdateHarvestProgress(float DeltaTime)
 	static float LastLoggedProgress = -1.0f;
 	if (FMath::Abs(Progress - LastLoggedProgress) > 0.05f) // Log every 5% change
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager::UpdateHarvestProgress - Broadcasting progress %.1f%%"), 
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager::UpdateHarvestProgress - Broadcasting progress %.1f%%"), 
 			Progress * 100.0f);
 		LastLoggedProgress = Progress;
 	}
@@ -39,7 +40,7 @@ void UHarvestManager::UpdateHarvestProgress(float DeltaTime)
 	// Auto-complete if progress reaches 100% (fallback in case server message is missed)
 	if (Progress >= 1.0f)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Harvest progress completed locally"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Harvest progress completed locally"));
 		// Note: We don't auto-complete here, we wait for server response
 	}
 }
@@ -73,7 +74,7 @@ void UHarvestManager::HandleHarvestComplete(const FHarvestCompleteStruct& Harves
 			if (Mob)
 			{
 				Mob->SetHarvested(true);
-				UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Marked mob %s as harvested"), *Mob->GetMobName());
+				UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Marked mob %s as harvested"), *Mob->GetMobName());
 			}
 		}
 	}
@@ -194,11 +195,11 @@ void UHarvestManager::StartTicking()
 			Tick(0.016f); // Approximate delta time for 60 FPS
 		}, 0.016f, true);
 		
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Started ticking with timer"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Started ticking with timer"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("HarvestManager: Cannot start ticking - no world context"));
+		UE_LOG(LogGameplay, Error, TEXT("HarvestManager: Cannot start ticking - no world context"));
 	}
 }
 
@@ -207,6 +208,6 @@ void UHarvestManager::StopTicking()
 	if (GetValidWorld())
 	{
 		GetValidWorld()->GetTimerManager().ClearTimer(TickTimerHandle);
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Stopped ticking"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Stopped ticking"));
 	}
 }

@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillSlotWidget.h"
 #include "UI/SkillSlotWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
@@ -55,7 +56,7 @@ void USkillSlotWidget::NativeConstruct()
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("SkillSlotWidget[%d]: SkillButton is NULL - events not bound!"), SlotIndex);
+        UE_LOG(LogGameplay, Error, TEXT("SkillSlotWidget[%d]: SkillButton is NULL - events not bound!"), SlotIndex);
     }
 
     // All decoration widgets (icons, overlays, borders, text) must be

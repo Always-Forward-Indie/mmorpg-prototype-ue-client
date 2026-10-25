@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillBarWidget.h"
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/Skills/PlayerSkillNetworkHandler.h"
 #include "Components/HorizontalBox.h"
@@ -63,7 +64,7 @@ void USkillBarWidget::NativeConstruct()
         SkillGridContainer->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("SkillBarWidget::NativeConstruct — containers set SelfHitTestInvisible, slots=%d eventsSub=%d"),
+    UE_LOG(LogGameplay, Log, TEXT("SkillBarWidget::NativeConstruct — containers set SelfHitTestInvisible, slots=%d eventsSub=%d"),
         SkillSlots.Num(), bEventsSubscribed ? 1 : 0);
 }
 

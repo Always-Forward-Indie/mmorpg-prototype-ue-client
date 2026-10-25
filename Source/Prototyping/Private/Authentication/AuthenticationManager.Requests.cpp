@@ -1,18 +1,19 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Authentication/AuthenticationManager.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 
 void UAuthenticationManager::SendLoginRequest(const FString& Username, const FString& Password)
 {
-	UE_LOG(LogTemp, Warning, TEXT("AuthManager::SendLoginRequest — networkManager=%s, connected=%s, user='%s'"),
+	UE_LOG(LogConnection, Warning, TEXT("AuthManager::SendLoginRequest — networkManager=%s, connected=%s, user='%s'"),
 		networkManager ? TEXT("valid") : TEXT("NULL"),
 		(networkManager && networkManager->IsLoginServerConnected()) ? TEXT("yes") : TEXT("no"),
 		*Username);
 
 	if (!networkManager || !networkManager->IsLoginServerConnected())
 	{
-		UE_LOG(LogTemp, Error, TEXT("AuthManager::SendLoginRequest — login server not connected, broadcasting error"));
+		UE_LOG(LogConnection, Error, TEXT("AuthManager::SendLoginRequest — login server not connected, broadcasting error"));
 		OnLoginResponse.Broadcast(false, TEXT("ERR_SERVER_UNAVAILABLE"));
 		return;
 	}
@@ -29,21 +30,21 @@ void UAuthenticationManager::SendLoginRequest(const FString& Username, const FSt
 		"authentificationClient", HeaderData, BodyData,
 		gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::LoginServer);
 
-	UE_LOG(LogTemp, Warning, TEXT("AuthManager::SendLoginRequest — sending JSON: %s"), *JsonString);
+	UE_LOG(LogNetPacket, Verbose, TEXT("AuthManager::SendLoginRequest — sending JSON: %s"), *JsonString);
 	networkManager->SendDataToLoginServer(JsonString);
 	StartRequestTimeout(LoginRequestTimeoutHandle, &UAuthenticationManager::OnLoginRequestTimeout);
 }
 
 void UAuthenticationManager::SendRegisterRequest(const FString& Username, const FString& Password, const FString& Email)
 {
-	UE_LOG(LogTemp, Warning, TEXT("AuthManager::SendRegisterRequest — networkManager=%s, connected=%s, user='%s'"),
+	UE_LOG(LogConnection, Warning, TEXT("AuthManager::SendRegisterRequest — networkManager=%s, connected=%s, user='%s'"),
 		networkManager ? TEXT("valid") : TEXT("NULL"),
 		(networkManager && networkManager->IsLoginServerConnected()) ? TEXT("yes") : TEXT("no"),
 		*Username);
 
 	if (!networkManager || !networkManager->IsLoginServerConnected())
 	{
-		UE_LOG(LogTemp, Error, TEXT("AuthManager::SendRegisterRequest — login server not connected, broadcasting error"));
+		UE_LOG(LogConnection, Error, TEXT("AuthManager::SendRegisterRequest — login server not connected, broadcasting error"));
 		OnRegisterResponse.Broadcast(false, TEXT("ERR_SERVER_UNAVAILABLE"));
 		return;
 	}
@@ -64,7 +65,7 @@ void UAuthenticationManager::SendRegisterRequest(const FString& Username, const 
 		"registerAccount", HeaderData, BodyData,
 		gameInstance ? gameInstance->GetTimeSyncService() : nullptr, EServerType::LoginServer);
 
-	UE_LOG(LogTemp, Warning, TEXT("AuthManager::SendRegisterRequest — sending JSON: %s"), *JsonString);
+	UE_LOG(LogNetPacket, Verbose, TEXT("AuthManager::SendRegisterRequest — sending JSON: %s"), *JsonString);
 	networkManager->SendDataToLoginServer(JsonString);
 	StartRequestTimeout(RegisterRequestTimeoutHandle, &UAuthenticationManager::OnRegisterRequestTimeout);
 }

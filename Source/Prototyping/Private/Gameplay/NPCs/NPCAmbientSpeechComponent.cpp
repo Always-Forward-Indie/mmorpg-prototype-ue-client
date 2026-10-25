@@ -1,4 +1,5 @@
 #include "Gameplay/NPCs/NPCAmbientSpeechComponent.h"
+#include "Prototyping.h"
 #include "Gameplay/UI/NameplateManager.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "UI/UIManager.h"
@@ -73,12 +74,12 @@ void UNPCAmbientSpeechComponent::SetAmbientData(const FAmbientSpeechNPCData& Dat
 
     int32 TotalLines = 0;
     for (const FAmbientSpeechPoolData& P : Data.pools) TotalLines += P.lines.Num();
-    UE_LOG(LogTemp, Log, TEXT("[AmbientSpeech] NPC %d: SetAmbientData — %d pools, %d total lines, interval [%d–%d]s"),
+    UE_LOG(LogGameplay, Verbose, TEXT("[AmbientSpeech] NPC %d: SetAmbientData — %d pools, %d total lines, interval [%d–%d]s"),
         Data.npcId, Data.pools.Num(), TotalLines, Data.minIntervalSec, Data.maxIntervalSec);
 
     if (Data.pools.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[AmbientSpeech] NPC %d: pools array is EMPTY — nothing will play"), Data.npcId);
+        UE_LOG(LogGameplay, Warning, TEXT("[AmbientSpeech] NPC %d: pools array is EMPTY — nothing will play"), Data.npcId);
         return;
     }
 
@@ -97,7 +98,7 @@ void UNPCAmbientSpeechComponent::SetAmbientData(const FAmbientSpeechNPCData& Dat
     }
 
     SetComponentTickEnabled(bHasProximityLines);
-    UE_LOG(LogTemp, Log, TEXT("[AmbientSpeech] NPC %d: proximity lines=%s — scheduling periodic timer"),
+    UE_LOG(LogGameplay, Verbose, TEXT("[AmbientSpeech] NPC %d: proximity lines=%s — scheduling periodic timer"),
         AmbientData.npcId, bHasProximityLines ? TEXT("YES") : TEXT("no"));
     ScheduleNextPeriodicTimer();
 }
@@ -129,7 +130,7 @@ void UNPCAmbientSpeechComponent::ScheduleNextPeriodicTimer()
         FMath::Max(AmbientData.minIntervalSec, 1.f),
         FMath::Max(AmbientData.maxIntervalSec, AmbientData.minIntervalSec + 1.f));
 
-    UE_LOG(LogTemp, Log, TEXT("[AmbientSpeech] NPC %d: next periodic fire in %.1fs"), AmbientData.npcId, Interval);
+    UE_LOG(LogGameplay, Verbose, TEXT("[AmbientSpeech] NPC %d: next periodic fire in %.1fs"), AmbientData.npcId, Interval);
 
     World->GetTimerManager().SetTimer(PeriodicTimer, this,
         &UNPCAmbientSpeechComponent::OnPeriodicTimerFired, Interval, false);
@@ -137,17 +138,17 @@ void UNPCAmbientSpeechComponent::ScheduleNextPeriodicTimer()
 
 void UNPCAmbientSpeechComponent::OnPeriodicTimerFired()
 {
-    UE_LOG(LogTemp, Log, TEXT("[AmbientSpeech] NPC %d: periodic timer fired"), AmbientData.npcId);
+    UE_LOG(LogGameplay, Verbose, TEXT("[AmbientSpeech] NPC %d: periodic timer fired"), AmbientData.npcId);
     FAmbientSpeechLineData Line;
     if (PickPeriodicLine(Line))
     {
-        UE_LOG(LogTemp, Log, TEXT("[AmbientSpeech] NPC %d: picked line id=%d key='%s'"),
+        UE_LOG(LogGameplay, Verbose, TEXT("[AmbientSpeech] NPC %d: picked line id=%d key='%s'"),
             AmbientData.npcId, Line.id, *Line.lineKey);
         ShowSpeechLine(Line);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("[AmbientSpeech] NPC %d: PickPeriodicLine returned nothing (all on cooldown?)"), AmbientData.npcId);
+        UE_LOG(LogGameplay, Warning, TEXT("[AmbientSpeech] NPC %d: PickPeriodicLine returned nothing (all on cooldown?)"), AmbientData.npcId);
     }
     ScheduleNextPeriodicTimer();
 }
@@ -180,7 +181,7 @@ bool UNPCAmbientSpeechComponent::PickPeriodicLine(FAmbientSpeechLineData& OutLin
 
         if (Eligible.IsEmpty())
         {
-            UE_LOG(LogTemp, Verbose, TEXT("[AmbientSpeech] NPC %d: pool priority=%d has no eligible periodic lines (all on cooldown)"),
+            UE_LOG(LogGameplay, Verbose, TEXT("[AmbientSpeech] NPC %d: pool priority=%d has no eligible periodic lines (all on cooldown)"),
                 AmbientData.npcId, Pool.priority);
             continue;  // no eligible lines in this pool, try lower priority
         }
@@ -214,10 +215,10 @@ bool UNPCAmbientSpeechComponent::PickPeriodicLine(FAmbientSpeechLineData& OutLin
 void UNPCAmbientSpeechComponent::ShowSpeechLine(const FAmbientSpeechLineData& Line)
 {
     UGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
-    if (!GI) { UE_LOG(LogTemp, Error, TEXT("[AmbientSpeech] ShowSpeechLine: no GameInstance")); return; }
+    if (!GI) { UE_LOG(LogGameplay, Error, TEXT("[AmbientSpeech] ShowSpeechLine: no GameInstance")); return; }
 
     ULocalizationSubsystem* LocSys = GI->GetSubsystem<ULocalizationSubsystem>();
-    if (!LocSys) { UE_LOG(LogTemp, Error, TEXT("[AmbientSpeech] ShowSpeechLine: no LocalizationSubsystem")); return; }
+    if (!LocSys) { UE_LOG(LogGameplay, Error, TEXT("[AmbientSpeech] ShowSpeechLine: no LocalizationSubsystem")); return; }
 
     // Resolve text and display duration
     FAmbientSpeechLineDefinition Def;
@@ -228,17 +229,17 @@ void UNPCAmbientSpeechComponent::ShowSpeechLine(const FAmbientSpeechLineData& Li
     {
         SpeechText = Def.speechText;
         if (Def.DisplayDuration > 0.f) Duration = Def.DisplayDuration;
-        UE_LOG(LogTemp, Log, TEXT("[AmbientSpeech] key='%s' resolved via DataTable: '%s'"),
+        UE_LOG(LogGameplay, Verbose, TEXT("[AmbientSpeech] key='%s' resolved via DataTable: '%s'"),
             *Line.lineKey, *SpeechText.ToString());
     }
     else
     {
         SpeechText = LocSys->GetNPCSpeechText(Line.lineKey);
-        UE_LOG(LogTemp, Warning, TEXT("[AmbientSpeech] key='%s' NOT in DataTable — fallback: '%s'"),
+        UE_LOG(LogGameplay, Warning, TEXT("[AmbientSpeech] key='%s' NOT in DataTable — fallback: '%s'"),
             *Line.lineKey, *SpeechText.ToString());
     }
 
-    if (SpeechText.IsEmpty()) { UE_LOG(LogTemp, Error, TEXT("[AmbientSpeech] key='%s' resolved to EMPTY text — bubble suppressed"), *Line.lineKey); return; }
+    if (SpeechText.IsEmpty()) { UE_LOG(LogGameplay, Error, TEXT("[AmbientSpeech] key='%s' resolved to EMPTY text — bubble suppressed"), *Line.lineKey); return; }
 
     // Record cooldown
     LineCooldowns.Add(Line.id, Now());
@@ -252,7 +253,7 @@ void UNPCAmbientSpeechComponent::ShowSpeechLine(const FAmbientSpeechLineData& Li
             {
                 if (UNameplateManager* NMgr = UIMgr->GetNameplateManager())
                 {
-                    UE_LOG(LogTemp, Log, TEXT("[AmbientSpeech] NPC %d: calling ShowNPCSpeechBubble '%s' %.1fs"),
+                    UE_LOG(LogGameplay, Verbose, TEXT("[AmbientSpeech] NPC %d: calling ShowNPCSpeechBubble '%s' %.1fs"),
                         AmbientData.npcId, *SpeechText.ToString(), Duration);
                     NMgr->ShowNPCSpeechBubble(GetOwner(), SpeechText, Duration);
                 }
@@ -261,23 +262,23 @@ void UNPCAmbientSpeechComponent::ShowSpeechLine(const FAmbientSpeechLineData& Li
                     // Transient startup ordering (speech fired before the local
                     // UI finished initializing) — Warning, not Error: the bubble
                     // is skipped this time, the manager appears right after.
-                    UE_LOG(LogTemp, Warning, TEXT("[AmbientSpeech] NPC %d: NameplateManager not ready yet, bubble suppressed"), AmbientData.npcId);
+                    UE_LOG(LogGameplay, Warning, TEXT("[AmbientSpeech] NPC %d: NameplateManager not ready yet, bubble suppressed"), AmbientData.npcId);
                 }
             }
             else
             {
-                UE_LOG(LogTemp, Error, TEXT("[AmbientSpeech] NPC %d: GetUIManager() returned null"), AmbientData.npcId);
+                UE_LOG(LogGameplay, Error, TEXT("[AmbientSpeech] NPC %d: GetUIManager() returned null"), AmbientData.npcId);
             }
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("[AmbientSpeech] NPC %d: PlayerController pawn is not ABasicPlayer (pawn=%s)"),
+            UE_LOG(LogGameplay, Error, TEXT("[AmbientSpeech] NPC %d: PlayerController pawn is not ABasicPlayer (pawn=%s)"),
                 AmbientData.npcId, PC->GetPawn() ? *PC->GetPawn()->GetClass()->GetName() : TEXT("null"));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("[AmbientSpeech] NPC %d: PlayerController is NULL"), AmbientData.npcId);
+        UE_LOG(LogGameplay, Error, TEXT("[AmbientSpeech] NPC %d: PlayerController is NULL"), AmbientData.npcId);
     }
 
     // Optional: play sound

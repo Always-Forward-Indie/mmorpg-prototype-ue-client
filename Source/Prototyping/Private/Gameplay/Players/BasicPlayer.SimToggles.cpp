@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -106,7 +107,7 @@ void ABasicPlayer::UpdateMovementSimulation(float DeltaTime)
 
 
         // Logging for debugging
-        UE_LOG(LogTemp, Warning, TEXT("New target position: %s"), *TargetPosition.ToString());
+        UE_LOG(LogGameplay, Warning, TEXT("New target position: %s"), *TargetPosition.ToString());
     }
 
     // Move towards TargetPosition if not already close

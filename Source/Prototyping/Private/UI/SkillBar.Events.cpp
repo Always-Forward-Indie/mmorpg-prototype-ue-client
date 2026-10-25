@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillBarWidget.h"
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/Skills/PlayerSkillNetworkHandler.h"
 #include "Components/HorizontalBox.h"
@@ -16,14 +17,14 @@ void USkillBarWidget::OnSkillSlotClicked(int32 SlotIndex, const FString& SkillSl
 
 void USkillBarWidget::OnSkillSlotRightClicked(int32 SlotIndex, const FString& SkillSlug)
 {
-    UE_LOG(LogTemp, Log, TEXT("SkillBarWidget: Right-clicked slot %d"), SlotIndex);
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillBarWidget: Right-clicked slot %d"), SlotIndex);
 }
 
 void USkillBarWidget::OnSkillDroppedOnSlot(int32 SlotIndex, const FPlayerSkillData& SkillData, const FKey& Hotkey)
 {
     if (!SkillManager)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillBarWidget: Cannot handle skill drop - SkillManager not available"));
+        UE_LOG(LogGameplay, Warning, TEXT("SkillBarWidget: Cannot handle skill drop - SkillManager not available"));
         return;
     }
 
@@ -38,7 +39,7 @@ void USkillBarWidget::OnSkillDroppedOnSlot(int32 SlotIndex, const FPlayerSkillDa
 
     AssignSkillToSlot(SlotIndex, SkillData.networkData.skillSlug, Hotkey);
 
-    UE_LOG(LogTemp, Log, TEXT("SkillBarWidget: Dropped skill '%s' on slot %d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillBarWidget: Dropped skill '%s' on slot %d"),
         *SkillData.networkData.skillSlug, SlotIndex);
 }
 
@@ -46,7 +47,7 @@ void USkillBarWidget::OnSkillSlotDragCleared(int32 SlotIndex)
 {
     if (!SkillManager)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillBarWidget: Cannot clear slot - SkillManager not available"));
+        UE_LOG(LogGameplay, Warning, TEXT("SkillBarWidget: Cannot clear slot - SkillManager not available"));
         return;
     }
 
@@ -75,7 +76,7 @@ void USkillBarWidget::OnSkillSlotDragCleared(int32 SlotIndex)
         }
     }
 
-    UE_LOG(LogTemp, Log, TEXT("SkillBarWidget: Cleared slot %d via drag-out"), SlotIndex);
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillBarWidget: Cleared slot %d via drag-out"), SlotIndex);
 }
 
 void USkillBarWidget::ClearHighlightOnOtherSlots(USkillSlotWidget* Except)
@@ -91,19 +92,19 @@ void USkillBarWidget::ClearHighlightOnOtherSlots(USkillSlotWidget* Except)
 
 void USkillBarWidget::OnPlayerSkillsInitialized(const TArray<FPlayerSkillData>& Skills)
 {
-    UE_LOG(LogTemp, Log, TEXT("SkillBarWidget: Player skills initialized, refreshing slots"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillBarWidget: Player skills initialized, refreshing slots"));
     RefreshAllSlots();
 }
 
 void USkillBarWidget::OnSkillCooldownStarted(const FString& SkillSlug)
 {
-    UE_LOG(LogTemp, Warning,
+    UE_LOG(LogGameplay, Warning,
         TEXT("SkillBarWidget: OnSkillCooldownStarted '%s' — slots=%d"),
         *SkillSlug, SkillSlots.Num());
     for (int32 i = 0; i < SkillSlots.Num(); ++i)
     {
         USkillSlotWidget* SlotWidget = SkillSlots[i];
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
             TEXT("SkillBarWidget:   slot[%d] assigned='%s' match=%d"),
             i,
             SlotWidget ? *SlotWidget->GetAssignedSkillSlug() : TEXT("NULL"),

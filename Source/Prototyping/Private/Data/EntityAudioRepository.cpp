@@ -1,4 +1,5 @@
 #include "Data/EntityAudioRepository.h"
+#include "Prototyping.h"
 #include "Engine/DataTable.h"
 
 void UEntityAudioRepository::Initialize(UDataTable* InTable)
@@ -8,13 +9,13 @@ void UEntityAudioRepository::Initialize(UDataTable* InTable)
 
     if (!Table.Get())
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
             TEXT("UEntityAudioRepository::Initialize — DataTable is null. "
                  "Assign DT_EntityAudioProfiles in the GameInstance Blueprint."));
     }
     else
     {
-        UE_LOG(LogTemp, Log,
+        UE_LOG(LogGameplay, Log,
             TEXT("UEntityAudioRepository: initialized with %d row(s) from '%s'."),
             Table->GetRowNames().Num(),
             *Table->GetName());
@@ -42,13 +43,13 @@ void UEntityAudioRepository::InitializeSkillVoiceOverrides(UDataTable* InTable)
     if (!SkillVoiceTable.Get())
     {
         // Allowed to be null — feature is optional, log at Verbose to avoid spam.
-        UE_LOG(LogTemp, Verbose,
+        UE_LOG(LogGameplay, Verbose,
             TEXT("UEntityAudioRepository::InitializeSkillVoiceOverrides — no table assigned. "
                  "Per-entity per-skill voice overrides are disabled."));
     }
     else
     {
-        UE_LOG(LogTemp, Log,
+        UE_LOG(LogGameplay, Log,
             TEXT("UEntityAudioRepository: skill voice overrides initialized with %d row(s) from '%s'."),
             SkillVoiceTable->GetRowNames().Num(),
             *SkillVoiceTable->GetName());

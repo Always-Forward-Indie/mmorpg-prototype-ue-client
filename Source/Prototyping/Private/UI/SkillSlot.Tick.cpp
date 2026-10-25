@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillSlotWidget.h"
 #include "UI/SkillSlotWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
@@ -27,7 +28,7 @@ void USkillSlotWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
         }
         else if (Now - StuckDragStartTime > 5.0f)
         {
-            UE_LOG(LogTemp, Error, TEXT("SkillSlotWidget[%d]: STUCK DRAG DETECTED — bIsDragging=true for %.1fs, force-resetting"),
+            UE_LOG(LogGameplay, Error, TEXT("SkillSlotWidget[%d]: STUCK DRAG DETECTED — bIsDragging=true for %.1fs, force-resetting"),
                 SlotIndex, Now - StuckDragStartTime);
             ForceResetDragState();
             StuckDragStartTime = 0.0f;

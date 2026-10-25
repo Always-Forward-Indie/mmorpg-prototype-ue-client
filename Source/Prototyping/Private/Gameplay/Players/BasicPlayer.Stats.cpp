@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -79,14 +80,14 @@ void ABasicPlayer::UpdatePlayerStats(const FPlayerStatsUpdateStruct& StatsUpdate
 	// Validate the stats update
 	if (!PlayerAttributeParser::ValidateStatsData(StatsUpdate))
 	{
-		UE_LOG(LogTemp, Error, TEXT("BasicPlayer: Invalid stats update data received"));
+		UE_LOG(LogGameplay, Error, TEXT("BasicPlayer: Invalid stats update data received"));
 		return;
 	}
 
 	// Check if this update is for this player
 	if (StatsUpdate.characterId != playerData.characterData.characterId)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Stats update for different character (Expected: %d, Received: %d)"), 
+		UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: Stats update for different character (Expected: %d, Received: %d)"), 
 			playerData.characterData.characterId, StatsUpdate.characterId);
 		return;
 	}
@@ -94,7 +95,7 @@ void ABasicPlayer::UpdatePlayerStats(const FPlayerStatsUpdateStruct& StatsUpdate
 	// Update character data
 	PlayerAttributeParser::UpdateCharacterDataFromStatsUpdate(playerData.characterData, StatsUpdate);
 
-	UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Updated stats for character %d - Level: %d, HP: %d/%d, MP: %d/%d"),
+	UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Updated stats for character %d - Level: %d, HP: %d/%d, MP: %d/%d"),
 		StatsUpdate.characterId, StatsUpdate.level,
 		StatsUpdate.healthCurrent, StatsUpdate.healthMax,
 		StatsUpdate.manaCurrent, StatsUpdate.manaMax);
@@ -106,7 +107,7 @@ void ABasicPlayer::ApplyServerMoveSpeed(float ServerMoveSpeed)
 	{
 		const float NewSpeed = ServerMoveSpeed * MoveSpeedScale;
 		CMC->MaxWalkSpeed = NewSpeed;
-		UE_LOG(LogTemp, Log, TEXT("BasicPlayer: MaxWalkSpeed set to %.1f (server move_speed=%.1f, scale=%.1f)"),
+		UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: MaxWalkSpeed set to %.1f (server move_speed=%.1f, scale=%.1f)"),
 			NewSpeed, ServerMoveSpeed, MoveSpeedScale);
 	}
 }
@@ -121,7 +122,7 @@ void ABasicPlayer::ApplyVisualFromDataTable(UDataTable* VisualTable)
 
 	if (GenderName.IsEmpty())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("BasicPlayer::ApplyVisualFromDataTable: characterGender is empty for charId=%d — server may not be sending 'gender' in joinGameCharacter. Falling back through visual definition chain."),
+		UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer::ApplyVisualFromDataTable: characterGender is empty for charId=%d — server may not be sending 'gender' in joinGameCharacter. Falling back through visual definition chain."),
 			playerData.characterData.characterId);
 	}
 
@@ -130,7 +131,7 @@ void ABasicPlayer::ApplyVisualFromDataTable(UDataTable* VisualTable)
 
 	if (!Def)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("BasicPlayer::ApplyVisualFromDataTable: No definition for %s_%s_%s"),
+		UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer::ApplyVisualFromDataTable: No definition for %s_%s_%s"),
 			*ClassSlug, *RaceSlug, *GenderName);
 		return;
 	}
@@ -212,7 +213,7 @@ void ABasicPlayer::ApplyVisualFromDataTable(UDataTable* VisualTable)
 
 	// Initialize default cosmetics
 	// This must happen after SetActorScale3D so the body component pointer is stable.
-	UE_LOG(LogTemp, Log, TEXT("[Cosmetic] ApplyVisualFromDataTable: CosmeticVisualComponent=%s  MyGameInstance=%s  CosmeticsTable=%s"),
+	UE_LOG(LogGameplay, Verbose, TEXT("[Cosmetic] ApplyVisualFromDataTable: CosmeticVisualComponent=%s  MyGameInstance=%s  CosmeticsTable=%s"),
 		CosmeticVisualComponent ? TEXT("OK") : TEXT("NULL — not created in constructor?"),
 		MyGameInstance ? TEXT("OK") : TEXT("NULL"),
 		(MyGameInstance && MyGameInstance->CharacterCosmeticsDataTable) ? *MyGameInstance->CharacterCosmeticsDataTable->GetName() : TEXT("NULL — assign in BP_GameInstance"));
@@ -222,7 +223,7 @@ void ABasicPlayer::ApplyVisualFromDataTable(UDataTable* VisualTable)
 		CosmeticVisualComponent->SetDefaultCosmetics(*Def, CosmeticsTable);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("BasicPlayer::ApplyVisualFromDataTable: Applied visual for %s_%s_%s"),
+	UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer::ApplyVisualFromDataTable: Applied visual for %s_%s_%s"),
 		*ClassSlug, *RaceSlug, *GenderName);
 }
 
@@ -283,7 +284,7 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning,
+			UE_LOG(LogGameplay, Warning,
 				TEXT("BasicPlayer: Ignoring stats_update(HP=0) — within respawn grace window (%.1fs < %.1fs)"),
 				TimeSinceRespawn, RespawnGraceSeconds);
 		}
@@ -355,13 +356,13 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 		ShowBuffEffect_Implementation(EffectData);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Processed stats update and refreshed UI"));
+	UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Processed stats update and refreshed UI"));
 }
 
 void ABasicPlayer::HandleStatsManagerUpdate(const FPlayerStatsUpdateStruct& NewStats)
 {
 	// Log BEFORE any early return so we can see if the function is ever called at all.
-	UE_LOG(LogTemp, Warning, TEXT("[EFFECTS] HandleStatsManagerUpdate: ENTER charId=%d myCharId=%d isOtherClient=%d effects=%d"),
+	UE_LOG(LogGameplay, Warning, TEXT("[EFFECTS] HandleStatsManagerUpdate: ENTER charId=%d myCharId=%d isOtherClient=%d effects=%d"),
 		NewStats.characterId, playerData.characterData.characterId, (int)playerData.isOtherClient, NewStats.activeEffects.Num());
 
 	// Only handle updates for the local player and for our own character.
@@ -397,7 +398,7 @@ void ABasicPlayer::HandleStatsManagerUpdate(const FPlayerStatsUpdateStruct& NewS
 			const int32 HPGain = NewHP - OldHP;
 			const int32 MPGain = NewMP - OldMP;
 
-			UE_LOG(LogTemp, Log, TEXT("[REGEN] source=%s oldHP=%d newHP=%d gain=%d oldMP=%d newMP=%d gain=%d"),
+			UE_LOG(LogGameplay, Verbose, TEXT("[REGEN] source=%s oldHP=%d newHP=%d gain=%d oldMP=%d newMP=%d gain=%d"),
 				*NewStats.updateSource, OldHP, NewHP, HPGain, OldMP, NewMP, MPGain);
 
 			const bool bIsDamage = NewStats.updateSource == TEXT("damage");
@@ -412,7 +413,7 @@ void ABasicPlayer::HandleStatsManagerUpdate(const FPlayerStatsUpdateStruct& NewS
 	// Forward activeEffects to the HUD buff bar. This mirrors ProcessStatsUpdate's
 	// behaviour and ensures effects are visible even when stats arrive before the
 	// player actor is registered (when ProcessStatsUpdate cannot be called).
-	UE_LOG(LogTemp, Warning, TEXT("[EFFECTS] HandleStatsManagerUpdate: PASS UIManager=%s effects=%d"),
+	UE_LOG(LogGameplay, Warning, TEXT("[EFFECTS] HandleStatsManagerUpdate: PASS UIManager=%s effects=%d"),
 		UIManager ? TEXT("valid") : TEXT("NULL"), NewStats.activeEffects.Num());
 
 	if (UIManager)
@@ -420,7 +421,7 @@ void ABasicPlayer::HandleStatsManagerUpdate(const FPlayerStatsUpdateStruct& NewS
 		if (UPlayerInterfaceWidget* PIW = UIManager->GetPlayerInterfaceWidget())
 		{
 			UActiveEffectsWidget* AEW = PIW->GetActiveEffectsWidget();
-			UE_LOG(LogTemp, Warning, TEXT("[EFFECTS] HandleStatsManagerUpdate: PIW=valid AEW=%s effects=%d"),
+			UE_LOG(LogGameplay, Warning, TEXT("[EFFECTS] HandleStatsManagerUpdate: PIW=valid AEW=%s effects=%d"),
 				AEW ? TEXT("valid") : TEXT("NULL"), NewStats.activeEffects.Num());
 			if (AEW)
 			{
@@ -429,7 +430,7 @@ void ABasicPlayer::HandleStatsManagerUpdate(const FPlayerStatsUpdateStruct& NewS
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[EFFECTS] HandleStatsManagerUpdate: PIW is NULL"));
+			UE_LOG(LogGameplay, Warning, TEXT("[EFFECTS] HandleStatsManagerUpdate: PIW is NULL"));
 		}
 	}
 }
@@ -439,7 +440,7 @@ void ABasicPlayer::RefreshHUD()
 {
 	if (!PlayerHUD)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Cannot refresh HUD - PlayerHUD is null"));
+		UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: Cannot refresh HUD - PlayerHUD is null"));
 		return;
 	}
 

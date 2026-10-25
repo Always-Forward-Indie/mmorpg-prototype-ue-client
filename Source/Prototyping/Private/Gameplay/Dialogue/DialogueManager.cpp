@@ -1,4 +1,5 @@
 #include "Gameplay/Dialogue/DialogueManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Dialogue/DialogueManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
@@ -15,12 +16,12 @@ void UDialogueManager::Initialize(UNetworkManager* InNetworkManager, UMyGameInst
 {
     if (!InNetworkManager || !InGameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("DialogueManager: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("DialogueManager: Initialize called with null parameters"));
         return;
     }
     NetworkManager  = InNetworkManager;
     GameInstance    = InGameInstance;
-    UE_LOG(LogTemp, Log, TEXT("DialogueManager: Initialized"));
+    UE_LOG(LogGameplay, Verbose, TEXT("DialogueManager: Initialized"));
 }
 
 // ??? Client ? Server ??????????????????????????????????????????????????????????
@@ -29,13 +30,13 @@ void UDialogueManager::OpenDialogue(int32 NpcId)
 {
     if (!NetworkManager || !GameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("DialogueManager::OpenDialogue: not initialized"));
+        UE_LOG(LogGameplay, Error, TEXT("DialogueManager::OpenDialogue: not initialized"));
         return;
     }
 
     if (bSessionActive)
     {
-        UE_LOG(LogTemp, Warning, TEXT("DialogueManager::OpenDialogue: a session is already active (%s), closing first"), *CurrentSessionId);
+        UE_LOG(LogGameplay, Warning, TEXT("DialogueManager::OpenDialogue: a session is already active (%s), closing first"), *CurrentSessionId);
         CloseDialogue();
     }
 
@@ -67,14 +68,14 @@ void UDialogueManager::OpenDialogue(int32 NpcId)
 
     NetworkManager->SendDataToChunkServer(Payload);
 
-    UE_LOG(LogTemp, Log, TEXT("DialogueManager: Sent npcInteract for NPC %d"), NpcId);
+    UE_LOG(LogGameplay, Verbose, TEXT("DialogueManager: Sent npcInteract for NPC %d"), NpcId);
 }
 
 void UDialogueManager::SendChoice(int32 EdgeId)
 {
     if (!bSessionActive || CurrentSessionId.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("DialogueManager::SendChoice: no active session"));
+        UE_LOG(LogGameplay, Warning, TEXT("DialogueManager::SendChoice: no active session"));
         return;
     }
     if (!NetworkManager || !GameInstance)
@@ -108,7 +109,7 @@ void UDialogueManager::SendChoice(int32 EdgeId)
 
     NetworkManager->SendDataToChunkServer(Payload);
 
-    UE_LOG(LogTemp, Log, TEXT("DialogueManager: Sent dialogueChoice edgeId=%d session=%s"), EdgeId, *CurrentSessionId);
+    UE_LOG(LogGameplay, Verbose, TEXT("DialogueManager: Sent dialogueChoice edgeId=%d session=%s"), EdgeId, *CurrentSessionId);
 }
 
 void UDialogueManager::CloseDialogue()
@@ -147,7 +148,7 @@ void UDialogueManager::CloseDialogue()
 
     NetworkManager->SendDataToChunkServer(Payload);
 
-    UE_LOG(LogTemp, Log, TEXT("DialogueManager: Sent dialogueClose session=%s"), *CurrentSessionId);
+    UE_LOG(LogGameplay, Verbose, TEXT("DialogueManager: Sent dialogueClose session=%s"), *CurrentSessionId);
 
     // Clear local state immediately
     bSessionActive    = false;
@@ -165,7 +166,7 @@ void UDialogueManager::OnNodeReceived(const FDialogueNodeData& NodeData)
     CurrentNpcId     = NodeData.npcId;
     CurrentNode      = NodeData;
 
-    UE_LOG(LogTemp, Log, TEXT("DialogueManager: Node received type=%s key=%s session=%s"),
+    UE_LOG(LogGameplay, Verbose, TEXT("DialogueManager: Node received type=%s key=%s session=%s"),
         *NodeData.type, *NodeData.clientNodeKey, *NodeData.sessionId);
 
     OnDialogueNodeReceived.Broadcast(NodeData);
@@ -173,7 +174,7 @@ void UDialogueManager::OnNodeReceived(const FDialogueNodeData& NodeData)
 
 void UDialogueManager::OnSessionClosed(const FString& SessionId)
 {
-    UE_LOG(LogTemp, Log, TEXT("DialogueManager: Session closed: %s"), *SessionId);
+    UE_LOG(LogGameplay, Verbose, TEXT("DialogueManager: Session closed: %s"), *SessionId);
 
     bSessionActive    = false;
     CurrentSessionId  = "";
@@ -185,7 +186,7 @@ void UDialogueManager::OnSessionClosed(const FString& SessionId)
 
 void UDialogueManager::OnErrorReceived(const FDialogueErrorData& ErrorData)
 {
-    UE_LOG(LogTemp, Warning, TEXT("DialogueManager: Error received: %s — %s"),
+    UE_LOG(LogGameplay, Warning, TEXT("DialogueManager: Error received: %s — %s"),
         *ErrorData.errorCode, *ErrorData.message);
 
     OnDialogueError.Broadcast(ErrorData);

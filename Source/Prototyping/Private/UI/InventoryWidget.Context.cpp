@@ -1,4 +1,5 @@
 #include "UI/InventoryWidget.h"
+#include "Prototyping.h"
 #include "UI/InventorySlotWidget.h"
 #include "Utils/NetCore/SlotMath.h"
 #include "UI/ItemTooltipWidget.h"
@@ -70,12 +71,12 @@ void UInventoryWidget::HandleDropConfirmed(const FInventoryItemStruct& Item, int
 
 	InventoryManager->DropItem(Item.itemId, Quantity);
 
-	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Drop confirmed � itemId=%d qty=%d"), Item.itemId, Quantity);
+	UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Drop confirmed � itemId=%d qty=%d"), Item.itemId, Quantity);
 }
 
 void UInventoryWidget::HandleDropCancelled()
 {
-	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Drop cancelled by player."));
+	UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Drop cancelled by player."));
 }
 
 void UInventoryWidget::ShowTooltip(const FInventoryItemStruct& Item, FVector2D Position)

@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Components/ArrowComponent.h"
 #include "ShaderCompiler.h"
 #include "ContentStreaming.h"
@@ -135,7 +136,7 @@ static TSharedPtr<FPIEInputPreprocessor> GPIEInputPreprocessor;
 UMyGameInstance::UMyGameInstance(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	UE_LOG(LogTemp, Warning, TEXT("GameInstance Constructor called"));
+	UE_LOG(LogGameplay, Warning, TEXT("GameInstance Constructor called"));
 }
 
 
@@ -151,13 +152,13 @@ void UMyGameInstance::OnStart()
 	if (FSlateApplication::IsInitialized())
 	{
 		FSlateApplication::Get().SetAllUserFocusToGameViewport();
-		UE_LOG(LogTemp, Log, TEXT("GameInstance: OnStart — viewport focus set, custom cursor active."));
+		UE_LOG(LogGameplay, Verbose, TEXT("GameInstance: OnStart — viewport focus set, custom cursor active."));
 
 		if (!GPIEInputPreprocessor.IsValid())
 		{
 			GPIEInputPreprocessor = MakeShared<FPIEInputPreprocessor>(this);
 			FSlateApplication::Get().RegisterInputPreProcessor(GPIEInputPreprocessor);
-			UE_LOG(LogTemp, Log, TEXT("GameInstance: PIE Escape preprocessor registered."));
+			UE_LOG(LogGameplay, Verbose, TEXT("GameInstance: PIE Escape preprocessor registered."));
 		}
 	}
 
@@ -172,7 +173,7 @@ void UMyGameInstance::Shutdown()
 		if (FSlateApplication::IsInitialized())
 			FSlateApplication::Get().UnregisterInputPreProcessor(GPIEInputPreprocessor);
 		GPIEInputPreprocessor.Reset();
-		UE_LOG(LogTemp, Log, TEXT("GameInstance: PIE Escape preprocessor unregistered."));
+		UE_LOG(LogConnection, Verbose, TEXT("GameInstance: PIE Escape preprocessor unregistered."));
 	}
 
 	if (PreLoadMapDelegateHandle.IsValid())
@@ -193,7 +194,7 @@ void UMyGameInstance::Shutdown()
 	if (bTransitioningToGameWorld)
 	{
 		FPlatformAtomics::InterlockedExchange(&GActiveWorldPartitionTransitions, 0);
-		UE_LOG(LogTemp, Warning, TEXT("Shutdown: released WP transition slot (shutdown during transition)"));
+		UE_LOG(LogConnection, Warning, TEXT("Shutdown: released WP transition slot (shutdown during transition)"));
 	}
 
 	// Clean up loading-screen frame-countdown delegates so they never fire
@@ -234,30 +235,30 @@ void UMyGameInstance::Shutdown()
 		// Notify Login Server
 		if (AuthenticationManager && NetworkManager && NetworkManager->IsLoginServerConnected())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Shutdown: Sending login disconnect for ClientID=%d"),
+			UE_LOG(LogConnection, Warning, TEXT("Shutdown: Sending login disconnect for ClientID=%d"),
 				ClientData.clientId);
 			AuthenticationManager->SendLeaveGameRequest(ClientData);
 		}
 		else
 		{
-			UE_LOG(LogTemp, Verbose, TEXT("Shutdown: skipping login disconnect (no live login socket)"));
+			UE_LOG(LogConnection, Verbose, TEXT("Shutdown: skipping login disconnect (no live login socket)"));
 		}
 
 		// Notify Chunk Server (and optionally Game Server)
 		if (PlayerManager && NetworkManager && NetworkManager->IsChunkServerConnected())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Shutdown: Sending chunk disconnect for ClientID=%d CharID=%d"),
+			UE_LOG(LogConnection, Warning, TEXT("Shutdown: Sending chunk disconnect for ClientID=%d CharID=%d"),
 				ClientData.clientId, ClientData.characterData.characterId);
 			PlayerManager->SendLeaveGameRequest(ClientData);
 		}
 		else
 		{
-			UE_LOG(LogTemp, Verbose, TEXT("Shutdown: skipping chunk disconnect (no live chunk socket)"));
+			UE_LOG(LogConnection, Verbose, TEXT("Shutdown: skipping chunk disconnect (no live chunk socket)"));
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Shutdown: Skipping disconnect — ClientID=%d (not authenticated)"),
+		UE_LOG(LogConnection, Warning, TEXT("Shutdown: Skipping disconnect — ClientID=%d (not authenticated)"),
 			ClientData.clientId);
 	}
 

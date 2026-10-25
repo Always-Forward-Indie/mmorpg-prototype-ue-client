@@ -1,5 +1,6 @@
 ﻿#include "Gameplay/Items/InventoryManager.h"
 #include "Networking/NetworkManager.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Utils/NetCore/InventoryRules.h"
 #include "Gameplay/Items/HarvestManager.h"
@@ -25,24 +26,24 @@ void UInventoryManager::ProcessGameServerData(const FString& ReceivedData)
 	//}
 
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
-	UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Received event type: %s"), *MessageData.eventType);
+	UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Received event type: %s"), *MessageData.eventType);
 
 	// Handle inventory data response
 	if (MessageData.eventType == "getPlayerInventory" && MessageData.status == "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Received inventory data"));
+		UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Received inventory data"));
 		ProcessInventoryData(ReceivedData);
 	}
 	// Handle inventory update events
 	else if (MessageData.eventType == "INVENTORY_UPDATE" && MessageData.status == "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Received inventory update"));
+		UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Received inventory update"));
 		ProcessInventoryUpdate(ReceivedData);
 	}
 	// Handle use item response
 	else if (MessageData.eventType == "useItem" && MessageData.status == "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Item used successfully"));
+		UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Item used successfully"));
 		ProcessInventoryUpdate(ReceivedData);
 
 		int32 UsedItemId = 0;
@@ -79,7 +80,7 @@ void UInventoryManager::ProcessGameServerData(const FString& ReceivedData)
 	// Handle drop item response
 	else if (MessageData.eventType == "dropItem" && MessageData.status == "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Item dropped successfully"));
+		UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Item dropped successfully"));
 		ProcessInventoryUpdate(ReceivedData);
 	}
 	// Handle weapon kill count update (item soul system — server pushes new count on every kill)
@@ -108,7 +109,7 @@ void UInventoryManager::ProcessGameServerData(const FString& ReceivedData)
 								if (Item.id == InventoryItemId)
 								{
 									Item.killCount = NewKillCount;
-									UE_LOG(LogTemp, Log, TEXT("InventoryManager: Updated killCount=%d for inventoryItemId=%d"), NewKillCount, InventoryItemId);
+									UE_LOG(LogGameplay, Verbose, TEXT("InventoryManager: Updated killCount=%d for inventoryItemId=%d"), NewKillCount, InventoryItemId);
 									OnInventoryUpdated.Broadcast(CurrentInventory);
 									break;
 								}
@@ -128,7 +129,7 @@ void UInventoryManager::ProcessInventoryData(const FString& JsonData)
 	
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("InventoryManager: Failed to deserialize inventory data"));
+		UE_LOG(LogNetPacket, Error, TEXT("InventoryManager: Failed to deserialize inventory data"));
 		OnInventoryLoadComplete.Broadcast(false);
 		return;
 	}
@@ -136,7 +137,7 @@ void UInventoryManager::ProcessInventoryData(const FString& JsonData)
 	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 	if (!Body.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("InventoryManager: No body found in inventory data"));
+		UE_LOG(LogGameplay, Error, TEXT("InventoryManager: No body found in inventory data"));
 		OnInventoryLoadComplete.Broadcast(false);
 		return;
 	}
@@ -148,7 +149,7 @@ void UInventoryManager::ProcessInventoryData(const FString& JsonData)
 	// Reject packets belonging to a different character
 	if (OwnerCharacterId > 0 && Parsed.characterId > 0 && Parsed.characterId != OwnerCharacterId)
 	{
-		UE_LOG(LogTemp, Verbose, TEXT("InventoryManager: Ignoring inventory data for CharID=%d (owner=%d)"),
+		UE_LOG(LogGameplay, Verbose, TEXT("InventoryManager: Ignoring inventory data for CharID=%d (owner=%d)"),
 			Parsed.characterId, OwnerCharacterId);
 		return;
 	}
@@ -178,7 +179,7 @@ void UInventoryManager::ProcessInventoryData(const FString& JsonData)
 	}
 
 	bInventoryLoaded = true;
-	UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Loaded %d items, gold=%d for character %d"),
+	UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Loaded %d items, gold=%d for character %d"),
 		CurrentInventory.items.Num(), CurrentInventory.gold, CurrentInventory.characterId);
 
 	// Broadcast events
@@ -193,14 +194,14 @@ void UInventoryManager::ProcessInventoryUpdate(const FString& JsonData)
 	
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("InventoryManager: Failed to deserialize inventory update"));
+		UE_LOG(LogNetPacket, Error, TEXT("InventoryManager: Failed to deserialize inventory update"));
 		return;
 	}
 
 	TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
 	if (!Body.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("InventoryManager: No body found in inventory update"));
+		UE_LOG(LogGameplay, Error, TEXT("InventoryManager: No body found in inventory update"));
 		return;
 	}
 
@@ -214,7 +215,7 @@ void UInventoryManager::ProcessInventoryUpdate(const FString& JsonData)
 		Body->TryGetNumberField(TEXT("characterId"), CharacterId);
 		if (OwnerCharacterId > 0 && CharacterId > 0 && CharacterId != OwnerCharacterId)
 		{
-			UE_LOG(LogTemp, Verbose, TEXT("InventoryManager: Ignoring INVENTORY_UPDATE for CharID=%d (owner=%d)"), CharacterId, OwnerCharacterId);
+			UE_LOG(LogGameplay, Verbose, TEXT("InventoryManager: Ignoring INVENTORY_UPDATE for CharID=%d (owner=%d)"), CharacterId, OwnerCharacterId);
 			return;
 		}
 
@@ -262,7 +263,7 @@ void UInventoryManager::ProcessInventoryUpdate(const FString& JsonData)
 		// Filter: ignore updates that belong to a different character.
 		if (OwnerCharacterId > 0 && CharacterId > 0 && CharacterId != OwnerCharacterId)
 		{
-			UE_LOG(LogTemp, Verbose, TEXT("InventoryManager: Ignoring INVENTORY_UPDATE for CharID=%d (owner=%d)"), CharacterId, OwnerCharacterId);
+			UE_LOG(LogGameplay, Verbose, TEXT("InventoryManager: Ignoring INVENTORY_UPDATE for CharID=%d (owner=%d)"), CharacterId, OwnerCharacterId);
 			return;
 		}
 
@@ -319,7 +320,7 @@ void UInventoryManager::ProcessInventoryUpdate(const FString& JsonData)
 					NewItem.name = FString::Printf(TEXT("Item %d"), ItemId); // Placeholder
 					NewInventory.items.Add(NewItem);
 					
-						UE_LOG(LogTemp, Warning, TEXT("InventoryManager: New item detected (ID: %d), may need full item data"), ItemId);
+						UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: New item detected (ID: %d), may need full item data"), ItemId);
 					}
 			}
 		}

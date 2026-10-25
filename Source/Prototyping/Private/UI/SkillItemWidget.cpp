@@ -1,4 +1,5 @@
 #include "UI/SkillItemWidget.h"
+#include "Prototyping.h"
 #include "Services/LocalizationSubsystem.h"
 #include "UI/SkillDragDropOperation.h"
 #include "UI/SkillDragVisualWidget.h"
@@ -18,16 +19,16 @@ void USkillItemWidget::NativeConstruct()
     // Enable mouse events for this widget
     SetVisibility(ESlateVisibility::Visible);
     
-    UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: NativeConstruct called for skill %s"), *CurrentSkillData.networkData.skillSlug);
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: NativeConstruct called for skill %s"), *CurrentSkillData.networkData.skillSlug);
 
     // Configure main border for visual feedback
     if (SkillBorder)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: SkillBorder found and configured"));
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: SkillBorder found and configured"));
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: SkillBorder is NULL - make sure to bind it in UMG"));
+        UE_LOG(LogGameplay, Warning, TEXT("SkillItemWidget: SkillBorder is NULL - make sure to bind it in UMG"));
     }
 }
 
@@ -42,7 +43,7 @@ void USkillItemWidget::SetSkillData(const FPlayerSkillData& SkillData)
     CurrentSkillData = SkillData;
     UpdateVisualDisplay();
     
-    UE_LOG(LogTemp, Log, TEXT("SkillItemWidget: SetSkillData called for skill %s"), *SkillData.networkData.skillSlug);
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: SetSkillData called for skill %s"), *SkillData.networkData.skillSlug);
 }
 
 void USkillItemWidget::SetSlotSize(float InSize)
@@ -57,7 +58,7 @@ void USkillItemWidget::SetSlotSize(float InSize)
 
 void USkillItemWidget::OnSkillClicked()
 {
-    UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: Skill clicked for %s"), *CurrentSkillData.networkData.skillSlug);
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: Skill clicked for %s"), *CurrentSkillData.networkData.skillSlug);
     OnSkillItemClicked.Broadcast(CurrentSkillData);
 }
 
@@ -68,12 +69,12 @@ void USkillItemWidget::SimulateClick()
 
 FReply USkillItemWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
-    UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: Mouse button down - Button: %s, Skill: %s"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: Mouse button down - Button: %s, Skill: %s"), 
         *InMouseEvent.GetEffectingButton().ToString(), *CurrentSkillData.networkData.skillSlug);
 
     if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: Left mouse button detected, preparing for drag"));
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: Left mouse button detected, preparing for drag"));
         
         // Update visual state to show pressed
         UpdateClickState(true);
@@ -93,7 +94,7 @@ FReply USkillItemWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FP
 
 FReply USkillItemWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
-    UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: Mouse button up - Button: %s, Skill: %s"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: Mouse button up - Button: %s, Skill: %s"), 
         *InMouseEvent.GetEffectingButton().ToString(), *CurrentSkillData.networkData.skillSlug);
     
     if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
@@ -136,8 +137,8 @@ FReply USkillItemWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, cons
 // ���������� ���������� NativeOnDragDetected
 void USkillItemWidget::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation)
 {
-    UE_LOG(LogTemp, Warning, TEXT("=== SKILL DRAG DETECTED DEBUG START ==="));
-    UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: DRAG DETECTED for skill %s"), *CurrentSkillData.networkData.skillSlug);
+    UE_LOG(LogGameplay, Verbose, TEXT("=== SKILL DRAG DETECTED DEBUG START ==="));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: DRAG DETECTED for skill %s"), *CurrentSkillData.networkData.skillSlug);
 
     // Hide tooltip when starting drag operation
     OnSkillItemHovered.Broadcast(CurrentSkillData, false);
@@ -146,27 +147,27 @@ void USkillItemWidget::NativeOnDragDetected(const FGeometry& InGeometry, const F
     USkillDragDropOperation* DragDropOp = NewObject<USkillDragDropOperation>(this, USkillDragDropOperation::StaticClass());
     if (!DragDropOp)
     {
-        UE_LOG(LogTemp, Error, TEXT("SkillItemWidget: ? Failed to create DragDropOperation"));
+        UE_LOG(LogGameplay, Error, TEXT("SkillItemWidget: ? Failed to create DragDropOperation"));
         OutOperation = nullptr;
-        UE_LOG(LogTemp, Warning, TEXT("=== SKILL DRAG DETECTED DEBUG END (FAILED) ==="));
+        UE_LOG(LogGameplay, Verbose, TEXT("=== SKILL DRAG DETECTED DEBUG END (FAILED) ==="));
         return;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: ? Created DragDropOperation successfully"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: ? Created DragDropOperation successfully"));
 
     // ����������� ��������
     DragDropOp->SetSkillData(CurrentSkillData, this);
-    UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: ? Set skill data in DragDropOperation"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: ? Set skill data in DragDropOperation"));
     
     // �����: �������� ����� drag visual �� USkillItemWidget � DragDropOperation
     if (DragVisualWidgetClass)
     {
         DragDropOp->DragVisualWidgetClass = DragVisualWidgetClass;
-        UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: Set custom DragVisualWidgetClass: %s"), *DragVisualWidgetClass->GetName());
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: Set custom DragVisualWidgetClass: %s"), *DragVisualWidgetClass->GetName());
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: No custom DragVisualWidgetClass set"));
+        UE_LOG(LogGameplay, Warning, TEXT("SkillItemWidget: No custom DragVisualWidgetClass set"));
     }
     
     // ������� drag visual
@@ -174,7 +175,7 @@ void USkillItemWidget::NativeOnDragDetected(const FGeometry& InGeometry, const F
     if (DragVisual)
     {
         DragDropOp->DefaultDragVisual = DragVisual;
-        UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: ? Created custom drag visual"));
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: ? Created custom drag visual"));
     }
     else
     {
@@ -182,15 +183,15 @@ void USkillItemWidget::NativeOnDragDetected(const FGeometry& InGeometry, const F
         // source out of its container and corrupts layout/hit-testing for the
         // duration of the drag. Proceed without a visual instead.
         DragDropOp->DefaultDragVisual = nullptr;
-        UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: CreateDragVisualWidget returned null — proceeding without drag visual"));
+        UE_LOG(LogGameplay, Warning, TEXT("SkillItemWidget: CreateDragVisualWidget returned null — proceeding without drag visual"));
     }
     
     // ��������� �������
     DragDropOp->Pivot = EDragPivot::MouseDown;
     DragDropOp->Offset = FVector2D::ZeroVector;
     
-    UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: ? Configured drag operation settings"));
-    UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: ? Setting OutOperation and marking as dragging"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: ? Configured drag operation settings"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: ? Setting OutOperation and marking as dragging"));
     
     OutOperation = DragDropOp;
     bIsDragging = true;
@@ -199,8 +200,8 @@ void USkillItemWidget::NativeOnDragDetected(const FGeometry& InGeometry, const F
     // allowing drag events to reach the SkillBar below it.
     OnSkillItemDragStarted.Broadcast(CurrentSkillData);
 
-    UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: Started dragging skill %s"), *CurrentSkillData.networkData.skillSlug);
-    UE_LOG(LogTemp, Warning, TEXT("=== SKILL DRAG DETECTED DEBUG END (SUCCESS) ==="));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: Started dragging skill %s"), *CurrentSkillData.networkData.skillSlug);
+    UE_LOG(LogGameplay, Verbose, TEXT("=== SKILL DRAG DETECTED DEBUG END (SUCCESS) ==="));
 }
 
 void USkillItemWidget::NativeOnDragCancelled(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
@@ -211,7 +212,7 @@ void USkillItemWidget::NativeOnDragCancelled(const FDragDropEvent& InDragDropEve
     // previously unreliable because NativeOnMouseLeave could clear it early.
     bIsDragging = false;
     OnSkillItemDragEnded.Broadcast(CurrentSkillData);
-    UE_LOG(LogTemp, Log, TEXT("SkillItemWidget: Drag cancelled for skill %s"), *CurrentSkillData.networkData.skillSlug);
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: Drag cancelled for skill %s"), *CurrentSkillData.networkData.skillSlug);
 }
 
 void USkillItemWidget::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
@@ -224,7 +225,7 @@ void USkillItemWidget::NativeOnMouseEnter(const FGeometry& InGeometry, const FPo
     // Broadcast hover event
     OnSkillItemHovered.Broadcast(CurrentSkillData, true);
     
-    UE_LOG(LogTemp, Log, TEXT("SkillItemWidget: Mouse entered skill %s"), *CurrentSkillData.networkData.skillSlug);
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: Mouse entered skill %s"), *CurrentSkillData.networkData.skillSlug);
 }
 
 void USkillItemWidget::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
@@ -241,13 +242,13 @@ void USkillItemWidget::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
     // Broadcast hover event
     OnSkillItemHovered.Broadcast(CurrentSkillData, false);
 
-    UE_LOG(LogTemp, Log, TEXT("SkillItemWidget: Mouse left skill %s (dragging: %s)"),
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: Mouse left skill %s (dragging: %s)"),
         *CurrentSkillData.networkData.skillSlug, bIsDragging ? TEXT("true") : TEXT("false"));
 }
 
 void USkillItemWidget::UpdateVisualDisplay()
 {
-    UE_LOG(LogTemp, Log, TEXT("SkillItemWidget: UpdateVisualDisplay for skill %s"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: UpdateVisualDisplay for skill %s"), 
         *CurrentSkillData.networkData.skillSlug);
     
     // Update skill icon
@@ -257,39 +258,39 @@ void USkillItemWidget::UpdateVisualDisplay()
         
         if (CurrentSkillData.definitionData.skillIcon.IsValid())
         {
-            UE_LOG(LogTemp, Log, TEXT("SkillItemWidget: Attempting to load skill icon from TSoftObjectPtr"));
+            UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: Attempting to load skill icon from TSoftObjectPtr"));
             
             if (UTexture2D* IconTexture = CurrentSkillData.definitionData.skillIcon.LoadSynchronous())
             {
                 SkillIcon->SetBrushFromTexture(IconTexture);
                 bIconSet = true;
-                UE_LOG(LogTemp, Log, TEXT("SkillItemWidget: Successfully set skill icon from texture"));
+                UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: Successfully set skill icon from texture"));
             }
             else
             {
-                UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: Failed to load texture from TSoftObjectPtr"));
+                UE_LOG(LogGameplay, Warning, TEXT("SkillItemWidget: Failed to load texture from TSoftObjectPtr"));
             }
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: Skill icon TSoftObjectPtr is not valid"));
+            UE_LOG(LogGameplay, Warning, TEXT("SkillItemWidget: Skill icon TSoftObjectPtr is not valid"));
         }
         
         if (!bIconSet && DefaultSkillIcon)
         {
             SkillIcon->SetBrushFromTexture(DefaultSkillIcon);
             bIconSet = true;
-            UE_LOG(LogTemp, Log, TEXT("SkillItemWidget: Set default skill icon"));
+            UE_LOG(LogGameplay, Verbose, TEXT("SkillItemWidget: Set default skill icon"));
         }
         
         if (!bIconSet)
         {
-            UE_LOG(LogTemp, Warning, TEXT("SkillItemWidget: No icon available, no texture set"));
+            UE_LOG(LogGameplay, Warning, TEXT("SkillItemWidget: No icon available, no texture set"));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("SkillItemWidget: SkillIcon widget is NULL"));
+        UE_LOG(LogGameplay, Error, TEXT("SkillItemWidget: SkillIcon widget is NULL"));
     }
 
     // Update skill level (keep this for quick reference)

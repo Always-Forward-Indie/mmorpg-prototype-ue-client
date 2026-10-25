@@ -1,4 +1,5 @@
 #include "Gameplay/Combat/DamageEffectHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/Combat/ICombatable.h"
 #include "Gameplay/Mobs/BasicMOB.h"
 #include "Gameplay/Mobs/MOBAnimInstance.h"
@@ -20,13 +21,13 @@ void UDamageEffectHandler::ProcessSkillResult_Implementation(const FSkillResultD
 {
     if (!Target.GetInterface() || !Target.GetObject() || !IsValid(Target.GetObject()))
     {
-        UE_LOG(LogTemp, Error, TEXT("DamageEffectHandler: Target interface is null or invalid"));
+        UE_LOG(LogGameplay, Error, TEXT("DamageEffectHandler: Target interface is null or invalid"));
         return;
     }
 
     UObject* TargetObject = Target.GetObject();
 
-    UE_LOG(LogTemp, Warning, TEXT("DamageEffectHandler: Processing result for target %s - Damage=%d HP=%d?%d Died=%s"), 
+    UE_LOG(LogGameplay, Warning, TEXT("DamageEffectHandler: Processing result for target %s - Damage=%d HP=%d?%d Died=%s"), 
         *GetNameSafe(TargetObject), SkillResult.damage, 
         ICombatable::Execute_GetCurrentHealth(TargetObject), SkillResult.finalTargetHealth,
         SkillResult.targetDied ? TEXT("YES") : TEXT("NO"));
@@ -37,7 +38,7 @@ void UDamageEffectHandler::ProcessSkillResult_Implementation(const FSkillResultD
     const bool bFailedWithNoEffect = !SkillResult.success && SkillResult.damage == 0 && SkillResult.healing == 0;
     if (bFailedWithNoEffect)
     {
-        UE_LOG(LogTemp, Warning, TEXT("DamageEffectHandler: Skipping HP/MP update — skill '%s' failed with no effect (reason: %s)"),
+        UE_LOG(LogGameplay, Warning, TEXT("DamageEffectHandler: Skipping HP/MP update — skill '%s' failed with no effect (reason: %s)"),
             *SkillResult.skillName, *SkillResult.errorReason);
     }
     // Apply HP/Mana changes for hits and blocks — skip only for misses
@@ -100,14 +101,14 @@ void UDamageEffectHandler::ProcessSkillResult_Implementation(const FSkillResultD
                         : 999.f;
                     if (TimeSinceRespawn < 5.0f)
                     {
-                        UE_LOG(LogTemp, Warning, TEXT("DamageEffectHandler: Ignoring targetDied for player %s - within respawn grace window (%.1fs)"),
+                        UE_LOG(LogGameplay, Warning, TEXT("DamageEffectHandler: Ignoring targetDied for player %s - within respawn grace window (%.1fs)"),
                             *GetNameSafe(TargetObject), TimeSinceRespawn);
                         return;
                     }
                 }
             }
 
-            UE_LOG(LogTemp, Warning, TEXT("DamageEffectHandler: Target %s is DEAD - calling SetDead(true)"), 
+            UE_LOG(LogGameplay, Warning, TEXT("DamageEffectHandler: Target %s is DEAD - calling SetDead(true)"), 
                 *GetNameSafe(TargetObject));
             // SetDead(true) already calls OnDeath internally � do NOT call OnDeath separately.
             ICombatable::Execute_SetDead(TargetObject, true);
@@ -132,7 +133,7 @@ void UDamageEffectHandler::ShowNormalDamageEffect(const FSkillResultData& SkillR
     // �������� floating combat text
     ShowFloatingDamageText(SkillResult, Target);
 
-    UE_LOG(LogTemp, Log, TEXT("DamageEffectHandler: Showed normal damage effect: %d damage"), SkillResult.damage);
+    UE_LOG(LogGameplay, Verbose, TEXT("DamageEffectHandler: Showed normal damage effect: %d damage"), SkillResult.damage);
 }
 
 void UDamageEffectHandler::ShowBlockedDamageEffect(const FSkillResultData& SkillResult, const TScriptInterface<ICombatable>& Target)
@@ -160,7 +161,7 @@ void UDamageEffectHandler::ShowBlockedDamageEffect(const FSkillResultData& Skill
         }
     }
 
-    UE_LOG(LogTemp, Log, TEXT("DamageEffectHandler: Showed blocked damage effect: %d damage"), SkillResult.damage);
+    UE_LOG(LogGameplay, Verbose, TEXT("DamageEffectHandler: Showed blocked damage effect: %d damage"), SkillResult.damage);
 }
 
 void UDamageEffectHandler::ShowMissedEffect(const FSkillResultData& SkillResult, const TScriptInterface<ICombatable>& Target)
@@ -179,7 +180,7 @@ void UDamageEffectHandler::ShowMissedEffect(const FSkillResultData& SkillResult,
         FCTManager->ShowMissText(CombatPosition);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("DamageEffectHandler: Showed missed effect"));
+    UE_LOG(LogGameplay, Verbose, TEXT("DamageEffectHandler: Showed missed effect"));
 }
 
 void UDamageEffectHandler::ShowFloatingDamageText(const FSkillResultData& SkillResult, const TScriptInterface<ICombatable>& Target)
@@ -214,7 +215,7 @@ UFloatingCombatTextManager* UDamageEffectHandler::GetFCTManager(UObject* TargetO
 {
     if (!TargetObject || !TargetObject->IsA(AActor::StaticClass()))
     {
-        UE_LOG(LogTemp, Error, TEXT("GetFCTManager: TargetObject is not an AActor"));
+        UE_LOG(LogGameplay, Error, TEXT("GetFCTManager: TargetObject is not an AActor"));
         return nullptr;
     }
 
@@ -222,14 +223,14 @@ UFloatingCombatTextManager* UDamageEffectHandler::GetFCTManager(UObject* TargetO
     UWorld* World = Actor->GetWorld();
     if (!World)
     {
-        UE_LOG(LogTemp, Error, TEXT("GetFCTManager: World is null"));
+        UE_LOG(LogGameplay, Error, TEXT("GetFCTManager: World is null"));
         return nullptr;
     }
 
         APawn* LocalPawn = UGameplayStatics::GetPlayerPawn(World, 0);
         if (!LocalPawn)
         {
-            UE_LOG(LogTemp, Error, TEXT("GetFCTManager: No local player pawn"));
+            UE_LOG(LogGameplay, Error, TEXT("GetFCTManager: No local player pawn"));
             return nullptr;
         }
 
@@ -239,15 +240,15 @@ UFloatingCombatTextManager* UDamageEffectHandler::GetFCTManager(UObject* TargetO
             {
                 return FCT;
             }
-            UE_LOG(LogTemp, Error, TEXT("GetFCTManager: Local player's UIManager has no FCT"));
+            UE_LOG(LogGameplay, Error, TEXT("GetFCTManager: Local player's UIManager has no FCT"));
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("GetFCTManager: Local player has no UUIManager component"));
+            UE_LOG(LogGameplay, Error, TEXT("GetFCTManager: Local player has no UUIManager component"));
         }
 
 
-    UE_LOG(LogTemp, Error, TEXT("GetFCTManager: Failed to resolve FCT (Target=%s)"), *GetNameSafe(Actor));
+    UE_LOG(LogGameplay, Error, TEXT("GetFCTManager: Failed to resolve FCT (Target=%s)"), *GetNameSafe(Actor));
     return nullptr;
 }
 
@@ -268,7 +269,7 @@ EDamageType UDamageEffectHandler::ConvertSkillSchoolToDamageType(ESkillSchool Sk
 
 void UDamageEffectHandler::ProcessCriticalHit(const FSkillResultData& SkillResult, UObject* TargetObject)
 {
-    UE_LOG(LogTemp, Log, TEXT("DamageEffectHandler: Processing critical hit for %d damage"), SkillResult.damage);
+    UE_LOG(LogGameplay, Verbose, TEXT("DamageEffectHandler: Processing critical hit for %d damage"), SkillResult.damage);
 
     // �������������� ������� ��� ����������� ������
     // ��������, ����������� �����, ������� � �.�.
@@ -276,13 +277,13 @@ void UDamageEffectHandler::ProcessCriticalHit(const FSkillResultData& SkillResul
 
 void UDamageEffectHandler::ProcessDamageOverTime(const FSkillResultData& SkillResult, UObject* TargetObject)
 {
-    UE_LOG(LogTemp, Log, TEXT("DamageEffectHandler: Processing DOT effect"));
+    UE_LOG(LogGameplay, Verbose, TEXT("DamageEffectHandler: Processing DOT effect"));
     // DOT processing logic can be implemented here
 }
 
 void UDamageEffectHandler::LogDamageProcessing(const FSkillResultData& SkillResult, UObject* TargetObject)
 {
-    UE_LOG(LogTemp, Verbose, TEXT("DamageEffectHandler: Processed %d damage to target %d (Critical: %s, Blocked: %s, Missed: %s)"),
+    UE_LOG(LogGameplay, Verbose, TEXT("DamageEffectHandler: Processed %d damage to target %d (Critical: %s, Blocked: %s, Missed: %s)"),
         SkillResult.damage, ICombatable::Execute_GetActorId(TargetObject),
         SkillResult.isCritical ? TEXT("Yes") : TEXT("No"),
         SkillResult.isBlocked ? TEXT("Yes") : TEXT("No"),

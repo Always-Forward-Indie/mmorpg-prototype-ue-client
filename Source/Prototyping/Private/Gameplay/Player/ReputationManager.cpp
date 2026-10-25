@@ -1,4 +1,5 @@
 #include "Gameplay/Player/ReputationManager.h"
+#include "Prototyping.h"
 
 void UReputationManager::ApplyReputationsState(const FPlayerReputationsState& InState)
 {
@@ -10,7 +11,7 @@ void UReputationManager::ApplyReputationsState(const FPlayerReputationsState& In
         ReputationMap.Add(Entry.factionSlug, Entry);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("ReputationManager: Loaded %d reputation entries for character %d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("ReputationManager: Loaded %d reputation entries for character %d"),
         ReputationMap.Num(), CachedCharacterId);
 
     OnReputationsLoaded.Broadcast(InState);
@@ -23,7 +24,7 @@ void UReputationManager::ApplyReputationUpdate(const FReputationUpdateData& Upda
     Entry.value       = Update.value;
     Entry.tier        = Update.tier;
 
-    UE_LOG(LogTemp, Log, TEXT("ReputationManager: %s -> %d (%s)"),
+    UE_LOG(LogGameplay, Verbose, TEXT("ReputationManager: %s -> %d (%s)"),
         *Update.factionSlug, Update.value, *Update.tier);
 
     OnReputationUpdated.Broadcast(Update);

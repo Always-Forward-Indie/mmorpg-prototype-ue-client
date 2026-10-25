@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Gameplay/NPCs/NPCAnimInstance.h"
+#include "Prototyping.h"
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Animation/AnimMontage.h"
@@ -42,7 +43,7 @@ bool UNPCAnimInstance::PlayAction(FName ActionSlug)
     UAnimMontage* const* Found = ActionMontageMap.Find(ActionSlug);
     if (!Found || !(*Found))
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
             TEXT("[NPCAnimInstance] PlayAction: no montage for slug '%s'"), *ActionSlug.ToString());
         return false;
     }
@@ -76,7 +77,7 @@ void UNPCAnimInstance::PickRandomIdleMontage()
 {
     if (IdleMontages.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
             TEXT("[NPCAnimInstance] PickRandomIdleMontage: IdleMontages array is empty — assign AnimMontages in the AnimBlueprint defaults (NPC|Montages category)"));
         return;
     }
@@ -144,7 +145,7 @@ bool UNPCAnimInstance::PlayMontageInternal(UAnimMontage* Montage, float PlayRate
         Montage_SetEndDelegate(ActionMontageEndedDelegate, Montage);
         return true;
     }
-    UE_LOG(LogTemp, Warning,
+    UE_LOG(LogGameplay, Warning,
         TEXT("[NPCAnimInstance] Montage_Play failed for '%s' — verify the AnimGraph has a 'DefaultSlot' node and the montage is compatible with this skeleton"),
         *Montage->GetName());    ActiveActionMontage = nullptr;
     return false;

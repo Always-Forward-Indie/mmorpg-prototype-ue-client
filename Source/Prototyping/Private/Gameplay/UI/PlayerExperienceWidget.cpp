@@ -1,4 +1,5 @@
 #include "Gameplay/UI/PlayerExperienceWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/Player/ExperienceManager.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "Components/ProgressBar.h"
@@ -45,7 +46,7 @@ void UPlayerExperienceWidget::NativeConstruct()
         ExperienceGainText->SetVisibility(ESlateVisibility::Hidden);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("PlayerExperienceWidget: NativeConstruct completed"));
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerExperienceWidget: NativeConstruct completed"));
 }
 
 void UPlayerExperienceWidget::NativeDestruct()
@@ -58,7 +59,7 @@ void UPlayerExperienceWidget::NativeDestruct()
         ProgressionInterface.SetInterface(this);
         
         ExperienceManager->UnregisterProgressionListener(ProgressionInterface);
-        UE_LOG(LogTemp, Log, TEXT("PlayerExperienceWidget: Unregistered from ExperienceManager"));
+        UE_LOG(LogGameplay, Verbose, TEXT("PlayerExperienceWidget: Unregistered from ExperienceManager"));
     }
 
     // Unsubscribe from stats manager
@@ -80,7 +81,7 @@ void UPlayerExperienceWidget::InitializeWidget(UExperienceManager* InExperienceM
 {
     if (!InExperienceManager || CharacterId <= 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerExperienceWidget: Invalid initialization parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerExperienceWidget: Invalid initialization parameters"));
         return;
     }
 
@@ -102,7 +103,7 @@ void UPlayerExperienceWidget::InitializeWidget(UExperienceManager* InExperienceM
     {
         CurrentProgression = ExperienceManager->GetCharacterProgression(CurrentCharacterId);
         
-        UE_LOG(LogTemp, Warning, TEXT("PlayerExperienceWidget: Retrieved progression data - Level: %d, Exp: %d/%d"), 
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerExperienceWidget: Retrieved progression data - Level: %d, Exp: %d/%d"), 
             CurrentProgression.currentLevel, CurrentProgression.currentExperience, CurrentProgression.expForNextLevel);
             
         OnProgressionUpdated_Implementation(CurrentProgression);
@@ -112,10 +113,10 @@ void UPlayerExperienceWidget::InitializeWidget(UExperienceManager* InExperienceM
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerExperienceWidget: No progression data found for character %d"), CurrentCharacterId);
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerExperienceWidget: No progression data found for character %d"), CurrentCharacterId);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("PlayerExperienceWidget: Initialized for character %d"), CharacterId);
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerExperienceWidget: Initialized for character %d"), CharacterId);
 }
 
 void UPlayerExperienceWidget::BindToStatsManager(UPlayerStatsManager* InStatsManager)
@@ -141,7 +142,7 @@ void UPlayerExperienceWidget::BindToStatsManager(UPlayerStatsManager* InStatsMan
         RefreshFromStatsUpdate(Cached);
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("PlayerExperienceWidget: Bound to PlayerStatsManager (charId=%d)"), CurrentCharacterId);
+    UE_LOG(LogGameplay, Warning, TEXT("PlayerExperienceWidget: Bound to PlayerStatsManager (charId=%d)"), CurrentCharacterId);
 }
 
 void UPlayerExperienceWidget::HandleStatsUpdated(const FPlayerStatsUpdateStruct& NewStats)
@@ -221,7 +222,7 @@ void UPlayerExperienceWidget::RefreshFromStatsUpdate(const FPlayerStatsUpdateStr
     if (LevelText)            { LevelText->SynchronizeProperties(); }
     if (ExperienceText)       { ExperienceText->SynchronizeProperties(); }
 
-    UE_LOG(LogTemp, Log, TEXT("PlayerExperienceWidget: Refreshed from stats_update - Lv=%d XP=%d [%d-%d] debt=%d progress=%.2f"),
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerExperienceWidget: Refreshed from stats_update - Lv=%d XP=%d [%d-%d] debt=%d progress=%.2f"),
         Stats.level, Stats.experienceCurrent,
         Stats.experienceLevelStart, Stats.experienceNextLevel,
         Stats.experienceDebt, ProgressPercent);
@@ -235,7 +236,7 @@ void UPlayerExperienceWidget::OnExperienceGained_Implementation(const FExperienc
     if (ExperienceEvent.characterId != CurrentCharacterId)
         return;
 
-    UE_LOG(LogTemp, Log, TEXT("PlayerExperienceWidget: Experience gained - %d (%s)"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerExperienceWidget: Experience gained - %d (%s)"), 
         ExperienceEvent.experienceGained, *ExperienceEvent.reasonText);
 
     // Show experience gain notification
@@ -256,7 +257,7 @@ void UPlayerExperienceWidget::OnLevelUp_Implementation(int32 OldLevel, int32 New
     if (!bLocalProgressionUpdated)
         return;
 
-    UE_LOG(LogTemp, Warning, TEXT("PlayerExperienceWidget: Level up! %d -> %d"), OldLevel, NewLevel);
+    UE_LOG(LogGameplay, Warning, TEXT("PlayerExperienceWidget: Level up! %d -> %d"), OldLevel, NewLevel);
 
     // Show level up notification
     ShowLevelUpNotification(NewLevel);
@@ -270,14 +271,14 @@ void UPlayerExperienceWidget::OnLevelUp_Implementation(int32 OldLevel, int32 New
 
 void UPlayerExperienceWidget::OnProgressionUpdated_Implementation(const FPlayerProgressionStruct& NewProgression)
 {
-    UE_LOG(LogTemp, Warning, TEXT("PlayerExperienceWidget: OnProgressionUpdated called - Initialized: %s, CharacterMatch: %s (Expected: %d, Got: %d)"), 
+    UE_LOG(LogGameplay, Warning, TEXT("PlayerExperienceWidget: OnProgressionUpdated called - Initialized: %s, CharacterMatch: %s (Expected: %d, Got: %d)"), 
         bIsInitialized ? TEXT("True") : TEXT("False"),
         (NewProgression.characterId == CurrentCharacterId) ? TEXT("True") : TEXT("False"),
         CurrentCharacterId, NewProgression.characterId);
 
     if (!bIsInitialized || NewProgression.characterId != CurrentCharacterId)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerExperienceWidget: Progression update skipped - Initialized: %s, CharacterMatch: %s"), 
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerExperienceWidget: Progression update skipped - Initialized: %s, CharacterMatch: %s"), 
             bIsInitialized ? TEXT("True") : TEXT("False"),
             (NewProgression.characterId == CurrentCharacterId) ? TEXT("True") : TEXT("False"));
         bLocalProgressionUpdated = false;
@@ -288,7 +289,7 @@ void UPlayerExperienceWidget::OnProgressionUpdated_Implementation(const FPlayerP
 
     CurrentProgression = NewProgression;
 
-    UE_LOG(LogTemp, Warning, TEXT("PlayerExperienceWidget: Progression updated - Level: %d, Exp: %d [%d - %d] Debt: %d"), 
+    UE_LOG(LogGameplay, Warning, TEXT("PlayerExperienceWidget: Progression updated - Level: %d, Exp: %d [%d - %d] Debt: %d"), 
         NewProgression.currentLevel, NewProgression.currentExperience,
         NewProgression.expForCurrentLevel, NewProgression.expForNextLevel,
         NewProgression.experienceDebt);
@@ -323,7 +324,7 @@ void UPlayerExperienceWidget::OnProgressionUpdated_Implementation(const FPlayerP
     if (LevelText)            { LevelText->SynchronizeProperties(); }
     if (ExperienceText)       { ExperienceText->SynchronizeProperties(); }
 
-    UE_LOG(LogTemp, Warning, TEXT("PlayerExperienceWidget: UI updated with progress percent: %f"), ProgressPercent);
+    UE_LOG(LogGameplay, Warning, TEXT("PlayerExperienceWidget: UI updated with progress percent: %f"), ProgressPercent);
 }
 
 int32 UPlayerExperienceWidget::GetCurrentLevel_Implementation() const
@@ -408,7 +409,7 @@ void UPlayerExperienceWidget::ShowExperienceGain(int32 ExpGained, const FString&
 
 void UPlayerExperienceWidget::ShowLevelUpNotification(int32 NewLevel)
 {
-    UE_LOG(LogTemp, Warning, TEXT("PlayerExperienceWidget: Showing level up notification for level %d"), NewLevel);
+    UE_LOG(LogGameplay, Warning, TEXT("PlayerExperienceWidget: Showing level up notification for level %d"), NewLevel);
     
     // This can be extended to show special level up UI elements
     // For now, just update the level display with emphasis
@@ -477,7 +478,7 @@ void UPlayerExperienceWidget::UpdateExperienceTextDisplay(int32 CurrentExp, int3
 {
     if (!ExperienceText)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerExperienceWidget: ExperienceText widget is null!"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerExperienceWidget: ExperienceText widget is null!"));
         return;
     }
 
@@ -493,5 +494,5 @@ void UPlayerExperienceWidget::UpdateExperienceTextDisplay(int32 CurrentExp, int3
 
     ExperienceText->SetText(FText::FromString(ExpString));
 
-    UE_LOG(LogTemp, Warning, TEXT("PlayerExperienceWidget: Updated experience text to: %s"), *ExpString);
+    UE_LOG(LogGameplay, Warning, TEXT("PlayerExperienceWidget: Updated experience text to: %s"), *ExpString);
 }

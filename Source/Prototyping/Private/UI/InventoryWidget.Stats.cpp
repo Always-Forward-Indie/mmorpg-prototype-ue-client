@@ -1,4 +1,5 @@
 #include "UI/InventoryWidget.h"
+#include "Prototyping.h"
 #include "UI/InventorySlotWidget.h"
 #include "Utils/NetCore/InventoryWeight.h"
 #include "UI/ItemTooltipWidget.h"
@@ -103,7 +104,7 @@ void UInventoryWidget::UpdateInventoryStats()
 		GoldText->SetText(FText::FromString(FString::Printf(TEXT("%d"), CurrentInventory.gold)));
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Stats updated - Weight: %.1f/%.1f, Slots: %d/%d, Gold: %d"),
+	UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Stats updated - Weight: %.1f/%.1f, Slots: %d/%d, Gold: %d"),
 		GetCurrentInventoryWeight(), MaxInventoryWeight, GetUsedSlots(), GetTotalSlots(), CurrentInventory.gold);
 }
 
@@ -112,5 +113,5 @@ void UInventoryWidget::SetMaxInventoryWeight(float NewMaxWeight)
 	MaxInventoryWeight = FMath::Max(0.0f, NewMaxWeight);
 	UpdateInventoryStats();
 	
-	UE_LOG(LogTemp, Log, TEXT("InventoryWidget: Max weight set to %.1f"), MaxInventoryWeight);
+	UE_LOG(LogGameplay, Log, TEXT("InventoryWidget: Max weight set to %.1f"), MaxInventoryWeight);
 }

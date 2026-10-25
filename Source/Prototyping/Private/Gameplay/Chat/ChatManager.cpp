@@ -1,4 +1,5 @@
 #include "Gameplay/Chat/ChatManager.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
@@ -15,7 +16,7 @@ void UChatManager::Initialize(UMyGameInstance* InGameInstance, UNetworkManager* 
 {
     if (!InGameInstance || !InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("ChatManager: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("ChatManager: Initialize called with null parameters"));
         return;
     }
     GameInstance    = InGameInstance;
@@ -26,19 +27,19 @@ void UChatManager::SendChatMessage(const FString& Channel, const FString& Text, 
 {
     if (!NetworkManager || !GameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("ChatManager: Cannot send message - missing dependencies"));
+        UE_LOG(LogGameplay, Error, TEXT("ChatManager: Cannot send message - missing dependencies"));
         return;
     }
 
     if (Text.IsEmpty() || Text.Len() > 255)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ChatManager: Message text is empty or exceeds 255 chars"));
+        UE_LOG(LogGameplay, Warning, TEXT("ChatManager: Message text is empty or exceeds 255 chars"));
         return;
     }
 
     if (Channel.Equals(TEXT("whisper"), ESearchCase::IgnoreCase) && TargetName.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("ChatManager: Whisper requires a targetName"));
+        UE_LOG(LogGameplay, Warning, TEXT("ChatManager: Whisper requires a targetName"));
         return;
     }
 

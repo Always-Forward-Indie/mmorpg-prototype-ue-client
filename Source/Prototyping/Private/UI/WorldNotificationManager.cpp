@@ -1,4 +1,5 @@
 #include "UI/WorldNotificationManager.h"
+#include "Prototyping.h"
 #include "UI/BestiaryWidget.h"
 #include "UI/NotificationToastWidget.h"
 #include "UI/NotificationZoneBannerWidget.h"
@@ -37,12 +38,12 @@ void UWorldNotificationManager::Initialize(
 
     bIsInitialized = true;
 
-    UE_LOG(LogTemp, Log, TEXT("WorldNotificationManager: Initialized"));
+    UE_LOG(LogGameplay, Log, TEXT("WorldNotificationManager: Initialized"));
 
     // Flush notifications that arrived before the widgets were ready
     if (PendingRawNotifications.Num() > 0)
     {
-        UE_LOG(LogTemp, Log, TEXT("WorldNotificationManager: Flushing %d pending notification(s)"),
+        UE_LOG(LogGameplay, Log, TEXT("WorldNotificationManager: Flushing %d pending notification(s)"),
             PendingRawNotifications.Num());
 
         // Copy and clear before processing to avoid re-entrant additions
@@ -83,7 +84,7 @@ void UWorldNotificationManager::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("WorldNotificationManager: Cannot subscribe � NetworkManager invalid"));
+        UE_LOG(LogGameplay, Error, TEXT("WorldNotificationManager: Cannot subscribe � NetworkManager invalid"));
         return;
     }
 
@@ -93,14 +94,14 @@ void UWorldNotificationManager::SubscribeToNetworkEvents()
     NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UWorldNotificationManager::HandleChunkServerData);
     bIsSubscribed = true;
 
-    UE_LOG(LogTemp, Log, TEXT("WorldNotificationManager: Subscribed to network events"));
+    UE_LOG(LogGameplay, Verbose, TEXT("WorldNotificationManager: Subscribed to network events"));
 }
 
 void UWorldNotificationManager::SubscribeToNetworkEvents_Early(UNetworkManager* InNetworkManager)
 {
     if (!InNetworkManager || !IsValid(InNetworkManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("WorldNotificationManager: Early subscribe � NetworkManager invalid"));
+        UE_LOG(LogGameplay, Error, TEXT("WorldNotificationManager: Early subscribe � NetworkManager invalid"));
         return;
     }
 
@@ -111,7 +112,7 @@ void UWorldNotificationManager::SubscribeToNetworkEvents_Early(UNetworkManager* 
     NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UWorldNotificationManager::HandleChunkServerData);
     bIsSubscribed = true;
 
-    UE_LOG(LogTemp, Log, TEXT("WorldNotificationManager: Subscribed early to network events (buffering until Initialize)"));
+    UE_LOG(LogGameplay, Verbose, TEXT("WorldNotificationManager: Subscribed early to network events (buffering until Initialize)"));
 }
 
 void UWorldNotificationManager::UnsubscribeFromNetworkEvents()
@@ -310,17 +311,17 @@ void UWorldNotificationManager::DispatchNotification(const FWorldNotificationStr
     }
     else if (Channel == TEXT("chat_log"))
     {
-        UE_LOG(LogTemp, Log, TEXT("WorldNotification [chat_log] %s"), *Type);
+        UE_LOG(LogGameplay, Log, TEXT("WorldNotification [chat_log] %s"), *Type);
     }
     else if (Channel == TEXT("silent"))
     {
         // Silent notifications update data only � no visual widget
-        UE_LOG(LogTemp, Verbose, TEXT("WorldNotification [silent] %s"), *Type);
+        UE_LOG(LogGameplay, Verbose, TEXT("WorldNotification [silent] %s"), *Type);
     }
     else
     {
         // Unknown channel � graceful fallback to toast if widget available
-        UE_LOG(LogTemp, Verbose, TEXT("WorldNotificationManager: Unknown channel '%s' for type '%s', fallback to toast"), *Channel, *Type);
+        UE_LOG(LogGameplay, Verbose, TEXT("WorldNotificationManager: Unknown channel '%s' for type '%s', fallback to toast"), *Channel, *Type);
         if (ToastWidget)
             ToastWidget->ShowNotification(Notification);
     }

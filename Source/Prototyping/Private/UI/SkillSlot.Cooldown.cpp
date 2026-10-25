@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillSlotWidget.h"
 #include "UI/SkillSlotWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
@@ -29,7 +30,7 @@ void USkillSlotWidget::BeginDestroy()
 
 void USkillSlotWidget::OnSkillCooldownStarted(const FString& SkillSlug)
 {
-    UE_LOG(LogTemp, Warning,
+    UE_LOG(LogGameplay, Warning,
         TEXT("SkillSlotWidget[%d]: OnSkillCooldownStarted '%s' assigned='%s' match=%d"),
         SlotIndex, *SkillSlug, *AssignedSkillSlug,
         (SkillSlug == AssignedSkillSlug) ? 1 : 0);
@@ -39,7 +40,7 @@ void USkillSlotWidget::OnSkillCooldownStarted(const FString& SkillSlug)
         CooldownRemainingTime = SkillManager->GetSkillCooldownRemaining(SkillSlug);
         bIsOnCooldown = (CooldownRemainingTime > 0.0f);
 
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
             TEXT("SkillSlotWidget[%d]: applying cooldown total=%.1f remaining=%.1f onCD=%d"),
             SlotIndex, CooldownTotalTime, CooldownRemainingTime, bIsOnCooldown ? 1 : 0);
 
@@ -59,6 +60,6 @@ void USkillSlotWidget::OnSkillReady(const FString& SkillSlug)
         UpdateCooldownDisplay();
         UpdateVisualState();
         
-        UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Skill %s is ready"), SlotIndex, *SkillSlug);
+        UE_LOG(LogGameplay, Log, TEXT("SkillSlotWidget[%d]: Skill %s is ready"), SlotIndex, *SkillSlug);
     }
 }

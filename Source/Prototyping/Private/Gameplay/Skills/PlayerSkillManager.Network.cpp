@@ -1,4 +1,5 @@
 #include "Gameplay/Skills/PlayerSkillManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Combat/SkillSystemManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Services/TimeSyncService.h"
@@ -9,12 +10,12 @@ void UPlayerSkillManager::HandleSkillInitiation(const FString& SkillSlug, int32 
     // Only handle initiations for our character
     if (CasterId != CharacterId)
     {
-        UE_LOG(LogTemp, Verbose, TEXT("PlayerSkillManager: Ignoring skill initiation for other character %d (ours: %d)"), 
+        UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillManager: Ignoring skill initiation for other character %d (ours: %d)"), 
             CasterId, CharacterId);
         return;
     }
     
-    UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Server-confirmed skill %s (cooldownMs=%d, gcdMs=%d)"),
+    UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Server-confirmed skill %s (cooldownMs=%d, gcdMs=%d)"),
         *SkillSlug, CooldownMs, GcdMs);
 
     // Defense: a successful initiation should carry a non-zero cooldown or GCD.
@@ -22,7 +23,7 @@ void UPlayerSkillManager::HandleSkillInitiation(const FString& SkillSlug, int32 
     // by CombatNetworkHandler. This guard is a safety-net against a missing filter.
     if (CooldownMs <= 0 && GcdMs <= 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Suspicious initiation for %s - cooldownMs=%d gcdMs=%d. Processing anyway but it may be an error."),
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Suspicious initiation for %s - cooldownMs=%d gcdMs=%d. Processing anyway but it may be an error."),
             *SkillSlug, CooldownMs, GcdMs);
     }
 
@@ -58,13 +59,13 @@ void UPlayerSkillManager::HandleSkillInitiation(const FString& SkillSlug, int32 
                 S->bIsReady = false;
 
                 OnSkillCooldownStarted.Broadcast(SkillSlug);
-                UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Started cooldown %.1fs for %s"), CooldownSec, *SkillSlug);
+                UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillManager: Started cooldown %.1fs for %s"), CooldownSec, *SkillSlug);
             }
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Server confirmed skill %s but we don't have it"), *SkillSlug);
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Server confirmed skill %s but we don't have it"), *SkillSlug);
     }
 
     // Start GCD (affects all skills)
@@ -73,13 +74,13 @@ void UPlayerSkillManager::HandleSkillInitiation(const FString& SkillSlug, int32 
         const double GcdSec = static_cast<double>(GcdMs) / 1000.0;
         bGCDUsesServerClock = false;
         GCDEndTime = GetWorldSeconds() + GcdSec;
-        UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Started GCD %.1fs"), GcdSec);
+        UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillManager: Started GCD %.1fs"), GcdSec);
     }
 }
 
 void UPlayerSkillManager::NotifyAnimationEnded(){
     bIsAnimationPlaying      = false;
-    UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Animation ended, cast lock released"));
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillManager: Animation ended, cast lock released"));
 }
 
 void UPlayerSkillManager::ApplyServerCooldowns(const TArray<FSkillCooldownEntry>& Cooldowns)
@@ -89,7 +90,7 @@ void UPlayerSkillManager::ApplyServerCooldowns(const TArray<FSkillCooldownEntry>
     // time sync drops out after relogin (world-time ~67 vs server-epoch ~1.75B).
     const double Now = GetWorldSeconds();
 
-    UE_LOG(LogTemp, Warning,
+    UE_LOG(LogGameplay, Warning,
         TEXT("PlayerSkillManager: ApplyServerCooldowns — now=%.3f, entries=%d"),
         Now, Cooldowns.Num());
 
@@ -103,7 +104,7 @@ void UPlayerSkillManager::ApplyServerCooldowns(const TArray<FSkillCooldownEntry>
         FPlayerSkillData* S = PlayerSkills.Find(Entry.skillSlug);
         if (!S)
         {
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogGameplay, Warning,
                 TEXT("PlayerSkillManager: ApplyServerCooldowns - unknown skill '%s', skipping"),
                 *Entry.skillSlug);
             continue;
@@ -123,13 +124,13 @@ void UPlayerSkillManager::ApplyServerCooldowns(const TArray<FSkillCooldownEntry>
 
         OnSkillCooldownStarted.Broadcast(Entry.skillSlug);
 
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGameplay, Warning,
             TEXT("PlayerSkillManager: Restored cooldown %.1fs for '%s' (clamped from %dms to %dms) endTime=%.3f"),
             RemainingSec, *Entry.skillSlug, Entry.remainingMs, ClampedMs, S->cooldownEndTime);
         ++Applied;
     }
 
-    UE_LOG(LogTemp, Log,
+    UE_LOG(LogGameplay, Verbose,
         TEXT("PlayerSkillManager: ApplyServerCooldowns — applied %d / %d entries"),
         Applied, Cooldowns.Num());
 }

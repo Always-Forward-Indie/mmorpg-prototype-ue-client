@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Items/ItemManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Items/DroppedItemActor.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -22,7 +23,7 @@ void UItemManager::ProcessItemPickup(const FItemBaseStruct& Item)
 	// Broadcast the item pickup event
 	OnItemPickedUp.Broadcast(Item);
 
-	UE_LOG(LogTemp, Warning, TEXT("Picked up item: %s"), *Item.name);
+	UE_LOG(LogGameplay, Warning, TEXT("Picked up item: %s"), *Item.name);
 
 	// Show a toast notification with localised item name
 	if (!Item.slug.IsEmpty())
@@ -81,11 +82,11 @@ void UItemManager::LoadItemVisualsDataTable(UDataTable* InItemVisualsTable)
 			}
 		}
 
-		UE_LOG(LogTemp, Log, TEXT("Loaded %d item visual entries from data table"), ItemVisualsCache.Num());
+		UE_LOG(LogGameplay, Verbose, TEXT("Loaded %d item visual entries from data table"), ItemVisualsCache.Num());
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("No item visuals data table provided"));
+		UE_LOG(LogGameplay, Warning, TEXT("No item visuals data table provided"));
 	}
 
 	PreloadNiagaraAssetsAsync();
@@ -114,7 +115,7 @@ void UItemManager::PreloadNiagaraAssetsAsync()
 		FStreamableManager::AsyncLoadHighPriority
 	);
 
-	UE_LOG(LogTemp, Log, TEXT("ItemManager: Preloading %d Niagara VFX assets"), Paths.Num());
+	UE_LOG(LogGameplay, Verbose, TEXT("ItemManager: Preloading %d Niagara VFX assets"), Paths.Num());
 }
 
 FItemVisualData UItemManager::GetItemVisualDataBySlug(const FString& ItemSlug)
@@ -137,7 +138,7 @@ FItemVisualData UItemManager::GetItemVisualDataBySlug(const FString& ItemSlug)
 		}
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("ItemManager: No visual data found for slug: %s"), *ItemSlug);
+	UE_LOG(LogGameplay, Warning, TEXT("ItemManager: No visual data found for slug: %s"), *ItemSlug);
 	return FItemVisualData();
 }
 
@@ -155,7 +156,7 @@ void UItemManager::SetItemCatalog(int32 Version, const TArray<FInventoryItemStru
 		if (Item.itemId > 0)
 			ItemStatCatalog.Add(Item.itemId, Item);
 	}
-	UE_LOG(LogTemp, Log, TEXT("ItemManager: Stat catalog v%d now holds %d templates (+%d)"),
+	UE_LOG(LogGameplay, Verbose, TEXT("ItemManager: Stat catalog v%d now holds %d templates (+%d)"),
 		ItemCatalogVersion, ItemStatCatalog.Num(), Items.Num());
 
 	// New statics may complete placeholder rows the inventory merged from

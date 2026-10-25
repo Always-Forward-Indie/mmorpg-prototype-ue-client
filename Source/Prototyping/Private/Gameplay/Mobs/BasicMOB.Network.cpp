@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Prototyping.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Mobs/MOBAnimInstance.h"
@@ -104,7 +105,7 @@ void ABasicMOB::EndPlay(const EEndPlayReason::Type EndPlayReason)
                 CombatableInterface.SetInterface(this);
                 
                 CombatManager->UnregisterCombatable(CombatableInterface);
-                UE_LOG(LogTemp, Log, TEXT("MOB %d unregistered from combat system"), GetActorId_Implementation());
+                UE_LOG(LogGameplay, Verbose, TEXT("MOB %d unregistered from combat system"), GetActorId_Implementation());
             }
         }
     }
@@ -175,13 +176,13 @@ void ABasicMOB::OnReceiveSkillResult(const FSkillResultData& SkillResult)
 
 				if (UMOBAnimInstance* AnimInst = Cast<UMOBAnimInstance>(GetMesh()->GetAnimInstance()))
 				{
-					UE_LOG(LogTemp, Warning, TEXT("[MOB %d] OnReceiveSkillResult: damage=%d, calling NotifyHit"),
+					UE_LOG(LogGameplay, Warning, TEXT("[MOB %d] OnReceiveSkillResult: damage=%d, calling NotifyHit"),
 						GetActorId_Implementation(), SkillResult.damage);
 					AnimInst->NotifyHit();
 				}
 				else
 				{
-					UE_LOG(LogTemp, Warning, TEXT("[MOB %d] OnReceiveSkillResult: Cast<UMOBAnimInstance> failed"), GetActorId_Implementation());
+					UE_LOG(LogGameplay, Warning, TEXT("[MOB %d] OnReceiveSkillResult: Cast<UMOBAnimInstance> failed"), GetActorId_Implementation());
 				}
 			}
 		}

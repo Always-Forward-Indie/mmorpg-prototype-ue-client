@@ -1,4 +1,5 @@
 #include "Gameplay/Items/HarvestManager.h"
+#include "Prototyping.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
 #include "Utils/JSONParser.h"
@@ -17,7 +18,7 @@ void UHarvestManager::SendHarvestStartRequest(int32 CorpseUID)
 {
 	if (!networkManager || !gameInstance)
 	{
-		UE_LOG(LogTemp, Error, TEXT("HarvestManager: Cannot send harvest start request - missing dependencies"));
+		UE_LOG(LogNetPacket, Error, TEXT("HarvestManager: Cannot send harvest start request - missing dependencies"));
 		return;
 	}
 
@@ -45,14 +46,14 @@ void UHarvestManager::SendHarvestStartRequest(int32 CorpseUID)
 	// Send the request to the server
 	networkManager->SendDataToChunkServer(JsonString);
 	
-	UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Sent harvest start request for corpse: %d"), CorpseUID);
+	UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Sent harvest start request for corpse: %d"), CorpseUID);
 }
 
 void UHarvestManager::SendLootPickupRequest(int32 CorpseUID, const TArray<FCorpseLootPickupRequestItem>& RequestedItems)
 {
 	if (!networkManager || !gameInstance)
 	{
-		UE_LOG(LogTemp, Error, TEXT("HarvestManager: Cannot send loot pickup request - missing dependencies"));
+		UE_LOG(LogNetPacket, Error, TEXT("HarvestManager: Cannot send loot pickup request - missing dependencies"));
 		return;
 	}
 
@@ -97,7 +98,7 @@ void UHarvestManager::SendLootPickupRequest(int32 CorpseUID, const TArray<FCorps
 	// Send the request to the server
 	networkManager->SendDataToChunkServer(JsonString);
 	
-	UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Sent loot pickup request for corpse: %d with %d items"), 
+	UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Sent loot pickup request for corpse: %d with %d items"), 
 		CorpseUID, RequestedItems.Num());
 }
 
@@ -105,7 +106,7 @@ void UHarvestManager::SendLootInspectRequest(int32 CorpseUID)
 {
 	if (!networkManager || !gameInstance)
 	{
-		UE_LOG(LogTemp, Error, TEXT("HarvestManager: Cannot send loot inspect request - missing dependencies"));
+		UE_LOG(LogNetPacket, Error, TEXT("HarvestManager: Cannot send loot inspect request - missing dependencies"));
 		return;
 	}
 
@@ -137,6 +138,6 @@ void UHarvestManager::SendLootInspectRequest(int32 CorpseUID)
 	// Send the request to the server
 	networkManager->SendDataToChunkServer(JsonString);
 	
-	UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Sent loot inspect request for corpse: %d"), CorpseUID);
+	UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Sent loot inspect request for corpse: %d"), CorpseUID);
 }
 

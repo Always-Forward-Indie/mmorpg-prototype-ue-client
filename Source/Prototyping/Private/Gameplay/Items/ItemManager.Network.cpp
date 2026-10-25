@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Items/ItemManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Items/DroppedItemActor.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Players/PlayerAnimInstance.h"
@@ -21,7 +22,7 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 	CRASH_GUARD("ItemManager::ProcessGameServerData");
 	if (!worldContext)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ItemManager: No world context — queuing network event for later processing"));
+		UE_LOG(LogGameplay, Warning, TEXT("ItemManager: No world context — queuing network event for later processing"));
 		PendingNetworkEvents.Add(ReceivedData);
 		return;
 	}
@@ -33,7 +34,7 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 	//}
 
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
-	UE_LOG(LogTemp, Warning, TEXT("ItemManager: Received event type: %s"), *MessageData.eventType);
+	UE_LOG(LogGameplay, Warning, TEXT("ItemManager: Received event type: %s"), *MessageData.eventType);
 
 	TSharedPtr<FJsonObject> Root;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
@@ -43,7 +44,7 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 
 	if (MessageData.eventType == "itemDrop" && MessageData.status == "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ItemManager: Received itemDrop event"));
+		UE_LOG(LogGameplay, Warning, TEXT("ItemManager: Received itemDrop event"));
 		FItemDropResponseStruct ItemDropResponse = JSONParser::DeserializeItemDropResponse(Body);
 		for (FDroppedItemStruct& DroppedItem : ItemDropResponse.droppedItems)
 		{
@@ -54,7 +55,7 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 	}
 	else if (MessageData.eventType == "nearbyItems")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ItemManager: Received nearbyItems event"));
+		UE_LOG(LogGameplay, Warning, TEXT("ItemManager: Received nearbyItems event"));
 		// Body contains { "items": [ DroppedItemStruct... ] } - same shape as itemDrop
 		FItemDropResponseStruct NearbyResponse = JSONParser::DeserializeItemDropResponse(Body);
 		for (FDroppedItemStruct& DroppedItem : NearbyResponse.droppedItems)
@@ -67,7 +68,7 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 	}
 	else if (MessageData.eventType == "itemPickup" && MessageData.status == "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ItemManager: Received pickUpItem event"));
+		UE_LOG(LogGameplay, Warning, TEXT("ItemManager: Received pickUpItem event"));
 
 		// If the server broadcasts itemPickup to all clients, only the picker should update
 		// inventory / play the LOCAL animation.  However every observer client must still
@@ -79,7 +80,7 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 			Body->TryGetNumberField(TEXT("characterId"), ResponseCharId);
 			if (ResponseCharId > 0 && ResponseCharId != gameInstance->GetCurrentCharacterID())
 			{
-				UE_LOG(LogTemp, Warning, TEXT("ItemManager: itemPickup by other player charId=%d — playing remote animation and destroying item"),
+				UE_LOG(LogGameplay, Warning, TEXT("ItemManager: itemPickup by other player charId=%d — playing remote animation and destroying item"),
 					ResponseCharId);
 
 				// Read the UID of the picked-up item.
@@ -146,7 +147,7 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 					{
 						const float MontageDuration = AnimInst->NotifyPickup();
 						bMontageStarted = MontageDuration > 0.0f;
-						UE_LOG(LogTemp, Warning,
+						UE_LOG(LogGameplay, Warning,
 							TEXT("ItemManager: pickup montage started, duration=%.3fs"),
 							MontageDuration);
 					}
@@ -157,7 +158,7 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 		// Fallback: no player / no montage assigned � fire immediately
 		if (!bMontageStarted)
 		{
-			UE_LOG(LogTemp, Warning,
+			UE_LOG(LogGameplay, Warning,
 				TEXT("ItemManager: no pickup montage, resolving pickup immediately"));
 			OnPickupPointFired();
 		}
@@ -179,7 +180,7 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 			{
 				if (bItemNonExistent)
 				{
-					UE_LOG(LogTemp, Warning, TEXT("ItemManager: pickup failed (non-existent) — cleaning up stale UID %d"), FailedUID);
+					UE_LOG(LogGameplay, Warning, TEXT("ItemManager: pickup failed (non-existent) — cleaning up stale UID %d"), FailedUID);
 					DroppedActor->PlayPickupEffect();
 					DroppedItemsMap.Remove(FailedUID);
 				}
@@ -190,7 +191,7 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 			}
 		}
 
-		UE_LOG(LogTemp, Warning, TEXT("ItemManager: itemPickup failed — unlocking player movement"));
+		UE_LOG(LogGameplay, Warning, TEXT("ItemManager: itemPickup failed — unlocking player movement"));
 
 		// Server rejected the pickup � cancel any pending pickup-point timer and unlock
 		if (worldContext)
@@ -228,7 +229,7 @@ void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 						DroppedActor->PlayPickupEffect();
 					}
 					DroppedItemsMap.Remove(RemoveUid);
-					UE_LOG(LogTemp, Log, TEXT("ItemManager: itemRemove cleaned up stale UID %d"), RemoveUid);
+					UE_LOG(LogGameplay, Verbose, TEXT("ItemManager: itemRemove cleaned up stale UID %d"), RemoveUid);
 				}
 			}
 		}

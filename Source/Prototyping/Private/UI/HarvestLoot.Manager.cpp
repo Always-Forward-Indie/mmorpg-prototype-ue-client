@@ -1,4 +1,5 @@
 #include "UI/HarvestLootWidget.h"
+#include "Prototyping.h"
 
 // S5: widget chrome gathered via LOCTEXT.
 #define LOCTEXT_NAMESPACE "HarvestLoot"
@@ -44,7 +45,7 @@ void UHarvestLootWidget::UnbindFromHarvestManager()
 
 void UHarvestLootWidget::HandleHarvestCompleted(const FHarvestCompleteStruct& HarvestData)
 {
-	UE_LOG(LogTemp, Warning, TEXT("HarvestLootWidget: Harvest completed with %d items"), 
+	UE_LOG(LogGameplay, Warning, TEXT("HarvestLootWidget: Harvest completed with %d items"), 
 		HarvestData.availableLoot.Num());
 		
 	SetLootItems(HarvestData.availableLoot);
@@ -52,11 +53,11 @@ void UHarvestLootWidget::HandleHarvestCompleted(const FHarvestCompleteStruct& Ha
 	if (HarvestData.availableLoot.Num() > 0)
 	{
 		ShowWidget();
-		UE_LOG(LogTemp, Warning, TEXT("HarvestLootWidget: Showing loot window"));
+		UE_LOG(LogGameplay, Verbose, TEXT("HarvestLootWidget: Showing loot window"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestLootWidget: No loot available, staying hidden"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestLootWidget: No loot available, staying hidden"));
 	}
 }
 
@@ -76,7 +77,7 @@ void UHarvestLootWidget::HandleLootPickupError(const FCorpseLootPickupErrorStruc
 
 void UHarvestLootWidget::InitializeWidget()
 {
-	UE_LOG(LogTemp, Warning, TEXT("HarvestLootWidget: InitializeWidget called"));
+	UE_LOG(LogGameplay, Verbose, TEXT("HarvestLootWidget: InitializeWidget called"));
 
 	if (TextBlock_Title)
 	{
@@ -86,7 +87,7 @@ void UHarvestLootWidget::InitializeWidget()
 	UpdateItemCountDisplay();
 	HideWidget();
 	
-	UE_LOG(LogTemp, Warning, TEXT("HarvestLootWidget: InitializeWidget completed"));
+	UE_LOG(LogGameplay, Warning, TEXT("HarvestLootWidget: InitializeWidget completed"));
 }
 
 #undef LOCTEXT_NAMESPACE

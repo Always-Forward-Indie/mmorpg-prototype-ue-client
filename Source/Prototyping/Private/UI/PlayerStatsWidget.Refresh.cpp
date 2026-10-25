@@ -1,4 +1,5 @@
 #include "UI/PlayerStatsWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "Gameplay/Player/TitleManager.h"
 #include "Gameplay/Player/MasteryManager.h"
@@ -32,7 +33,7 @@ void UPlayerStatsWidget::HandleStatsUpdated(const FPlayerStatsUpdateStruct& NewS
 
 void UPlayerStatsWidget::RefreshAll(const FPlayerStatsUpdateStruct& Stats)
 {
-    UE_LOG(LogTemp, Log, TEXT("PlayerStatsWidget::RefreshAll - charId=%d lv=%d SP=%d effects=%d attrs=%d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerStatsWidget::RefreshAll - charId=%d lv=%d SP=%d effects=%d attrs=%d"),
         Stats.characterId, Stats.level, Stats.freeSkillPoints,
         Stats.activeEffects.Num(), Stats.attributes.Num());
 
@@ -51,7 +52,7 @@ void UPlayerStatsWidget::RefreshVitals(const FPlayerStatsUpdateStruct& Stats)
 
     // Free skill points
     if (!SP_Text)
-        UE_LOG(LogTemp, Warning, TEXT("PlayerStatsWidget::RefreshVitals - SP_Text is NULL (add UTextBlock named 'SP_Text' to WBP_PlayerStats), SP value would be %d"), Stats.freeSkillPoints);
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerStatsWidget::RefreshVitals - SP_Text is NULL (add UTextBlock named 'SP_Text' to WBP_PlayerStats), SP value would be %d"), Stats.freeSkillPoints);
     if (SP_Text)
     {
         SP_Text->SetText(FText::Format(LOCTEXT("SkillPoints", "Skill Points: {0}"), FText::AsNumber(Stats.freeSkillPoints)));
@@ -176,7 +177,7 @@ void UPlayerStatsWidget::RefreshEffects(const FPlayerStatsUpdateStruct& Stats)
 {
     if (!Effects_Box)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerStatsWidget::RefreshEffects - Effects_Box is NULL (add UVerticalBox named 'Effects_Box' to WBP_PlayerStats)"));
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerStatsWidget::RefreshEffects - Effects_Box is NULL (add UVerticalBox named 'Effects_Box' to WBP_PlayerStats)"));
         return;
     }
     Effects_Box->ClearChildren();

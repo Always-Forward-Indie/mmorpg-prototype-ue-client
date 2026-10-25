@@ -1,6 +1,7 @@
 // Character Preview Manager — Implementation
 
 #include "Gameplay/Characters/CharacterPreviewManager.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Equipment/EquipmentVisualComponent.h"
@@ -62,7 +63,7 @@ void UCharacterPreviewManager::ApplyVisualToActor(ABasicPlayer* Actor, const FSt
 	UDataTable* Table = GetVisualTable();
 	if (!Table)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("CharacterPreviewManager: No CharacterVisualDefinitionsTable set on GameInstance"));
+		UE_LOG(LogGameplay, Warning, TEXT("CharacterPreviewManager: No CharacterVisualDefinitionsTable set on GameInstance"));
 		return;
 	}
 
@@ -71,7 +72,7 @@ void UCharacterPreviewManager::ApplyVisualToActor(ABasicPlayer* Actor, const FSt
 
 	if (!Def)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("CharacterPreviewManager: No visual definition found for %s_%s_%s"),
+		UE_LOG(LogGameplay, Warning, TEXT("CharacterPreviewManager: No visual definition found for %s_%s_%s"),
 			*ClassSlug, *RaceSlug, *GenderName);
 		return;
 	}
@@ -138,7 +139,7 @@ void UCharacterPreviewManager::ApplyVisualToActor(ABasicPlayer* Actor, const FSt
 	// SetLeaderPoseComponent does not require the body mesh asset to be loaded yet.
 	UCosmeticVisualComponent* CosmeticVis = Actor->GetCosmeticVisualComponent();
 	UDataTable* CosmeticsTable = GameInstanceRef ? GameInstanceRef->CharacterCosmeticsDataTable : nullptr;
-	UE_LOG(LogTemp, Log,
+	UE_LOG(LogGameplay, Verbose,
 		TEXT("[Cosmetic] PreviewManager::ApplyVisualToActor — CosmeticVis=%s  GameInstanceRef=%s  CosmeticsTable=%s  HairSlug='%s'"),
 		CosmeticVis ? TEXT("OK") : TEXT("NULL — CosmeticVisualComponent not found on actor (recompile + resave BP?)"),
 		GameInstanceRef ? TEXT("OK") : TEXT("NULL"),
@@ -189,7 +190,7 @@ void UCharacterPreviewManager::ApplyEquipmentToActor(ABasicPlayer* Actor, const 
 	UItemManager* ItemMgr = GameInstanceRef ? GameInstanceRef->GetItemManager() : nullptr;
 	if (!ItemMgr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("CharacterPreviewManager: ItemManager not available — cannot apply equipment preview"));
+		UE_LOG(LogGameplay, Warning, TEXT("CharacterPreviewManager: ItemManager not available — cannot apply equipment preview"));
 		return;
 	}
 
@@ -204,7 +205,7 @@ void UCharacterPreviewManager::ApplyEquipmentToActor(ABasicPlayer* Actor, const 
 		const FString SlotSlug = SlotIdToSlug(Entry.SlotId);
 		if (SlotSlug.IsEmpty())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("CharacterPreviewManager: Unknown slotId %d for item '%s'"), Entry.SlotId, *Entry.ItemSlug);
+			UE_LOG(LogGameplay, Warning, TEXT("CharacterPreviewManager: Unknown slotId %d for item '%s'"), Entry.SlotId, *Entry.ItemSlug);
 			continue;
 		}
 

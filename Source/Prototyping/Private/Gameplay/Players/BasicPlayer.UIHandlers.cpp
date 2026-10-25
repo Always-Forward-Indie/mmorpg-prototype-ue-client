@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -82,7 +83,7 @@ void ABasicPlayer::HandleLevelUp(int32 OldLevel, int32 NewLevel, int32 NewTotalE
 {
     if (playerData.isOtherClient) return;
 
-    UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Level up! %d -> %d"), OldLevel, NewLevel);
+    UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: Level up! %d -> %d"), OldLevel, NewLevel);
     if (const FEntityAudioProfile* Profile = GetAudioProfile())
     {
         PlayEventSound(Profile->LevelUp);
@@ -223,7 +224,7 @@ void ABasicPlayer::HandleUIManagerInitialized()
         }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] HandleUIManagerInitialized: bUIInitDone=true, NotifyUIInitialized sent. Pos=(%.0f,%.0f,%.0f)"),
+    UE_LOG(LogGameplay, Warning, TEXT("[LOADSEQ] HandleUIManagerInitialized: bUIInitDone=true, NotifyUIInitialized sent. Pos=(%.0f,%.0f,%.0f)"),
         GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z);
 }
 

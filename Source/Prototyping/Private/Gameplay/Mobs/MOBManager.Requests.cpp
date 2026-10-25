@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/MOBManager.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "CrashDiagnostics.h"
@@ -31,7 +32,7 @@ void UMOBManager::SendGetMobData(const FClientDataStruct& ClientData)
 		networkManager->SendDataToGameServer(JsonString);
 	}
 	else {
-		UE_LOG(LogTemp, Error, TEXT("Network manager not found"));
+		UE_LOG(LogGameplay, Error, TEXT("Network manager not found"));
 	}
 }
 
@@ -40,7 +41,7 @@ void UMOBManager::UpdateMobHealth(const FCombatResultData& ResultData)
 {
 	if (!worldContext || !worldContext->IsValidLowLevel())
 	{
-		UE_LOG(LogTemp, Error, TEXT("MOBManager: Cannot update mob health - no valid world context"));
+		UE_LOG(LogGameplay, Error, TEXT("MOBManager: Cannot update mob health - no valid world context"));
 		return;
 	}
 
@@ -88,14 +89,14 @@ void UMOBManager::UpdateMobHealth(const FCombatResultData& ResultData)
 					);
 				}
 				
-				UE_LOG(LogTemp, Warning, TEXT("MOB %s health updated: %d, IsDead: %s"),
+				UE_LOG(LogGameplay, Warning, TEXT("MOB %s health updated: %d, IsDead: %s"),
 					*MOB->GetMobName(), MOB->GetMOBCurrentHealth(), ResultData.bTargetDied ? TEXT("True") : TEXT("False"));
 			}
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Mob with ID %d not found for health update"), ResultData.TargetId);
+		UE_LOG(LogGameplay, Warning, TEXT("Mob with ID %d not found for health update"), ResultData.TargetId);
 	}
 }
 

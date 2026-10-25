@@ -1,4 +1,5 @@
 #include "Gameplay/WorldObjects/WIONetworkHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/WorldObjects/WorldObjectManager.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
@@ -14,7 +15,7 @@ void UWIONetworkHandler::Initialize(UWorldObjectManager* InManager, UNetworkMana
 {
 	if (!InManager || !InNetworkManager)
 	{
-		UE_LOG(LogTemp, Error, TEXT("WIONetworkHandler: Initialize called with null parameters"));
+		UE_LOG(LogGameplay, Error, TEXT("WIONetworkHandler: Initialize called with null parameters"));
 		return;
 	}
 	WorldObjectManager = InManager;
@@ -25,7 +26,7 @@ void UWIONetworkHandler::SubscribeToNetworkEvents()
 {
 	if (!NetworkManager || !IsValid(NetworkManager))
 	{
-		UE_LOG(LogTemp, Error, TEXT("WIONetworkHandler: Cannot subscribe — NetworkManager is null"));
+		UE_LOG(LogGameplay, Error, TEXT("WIONetworkHandler: Cannot subscribe — NetworkManager is null"));
 		return;
 	}
 	if (bIsSubscribed)
@@ -70,14 +71,14 @@ void UWIONetworkHandler::HandleChunkServerData(const FString& ReceivedData)
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("WIONetworkHandler: Failed to parse JSON for event %s"), *EventType);
+		UE_LOG(LogNetPacket, Error, TEXT("WIONetworkHandler: Failed to parse JSON for event %s"), *EventType);
 		return;
 	}
 
 	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
 	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr)
 	{
-		UE_LOG(LogTemp, Error, TEXT("WIONetworkHandler: Missing body in event %s"), *EventType);
+		UE_LOG(LogNetPacket, Error, TEXT("WIONetworkHandler: Missing body in event %s"), *EventType);
 		return;
 	}
 

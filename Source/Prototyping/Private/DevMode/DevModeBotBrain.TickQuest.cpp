@@ -1,4 +1,5 @@
 #include "DevMode/DevModeBotBrain.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeConsoleCommands.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -44,7 +45,7 @@ bool UDevModeBotBrain::Tick_QuestWalk(UWorld* World, ABasicPlayer* Player, doubl
         {
             Step = EBotStep::QuestAccept;
             QuestLegStartTime = Now;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT at quest npc=%d, opening dialogue"), QuestNpcId);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT at quest npc=%d, opening dialogue"), QuestNpcId);
             return true;
         }
         if (Now - QuestLegStartTime > QuestTimeoutSec)
@@ -79,7 +80,7 @@ bool UDevModeBotBrain::Tick_QuestAccept(UWorld* World, ABasicPlayer* Player, dou
             QuestLegStartTime = Now;
             LastChasePos = PlayerAt;
             LastChaseProgressTime = Now;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT quest accepted, relocating to hunt grounds"));
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT quest accepted, relocating to hunt grounds"));
             return true;
         }
         if (!EnsureDialogueOpen(QuestNpcId, Now))
@@ -96,7 +97,7 @@ bool UDevModeBotBrain::Tick_QuestAccept(UWorld* World, ABasicPlayer* Player, dou
             {
                 Dlg->SendChoice(AcceptEdge);
                 bChoiceSent = true;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT accept choice sent edge=%d"), AcceptEdge);
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT accept choice sent edge=%d"), AcceptEdge);
             }
             // Quest grant lands as a journal push; polled at the top on the
             // next ticks (HasQuest branch above).
@@ -120,14 +121,14 @@ bool UDevModeBotBrain::Tick_QuestAccept(UWorld* World, ABasicPlayer* Player, dou
                 Dlg->SendChoice(AdvanceEdge);
                 LastAdvanceNodeId = NodeId;
                 ++DialogueClicks;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT dialogue advance edge=%d (node %d)"),
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT dialogue advance edge=%d (node %d)"),
                     AdvanceEdge, NodeId);
             }
             return true;
         }
         if (Now - QuestLegStartTime > QuestTimeoutSec)
         {
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT no accept/advance edge in node %d (%d choices)"),
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT no accept/advance edge in node %d (%d choices)"),
                 NodeId, Dlg->GetCurrentNode().choices.Num());
             Finish(false, TEXT("no-accept-choice"));
         }
@@ -147,7 +148,7 @@ bool UDevModeBotBrain::Tick_QuestRelocate(UWorld* World, ABasicPlayer* Player, d
             StepStartTime = Now;
             LastChasePos = PlayerAt;
             LastChaseProgressTime = Now;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT at hunting grounds, hunting objectives"));
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT at hunting grounds, hunting objectives"));
             return true;
         }
         if (Now - QuestLegStartTime > QuestTimeoutSec)
@@ -190,7 +191,7 @@ bool UDevModeBotBrain::Tick_QuestTurnin(UWorld* World, ABasicPlayer* Player, dou
             {
                 Dlg->SendChoice(TurninEdge);
                 bChoiceSent = true;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT turnin choice sent edge=%d"), TurninEdge);
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT turnin choice sent edge=%d"), TurninEdge);
                 return true;
             }
         }
@@ -200,7 +201,7 @@ bool UDevModeBotBrain::Tick_QuestTurnin(UWorld* World, ABasicPlayer* Player, dou
         if (bChoiceSent && GetGold() >= GoldBeforeReward + 5 && HasItemTemplate(46))
         {
             const FQuestProgressData Q = Qst->GetQuestData(QuestId);
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT turned in: gold %d -> %d queststate='%s'"),
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT turned in: gold %d -> %d queststate='%s'"),
                 GoldBeforeReward, GetGold(), *Q.state);
             BotAssert(true, TEXT("quest-reward-gold"), 1, 1);
             BotAssert(true, TEXT("quest-reward-item"), 46, 46);
@@ -225,7 +226,7 @@ bool UDevModeBotBrain::Tick_QuestTurnin(UWorld* World, ABasicPlayer* Player, dou
                     {
                         LastInvResyncTime = Now;
                         Inv->RequestInventoryData(Inv->GetInventory().characterId);
-                        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT turned_in but no reward snapshot, re-requesting inventory"));
+                        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT turned_in but no reward snapshot, re-requesting inventory"));
                     }
                 }
             }
@@ -251,7 +252,7 @@ bool UDevModeBotBrain::Tick_QuestTurnin(UWorld* World, ABasicPlayer* Player, dou
                 Dlg->SendChoice(AdvanceEdge);
                 LastAdvanceNodeId = NodeId;
                 ++DialogueClicks;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT turnin dialogue advance edge=%d (node %d)"),
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT turnin dialogue advance edge=%d (node %d)"),
                     AdvanceEdge, NodeId);
             }
             return true;
@@ -259,7 +260,7 @@ bool UDevModeBotBrain::Tick_QuestTurnin(UWorld* World, ABasicPlayer* Player, dou
         if (Now - QuestLegStartTime > QuestTimeoutSec)
         {
             const FQuestProgressData Q = Qst->GetQuestData(QuestId);
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT no turnin edge in node %d (%d choices) queststate='%s' step='%s' %d/%d"),
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT no turnin edge in node %d (%d choices) queststate='%s' step='%s' %d/%d"),
                 NodeId, Dlg->GetCurrentNode().choices.Num(), *Q.state, *Q.currentStepKey, Q.stepCurrentCount, Q.stepRequiredCount);
             Finish(false, TEXT("no-turnin-choice"));
         }

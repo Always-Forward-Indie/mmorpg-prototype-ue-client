@@ -1,4 +1,5 @@
 #include "Gameplay/Combat/SkillSystemManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Combat/CombatSystemManager.h"
 #include "Gameplay/Combat/ICombatable.h"
 #include "Networking/NetworkManager.h"
@@ -32,20 +33,20 @@ void USkillSystemManager::Initialize(UCombatSystemManager* CombatManager, UNetwo
     BasicAttack.range = 200.0f;
     RegisterSkill(BasicAttack.skillSlug, BasicAttack);
 
-    UE_LOG(LogTemp, Warning, TEXT("SkillSystemManager: Initialized with default skills"));
+    UE_LOG(LogGameplay, Warning, TEXT("SkillSystemManager: Initialized with default skills"));
 }
 
 // Add setter for PlayerSkillManager integration
 void USkillSystemManager::SetPlayerSkillManager(UPlayerSkillManager* InPlayerSkillManager)
 {
     PlayerSkillManager = InPlayerSkillManager;
-    UE_LOG(LogTemp, Log, TEXT("SkillSystemManager: PlayerSkillManager integration enabled"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillSystemManager: PlayerSkillManager integration enabled"));
 }
 
 void USkillSystemManager::RegisterSkill(const FString& SkillSlug, const FSkillData& SkillData)
 {
     RegisteredSkills.Add(SkillSlug, SkillData);
-    UE_LOG(LogTemp, Log, TEXT("SkillSystemManager: Registered skill %s (%s)"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillSystemManager: Registered skill %s (%s)"), 
         *SkillSlug, *SkillData.skillName);
 }
 
@@ -68,14 +69,14 @@ bool USkillSystemManager::CanCastSkill(int32 CasterId, const FString& SkillSlug)
     // Check if skill exists
     if (!HasSkill(SkillSlug))
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillSystemManager: Skill %s not found"), *SkillSlug);
+        UE_LOG(LogGameplay, Warning, TEXT("SkillSystemManager: Skill %s not found"), *SkillSlug);
         return false;
     }
 
     // Check cooldown
     if (IsSkillOnCooldown(CasterId, SkillSlug))
     {
-        UE_LOG(LogTemp, Log, TEXT("SkillSystemManager: Skill %s is on cooldown for caster %d"), 
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillSystemManager: Skill %s is on cooldown for caster %d"), 
             *SkillSlug, CasterId);
         return false;
     }
@@ -83,7 +84,7 @@ bool USkillSystemManager::CanCastSkill(int32 CasterId, const FString& SkillSlug)
     // Check mana
     if (!HasSufficientMana(CasterId, SkillSlug))
     {
-        UE_LOG(LogTemp, Log, TEXT("SkillSystemManager: Insufficient mana for skill %s"), *SkillSlug);
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillSystemManager: Insufficient mana for skill %s"), *SkillSlug);
         return false;
     }
 
@@ -114,12 +115,12 @@ bool USkillSystemManager::CastSkill(int32 CasterId, int32 TargetId, const FStrin
         {
             CombatSystemManager->SendSkillUsageRequest(TargetId, SkillSlug, TargetType);
         }
-        UE_LOG(LogTemp, Log, TEXT("SkillSystemManager: Sent skill request %s from %d to %d (type=%d)"), 
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillSystemManager: Sent skill request %s from %d to %d (type=%d)"), 
             *SkillSlug, CasterId, TargetId, static_cast<int32>(TargetType));
         return true;
     }
 
-    UE_LOG(LogTemp, Error, TEXT("SkillSystemManager: Combat system manager not available"));
+    UE_LOG(LogGameplay, Error, TEXT("SkillSystemManager: Combat system manager not available"));
     return false;
 }
 
@@ -168,7 +169,7 @@ void USkillSystemManager::StartSkillCooldown(int32 CasterId, const FString& Skil
         
         SkillCooldowns[CasterId].Add(SkillSlug, EndTime);
         
-        UE_LOG(LogTemp, Log, TEXT("SkillSystemManager: Started cooldown for %s (%.1fs) at synchronized time %.3f"), 
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillSystemManager: Started cooldown for %s (%.1fs) at synchronized time %.3f"), 
             *SkillSlug, SkillData.cooldown, CurrentTime);
     }
 }
@@ -192,7 +193,7 @@ bool USkillSystemManager::ValidateSkillCast(int32 CasterId, int32 TargetId, cons
     // Basic validation - could be expanded with range checks, line of sight, etc.
     if (CasterId <= 0 || TargetId <= 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillSystemManager: Invalid caster or target ID"));
+        UE_LOG(LogGameplay, Warning, TEXT("SkillSystemManager: Invalid caster or target ID"));
         return false;
     }
 
@@ -209,7 +210,7 @@ bool USkillSystemManager::ValidateSkillCast(int32 CasterId, int32 TargetId, cons
         {
             if (ICombatable::Execute_IsDead(Target.GetObject()))
             {
-                UE_LOG(LogTemp, Warning, TEXT("SkillSystemManager: Cannot cast harmful skill %s on dead target %d (%s)"),
+                UE_LOG(LogGameplay, Warning, TEXT("SkillSystemManager: Cannot cast harmful skill %s on dead target %d (%s)"),
                     *SkillSlug, TargetId, *UEnum::GetValueAsString(TargetType));
                 return false;
             }

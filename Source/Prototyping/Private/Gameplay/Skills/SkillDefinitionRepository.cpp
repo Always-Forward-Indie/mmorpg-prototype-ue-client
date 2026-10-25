@@ -1,4 +1,5 @@
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
+#include "Prototyping.h"
 #include "Engine/DataTable.h"
 
 USkillDefinitionRepository::USkillDefinitionRepository()
@@ -11,7 +12,7 @@ void USkillDefinitionRepository::Initialize(UDataTable* InSkillDefinitionsTable)
 {
     if (!InSkillDefinitionsTable)
     {
-        UE_LOG(LogTemp, Error, TEXT("SkillDefinitionRepository: Cannot initialize with null DataTable"));
+        UE_LOG(LogGameplay, Error, TEXT("SkillDefinitionRepository: Cannot initialize with null DataTable"));
         return;
     }
 
@@ -21,7 +22,7 @@ void USkillDefinitionRepository::Initialize(UDataTable* InSkillDefinitionsTable)
     PreloadNiagaraAssetsAsync();
     bIsInitialized = true;
 
-    UE_LOG(LogTemp, Log, TEXT("SkillDefinitionRepository: Initialized with %d skill definitions"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDefinitionRepository: Initialized with %d skill definitions"), 
         CachedDefinitions.Num());
 }
 
@@ -49,7 +50,7 @@ void USkillDefinitionRepository::PreloadIconsAsync()
 
 void USkillDefinitionRepository::OnIconsPreloaded()
 {
-    UE_LOG(LogTemp, Log, TEXT("SkillDefinitionRepository: Icons preloaded"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDefinitionRepository: Icons preloaded"));
 }
 
 void USkillDefinitionRepository::PreloadNiagaraAssetsAsync()
@@ -76,14 +77,14 @@ void USkillDefinitionRepository::PreloadNiagaraAssetsAsync()
         FStreamableManager::AsyncLoadHighPriority
     );
 
-    UE_LOG(LogTemp, Log, TEXT("SkillDefinitionRepository: Preloading %d Niagara VFX assets"), Paths.Num());
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDefinitionRepository: Preloading %d Niagara VFX assets"), Paths.Num());
 }
 
 bool USkillDefinitionRepository::HasDefinition(const FString& SkillSlug) const
 {
     if (!bIsInitialized)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillDefinitionRepository: Repository not initialized"));
+        UE_LOG(LogGameplay, Warning, TEXT("SkillDefinitionRepository: Repository not initialized"));
         return false;
     }
 
@@ -94,29 +95,29 @@ FSkillDefinitionData USkillDefinitionRepository::GetDefinition(const FString& Sk
 {
     if (!bIsInitialized)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillDefinitionRepository: Repository not initialized"));
+        UE_LOG(LogGameplay, Warning, TEXT("SkillDefinitionRepository: Repository not initialized"));
         return GetDefaultDefinition(SkillSlug);
     }
     
-    UE_LOG(LogTemp, Warning, TEXT("SkillDefinitionRepository: Getting definition for skill %s"), *SkillSlug);
+    UE_LOG(LogGameplay, Warning, TEXT("SkillDefinitionRepository: Getting definition for skill %s"), *SkillSlug);
     
     if (const FSkillDefinitionData* Found = CachedDefinitions.Find(SkillSlug))
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillDefinitionRepository: Found cached definition for %s - DisplayName: %s, Icon IsValid: %s"), 
+        UE_LOG(LogGameplay, Warning, TEXT("SkillDefinitionRepository: Found cached definition for %s - DisplayName: %s, Icon IsValid: %s"), 
             *SkillSlug, 
             *Found->displayName.ToString(),
             Found->skillIcon.IsValid() ? TEXT("true") : TEXT("false"));
             
         if (Found->skillIcon.IsValid())
         {
-            UE_LOG(LogTemp, Warning, TEXT("SkillDefinitionRepository: Icon path: %s"), 
+            UE_LOG(LogGameplay, Warning, TEXT("SkillDefinitionRepository: Icon path: %s"), 
                 *Found->skillIcon.ToSoftObjectPath().ToString());
         }
         
         return *Found;
     }
     
-    UE_LOG(LogTemp, Warning, TEXT("SkillDefinitionRepository: No definition found for %s, returning default"), *SkillSlug);
+    UE_LOG(LogGameplay, Warning, TEXT("SkillDefinitionRepository: No definition found for %s, returning default"), *SkillSlug);
     return GetDefaultDefinition(SkillSlug);
 }
 
@@ -126,7 +127,7 @@ TArray<FSkillDefinitionData> USkillDefinitionRepository::GetAllDefinitions() con
     
     if (!bIsInitialized)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillDefinitionRepository: Repository not initialized"));
+        UE_LOG(LogGameplay, Warning, TEXT("SkillDefinitionRepository: Repository not initialized"));
         return Definitions;
     }
 
@@ -138,14 +139,14 @@ void USkillDefinitionRepository::RefreshCache()
 {
     if (!SkillDefinitionsTable)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillDefinitionRepository: Cannot refresh cache, DataTable is null"));
+        UE_LOG(LogGameplay, Warning, TEXT("SkillDefinitionRepository: Cannot refresh cache, DataTable is null"));
         return;
     }
 
     ClearCache();
     LoadDefinitionsFromTable();
     
-    UE_LOG(LogTemp, Log, TEXT("SkillDefinitionRepository: Cache refreshed with %d definitions"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDefinitionRepository: Cache refreshed with %d definitions"), 
         CachedDefinitions.Num());
 }
 
@@ -158,14 +159,14 @@ void USkillDefinitionRepository::LoadDefinitionsFromTable()
 {
     if (!SkillDefinitionsTable)
     {
-        UE_LOG(LogTemp, Error, TEXT("SkillDefinitionRepository: SkillDefinitionsTable is null"));
+        UE_LOG(LogGameplay, Error, TEXT("SkillDefinitionRepository: SkillDefinitionsTable is null"));
         return;
     }
 
     // Get all rows from data table
     TArray<FName> RowNames = SkillDefinitionsTable->GetRowNames();
     
-    UE_LOG(LogTemp, Warning, TEXT("SkillDefinitionRepository: Loading from DataTable with %d rows"), RowNames.Num());
+    UE_LOG(LogGameplay, Warning, TEXT("SkillDefinitionRepository: Loading from DataTable with %d rows"), RowNames.Num());
     
     for (const FName& RowName : RowNames)
     {
@@ -178,7 +179,7 @@ void USkillDefinitionRepository::LoadDefinitionsFromTable()
             
             // Debug icon loading
             FString IconPath = RowData->skillIcon.ToSoftObjectPath().ToString();
-            UE_LOG(LogTemp, Warning, TEXT("SkillDefinitionRepository: Loading skill %s - Icon path: '%s', IsValid: %s, DisplayName: '%s'"), 
+            UE_LOG(LogGameplay, Warning, TEXT("SkillDefinitionRepository: Loading skill %s - Icon path: '%s', IsValid: %s, DisplayName: '%s'"), 
                 *SkillSlug,
                 *IconPath,
                 RowData->skillIcon.IsValid() ? TEXT("true") : TEXT("false"),
@@ -186,12 +187,12 @@ void USkillDefinitionRepository::LoadDefinitionsFromTable()
             
             CachedDefinitions.Add(SkillSlug, *RowData);
             
-            UE_LOG(LogTemp, Verbose, TEXT("SkillDefinitionRepository: Loaded definition for skill %s"), 
+            UE_LOG(LogGameplay, Verbose, TEXT("SkillDefinitionRepository: Loaded definition for skill %s"), 
                 *SkillSlug);
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("SkillDefinitionRepository: Failed to load row %s"), 
+            UE_LOG(LogGameplay, Warning, TEXT("SkillDefinitionRepository: Failed to load row %s"), 
                 *RowName.ToString());
         }
     }

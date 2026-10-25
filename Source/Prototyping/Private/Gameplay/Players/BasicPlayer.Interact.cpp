@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -141,7 +142,7 @@ void ABasicPlayer::CheckForNPC()
 
     if (HitNPC && !HitNPC->IsNPCInteractable())
     {
-        UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: CheckForNPC hit NPC '%s' but IsNPCInteractable() is false"), *HitNPC->GetNPCName());
+        UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: CheckForNPC hit NPC '%s' but IsNPCInteractable() is false"), *HitNPC->GetNPCName());
     }
 
     TrackedNPC = (HitNPC && HitNPC->IsNPCInteractable()) ? HitNPC : nullptr;
@@ -169,7 +170,7 @@ void ABasicPlayer::CheckNPCInteractionDistance()
 
     if (Dist2D > CloseThreshold)
     {
-        UE_LOG(LogTemp, Log, TEXT("[NPC] Player moved %.0f units from NPC %d (threshold %.0f). Force-closing NPC windows."),
+        UE_LOG(LogGameplay, Verbose, TEXT("[NPC] Player moved %.0f units from NPC %d (threshold %.0f). Force-closing NPC windows."),
             Dist2D, ActiveNpcId, CloseThreshold);
         UDialogueManager* DlgMgr = MyGameInstance->GetDialogueManager();
         UIManager->ForceCloseAllNPCWindows(DlgMgr);
@@ -178,7 +179,7 @@ void ABasicPlayer::CheckNPCInteractionDistance()
 
 void ABasicPlayer::OnInteractInput()
 {
-	UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: OnInteractInput triggered"));
+	UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: OnInteractInput triggered"));
 
 	if (playerData.characterData.bIsDead) return;
 	if (playerData.isOtherClient) return;

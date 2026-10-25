@@ -1,4 +1,5 @@
 #include "Gameplay/Skills/PlayerSkillManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Combat/SkillSystemManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Services/TimeSyncService.h"
@@ -35,28 +36,28 @@ FPlayerSkillData UPlayerSkillManager::CreatePlayerSkillData(const FPlayerSkillNe
     FPlayerSkillData SkillData;
     SkillData.networkData = NetworkData;
     
-    UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Creating skill data for %s"), *NetworkData.skillSlug);
+    UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Creating skill data for %s"), *NetworkData.skillSlug);
     
     // Get definition from repository
     if (DefinitionRepository)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: DefinitionRepository available, getting definition"));
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: DefinitionRepository available, getting definition"));
         SkillData.definitionData = DefinitionRepository->GetDefinition(NetworkData.skillSlug);
         
         // Debug the loaded definition
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Loaded definition - DisplayName: %s, Icon IsValid: %s"), 
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Loaded definition - DisplayName: %s, Icon IsValid: %s"), 
             *SkillData.definitionData.displayName.ToString(),
             SkillData.definitionData.skillIcon.IsValid() ? TEXT("true") : TEXT("false"));
             
         if (SkillData.definitionData.skillIcon.IsValid())
         {
-            UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Icon path: %s"), 
+            UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Icon path: %s"), 
                 *SkillData.definitionData.skillIcon.ToSoftObjectPath().ToString());
         }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillManager: DefinitionRepository is NULL"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillManager: DefinitionRepository is NULL"));
         
         // Create basic definition if repository is not available
         SkillData.definitionData.displayName = FText::FromString(NetworkData.skillSlug);

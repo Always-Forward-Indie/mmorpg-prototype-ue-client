@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Prototyping.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Mobs/MOBAnimInstance.h"
@@ -40,7 +41,7 @@ static EDamageType MOBSchoolToDamageType(ESkillSchool School)
 
 void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, ESkillSchool School, bool bIsMissed, bool bIsBlocked, const FString& SkillSlug)
 {
-	UE_LOG(LogTemp, Log, TEXT("MOB %d taking %d damage (Critical: %s, School: %s, Missed: %s, Blocked: %s, Skill: %s)"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("MOB %d taking %d damage (Critical: %s, School: %s, Missed: %s, Blocked: %s, Skill: %s)"), 
 		GetActorId_Implementation(), Damage,
 		bIsCritical ? TEXT("true") : TEXT("false"), *UEnum::GetValueAsString(School),
 		bIsMissed ? TEXT("true") : TEXT("false"),
@@ -61,7 +62,7 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
 		{
 			const FSkillDefinitionData& Def = Repo->GetDefinition(SkillSlug);
 
-			UE_LOG(LogTemp, Warning, TEXT("[MOB HitSFX] SkillSlug='%s' WeaponImpactType='%s' hitSound=%s"),
+			UE_LOG(LogGameplay, Warning, TEXT("[MOB HitSFX] SkillSlug='%s' WeaponImpactType='%s' hitSound=%s"),
 				*SkillSlug,
 				*Def.WeaponImpactType.ToString(),
 				Def.hitSound.IsNull() ? TEXT("NULL") : TEXT("SET"));
@@ -70,7 +71,7 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
 			if (Def.WeaponImpactType != NAME_None)
 			{
 				UDataTable* ImpactTable = GI->GetImpactSoundsTable();
-				UE_LOG(LogTemp, Warning, TEXT("[MOB HitSFX] ImpactTable=%s  MobDefinitionTable=%s  mobSlug='%s'"),
+				UE_LOG(LogGameplay, Warning, TEXT("[MOB HitSFX] ImpactTable=%s  MobDefinitionTable=%s  mobSlug='%s'"),
 					ImpactTable ? TEXT("OK") : TEXT("NULL"),
 					MobDefinitionTable ? TEXT("OK") : TEXT("NULL"),
 					*MOBData.mobSlug);
@@ -88,7 +89,7 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
 						}
 					}
 
-					UE_LOG(LogTemp, Warning, TEXT("[MOB HitSFX] ArmorMat='%s'"), *ArmorMat.ToString());
+					UE_LOG(LogGameplay, Warning, TEXT("[MOB HitSFX] ArmorMat='%s'"), *ArmorMat.ToString());
 
 					if (ArmorMat != NAME_None)
 					{
@@ -96,7 +97,7 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
 							*Def.WeaponImpactType.ToString(), *ArmorMat.ToString()));
 
 						const FImpactSoundData* ImpactRow = ImpactTable->FindRow<FImpactSoundData>(ImpactKey, TEXT(""));
-						UE_LOG(LogTemp, Warning, TEXT("[MOB HitSFX] ImpactKey='%s'  RowFound=%s  Sounds=%d"),
+						UE_LOG(LogGameplay, Warning, TEXT("[MOB HitSFX] ImpactKey='%s'  RowFound=%s  Sounds=%d"),
 							*ImpactKey.ToString(),
 							ImpactRow ? TEXT("YES") : TEXT("NO"),
 							ImpactRow ? ImpactRow->ImpactSounds.Num() : 0);
@@ -107,7 +108,7 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
 							{
 								int32 Idx = FMath::RandRange(0, ImpactRow->ImpactSounds.Num() - 1);
 								USoundBase* ImpactSound = ImpactRow->ImpactSounds[Idx].LoadSynchronous();
-								UE_LOG(LogTemp, Warning, TEXT("[MOB HitSFX] ImpactSound[%d]=%s"), Idx, ImpactSound ? TEXT("OK") : TEXT("NULL"));
+								UE_LOG(LogGameplay, Warning, TEXT("[MOB HitSFX] ImpactSound[%d]=%s"), Idx, ImpactSound ? TEXT("OK") : TEXT("NULL"));
 								if (ImpactSound)
 									{
 										SpawnSFXAttached(this, ImpactSound, GetActorLocation(), 1.0f, DefaultAttenuation);
@@ -137,7 +138,7 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
 			if (!bHitSoundPlayed && !Def.hitSound.IsNull())
 			{
 				USoundBase* Sound = Def.hitSound.LoadSynchronous();
-				UE_LOG(LogTemp, Warning, TEXT("[MOB HitSFX] Fallback hitSound=%s"), Sound ? TEXT("OK") : TEXT("NULL (asset not loaded)"));
+				UE_LOG(LogGameplay, Warning, TEXT("[MOB HitSFX] Fallback hitSound=%s"), Sound ? TEXT("OK") : TEXT("NULL (asset not loaded)"));
 				if (Sound)
 				{
 					SpawnSFXAttached(this, Sound, GetActorLocation(), 1.0f, DefaultAttenuation);
@@ -204,7 +205,7 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
 
 void ABasicMOB::ShowHealingEffect_Implementation(int32 Healing, const FString& SkillSlug)
 {
-    UE_LOG(LogTemp, Log, TEXT("MOB %d healed for %d (skill: %s)"), GetActorId_Implementation(), Healing, *SkillSlug);
+    UE_LOG(LogGameplay, Verbose, TEXT("MOB %d healed for %d (skill: %s)"), GetActorId_Implementation(), Healing, *SkillSlug);
 
     UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
     if (!GI) return;
@@ -240,7 +241,7 @@ void ABasicMOB::ShowHealingEffect_Implementation(int32 Healing, const FString& S
 
 void ABasicMOB::ShowBuffEffect_Implementation(const FAppliedEffectData& Effect)
 {
-    UE_LOG(LogTemp, Log, TEXT("MOB %d received %s effect: %s (Value: %d, Duration: %.1f)"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("MOB %d received %s effect: %s (Value: %d, Duration: %.1f)"), 
         GetActorId_Implementation(), *Effect.effectType, *Effect.effectName, Effect.value, Effect.duration);
 
     UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());

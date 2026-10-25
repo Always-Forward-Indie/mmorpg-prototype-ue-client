@@ -1,4 +1,5 @@
 #include "Services/TimeSyncService.h"
+#include "Prototyping.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/DateTime.h"
 #include "Misc/Guid.h"
@@ -17,7 +18,7 @@ UTimeSyncService::UTimeSyncService()
 
 void UTimeSyncService::Initialize()
 {
-    UE_LOG(LogTemp, Warning, TEXT("TimeSyncService: Initialized"));
+    UE_LOG(LogPing, Verbose, TEXT("TimeSyncService: Initialized"));
     
     // Initialize sync data for all server types
     EnsureServerSyncDataExists(EServerType::LoginServer);
@@ -37,11 +38,11 @@ void UTimeSyncService::Initialize()
     {
         FTimerManager& TimerManager = WorldContext->GetTimerManager();
         TimerManager.SetTimer(CleanupTimerHandle, this, &UTimeSyncService::CleanupExpiredRequests, 30.0f, true);
-        UE_LOG(LogTemp, Warning, TEXT("TimeSyncService: Cleanup timer started"));
+        UE_LOG(LogPing, Verbose, TEXT("TimeSyncService: Cleanup timer started"));
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("TimeSyncService: WorldContext is null, cannot start cleanup timer"));
+        UE_LOG(LogPing, Error, TEXT("TimeSyncService: WorldContext is null, cannot start cleanup timer"));
     }
 }
 
@@ -59,7 +60,7 @@ void UTimeSyncService::SetWorldContext(UWorld* World)
     {
         FTimerManager& TimerManager = WorldContext->GetTimerManager();
         TimerManager.SetTimer(CleanupTimerHandle, this, &UTimeSyncService::CleanupExpiredRequests, 30.0f, true);
-        UE_LOG(LogTemp, Warning, TEXT("TimeSyncService: Cleanup timer started with new world context"));
+        UE_LOG(LogPing, Verbose, TEXT("TimeSyncService: Cleanup timer started with new world context"));
     }
 }
 

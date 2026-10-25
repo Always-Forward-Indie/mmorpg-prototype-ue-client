@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -106,7 +107,7 @@ void ABasicPlayer::TargetSelf()
         CursorInteractionComponent->NotifyLockedTargetChanged(nullptr, nullptr, EInteractableType::None);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Self-targeted (%s, id=%d)"),
+    UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Self-targeted (%s, id=%d)"),
         *playerData.characterData.characterName, playerData.characterData.characterId);
 }
 
@@ -123,7 +124,7 @@ void ABasicPlayer::OnTargetSelfInput()
             UIManager->SetSkillTarget(0, ECasterType::None);
             UIManager->HideMobTargetFrame();
         }
-        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Self-target cleared"));
+        UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Self-target cleared"));
     }
     else
     {

@@ -1,5 +1,6 @@
 ﻿#include "UI/AvailableSkillsWidget.h"
 #include "UI/AvailableSkillsWidget.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
@@ -28,7 +29,7 @@ void UAvailableSkillsWidget::PopulateSkillList(const TArray<FPlayerSkillData>& S
     UPanelWidget* Container = GetSkillContainer();
     if (!Container)
     {
-        UE_LOG(LogTemp, Error, TEXT("AvailableSkillsWidget: No skill container found"));
+        UE_LOG(LogGameplay, Error, TEXT("AvailableSkillsWidget: No skill container found"));
         return;
     }
 
@@ -74,7 +75,7 @@ void UAvailableSkillsWidget::PopulateSkillList(const TArray<FPlayerSkillData>& S
     }
 
     UpdateSkillCountDisplay();
-    UE_LOG(LogTemp, Log, TEXT("AvailableSkillsWidget: Populated %d skills using %s layout"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Populated %d skills using %s layout"), 
         DisplayedSkillCount, bUseGridLayout ? TEXT("Grid") : TEXT("List"));
 }
 
@@ -93,7 +94,7 @@ USkillItemWidget* UAvailableSkillsWidget::CreateSkillItemWidget(const FPlayerSki
 {
     if (!SkillItemWidgetClass)
     {
-        UE_LOG(LogTemp, Error, TEXT("AvailableSkillsWidget: SkillItemWidgetClass not set"));
+        UE_LOG(LogGameplay, Error, TEXT("AvailableSkillsWidget: SkillItemWidgetClass not set"));
         return nullptr;
     }
 
@@ -113,11 +114,11 @@ USkillItemWidget* UAvailableSkillsWidget::CreateSkillItemWidget(const FPlayerSki
         ItemWidget->OnSkillItemDragStarted.AddDynamic(this, &UAvailableSkillsWidget::OnChildSkillDragStarted_Handler);
         ItemWidget->OnSkillItemDragEnded.AddDynamic(this, &UAvailableSkillsWidget::OnChildSkillDragEnded_Handler);
         
-        UE_LOG(LogTemp, Log, TEXT("AvailableSkillsWidget: Created skill item widget for %s"), *SkillData.networkData.skillSlug);
+        UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Created skill item widget for %s"), *SkillData.networkData.skillSlug);
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("AvailableSkillsWidget: Failed to create skill item widget for %s"), *SkillData.networkData.skillSlug);
+        UE_LOG(LogGameplay, Error, TEXT("AvailableSkillsWidget: Failed to create skill item widget for %s"), *SkillData.networkData.skillSlug);
     }
 
     return ItemWidget;
@@ -179,7 +180,7 @@ void UAvailableSkillsWidget::ShowSkillTooltip(const FPlayerSkillData& SkillData,
         SkillTooltipWidget->ShowTooltip();
         bIsShowingTooltip = true;
         
-        UE_LOG(LogTemp, Log, TEXT("AvailableSkillsWidget: Showing tooltip for skill %s"), 
+        UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Showing tooltip for skill %s"), 
             *SkillData.networkData.skillSlug);
     }
 }
@@ -191,7 +192,7 @@ void UAvailableSkillsWidget::HideSkillTooltip()
         SkillTooltipWidget->HideTooltip();
         bIsShowingTooltip = false;
         
-        UE_LOG(LogTemp, Log, TEXT("AvailableSkillsWidget: Hiding skill tooltip"));
+        UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Hiding skill tooltip"));
     }
 }
 

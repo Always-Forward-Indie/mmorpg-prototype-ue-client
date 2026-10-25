@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Components/ArrowComponent.h"
 #include "ShaderCompiler.h"
 #include "ContentStreaming.h"
@@ -208,7 +209,7 @@ void UMyGameInstance::InitProgression()
 	if (ExperienceManager != nullptr) {
 		// Initialize the experience manager
 		ExperienceManager->Initialize(this, NetworkManager);
-		UE_LOG(LogTemp, Warning, TEXT("ExperienceManager initialized"));
+		UE_LOG(LogGameplay, Warning, TEXT("ExperienceManager initialized"));
 	}
 
 	if (ExperienceNetworkHandler != nullptr && ExperienceManager != nullptr) {
@@ -216,7 +217,7 @@ void UMyGameInstance::InitProgression()
 		ExperienceNetworkHandler->Initialize(ExperienceManager, this, NetworkManager);
 		// Subscribe to network events
 		ExperienceNetworkHandler->SubscribeToNetworkEvents();
-		UE_LOG(LogTemp, Warning, TEXT("ExperienceNetworkHandler initialized and subscribed"));
+		UE_LOG(LogGameplay, Warning, TEXT("ExperienceNetworkHandler initialized and subscribed"));
 	}
 
 }
@@ -249,13 +250,13 @@ void UMyGameInstance::InitCombat()
 		BuffInterface.SetInterface(Cast<ISkillEffectHandler>(BuffHandler));
 		CombatSystemManager->RegisterEffectHandler(BuffInterface);
 		
-		UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager initialized with UINTERFACE effect handlers"));
+		UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager initialized with UINTERFACE effect handlers"));
 	}
 
 	if (SkillSystemManager != nullptr) {
 		// Initialize the skill system manager
 		SkillSystemManager->Initialize(CombatSystemManager, NetworkManager);
-		UE_LOG(LogTemp, Warning, TEXT("SkillSystemManager initialized"));
+		UE_LOG(LogGameplay, Warning, TEXT("SkillSystemManager initialized"));
 	}
 
 	// Initialize player skill system using factory pattern
@@ -283,16 +284,16 @@ void UMyGameInstance::InitCombat()
 				PlayerSkillNetworkHandler->SetGameInstance(this);
 			}
 
-			UE_LOG(LogTemp, Warning, TEXT("Player skill system created successfully"));
+			UE_LOG(LogGameplay, Warning, TEXT("Player skill system created successfully"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("Failed to create player skill system"));
+			UE_LOG(LogGameplay, Error, TEXT("Failed to create player skill system"));
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Cannot create player skill system - missing dependencies or SkillDefinitionsDataTable not configured"));
+		UE_LOG(LogGameplay, Warning, TEXT("Cannot create player skill system - missing dependencies or SkillDefinitionsDataTable not configured"));
 	}
 
 	// Initialize EntityAudioRepository
@@ -336,7 +337,7 @@ void UMyGameInstance::InitCombat()
 		CombatNetworkHandler->Initialize(CombatSystemManager, NetworkManager);
 		// Subscribe to network events
 		CombatNetworkHandler->SubscribeToNetworkManager();
-		UE_LOG(LogTemp, Warning, TEXT("CombatNetworkHandler initialized centrally"));
+		UE_LOG(LogGameplay, Warning, TEXT("CombatNetworkHandler initialized centrally"));
 	}
 
 }
@@ -355,10 +356,10 @@ void UMyGameInstance::InitNPC()
 		if (NPCDefinitionTable)
 		{
 			NPCManager->SetNPCDefinitionTable(NPCDefinitionTable);
-			UE_LOG(LogTemp, Warning, TEXT("NPCManager: NPCDefinitionTable assigned from GameInstance"));
+			UE_LOG(LogGameplay, Warning, TEXT("NPCManager: NPCDefinitionTable assigned from GameInstance"));
 		}
 		
-		UE_LOG(LogTemp, Warning, TEXT("NPCManager initialized"));
+		UE_LOG(LogGameplay, Warning, TEXT("NPCManager initialized"));
 	}
 
 	// Initialize NPC Network Handler
@@ -367,7 +368,7 @@ void UMyGameInstance::InitNPC()
 		NPCNetworkHandler->Initialize(NPCManager, GetNetworkManager());
 		NPCNetworkHandler->SubscribeToNetworkEvents();
 		
-		UE_LOG(LogTemp, Warning, TEXT("NPCNetworkHandler initialized"));
+		UE_LOG(LogGameplay, Warning, TEXT("NPCNetworkHandler initialized"));
 	}
 
 }

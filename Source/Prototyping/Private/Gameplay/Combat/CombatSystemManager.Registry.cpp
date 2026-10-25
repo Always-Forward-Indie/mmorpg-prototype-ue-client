@@ -1,4 +1,5 @@
 #include "Gameplay/Combat/CombatSystemManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Combat/ISkillEffectHandler.h"
 #include "Gameplay/Combat/ICombatable.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
@@ -29,7 +30,7 @@ void UCombatSystemManager::Initialize(UMyGameInstance* InGameInstance, UNetworkM
     // Clean up any invalid effect handlers from previous sessions
     CleanupInvalidHandlers();
 
-    UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Initialized with UE5 interface system"));
+    UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Initialized with UE5 interface system"));
 }
 
 void UCombatSystemManager::SetWorldContext(UWorld* World)
@@ -52,7 +53,7 @@ void UCombatSystemManager::RegisterCombatable(const TScriptInterface<ICombatable
 {
     if (!CombatableActor.GetInterface() || !CombatableActor.GetObject() || !IsValid(CombatableActor.GetObject()))
     {
-        UE_LOG(LogTemp, Error, TEXT("CombatSystemManager: Attempted to register invalid combatable actor"));
+        UE_LOG(LogGameplay, Error, TEXT("CombatSystemManager: Attempted to register invalid combatable actor"));
         return;
     }
 
@@ -63,7 +64,7 @@ void UCombatSystemManager::RegisterCombatable(const TScriptInterface<ICombatable
 
     if (ActorId <= 0 || ActorType == ECasterType::None)
     {
-        UE_LOG(LogTemp, Error, TEXT("CombatSystemManager: Invalid actor ID (%d) or type (%d)"), ActorId, (int32)ActorType);
+        UE_LOG(LogGameplay, Error, TEXT("CombatSystemManager: Invalid actor ID (%d) or type (%d)"), ActorId, (int32)ActorType);
         return;
     }
 
@@ -71,7 +72,7 @@ void UCombatSystemManager::RegisterCombatable(const TScriptInterface<ICombatable
 
     if (RegisteredCombatables.Contains(Key))
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Actor with ID %d and type %s already registered"),
+        UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Actor with ID %d and type %s already registered"),
             ActorId, *ICombatable::Execute_GetActorTypeString(CombatableObject));
         return;
     }
@@ -80,7 +81,7 @@ void UCombatSystemManager::RegisterCombatable(const TScriptInterface<ICombatable
     Entry.WeakObject = CombatableObject;
     Entry.Interface  = CombatableActor.GetInterface();
     RegisteredCombatables.Add(Key, Entry);
-    UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Registered combatable %d (%s)"),
+    UE_LOG(LogGameplay, Verbose, TEXT("CombatSystemManager: Registered combatable %d (%s)"),
         ActorId, *ICombatable::Execute_GetActorTypeString(CombatableObject));
 }
 
@@ -88,7 +89,7 @@ void UCombatSystemManager::UnregisterCombatable(const TScriptInterface<ICombatab
 {
     if (!CombatableActor.GetInterface() || !CombatableActor.GetObject())
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Attempted to unregister invalid combatable actor"));
+        UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Attempted to unregister invalid combatable actor"));
         return;
     }
 
@@ -101,12 +102,12 @@ void UCombatSystemManager::UnregisterCombatable(const TScriptInterface<ICombatab
 
     if (RegisteredCombatables.Remove(Key) > 0)
     {
-        UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Unregistered combatable %d (%s)"),
+        UE_LOG(LogGameplay, Verbose, TEXT("CombatSystemManager: Unregistered combatable %d (%s)"),
             ActorId, *ICombatable::Execute_GetActorTypeString(CombatableObject));
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Actor %d (%s) was not registered"),
+        UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Actor %d (%s) was not registered"),
             ActorId, *ICombatable::Execute_GetActorTypeString(CombatableObject));
     }
 }
@@ -115,7 +116,7 @@ void UCombatSystemManager::RegisterEffectHandler(const TScriptInterface<ISkillEf
 {
     if (!Handler.GetInterface() || !Handler.GetObject() || !IsValid(Handler.GetObject()))
     {
-        UE_LOG(LogTemp, Error, TEXT("CombatSystemManager: Attempted to register invalid effect handler"));
+        UE_LOG(LogGameplay, Error, TEXT("CombatSystemManager: Attempted to register invalid effect handler"));
         return;
     }
 
@@ -126,7 +127,7 @@ void UCombatSystemManager::RegisterEffectHandler(const TScriptInterface<ISkillEf
     {
         if (Existing.WeakObject.IsValid() && Existing.WeakObject.Get() == HandlerObject)
         {
-            UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Effect handler already registered, skipping"));
+            UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Effect handler already registered, skipping"));
             return;
         }
     }
@@ -141,7 +142,7 @@ void UCombatSystemManager::RegisterEffectHandler(const TScriptInterface<ISkillEf
         FEffectHandlerEntry& ExistingEntry = EffectHandlers[i];
         if (!ExistingEntry.WeakObject.IsValid())
         {
-            UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Removing stale handler during registration at index %d"), i);
+            UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Removing stale handler during registration at index %d"), i);
             EffectHandlers.RemoveAt(i);
             i--;
             continue;
@@ -165,7 +166,7 @@ void UCombatSystemManager::RegisterEffectHandler(const TScriptInterface<ISkillEf
     // Keep a strong UPROPERTY reference so the handler is not garbage-collected.
     EffectHandlerStrongRefs.AddUnique(HandlerObject);
 
-    UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Registered effect handler '%s' with priority %d at index %d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("CombatSystemManager: Registered effect handler '%s' with priority %d at index %d"),
         *HandlerObject->GetClass()->GetName(), HandlerPriority, InsertIndex);
 }
 
@@ -173,7 +174,7 @@ void UCombatSystemManager::UnregisterEffectHandler(const TScriptInterface<ISkill
 {
     if (!Handler.GetInterface() || !Handler.GetObject())
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Attempted to unregister null effect handler"));
+        UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Attempted to unregister null effect handler"));
         return;
     }
 
@@ -185,11 +186,11 @@ void UCombatSystemManager::UnregisterEffectHandler(const TScriptInterface<ISkill
     if (RemovedCount > 0)
     {
         EffectHandlerStrongRefs.Remove(HandlerObject);
-        UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Unregistered effect handler (removed %d instances)"), RemovedCount);
+        UE_LOG(LogGameplay, Verbose, TEXT("CombatSystemManager: Unregistered effect handler (removed %d instances)"), RemovedCount);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Effect handler was not registered"));
+        UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Effect handler was not registered"));
     }
 }
 
@@ -206,7 +207,7 @@ void UCombatSystemManager::CleanupInvalidHandlers()
         {
             return !IsValid(Obj);
         });
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Removed %d stale effect handlers (remaining: %d)"),
+        UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Removed %d stale effect handlers (remaining: %d)"),
             RemovedHandlers, EffectHandlers.Num());
     }
 
@@ -222,7 +223,7 @@ void UCombatSystemManager::CleanupInvalidHandlers()
     for (const FString& Key : KeysToRemove)
     {
         RegisteredCombatables.Remove(Key);
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Removed stale combatable with key: %s"), *Key);
+        UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Removed stale combatable with key: %s"), *Key);
     }
 }
 

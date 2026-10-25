@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Audio/AmbientSoundZoneActor.h"
+#include "Prototyping.h"
 #include "Audio/AudioManager.h"
 #include "Components/BoxComponent.h"
 #include "Components/AudioComponent.h"
@@ -97,7 +98,7 @@ void AAmbientSoundZoneActor::BeginPlay()
 {
 	Super::BeginPlay();
 
-	UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' BeginPlay. AmbientSound=%s AudioComponent=%s"),
+	UE_LOG(LogGameAudio, Verbose, TEXT("[AmbientZone] '%s' BeginPlay. AmbientSound=%s AudioComponent=%s"),
 		*GetName(),
 		AmbientSound ? *AmbientSound->GetName() : TEXT("NULL"),
 		AudioComponent ? TEXT("OK") : TEXT("NULL"));
@@ -116,12 +117,12 @@ void AAmbientSoundZoneActor::BeginPlay()
 	if (TargetClass && AudioComponent)
 	{
 		AudioComponent->SoundClassOverride = TargetClass;
-		UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' SoundClass set to '%s'"),
+		UE_LOG(LogGameAudio, Verbose, TEXT("[AmbientZone] '%s' SoundClass set to '%s'"),
 			*GetName(), *TargetClass->GetName());
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[AmbientZone] '%s' SoundClass NOT assigned! "
+		UE_LOG(LogGameAudio, Warning, TEXT("[AmbientZone] '%s' SoundClass NOT assigned! "
 			"TargetClass=%s AudioComponent=%s — Ambient volume slider will NOT control this zone."),
 			*GetName(),
 			TargetClass ? *TargetClass->GetName() : TEXT("NULL"),
@@ -132,12 +133,12 @@ void AAmbientSoundZoneActor::BeginPlay()
 	{
 		AudioComponent->SetSound(AmbientSound);
 		AudioComponent->SetVolumeMultiplier(VolumeMultiplier);
-		UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' Sound assigned. VolumeMultiplier=%.2f bAllowSpatialization=%d"),
+		UE_LOG(LogGameAudio, Verbose, TEXT("[AmbientZone] '%s' Sound assigned. VolumeMultiplier=%.2f bAllowSpatialization=%d"),
 			*GetName(), VolumeMultiplier, (int32)AudioComponent->bAllowSpatialization);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[AmbientZone] '%s' Cannot assign sound: AmbientSound=%s AudioComponent=%s — zone will be SILENT."),
+		UE_LOG(LogGameAudio, Warning, TEXT("[AmbientZone] '%s' Cannot assign sound: AmbientSound=%s AudioComponent=%s — zone will be SILENT."),
 			*GetName(),
 			AmbientSound ? *AmbientSound->GetName() : TEXT("NULL"),
 			AudioComponent ? TEXT("OK") : TEXT("NULL"));
@@ -148,12 +149,12 @@ void AAmbientSoundZoneActor::BeginPlay()
 	if (bSpatialized)
 	{
 		const float SafeOuter = FMath::Max(AttenuationOuterRadius, AttenuationInnerRadius + 1.0f);
-		UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' Spatialized=true InnerR=%.0f OuterR=%.0f"),
+		UE_LOG(LogGameAudio, Verbose, TEXT("[AmbientZone] '%s' Spatialized=true InnerR=%.0f OuterR=%.0f"),
 			*GetName(), AttenuationInnerRadius, SafeOuter);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' Spatialized=false (2D playback)."), *GetName());
+		UE_LOG(LogGameAudio, Verbose, TEXT("[AmbientZone] '%s' Spatialized=false (2D playback)."), *GetName());
 	}
 
 	TriggerBox->OnComponentBeginOverlap.RemoveDynamic(this, &AAmbientSoundZoneActor::OnBoxBeginOverlap);
@@ -165,7 +166,7 @@ void AAmbientSoundZoneActor::BeginPlay()
 	// where there is no player pawn to walk into the trigger box.
 	if (bAutoPlay)
 	{
-		UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' bAutoPlay=true — starting ambient immediately."), *GetName());
+		UE_LOG(LogGameAudio, Verbose, TEXT("[AmbientZone] '%s' bAutoPlay=true — starting ambient immediately."), *GetName());
 		bPlayerIsInside = true;
 		StartAmbient();
 		return; // skip the overlap poll entirely
@@ -175,13 +176,13 @@ void AAmbientSoundZoneActor::BeginPlay()
 	const FVector ScaledExtent = TriggerBox->GetScaledBoxExtent();
 	if (ScaledExtent.X < 0.f || ScaledExtent.Y < 0.f || ScaledExtent.Z < 0.f)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[AmbientZone] '%s' TriggerBox has NEGATIVE scaled extent (%s)! "
+		UE_LOG(LogGameAudio, Warning, TEXT("[AmbientZone] '%s' TriggerBox has NEGATIVE scaled extent (%s)! "
 			"Check for negative scale on the actor or component — overlaps may not fire."),
 			*GetName(), *ScaledExtent.ToString());
 	}
 	else
 	{
-		UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' TriggerBox extent=(%s). Starting overlap poll."),
+		UE_LOG(LogGameAudio, Verbose, TEXT("[AmbientZone] '%s' TriggerBox extent=(%s). Starting overlap poll."),
 			*GetName(), *ScaledExtent.ToString());
 	}
 
@@ -199,7 +200,7 @@ void AAmbientSoundZoneActor::CheckInitialOverlap()
 	// Already playing — nothing to do, stop the timer.
 	if (AudioComponent && AudioComponent->IsPlaying())
 	{
-		UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' CheckInitialOverlap: already playing, clearing timer."), *GetName());
+		UE_LOG(LogGameAudio, Verbose, TEXT("[AmbientZone] '%s' CheckInitialOverlap: already playing, clearing timer."), *GetName());
 		GetWorld()->GetTimerManager().ClearTimer(OverlapCheckTimerHandle);
 		return;
 	}
@@ -235,12 +236,12 @@ void AAmbientSoundZoneActor::CheckInitialOverlap()
 	if (Overlapping.Num() == 0 && !UGameplayStatics::GetPlayerPawn(this, 0))
 	{
 		// No pawn in world yet — keep polling.
-		UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' CheckInitialOverlap: no player pawn in world yet, polling..."), *GetName());
+		UE_LOG(LogGameAudio, Verbose, TEXT("[AmbientZone] '%s' CheckInitialOverlap: no player pawn in world yet, polling..."), *GetName());
 		return;
 	}
 
 	const bool bInside = (LocalPawn != nullptr);
-	UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' CheckInitialOverlap: InsideZone=%d OverlappingPawns=%d LocalPawn=%s — clearing timer."),
+	UE_LOG(LogGameAudio, Verbose, TEXT("[AmbientZone] '%s' CheckInitialOverlap: InsideZone=%d OverlappingPawns=%d LocalPawn=%s — clearing timer."),
 		*GetName(), (int32)bInside, Overlapping.Num(),
 		LocalPawn ? *LocalPawn->GetName() : TEXT("None"));
 
@@ -255,12 +256,12 @@ void AAmbientSoundZoneActor::StartAmbient()
 {
 	if (!AudioComponent)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[AmbientZone] '%s' StartAmbient: AudioComponent is NULL!"), *GetName());
+		UE_LOG(LogGameAudio, Error, TEXT("[AmbientZone] '%s' StartAmbient: AudioComponent is NULL!"), *GetName());
 		return;
 	}
 	if (!AmbientSound)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[AmbientZone] '%s' StartAmbient: AmbientSound is NULL — assign a sound asset in Details."), *GetName());
+		UE_LOG(LogGameAudio, Warning, TEXT("[AmbientZone] '%s' StartAmbient: AmbientSound is NULL — assign a sound asset in Details."), *GetName());
 		return;
 	}
 
@@ -270,14 +271,14 @@ void AAmbientSoundZoneActor::StartAmbient()
 	if (Count > 0)
 	{
 		Count++;
-		UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' StartAmbient: Sound='%s' already playing (ref=%d) — skipping restart."),
+		UE_LOG(LogGameAudio, Verbose, TEXT("[AmbientZone] '%s' StartAmbient: Sound='%s' already playing (ref=%d) — skipping restart."),
 			*GetName(), *AmbientSound->GetName(), Count);
 		return;
 	}
 	Count++;
 	ActiveAmbientComponents.Add(AmbientSound, AudioComponent);
 
-	UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' StartAmbient: Sound='%s' FadeIn=%.2f Vol=%.2f SoundClass=%s"),
+	UE_LOG(LogGameAudio, Log, TEXT("[AmbientZone] '%s' StartAmbient: Sound='%s' FadeIn=%.2f Vol=%.2f SoundClass=%s"),
 		*GetName(), *AmbientSound->GetName(), FadeInTime, VolumeMultiplier,
 		AudioComponent->SoundClassOverride ? *AudioComponent->SoundClassOverride->GetName() : TEXT("None"));
 
@@ -300,13 +301,13 @@ void AAmbientSoundZoneActor::StartAmbient()
 	AudioComponent->OnAudioFinished.RemoveDynamic(this, &AAmbientSoundZoneActor::OnAmbientFinished);
 	AudioComponent->OnAudioFinished.AddDynamic(this, &AAmbientSoundZoneActor::OnAmbientFinished);
 
-	UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' StartAmbient: playback started (IsPlaying=%d) bLoop=%d."),
+	UE_LOG(LogGameAudio, Verbose, TEXT("[AmbientZone] '%s' StartAmbient: playback started (IsPlaying=%d) bLoop=%d."),
 		*GetName(), (int32)AudioComponent->IsPlaying(), (int32)bLoop);
 }
 
 void AAmbientSoundZoneActor::OnAmbientFinished()
 {
-	UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' OnAmbientFinished: bLoop=%d bPlayerIsInside=%d."),
+	UE_LOG(LogGameAudio, Verbose, TEXT("[AmbientZone] '%s' OnAmbientFinished: bLoop=%d bPlayerIsInside=%d."),
 		*GetName(), (int32)bLoop, (int32)bPlayerIsInside);
 
 	if (bLoop && bPlayerIsInside)
@@ -334,7 +335,7 @@ void AAmbientSoundZoneActor::StopAmbient()
 
 	if (!AmbientSound)
 	{
-		UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' StopAmbient: FadeOut=%.2f (no sound asset — direct stop)"), *GetName(), FadeOutTime);
+		UE_LOG(LogGameAudio, Log, TEXT("[AmbientZone] '%s' StopAmbient: FadeOut=%.2f (no sound asset — direct stop)"), *GetName(), FadeOutTime);
 		if (FadeOutTime > 0.0f) { AudioComponent->FadeOut(FadeOutTime, 0.0f); }
 		else { AudioComponent->Stop(); }
 		return;
@@ -345,7 +346,7 @@ void AAmbientSoundZoneActor::StopAmbient()
 
 	if (Count && *Count > 0)
 	{
-		UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' StopAmbient: Sound='%s' still covered (ref=%d) — keeping audio."),
+		UE_LOG(LogGameAudio, Log, TEXT("[AmbientZone] '%s' StopAmbient: Sound='%s' still covered (ref=%d) — keeping audio."),
 			*GetName(), *AmbientSound->GetName(), *Count);
 		return;
 	}
@@ -358,7 +359,7 @@ void AAmbientSoundZoneActor::StopAmbient()
 	UAudioComponent* CompToStop = (PlayingComp && IsValid(*PlayingComp)) ? *PlayingComp : AudioComponent;
 	ActiveAmbientComponents.Remove(AmbientSound);
 
-	UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' StopAmbient: Sound='%s' last zone — stopping. FadeOut=%.2f Comp=%s"),
+	UE_LOG(LogGameAudio, Log, TEXT("[AmbientZone] '%s' StopAmbient: Sound='%s' last zone — stopping. FadeOut=%.2f Comp=%s"),
 		*GetName(), *AmbientSound->GetName(), FadeOutTime,
 		CompToStop->IsPlaying() ? TEXT("playing") : TEXT("idle"));
 
@@ -376,7 +377,7 @@ void AAmbientSoundZoneActor::OnBoxBeginOverlap(UPrimitiveComponent* /*Overlapped
 	APawn* P = Cast<APawn>(OtherActor);
 	const bool bIsLocalPawn = P && P->IsLocallyControlled();
 
-	UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' OnBoxBeginOverlap: OtherActor='%s' IsPawn=%d IsLocallyControlled=%d"),
+	UE_LOG(LogGameAudio, Verbose, TEXT("[AmbientZone] '%s' OnBoxBeginOverlap: OtherActor='%s' IsPawn=%d IsLocallyControlled=%d"),
 		*GetName(),
 		OtherActor ? *OtherActor->GetName() : TEXT("NULL"),
 		(int32)(P != nullptr),
@@ -394,7 +395,7 @@ void AAmbientSoundZoneActor::OnBoxEndOverlap(UPrimitiveComponent* /*OverlappedCo
 	APawn* P = Cast<APawn>(OtherActor);
 	const bool bIsLocalPawn = P && P->IsLocallyControlled();
 
-	UE_LOG(LogTemp, Log, TEXT("[AmbientZone] '%s' OnBoxEndOverlap: OtherActor='%s' IsPawn=%d IsLocallyControlled=%d"),
+	UE_LOG(LogGameAudio, Verbose, TEXT("[AmbientZone] '%s' OnBoxEndOverlap: OtherActor='%s' IsPawn=%d IsLocallyControlled=%d"),
 		*GetName(),
 		OtherActor ? *OtherActor->GetName() : TEXT("NULL"),
 		(int32)(P != nullptr),

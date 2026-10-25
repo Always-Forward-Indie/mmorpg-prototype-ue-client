@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Components/ArrowComponent.h"
 #include "ShaderCompiler.h"
 #include "ContentStreaming.h"
@@ -103,7 +104,7 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 {
 	if (!LoadedWorld) return;
 
-	UE_LOG(LogTemp, Warning, TEXT("OnPostLoginLevelLoaded: %s"), *LevelBeingLoaded.ToString());
+	UE_LOG(LogConnection, Warning, TEXT("OnPostLoginLevelLoaded: %s"), *LevelBeingLoaded.ToString());
 
 	// Travel measurement: how long the travel took in wall-clock and frames.
 	// A crawl here (seconds high, frames low) means the engine travel itself
@@ -113,7 +114,7 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 	{
 		const double TravelElapsed = FPlatformTime::Seconds() - LoadTravelStartTime;
 		const uint64 TravelFrames = GFrameCounter - LoadTravelStartFrame;
-		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Travel DONE: map '%s' took %.1fs wall-clock (%llu frames, avg %.1f fps)"),
+		UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Travel DONE: map '%s' took %.1fs wall-clock (%llu frames, avg %.1f fps)"),
 			*LevelBeingLoaded.ToString(), TravelElapsed, TravelFrames,
 			TravelElapsed > 0.0 ? (double)TravelFrames / TravelElapsed : 0.0);
 		LoadTravelStartTime = 0.0;
@@ -128,7 +129,7 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 		// unexpected intermediate map.
 		if (bTransitioningToGameWorld)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("OnPostLoginLevelLoaded: LoginLevel match but bTransitioningToGameWorld=true — skipping login UI"));
+			UE_LOG(LogConnection, Warning, TEXT("OnPostLoginLevelLoaded: LoginLevel match but bTransitioningToGameWorld=true — skipping login UI"));
 			return;
 		}
 
@@ -187,11 +188,11 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 				PodiumSpawnRotation = SetupActor->PodiumSlots[0]->GetComponentRotation();
 			}
 
-			UE_LOG(LogTemp, Log, TEXT("LoginLevelSetupActor found — camera and spawn transforms applied."));
+			UE_LOG(LogConnection, Verbose, TEXT("LoginLevelSetupActor found — camera and spawn transforms applied."));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("LoginLevelSetupActor not found in Login Level — using Blueprint-configured values."));
+			UE_LOG(LogConnection, Warning, TEXT("LoginLevelSetupActor not found in Login Level — using Blueprint-configured values."));
 		}
 
 		// Spawn login camera
@@ -301,7 +302,7 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 
 			if (!DevModeDataProvider->LoadPlayerData(clientData))
 			{
-				UE_LOG(LogTemp, Warning, TEXT("DevMode: LoadPlayerData failed — using stub data. Check Config/DevMode/dev_player.json"));
+				UE_LOG(LogGameplay, Warning, TEXT("DevMode: LoadPlayerData failed — using stub data. Check Config/DevMode/dev_player.json"));
 				clientData.clientId = 1;
 				clientData.characterData.characterId = 1;
 				clientData.characterData.characterPosition.positionX = 0.0f;
@@ -382,7 +383,7 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 				LoadedWorld->GetTimerManager().SetTimer(
 					DevModeSweepTimerHandle, this,
 					&UMyGameInstance::RunDevModeAutoScenario, 3.0f, false);
-				UE_LOG(LogTemp, Warning, TEXT("GameInstance: auto-scenario '%s' scheduled"), *DevModeAutoScenario);
+				UE_LOG(LogGameplay, Warning, TEXT("GameInstance: auto-scenario '%s' scheduled"), *DevModeAutoScenario);
 			}
 		}
 
@@ -409,17 +410,17 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 			// A lost screen WITH a renderer is a real travel bug — Error.
 			if (!FApp::CanEverRender())
 			{
-				UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Headless run: loading screen not playing after transition — reconfiguring MoviePlayer"));
+				UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Headless run: loading screen not playing after transition — reconfiguring MoviePlayer"));
 			}
 			else
 			{
-				UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] CRITICAL: loading screen lost after level transition — reconfiguring MoviePlayer"));
+				UE_LOG(LogConnection, Error, TEXT("[LOADSEQ] CRITICAL: loading screen lost after level transition — reconfiguring MoviePlayer"));
 			}
 			SetupMoviePlayerLoadingScreen();
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Loading screen survived level transition (MoviePlayer)"));
+			UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Loading screen survived level transition (MoviePlayer)"));
 		}
 
 		// The MoviePlayer covers travel and auto-exits at load end (it must never
@@ -452,7 +453,7 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 					if (!LoadingScreenWidget) { return false; }
 					const double Elapsed = FPlatformTime::Seconds() - LoadingScreenWatchdogStartTime;
 					if (Elapsed < 8.0) { return true; }
-					UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] HARD SAFETY: %.1fs wall-clock elapsed — force-removing loading screen (gates/flags may have stalled)"), Elapsed);
+					UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] HARD SAFETY: %.1fs wall-clock elapsed — force-removing loading screen (gates/flags may have stalled)"), Elapsed);
 					RemoveLoadingScreen();
 					return false;
 				}),

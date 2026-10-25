@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Items/ItemManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Items/DroppedItemActor.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Players/PlayerAnimInstance.h"
@@ -36,14 +37,14 @@ ADroppedItemActor* UItemManager::SpawnDroppedItem(const FDroppedItemStruct& Drop
 	// If this item already exists in the world, don't spawn it again
 	if (ItemExists(worldContext, DroppedItem.uid))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Item with UID %d already exists in the world"), DroppedItem.uid);
+		UE_LOG(LogGameplay, Warning, TEXT("Item with UID %d already exists in the world"), DroppedItem.uid);
 		return nullptr;
 	}
 
 	// Make sure we have a game instance and world context
 	if (!gameInstance || !worldContext)
 	{
-		UE_LOG(LogTemp, Error, TEXT("GameInstance or WorldContext not found in ItemManager"));
+		UE_LOG(LogGameplay, Error, TEXT("GameInstance or WorldContext not found in ItemManager"));
 		return nullptr;
 	}
 
@@ -62,7 +63,7 @@ ADroppedItemActor* UItemManager::SpawnDroppedItem(const FDroppedItemStruct& Drop
 				{
 					if (!Mob->GetMOBIsDead())
 					{
-						UE_LOG(LogTemp, Log, TEXT("ItemManager: deferring item uid=%d \u2014 mob %d still alive"),
+						UE_LOG(LogGameplay, Verbose, TEXT("ItemManager: deferring item uid=%d \u2014 mob %d still alive"),
 							DroppedItem.uid, MobUID);
 						PendingMobDrops.FindOrAdd(MobUID).Add(DroppedItem);
 						return nullptr;
@@ -77,7 +78,7 @@ ADroppedItemActor* UItemManager::SpawnDroppedItem(const FDroppedItemStruct& Drop
 
 	if (DroppedItemClass == nullptr)
 	{
-		UE_LOG(LogTemp, Error, TEXT("DroppedItemActor class not found in GameInstance"));
+		UE_LOG(LogGameplay, Error, TEXT("DroppedItemActor class not found in GameInstance"));
 		return nullptr;
 	}
 
@@ -113,13 +114,13 @@ ADroppedItemActor* UItemManager::SpawnDroppedItem(const FDroppedItemStruct& Drop
 		// Add to the map
 		DroppedItemsMap.Add(DroppedItem.uid, SpawnedItem);
 		
-		UE_LOG(LogTemp, Warning, TEXT("Spawned item %s (ID:%d) at location X:%f Y:%f Z:%f"), 
+		UE_LOG(LogGameplay, Warning, TEXT("Spawned item %s (ID:%d) at location X:%f Y:%f Z:%f"), 
 			*DroppedItem.item.name, DroppedItem.uid, Location.X, Location.Y, Location.Z);
 		
 		return SpawnedItem;
 	}
 	
-	UE_LOG(LogTemp, Error, TEXT("Failed to spawn item %s (ID:%d)"), *DroppedItem.item.name, DroppedItem.uid);
+	UE_LOG(LogGameplay, Error, TEXT("Failed to spawn item %s (ID:%d)"), *DroppedItem.item.name, DroppedItem.uid);
 	return nullptr;
 }
 
@@ -138,13 +139,13 @@ void UItemManager::SendPickUpItemRequest(int32 ItemUID)
 {
 	if (!networkManager)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Network manager not found"));
+		UE_LOG(LogGameplay, Error, TEXT("Network manager not found"));
 		return;
 	}
 
 	if (!gameInstance)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Game instance not found"));
+		UE_LOG(LogGameplay, Error, TEXT("Game instance not found"));
 		return;
 	}
 	
@@ -189,12 +190,12 @@ void UItemManager::SendPickUpItemRequest(int32 ItemUID)
 		TSharedPtr<FJsonValueNumber> RotZValue = MakeShareable(new FJsonValueNumber(PlayerPosition.rotationZ));
 		BodyData.Add(TEXT("rotZ"), RotZValue);
 
-		UE_LOG(LogTemp, Log, TEXT("Added player position to pickup request: X=%.2f, Y=%.2f, Z=%.2f, RotZ=%.2f"),
+		UE_LOG(LogGameplay, Verbose, TEXT("Added player position to pickup request: X=%.2f, Y=%.2f, Z=%.2f, RotZ=%.2f"),
 			PlayerPosition.positionX, PlayerPosition.positionY, PlayerPosition.positionZ, PlayerPosition.rotationZ);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Current player not found, sending pickup request without position data"));
+		UE_LOG(LogGameplay, Warning, TEXT("Current player not found, sending pickup request without position data"));
 	}
 
 	
@@ -204,6 +205,6 @@ void UItemManager::SendPickUpItemRequest(int32 ItemUID)
 	// Send the request to the server
 	networkManager->SendDataToChunkServer(JsonString);
 	
-	UE_LOG(LogTemp, Warning, TEXT("Sent itemPickup request for item UID: %d"), ItemUID);
+	UE_LOG(LogGameplay, Warning, TEXT("Sent itemPickup request for item UID: %d"), ItemUID);
 }
 

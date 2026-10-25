@@ -1,4 +1,5 @@
 #include "UI/UIManager.h"
+#include "Prototyping.h"
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
 #include "UI/HarvestLootWidget.h"
@@ -82,11 +83,11 @@
 
 void UUIManager::InitializeWIOWidgets(UWorldObjectManager* InWorldObjectManager)
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeWIOWidgets - Starting initialization"));
+	UE_LOG(LogGameplay, Log, TEXT("UIManager::InitializeWIOWidgets - Starting initialization"));
 
 	if (!InWorldObjectManager)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::InitializeWIOWidgets - WorldObjectManager is null"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager::InitializeWIOWidgets - WorldObjectManager is null"));
 		return;
 	}
 
@@ -98,16 +99,16 @@ void UUIManager::InitializeWIOWidgets(UWorldObjectManager* InWorldObjectManager)
 		{
 			WIOInteractionPromptWidget->AddToViewport(60);
 			WIOInteractionPromptWidget->SetVisibility(ESlateVisibility::Collapsed);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: WIOInteractionPromptWidget created"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: WIOInteractionPromptWidget created"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create WIOInteractionPromptWidget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create WIOInteractionPromptWidget"));
 		}
 	}
 	else if (!WIOInteractionPromptWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: WIOInteractionPromptWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: WIOInteractionPromptWidgetClass is not set in Blueprint"));
 	}
 
 	// Create channel bar widget
@@ -118,23 +119,23 @@ void UUIManager::InitializeWIOWidgets(UWorldObjectManager* InWorldObjectManager)
 		{
 			WIOChannelBarWidget->AddToViewport(65);
 			WIOChannelBarWidget->SetVisibility(ESlateVisibility::Collapsed);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: WIOChannelBarWidget created"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: WIOChannelBarWidget created"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create WIOChannelBarWidget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create WIOChannelBarWidget"));
 		}
 	}
 	else if (!WIOChannelBarWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: WIOChannelBarWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: WIOChannelBarWidgetClass is not set in Blueprint"));
 	}
 
 	// Bind to WorldObjectManager delegates for automatic UI updates
 	InWorldObjectManager->OnInteractResult.AddDynamic(this, &UUIManager::HandleWIOInteractResult);
 	InWorldObjectManager->OnChannelCancelled.AddDynamic(this, &UUIManager::HandleWIOChannelCancelled);
 
-	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeWIOWidgets - Completed"));
+	UE_LOG(LogGameplay, Log, TEXT("UIManager::InitializeWIOWidgets - Completed"));
 }
 
 void UUIManager::ShowWIOInteractionPrompt(int32 ObjectId)

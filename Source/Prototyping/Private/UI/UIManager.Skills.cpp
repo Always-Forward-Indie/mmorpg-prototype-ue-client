@@ -1,4 +1,5 @@
 #include "UI/UIManager.h"
+#include "Prototyping.h"
 #include "UI/UIManager.h"
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
@@ -82,7 +83,7 @@ void UUIManager::ToggleInventory()
 {
 	if (!bIsInitialized)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: Cannot toggle inventory - not initialized"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: Cannot toggle inventory - not initialized"));
 		return;
 	}
 
@@ -98,7 +99,7 @@ void UUIManager::ToggleInventory()
 		// ��������� ������ � ����� �����
 		UpdateCursorAndInputMode();
 		
-		UE_LOG(LogTemp, Log, TEXT("UIManager: Toggled inventory UI - now %s"), 
+		UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Toggled inventory UI - now %s"), 
 			bInventoryVisible ? TEXT("visible") : TEXT("hidden"));
 	}
 }
@@ -115,26 +116,26 @@ void UUIManager::InitializeExperienceWidget(int32 CharacterId)
 {
 	if (!PlayerInterfaceWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: PlayerInterfaceWidget not created yet"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: PlayerInterfaceWidget not created yet"));
 		return;
 	}
 
 	if (!ExperienceManager)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: ExperienceManager not available for experience widget initialization"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: ExperienceManager not available for experience widget initialization"));
 		return;
 	}
 
 	if (CharacterId <= 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: Invalid character ID for experience widget initialization: %d"), CharacterId);
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: Invalid character ID for experience widget initialization: %d"), CharacterId);
 		return;
 	}
 
 	// Delegate initialization to PlayerInterfaceWidget
 	PlayerInterfaceWidget->InitializeExperienceWidget(ExperienceManager, CharacterId);
 	
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Experience widget initialization delegated to PlayerInterfaceWidget for character %d"), CharacterId);
+	UE_LOG(LogGameplay, Warning, TEXT("UIManager: Experience widget initialization delegated to PlayerInterfaceWidget for character %d"), CharacterId);
 }
 
 void UUIManager::CreateSkillWidgets()
@@ -167,21 +168,21 @@ void UUIManager::CreateSkillWidgets()
 			if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetWorld()->GetGameInstance()))
 			{
 				AvailableSkillsWidget->SkillInitialize(GameInstance);
-				UE_LOG(LogTemp, Warning, TEXT("UIManager: Available skills widget created and initialized"));
+				UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Available skills widget created and initialized"));
 			}
 			else
 			{
-				UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to get GameInstance for available skills widget"));
+				UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to get GameInstance for available skills widget"));
 			}
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create available skills widget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create available skills widget"));
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: AvailableSkillsWidgetClass is not set"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: AvailableSkillsWidgetClass is not set"));
 	}
 }
 
@@ -189,7 +190,7 @@ void UUIManager::InitializeSkillWidgets()
 {
 	if (!SkillManager)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: SkillManager not available for skill widgets initialization"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: SkillManager not available for skill widgets initialization"));
 		return;
 	}
 
@@ -199,14 +200,14 @@ void UUIManager::InitializeSkillWidgets()
 	{
 		// Refresh skill bar to show current skills
 		SkillBarWidget->RefreshAllSlots();
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: Skill bar widget refreshed"));
+		UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Skill bar widget refreshed"));
 	}
 
 	if (AvailableSkillsWidget)
 	{
 		// Refresh available skills list
 		AvailableSkillsWidget->RefreshSkillList();
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: Available skills widget refreshed"));
+		UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Available skills widget refreshed"));
 	}
 }
 
@@ -214,13 +215,13 @@ void UUIManager::ToggleSkillsPanel()
 {
 	if (!bIsInitialized)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: Cannot toggle skills panel - not initialized"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: Cannot toggle skills panel - not initialized"));
 		return;
 	}
 
 	if (!AvailableSkillsWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: Available skills widget not created"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: Available skills widget not created"));
 		return;
 	}
 
@@ -232,18 +233,18 @@ void UUIManager::ToggleSkillsPanel()
 		// ����������: ���������� ShowWidget() ������ SetVisibility(SelfHitTestInvisible)
 		AvailableSkillsWidget->ShowWidget();
 		
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel opened using ShowWidget()"));
+		UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Skills panel opened using ShowWidget()"));
 	}
 	else
 	{
 		// ���������� HideWidget() ��� ������������������
 		AvailableSkillsWidget->HideWidget();
 		
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: Skills panel closed using HideWidget()"));
+		UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Skills panel closed using HideWidget()"));
 	}
 
 	// bSkillsPanelVisible ����� ������������� ��������� ����� OnAvailableSkillsVisibilityChanged
-	UE_LOG(LogTemp, Log, TEXT("UIManager: Skills panel %s"), !bCurrentlyVisible ? TEXT("opened") : TEXT("closed"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Skills panel %s"), !bCurrentlyVisible ? TEXT("opened") : TEXT("closed"));
 }
 
 void UUIManager::HandleSkillsPanelToggle(const FInputActionValue& Value)
@@ -260,13 +261,12 @@ void UUIManager::SetSkillTarget(int32 TargetId, ECasterType TargetType)
 	if (SkillBarWidget)
 	{
 		SkillBarWidget->SetCurrentTarget(TargetId, TargetType);
-		//UE_LOG(LogTemp, Log, TEXT("UIManager: Set skill target to %d (%s)"), TargetId, *UEnum::GetValueAsString(TargetType));
 	}
 }
 
 void UUIManager::SetPlayerController(APlayerController* InPlayerController)
 {
 	PlayerController = InPlayerController;
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: PlayerController reference set successfully"));
+	UE_LOG(LogGameplay, Warning, TEXT("UIManager: PlayerController reference set successfully"));
 }
 

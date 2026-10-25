@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Prototyping.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Mobs/MOBAnimInstance.h"
@@ -52,14 +53,14 @@ void ABasicMOB::SetDead_Implementation(bool bNewDead)
     
     if (bNewDead)
     {
-        UE_LOG(LogTemp, Warning, TEXT("MOB %d has died"), GetActorId_Implementation());
+        UE_LOG(LogGameplay, Warning, TEXT("MOB %d has died"), GetActorId_Implementation());
         OnDeath_Implementation();
     }
 }
 
 void ABasicMOB::OnDeath_Implementation()
 {
-    UE_LOG(LogTemp, Warning, TEXT("MOB %s died"), *MOBData.mobName);
+    UE_LOG(LogGameplay, Warning, TEXT("MOB %s died"), *MOBData.mobName);
     
     // Clear target when dying
     ClearTarget_Implementation();
@@ -77,7 +78,7 @@ void ABasicMOB::SetTarget_Implementation(int32 TargetId, ECasterType TargetType)
     SetMobTargetId(TargetId);
     SetMobTargetType(TargetType == ECasterType::Player ? TEXT("Player") : TEXT("Mob"));
     
-    UE_LOG(LogTemp, Log, TEXT("MOB %d set target: %d (%s)"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("MOB %d set target: %d (%s)"), 
         GetActorId_Implementation(), TargetId, *UEnum::GetValueAsString(TargetType));
 }
 
@@ -90,7 +91,7 @@ void ABasicMOB::ClearTarget_Implementation()
     SetMobTargetId(0);
     SetMobTargetType(TEXT(""));
     
-    UE_LOG(LogTemp, Log, TEXT("MOB %d cleared target"), GetActorId_Implementation());
+    UE_LOG(LogGameplay, Verbose, TEXT("MOB %d cleared target"), GetActorId_Implementation());
 }
 
 void ABasicMOB::SetIsAggressiveState_Implementation(int32 TargetId, ECasterType TargetType, bool bIsAggressive)
@@ -156,7 +157,7 @@ void ABasicMOB::SetIsAggressiveState_Implementation(int32 TargetId, ECasterType 
 		}
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("MOB %d is now %s"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("MOB %d is now %s"), 
 		GetActorId_Implementation(), bIsAggressive ? TEXT("Aggressive") : TEXT("Passive"));
 }
 

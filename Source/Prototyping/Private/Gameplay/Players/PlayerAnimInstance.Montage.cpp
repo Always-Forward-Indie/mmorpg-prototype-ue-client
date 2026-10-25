@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/PlayerAnimInstance.h"
+#include "Prototyping.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Animation/AnimMontage.h"
@@ -49,13 +50,13 @@ float UPlayerAnimInstance::CalcHitDelay(const UAnimMontage* Montage, float PlayR
                 // TriggerTime is in montage-seconds (at PlayRate=1).
                 // Divide by PlayRate to get wall-clock seconds.
                 const float WallClockTime = NotifyEvent.GetTriggerTime() / PlayRate;
-                UE_LOG(LogTemp, Log,
+                UE_LOG(LogGameplay, Verbose,
                     TEXT("[PlayerAnim] HitDelay from notify '%s': montageTime=%.3fs playRate=%.3f wallClock=%.3fs"),
                     *NotifyName.ToString(), NotifyEvent.GetTriggerTime(), PlayRate, WallClockTime);
                 return WallClockTime;
             }
         }
-        UE_LOG(LogTemp, Log,
+        UE_LOG(LogGameplay, Verbose,
             TEXT("[PlayerAnim] No HitPoint notify found in montage '%s', using DefaultHitRatio fallback"),
             *Montage->GetName());
     }

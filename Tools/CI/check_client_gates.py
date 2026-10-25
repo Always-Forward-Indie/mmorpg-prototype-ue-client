@@ -18,6 +18,9 @@ GitHub-hosted runners:
 5. Codebook coverage (S3a): every Get*DisplayName codebook getter must be
    called by at least one spec, and every Config/Localization/*.csv must
    parse with unique spaceless non-empty slugs.
+6. No LogTemp (S01): no UE_LOG(LogTemp in Source/Prototyping — use the
+   project categories from Source/Prototyping/Prototyping.h
+   (LogConnection / LogNetPacket / LogPing / LogGameplay / LogGameAudio).
 
 Exit 0 = all green, exit 1 = red (blocks the PR).
 Usage: python3 Tools/CI/check_client_gates.py [--root <repo root>]
@@ -160,6 +163,20 @@ def main() -> int:
                     failures.append(f"codebook csv: {csv_path.name} duplicate slug: {slug!r}")
                     break
                 seen.add(slug)
+
+    # 6. No LogTemp (S01): every UE_LOG must use a project category.
+    logtemp_re = re.compile(r"UE_LOG\s*\(\s*LogTemp\b")
+    for path in sorted(src.rglob("*.cpp")) + sorted(src.rglob("*.h")):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            failures.append(f"cannot read {path}: {exc}")
+            continue
+        if logtemp_re.search(text):
+            failures.append(
+                f"LogTemp banned: {path.relative_to(root).as_posix()} uses "
+                "UE_LOG(LogTemp — use LogConnection/LogNetPacket/LogPing/LogGameplay/LogAudio"
+            )
 
     if failures:
         print("CLIENT GATES: FAIL")

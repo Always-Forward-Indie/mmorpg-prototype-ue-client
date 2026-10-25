@@ -1,4 +1,5 @@
 #include "UI/EquipmentWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "Components/Button.h"
@@ -189,7 +190,7 @@ void UEquipmentWidget::HandleEquipmentStateChanged(const FEquipmentStateData& St
 void UEquipmentWidget::HandleEquipResultReceived(const FEquipResultData& Result)
 {
     if (!Result.errorCode.IsEmpty())
-        UE_LOG(LogTemp, Warning, TEXT("EquipmentWidget: equip error - %s"), *Result.errorCode);
+        UE_LOG(LogGameplay, Warning, TEXT("EquipmentWidget: equip error - %s"), *Result.errorCode);
 }
 
 void UEquipmentWidget::HandleCloseButtonClicked()
@@ -215,13 +216,13 @@ void UEquipmentWidget::HandleUnequipRequested(const FString& SlotSlug)
 {
     if (!EquipmentManager || !InventoryManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("EquipmentWidget: cannot unequip '%s' - managers not bound"), *SlotSlug);
+        UE_LOG(LogGameplay, Error, TEXT("EquipmentWidget: cannot unequip '%s' - managers not bound"), *SlotSlug);
         return;
     }
     const int32 CharacterId = InventoryManager->GetInventory().characterId;
     if (CharacterId <= 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("EquipmentWidget: cannot unequip '%s' - invalid characterId"), *SlotSlug);
+        UE_LOG(LogGameplay, Error, TEXT("EquipmentWidget: cannot unequip '%s' - invalid characterId"), *SlotSlug);
         return;
     }
     EquipmentManager->RequestUnequipItem(CharacterId, SlotSlug);

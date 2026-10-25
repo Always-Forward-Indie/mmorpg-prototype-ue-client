@@ -1,4 +1,5 @@
 #include "Gameplay/Trade/TradeNetworkHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/Trade/TradeManager.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
@@ -10,7 +11,7 @@ void UTradeNetworkHandler::Initialize(UTradeManager* InTradeManager, UNetworkMan
 {
     if (!InTradeManager || !InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("TradeNetworkHandler: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("TradeNetworkHandler: Initialize called with null parameters"));
         return;
     }
     TradeManager   = InTradeManager;

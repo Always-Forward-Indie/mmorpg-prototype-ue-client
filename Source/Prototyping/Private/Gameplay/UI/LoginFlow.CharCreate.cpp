@@ -1,6 +1,7 @@
 // Login Flow Widget — Implementation
 
 #include "Gameplay/UI/LoginFlowWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/UI/DeleteConfirmWidget.h"
 #include "MyGameInstance.h"
 #include "Authentication/AuthenticationManager.h"
@@ -45,7 +46,7 @@ void ULoginFlowWidget::HandleCharCreateClicked()
 
 	if (ClassSlug.IsEmpty() || RaceSlug.IsEmpty() || GenderSlug.IsEmpty())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HandleCharCreateClicked: slug lookup failed — Class='%s' Race='%s' GenderLabel='%s'"),
+		UE_LOG(LogGameplay, Warning, TEXT("HandleCharCreateClicked: slug lookup failed — Class='%s' Race='%s' GenderLabel='%s'"),
 			*ClassName, *RaceName, *GenderLabel);
 		SetError(CharCreate_ErrorText, NSLOCTEXT("LoginFlow", "FillAllFields", "Please fill in all fields."));
 		return;

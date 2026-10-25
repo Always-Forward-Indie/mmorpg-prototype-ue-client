@@ -1,4 +1,5 @@
 #include "Gameplay/Combat/BaseMMOProjectile.h"
+#include "Prototyping.h"
 
 #include "Components/SphereComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
@@ -51,7 +52,7 @@ void ABaseMMOProjectile::BeginPlay()
 {
     Super::BeginPlay();
 
-    UE_LOG(LogTemp, Warning, TEXT("[Projectile] BeginPlay: actor='%s' instigator='%s' collision='%s'"),
+    UE_LOG(LogGameplay, Warning, TEXT("[Projectile] BeginPlay: actor='%s' instigator='%s' collision='%s'"),
         *GetName(),
         GetInstigator() ? *GetInstigator()->GetName() : TEXT("NULL"),
         *CollisionSphere->GetCollisionProfileName().ToString());
@@ -81,7 +82,7 @@ void ABaseMMOProjectile::BeginPlay()
         {
             if (WeakSelf.IsValid() && !WeakSelf->IsPendingKillPending())
             {
-                UE_LOG(LogTemp, Warning, TEXT("[Projectile] LIFETIME EXPIRED — overlap never fired! actor='%s' bHasHit=%d"),
+                UE_LOG(LogGameplay, Warning, TEXT("[Projectile] LIFETIME EXPIRED — overlap never fired! actor='%s' bHasHit=%d"),
                     *WeakSelf->GetName(), (int)WeakSelf->bHasHit);
                 WeakSelf->Destroy();
             }
@@ -94,7 +95,7 @@ void ABaseMMOProjectile::SetupProjectile(const FString& InSkillSlug, int32 InCas
     SkillSlug = InSkillSlug;
     CasterId  = InCasterId;
 
-    UE_LOG(LogTemp, Warning, TEXT("[Projectile] SetupProjectile: skill='%s' casterId=%d target='%s' speed=%.0f"),
+    UE_LOG(LogGameplay, Warning, TEXT("[Projectile] SetupProjectile: skill='%s' casterId=%d target='%s' speed=%.0f"),
         *InSkillSlug, InCasterId,
         IsValid(InTarget) ? *InTarget->GetName() : TEXT("NULL — straight-line flight, overlap uses ICombatable check"),
         Speed);
@@ -108,13 +109,13 @@ void ABaseMMOProjectile::SetupProjectile(const FString& InSkillSlug, int32 InCas
         if (USceneComponent* TargetRoot = InTarget->GetRootComponent())
         {
             ProjectileMovement->HomingTargetComponent = TargetRoot;
-            UE_LOG(LogTemp, Warning, TEXT("[Projectile] Homing enabled → target root component: '%s'"),
+            UE_LOG(LogGameplay, Warning, TEXT("[Projectile] Homing enabled → target root component: '%s'"),
                 *TargetRoot->GetName());
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("[Projectile] No homing target — projectile flies straight. Overlap will fire on ANY ICombatable."));
+        UE_LOG(LogGameplay, Warning, TEXT("[Projectile] No homing target — projectile flies straight. Overlap will fire on ANY ICombatable."));
     }
 
     float UseSpeed = (Speed > 0.0f) ? Speed : DefaultSpeed;
@@ -183,7 +184,7 @@ void ABaseMMOProjectile::SetupProjectile(const FString& InSkillSlug, int32 InCas
             const float Dist = FVector::Dist(WeakSelf->GetActorLocation(), WeakTarget->GetActorLocation());
             if (Dist < 200.0f)
             {
-                UE_LOG(LogTemp, Warning, TEXT("[Projectile] Proximity force-hit at dist=%.0f"), Dist);
+                UE_LOG(LogGameplay, Warning, TEXT("[Projectile] Proximity force-hit at dist=%.0f"), Dist);
                 WeakSelf->OnProjectileImpact(WeakSelf->GetActorLocation());
             }
         }, 0.1f, true);
@@ -193,7 +194,7 @@ void ABaseMMOProjectile::SetupProjectile(const FString& InSkillSlug, int32 InCas
 void ABaseMMOProjectile::OnSphereBeginOverlap(UPrimitiveComponent* /*OverlappedComponent*/, AActor* OtherActor,
     UPrimitiveComponent* OtherComp, int32 /*OtherBodyIndex*/, bool /*bFromSweep*/, const FHitResult& /*SweepResult*/)
 {
-    UE_LOG(LogTemp, Warning, TEXT("[Projectile] OnSphereBeginOverlap: other='%s' comp='%s' bHasHit=%d targetValid=%d"),
+    UE_LOG(LogGameplay, Warning, TEXT("[Projectile] OnSphereBeginOverlap: other='%s' comp='%s' bHasHit=%d targetValid=%d"),
         IsValid(OtherActor) ? *OtherActor->GetName() : TEXT("NULL"),
         OtherComp         ? *OtherComp->GetName()   : TEXT("NULL"),
         (int)bHasHit,
@@ -205,7 +206,7 @@ void ABaseMMOProjectile::OnSphereBeginOverlap(UPrimitiveComponent* /*OverlappedC
     // If we have a specific target, only react to that actor to prevent early detonation
     if (TargetActor.IsValid() && OtherActor != TargetActor.Get())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[Projectile] Overlap SKIPPED — not our homing target (target='%s')"),
+        UE_LOG(LogGameplay, Warning, TEXT("[Projectile] Overlap SKIPPED — not our homing target (target='%s')"),
             *TargetActor.Get()->GetName());
         return;
     }
@@ -215,18 +216,18 @@ void ABaseMMOProjectile::OnSphereBeginOverlap(UPrimitiveComponent* /*OverlappedC
     {
         const bool bIsCombatable = OtherActor->GetClass()->ImplementsInterface(UCombatable::StaticClass())
             || OtherActor->Implements<UCombatable>();
-        UE_LOG(LogTemp, Warning, TEXT("[Projectile] No homing target — bIsCombatable=%d for '%s'"),
+        UE_LOG(LogGameplay, Warning, TEXT("[Projectile] No homing target — bIsCombatable=%d for '%s'"),
             (int)bIsCombatable, *OtherActor->GetName());
         if (!bIsCombatable) return;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[Projectile] IMPACT accepted → calling OnProjectileImpact"));
+    UE_LOG(LogGameplay, Warning, TEXT("[Projectile] IMPACT accepted → calling OnProjectileImpact"));
     OnProjectileImpact(GetActorLocation());
 }
 
 void ABaseMMOProjectile::OnProjectileImpact(const FVector& ImpactLocation)
 {
-    UE_LOG(LogTemp, Warning, TEXT("[Projectile] OnProjectileImpact: skill='%s' loc=(%.0f,%.0f,%.0f)"),
+    UE_LOG(LogGameplay, Warning, TEXT("[Projectile] OnProjectileImpact: skill='%s' loc=(%.0f,%.0f,%.0f)"),
         *SkillSlug, ImpactLocation.X, ImpactLocation.Y, ImpactLocation.Z);
 
     bHasHit = true;

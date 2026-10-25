@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/MOBManager.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "CrashDiagnostics.h"
@@ -25,11 +26,11 @@ void UMOBManager::Initialize(UNetworkManager* NetworkManager)
 
 	if (gameInstance)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("GameInstance found"));
+		UE_LOG(LogGameplay, Warning, TEXT("GameInstance found"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("GameInstance not found"));
+		UE_LOG(LogGameplay, Error, TEXT("GameInstance not found"));
 	}
 }
 
@@ -43,11 +44,11 @@ void UMOBManager::SubscribeToNetworkManager()
 {
 	if (networkManager != nullptr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Network Manager found and subscribed to ChunkServerResponse delegate"));
+		UE_LOG(LogGameplay, Warning, TEXT("Network Manager found and subscribed to ChunkServerResponse delegate"));
 
 		if (IsValid(networkManager))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Network Manager is valid"));
+			UE_LOG(LogGameplay, Warning, TEXT("Network Manager is valid"));
 
 			// Subscribe to the network manager's events for chunk server data
 			networkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UMOBManager::ProcessGameServerData);
@@ -55,12 +56,12 @@ void UMOBManager::SubscribeToNetworkManager()
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("Network Manager is not valid"));
+			UE_LOG(LogGameplay, Error, TEXT("Network Manager is not valid"));
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("Network manager not found"));
+		UE_LOG(LogGameplay, Error, TEXT("Network manager not found"));
 	}
 }
 

@@ -1,4 +1,5 @@
 #include "DevMode/DevModeBotBrain.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeConsoleCommands.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -54,7 +55,7 @@ bool UDevModeBotBrain::Tick_CharList(UWorld* World, ABasicPlayer* Player, double
             FClientDataStruct ClientData = GameInstance->GetCurrentClientData();
             Auth->SendCharacterListRequest(ClientData);
             bListReqSent = true;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT character list requested"));
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT character list requested"));
             return true;
         }
         if (CharListCache.Num() > 0)
@@ -88,7 +89,7 @@ bool UDevModeBotBrain::Tick_CharCreate(UWorld* World, ABasicPlayer* Player, doub
         if (!CreateError.IsEmpty())
         {
             BotAssert(false, TEXT("char-created"), 0, 1);
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT create failed: %s"), *CreateError);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT create failed: %s"), *CreateError);
             Finish(false, TEXT("create-failed"));
             return true;
         }
@@ -139,7 +140,7 @@ bool UDevModeBotBrain::Tick_CharCreate(UWorld* World, ABasicPlayer* Player, doub
         {
             Auth->SendCreateCharacterRequest(CharName, TEXT("warrior"), TEXT("human"), TEXT("male"));
             bCreateSent = true;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT create requested '%s'"), *CharName);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT create requested '%s'"), *CharName);
         }
         if (Now - FlowLegStartTime > FlowTimeoutSec)
         {
@@ -159,7 +160,7 @@ bool UDevModeBotBrain::Tick_CharDelete(UWorld* World, ABasicPlayer* Player, doub
         if (!DeleteError.IsEmpty())
         {
             BotAssert(false, TEXT("char-deleted"), 0, 1);
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT delete failed: %s"), *DeleteError);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT delete failed: %s"), *DeleteError);
             Finish(false, TEXT("delete-failed"));
             return true;
         }
@@ -168,7 +169,7 @@ bool UDevModeBotBrain::Tick_CharDelete(UWorld* World, ABasicPlayer* Player, doub
             Auth->SendDeleteCharacterRequest(NewCharId);
             bDeleteSent = true;
             bListReqSent = false;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT delete requested id=%d"), NewCharId);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT delete requested id=%d"), NewCharId);
             return true;
         }
         if (!bListReqSent)
@@ -210,7 +211,7 @@ bool UDevModeBotBrain::Tick_BackToLogin(UWorld* World, ABasicPlayer* Player, dou
         {
             GameInstance->ReturnToLoginLevel();
             bLoginTravelSent = true;
-            UE_LOG(LogTemp, Warning, TEXT("%s returning to login"), *TombstonePrefix);
+            UE_LOG(LogGameplay, Warning, TEXT("%s returning to login"), *TombstonePrefix);
             TWeakObjectPtr<UDevModeBotBrain> WeakThis(this);
             const double WatchStart = FPlatformTime::Seconds();
             FTSTicker::GetCoreTicker().RemoveTicker(LoginWatchdogHandle);

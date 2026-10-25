@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -125,7 +126,7 @@ void ABasicPlayer::SetLockedTarget(ABasicMOB* NewTarget)
         }
 
         FaceLockedTarget();
-        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Locked target -> MOB %d (%s)"),
+        UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Locked target -> MOB %d (%s)"),
             MobId, *LockedTarget->GetMobName());
     }
 
@@ -145,7 +146,7 @@ void ABasicPlayer::ClearLockedTarget()
         {
             LockedTarget->MobHeadInfo->ShowWidget(false);
         }
-        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Cleared locked target"));
+        UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Cleared locked target"));
     }
 
     LockedTarget = nullptr;
@@ -211,7 +212,7 @@ void ABasicPlayer::SetLockedPlayerTarget(ABasicPlayer* NewTarget)
                 nullptr); // no icon
         }
 
-        UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Locked player target -> Player %d (%s)"),
+        UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Locked player target -> Player %d (%s)"),
             PlayerId, *LockedPlayerTarget->playerData.characterData.characterName);
     }
 

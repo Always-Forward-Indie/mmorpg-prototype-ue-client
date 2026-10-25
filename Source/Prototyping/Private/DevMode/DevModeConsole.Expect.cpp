@@ -1,4 +1,5 @@
 #include "DevMode/DevModeConsoleCommands.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeBotBrain.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Mobs/MOBManager.h"
@@ -23,7 +24,7 @@ void UDevModeConsoleCommands::Cmd_Expect(const TArray<FString>& Args) const
 {
     if (Args.Num() < 3)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.expect <hp|mobs|inv|gold> <eq|ne|gt|lt|ge|le> <Value>"));
+        UE_LOG(LogGameplay, Warning, TEXT("Usage: devmode.expect <hp|mobs|inv|gold> <eq|ne|gt|lt|ge|le> <Value>"));
         return;
     }
     ExpectValue(Args[0].ToLower(), Args[1].ToLower(), FCString::Atoi(*Args[2]));
@@ -71,7 +72,7 @@ void UDevModeConsoleCommands::ExpectValue(const FString& Key, const FString& Op,
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_ASSERT FAIL unknown-key '%s'"), *Key);
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_ASSERT FAIL unknown-key '%s'"), *Key);
         ++SweepFailures;
         return;
     }
@@ -85,18 +86,18 @@ void UDevModeConsoleCommands::ExpectValue(const FString& Key, const FString& Op,
     else if (Op == TEXT("le")) bPass = (Actual <= Expected);
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_ASSERT FAIL unknown-op '%s'"), *Op);
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_ASSERT FAIL unknown-op '%s'"), *Op);
         ++SweepFailures;
         return;
     }
 
     if (bPass)
     {
-        UE_LOG(LogTemp, Log, TEXT("DEVMODE_ASSERT PASS %s %s %d actual=%d"), *Key, *Op, Expected, Actual);
+        UE_LOG(LogGameplay, Verbose, TEXT("DEVMODE_ASSERT PASS %s %s %d actual=%d"), *Key, *Op, Expected, Actual);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_ASSERT FAIL %s %s %d actual=%d"), *Key, *Op, Expected, Actual);
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_ASSERT FAIL %s %s %d actual=%d"), *Key, *Op, Expected, Actual);
         ++SweepFailures;
     }
 }
@@ -108,7 +109,7 @@ void UDevModeConsoleCommands::Cmd_SetMobHP(const TArray<FString>& Args) const
 {
     if (Args.Num() < 2)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.setmobhp <MobUID> <Value>"));
+        UE_LOG(LogGameplay, Warning, TEXT("Usage: devmode.setmobhp <MobUID> <Value>"));
         return;
     }
     if (!GameInstance || !GameInstance->MOBManager) return;
@@ -117,7 +118,7 @@ void UDevModeConsoleCommands::Cmd_SetMobHP(const TArray<FString>& Args) const
     ABasicMOB* Mob = Cast<ABasicMOB>(MobActor);
     if (!Mob)
     {
-        UE_LOG(LogTemp, Warning, TEXT("devmode.setmobhp: Mob UID=%s not found"), *Args[0]);
+        UE_LOG(LogGameplay, Warning, TEXT("devmode.setmobhp: Mob UID=%s not found"), *Args[0]);
         return;
     }
 
@@ -127,7 +128,7 @@ void UDevModeConsoleCommands::Cmd_SetMobHP(const TArray<FString>& Args) const
     {
         Mob->Die();
     }
-    UE_LOG(LogTemp, Log, TEXT("devmode.setmobhp: Mob UID=%s HP set to %d"), *Args[0], NewHP);
+    UE_LOG(LogGameplay, Verbose, TEXT("devmode.setmobhp: Mob UID=%s HP set to %d"), *Args[0], NewHP);
 }
 
 // ============================================================================
@@ -160,11 +161,11 @@ void UDevModeConsoleCommands::Cmd_KillMob(const TArray<FString>& Args) const
 
     if (!Target)
     {
-        UE_LOG(LogTemp, Warning, TEXT("devmode.killmob: no living mob found"));
+        UE_LOG(LogGameplay, Warning, TEXT("devmode.killmob: no living mob found"));
         return;
     }
     Target->Die();
-    UE_LOG(LogTemp, Log, TEXT("devmode.killmob: mob '%s' killed"), *Target->GetMobName());
+    UE_LOG(LogGameplay, Verbose, TEXT("devmode.killmob: mob '%s' killed"), *Target->GetMobName());
 }
 
 // ============================================================================
@@ -175,7 +176,7 @@ void UDevModeConsoleCommands::Cmd_ClearCorpses(const TArray<FString>& Args) cons
     UWorld* World = GameInstance ? GameInstance->GetWorld() : nullptr;
     if (!World)
     {
-        UE_LOG(LogTemp, Warning, TEXT("devmode.clearcorpses: No world"));
+        UE_LOG(LogGameplay, Warning, TEXT("devmode.clearcorpses: No world"));
         return;
     }
     int32 Removed = 0;
@@ -192,6 +193,6 @@ void UDevModeConsoleCommands::Cmd_ClearCorpses(const TArray<FString>& Args) cons
         A->Destroy();
         ++Removed;
     }
-    UE_LOG(LogTemp, Log, TEXT("devmode.clearcorpses: destroyed %d corpses"), Removed);
+    UE_LOG(LogGameplay, Verbose, TEXT("devmode.clearcorpses: destroyed %d corpses"), Removed);
 }
 

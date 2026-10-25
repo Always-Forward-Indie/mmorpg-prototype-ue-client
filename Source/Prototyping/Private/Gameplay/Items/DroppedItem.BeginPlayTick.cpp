@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Items/DroppedItemActor.h"
+#include "Prototyping.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "Gameplay/Mobs/BasicMOB.h"
@@ -191,7 +192,7 @@ void ADroppedItemActor::Tick(float DeltaTime)
 					ItemMesh->SetRelativeRotation(VisualData.GroundRotation, false, nullptr, ETeleportType::ResetPhysics);
 
 					// Log the actual rotation after setting it
-					UE_LOG(LogTemp, Warning, TEXT("Final rotation set for item %s - Target: %s, Actual Relative: %s, Actual World: %s"),
+					UE_LOG(LogGameplay, Warning, TEXT("Final rotation set for item %s - Target: %s, Actual Relative: %s, Actual World: %s"),
 						*ItemData.item.name,
 						*VisualData.GroundRotation.ToString(),
 						*ItemMesh->GetRelativeRotation().ToString(),
@@ -212,12 +213,12 @@ void ADroppedItemActor::Tick(float DeltaTime)
 						FMath::RandRange(-5.0f, 5.0f)   // Small roll variation
 					);
 					ItemMesh->SetRelativeRotation(DefaultRotation);
-					UE_LOG(LogTemp, Warning, TEXT("Using default rotation for item %s: %s"),
+					UE_LOG(LogGameplay, Warning, TEXT("Using default rotation for item %s: %s"),
 						*ItemData.item.name, *DefaultRotation.ToString());
 				}
 			}
 
-			UE_LOG(LogTemp, Warning, TEXT("Drop animation complete for item %s"), *ItemData.item.name);
+			UE_LOG(LogGameplay, Warning, TEXT("Drop animation complete for item %s"), *ItemData.item.name);
 		}
 	}
 }

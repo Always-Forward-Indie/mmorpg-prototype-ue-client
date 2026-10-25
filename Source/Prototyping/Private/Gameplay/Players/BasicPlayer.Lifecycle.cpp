@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -90,10 +91,10 @@ Super::BeginPlay();
    MyGameInstance = Cast<UMyGameInstance>(UGameplayStatics::GetGameInstance(this));
    if (MyGameInstance)
    {
-       UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] BasicPlayer::BeginPlay вЂ” CharID=%d isOtherClient=%d Pos=(%.0f,%.0f,%.0f)"),
+       UE_LOG(LogGameplay, Warning, TEXT("[LOADSEQ] BasicPlayer::BeginPlay вЂ” CharID=%d isOtherClient=%d Pos=(%.0f,%.0f,%.0f)"),
            playerData.characterData.characterId, (int)playerData.isOtherClient,
            GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z);
-        UE_LOG(LogTemp, Warning, TEXT("GameInstance found"));
+        UE_LOG(LogGameplay, Warning, TEXT("GameInstance found"));
 
         // Route the player's AudioComponent through the SFX SoundClass
         if (AudioComponent && MyGameInstance->AudioManager && MyGameInstance->AudioManager->SFXClass)
@@ -135,16 +136,16 @@ Super::BeginPlay();
                 CombatableInterface.SetInterface(this);
                 
                 CombatManager->RegisterCombatable(CombatableInterface);
-                UE_LOG(LogTemp, Warning, TEXT("Player %d registered with combat system"), GetActorId_Implementation());
+                UE_LOG(LogGameplay, Warning, TEXT("Player %d registered with combat system"), GetActorId_Implementation());
             }
         }
     }
     else
     {
-		UE_LOG(LogTemp, Error, TEXT("GameInstance not found"));
+		UE_LOG(LogGameplay, Error, TEXT("GameInstance not found"));
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("Player Was Created"));
+	UE_LOG(LogGameplay, Warning, TEXT("Player Was Created"));
 
 	// Bind emote-ended delegate so movement unlocks when the emote finishes
 	if (!playerData.isOtherClient && EmoteComponent)
@@ -197,7 +198,7 @@ Super::BeginPlay();
 				HarvestManager->SubscribeToNetworkManager();
 			}
 
-			UE_LOG(LogTemp, Warning, TEXT("HarvestManager initialized for local player"));
+			UE_LOG(LogGameplay, Warning, TEXT("HarvestManager initialized for local player"));
 		}
 
 		// Initialize UI manager with slight delay to ensure everything is ready
@@ -263,10 +264,10 @@ Super::BeginPlay();
 					if (PC)
 					{
 						UIManager->SetPlayerController(PC);
-						UE_LOG(LogTemp, Warning, TEXT("UIManager: PlayerController set during initialization"));
+						UE_LOG(LogGameplay, Warning, TEXT("UIManager: PlayerController set during initialization"));
 
 						UIManager->InitFTCManager(PC);
-						UE_LOG(LogTemp, Warning, TEXT("UIManager: Init called for FCT system"));
+						UE_LOG(LogGameplay, Warning, TEXT("UIManager: Init called for FCT system"));
 
                         PlayerHUD = UIManager->GetPlayerInterfaceWidget()->GetPlayerHUD();
 
@@ -290,10 +291,10 @@ Super::BeginPlay();
 					}
 					else
 					{
-						UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to get PlayerController during initialization"));
+						UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to get PlayerController during initialization"));
 					}
 					
-					UE_LOG(LogTemp, Warning, TEXT("UIManager initialized with all managers including SkillManager"));
+					UE_LOG(LogGameplay, Warning, TEXT("UIManager initialized with all managers including SkillManager"));
 
 					// Initialize experience widget for this character.
 					// ExperienceManager already has correct progression data
@@ -303,7 +304,7 @@ Super::BeginPlay();
 					{
 						UIManager->InitializeExperienceWidget(playerData.characterData.characterId);
 
-						UE_LOG(LogTemp, Warning, TEXT("ExperienceWidget initialized for character %d"), 
+						UE_LOG(LogGameplay, Warning, TEXT("ExperienceWidget initialized for character %d"), 
 							playerData.characterData.characterId);
 					}
 
@@ -311,7 +312,7 @@ Super::BeginPlay();
 					if (SkillManager)
 					{
 						UIManager->InitializeSkillWidgets();
-						UE_LOG(LogTemp, Warning, TEXT("Skill widgets initialized"));
+						UE_LOG(LogGameplay, Warning, TEXT("Skill widgets initialized"));
 					}
 
 				// Bind dialogue and quest widgets to their managers
@@ -363,7 +364,7 @@ Super::BeginPlay();
 				if (MyGameInstance && MyGameInstance->GetBestiaryNetworkHandler())
 					{
 						UIManager->InitializeNotificationSystem(MyGameInstance->GetBestiaryNetworkHandler());
-						UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: WorldNotificationManager initialized"));
+						UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: WorldNotificationManager initialized"));
 
 						// Request the bestiary overview so the mob list is populated on login.
 						// Skipped in DevMode offline (no chunk to ask — avoids an
@@ -372,7 +373,7 @@ Super::BeginPlay();
 						{
 							MyGameInstance->GetBestiaryNetworkHandler()->RequestBestiaryOverview(
 								playerData.characterData.characterId);
-							UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Requested bestiary overview for character %d"),
+							UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: Requested bestiary overview for character %d"),
 								playerData.characterData.characterId);
 						}
 					}
@@ -381,21 +382,21 @@ Super::BeginPlay();
 				if (MyGameInstance && MyGameInstance->GetWorldObjectManager())
 				{
 					UIManager->InitializeWIOWidgets(MyGameInstance->GetWorldObjectManager());
-					UE_LOG(LogTemp, Log, TEXT("BasicPlayer: WIO widgets initialized"));
+					UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: WIO widgets initialized"));
 				}
 
 			// Subscribe to weight status and initialize equipment visuals
 				if (UEquipmentManager* EqMgr = MyGameInstance ? MyGameInstance->GetEquipmentManager() : nullptr)
 				{
 					EqMgr->OnWeightStatusChangedDelegate.AddDynamic(this, &ABasicPlayer::HandleWeightStatusChanged);
-					UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Subscribed to weight status events"));
+					UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Subscribed to weight status events"));
 
 					// Initialize equipment visual component so equipped items appear on the mesh
 					if (EquipmentVisualComponent)
 					{
 						UItemManager* ItemMgr = MyGameInstance->GetItemManager();
 						EquipmentVisualComponent->Initialize(EqMgr, ItemMgr);
-						UE_LOG(LogTemp, Log, TEXT("BasicPlayer: EquipmentVisualComponent initialized"));
+						UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: EquipmentVisualComponent initialized"));
 					}
 
 					// Bind cosmetic component to live equipment manager so visibility
@@ -403,7 +404,7 @@ Super::BeginPlay();
 					if (CosmeticVisualComponent)
 					{
 						CosmeticVisualComponent->BindEquipmentManager(EqMgr);
-						UE_LOG(LogTemp, Log, TEXT("BasicPlayer: CosmeticVisualComponent bound to EquipmentManager"));
+						UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: CosmeticVisualComponent bound to EquipmentManager"));
 					}
 
 					// Explicitly request equipment state from server.
@@ -414,7 +415,7 @@ Super::BeginPlay();
 					if (playerData.characterData.characterId > 0)
 					{
 						EqMgr->RequestGetEquipment(playerData.characterData.characterId);
-						UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Requested equipment state for character %d"),
+						UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Requested equipment state for character %d"),
 							playerData.characterData.characterId);
 					}
 				}
@@ -446,7 +447,7 @@ Super::BeginPlay();
 				// render thread has already received the widget before we signal
 				// the loading-screen countdown to start.
 				UIManager->OnUIManagerInitialized.AddDynamic(this, &ABasicPlayer::HandleUIManagerInitialized);
-				UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] UIInitTimer: subscribed to OnUIManagerInitialized"));
+				UE_LOG(LogGameplay, Warning, TEXT("[LOADSEQ] UIInitTimer: subscribed to OnUIManagerInitialized"));
 
 				// Fallback: if the Slate NativeTick broadcast never arrives (window
 				// throttled while the loading screen is up), drive the gate directly.
@@ -454,7 +455,7 @@ Super::BeginPlay();
 				GetWorld()->GetTimerManager().SetTimer(UIInitFallbackTimerHandle, [this]()
 				{
 					if (playerData.isOtherClient || bUIInitDone) { return; }
-					UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] UIInitFallback: NativeTick signal missing — firing HandleUIManagerInitialized directly"));
+					UE_LOG(LogGameplay, Warning, TEXT("[LOADSEQ] UIInitFallback: NativeTick signal missing — firing HandleUIManagerInitialized directly"));
 					HandleUIManagerInitialized();
 				}, 3.0f, false);
                 

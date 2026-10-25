@@ -1,4 +1,5 @@
 #include "Gameplay/Emotes/EmoteManager.h"
+#include "Prototyping.h"
 
 // ---------------------------------------------------------------------------
 // Definitions
@@ -14,7 +15,7 @@ void UEmoteManager::LoadDefinitions(const TArray<FEmoteDefinitionData>& InDefini
             Definitions.Add(Def.slug, Def);
         }
     }
-    UE_LOG(LogTemp, Log, TEXT("EmoteManager: loaded %d emote definitions"), Definitions.Num());
+    UE_LOG(LogGameplay, Verbose, TEXT("EmoteManager: loaded %d emote definitions"), Definitions.Num());
 }
 
 TArray<FEmoteDefinitionData> UEmoteManager::GetAllDefinitions() const
@@ -45,7 +46,7 @@ bool UEmoteManager::GetDefinitionBySlug(const FString& Slug, FEmoteDefinitionDat
 void UEmoteManager::ApplyPlayerEmotes(const FPlayerEmotesState& InState)
 {
     CachedPlayerEmotes = InState;
-    UE_LOG(LogTemp, Log, TEXT("EmoteManager: applied %d emotes for character %d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("EmoteManager: applied %d emotes for character %d"),
         InState.emotes.Num(), InState.characterId);
     OnPlayerEmotesLoaded.Broadcast(CachedPlayerEmotes);
 }

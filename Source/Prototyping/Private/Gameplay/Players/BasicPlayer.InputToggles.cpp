@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -146,7 +147,7 @@ void ABasicPlayer::LockMovementForPickup()
     StopAutoAttack();
 
     LockMovement();
-    UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Movement locked for pickup"));
+    UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: Movement locked for pickup"));
 
     // Safety timeout: unlock movement after 5s even if the pickup chain fails
     if (UWorld* World = GetWorld())
@@ -167,7 +168,7 @@ void ABasicPlayer::UnlockMovementAfterPickup()
     }
 
     UnlockMovement();
-    UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Movement unlocked after pickup"));
+    UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: Movement unlocked after pickup"));
 }
 
 void ABasicPlayer::LockMovement()
@@ -204,7 +205,7 @@ void ABasicPlayer::UnlockMovement()
 
 void ABasicPlayer::OnInventoryToggle()
 {
-    UE_LOG(LogTemp, Warning, TEXT("Inventory toggle pressed"));
+    UE_LOG(LogGameplay, Warning, TEXT("Inventory toggle pressed"));
     
     if (InventoryManager)
     {
@@ -212,13 +213,13 @@ void ABasicPlayer::OnInventoryToggle()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("Inventory manager not found"));
+        UE_LOG(LogGameplay, Warning, TEXT("Inventory manager not found"));
     }
 }
 
 void ABasicPlayer::OnSkillsPanelToggle()
 {
-    UE_LOG(LogTemp, Warning, TEXT("Skills panel toggle pressed"));
+    UE_LOG(LogGameplay, Warning, TEXT("Skills panel toggle pressed"));
     
     if (UIManager)
     {
@@ -226,7 +227,7 @@ void ABasicPlayer::OnSkillsPanelToggle()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("UI manager not found"));
+        UE_LOG(LogGameplay, Warning, TEXT("UI manager not found"));
     }
 }
 

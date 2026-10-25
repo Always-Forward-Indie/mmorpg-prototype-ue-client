@@ -1,4 +1,5 @@
 #include "UI/UIManager.h"
+#include "Prototyping.h"
 #include "UI/UIManager.h"
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
@@ -103,16 +104,16 @@ void UUIManager::CreateHarvestWidgets()
 				HarvestManager->SetHarvestProgressWidget(HarvestProgressWidget);
 			}
 			
-			UE_LOG(LogTemp, Warning, TEXT("UIManager: Harvest progress widget created and forcibly hidden"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Harvest progress widget created and forcibly hidden"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create harvest progress widget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create harvest progress widget"));
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: HarvestProgressWidgetClass is not set"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: HarvestProgressWidgetClass is not set"));
 	}
 
 	// Create harvest loot widget
@@ -142,16 +143,16 @@ void UUIManager::CreateHarvestWidgets()
 			// Bind to harvest loot visibility events
 			HarvestLootWidget->OnHarvestLootVisibilityChanged.AddDynamic(this, &UUIManager::OnHarvestLootVisibilityChanged);
 			
-			UE_LOG(LogTemp, Warning, TEXT("UIManager: Harvest loot widget created and forcibly hidden"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Harvest loot widget created and forcibly hidden"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create harvest loot widget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create harvest loot widget"));
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: HarvestLootWidgetClass is not set"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: HarvestLootWidgetClass is not set"));
 	}
 }
 
@@ -220,12 +221,12 @@ void UUIManager::CreateGameVersionWidget()
 {
 	if (!GameVersionWidgetClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager: GameVersionWidgetClass is not set"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager: GameVersionWidgetClass is not set"));
 		return;
 	}
 	if (GameVersionWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: Game version widget already exists, removing old one"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: Game version widget already exists, removing old one"));
 		GameVersionWidget->RemoveFromParent();
 		GameVersionWidget = nullptr;
 	}
@@ -233,19 +234,19 @@ void UUIManager::CreateGameVersionWidget()
 	GameVersionWidget = CreateWidget<UGameVersionWidget>(GetWorld(), GameVersionWidgetClass);
 	if (!GameVersionWidget)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create game version widget"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create game version widget"));
 		return;
 	}
 	// Add to viewport with very low Z-Order (background HUD element)
 	GameVersionWidget->AddToViewport(1);
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Game version widget created and added to viewport"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Game version widget created and added to viewport"));
 }
 
 void UUIManager::CreateGameMenuBarWidget()
 {
 	if (!GameMenuBarWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: GameMenuBarWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: GameMenuBarWidgetClass is not set in Blueprint"));
 		return;
 	}
 
@@ -258,7 +259,7 @@ void UUIManager::CreateGameMenuBarWidget()
 	GameMenuBarWidget = CreateWidget<UGameMenuBarWidget>(GetWorld(), GameMenuBarWidgetClass);
 	if (!GameMenuBarWidget)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create GameMenuBarWidget"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create GameMenuBarWidget"));
 		return;
 	}
 
@@ -276,14 +277,14 @@ void UUIManager::CreateGameMenuBarWidget()
 	GameMenuBarWidget->OnEmoteClicked.AddDynamic(this,        &UUIManager::OnMenuBarEmoteClicked);
 	GameMenuBarWidget->OnMenuClicked.AddDynamic(this,         &UUIManager::OnMenuBarMenuClicked);
 
-	UE_LOG(LogTemp, Log, TEXT("UIManager: GameMenuBarWidget created and wired"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: GameMenuBarWidget created and wired"));
 }
 
 void UUIManager::CreateGameMenuWidget()
 {
 	if (!GameMenuWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: GameMenuWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: GameMenuWidgetClass is not set in Blueprint"));
 		return;
 	}
 
@@ -296,7 +297,7 @@ void UUIManager::CreateGameMenuWidget()
 	GameMenuWidget = CreateWidget<UGameMenuWidget>(GetWorld(), GameMenuWidgetClass);
 	if (!GameMenuWidget)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create GameMenuWidget"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create GameMenuWidget"));
 		return;
 	}
 
@@ -309,7 +310,7 @@ void UUIManager::CreateGameMenuWidget()
 	GameMenuWidget->OnExitToDesktopClicked.AddDynamic(this, &UUIManager::HandleExitToDesktopClicked);
 	GameMenuWidget->OnBugReportClicked.AddDynamic(this, &UUIManager::HandleBugReportClicked);
 
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: GameMenuWidget created and wired (class: %s)"),
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: GameMenuWidget created and wired (class: %s)"),
 		*GameMenuWidgetClass->GetName());
 }
 

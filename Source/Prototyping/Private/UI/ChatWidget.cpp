@@ -1,4 +1,5 @@
 #include "UI/ChatWidget.h"
+#include "Prototyping.h"
 #include "UI/ChatMessageLineWidget.h"
 #include "Gameplay/Chat/ChatManager.h"
 #include "Components/TextBlock.h"
@@ -53,7 +54,7 @@ void UChatWidget::InitializeChatWidget(UChatManager* InChatManager)
 {
     if (!InChatManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("ChatWidget: InitializeChatWidget called with null ChatManager"));
+        UE_LOG(LogGameplay, Error, TEXT("ChatWidget: InitializeChatWidget called with null ChatManager"));
         return;
     }
 
@@ -199,7 +200,7 @@ void UChatWidget::SubmitCurrentInput()
         Target = WhisperTargetBox->GetText().ToString().TrimStartAndEnd();
         if (Target.IsEmpty())
         {
-            UE_LOG(LogTemp, Warning, TEXT("ChatWidget: Whisper target name is empty"));
+            UE_LOG(LogGameplay, Warning, TEXT("ChatWidget: Whisper target name is empty"));
             return;
         }
     }

@@ -1,4 +1,5 @@
 #include "Gameplay/Combat/CombatSystemManager.h"
+#include "Prototyping.h"
 #include "Services/LocalizationSubsystem.h"
 #include "Gameplay/Combat/ISkillEffectHandler.h"
 #include "Gameplay/Combat/ICombatable.h"
@@ -40,7 +41,7 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: PlayerSkillManager not available"));
+            UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: PlayerSkillManager not available"));
         }
     }
 
@@ -74,7 +75,7 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
     ECasterType CasterType = MapNetCasterType(SkillData.casterType, SkillData.casterTypeString);
     TScriptInterface<ICombatable> Caster = FindCombatableById(SkillData.casterId, CasterType);
 
-    UE_LOG(LogTemp, Warning, TEXT("INIT: casterId=%d netType=%d(%s) mapped=%d key=%s"),
+    UE_LOG(LogGameplay, Warning, TEXT("INIT: casterId=%d netType=%d(%s) mapped=%d key=%s"),
         SkillData.casterId, SkillData.casterType, *SkillData.casterTypeString,
         (int32)CasterType, *CreateCombatableKey(SkillData.casterId, CasterType));
 
@@ -102,7 +103,7 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Could not find caster %d (%s) for skill initiation"),
+        UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Could not find caster %d (%s) for skill initiation"),
             SkillData.casterId, *SkillData.casterTypeString);
     }
 

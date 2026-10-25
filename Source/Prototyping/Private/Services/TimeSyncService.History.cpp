@@ -1,4 +1,5 @@
 #include "Services/TimeSyncService.h"
+#include "Prototyping.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/DateTime.h"
 #include "Misc/Guid.h"
@@ -142,7 +143,7 @@ void UTimeSyncService::ApplyEWMAFiltering(EServerType ServerType, const FTimeSyn
         ServerData->FilteredOffsetMs += Alpha * OffsetDelta;
         ServerData->FilteredLatencyMs += Alpha * LatencyDelta;
         
-        UE_LOG(LogTemp, VeryVerbose, TEXT("TimeSyncService: EWMA %s - NewOffset: %.1f, Delta: %.1f, Filtered: %.1f"), 
+        UE_LOG(LogPing, VeryVerbose, TEXT("TimeSyncService: EWMA %s - NewOffset: %.1f, Delta: %.1f, Filtered: %.1f"), 
             *GetServerTypeName(ServerType), NewOffset, OffsetDelta, ServerData->FilteredOffsetMs);
     }
     
@@ -253,26 +254,23 @@ bool UTimeSyncService::RemovePendingRequest(const FString& RequestId)
 //        if (TimeDiff < 0)
 //        {
 //            BackwardJumps++;
-//            UE_LOG(LogTemp, Error, TEXT(" SYSTEM TIME BACKWARDS: %lld ms (jumps: %d/%d calls)"),
-//                TimeDiff, BackwardJumps, CallCount);
+
 //        }
 //        else if (TimeDiff > 1000) // ������ 1 ������� ����� ��������
 //        {
 //            LargeJumps++;
-//            UE_LOG(LogTemp, Warning, TEXT(" SYSTEM TIME LARGE JUMP: %lld ms (jumps: %d/%d calls)"),
-//                TimeDiff, LargeJumps, CallCount);
+
 //        }
 //        else if (TimeDiff == 0 && CallCount % 100 == 0)
 //        {
-//            UE_LOG(LogTemp, VeryVerbose, TEXT(" System time resolution: multiple calls return same timestamp"));
+
 //        }
 //    }
 //
 //    // �������� ������ 1000 ������� ��� �������� ��������
 //    if (CallCount % 1000 == 0)
 //    {
-//        UE_LOG(LogTemp, Log, TEXT(" Time quality stats: %d calls, %d backward jumps, %d large jumps"),
-//            CallCount, BackwardJumps, LargeJumps);
+
 //    }
 //
 //    LastTime = Result;

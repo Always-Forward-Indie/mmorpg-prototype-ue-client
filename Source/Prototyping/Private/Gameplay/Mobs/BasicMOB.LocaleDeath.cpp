@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Prototyping.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Mobs/MOBAnimInstance.h"
@@ -95,7 +96,7 @@ void ABasicMOB::Die()
 		AnimInst->NotifyDeath();
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("MOB %s (ID:%d) has died."), *MOBData.mobName, MOBData.mobID);
+	UE_LOG(LogGameplay, Warning, TEXT("MOB %s (ID:%d) has died."), *MOBData.mobName, MOBData.mobID);
 
 	// Disable mesh physics so the corpse does not block movement or camera.
 	// IMPORTANT: Do NOT call SetActorEnableCollision(false) here � that actor-level flag

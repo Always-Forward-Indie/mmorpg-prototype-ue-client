@@ -2,6 +2,7 @@
 
 
 #include "Utils/JSONParser.h"
+#include "Prototyping.h"
 #include "Services/TimeSyncService.h"
 #include "MyGameInstance.h"
 #include "Engine/World.h"
@@ -17,14 +18,14 @@ TArray<FLoginCharacterEntry> JSONParser::DeserializeLoginCharactersList(const FS
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, JsonObject) || !JsonObject.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeLoginCharactersList failed to parse JSON"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeLoginCharactersList failed to parse JSON"));
 		return CharacterList;
 	}
 
 	const TSharedPtr<FJsonObject>* BodyObject = nullptr;
 	if (!JsonObject->TryGetObjectField(TEXT("body"), BodyObject) || BodyObject == nullptr)
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeLoginCharactersList missing body"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeLoginCharactersList missing body"));
 		return CharacterList;
 	}
 
@@ -88,14 +89,14 @@ FCharacterCreationOptions JSONParser::DeserializeCharacterCreationOptions(const 
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
     if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCharacterCreationOptions failed to parse JSON"));
+        UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeCharacterCreationOptions failed to parse JSON"));
         return Options;
     }
 
     const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
     if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr)
     {
-        UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCharacterCreationOptions missing body"));
+        UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeCharacterCreationOptions missing body"));
         return Options;
     }
     const TSharedPtr<FJsonObject>& Body = *BodyPtr;

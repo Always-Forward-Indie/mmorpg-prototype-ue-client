@@ -1,4 +1,5 @@
 #include "Gameplay/Items/HarvestManager.h"
+#include "Prototyping.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
 #include "Utils/JSONParser.h"
@@ -17,7 +18,7 @@ void UHarvestManager::TryHarvestNearbyCorpse()
 {
 	if (bIsHarvesting)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Already harvesting"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Already harvesting"));
 		return;
 	}
 
@@ -25,7 +26,7 @@ void UHarvestManager::TryHarvestNearbyCorpse()
 	if (NearestCorpse)
 	{
 		int32 CorpseUID = FCString::Atoi(*NearestCorpse->GetMOBUId());
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Starting harvest for corpse UID: %d"), CorpseUID);
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Starting harvest for corpse UID: %d"), CorpseUID);
 		StartHarvest(CorpseUID);
 	}
 	else
@@ -35,12 +36,12 @@ void UHarvestManager::TryHarvestNearbyCorpse()
 		if (NearestHarvestedCorpse)
 		{
 			int32 CorpseUID = FCString::Atoi(*NearestHarvestedCorpse->GetMOBUId());
-			UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Inspecting harvested corpse UID: %d"), CorpseUID);
+			UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Inspecting harvested corpse UID: %d"), CorpseUID);
 			InspectCorpseLoot(CorpseUID);
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("HarvestManager: No harvestable or harvested corpse found within range"));
+			UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: No harvestable or harvested corpse found within range"));
 			
 			// Show message to player
 			if (GEngine)
@@ -56,13 +57,13 @@ void UHarvestManager::TryHarvestSpecificCorpse(ABasicMOB* TargetCorpse)
 {
     if (!IsValid(TargetCorpse))
     {
-        UE_LOG(LogTemp, Warning, TEXT("HarvestManager: TryHarvestSpecificCorpse - null target"));
+        UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: TryHarvestSpecificCorpse - null target"));
         return;
     }
 
     if (bIsHarvesting)
     {
-        UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Already harvesting"));
+        UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Already harvesting"));
         return;
     }
 
@@ -71,13 +72,13 @@ void UHarvestManager::TryHarvestSpecificCorpse(ABasicMOB* TargetCorpse)
     // MOB is harvestable (not yet harvested) → start harvest
     if (!TargetCorpse->GetMOBData().bHasBeenHarvested)
     {
-        UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Harvesting specific corpse UID=%d"), CorpseUID);
+        UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Harvesting specific corpse UID=%d"), CorpseUID);
         StartHarvest(CorpseUID);
     }
     else
     {
         // Already harvested → inspect loot instead
-        UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Inspecting already-harvested corpse UID=%d"), CorpseUID);
+        UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Inspecting already-harvested corpse UID=%d"), CorpseUID);
         InspectCorpseLoot(CorpseUID);
     }
 }
@@ -85,19 +86,19 @@ void UHarvestManager::TryHarvestSpecificCorpse(ABasicMOB* TargetCorpse)
 void UHarvestManager::StartHarvest(int32 CorpseUID){
 	if (bIsHarvesting)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Already harvesting"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Already harvesting"));
 		return;
 	}
 
 	if (!networkManager || !gameInstance)
 	{
-		UE_LOG(LogTemp, Error, TEXT("HarvestManager: Cannot start harvest - missing dependencies"));
+		UE_LOG(LogGameplay, Error, TEXT("HarvestManager: Cannot start harvest - missing dependencies"));
 		return;
 	}
 
 	if (!networkManager->IsChunkServerConnected())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Chunk server not connected, cannot start harvest"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Chunk server not connected, cannot start harvest"));
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red,
@@ -151,7 +152,7 @@ void UHarvestManager::PickupLootItem(int32 ItemId, int32 Quantity)
 {
 	if (CurrentCorpseUID == 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: No active corpse to pickup from"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: No active corpse to pickup from"));
 		return;
 	}
 
@@ -168,7 +169,7 @@ void UHarvestManager::PickupAllLoot()
 {
 	if (CurrentCorpseUID == 0 || CurrentAvailableLoot.Num() == 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: No loot available to pickup"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: No loot available to pickup"));
 		return;
 	}
 
@@ -191,7 +192,7 @@ void UHarvestManager::CancelHarvest()
 		return;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Harvest cancelled"));
+	UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Harvest cancelled"));
 
 	// Notify the server so it can broadcast harvestCancelBroadcast to other clients
 	SendHarvestCancelRequest(CurrentCorpseUID);
@@ -223,16 +224,16 @@ void UHarvestManager::SendHarvestCancelRequest(int32 CorpseUID)
 		gameInstance->GetTimeSyncService(), EServerType::ChunkServer);
 
 	networkManager->SendDataToChunkServer(JsonString);
-	UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Sent harvestCancel request for corpse: %d"), CorpseUID);
+	UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Sent harvestCancel request for corpse: %d"), CorpseUID);
 }
 
 float UHarvestManager::GetHarvestProgress() const
 {
-	UE_LOG(LogTemp, Warning, TEXT("HarvestManager::GetHarvestProgress - Starting calculation"));
+	UE_LOG(LogGameplay, Warning, TEXT("HarvestManager::GetHarvestProgress - Starting calculation"));
 	
 	if (!bIsHarvesting || HarvestDuration <= 0.0f)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager::GetHarvestProgress - Not harvesting or invalid duration. bIsHarvesting: %s, HarvestDuration: %.0f"), 
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager::GetHarvestProgress - Not harvesting or invalid duration. bIsHarvesting: %s, HarvestDuration: %.0f"), 
 			bIsHarvesting ? TEXT("true") : TEXT("false"), HarvestDuration);
 		return 0.0f;
 	}
@@ -240,7 +241,7 @@ float UHarvestManager::GetHarvestProgress() const
 	UWorld* World = GetValidWorld();
 	if (!World)
 	{
-		UE_LOG(LogTemp, Error, TEXT("HarvestManager::GetHarvestProgress - GetValidWorld() returned null!"));
+		UE_LOG(LogGameplay, Error, TEXT("HarvestManager::GetHarvestProgress - GetValidWorld() returned null!"));
 		return 0.0f;
 	}
 
@@ -250,7 +251,7 @@ float UHarvestManager::GetHarvestProgress() const
 	float Progress = FMath::Clamp(ElapsedTime / TotalDurationInSeconds, 0.0f, 1.0f);
 	
 	// Always log for debugging
-	UE_LOG(LogTemp, Warning, TEXT("HarvestManager::GetHarvestProgress - Progress: %.1f%%, ElapsedTime: %.2fs, TotalDuration: %.2fs, HarvestDuration(ms): %.0f"), 
+	UE_LOG(LogGameplay, Warning, TEXT("HarvestManager::GetHarvestProgress - Progress: %.1f%%, ElapsedTime: %.2fs, TotalDuration: %.2fs, HarvestDuration(ms): %.0f"), 
 		Progress * 100.0f, ElapsedTime, TotalDurationInSeconds, HarvestDuration);
 	
 	return Progress;

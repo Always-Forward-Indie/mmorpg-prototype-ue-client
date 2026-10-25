@@ -1,5 +1,6 @@
 ﻿#include "Gameplay/Items/InventoryManager.h"
 #include "Networking/NetworkManager.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Items/HarvestManager.h"
 #include "Utils/JSONParser.h"
@@ -47,11 +48,11 @@ void UInventoryManager::Initialize(UNetworkManager* NetworkManager)
 
 		if (gameInstance)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("InventoryManager: GameInstance found"));
+			UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: GameInstance found"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("InventoryManager: GameInstance not found"));
+			UE_LOG(LogGameplay, Error, TEXT("InventoryManager: GameInstance not found"));
 		}
 	}
 }
@@ -70,11 +71,11 @@ void UInventoryManager::SubscribeToNetworkManager()
 {
 	if (networkManager != nullptr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Network Manager found and subscribed to events"));
+		UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Network Manager found and subscribed to events"));
 
 		if (IsValid(networkManager))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Network Manager is valid"));
+			UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Network Manager is valid"));
 
 			// Subscribe to the network manager's events
 			networkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UInventoryManager::ProcessGameServerData);
@@ -82,12 +83,12 @@ void UInventoryManager::SubscribeToNetworkManager()
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("InventoryManager: Network Manager is not valid"));
+			UE_LOG(LogGameplay, Error, TEXT("InventoryManager: Network Manager is not valid"));
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("InventoryManager: Network manager not found"));
+		UE_LOG(LogGameplay, Error, TEXT("InventoryManager: Network manager not found"));
 	}
 }
 

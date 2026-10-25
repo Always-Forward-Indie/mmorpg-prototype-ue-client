@@ -1,4 +1,5 @@
 #include "Gameplay/Skills/PlayerSkillManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Combat/SkillSystemManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Services/TimeSyncService.h"
@@ -42,7 +43,7 @@ bool UPlayerSkillManager::CanCastSkill(const FString& SkillSlug) const
     // Check GCD
     if (IsGCDActive())
     {
-        UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Cannot cast %s - GCD active (%.1fs remaining)"),
+        UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillManager: Cannot cast %s - GCD active (%.1fs remaining)"),
             *SkillSlug, GetGCDRemaining());
         return false;
     }
@@ -56,13 +57,13 @@ bool UPlayerSkillManager::CanCastSkill(const FString& SkillSlug) const
         const double Elapsed = GetWorldSeconds() - AnimationStartWorldTime;
         if (Elapsed < AnimationLockTimeoutSec)
         {
-            UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Cannot cast %s - animation lock active (%.1fs elapsed)"),
+            UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillManager: Cannot cast %s - animation lock active (%.1fs elapsed)"),
                 *SkillSlug, Elapsed);
             return false;
         }
         // Lock timed out — clear and allow the cast
         const_cast<UPlayerSkillManager*>(this)->bIsAnimationPlaying = false;
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Animation lock timed out for %s"), *SkillSlug);
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Animation lock timed out for %s"), *SkillSlug);
     }
 
     // Check per-skill server-confirmation guard: a request for THIS specific
@@ -74,13 +75,13 @@ bool UPlayerSkillManager::CanCastSkill(const FString& SkillSlug) const
         const double Timeout = GetConfirmationTimeout();
         if (Elapsed < Timeout)
         {
-            UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Cannot cast %s - awaiting server confirmation (%.1fs/%.1fs elapsed)"),
+            UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillManager: Cannot cast %s - awaiting server confirmation (%.1fs/%.1fs elapsed)"),
                 *SkillSlug, Elapsed, Timeout);
             return false;
         }
         // Server never replied — auto-expire
         const_cast<UPlayerSkillManager*>(this)->PendingConfirmations.Remove(SkillSlug);
-        UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Server confirmation timed out for %s after %.1fs (timeout=%.1fs)"),
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Server confirmation timed out for %s after %.1fs (timeout=%.1fs)"),
             *SkillSlug, Elapsed, Timeout);
     }
 

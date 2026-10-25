@@ -1,4 +1,5 @@
 #include "Gameplay/NPCs/BasicNPC.h"
+#include "Prototyping.h"
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/NPCs/NPCAnimInstance.h"
@@ -25,11 +26,11 @@ void ABasicNPC::OnPlayerInteract(APlayerController* InteractingPlayer)
 {
 	if (!NPCData.isInteractable)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("NPC %s is not interactable"), *NPCData.name);
+		UE_LOG(LogGameplay, Warning, TEXT("NPC %s is not interactable"), *NPCData.name);
 		return;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("Player interacting with NPC %s"), *NPCData.name);
+	UE_LOG(LogGameplay, Verbose, TEXT("Player interacting with NPC %s"), *NPCData.name);
 	
 	// Play interaction sound if available
 	PlaySoundByName("Interact");

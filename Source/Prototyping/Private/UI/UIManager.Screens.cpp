@@ -1,4 +1,5 @@
 #include "UI/UIManager.h"
+#include "Prototyping.h"
 #include "UI/UIManager.h"
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
@@ -80,12 +81,12 @@
 
 void UUIManager::ShowDeathScreen(int32 RespawnTimeSec)
 {
-	UE_LOG(LogTemp, Warning, TEXT("UIManager::ShowDeathScreen RespawnTime=%d"), RespawnTimeSec);
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::ShowDeathScreen RespawnTime=%d"), RespawnTimeSec);
 
 	// If PlayerController is not yet assigned, defer the death screen until InitFTCManager is called
 	if (!PlayerController)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::ShowDeathScreen - PlayerController not ready, deferring"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager::ShowDeathScreen - PlayerController not ready, deferring"));
 		bPendingDeathScreen = true;
 		PendingDeathScreenDebt = RespawnTimeSec;
 		return;
@@ -107,12 +108,12 @@ void UUIManager::ShowDeathScreen(int32 RespawnTimeSec)
 			}
 			else
 			{
-				UE_LOG(LogTemp, Error, TEXT("UIManager::ShowDeathScreen - owner is not ABasicPlayer, respawn button will not work"));
+				UE_LOG(LogGameplay, Error, TEXT("UIManager::ShowDeathScreen - owner is not ABasicPlayer, respawn button will not work"));
 			}
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager::ShowDeathScreen - failed to create DeathScreenWidget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager::ShowDeathScreen - failed to create DeathScreenWidget"));
 			return;
 		}
 	}
@@ -125,13 +126,13 @@ void UUIManager::ShowDeathScreen(int32 RespawnTimeSec)
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::ShowDeathScreen - DeathScreenWidgetClass not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager::ShowDeathScreen - DeathScreenWidgetClass not set in Blueprint"));
 	}
 }
 
 void UUIManager::HideDeathScreen()
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::HideDeathScreen"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::HideDeathScreen"));
 
 	if (DeathScreenWidget)
 	{
@@ -155,7 +156,7 @@ void UUIManager::UpdateMobTargetFrameHP(int32 CurrentHP, int32 MaxHP)
 
 void UUIManager::ShowHealScreenFlash()
 {
-	UE_LOG(LogTemp, Verbose, TEXT("UIManager::ShowHealScreenFlash"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::ShowHealScreenFlash"));
 	EnsureFlashWidget();
 	if (CombatScreenFlashWidget)
 	{
@@ -165,7 +166,7 @@ void UUIManager::ShowHealScreenFlash()
 
 void UUIManager::ShowDamageScreenFlash()
 {
-	UE_LOG(LogTemp, Verbose, TEXT("UIManager::ShowDamageScreenFlash"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::ShowDamageScreenFlash"));
 	EnsureFlashWidget();
 	if (CombatScreenFlashWidget)
 	{

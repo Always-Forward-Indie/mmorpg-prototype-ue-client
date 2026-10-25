@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/MOBManager.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "CrashDiagnostics.h"
@@ -12,12 +13,11 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
     if (!worldContext) return;
 
     FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
-	UE_LOG(LogTemp, Warning, TEXT("MOBManager: Received event type: %s"), *MessageData.eventType);
+	UE_LOG(LogGameplay, Warning, TEXT("MOBManager: Received event type: %s"), *MessageData.eventType);
 
 	// Check if this is a combat event - if so, let CombatNetworkHandler handle it
 	//if (IsCombatEvent(MessageData.eventType))
 	//{
-	//	UE_LOG(LogTemp, Log, TEXT("MOBManager: Delegating combat event '%s' to CombatNetworkHandler"), *MessageData.eventType);
 	//	// Combat events are handled by CombatNetworkHandler which is already subscribed to the same event
 	//	// No need to process them here
 	//	return;
@@ -31,7 +31,7 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 
 	if (MessageData.eventType == "spawnMobsInZone" && MessageData.status == "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("MOBManager: Received spawnMobsInZone event"));
+		UE_LOG(LogGameplay, Warning, TEXT("MOBManager: Received spawnMobsInZone event"));
 		TArray<FMOBStruct> MobsData = JSONParser::DeserializeMobsList(Body);
 		for (FMOBStruct MobData : MobsData)
 		{
@@ -40,17 +40,17 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 	}
 	else if (MessageData.eventType == "getMOBData" && MessageData.status == "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Received getMOBData event"));
+		UE_LOG(LogGameplay, Warning, TEXT("Received getMOBData event"));
 		// Deserialize the JSON string into a single MOB data
 		FMOBStruct MobData = JSONParser::DeserializeMobData(Body->GetObjectField(TEXT("mob")));
 	}
 	else if (MessageData.eventType == "zoneMoveMobs" && MessageData.status == "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Received moveMOB event"));
+		UE_LOG(LogGameplay, Warning, TEXT("Received moveMOB event"));
 
 		if (!worldContext || !worldContext->IsValidLowLevel())
 		{
-			UE_LOG(LogTemp, Error, TEXT("MOBManager: Cannot process zoneMoveMobs - no valid world context"));
+			UE_LOG(LogGameplay, Error, TEXT("MOBManager: Cannot process zoneMoveMobs - no valid world context"));
 			return;
 		}
 
@@ -77,25 +77,25 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 		int32 MobUID = 0;
 		if (!Body.IsValid() || !Body->TryGetNumberField(TEXT("mobUID"), MobUID) || MobUID <= 0)
 		{
-			UE_LOG(LogTemp, Error, TEXT("MOBManager: mobDeath - missing or invalid mobUID"));
+			UE_LOG(LogGameplay, Error, TEXT("MOBManager: mobDeath - missing or invalid mobUID"));
 			return;
 		}
 
 		TWeakObjectPtr<ABasicMOB>* FoundWeak = MobActorRegistry.Find(MobUID);
 		if (!FoundWeak || !FoundWeak->IsValid())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("MOBManager: mobDeath for UID %d - actor not found (already cleaned up?)"), MobUID);
+			UE_LOG(LogGameplay, Warning, TEXT("MOBManager: mobDeath for UID %d - actor not found (already cleaned up?)"), MobUID);
 			return;
 		}
 
 		ABasicMOB* MOB = FoundWeak->Get();
 		if (!IsValid(MOB))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("MOBManager: mobDeath for UID %d - actor is pending kill"), MobUID);
+			UE_LOG(LogGameplay, Warning, TEXT("MOBManager: mobDeath for UID %d - actor is pending kill"), MobUID);
 			return;
 		}
 
-		UE_LOG(LogTemp, Warning, TEXT("MOBManager: mobDeath for UID %d (%s)"), MobUID, *MOB->GetMobName());
+		UE_LOG(LogGameplay, Warning, TEXT("MOBManager: mobDeath for UID %d (%s)"), MobUID, *MOB->GetMobName());
 
 		if (!MOB->GetMOBIsDead())
 		{
@@ -143,7 +143,7 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 	}
 	else if (MessageData.eventType == "mobHealthUpdate")
 	{
-		UE_LOG(LogTemp, Log, TEXT("MOBManager: Received mobHealthUpdate event"));
+		UE_LOG(LogGameplay, Verbose, TEXT("MOBManager: Received mobHealthUpdate event"));
 
 		if (!worldContext || !worldContext->IsValidLowLevel()) return;
 
@@ -172,23 +172,23 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 			}
 			else
 			{
-				UE_LOG(LogTemp, Warning, TEXT("MOBManager: Mob UID %d not found in registry for mobHealthUpdate"), MobUID);
+				UE_LOG(LogGameplay, Warning, TEXT("MOBManager: Mob UID %d not found in registry for mobHealthUpdate"), MobUID);
 			}
 		}
 	}
 	else if (MessageData.eventType == "mobTargetLost" && MessageData.status == "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("MOBManager: Received mob target lost event"));
+		UE_LOG(LogGameplay, Warning, TEXT("MOBManager: Received mob target lost event"));
 
 		if (!worldContext || !worldContext->IsValidLowLevel())
 		{
-			UE_LOG(LogTemp, Error, TEXT("MOBManager: Cannot process mobTargetLost - no valid world context"));
+			UE_LOG(LogGameplay, Error, TEXT("MOBManager: Cannot process mobTargetLost - no valid world context"));
 			return;
 		}
 
 		FMobTargetLostStruct TargetLostData = JSONParser::DeserializeMobTargetLost(Body);
 
-		UE_LOG(LogTemp, Warning, TEXT("Mob %d (UID: %d) lost target player %d at position (%.2f, %.2f, %.2f)"),
+		UE_LOG(LogGameplay, Warning, TEXT("Mob %d (UID: %d) lost target player %d at position (%.2f, %.2f, %.2f)"),
 			TargetLostData.mobId, TargetLostData.mobUID, TargetLostData.lostTargetPlayerId,
 			TargetLostData.position.positionX, TargetLostData.position.positionY, TargetLostData.position.positionZ);
 
@@ -225,20 +225,20 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 								if (LocalPlayer && LocalPlayer->GetLockedTarget() == MOB)
 								{
 									LocalPlayer->ClearLockedTarget();
-									UE_LOG(LogTemp, Log, TEXT("MOBManager: Cleared player lock target � mob %d returned to zone"),
+									UE_LOG(LogGameplay, Verbose, TEXT("MOBManager: Cleared player lock target � mob %d returned to zone"),
 										TargetLostData.mobUID);
 								}
 							}
 						}
 
-						UE_LOG(LogTemp, Warning, TEXT("MOB %s (UID: %d) target cleared and position updated"),
+						UE_LOG(LogGameplay, Warning, TEXT("MOB %s (UID: %d) target cleared and position updated"),
 							*MOB->GetMobName(), TargetLostData.mobUID);
 					}
 			}
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Mob with UID %d not found for target lost event"), TargetLostData.mobUID);
+			UE_LOG(LogGameplay, Warning, TEXT("Mob with UID %d not found for target lost event"), TargetLostData.mobUID);
 		}
 	}
 	else if (MessageData.eventType == "effectTick")
@@ -262,46 +262,46 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 	{
 		if (!worldContext || !worldContext->IsValidLowLevel())
 		{
-			UE_LOG(LogTemp, Error, TEXT("MOBManager: Cannot process corpseRemoved - no valid world context"));
+			UE_LOG(LogGameplay, Error, TEXT("MOBManager: Cannot process corpseRemoved - no valid world context"));
 			return;
 		}
 
 		if (!Body.IsValid())
 		{
-			UE_LOG(LogTemp, Error, TEXT("MOBManager: corpseRemoved packet has no body"));
+			UE_LOG(LogGameplay, Error, TEXT("MOBManager: corpseRemoved packet has no body"));
 			return;
 		}
 
 		int32 CorpseUID = 0;
 		if (!Body->TryGetNumberField(TEXT("corpseUID"), CorpseUID) || CorpseUID <= 0)
 		{
-			UE_LOG(LogTemp, Error, TEXT("MOBManager: corpseRemoved - missing or invalid corpseUID"));
+			UE_LOG(LogGameplay, Error, TEXT("MOBManager: corpseRemoved - missing or invalid corpseUID"));
 			return;
 		}
 
 		TWeakObjectPtr<ABasicMOB>* FoundWeak = MobActorRegistry.Find(CorpseUID);
 		if (!FoundWeak || !FoundWeak->IsValid())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("MOBManager: corpseRemoved for UID %d - actor not found (already cleaned up?)"), CorpseUID);
+			UE_LOG(LogGameplay, Warning, TEXT("MOBManager: corpseRemoved for UID %d - actor not found (already cleaned up?)"), CorpseUID);
 			return;
 		}
 
 		ABasicMOB* MOB = FoundWeak->Get();
 		if (!IsValid(MOB))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("MOBManager: corpseRemoved for UID %d - actor is pending kill"), CorpseUID);
+			UE_LOG(LogGameplay, Warning, TEXT("MOBManager: corpseRemoved for UID %d - actor is pending kill"), CorpseUID);
 			return;
 		}
 
 		if (!MOB->GetMOBIsDead())
 		{
-			UE_LOG(LogTemp, Warning,
+			UE_LOG(LogGameplay, Warning,
 				TEXT("MOBManager: corpseRemoved for UID %d (%s) - mob is NOT marked dead on client. Server-authoritative removal applied."),
 				CorpseUID, *MOB->GetMobName());
 		}
 		else
 		{
-			UE_LOG(LogTemp, Log, TEXT("MOBManager: Removing corpse UID %d (%s)"), CorpseUID, *MOB->GetMobName());
+			UE_LOG(LogGameplay, Verbose, TEXT("MOBManager: Removing corpse UID %d (%s)"), CorpseUID, *MOB->GetMobName());
 		}
 
 		ClearLockedTargetOnAllPlayers(MOB);
@@ -315,20 +315,20 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 		// Over-inclusive by design — unknown UIDs are dropped silently (no crash).
 		if (!worldContext || !worldContext->IsValidLowLevel())
 		{
-			UE_LOG(LogTemp, Error, TEXT("MOBManager: Cannot process mobCellLeft - no valid world context"));
+			UE_LOG(LogGameplay, Error, TEXT("MOBManager: Cannot process mobCellLeft - no valid world context"));
 			return;
 		}
 
 		if (!Body.IsValid())
 		{
-			UE_LOG(LogTemp, Error, TEXT("MOBManager: mobCellLeft packet has no body"));
+			UE_LOG(LogGameplay, Error, TEXT("MOBManager: mobCellLeft packet has no body"));
 			return;
 		}
 
 		const TArray<TSharedPtr<FJsonValue>>* UidsArray = nullptr;
 		if (!Body->TryGetArrayField(TEXT("uids"), UidsArray) || UidsArray == nullptr)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("MOBManager: mobCellLeft - missing uids array"));
+			UE_LOG(LogNetPacket, Warning, TEXT("MOBManager: mobCellLeft - missing uids array"));
 			return;
 		}
 
@@ -351,7 +351,7 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 			ABasicMOB* MOB = FoundWeak->Get();
 			if (!IsValid(MOB)) continue;
 
-			UE_LOG(LogTemp, Log, TEXT("MOBManager: mobCellLeft evicting UID %d (%s)"), EvictUID, *MOB->GetMobName());
+			UE_LOG(LogGameplay, Verbose, TEXT("MOBManager: mobCellLeft evicting UID %d (%s)"), EvictUID, *MOB->GetMobName());
 
 			ClearLockedTargetOnAllPlayers(MOB);
 
@@ -385,7 +385,7 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 			TWeakObjectPtr<ABasicMOB>* FoundWeak = MobActorRegistry.Find(ChampionUID);
 			if (!FoundWeak || !FoundWeak->IsValid() || !IsValid(FoundWeak->Get()))
 			{
-				UE_LOG(LogTemp, Warning, TEXT("MOBManager: champion_despawned for UID %d - actor not found (already cleaned up?)"), ChampionUID);
+				UE_LOG(LogGameplay, Warning, TEXT("MOBManager: champion_despawned for UID %d - actor not found (already cleaned up?)"), ChampionUID);
 				return;
 			}
 			Target = FoundWeak->Get();
@@ -403,17 +403,17 @@ void UMOBManager::ProcessGameServerData(const FString& ReceivedData)
 			}
 			if (!Target)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("MOBManager: champion_despawned for slug %s - actor not found (already cleaned up?)"), *ChampionSlug);
+				UE_LOG(LogGameplay, Warning, TEXT("MOBManager: champion_despawned for slug %s - actor not found (already cleaned up?)"), *ChampionSlug);
 				return;
 			}
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("MOBManager: champion_despawned - missing both uid and mobSlug"));
+			UE_LOG(LogGameplay, Error, TEXT("MOBManager: champion_despawned - missing both uid and mobSlug"));
 			return;
 		}
 
-		UE_LOG(LogTemp, Warning, TEXT("MOBManager: champion_despawned removing %s (uid=%d)"), *Target->GetMobName(), ChampionUID);
+		UE_LOG(LogGameplay, Warning, TEXT("MOBManager: champion_despawned removing %s (uid=%d)"), *Target->GetMobName(), ChampionUID);
 
 		ClearLockedTargetOnAllPlayers(Target);
 

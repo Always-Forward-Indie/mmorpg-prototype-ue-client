@@ -1,5 +1,6 @@
 ﻿#include "UI/AvailableSkillsWidget.h"
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Components/ScrollBox.h"
@@ -66,7 +67,7 @@ void UAvailableSkillsWidget::NativeConstruct()
         {
             SkillTooltipWidget->AddToViewport(1000); // High Z-order for tooltip
             SkillTooltipWidget->SetVisibility(ESlateVisibility::Hidden);
-            UE_LOG(LogTemp, Log, TEXT("AvailableSkillsWidget: Created skill tooltip widget"));
+            UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Created skill tooltip widget"));
         }
     }
 

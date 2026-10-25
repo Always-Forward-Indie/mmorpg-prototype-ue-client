@@ -2,6 +2,7 @@
 
 
 #include "Utils/JSONParser.h"
+#include "Prototyping.h"
 #include "Services/TimeSyncService.h"
 #include "MyGameInstance.h"
 #include "Engine/World.h"
@@ -159,14 +160,14 @@ FNPCSpawnDataStruct JSONParser::DeserializeNPCSpawnData(const FString& JsonStrin
     
     if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeNPCSpawnData failed to parse JSON"));
+        UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeNPCSpawnData failed to parse JSON"));
         return SpawnData;
     }
 
     const TSharedPtr<FJsonObject>* BodyObject = nullptr;
     if (!Root->TryGetObjectField(TEXT("body"), BodyObject) || !BodyObject || !(*BodyObject).IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeNPCSpawnData missing body"));
+        UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeNPCSpawnData missing body"));
         return SpawnData;
     }
 

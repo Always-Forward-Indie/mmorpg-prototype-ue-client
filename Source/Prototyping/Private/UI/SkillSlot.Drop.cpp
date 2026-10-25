@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillSlotWidget.h"
 #include "UI/SkillSlotWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
@@ -17,19 +18,19 @@ bool USkillSlotWidget::NativeOnDrop(const FGeometry& G, const FDragDropEvent& E,
     auto* SkillOp = Cast<USkillDragDropOperation>(Op);
     if (!SkillOp)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Drop RECEIVED — not a SkillDragDropOperation, rejecting"), SlotIndex);
+        UE_LOG(LogGameplay, Warning, TEXT("SkillSlotWidget[%d]: Drop RECEIVED — not a SkillDragDropOperation, rejecting"), SlotIndex);
         ResetDragVisualState();
         return false;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Drop RECEIVED sourceSlot=%d slug='%s'"),
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillSlotWidget[%d]: Drop RECEIVED sourceSlot=%d slug='%s'"),
         SlotIndex, SkillOp->SourceSlotIndex, *SkillOp->SkillData.networkData.skillSlug);
 
     // Validate we have an actual skill to assign.
     const FString& DroppedSlug = SkillOp->SkillData.networkData.skillSlug;
     if (DroppedSlug.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Drop rejected — empty skill slug"), SlotIndex);
+        UE_LOG(LogGameplay, Warning, TEXT("SkillSlotWidget[%d]: Drop rejected — empty skill slug"), SlotIndex);
         ResetDragVisualState();
         return false;
     }
@@ -39,7 +40,7 @@ bool USkillSlotWidget::NativeOnDrop(const FGeometry& G, const FDragDropEvent& E,
     // authoritative logic and will validate + reject if needed.
     if (SkillManager && !SkillManager->HasSkill(DroppedSlug))
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: Drop rejected — skill '%s' not known to SkillManager"),
+        UE_LOG(LogGameplay, Warning, TEXT("SkillSlotWidget[%d]: Drop rejected — skill '%s' not known to SkillManager"),
             SlotIndex, *DroppedSlug);
         ResetDragVisualState();
         return false;
@@ -49,7 +50,7 @@ bool USkillSlotWidget::NativeOnDrop(const FGeometry& G, const FDragDropEvent& E,
     if (SkillOp->SourceSlotIndex >= 0 && SkillOp->SourceSlotWidget && SkillOp->SourceSlotIndex != SlotIndex)
     {
         SkillOp->SourceSlotWidget->OnSkillSlotDragCleared.Broadcast(SkillOp->SourceSlotIndex);
-        UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Clearing source slot %d after drop"),
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillSlotWidget[%d]: Clearing source slot %d after drop"),
             SlotIndex, SkillOp->SourceSlotIndex);
     }
 
@@ -60,7 +61,7 @@ bool USkillSlotWidget::NativeOnDrop(const FGeometry& G, const FDragDropEvent& E,
 
     OnSkillDroppedOnSlot.Broadcast(SlotIndex, DroppedSkill, Hotkey);
 
-    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Dropped skill '%s'"),
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillSlotWidget[%d]: Dropped skill '%s'"),
         SlotIndex, *DroppedSlug);
 
     return true;
@@ -70,7 +71,7 @@ void USkillSlotWidget::NativeOnDragLeave(const FDragDropEvent& E, UDragDropOpera
 {
     Super::NativeOnDragLeave(E, Op);
 
-    UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: DragLeave op=%p highlight=%d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillSlotWidget[%d]: DragLeave op=%p highlight=%d"),
         SlotIndex, Op, bIsDropHighlighted ? 1 : 0);
 
     // Direct clear. The previous deferred-clear timer was a band-aid for flicker
@@ -92,12 +93,12 @@ void USkillSlotWidget::NativeOnDragCancelled(const FDragDropEvent& E, UDragDropO
     auto* SkillOp = Cast<USkillDragDropOperation>(Op);
     if (SkillOp && SkillOp->SourceSlotIndex == SlotIndex && SkillOp->SourceSlotWidget == this)
     {
-        UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: Drag cancelled — clearing slot"), SlotIndex);
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillSlotWidget[%d]: Drag cancelled — clearing slot"), SlotIndex);
         OnSkillSlotDragCleared.Broadcast(SlotIndex);
     }
 
     bIsDragging = false;
-    UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: NativeOnDragCancelled — bIsDragging=false bMousePressed=%d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillSlotWidget[%d]: NativeOnDragCancelled — bIsDragging=false bMousePressed=%d"),
         SlotIndex, bMousePressed ? 1 : 0);
 }
 

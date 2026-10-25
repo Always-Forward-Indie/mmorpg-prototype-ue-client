@@ -1,4 +1,5 @@
 #include "UI/VendorShopWidget.h"
+#include "Prototyping.h"
 #include "UI/VendorShopWidget.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Gameplay/Items/InventoryManager.h"
@@ -30,11 +31,11 @@ void UVendorShopWidget::NativeConstruct()
     if (Buy_Confirm_Button)
         Buy_Confirm_Button->OnClicked.AddDynamic(this, &UVendorShopWidget::HandleConfirmBuyCart);
     else
-        UE_LOG(LogTemp, Warning, TEXT("VendorShopWidget: Buy_Confirm_Button is not bound in Blueprint - buy cart cannot be confirmed"));
+        UE_LOG(LogGameplay, Warning, TEXT("VendorShopWidget: Buy_Confirm_Button is not bound in Blueprint - buy cart cannot be confirmed"));
     if (Sell_Confirm_Button)
         Sell_Confirm_Button->OnClicked.AddDynamic(this, &UVendorShopWidget::HandleConfirmSellCart);
     else
-        UE_LOG(LogTemp, Warning, TEXT("VendorShopWidget: Sell_Confirm_Button is not bound in Blueprint - sell cart cannot be confirmed"));
+        UE_LOG(LogGameplay, Warning, TEXT("VendorShopWidget: Sell_Confirm_Button is not bound in Blueprint - sell cart cannot be confirmed"));
     if (Buy_Clear_Button)
         Buy_Clear_Button->OnClicked.AddDynamic(this, &UVendorShopWidget::HandleClearBuyCart);
     if (Sell_Clear_Button)

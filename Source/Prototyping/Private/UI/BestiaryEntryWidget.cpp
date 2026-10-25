@@ -1,4 +1,5 @@
 #include "UI/BestiaryEntryWidget.h"
+#include "Prototyping.h"
 #include "UI/BestiaryEntryWidget.h"
 #include "UI/BestiaryTierRowWidget.h"
 #include "Components/TextBlock.h"
@@ -166,7 +167,7 @@ void UBestiaryEntryWidget::BuildTierRow(const FBestiaryTierStruct& Tier)
 
     if (!TierRowClass)
     {
-        UE_LOG(LogTemp, Warning, TEXT("BestiaryEntryWidget: BuildTierRow skipped - TierRowClass is not set"));
+        UE_LOG(LogGameplay, Warning, TEXT("BestiaryEntryWidget: BuildTierRow skipped - TierRowClass is not set"));
         return;
     }
 

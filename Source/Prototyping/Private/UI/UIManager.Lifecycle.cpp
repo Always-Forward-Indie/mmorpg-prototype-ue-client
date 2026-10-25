@@ -1,4 +1,5 @@
 #include "UI/UIManager.h"
+#include "Prototyping.h"
 #include "UI/UIManager.h"
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
@@ -222,18 +223,18 @@ void UUIManager::Initialize(UInventoryManager* InInventoryManager, UHarvestManag
 {
 	if (!InInventoryManager)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager: Cannot initialize with null InventoryManager"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager: Cannot initialize with null InventoryManager"));
 		return;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Starting initialization"));
+	UE_LOG(LogGameplay, Warning, TEXT("UIManager: Starting initialization"));
 
 	InventoryManager = InInventoryManager;
 	HarvestManager = InHarvestManager;
 	ExperienceManager = InExperienceManager;
 	SkillManager = InSkillManager;
 	
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Managers set - InventoryManager: %s, HarvestManager: %s, ExperienceManager: %s, SkillManager: %s"), 
+	UE_LOG(LogGameplay, Warning, TEXT("UIManager: Managers set - InventoryManager: %s, HarvestManager: %s, ExperienceManager: %s, SkillManager: %s"), 
 		InventoryManager ? TEXT("Valid") : TEXT("NULL"), 
 		HarvestManager ? TEXT("Valid") : TEXT("NULL"),
 		ExperienceManager ? TEXT("Valid") : TEXT("NULL"),
@@ -243,7 +244,7 @@ void UUIManager::Initialize(UInventoryManager* InInventoryManager, UHarvestManag
 	CreateUIWidgets();
 	
 	bIsInitialized = true;
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: Successfully initialized"));
+	UE_LOG(LogGameplay, Warning, TEXT("UIManager: Successfully initialized"));
 }
 
 void UUIManager::RegisterPreInputListener()
@@ -267,7 +268,7 @@ void UUIManager::InitFTCManager(APlayerController* InPC)
 	UDamageCanvasWidget* InDamageCanvasWidget = GetDamageCanvasWidget();
 	TSubclassOf<UDamageTextWidget> InDamageTextClass = DamageTextWidgetClass;
 
-	UE_LOG(LogTemp, Warning, TEXT("UIManager::InitFTCManager called with PC: %s, DamageCanvasWidget: %s, DamageTextClass: %s"),
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::InitFTCManager called with PC: %s, DamageCanvasWidget: %s, DamageTextClass: %s"),
 		InPC ? TEXT("Valid") : TEXT("NULL"),
 		InDamageCanvasWidget ? TEXT("Valid") : TEXT("NULL"),
 		InDamageTextClass ? TEXT("Valid") : TEXT("NULL"));
@@ -275,25 +276,25 @@ void UUIManager::InitFTCManager(APlayerController* InPC)
 	// Validate all required parameters before proceeding
 	if (!PlayerController)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager::InitFTCManager - PlayerController is null"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager::InitFTCManager - PlayerController is null"));
 		return;
 	}
 
 	if (!InDamageCanvasWidget)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager::InitFTCManager - DamageCanvasWidget is null"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager::InitFTCManager - DamageCanvasWidget is null"));
 		return;
 	}
 
 	if (!InDamageCanvasWidget->GetDamageCanvas())
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager::InitFTCManager - DamageCanvas is null"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager::InitFTCManager - DamageCanvas is null"));
 		return;
 	}
 
 	if (!InDamageTextClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager::InitFTCManager - DamageTextClass is null"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager::InitFTCManager - DamageTextClass is null"));
 		return;
 	}
 
@@ -303,7 +304,7 @@ void UUIManager::InitFTCManager(APlayerController* InPC)
 		FCTManager = NewObject<UFloatingCombatTextManager>(this);
 		if (!FCTManager)
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager::InitFTCManager - Failed to create FCTManager object"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager::InitFTCManager - Failed to create FCTManager object"));
 			return;
 		}
 	}
@@ -313,23 +314,23 @@ void UUIManager::InitFTCManager(APlayerController* InPC)
 	FCTManager->MaxVisibleDistanceCm = FCTMaxVisibleDistanceCm;
 	FCTManager->FadeStartDistanceCm = FCTFadeStartDistanceCm;
 
-	UE_LOG(LogTemp, Warning, TEXT("UIManager: FCT Manager initialized successfully with DamageCanvasWidget"));
+	UE_LOG(LogGameplay, Warning, TEXT("UIManager: FCT Manager initialized successfully with DamageCanvasWidget"));
 
 	// Verify the FCTManager is properly set up
 	if (FCTManager->GetRootCanvas() && FCTManager->GetPlayerController() && FCTManager->GetDamageTextClass())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: FCT Manager validation successful - all components ready"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: FCT Manager validation successful - all components ready"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("UIManager: FCT Manager validation failed after init"));
+		UE_LOG(LogGameplay, Error, TEXT("UIManager: FCT Manager validation failed after init"));
 		// Don't null out FCTManager here, as it might still be partially functional
 	}
 
 	// If death screen was requested before PlayerController was ready, show it now
 	if (bPendingDeathScreen)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: Showing pending death screen (debt=%d)"), PendingDeathScreenDebt);
+		UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Showing pending death screen (debt=%d)"), PendingDeathScreenDebt);
 		ShowDeathScreen(PendingDeathScreenDebt);
 		bPendingDeathScreen = false;
 		PendingDeathScreenDebt = 0;

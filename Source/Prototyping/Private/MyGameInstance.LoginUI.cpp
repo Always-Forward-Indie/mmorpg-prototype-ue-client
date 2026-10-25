@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Components/ArrowComponent.h"
 #include "ShaderCompiler.h"
 #include "ContentStreaming.h"
@@ -102,7 +103,7 @@ void UMyGameInstance::PreloadWorldInteractionCursors()
 {
 	if (!WorldInteractionConfig)
 	{
-		UE_LOG(LogTemp, Warning,
+		UE_LOG(LogGameplay, Warning,
 			TEXT("GameInstance: WorldInteractionConfig not assigned. "
 			     "Open BP_GameInstance → Details → World Interaction → assign DA_WorldInteractionConfig. "
 			     "Custom cursors will not show until this is set."));
@@ -123,7 +124,7 @@ void UMyGameInstance::PreloadWorldInteractionCursors()
 		}
 	}
 
-	UE_LOG(LogTemp, Log,
+	UE_LOG(LogGameplay, Verbose,
 		TEXT("GameInstance: Cursor preload complete. Default=%s, TypedHandles=%d"),
 		PreloadedDefaultCursorHandle ? TEXT("OK") : TEXT("FAILED — check texture settings"),
 		PreloadedCursorHandles.Num());
@@ -300,11 +301,11 @@ void UMyGameInstance::StartLoadingScreenMusic()
 			LoadingScreenAudioComponent->SoundClassOverride = AudioManager->MusicClass;
 		}
 
-		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Loading screen music started (persists across level transition)"));
+		UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Loading screen music started (persists across level transition)"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] StartLoadingScreenMusic: SpawnSound2D returned null"));
+		UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] StartLoadingScreenMusic: SpawnSound2D returned null"));
 	}
 }
 
@@ -312,20 +313,20 @@ void UMyGameInstance::ShowInitialLoadingScreen()
 {
 	if (!LoadingScreenWidgetClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] ShowInitialLoadingScreen: SKIP — no widget class"));
+		UE_LOG(LogConnection, Error, TEXT("[LOADSEQ] ShowInitialLoadingScreen: SKIP — no widget class"));
 		return;
 	}
 
 	LoadingScreenWidget = CreateWidget<UUserWidget>(this, LoadingScreenWidgetClass);
 	if (!LoadingScreenWidget)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] ShowInitialLoadingScreen: FAIL — CreateWidget returned null"));
+		UE_LOG(LogConnection, Error, TEXT("[LOADSEQ] ShowInitialLoadingScreen: FAIL — CreateWidget returned null"));
 		return;
 	}
 
 	LoadingScreenWidget->AddToViewport(1000);
 
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] ShowInitialLoadingScreen: widget added to viewport (Init phase, pre-transition)"));
+	UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] ShowInitialLoadingScreen: widget added to viewport (Init phase, pre-transition)"));
 }
 
 void UMyGameInstance::EnsureReadinessOverlay()
@@ -336,26 +337,26 @@ void UMyGameInstance::EnsureReadinessOverlay()
 	}
 	if (!LoadingScreenWidgetClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] EnsureReadinessOverlay: SKIP — no widget class"));
+		UE_LOG(LogConnection, Error, TEXT("[LOADSEQ] EnsureReadinessOverlay: SKIP — no widget class"));
 		return;
 	}
 
 	LoadingScreenOverlayWidget = CreateWidget<UUserWidget>(this, LoadingScreenWidgetClass);
 	if (!LoadingScreenOverlayWidget)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] EnsureReadinessOverlay: FAIL — CreateWidget returned null"));
+		UE_LOG(LogConnection, Error, TEXT("[LOADSEQ] EnsureReadinessOverlay: FAIL — CreateWidget returned null"));
 		return;
 	}
 
 	LoadingScreenOverlayWidget->AddToViewport(1001);
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] EnsureReadinessOverlay: readiness overlay shown (movie auto-exited at load end)"));
+	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] EnsureReadinessOverlay: readiness overlay shown (movie auto-exited at load end)"));
 }
 
 void UMyGameInstance::SetupMoviePlayerLoadingScreen()
 {
 	if (!LoadingScreenWidgetClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] SetupMoviePlayerLoadingScreen: SKIP — no widget class"));
+		UE_LOG(LogConnection, Error, TEXT("[LOADSEQ] SetupMoviePlayerLoadingScreen: SKIP — no widget class"));
 		return;
 	}
 
@@ -371,12 +372,12 @@ void UMyGameInstance::SetupMoviePlayerLoadingScreen()
 		LoadingScreenWidget = CreateWidget<UUserWidget>(this, LoadingScreenWidgetClass);
 		if (!LoadingScreenWidget)
 		{
-			UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] SetupMoviePlayerLoadingScreen: FAIL — CreateWidget returned null"));
+			UE_LOG(LogConnection, Error, TEXT("[LOADSEQ] SetupMoviePlayerLoadingScreen: FAIL — CreateWidget returned null"));
 			return;
 		}
 
 		LoadingScreenWidget->AddToViewport(1000);
-		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] SetupMoviePlayerLoadingScreen: widget added via AddToViewport (PIE)"));
+		UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] SetupMoviePlayerLoadingScreen: widget added via AddToViewport (PIE)"));
 		StartLoadingScreenMusic();
 		return;
 	}
@@ -385,7 +386,7 @@ void UMyGameInstance::SetupMoviePlayerLoadingScreen()
 	IGameMoviePlayer* MoviePlayer = GetMoviePlayer();
 	if (!MoviePlayer)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] SetupMoviePlayerLoadingScreen: FAIL — GetMoviePlayer() returned null"));
+		UE_LOG(LogConnection, Error, TEXT("[LOADSEQ] SetupMoviePlayerLoadingScreen: FAIL — GetMoviePlayer() returned null"));
 		return;
 	}
 
@@ -398,7 +399,7 @@ void UMyGameInstance::SetupMoviePlayerLoadingScreen()
 	LoadingScreenWidget = CreateWidget<UUserWidget>(this, LoadingScreenWidgetClass);
 	if (!LoadingScreenWidget)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[LOADSEQ] SetupMoviePlayerLoadingScreen: FAIL — CreateWidget returned null"));
+		UE_LOG(LogConnection, Error, TEXT("[LOADSEQ] SetupMoviePlayerLoadingScreen: FAIL — CreateWidget returned null"));
 		return;
 	}
 
@@ -423,7 +424,7 @@ void UMyGameInstance::SetupMoviePlayerLoadingScreen()
 
 	MoviePlayer->SetupLoadingScreen(LoadingScreen);
 
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] SetupMoviePlayerLoadingScreen: MoviePlayer configured (survives CleanupWorld)"));
+	UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] SetupMoviePlayerLoadingScreen: MoviePlayer configured (survives CleanupWorld)"));
 
 	StartLoadingScreenMusic();
 }
@@ -432,10 +433,10 @@ void UMyGameInstance::RemoveLoadingScreen()
 {
 	if (LoadingScreenShownTime > 0.0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] loading screen was up for %.1fs"), FPlatformTime::Seconds() - LoadingScreenShownTime);
+		UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] loading screen was up for %.1fs"), FPlatformTime::Seconds() - LoadingScreenShownTime);
 		LoadingScreenShownTime = 0.0;
 	}
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 9. RemoveLoadingScreen called � loading screen going away NOW"));
+	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] 9. RemoveLoadingScreen called � loading screen going away NOW"));
 
 	// Clean up render-thread and GT ticker if safety timer fired before countdown finished.
 	if (EndFrameDelegateHandle.IsValid())
@@ -472,7 +473,7 @@ void UMyGameInstance::RemoveLoadingScreen()
 	if (IGameMoviePlayer* MoviePlayer = GetMoviePlayer())
 	{
 		MoviePlayer->StopMovie();
-		UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] RemoveLoadingScreen: MoviePlayer stopped"));
+		UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] RemoveLoadingScreen: MoviePlayer stopped"));
 	}
 
 	// Restore viewport focus after loading screen removal so chunk server timers

@@ -1,4 +1,5 @@
 #include "Gameplay/Skills/PlayerSkillManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Combat/SkillSystemManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Services/TimeSyncService.h"
@@ -19,13 +20,13 @@ void UPlayerSkillManager::Initialize(USkillSystemManager* InSkillSystemManager,
 {
     if (!InSkillSystemManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillManager: Cannot initialize with null SkillSystemManager"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillManager: Cannot initialize with null SkillSystemManager"));
         return;
     }
 
     if (!InDefinitionRepository)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillManager: Cannot initialize with null DefinitionRepository"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillManager: Cannot initialize with null DefinitionRepository"));
         return;
     }
 
@@ -43,14 +44,14 @@ void UPlayerSkillManager::Initialize(USkillSystemManager* InSkillSystemManager,
     }
 
     bIsInitialized = true;
-    UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Initialized successfully"));
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillManager: Initialized successfully"));
 }
 
 void UPlayerSkillManager::InitializePlayerSkills(const FPlayerSkillsInitializationData& SkillsData)
 {
     if (!bIsInitialized)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerSkillManager: Cannot initialize skills - manager not initialized"));
+        UE_LOG(LogGameplay, Error, TEXT("PlayerSkillManager: Cannot initialize skills - manager not initialized"));
         return;
     }
 
@@ -77,7 +78,7 @@ void UPlayerSkillManager::InitializePlayerSkills(const FPlayerSkillsInitializati
 
         SkillSystemManager->RegisterSkill(NetworkSkill.skillSlug, LegacySkillData);
 
-        UE_LOG(LogTemp, Log, TEXT("PlayerSkillManager: Initialized skill %s (Level %d)"), 
+        UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillManager: Initialized skill %s (Level %d)"), 
             *NetworkSkill.skillSlug, NetworkSkill.skillLevel);
     }
 
@@ -85,7 +86,7 @@ void UPlayerSkillManager::InitializePlayerSkills(const FPlayerSkillsInitializati
     TArray<FPlayerSkillData> AllSkills = GetAllPlayerSkills();
     OnSkillsInitialized.Broadcast(AllSkills);
 
-    UE_LOG(LogTemp, Warning, TEXT("PlayerSkillManager: Initialized %d skills for character %d"), 
+    UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Initialized %d skills for character %d"), 
         PlayerSkills.Num(), CharacterId);
 }
 

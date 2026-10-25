@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Gameplay/Ambient/AmbientCreatureActor.h"
+#include "Prototyping.h"
 #include "Gameplay/Ambient/AmbientCreatureDefinition.h"
 #include "Gameplay/Ambient/AmbientScheduleAsset.h"
 #include "Gameplay/Ambient/AmbientBehaviorBase.h"
@@ -143,12 +144,12 @@ void AAmbientCreatureActor::BeginPlay()
 			{
 				// Нет подходящего агента — используем физический радиус как fallback
 				BestRadius = CreatureDefinition->CapsuleRadius;
-				UE_LOG(LogTemp, Warning, TEXT("[AmbientCreature] '%s' — no Supported Agent with radius >= %.1f found, using CapsuleRadius as NavAgent."), *GetName(), CreatureDefinition->CapsuleRadius);
+				UE_LOG(LogGameplay, Warning, TEXT("[AmbientCreature] '%s' — no Supported Agent with radius >= %.1f found, using CapsuleRadius as NavAgent."), *GetName(), CreatureDefinition->CapsuleRadius);
 			}
 			CMC->NavAgentProps.AgentRadius     = BestRadius;
 			CMC->NavAgentProps.AgentHeight     = BestHeight;
 			CMC->NavAgentProps.AgentStepHeight = -1.f;
-			UE_LOG(LogTemp, Log, TEXT("[AmbientCreature] '%s' — NavAgentProps set: radius=%.1f height=%.1f (CapsuleRadius=%.1f, clearance=%.1f)"),
+			UE_LOG(LogGameplay, Verbose, TEXT("[AmbientCreature] '%s' — NavAgentProps set: radius=%.1f height=%.1f (CapsuleRadius=%.1f, clearance=%.1f)"),
 				*GetName(), BestRadius, BestHeight, CreatureDefinition->CapsuleRadius, BestRadius - CreatureDefinition->CapsuleRadius);
 		}
 	}
@@ -161,11 +162,11 @@ void AAmbientCreatureActor::BeginPlay()
 
 	if (!GetController())
 	{
-		UE_LOG(LogTemp, Error, TEXT("[AmbientCreature] '%s' — AIController NOT spawned. NavMesh movement will be skipped."), *GetName());
+		UE_LOG(LogGameplay, Error, TEXT("[AmbientCreature] '%s' — AIController NOT spawned. NavMesh movement will be skipped."), *GetName());
 	}
 	else
 	{
-		UE_LOG(LogTemp, Log, TEXT("[AmbientCreature] '%s' — AIController spawned: %s"), *GetName(), *GetController()->GetClass()->GetName());
+		UE_LOG(LogGameplay, Verbose, TEXT("[AmbientCreature] '%s' — AIController spawned: %s"), *GetName(), *GetController()->GetClass()->GetName());
 	}
 
 	// Build per-instance runtime copies of behavior entries.
@@ -186,12 +187,12 @@ void AAmbientCreatureActor::BeginPlay()
 				RuntimeBehaviors.Add(nullptr);
 			}
 		}
-		UE_LOG(LogTemp, Log, TEXT("[AmbientCreature] '%s' — duplicated %d behavior entries from ScheduleAsset '%s'"),
+		UE_LOG(LogGameplay, Verbose, TEXT("[AmbientCreature] '%s' — duplicated %d behavior entries from ScheduleAsset '%s'"),
 			*GetName(), RuntimeBehaviors.Num(), *ScheduleAsset->GetName());
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[AmbientCreature] '%s' — no ScheduleAsset assigned, creature will be static."), *GetName());
+		UE_LOG(LogGameplay, Warning, TEXT("[AmbientCreature] '%s' — no ScheduleAsset assigned, creature will be static."), *GetName());
 	}
 
 	// Start parallel idle animation cycle
@@ -209,7 +210,7 @@ void AAmbientCreatureActor::BeginPlay()
 			Delay = FMath::FRandRange(0.f, ScheduleAsset->RandomInitialOffset);
 		}
 
-		UE_LOG(LogTemp, Log, TEXT("[AmbientCreature] '%s' — schedule will start in %.1f seconds."), *GetName(), Delay);
+		UE_LOG(LogGameplay, Verbose, TEXT("[AmbientCreature] '%s' — schedule will start in %.1f seconds."), *GetName(), Delay);
 
 		if (Delay > 0.f)
 		{

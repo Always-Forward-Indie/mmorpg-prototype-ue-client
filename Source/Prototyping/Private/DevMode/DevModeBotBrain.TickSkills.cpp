@@ -1,4 +1,5 @@
 #include "DevMode/DevModeBotBrain.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeConsoleCommands.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -44,7 +45,7 @@ bool UDevModeBotBrain::Tick_SkillWalk(UWorld* World, ABasicPlayer* Player, doubl
         {
             Step = EBotStep::SkillLearn;
             CharLegStartTime = Now;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT at trainer npc=%d, opening skill shop"), SkillNpcId);
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT at trainer npc=%d, opening skill shop"), SkillNpcId);
             return true;
         }
         if (Now - CharLegStartTime > CharTimeoutSec)
@@ -70,7 +71,7 @@ bool UDevModeBotBrain::Tick_SkillLearn(UWorld* World, ABasicPlayer* Player, doub
             {
                 Shop->RequestOpenSkillShop(SkillNpcId, Player->GetActorLocation());
                 bShopReqSent = true;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT skill shop requested npc=%d"), SkillNpcId);
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT skill shop requested npc=%d"), SkillNpcId);
             }
             if (Now - CharLegStartTime > CharTimeoutSec)
             {
@@ -90,7 +91,7 @@ bool UDevModeBotBrain::Tick_SkillLearn(UWorld* World, ABasicPlayer* Player, doub
                 Shop->RequestLearnSkill(SkillNpcId, Next);
                 bLearnRequested = true;
                 LastLearnSlug = Next;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT learn requested %s"), *Next);
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT learn requested %s"), *Next);
             }
             if (Now - CharLegStartTime > CharTimeoutSec)
             {
@@ -104,7 +105,7 @@ bool UDevModeBotBrain::Tick_SkillLearn(UWorld* World, ABasicPlayer* Player, doub
         BotShot(TEXT("learned"));
         Step = EBotStep::SkillCast;
         CharLegStartTime = Now;
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT skills learned, hunting cast target"));
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT skills learned, hunting cast target"));
         return true;
 }
 
@@ -162,7 +163,7 @@ bool UDevModeBotBrain::Tick_SkillCast(UWorld* World, ABasicPlayer* Player, doubl
                 BotShot(TEXT("cast"));
                 Step = EBotStep::SkillBuff;
                 CharLegStartTime = Now;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT power_slash confirmed: mobhp %d -> %d mana %d -> %d"),
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT power_slash confirmed: mobhp %d -> %d mana %d -> %d"),
                     MobHpBefore, MobHpNow, ManaBefore, ManaNow);
                 return true;
             }
@@ -180,7 +181,7 @@ bool UDevModeBotBrain::Tick_SkillCast(UWorld* World, ABasicPlayer* Player, doubl
             // CharLegStartTime budget still bounds the leg.
             if (!bDamageSeen && !bCooldownSeen && !bManaSeen && Now - CastSentTime > 15.0f)
             {
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT cast fizzled (no confirm in 15s), re-approaching"));
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT cast fizzled (no confirm in 15s), re-approaching"));
                 bCastSent = false;
                 TargetMob.Reset();
                 bCastSteerInit = false;
@@ -210,7 +211,7 @@ bool UDevModeBotBrain::Tick_SkillCast(UWorld* World, ABasicPlayer* Player, doubl
                 if (Gain < -ChaseFleeLoss)
                 {
                     ExcludedKillerUIDs.Add(TargetUid);
-                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT cast target fleeing (gain %.0f in %.0fs) — excluding uid=%d, repicking"),
+                    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT cast target fleeing (gain %.0f in %.0fs) — excluding uid=%d, repicking"),
                         Gain, ChaseStallSec, TargetUid);
                     TargetMob.Reset();
                     bCastSteerInit = false;
@@ -220,7 +221,7 @@ bool UDevModeBotBrain::Tick_SkillCast(UWorld* World, ABasicPlayer* Player, doubl
                 if (Gain < ChaseMinGain)
                 {
                     ExcludedKillerUIDs.Add(TargetUid);
-                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT cast target unreachable (gain %.0f in %.0fs) — excluding uid=%d, repicking"),
+                    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT cast target unreachable (gain %.0f in %.0fs) — excluding uid=%d, repicking"),
                         ChaseCheckDist - TargetDist, ChaseStallSec, TargetUid);
                     TargetMob.Reset();
                     bCastSteerInit = false;
@@ -263,7 +264,7 @@ bool UDevModeBotBrain::Tick_SkillCast(UWorld* World, ABasicPlayer* Player, doubl
         bDamageSeen = false;
         bCooldownSeen = false;
         bManaSeen = false;
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT power_slash cast on uid=%d (mobhp=%d mana=%d)"),
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT power_slash cast on uid=%d (mobhp=%d mana=%d)"),
             TargetUid, MobHpBefore, ManaBefore);
         return true;
 }
@@ -280,7 +281,7 @@ bool UDevModeBotBrain::Tick_SkillBuff(UWorld* World, ABasicPlayer* Player, doubl
         {
             PSM->TryCastSkill(TEXT("battle_cry"), 0, ECasterType::Player);
             bBuffSent = true;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT battle_cry cast (self)"));
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT battle_cry cast (self)"));
             return true;
         }
         // The buff lands as a server stats_update activeEffects entry —

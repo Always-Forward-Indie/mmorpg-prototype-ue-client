@@ -1,4 +1,5 @@
 #include "DevMode/DevModeBotBrain.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeConsoleCommands.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -123,7 +124,7 @@ bool UDevModeBotBrain::BuildNavPath(ABasicPlayer* Player, const FVector& Dest, d
         {
             bNavLoggedMissing = true;
             const ANavigationData* DefaultNav = NavSys ? NavSys->GetDefaultNavDataInstance(FNavigationSystem::DontCreate) : nullptr;
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT no navmesh data (stage 3) default=[%s] at (%.0f,%.0f,%.0f)"),
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT no navmesh data (stage 3) default=[%s] at (%.0f,%.0f,%.0f)"),
                 DefaultNav ? *DefaultNav->GetName() : TEXT("(none)"), PlayerAt.X, PlayerAt.Y, PlayerAt.Z);
         }
         return false;
@@ -160,7 +161,7 @@ bool UDevModeBotBrain::BuildNavPath(ABasicPlayer* Player, const FVector& Dest, d
     if (!bNavLoggedActive)
     {
         bNavLoggedActive = true;
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT navmesh active (%d points on %s)"), NavPathPoints.Num(), NavData ? *NavData->GetName() : TEXT("?"));
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT navmesh active (%d points on %s)"), NavPathPoints.Num(), NavData ? *NavData->GetName() : TEXT("?"));
     }
     return true;
 }
@@ -201,7 +202,7 @@ void UDevModeBotBrain::NavSteerTarget(ABasicPlayer* Player, const FVector& Dest,
             if (NavFailStage != 3 && !bNavLoggedMissing)
             {
                 bNavLoggedMissing = true;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT no navmesh path (stage %d) — direct steering"), NavFailStage);
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT no navmesh path (stage %d) — direct steering"), NavFailStage);
             }
             return; // OutTarget stays Dest: direct steering, status quo.
         }
@@ -321,7 +322,7 @@ bool UDevModeBotBrain::SteerToward(ABasicPlayer* Player, const FVector& Dest, fl
                     const float SideDist = 300.0f * ((NavDetourCount + 1) / 2);
                     const FVector Detour = PlayerAt + Fwd * 200.0f + FVector(-Fwd.Y, Fwd.X, 0.0f) * SideSign * SideDist;
                     NavPathPoints.Insert(Detour, NavPathIndex);
-                    UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT_STUCK %s (dist %.0f, detour %d %.0fuu) from (%.0f,%.0f,%.0f) blocked=%d on='%s'"),
+                    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT_STUCK %s (dist %.0f, detour %d %.0fuu) from (%.0f,%.0f,%.0f) blocked=%d on='%s'"),
                         Label, Dist2D(PlayerAt, Dest), NavDetourCount, SideDist, PlayerAt.X, PlayerAt.Y, PlayerAt.Z,
                         bLastMoveBlocked ? 1 : 0, *LastBlockingActor);
                 }
@@ -333,7 +334,7 @@ bool UDevModeBotBrain::SteerToward(ABasicPlayer* Player, const FVector& Dest, fl
                 bNavPathValid = false;
                 NavPathPoints.Reset();
                 NavPathIndex = 0;
-                UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT_STUCK %s (dist %.0f, no teleport on live) from (%.0f,%.0f,%.0f) blocked=%d on='%s'"),
+                UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT_STUCK %s (dist %.0f, no teleport on live) from (%.0f,%.0f,%.0f) blocked=%d on='%s'"),
                     Label, Dist2D(PlayerAt, Dest), PlayerAt.X, PlayerAt.Y, PlayerAt.Z,
                     bLastMoveBlocked ? 1 : 0, *LastBlockingActor);
             }
@@ -350,7 +351,7 @@ bool UDevModeBotBrain::SteerToward(ABasicPlayer* Player, const FVector& Dest, fl
         const FVector Vel = Player->GetVelocity();
         const UCharacterMovementComponent* MoveComp = Player->GetCharacterMovement();
         AController* PC = Player->GetController();
-        UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT_FALLBACK teleport %s (dist %.0f) pawn='%s' ctrl='%s' locallycontrolled=%d maxwalk=%.0f compregistered=%d isother=%d from (%.0f,%.0f,%.0f) vel=%.0f mode=%d"),
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT_FALLBACK teleport %s (dist %.0f) pawn='%s' ctrl='%s' locallycontrolled=%d maxwalk=%.0f compregistered=%d isother=%d from (%.0f,%.0f,%.0f) vel=%.0f mode=%d"),
             Label, Dist2D(PlayerAt, Dest), *Player->GetName(),
             PC ? *PC->GetName() : TEXT("null"),
             Player->IsLocallyControlled() ? 1 : 0,
@@ -361,7 +362,7 @@ bool UDevModeBotBrain::SteerToward(ABasicPlayer* Player, const FVector& Dest, fl
             MoveComp ? (int32)MoveComp->MovementMode : -1);
         if (MoveComp)
         {
-            UE_LOG(LogTemp, Warning, TEXT("DEVMODE_BOT_INPUT pendmm=%d lastmm=%d"),
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT_INPUT pendmm=%d lastmm=%d"),
                 FMath::RoundToInt(MoveComp->GetPendingInputVector().Size() * 1000.0),
                 FMath::RoundToInt(MoveComp->GetLastInputVector().Size() * 1000.0));
         }
@@ -382,7 +383,7 @@ bool UDevModeBotBrain::SteerTick(float)
     if (!PendingShotName.IsEmpty() && !FScreenshotRequest::IsScreenshotRequested())
     {
         FScreenshotRequest::RequestScreenshot(PendingShotName, true, false);
-        UE_LOG(LogTemp, Log, TEXT("DEVMODE_BOT_SHOT_FLUSHED %s"), *PendingShotName);
+        UE_LOG(LogGameplay, Verbose, TEXT("DEVMODE_BOT_SHOT_FLUSHED %s"), *PendingShotName);
         PendingShotName.Empty();
     }
     if (!bSteerIntent)

@@ -1,4 +1,5 @@
 #include "Gameplay/Items/HarvestManager.h"
+#include "Prototyping.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
 #include "Utils/JSONParser.h"
@@ -25,28 +26,28 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 	//}
 
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
-	UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Received event type: %s"), *MessageData.eventType);
+	UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received event type: %s"), *MessageData.eventType);
 
 	// Handle harvest started response
 	if (MessageData.eventType == "harvestStarted" && MessageData.status == "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Received harvest started"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received harvest started"));
 		FHarvestStartedStruct HarvestData = JSONParser::DeserializeHarvestStarted(ReceivedData);
 		
 		// Validate harvest data before proceeding
 		if (HarvestData.duration <= 0)
 		{
-			UE_LOG(LogTemp, Error, TEXT("HarvestManager: Invalid harvest duration: %d ms"), HarvestData.duration);
+			UE_LOG(LogGameplay, Error, TEXT("HarvestManager: Invalid harvest duration: %d ms"), HarvestData.duration);
 			return;
 		}
 		
 		if (HarvestData.corpseId <= 0)
 		{
-			UE_LOG(LogTemp, Error, TEXT("HarvestManager: Invalid corpse ID: %d"), HarvestData.corpseId);
+			UE_LOG(LogGameplay, Error, TEXT("HarvestManager: Invalid corpse ID: %d"), HarvestData.corpseId);
 			return;
 		}
 		
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: About to set harvest state variables"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: About to set harvest state variables"));
 		
 		// Start local harvest progress
 		bIsHarvesting = true;
@@ -58,38 +59,38 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 		if (World)
 		{
 			HarvestStartTime = World->GetTimeSeconds();
-			UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Successfully got World time: %.2f"), HarvestStartTime);
+			UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Successfully got World time: %.2f"), HarvestStartTime);
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("HarvestManager: GetValidWorld() returned null when setting HarvestStartTime!"));
+			UE_LOG(LogGameplay, Error, TEXT("HarvestManager: GetValidWorld() returned null when setting HarvestStartTime!"));
 			HarvestStartTime = 0.0f;
 		}
 
 		// Add detailed debug logging
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Harvest started - CorpseID: %d, Duration: %dms (%.2fs), ServerStartTime: %lld, ClientStartTime: %.2fs"), 
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Harvest started - CorpseID: %d, Duration: %dms (%.2fs), ServerStartTime: %lld, ClientStartTime: %.2fs"), 
 			HarvestData.corpseId, HarvestData.duration, HarvestData.duration / 1000.0f, HarvestData.startTime, HarvestStartTime);
 
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: State after setting - bIsHarvesting: %s, HarvestDuration: %.0f, HarvestStartTime: %.2f"), 
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: State after setting - bIsHarvesting: %s, HarvestDuration: %.0f, HarvestStartTime: %.2f"), 
 			bIsHarvesting ? TEXT("true") : TEXT("false"), HarvestDuration, HarvestStartTime);
 
 		ShowHarvestProgress();
 		LockPlayerMovement();
 		OnHarvestStarted.Broadcast(HarvestData);
 		
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Harvest started event processing completed"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Harvest started event processing completed"));
 	}
 	// Handle harvest complete response
 	else if (MessageData.eventType == "harvestComplete" && MessageData.status == "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Received harvest complete"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received harvest complete"));
 		FHarvestCompleteStruct HarvestData = JSONParser::DeserializeHarvestComplete(ReceivedData);
 		HandleHarvestComplete(HarvestData);
 	}
 	// Handle harvest error
 	else if (MessageData.eventType == "harvestError" && MessageData.status == "error")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Received harvest error"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received harvest error"));
 		FHarvestErrorStruct ErrorData = JSONParser::DeserializeHarvestError(ReceivedData);
 		
 		// Cancel local harvest
@@ -107,14 +108,14 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 	// Handle loot pickup success
 	else if (MessageData.eventType == "corpseLootPickup" && MessageData.status == "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Received loot pickup success"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received loot pickup success"));
 		FCorpseLootPickupResponseStruct PickupData = JSONParser::DeserializeCorpseLootPickupResponse(ReceivedData);
 		HandleLootPickupResponse(PickupData);
 	}
 	// Handle loot pickup error
 	else if (MessageData.eventType == "corpseLootPickup" && MessageData.status == "error")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Received loot pickup error"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received loot pickup error"));
 		FCorpseLootPickupErrorStruct ErrorData = JSONParser::DeserializeCorpseLootPickupError(ReceivedData);
 		
 		// Show error message
@@ -129,14 +130,14 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 	// Handle loot inspect success
 	else if (MessageData.eventType == "corpseLootInspect" && MessageData.status == "success")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Received loot inspect success"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received loot inspect success"));
 		FCorpseLootInspectResponseStruct InspectData = JSONParser::DeserializeCorpseLootInspectResponse(ReceivedData);
 		HandleLootInspectResponse(InspectData);
 	}
 	// Handle loot inspect error
 	else if (MessageData.eventType == "corpseLootInspect" && MessageData.status == "error")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Received loot inspect error"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received loot inspect error"));
 		FCorpseLootInspectErrorStruct ErrorData = JSONParser::DeserializeCorpseLootInspectError(ReceivedData);
 		
 		// Show error message based on error code
@@ -172,7 +173,7 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 	// harvestCancelled — unicast confirmation to the player who sent harvestCancel
 	else if (MessageData.eventType == "harvestCancelled")
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Received harvestCancelled (server confirmed our cancel)"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received harvestCancelled (server confirmed our cancel)"));
 		// The cancel was already applied locally in CancelHarvest(); nothing more to do here.
 	}
 	// harvestStartBroadcast — another player started harvesting on a corpse
@@ -190,7 +191,7 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 				(*BodyPtr)->TryGetNumberField(TEXT("characterId"), HarvesterCharId);
 				(*BodyPtr)->TryGetNumberField(TEXT("corpseUID"),   BroadcastCorpseUID);
 
-				UE_LOG(LogTemp, Warning, TEXT("HarvestManager: harvestStartBroadcast charId=%d corpseUID=%d"),
+				UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: harvestStartBroadcast charId=%d corpseUID=%d"),
 					HarvesterCharId, BroadcastCorpseUID);
 
 				// Update the corresponding BasicMOB actor's harvesting state
@@ -242,7 +243,7 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 				(*BodyPtr)->TryGetNumberField(TEXT("characterId"), HarvesterCharId);
 				(*BodyPtr)->TryGetNumberField(TEXT("corpseUID"), BroadcastCorpseUID);
 
-				UE_LOG(LogTemp, Warning, TEXT("HarvestManager: harvestCompleteBroadcast charId=%d corpseUID=%d"),
+				UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: harvestCompleteBroadcast charId=%d corpseUID=%d"),
 					HarvesterCharId, BroadcastCorpseUID);
 
 				if (worldContext && BroadcastCorpseUID > 0)
@@ -294,7 +295,7 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 				(*BodyPtr)->TryGetNumberField(TEXT("characterId"), CancelledCharId);
 				(*BodyPtr)->TryGetNumberField(TEXT("corpseUID"),   BroadcastCorpseUID);
 
-				UE_LOG(LogTemp, Warning, TEXT("HarvestManager: harvestCancelBroadcast charId=%d corpseUID=%d"),
+				UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: harvestCancelBroadcast charId=%d corpseUID=%d"),
 					CancelledCharId, BroadcastCorpseUID);
 
 				// Clear harvester state on the MOB actor
@@ -319,7 +320,7 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 					const int32 LocalCharId = gameInstance ? gameInstance->GetCurrentCharacterID() : 0;
 					if (LocalCharId > 0 && CancelledCharId == LocalCharId)
 					{
-						UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Server cancelled our harvest via broadcast, clearing local state"));
+						UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Server cancelled our harvest via broadcast, clearing local state"));
 						bIsHarvesting   = false;
 						CurrentCorpseUID = 0;
 						HarvestStartTime = 0.0f;
@@ -360,7 +361,7 @@ void UHarvestManager::ProcessGameServerData(const FString& ReceivedData)
 				int32 RemovedCorpseUID = 0;
 				(*BodyPtr)->TryGetNumberField(TEXT("corpseUID"), RemovedCorpseUID);
 
-				UE_LOG(LogTemp, Warning, TEXT("HarvestManager: corpseRemoved corpseUID=%d"), RemovedCorpseUID);
+				UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: corpseRemoved corpseUID=%d"), RemovedCorpseUID);
 
 				KnownEmptyCorpses.Remove(RemovedCorpseUID);
 

@@ -1,4 +1,5 @@
 #include "Gameplay/Items/HarvestManager.h"
+#include "Prototyping.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
 #include "Utils/JSONParser.h"
@@ -17,7 +18,7 @@ void UHarvestManager::TryInspectNearbyCorpseLoot()
 {
 	if (bIsHarvesting)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Cannot inspect while harvesting"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Cannot inspect while harvesting"));
 		return;
 	}
 
@@ -25,12 +26,12 @@ void UHarvestManager::TryInspectNearbyCorpseLoot()
 	if (NearestHarvestedCorpse)
 	{
 		int32 CorpseUID = FCString::Atoi(*NearestHarvestedCorpse->GetMOBUId());
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: Inspecting harvested corpse UID: %d"), CorpseUID);
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Inspecting harvested corpse UID: %d"), CorpseUID);
 		InspectCorpseLoot(CorpseUID);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestManager: No harvested corpse found within range"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: No harvested corpse found within range"));
 		
 		// Show message to player
 		if (GEngine)
@@ -45,7 +46,7 @@ void UHarvestManager::InspectCorpseLoot(int32 CorpseUID)
 {
 	if (!networkManager || !gameInstance)
 	{
-		UE_LOG(LogTemp, Error, TEXT("HarvestManager: Cannot inspect corpse loot - missing dependencies"));
+		UE_LOG(LogGameplay, Error, TEXT("HarvestManager: Cannot inspect corpse loot - missing dependencies"));
 		return;
 	}
 

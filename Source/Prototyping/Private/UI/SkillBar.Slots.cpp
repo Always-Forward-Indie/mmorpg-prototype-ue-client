@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillBarWidget.h"
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/Skills/PlayerSkillNetworkHandler.h"
 #include "Components/HorizontalBox.h"
@@ -13,7 +14,7 @@ void USkillBarWidget::BarInitialize(UMyGameInstance* InGameInstance)
 {
     if (!InGameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("SkillBarWidget: Cannot initialize with null GameInstance"));
+        UE_LOG(LogGameplay, Error, TEXT("SkillBarWidget: Cannot initialize with null GameInstance"));
         return;
     }
 
@@ -23,11 +24,11 @@ void USkillBarWidget::BarInitialize(UMyGameInstance* InGameInstance)
     if (SkillManager)
     {
         SubscribeToSkillManagerEvents();
-        UE_LOG(LogTemp, Log, TEXT("SkillBarWidget: Initialized with PlayerSkillManager"));
+        UE_LOG(LogGameplay, Log, TEXT("SkillBarWidget: Initialized with PlayerSkillManager"));
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillBarWidget: PlayerSkillManager not available"));
+        UE_LOG(LogGameplay, Warning, TEXT("SkillBarWidget: PlayerSkillManager not available"));
     }
 
     CreateSkillSlots(DefaultNumSlots);
@@ -37,7 +38,7 @@ void USkillBarWidget::CreateSkillSlots(int32 NumSlots)
 {
     if (!SkillSlotsContainer && !SkillGridContainer)
     {
-        UE_LOG(LogTemp, Error, TEXT("SkillBarWidget: No container widget found for skill slots"));
+        UE_LOG(LogGameplay, Error, TEXT("SkillBarWidget: No container widget found for skill slots"));
         return;
     }
 
@@ -104,7 +105,7 @@ void USkillBarWidget::CreateSkillSlots(int32 NumSlots)
 
     SetupDefaultHotkeys();
     bSlotsCreated = true;
-    UE_LOG(LogTemp, Log, TEXT("SkillBarWidget: Created %d skill slots"), NumSlots);
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillBarWidget: Created %d skill slots"), NumSlots);
 }
 
 void USkillBarWidget::RefreshAllSlots()
@@ -141,14 +142,14 @@ void USkillBarWidget::AssignSkillToSlot(int32 SlotIndex, const FString& SkillSlu
 {
     if (!SkillManager || SlotIndex < 0 || SlotIndex >= SkillSlots.Num())
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillBarWidget: AssignSkillToSlot failed - invalid params (Slot: %d, SkillManager: %s)"),
+        UE_LOG(LogGameplay, Warning, TEXT("SkillBarWidget: AssignSkillToSlot failed - invalid params (Slot: %d, SkillManager: %s)"),
             SlotIndex, SkillManager ? TEXT("valid") : TEXT("null"));
         return;
     }
 
     if (!SkillManager->HasSkill(SkillSlug))
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillBarWidget: Cannot assign unknown skill '%s' to slot %d"), *SkillSlug, SlotIndex);
+        UE_LOG(LogGameplay, Warning, TEXT("SkillBarWidget: Cannot assign unknown skill '%s' to slot %d"), *SkillSlug, SlotIndex);
         return;
     }
 

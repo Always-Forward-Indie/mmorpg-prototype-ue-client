@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Gameplay/UI/NameplateCanvasWidget.h"
+#include "Prototyping.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Blueprint/SlateBlueprintLibrary.h"
 #include "Components/CanvasPanelSlot.h"
@@ -76,7 +77,7 @@ void UNameplateCanvasWidget::ShowPlayerChatBubble(AActor* Actor, const FString& 
 
     if (!ChatBubbleWidgetClass)
     {
-        UE_LOG(LogTemp, Warning, TEXT("NameplateCanvasWidget::ShowPlayerChatBubble - ChatBubbleWidgetClass is not set"));
+        UE_LOG(LogGameplay, Warning, TEXT("NameplateCanvasWidget::ShowPlayerChatBubble - ChatBubbleWidgetClass is not set"));
         return;
     }
 
@@ -94,7 +95,7 @@ void UNameplateCanvasWidget::ShowPlayerChatBubble(AActor* Actor, const FString& 
         Bubble = Cast<UChatBubbleWidget>(RawWidget);
         if (!Bubble)
         {
-            UE_LOG(LogTemp, Error, TEXT("NameplateCanvasWidget::ShowPlayerChatBubble - failed to create ChatBubbleWidget"));
+            UE_LOG(LogGameplay, Error, TEXT("NameplateCanvasWidget::ShowPlayerChatBubble - failed to create ChatBubbleWidget"));
             return;
         }
         ChatBubbles.Add(WeakActor, Bubble);

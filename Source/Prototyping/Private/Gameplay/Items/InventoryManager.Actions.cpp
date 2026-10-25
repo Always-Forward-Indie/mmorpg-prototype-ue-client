@@ -1,5 +1,6 @@
 ﻿#include "Gameplay/Items/InventoryManager.h"
 #include "Networking/NetworkManager.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Items/HarvestManager.h"
 #include "Utils/JSONParser.h"
@@ -16,13 +17,13 @@ void UInventoryManager::UseItem(int32 ItemId, int32 Quantity)
 {
 	if (!HasItem(ItemId))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Attempted to use item %d which is not in inventory"), ItemId);
+		UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Attempted to use item %d which is not in inventory"), ItemId);
 		return;
 	}
 
 	if (GetItemQuantity(ItemId) < Quantity)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Not enough quantity of item %d to use"), ItemId);
+		UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Not enough quantity of item %d to use"), ItemId);
 		return;
 	}
 
@@ -33,13 +34,13 @@ void UInventoryManager::DropItem(int32 ItemId, int32 Quantity)
 {
 	if (!HasItem(ItemId))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Attempted to drop item %d which is not in inventory"), ItemId);
+		UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Attempted to drop item %d which is not in inventory"), ItemId);
 		return;
 	}
 
 	if (GetItemQuantity(ItemId) < Quantity)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Not enough quantity of item %d to drop"), ItemId);
+		UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Not enough quantity of item %d to drop"), ItemId);
 		return;
 	}
 
@@ -50,7 +51,7 @@ void UInventoryManager::SendUseItemRequest(int32 ItemId, int32 Quantity)
 {
 	if (!networkManager || !gameInstance)
 	{
-		UE_LOG(LogTemp, Error, TEXT("InventoryManager: Cannot send use item request - missing dependencies"));
+		UE_LOG(LogNetPacket, Error, TEXT("InventoryManager: Cannot send use item request - missing dependencies"));
 		return;
 	}
 
@@ -76,14 +77,14 @@ void UInventoryManager::SendUseItemRequest(int32 ItemId, int32 Quantity)
 	// Send the request to the server
 	networkManager->SendDataToChunkServer(JsonString);
 	
-	UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Sent use item request for item %d (quantity: %d)"), ItemId, Quantity);
+	UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Sent use item request for item %d (quantity: %d)"), ItemId, Quantity);
 }
 
 void UInventoryManager::SendDropItemRequest(int32 ItemId, int32 Quantity)
 {
 	if (!networkManager || !gameInstance)
 	{
-		UE_LOG(LogTemp, Error, TEXT("InventoryManager: Cannot send drop item request - missing dependencies"));
+		UE_LOG(LogNetPacket, Error, TEXT("InventoryManager: Cannot send drop item request - missing dependencies"));
 		return;
 	}
 
@@ -118,7 +119,7 @@ void UInventoryManager::SendDropItemRequest(int32 ItemId, int32 Quantity)
 		BodyData.Add(TEXT("posY"),  MakeShareable(new FJsonValueNumber(Pos.positionY)));
 		BodyData.Add(TEXT("posZ"),  MakeShareable(new FJsonValueNumber(Pos.positionZ)));
 		BodyData.Add(TEXT("rotZ"),  MakeShareable(new FJsonValueNumber(Pos.rotationZ)));
-		UE_LOG(LogTemp, Log, TEXT("InventoryManager: drop request pos X=%.2f Y=%.2f Z=%.2f"),
+		UE_LOG(LogGameplay, Verbose, TEXT("InventoryManager: drop request pos X=%.2f Y=%.2f Z=%.2f"),
 			Pos.positionX, Pos.positionY, Pos.positionZ);
 	}
 
@@ -128,6 +129,6 @@ void UInventoryManager::SendDropItemRequest(int32 ItemId, int32 Quantity)
 	// Send the request to the server
 	networkManager->SendDataToChunkServer(JsonString);
 	
-	UE_LOG(LogTemp, Warning, TEXT("InventoryManager: Sent drop item request for item %d (quantity: %d)"), ItemId, Quantity);
+	UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Sent drop item request for item %d (quantity: %d)"), ItemId, Quantity);
 }
 

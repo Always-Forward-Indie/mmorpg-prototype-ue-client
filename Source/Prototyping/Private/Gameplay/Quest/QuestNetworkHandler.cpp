@@ -1,4 +1,5 @@
 #include "Gameplay/Quest/QuestNetworkHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/Quest/QuestNetworkHandler.h"
 #include "Gameplay/Quest/QuestManager.h"
 #include "Networking/NetworkManager.h"
@@ -16,7 +17,7 @@ void UQuestNetworkHandler::Initialize(UQuestManager* InQuestManager, UNetworkMan
 {
     if (!InQuestManager || !InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("QuestNetworkHandler: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("QuestNetworkHandler: Initialize called with null parameters"));
         return;
     }
     QuestManager   = InQuestManager;
@@ -27,7 +28,7 @@ void UQuestNetworkHandler::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("QuestNetworkHandler: Cannot subscribe � NetworkManager is null"));
+        UE_LOG(LogGameplay, Error, TEXT("QuestNetworkHandler: Cannot subscribe � NetworkManager is null"));
         return;
     }
     if (bIsSubscribed)
@@ -73,7 +74,7 @@ void UQuestNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
     if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("QuestNetworkHandler: Failed to parse JSON for event %s"), *EventType);
+        UE_LOG(LogNetPacket, Error, TEXT("QuestNetworkHandler: Failed to parse JSON for event %s"), *EventType);
         return;
     }
 

@@ -1,4 +1,5 @@
 #include "Gameplay/Repair/RepairManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
@@ -33,7 +34,7 @@ void URepairManager::Initialize(UNetworkManager* InNetworkManager, UMyGameInstan
 {
     if (!InNetworkManager || !InGameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("RepairManager: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("RepairManager: Initialize called with null parameters"));
         return;
     }
     NetworkManager = InNetworkManager;

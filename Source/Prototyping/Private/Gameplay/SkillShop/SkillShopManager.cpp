@@ -1,4 +1,5 @@
 #include "Gameplay/SkillShop/SkillShopManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
@@ -10,7 +11,7 @@ void USkillShopManager::Initialize(UNetworkManager* InNetworkManager, UMyGameIns
 {
     if (!InNetworkManager || !InGameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("SkillShopManager: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("SkillShopManager: Initialize called with null parameters"));
         return;
     }
     NetworkManager = InNetworkManager;
@@ -85,9 +86,9 @@ void USkillShopManager::RequestLearnSkill(int32 NpcId, const FString& SkillSlug)
         TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&Payload);
     FJsonSerializer::Serialize(Root.ToSharedRef(), Writer);
 
-    UE_LOG(LogTemp, Log, TEXT("[SkillShop] >>> requestLearnSkill: npcId=%d skillSlug='%s' targetLevel=%d"),
+    UE_LOG(LogGameplay, Verbose, TEXT("[SkillShop] >>> requestLearnSkill: npcId=%d skillSlug='%s' targetLevel=%d"),
         NpcId, *SkillSlug, TargetLevel);
-    UE_LOG(LogTemp, Log, TEXT("[SkillShop] >>> requestLearnSkill payload: %s"), *Payload);
+    UE_LOG(LogGameplay, Verbose, TEXT("[SkillShop] >>> requestLearnSkill payload: %s"), *Payload);
 
     NetworkManager->SendDataToChunkServer(Payload);
 }

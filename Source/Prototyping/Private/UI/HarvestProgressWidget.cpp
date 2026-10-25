@@ -1,4 +1,5 @@
 #include "UI/HarvestProgressWidget.h"
+#include "Prototyping.h"
 
 // S5: widget chrome gathered via LOCTEXT.
 #define LOCTEXT_NAMESPACE "HarvestProgress"
@@ -73,7 +74,7 @@ void UHarvestProgressWidget::SetHarvestManager(UHarvestManager* InHarvestManager
 
 void UHarvestProgressWidget::InitializeWidget()
 {
-	UE_LOG(LogTemp, Warning, TEXT("HarvestProgressWidget: InitializeWidget called"));
+	UE_LOG(LogGameplay, Verbose, TEXT("HarvestProgressWidget: InitializeWidget called"));
 
 	// Set default text
 	if (TextBlock_HarvestTitle)
@@ -95,7 +96,7 @@ void UHarvestProgressWidget::InitializeWidget()
 	// Hide widget initially
 	HideWidget();
 	
-	UE_LOG(LogTemp, Warning, TEXT("HarvestProgressWidget: InitializeWidget completed"));
+	UE_LOG(LogGameplay, Warning, TEXT("HarvestProgressWidget: InitializeWidget completed"));
 }
 
 void UHarvestProgressWidget::UpdateProgress(float Progress)
@@ -150,12 +151,12 @@ void UHarvestProgressWidget::ShowWidget()
 		// Set focus to handle input (now that bIsFocusable is true)
 		SetUserFocus(GetOwningPlayer());
 
-		UE_LOG(LogTemp, Warning, TEXT("HarvestProgressWidget: Widget shown - bIsVisible: %s, Visibility: Visible, CurrentProgress: %.2f%%"), 
+		UE_LOG(LogGameplay, Verbose, TEXT("HarvestProgressWidget: Widget shown - bIsVisible: %s, Visibility: Visible, CurrentProgress: %.2f%%"), 
 			bIsVisible ? TEXT("true") : TEXT("false"), CurrentProgress * 100.0f);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestProgressWidget: ShowWidget called but widget already visible"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestProgressWidget: ShowWidget called but widget already visible"));
 	}
 }
 
@@ -178,7 +179,7 @@ void UHarvestProgressWidget::HideWidget()
 	}
 	FSlateApplication::Get().SetAllUserFocusToGameViewport();
 
-	UE_LOG(LogTemp, Warning, TEXT("HarvestProgressWidget: Widget hidden - bIsVisible: %s, Visibility: Hidden"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("HarvestProgressWidget: Widget hidden - bIsVisible: %s, Visibility: Hidden"), 
 		bIsVisible ? TEXT("true") : TEXT("false"));
 }
 
@@ -186,18 +187,18 @@ void UHarvestProgressWidget::BindToHarvestManager()
 {
 	if (HarvestManager)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestProgressWidget: Binding to HarvestManager"));
+		UE_LOG(LogGameplay, Verbose, TEXT("HarvestProgressWidget: Binding to HarvestManager"));
 		
 		HarvestManager->OnHarvestStarted.AddDynamic(this, &UHarvestProgressWidget::HandleHarvestStarted);
 		HarvestManager->OnHarvestProgressUpdate.AddDynamic(this, &UHarvestProgressWidget::HandleHarvestProgress);
 		HarvestManager->OnHarvestCompleted.AddDynamic(this, &UHarvestProgressWidget::HandleHarvestCompleted);
 		HarvestManager->OnHarvestError.AddDynamic(this, &UHarvestProgressWidget::HandleHarvestError);
 		
-		UE_LOG(LogTemp, Warning, TEXT("HarvestProgressWidget: Successfully bound to HarvestManager delegates"));
+		UE_LOG(LogGameplay, Verbose, TEXT("HarvestProgressWidget: Successfully bound to HarvestManager delegates"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("HarvestProgressWidget: Cannot bind to HarvestManager - manager is null"));
+		UE_LOG(LogGameplay, Error, TEXT("HarvestProgressWidget: Cannot bind to HarvestManager - manager is null"));
 	}
 }
 
@@ -205,18 +206,18 @@ void UHarvestProgressWidget::UnbindFromHarvestManager()
 {
 	if (HarvestManager)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestProgressWidget: Unbinding from HarvestManager"));
+		UE_LOG(LogGameplay, Verbose, TEXT("HarvestProgressWidget: Unbinding from HarvestManager"));
 		
 		HarvestManager->OnHarvestStarted.RemoveDynamic(this, &UHarvestProgressWidget::HandleHarvestStarted);
 		HarvestManager->OnHarvestProgressUpdate.RemoveDynamic(this, &UHarvestProgressWidget::HandleHarvestProgress);
 		HarvestManager->OnHarvestCompleted.RemoveDynamic(this, &UHarvestProgressWidget::HandleHarvestCompleted);
 		HarvestManager->OnHarvestError.RemoveDynamic(this, &UHarvestProgressWidget::HandleHarvestError);
 		
-		UE_LOG(LogTemp, Warning, TEXT("HarvestProgressWidget: Successfully unbound from HarvestManager delegates"));
+		UE_LOG(LogGameplay, Verbose, TEXT("HarvestProgressWidget: Successfully unbound from HarvestManager delegates"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HarvestProgressWidget: Cannot unbind from HarvestManager - manager is null"));
+		UE_LOG(LogGameplay, Warning, TEXT("HarvestProgressWidget: Cannot unbind from HarvestManager - manager is null"));
 	}
 }
 
@@ -229,7 +230,7 @@ void UHarvestProgressWidget::HandleHarvestStarted(const FHarvestStartedStruct& H
 	
 	ShowWidget();
 	
-	UE_LOG(LogTemp, Warning, TEXT("HarvestProgressWidget: Harvest started, progress reset to 0. Expected duration: %.2fs"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("HarvestProgressWidget: Harvest started, progress reset to 0. Expected duration: %.2fs"), 
 		HarvestData.duration / 1000.0f);
 }
 
@@ -238,7 +239,7 @@ void UHarvestProgressWidget::HandleHarvestProgress(float Progress)
 	UpdateProgress(Progress);
 	
 	// Log progress updates to verify delegate is working
-	UE_LOG(LogTemp, Warning, TEXT("HarvestProgressWidget: Progress updated to %.2f%%"), Progress * 100.0f);
+	UE_LOG(LogGameplay, Verbose, TEXT("HarvestProgressWidget: Progress updated to %.2f%%"), Progress * 100.0f);
 	
 	// Update the progress text immediately to ensure synchronization
 	if (TextBlock_Progress)
@@ -260,7 +261,7 @@ void UHarvestProgressWidget::HandleHarvestError(const FHarvestErrorStruct& Error
 
 void UHarvestProgressWidget::CancelHarvest()
 {
-	UE_LOG(LogTemp, Warning, TEXT("HarvestProgressWidget: Cancel harvest requested"));
+	UE_LOG(LogGameplay, Verbose, TEXT("HarvestProgressWidget: Cancel harvest requested"));
 
 	if (HarvestManager)
 	{

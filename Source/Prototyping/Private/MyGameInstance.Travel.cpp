@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Components/ArrowComponent.h"
 #include "ShaderCompiler.h"
 #include "ContentStreaming.h"
@@ -121,11 +122,11 @@ void UMyGameInstance::LoadLoginLevel()
 		LevelBeingLoaded = LoginLevelName;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("LoadLoginLevel: Opening %s via OpenLevel"), *LevelBeingLoaded.ToString());
+	UE_LOG(LogConnection, Verbose, TEXT("LoadLoginLevel: Opening %s via OpenLevel"), *LevelBeingLoaded.ToString());
 	// Travel measurement (see TransitionToGameWorld): reported on PostLoadMap.
 	LoadTravelStartTime = FPlatformTime::Seconds();
 	LoadTravelStartFrame = GFrameCounter;
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Travel START: map '%s' (t=%.1fs, frame %llu)"),
+	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Travel START: map '%s' (t=%.1fs, frame %llu)"),
 		*LevelBeingLoaded.ToString(), LoadTravelStartTime, LoadTravelStartFrame);
 	// Setup MoviePlayer loading screen before OpenLevel — widget survives CleanupWorld.
 	SetupMoviePlayerLoadingScreen();
@@ -140,11 +141,11 @@ void UMyGameInstance::ReturnToLoginLevel()
 {
 	if (bReturningToLogin)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ReturnToLoginLevel: Already in progress, ignoring duplicate call"));
+		UE_LOG(LogConnection, Warning, TEXT("ReturnToLoginLevel: Already in progress, ignoring duplicate call"));
 		return;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("ReturnToLoginLevel: Disconnecting from servers and returning to login"));
+	UE_LOG(LogConnection, Verbose, TEXT("ReturnToLoginLevel: Disconnecting from servers and returning to login"));
 
 	// Stop idle tracking — unregisters input processor and clears timers
 	// before we tear down the game world and network connections.
@@ -217,7 +218,7 @@ volatile int32 GActiveWorldPartitionTransitions = 0;
 void UMyGameInstance::LoadLevel(const FName& LevelName)
 {
 	LevelBeingLoaded = LevelName;
-	UE_LOG(LogTemp, Log, TEXT("LoadLevel: Opening %s via OpenLevel"), *LevelName.ToString());
+	UE_LOG(LogConnection, Verbose, TEXT("LoadLevel: Opening %s via OpenLevel"), *LevelName.ToString());
 	SetupMoviePlayerLoadingScreen();
 
 	// Defer OpenLevel by one tick so Slate composites the loading screen first.
@@ -258,7 +259,7 @@ void UMyGameInstance::StartWindowFocusKeeper()
 			if (!LoadingScreenWidget) { return false; }
 			if (FPlatformTime::Seconds() - FocusNudgeStartTime > 8.0)
 			{
-				UE_LOG(LogTemp, Log, TEXT("[LOADSEQ] Focus keeper: giving up after 8s (screen still up)"));
+				UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] Focus keeper: giving up after 8s (screen still up)"));
 				return false;
 			}
 			ForceGameWindowToFront();
@@ -271,13 +272,13 @@ void UMyGameInstance::TransitionToGameWorld()
 {
 	if (GameWorldMap.IsNull())
 	{
-		UE_LOG(LogTemp, Error, TEXT("TransitionToGameWorld: GameWorldMap is not set! Assign it in the GameInstance Blueprint defaults."));
+		UE_LOG(LogConnection, Error, TEXT("TransitionToGameWorld: GameWorldMap is not set! Assign it in the GameInstance Blueprint defaults."));
 		return;
 	}
 
 	if (bTransitioningToGameWorld)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("TransitionToGameWorld: Already transitioning, ignoring duplicate call"));
+		UE_LOG(LogConnection, Warning, TEXT("TransitionToGameWorld: Already transitioning, ignoring duplicate call"));
 		return;
 	}
 
@@ -292,7 +293,7 @@ void UMyGameInstance::TransitionToGameWorld()
 		MapName = MapName.Left(MapName.Find(TEXT(".")));
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("TransitionToGameWorld: Starting transition to map '%s' (from path '%s')"), 
+	UE_LOG(LogConnection, Warning, TEXT("TransitionToGameWorld: Starting transition to map '%s' (from path '%s')"), 
 		*MapName, *MapAssetPath);
 
 	// Track which level we're opening so PostLoadMapWithWorld can route to the correct handler.
@@ -306,7 +307,7 @@ void UMyGameInstance::TransitionToGameWorld()
 	// waits on an unfocused window), the numbers show it instead of "hangs".
 	LoadTravelStartTime = FPlatformTime::Seconds();
 	LoadTravelStartFrame = GFrameCounter;
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] Travel START: map '%s' (t=%.1fs, frame %llu)"),
+	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Travel START: map '%s' (t=%.1fs, frame %llu)"),
 		*MapName, LoadTravelStartTime, LoadTravelStartFrame);
 
 	// Force the game window to foreground BEFORE the level transition so the
@@ -398,7 +399,7 @@ void UMyGameInstance::DoOpenLevel()
 	UWorld* CurrentWorld = GetWorld();
 	if (!CurrentWorld)
 	{
-		UE_LOG(LogTemp, Error, TEXT("DoOpenLevel: GetWorld() returned nullptr"));
+		UE_LOG(LogConnection, Error, TEXT("DoOpenLevel: GetWorld() returned nullptr"));
 		bTransitioningToGameWorld = false;
 		return;
 	}
@@ -411,7 +412,7 @@ void UMyGameInstance::DoOpenLevel()
 	if (ActiveNow != 0)
 	{
 		// Another PIE is inside OpenLevel/GenerateStreaming — wait and retry.
-		UE_LOG(LogTemp, Warning,
+		UE_LOG(LogConnection, Warning,
 			TEXT("[LOADSEQ] DoOpenLevel: another PIE transition in progress, retrying in 3s"));
 		CurrentWorld->GetTimerManager().SetTimer(
 			OpenLevelRetryTimerHandle,
@@ -432,7 +433,7 @@ void UMyGameInstance::DoOpenLevel()
 	}
 
 	UGameplayStatics::OpenLevel(CurrentWorld, FName(*TravelPath), true);
-	UE_LOG(LogTemp, Warning, TEXT("[LOADSEQ] 1. OpenLevel('%s') called"), *TravelPath);
+	UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] 1. OpenLevel('%s') called"), *TravelPath);
 
 	// Ticker is started in OnPostLoginLevelLoaded after the new world is
 	// loaded — prevents the ticker from firing on the old world mid-transition.

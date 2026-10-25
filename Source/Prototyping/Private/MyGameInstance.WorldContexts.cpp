@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Components/ArrowComponent.h"
 #include "ShaderCompiler.h"
 #include "ContentStreaming.h"
@@ -114,11 +115,11 @@ void UMyGameInstance::InvalidateManagerWorldContexts(const FString& /*MapName*/)
 	// sub-level) which does NOT fire PreLoadMap, so no false positives there.
 	if (!bTransitioningToGameWorld && !bReturningToLogin)
 	{
-		UE_LOG(LogTemp, Log, TEXT("InvalidateManagerWorldContexts: SKIPPED (not transitioning - PreLoadMap from another PIE instance)"));
+		UE_LOG(LogConnection, Verbose, TEXT("InvalidateManagerWorldContexts: SKIPPED (not transitioning - PreLoadMap from another PIE instance)"));
 		return;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("InvalidateManagerWorldContexts: Nulling world context on all managers before map load"));
+	UE_LOG(LogConnection, Warning, TEXT("InvalidateManagerWorldContexts: Nulling world context on all managers before map load"));
 
 	// Set worldContext to nullptr on every manager that holds one.
 	// This prevents stale TObjectPtr<UWorld> handle assertions (0xFFFFFFFFFFFFFFFF)
@@ -146,11 +147,11 @@ void UMyGameInstance::RefreshManagerWorldContexts()
 	UWorld* World = GetWorld();
 	if (!World)
 	{
-		UE_LOG(LogTemp, Error, TEXT("RefreshManagerWorldContexts: World is null"));
+		UE_LOG(LogGameplay, Error, TEXT("RefreshManagerWorldContexts: World is null"));
 		return;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("RefreshManagerWorldContexts: Refreshing world context on all managers"));
+	UE_LOG(LogConnection, Warning, TEXT("RefreshManagerWorldContexts: Refreshing world context on all managers"));
 
 	if (NetworkManager)
 	{
@@ -195,7 +196,7 @@ void UMyGameInstance::RefreshManagerWorldContexts()
 
 void UMyGameInstance::ProcessPendingSpawns()
 {
-	UE_LOG(LogTemp, Warning, TEXT("ProcessPendingSpawns: PendingSpawnClientId=%d, PendingRemote=%d"),
+	UE_LOG(LogConnection, Verbose, TEXT("ProcessPendingSpawns: PendingSpawnClientId=%d, PendingRemote=%d"),
 		PendingSpawnClientId, PendingRemotePlayerSpawns.Num());
 
 	if (PendingSpawnClientId > 0)

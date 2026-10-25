@@ -1,6 +1,7 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Audio/AudioManager.h"
+#include "Prototyping.h"
 #include "Audio/AudioConfigDataAsset.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
@@ -33,7 +34,7 @@ void UAudioManager::Init(UObject* InWorldContext, UAudioConfigDataAsset* InConfi
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UAudioManager::Init: no AudioConfigDataAsset provided. "
+		UE_LOG(LogGameAudio, Warning, TEXT("UAudioManager::Init: no AudioConfigDataAsset provided. "
 			"Assign DA_AudioConfig in BP_GameInstance → Class Defaults → Audio Config."));
 	}
 
@@ -43,7 +44,7 @@ void UAudioManager::Init(UObject* InWorldContext, UAudioConfigDataAsset* InConfi
 
 	if (!MasterSoundMix)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UAudioManager::Init: MasterSoundMix is not assigned in DA_AudioConfig."));
+		UE_LOG(LogGameAudio, Warning, TEXT("UAudioManager::Init: MasterSoundMix is not assigned in DA_AudioConfig."));
 	}
 }
 
@@ -61,7 +62,7 @@ void UAudioManager::ReapplySoundMix()
 
 	if (!GetWorldSafe(WorldContextObject))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UAudioManager::ReapplySoundMix: world not available yet, skipping."));
+		UE_LOG(LogGameAudio, Warning, TEXT("UAudioManager::ReapplySoundMix: world not available yet, skipping."));
 		return;
 	}
 
@@ -83,7 +84,7 @@ void UAudioManager::ReapplySoundMix()
 	{
 		const FString PlaylistToResume = ActivePlaylistId;
 		ActivePlaylistId.Empty(); // clear so PlayPlaylist does not early-out
-		UE_LOG(LogTemp, Log, TEXT("UAudioManager::ReapplySoundMix: respawning components and resuming playlist '%s'"), *PlaylistToResume);
+		UE_LOG(LogGameAudio, Log, TEXT("UAudioManager::ReapplySoundMix: respawning components and resuming playlist '%s'"), *PlaylistToResume);
 		PlayPlaylist(PlaylistToResume, /*bForceRestart=*/true);
 	}
 }
@@ -115,7 +116,7 @@ void UAudioManager::InvalidateAudioComponents()
 	}
 	TrackEndTimerHandle.Invalidate();
 
-	UE_LOG(LogTemp, Log, TEXT("UAudioManager::InvalidateAudioComponents: components cleared (pending world transition)"));
+	UE_LOG(LogGameAudio, Log, TEXT("UAudioManager::InvalidateAudioComponents: components cleared (pending world transition)"));
 }
 
 // ---------------------------------------------------------------------------

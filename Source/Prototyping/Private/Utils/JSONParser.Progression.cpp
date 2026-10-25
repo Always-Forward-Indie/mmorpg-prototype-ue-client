@@ -2,6 +2,7 @@
 
 
 #include "Utils/JSONParser.h"
+#include "Prototyping.h"
 #include "Services/TimeSyncService.h"
 #include "MyGameInstance.h"
 #include "Engine/World.h"
@@ -45,14 +46,14 @@ FExperienceUpdateStruct JSONParser::DeserializeExperienceUpdate(const FString& J
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeExperienceUpdate failed to parse JSON"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeExperienceUpdate failed to parse JSON"));
 		return FExperienceUpdateStruct();
 	}
 
 	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
 	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeExperienceUpdate missing body"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeExperienceUpdate missing body"));
 		return FExperienceUpdateStruct();
 	}
 
@@ -89,21 +90,21 @@ FPlayerProgressionStruct JSONParser::DeserializePlayerProgression(const FString&
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializePlayerProgression failed to parse JSON"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializePlayerProgression failed to parse JSON"));
 		return FPlayerProgressionStruct();
 	}
 
 	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
 	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializePlayerProgression missing body"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializePlayerProgression missing body"));
 		return FPlayerProgressionStruct();
 	}
 
 	const TSharedPtr<FJsonObject>* ProgressionPtr = nullptr;
 	if (!(*BodyPtr)->TryGetObjectField(TEXT("progression"), ProgressionPtr) || !ProgressionPtr || !(*ProgressionPtr).IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializePlayerProgression missing progression"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializePlayerProgression missing progression"));
 		return FPlayerProgressionStruct();
 	}
 
@@ -164,14 +165,14 @@ FExperienceGainEventStruct JSONParser::DeserializeExperienceGainEvent(const FStr
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeExperienceGainEvent failed to parse JSON"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeExperienceGainEvent failed to parse JSON"));
 		return FExperienceGainEventStruct();
 	}
 
 	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
 	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeExperienceGainEvent missing body"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeExperienceGainEvent missing body"));
 		return FExperienceGainEventStruct();
 	}
 
@@ -273,14 +274,14 @@ FPlayerSkillsInitializationData JSONParser::DeserializePlayerSkillsInitializatio
 
 	if (!FJsonSerializer::Deserialize(Reader, JsonObject) || !JsonObject.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializePlayerSkillsInitialization failed to parse JSON"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializePlayerSkillsInitialization failed to parse JSON"));
 		return InitData;
 	}
 
 	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
 	if (!JsonObject->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializePlayerSkillsInitialization missing body"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializePlayerSkillsInitialization missing body"));
 		return InitData;
 	}
 

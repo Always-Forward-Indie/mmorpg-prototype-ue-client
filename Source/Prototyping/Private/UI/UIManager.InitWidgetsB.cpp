@@ -1,4 +1,5 @@
 #include "UI/UIManager.h"
+#include "Prototyping.h"
 #include "UI/UIManager.h"
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
@@ -80,11 +81,11 @@
 
 void UUIManager::InitializeTitlesWidget(UTitleManager* InTitleManager, UTitleNetworkHandler* InTitleHandler, int32 InCharacterId)
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeTitlesWidget"));
+	UE_LOG(LogGameplay, Log, TEXT("UIManager::InitializeTitlesWidget"));
 
 	if (!InTitleManager)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::InitializeTitlesWidget - TitleManager is null"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager::InitializeTitlesWidget - TitleManager is null"));
 		return;
 	}
 
@@ -97,26 +98,26 @@ void UUIManager::InitializeTitlesWidget(UTitleManager* InTitleManager, UTitleNet
 			TitlesWidget->SetVisibility(ESlateVisibility::Collapsed);
 			TitlesWidget->BindToManagers(InTitleManager, InTitleHandler, InCharacterId);
 			TitlesWidget->OnTitlesVisibilityChanged.AddDynamic(this, &UUIManager::OnTitlesVisibilityChanged);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: TitlesWidget created and bound"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: TitlesWidget created and bound"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create TitlesWidget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create TitlesWidget"));
 		}
 	}
 	else if (!TitlesWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: TitlesWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: TitlesWidgetClass is not set in Blueprint"));
 	}
 }
 
 void UUIManager::InitializeReputationWidget(UReputationManager* InReputationManager)
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeReputationWidget"));
+	UE_LOG(LogGameplay, Log, TEXT("UIManager::InitializeReputationWidget"));
 
 	if (!InReputationManager)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::InitializeReputationWidget - ReputationManager is null"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager::InitializeReputationWidget - ReputationManager is null"));
 		return;
 	}
 
@@ -129,26 +130,26 @@ void UUIManager::InitializeReputationWidget(UReputationManager* InReputationMana
 			ReputationWidget->SetVisibility(ESlateVisibility::Collapsed);
 			ReputationWidget->BindToManager(InReputationManager);
 			ReputationWidget->OnReputationVisibilityChanged.AddDynamic(this, &UUIManager::OnReputationVisibilityChanged);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: ReputationWidget created and bound"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: ReputationWidget created and bound"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create ReputationWidget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create ReputationWidget"));
 		}
 	}
 	else if (!ReputationWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: ReputationWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: ReputationWidgetClass is not set in Blueprint"));
 	}
 }
 
 void UUIManager::InitializeEmoteListWidget(UEmoteManager* InEmoteManager, UEmoteNetworkHandler* InEmoteHandler, int32 InCharacterId)
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeEmoteListWidget"));
+	UE_LOG(LogGameplay, Log, TEXT("UIManager::InitializeEmoteListWidget"));
 
 	if (!InEmoteManager)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::InitializeEmoteListWidget - EmoteManager is null"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager::InitializeEmoteListWidget - EmoteManager is null"));
 		return;
 	}
 
@@ -161,16 +162,16 @@ void UUIManager::InitializeEmoteListWidget(UEmoteManager* InEmoteManager, UEmote
 			EmoteListWidget->SetVisibility(ESlateVisibility::Collapsed);
 			EmoteListWidget->BindToManagers(InEmoteManager, InEmoteHandler, InCharacterId);
 			EmoteListWidget->OnEmoteListVisibilityChanged.AddDynamic(this, &UUIManager::OnEmoteListVisibilityChanged);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: EmoteListWidget created and bound"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: EmoteListWidget created and bound"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create EmoteListWidget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create EmoteListWidget"));
 		}
 	}
 	else if (!EmoteListWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: EmoteListWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: EmoteListWidgetClass is not set in Blueprint"));
 	}
 }
 
@@ -183,11 +184,11 @@ void UUIManager::OnEmoteListVisibilityChanged()
 
 void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiaryHandler)
 {
-	UE_LOG(LogTemp, Log, TEXT("UIManager::InitializeNotificationSystem"));
+	UE_LOG(LogGameplay, Log, TEXT("UIManager::InitializeNotificationSystem"));
 
 	if (!InBestiaryHandler)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::InitializeNotificationSystem - BestiaryHandler is null"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager::InitializeNotificationSystem - BestiaryHandler is null"));
 		return;
 	}
 
@@ -201,16 +202,16 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 			BestiaryWidget->SetVisibility(ESlateVisibility::Collapsed);
 			BestiaryWidget->BindToBestiaryHandler(InBestiaryHandler);
 			BestiaryWidget->OnBestiaryVisibilityChanged.AddDynamic(this, &UUIManager::OnBestiaryVisibilityChanged);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: BestiaryWidget created and bound"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: BestiaryWidget created and bound"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create BestiaryWidget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create BestiaryWidget"));
 		}
 	}
 	else if (!BestiaryWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: BestiaryWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: BestiaryWidgetClass is not set in Blueprint"));
 	}
 
 	// Create chat widget if ChatManager is available through GameInstance
@@ -226,18 +227,18 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 				{
 					ChatWidget->AddToViewport(15); // Low Z-order, always visible as HUD overlay
 					ChatWidget->InitializeChatWidget(ChatMgr);
-					UE_LOG(LogTemp, Log, TEXT("UIManager: ChatWidget created and bound to ChatManager"));
+					UE_LOG(LogGameplay, Verbose, TEXT("UIManager: ChatWidget created and bound to ChatManager"));
 				}
 				else
 				{
-					UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create ChatWidget"));
+					UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create ChatWidget"));
 				}
 			}
 		}
 	}
 	else if (!ChatWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: ChatWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: ChatWidgetClass is not set in Blueprint"));
 	}
 
 	// ====================================================================
@@ -251,16 +252,16 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 		if (NotificationToastWidget)
 		{
 			NotificationToastWidget->AddToViewport(50);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: NotificationToastWidget created"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: NotificationToastWidget created"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create NotificationToastWidget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create NotificationToastWidget"));
 		}
 	}
 	else if (!NotificationToastWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: NotificationToastWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: NotificationToastWidgetClass is not set in Blueprint"));
 	}
 
 	// Zone banner widget (large banner for zone transitions)
@@ -270,16 +271,16 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 		if (NotificationZoneBannerWidget)
 		{
 			NotificationZoneBannerWidget->AddToViewport(55);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: NotificationZoneBannerWidget created"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: NotificationZoneBannerWidget created"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create NotificationZoneBannerWidget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create NotificationZoneBannerWidget"));
 		}
 	}
 	else if (!NotificationZoneBannerWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: NotificationZoneBannerWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: NotificationZoneBannerWidgetClass is not set in Blueprint"));
 	}
 
 	// Screen center widget (full-screen flash for critical events like level_up)
@@ -289,16 +290,16 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 		if (NotificationScreenCenterWidget)
 		{
 			NotificationScreenCenterWidget->AddToViewport(60);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: NotificationScreenCenterWidget created"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: NotificationScreenCenterWidget created"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create NotificationScreenCenterWidget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create NotificationScreenCenterWidget"));
 		}
 	}
 	else if (!NotificationScreenCenterWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: NotificationScreenCenterWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: NotificationScreenCenterWidgetClass is not set in Blueprint"));
 	}
 
 	// Atmosphere widget (semi-transparent ambient text)
@@ -308,16 +309,16 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 		if (NotificationAtmosphereWidget)
 		{
 			NotificationAtmosphereWidget->AddToViewport(45);
-			UE_LOG(LogTemp, Log, TEXT("UIManager: NotificationAtmosphereWidget created"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: NotificationAtmosphereWidget created"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: Failed to create NotificationAtmosphereWidget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create NotificationAtmosphereWidget"));
 		}
 	}
 	else if (!NotificationAtmosphereWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager: NotificationAtmosphereWidgetClass is not set in Blueprint"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: NotificationAtmosphereWidgetClass is not set in Blueprint"));
 	}
 
 	// ====================================================================
@@ -344,11 +345,11 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 				BestiaryWidget);
 
 			WorldNotificationManager->SubscribeToNetworkEvents();
-			UE_LOG(LogTemp, Log, TEXT("UIManager: WorldNotificationManager created and subscribed to network events"));
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: WorldNotificationManager created and subscribed to network events"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("UIManager: NetworkManager is null, WorldNotificationManager not initialized"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: NetworkManager is null, WorldNotificationManager not initialized"));
 		}
 	}
 }
@@ -357,6 +358,6 @@ void UUIManager::CreateExperienceWidget()
 {
 	// Experience widget is now managed by PlayerInterfaceWidget
 	// This method is kept for compatibility but delegates to PlayerInterfaceWidget
-	UE_LOG(LogTemp, Log, TEXT("UIManager::CreateExperienceWidget - handled by PlayerInterfaceWidget"));
+	UE_LOG(LogGameplay, Log, TEXT("UIManager::CreateExperienceWidget - handled by PlayerInterfaceWidget"));
 }
 

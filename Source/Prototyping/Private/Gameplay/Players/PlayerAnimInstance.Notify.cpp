@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/PlayerAnimInstance.h"
+#include "Prototyping.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Animation/AnimMontage.h"
@@ -93,7 +94,7 @@ float UPlayerAnimInstance::NotifyPickup()
 {
     if (!PickupMontage)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] NotifyPickup: PickupMontage is NULL - skipping montage"));
+        UE_LOG(LogGameplay, Warning, TEXT("[PlayerAnim] NotifyPickup: PickupMontage is NULL - skipping montage"));
         return 0.0f;
     }
 
@@ -102,7 +103,7 @@ float UPlayerAnimInstance::NotifyPickup()
     const float Duration     = MontageLen / PlayRate;
     const float PickupDelay  = Duration * 0.5f;
 
-    UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] NotifyPickup: playing montage '%s' len=%.3fs delay=%.3fs"),
+    UE_LOG(LogGameplay, Warning, TEXT("[PlayerAnim] NotifyPickup: playing montage '%s' len=%.3fs delay=%.3fs"),
         *PickupMontage->GetName(), MontageLen, PickupDelay);
 
     // Cancel any previous pickup-point timer
@@ -135,7 +136,7 @@ float UPlayerAnimInstance::NotifyHarvest(float DesiredDurationSeconds)
         ? FMath::Clamp(MontageLen / DesiredDurationSeconds, 0.5f, 3.0f)
         : 1.0f;
 
-    UE_LOG(LogTemp, Log, TEXT("[PlayerAnim] NotifyHarvest: playing montage '%s' len=%.3fs desired=%.1fs rate=%.2f"),
+    UE_LOG(LogGameplay, Verbose, TEXT("[PlayerAnim] NotifyHarvest: playing montage '%s' len=%.3fs desired=%.1fs rate=%.2f"),
         *HarvestMontage->GetName(), MontageLen, DesiredDurationSeconds, PlayRate);
 
     Montage_Play(HarvestMontage, PlayRate);
@@ -167,7 +168,7 @@ void UPlayerAnimInstance::FirePickupPoint()
         World->GetTimerManager().ClearTimer(PickupPointTimerHandle);
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[PlayerAnim] FirePickupPoint: listeners=%d"),
+    UE_LOG(LogGameplay, Warning, TEXT("[PlayerAnim] FirePickupPoint: listeners=%d"),
         OnPickupPoint.IsBound() ? 1 : 0);
 
     OnPickupPoint.Broadcast();

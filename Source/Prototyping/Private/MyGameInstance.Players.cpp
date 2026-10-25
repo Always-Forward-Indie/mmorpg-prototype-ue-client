@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Components/ArrowComponent.h"
 #include "ShaderCompiler.h"
 #include "ContentStreaming.h"
@@ -131,7 +132,7 @@ void UMyGameInstance::SetCurrentCharacterID(int32 CharacterID)
     // Update the character ID in the client data
     ClientData.characterData.characterId = CharacterID;
     
-    UE_LOG(LogTemp, Warning, TEXT("SetCurrentCharacterID %d"), CharacterID);
+    UE_LOG(LogConnection, Warning, TEXT("SetCurrentCharacterID %d"), CharacterID);
 }
 
 int32 UMyGameInstance::GetCurrentCharacterID()
@@ -141,23 +142,23 @@ int32 UMyGameInstance::GetCurrentCharacterID()
 
 void UMyGameInstance::JoinSelectedCharacterToGame()
 {
-	UE_LOG(LogTemp, Warning, TEXT("JoinSelectedCharacterToGame called with CharacterID: %d"), CurrentCharacterID);
+	UE_LOG(LogConnection, Verbose, TEXT("JoinSelectedCharacterToGame called with CharacterID: %d"), CurrentCharacterID);
 
 	if (!JoinGuard.TryEnter())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("JoinSelectedCharacterToGame: join already in progress, ignoring duplicate call (charId=%d)"), CurrentCharacterID);
+		UE_LOG(LogConnection, Verbose, TEXT("JoinSelectedCharacterToGame: join already in progress, ignoring duplicate call (charId=%d)"), CurrentCharacterID);
 		return;
 	}
 
 	if (CurrentCharacterID <= 0)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Cannot join game: No character selected."));
+		UE_LOG(LogConnection, Error, TEXT("Cannot join game: No character selected."));
 		return;
 	}
 
 	if (CurrentClientID <= 0 || CurrentClientSecret.IsEmpty())
 	{
-		UE_LOG(LogTemp, Error, TEXT("Cannot join game: Client not authenticated."));
+		UE_LOG(LogConnection, Error, TEXT("Cannot join game: Client not authenticated."));
 		return;
 	}
 
@@ -167,12 +168,12 @@ void UMyGameInstance::JoinSelectedCharacterToGame()
 	// then Phase 1 continued (joinGameCharacter on Chunk Server).
 	if (PlayerManager)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("PRE-PHASE: Sending joinGameClient to Game Server for character %d"), CurrentCharacterID);
+		UE_LOG(LogGameplay, Warning, TEXT("PRE-PHASE: Sending joinGameClient to Game Server for character %d"), CurrentCharacterID);
 		PlayerManager->SendJoinGameRequest(ClientData);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("Cannot join game: PlayerManager is null."));
+		UE_LOG(LogGameplay, Error, TEXT("Cannot join game: PlayerManager is null."));
 		JoinGuard.Reset();
 	}
 }
@@ -185,12 +186,12 @@ void UMyGameInstance::AddPlayerData(int32 ClientID, const FClientDataStruct clie
 		// If the player actor is already spawned we leave it in place;
 		// SpawnPlayerForClient guards against double-spawning.
 		ConnectedPlayers[ClientID] = clientData;
-		UE_LOG(LogTemp, Warning, TEXT("AddPlayerData: Updated existing entry for ClientID=%d CharID=%d"),
+		UE_LOG(LogConnection, Verbose, TEXT("AddPlayerData: Updated existing entry for ClientID=%d CharID=%d"),
 			clientData.clientId, clientData.characterData.characterId);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AddPlayerData: Added ClientID=%d CharID=%d"),
+		UE_LOG(LogConnection, Verbose, TEXT("AddPlayerData: Added ClientID=%d CharID=%d"),
 			clientData.clientId, clientData.characterData.characterId);
 		ConnectedPlayers.Add(ClientID, clientData);
 	}
@@ -294,7 +295,7 @@ void UMyGameInstance::MovePlayerForClient(const int32 ClientID, const FClientDat
 				// subsequent charAttributesUpdate or stats broadcast arrives.
 				const int32 MaxHP = PlayerToMove->GetMaxHealth_Implementation();
 				PlayerToMove->SetPlayerCurrentHPPoints(MaxHP);
-				UE_LOG(LogTemp, Log, TEXT("MovePlayerForClient: Auto-revived remote player CharID=%d HP set to %d"),
+				UE_LOG(LogConnection, Verbose, TEXT("MovePlayerForClient: Auto-revived remote player CharID=%d HP set to %d"),
 					clientData.characterData.characterId, MaxHP);
 			}
 		}
@@ -345,10 +346,10 @@ void UMyGameInstance::SetCharacterItems(TArray<FCharacterDataStruct> Items)
 		// a null widget in the manual flow is still an Error (empty list).
 		if (!LiveBotScenario.IsEmpty())
 		{
-			UE_LOG(LogTemp, Verbose, TEXT("SetCharacterItems: no login widget in live-bot flow, items consumed by driver"));
+			UE_LOG(LogGameplay, Verbose, TEXT("SetCharacterItems: no login widget in live-bot flow, items consumed by driver"));
 			return;
 		}
-		UE_LOG(LogTemp, Error, TEXT("Failed to set character items - LoginScreenWidget is null"));
+		UE_LOG(LogGameplay, Error, TEXT("Failed to set character items - LoginScreenWidget is null"));
 		return;
 	}
 
@@ -373,14 +374,14 @@ void UMyGameInstance::SetCharacterItems(TArray<FCharacterDataStruct> Items)
 				// Add the item to the List View
 				CharacterListView->AddItem(CharacterListItemWidget);
 				
-				UE_LOG(LogTemp, Warning, TEXT("Added character to list: %s (ID: %d)"), 
+				UE_LOG(LogGameplay, Warning, TEXT("Added character to list: %s (ID: %d)"), 
 					*Character.characterName, Character.characterId);
 			}
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to set character items - LoginScreenWidget or CharacterListView is null"));
+		UE_LOG(LogGameplay, Error, TEXT("Failed to set character items - LoginScreenWidget or CharacterListView is null"));
 	}
 }
 
@@ -404,6 +405,6 @@ ABasicPlayer* UMyGameInstance::GetPlayerByCharacterId(int32 CharacterId)
 	}
 
 	// If not found, return nullptr
-	UE_LOG(LogTemp, Warning, TEXT("MyGameInstance: Player with character ID %d not found"), CharacterId);
+	UE_LOG(LogGameplay, Warning, TEXT("MyGameInstance: Player with character ID %d not found"), CharacterId);
 	return nullptr;
 }

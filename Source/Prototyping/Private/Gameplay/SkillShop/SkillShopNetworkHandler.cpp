@@ -1,4 +1,5 @@
 #include "Gameplay/SkillShop/SkillShopNetworkHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/SkillShop/SkillShopManager.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Networking/NetworkManager.h"
@@ -13,7 +14,7 @@ void USkillShopNetworkHandler::Initialize(USkillShopManager* InSkillShopManager,
 {
     if (!InSkillShopManager || !InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("SkillShopNetworkHandler: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("SkillShopNetworkHandler: Initialize called with null parameters"));
         return;
     }
     SkillShopManager   = InSkillShopManager;
@@ -58,23 +59,23 @@ void USkillShopNetworkHandler::HandleChunkServerData(const FString& ReceivedData
 
     if (EventType == TEXT("skillShop") || EventType == TEXT("openSkillShop"))
     {
-        UE_LOG(LogTemp, Log, TEXT("[SkillShop] <<< %s received. Raw: %s"), *EventType, *ReceivedData);
+        UE_LOG(LogNetPacket, Verbose, TEXT("[SkillShop] <<< %s received. Raw: %s"), *EventType, *ReceivedData);
 
         const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
         if (!Root->TryGetObjectField(TEXT("body"), BodyPtr))
         {
-            UE_LOG(LogTemp, Warning, TEXT("[SkillShop] %s packet missing 'body' field"), *EventType);
+            UE_LOG(LogNetPacket, Warning, TEXT("[SkillShop] %s packet missing 'body' field"), *EventType);
             return;
         }
 
         FSkillShopData Shop = ParseSkillShop(*BodyPtr);
-        UE_LOG(LogTemp, Log, TEXT("[SkillShop] Parsed skillShop: npcId=%d npcSlug='%s' freeSkillPoints=%d goldBalance=%d skills=%d"),
+        UE_LOG(LogGameplay, Verbose, TEXT("[SkillShop] Parsed skillShop: npcId=%d npcSlug='%s' freeSkillPoints=%d goldBalance=%d skills=%d"),
             Shop.npcId, *Shop.npcSlug, Shop.freeSkillPoints, Shop.goldBalance, Shop.skills.Num());
 
         for (int32 i = 0; i < Shop.skills.Num(); ++i)
         {
             const FSkillShopSkillData& S = Shop.skills[i];
-            UE_LOG(LogTemp, Log,
+            UE_LOG(LogGameplay, Verbose,
                 TEXT("[SkillShop]   [%d] slug='%s' name='%s' lvl=%d sp=%d gold=%d book=%d "
                      "isLearned=%d canLearn=%d prereqMet=%d levelMet=%d spMet=%d goldMet=%d bookMet=%d"),
                 i, *S.skillSlug, *S.skillName, S.requiredLevel, S.spCost, S.goldCost, S.requiresBook ? 1 : 0,
@@ -86,12 +87,12 @@ void USkillShopNetworkHandler::HandleChunkServerData(const FString& ReceivedData
     }
     else if (EventType == TEXT("skill_learned"))
     {
-        UE_LOG(LogTemp, Log, TEXT("[SkillShop] <<< skill_learned received. Raw: %s"), *ReceivedData);
+        UE_LOG(LogNetPacket, Verbose, TEXT("[SkillShop] <<< skill_learned received. Raw: %s"), *ReceivedData);
 
         FLearnSkillResultData Result = ParseSkillLearned(Root);
         Result.bSuccess = true;
 
-        UE_LOG(LogTemp, Log, TEXT("[SkillShop] Parsed skill_learned: slug='%s' name='%s' newFreeSkillPoints=%d"),
+        UE_LOG(LogGameplay, Verbose, TEXT("[SkillShop] Parsed skill_learned: slug='%s' name='%s' newFreeSkillPoints=%d"),
             *Result.skillSlug, *Result.skillName, Result.newFreeSkillPoints);
 
         // Add to PlayerSkillManager so the hotbar updates immediately
@@ -101,19 +102,19 @@ void USkillShopNetworkHandler::HandleChunkServerData(const FString& ReceivedData
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("[SkillShop] PlayerSkillManager is null — hotbar will NOT be updated"));
+            UE_LOG(LogGameplay, Warning, TEXT("[SkillShop] PlayerSkillManager is null — hotbar will NOT be updated"));
         }
 
         SkillShopManager->OnSkillLearnedReceived(Result);
     }
     else if (EventType == TEXT("learn_skill_failed"))
     {
-        UE_LOG(LogTemp, Log, TEXT("[SkillShop] <<< learn_skill_failed received. Raw: %s"), *ReceivedData);
+        UE_LOG(LogNetPacket, Verbose, TEXT("[SkillShop] <<< learn_skill_failed received. Raw: %s"), *ReceivedData);
 
         const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
         if (!Root->TryGetObjectField(TEXT("body"), BodyPtr))
         {
-            UE_LOG(LogTemp, Warning, TEXT("[SkillShop] learn_skill_failed packet missing 'body' field"));
+            UE_LOG(LogNetPacket, Warning, TEXT("[SkillShop] learn_skill_failed packet missing 'body' field"));
             return;
         }
 
@@ -125,7 +126,7 @@ void USkillShopNetworkHandler::HandleChunkServerData(const FString& ReceivedData
         if (Reason.IsEmpty())
             (*BodyPtr)->TryGetStringField(TEXT("type"), Reason);
 
-        UE_LOG(LogTemp, Warning, TEXT("[SkillShop] Learn failed: slug='%s' reason='%s'"), *SkillSlug, *Reason);
+        UE_LOG(LogGameplay, Warning, TEXT("[SkillShop] Learn failed: slug='%s' reason='%s'"), *SkillSlug, *Reason);
 
         SkillShopManager->OnSkillLearnFailedReceived(SkillSlug, Reason);
     }

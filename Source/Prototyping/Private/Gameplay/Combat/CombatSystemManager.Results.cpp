@@ -1,4 +1,5 @@
 #include "Gameplay/Combat/CombatSystemManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Combat/ISkillEffectHandler.h"
 #include "Gameplay/Combat/ICombatable.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
@@ -29,7 +30,7 @@ void UCombatSystemManager::ProcessSkillResult(const FSkillResultData& SkillResul
     if (!Result.success && Result.errorReason.Contains(TEXT("out of range")))
     {
         Result.isMissed = true;
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Skill %s failed (out of range) — treating as miss"), *Result.skillName);
+        UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Skill %s failed (out of range) — treating as miss"), *Result.skillName);
     }
 
     // --- Update caster mana immediately (UI responsiveness) ---
@@ -59,7 +60,7 @@ void UCombatSystemManager::ProcessSkillResult(const FSkillResultData& SkillResul
                 TScriptInterface<ICombatable> Target = FindCombatableById(Result.targetId, TargetCombatType);
                 if (Target.GetInterface() && Target.GetObject() && IsValid(Target.GetObject()))
                 {
-                    UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Applying item heal for '%s' immediately (no anim sync needed)"), *LookupKey);
+                    UE_LOG(LogGameplay, Verbose, TEXT("CombatSystemManager: Applying item heal for '%s' immediately (no anim sync needed)"), *LookupKey);
                     ApplySkillEffects(Result, Target);
                     OnSkillCompleted.Broadcast(Result);
                 }
@@ -84,7 +85,7 @@ void UCombatSystemManager::ProcessSkillResult(const FSkillResultData& SkillResul
             Pending.bWaitsForProjectile = !Repo->GetDefinition(LookupKey).projectileClass.IsNull();
             if (Pending.bWaitsForProjectile)
             {
-                UE_LOG(LogTemp, Warning,
+                UE_LOG(LogGameplay, Warning,
                     TEXT("CombatSystemManager: Marking result for caster %d skill '%s' as bWaitsForProjectile"),
                     Result.casterId, *LookupKey);
             }
@@ -94,7 +95,7 @@ void UCombatSystemManager::ProcessSkillResult(const FSkillResultData& SkillResul
     TArray<FPendingResult>& Queue = PendingSkillResults.FindOrAdd(Result.casterId);
     Queue.Add(MoveTemp(Pending));
 
-    UE_LOG(LogTemp, Log, TEXT("CombatSystemManager: Queued pending result for caster %d (%d in queue)"),
+    UE_LOG(LogGameplay, Verbose, TEXT("CombatSystemManager: Queued pending result for caster %d (%d in queue)"),
         Result.casterId, Queue.Num());
 
     // Check if the projectile already landed before this result arrived (server was slow).
@@ -106,7 +107,7 @@ void UCombatSystemManager::ProcessSkillResult(const FSkillResultData& SkillResul
             const double NowTime = WorldContext ? WorldContext->GetTimeSeconds() : 0.0;
             if ((NowTime - *ImpactTime) < EarlyImpactWindowSeconds)
             {
-                UE_LOG(LogTemp, Warning,
+                UE_LOG(LogGameplay, Warning,
                     TEXT("CombatSystemManager: Early-impact marker found for caster %d (%.3fs ago) - flushing immediately"),
                     Result.casterId, NowTime - *ImpactTime);
                 EarlyProjectileImpacts.Remove(Result.casterId);
@@ -116,7 +117,7 @@ void UCombatSystemManager::ProcessSkillResult(const FSkillResultData& SkillResul
             else
             {
                 // Stale marker (shouldn't happen in practice), clean it up
-                UE_LOG(LogTemp, Warning,
+                UE_LOG(LogGameplay, Warning,
                     TEXT("CombatSystemManager: Stale early-impact marker for caster %d (%.3fs ago) - ignoring"),
                     Result.casterId, NowTime - *ImpactTime);
                 EarlyProjectileImpacts.Remove(Result.casterId);
@@ -132,7 +133,7 @@ TScriptInterface<ICombatable> UCombatSystemManager::FindCombatableById(int32 Act
 {
     if (ActorId <= 0 || ActorType == ECasterType::None)
     {
-        UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Invalid search parameters - ActorId: %d, ActorType: %d"), ActorId, (int32)ActorType);
+        UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Invalid search parameters - ActorId: %d, ActorType: %d"), ActorId, (int32)ActorType);
         return TScriptInterface<ICombatable>();
     }
 
@@ -143,7 +144,7 @@ TScriptInterface<ICombatable> UCombatSystemManager::FindCombatableById(int32 Act
         {
             if (!Found->WeakObject.IsValid())
             {
-                UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Stale combatable for ID %d, removing"), ActorId);
+                UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Stale combatable for ID %d, removing"), ActorId);
                 RegisteredCombatables.Remove(Key);
                 return TScriptInterface<ICombatable>();
             }
@@ -152,7 +153,7 @@ TScriptInterface<ICombatable> UCombatSystemManager::FindCombatableById(int32 Act
 
             if (ICombatable::Execute_GetActorId(CombatableObject) != ActorId)
             {
-                UE_LOG(LogTemp, Error, TEXT("CombatSystemManager: Actor ID mismatch - expected %d, got %d"),
+                UE_LOG(LogGameplay, Error, TEXT("CombatSystemManager: Actor ID mismatch - expected %d, got %d"),
                     ActorId, ICombatable::Execute_GetActorId(CombatableObject));
                 RegisteredCombatables.Remove(Key);
                 return TScriptInterface<ICombatable>();
@@ -185,7 +186,7 @@ TScriptInterface<ICombatable> UCombatSystemManager::FindCombatableById(int32 Act
         Result = TryFindByKey(FallbackKey);
         if (Result.GetInterface())
         {
-            UE_LOG(LogTemp, Warning, TEXT("CombatSystemManager: Found actor %d via fallback type %d (requested %d)"),
+            UE_LOG(LogGameplay, Warning, TEXT("CombatSystemManager: Found actor %d via fallback type %d (requested %d)"),
                 ActorId, (int32)Fallback, (int32)ActorType);
             return Result;
         }

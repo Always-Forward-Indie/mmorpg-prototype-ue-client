@@ -1,4 +1,5 @@
 #include "Gameplay/NPCs/NPCNetworkHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/NPCs/NPCManager.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
@@ -18,7 +19,7 @@ void UNPCNetworkHandler::Initialize(UNPCManager* InNPCManager, UNetworkManager* 
 {
     if (!InNPCManager || !InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("NPCNetworkHandler: Cannot initialize with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("NPCNetworkHandler: Cannot initialize with null parameters"));
         return;
     }
 
@@ -32,13 +33,13 @@ void UNPCNetworkHandler::SubscribeToNetworkEvents()
 {
     if (!NetworkManager || !IsValid(NetworkManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("NPCNetworkHandler: Cannot subscribe - NetworkManager is null or invalid"));
+        UE_LOG(LogGameplay, Error, TEXT("NPCNetworkHandler: Cannot subscribe - NetworkManager is null or invalid"));
         return;
     }
 
     if (bIsSubscribed)
     {
-        UE_LOG(LogTemp, Warning, TEXT("NPCNetworkHandler: Already subscribed to network events"));
+        UE_LOG(LogGameplay, Warning, TEXT("NPCNetworkHandler: Already subscribed to network events"));
         return;
     }
 
@@ -84,7 +85,7 @@ void UNPCNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
 {
     if (ReceivedData.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("NPCNetworkHandler: Received empty data"));
+        UE_LOG(LogNetPacket, Warning, TEXT("NPCNetworkHandler: Received empty data"));
         return;
     }
 
@@ -108,7 +109,7 @@ void UNPCNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
     // Validate event data before processing
     if (!ValidateNPCEventData(ReceivedData))
     {
-        UE_LOG(LogTemp, Warning, TEXT("NPCNetworkHandler: Invalid NPC event data"));
+        UE_LOG(LogGameplay, Warning, TEXT("NPCNetworkHandler: Invalid NPC event data"));
         return;
     }
 
@@ -131,7 +132,7 @@ void UNPCNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("NPCNetworkHandler: Unknown NPC event type: %s"), *MessageData.eventType);
+        UE_LOG(LogGameplay, Warning, TEXT("NPCNetworkHandler: Unknown NPC event type: %s"), *MessageData.eventType);
     }
 }
 
@@ -139,7 +140,7 @@ void UNPCNetworkHandler::HandleNPCSpawn(const FString& JsonData)
 {
     if (!NPCManager || !IsValid(NPCManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("NPCNetworkHandler: NPCManager is null or invalid"));
+        UE_LOG(LogGameplay, Error, TEXT("NPCNetworkHandler: NPCManager is null or invalid"));
         return;
     }
 
@@ -148,7 +149,7 @@ void UNPCNetworkHandler::HandleNPCSpawn(const FString& JsonData)
     
     if (NPCSpawnData.npcsSpawn.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("NPCNetworkHandler: No NPCs to spawn"));
+        UE_LOG(LogGameplay, Warning, TEXT("NPCNetworkHandler: No NPCs to spawn"));
         return;
     }
 
@@ -158,7 +159,7 @@ void UNPCNetworkHandler::HandleNPCSpawn(const FString& JsonData)
     // Forward to NPC manager
     NPCManager->SpawnNPCs(NPCSpawnData.npcsSpawn);
 
-    UE_LOG(LogTemp, Warning, TEXT("NPCNetworkHandler: Successfully processed spawn for %d NPCs"), 
+    UE_LOG(LogGameplay, Warning, TEXT("NPCNetworkHandler: Successfully processed spawn for %d NPCs"), 
         NPCSpawnData.npcsSpawn.Num());
 }
 
@@ -170,7 +171,7 @@ void UNPCNetworkHandler::HandleNPCUpdate(const FString& JsonData)
     
     if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("NPCNetworkHandler: Failed to parse NPC update JSON"));
+        UE_LOG(LogNetPacket, Error, TEXT("NPCNetworkHandler: Failed to parse NPC update JSON"));
         return;
     }
 
@@ -178,14 +179,14 @@ void UNPCNetworkHandler::HandleNPCUpdate(const FString& JsonData)
     TSharedPtr<FJsonObject> Body;
     if (!Root->HasField(TEXT("body")))
     {
-        UE_LOG(LogTemp, Error, TEXT("NPCNetworkHandler: No body in NPC update JSON"));
+        UE_LOG(LogGameplay, Error, TEXT("NPCNetworkHandler: No body in NPC update JSON"));
         return;
     }
     
     Body = Root->GetObjectField(TEXT("body"));
     if (!Body.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("NPCNetworkHandler: Invalid body object in NPC update"));
+        UE_LOG(LogNetPacket, Error, TEXT("NPCNetworkHandler: Invalid body object in NPC update"));
         return;
     }
 
@@ -195,7 +196,7 @@ void UNPCNetworkHandler::HandleNPCUpdate(const FString& JsonData)
 
     if (NPCId <= 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("NPCNetworkHandler: Invalid NPC ID in update: %d"), NPCId);
+        UE_LOG(LogGameplay, Error, TEXT("NPCNetworkHandler: Invalid NPC ID in update: %d"), NPCId);
         return;
     }
 
@@ -213,13 +214,13 @@ void UNPCNetworkHandler::HandleNPCUpdate(const FString& JsonData)
             if (UpdatedData.id == NPCId)
             {
                 NPC->SetNPCData(UpdatedData);
-                UE_LOG(LogTemp, Log, TEXT("NPCNetworkHandler: Updated NPC %s (ID: %d)"), 
+                UE_LOG(LogGameplay, Verbose, TEXT("NPCNetworkHandler: Updated NPC %s (ID: %d)"), 
                     *UpdatedData.name, NPCId);
             }
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("NPCNetworkHandler: NPC with ID %d not found for update"), NPCId);
+            UE_LOG(LogGameplay, Warning, TEXT("NPCNetworkHandler: NPC with ID %d not found for update"), NPCId);
         }
     }
 }
@@ -232,7 +233,7 @@ void UNPCNetworkHandler::HandleNPCRemove(const FString& JsonData)
     
     if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("NPCNetworkHandler: Failed to parse NPC remove JSON"));
+        UE_LOG(LogNetPacket, Error, TEXT("NPCNetworkHandler: Failed to parse NPC remove JSON"));
         return;
     }
 
@@ -240,7 +241,7 @@ void UNPCNetworkHandler::HandleNPCRemove(const FString& JsonData)
     TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
     if (!Body.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("NPCNetworkHandler: Invalid body object in NPC remove"));
+        UE_LOG(LogNetPacket, Error, TEXT("NPCNetworkHandler: Invalid body object in NPC remove"));
         return;
     }
 
@@ -250,7 +251,7 @@ void UNPCNetworkHandler::HandleNPCRemove(const FString& JsonData)
 
     if (NPCId <= 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("NPCNetworkHandler: Invalid NPC ID in remove: %d"), NPCId);
+        UE_LOG(LogGameplay, Error, TEXT("NPCNetworkHandler: Invalid NPC ID in remove: %d"), NPCId);
         return;
     }
 
@@ -274,7 +275,7 @@ void UNPCNetworkHandler::HandleNPCInteraction(const FString& JsonData)
     
     if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("NPCNetworkHandler: Failed to parse NPC interaction JSON"));
+        UE_LOG(LogNetPacket, Error, TEXT("NPCNetworkHandler: Failed to parse NPC interaction JSON"));
         return;
     }
 
@@ -282,7 +283,7 @@ void UNPCNetworkHandler::HandleNPCInteraction(const FString& JsonData)
     TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
     if (!Body.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("NPCNetworkHandler: Invalid body object in NPC interaction"));
+        UE_LOG(LogNetPacket, Error, TEXT("NPCNetworkHandler: Invalid body object in NPC interaction"));
         return;
     }
 
@@ -295,7 +296,7 @@ void UNPCNetworkHandler::HandleNPCInteraction(const FString& JsonData)
     Body->TryGetNumberField(TEXT("playerId"), PlayerId);
     Body->TryGetStringField(TEXT("interactionType"), InteractionType);
 
-    UE_LOG(LogTemp, Log, TEXT("NPCNetworkHandler: NPC interaction - NPC: %d, Player: %d, Type: %s"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("NPCNetworkHandler: NPC interaction - NPC: %d, Player: %d, Type: %s"), 
         NPCId, PlayerId, *InteractionType);
 
     // TODO: Handle specific interaction types (dialogue, quest, trade, etc.)
@@ -346,6 +347,6 @@ void UNPCNetworkHandler::LogNetworkEvent(const FString& Event, const FString& De
 {
     if (bDebugLogging)
     {
-        UE_LOG(LogTemp, Warning, TEXT("NPCNetworkHandler [%s]: %s"), *Event, *Details);
+        UE_LOG(LogGameplay, Warning, TEXT("NPCNetworkHandler [%s]: %s"), *Event, *Details);
     }
 }

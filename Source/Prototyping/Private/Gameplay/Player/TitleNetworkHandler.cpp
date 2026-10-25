@@ -1,4 +1,5 @@
 #include "Gameplay/Player/TitleNetworkHandler.h"
+#include "Prototyping.h"
 #include "Gameplay/Player/TitleManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
@@ -13,7 +14,7 @@ void UTitleNetworkHandler::Initialize(UTitleManager* InManager, UNetworkManager*
 {
     if (!InManager || !InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("TitleNetworkHandler: Initialize called with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("TitleNetworkHandler: Initialize called with null parameters"));
         return;
     }
     Manager          = InManager;
@@ -57,7 +58,7 @@ void UTitleNetworkHandler::RequestGetTitles(int32 CharacterId)
         GameInstance->GetTimeSyncService(), EServerType::ChunkServer);
 
     NetworkManager->SendDataToChunkServer(JsonString);
-    UE_LOG(LogTemp, Log, TEXT("TitleNetworkHandler: Sent getTitles for character %d"), CharacterId);
+    UE_LOG(LogGameplay, Verbose, TEXT("TitleNetworkHandler: Sent getTitles for character %d"), CharacterId);
 }
 
 void UTitleNetworkHandler::RequestEquipTitle(int32 CharacterId, const FString& TitleSlug)
@@ -78,7 +79,7 @@ void UTitleNetworkHandler::RequestEquipTitle(int32 CharacterId, const FString& T
         GameInstance->GetTimeSyncService(), EServerType::ChunkServer);
 
     NetworkManager->SendDataToChunkServer(JsonString);
-    UE_LOG(LogTemp, Log, TEXT("TitleNetworkHandler: Sent equipTitle='%s' for character %d"), *TitleSlug, CharacterId);
+    UE_LOG(LogGameplay, Verbose, TEXT("TitleNetworkHandler: Sent equipTitle='%s' for character %d"), *TitleSlug, CharacterId);
 }
 
 // ---------------------------------------------------------------------------

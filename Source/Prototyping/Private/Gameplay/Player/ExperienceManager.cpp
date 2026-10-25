@@ -1,4 +1,5 @@
 #include "Gameplay/Player/ExperienceManager.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Networking/NetworkManager.h"
 #include "Services/TimeSyncService.h"
@@ -16,7 +17,7 @@ void UExperienceManager::Initialize(UMyGameInstance* InGameInstance, UNetworkMan
 {
     if (!InGameInstance || !InNetworkManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("ExperienceManager: Cannot initialize with null parameters"));
+        UE_LOG(LogGameplay, Error, TEXT("ExperienceManager: Cannot initialize with null parameters"));
         return;
     }
 
@@ -49,7 +50,7 @@ void UExperienceManager::ProcessExperienceUpdate(const FExperienceUpdateStruct& 
 {
     if (!ValidateExperienceUpdate(ExperienceUpdate))
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceManager: Invalid experience update received"));
+        UE_LOG(LogGameplay, Warning, TEXT("ExperienceManager: Invalid experience update received"));
         return;
     }
 
@@ -124,7 +125,7 @@ void UExperienceManager::UpdateCharacterProgression(int32 CharacterId, const FPl
 {
     if (!ValidateCharacterProgression(NewProgression))
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceManager: Invalid character progression data"));
+        UE_LOG(LogGameplay, Warning, TEXT("ExperienceManager: Invalid character progression data"));
         return;
     }
 
@@ -196,14 +197,14 @@ void UExperienceManager::RegisterProgressionListener(const TScriptInterface<IPla
 {
     if (!Listener.GetInterface() || !Listener.GetObject() || !IsValid(Listener.GetObject()))
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceManager: Attempted to register invalid progression listener"));
+        UE_LOG(LogGameplay, Warning, TEXT("ExperienceManager: Attempted to register invalid progression listener"));
         return;
     }
 
     // Check if already registered
     if (ProgressionListeners.Contains(Listener))
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceManager: Progression listener already registered"));
+        UE_LOG(LogGameplay, Warning, TEXT("ExperienceManager: Progression listener already registered"));
         return;
     }
 
@@ -218,7 +219,7 @@ void UExperienceManager::UnregisterProgressionListener(const TScriptInterface<IP
 {
     if (!Listener.GetInterface())
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceManager: Attempted to unregister null progression listener"));
+        UE_LOG(LogGameplay, Warning, TEXT("ExperienceManager: Attempted to unregister null progression listener"));
         return;
     }
 
@@ -230,7 +231,7 @@ void UExperienceManager::UnregisterProgressionListener(const TScriptInterface<IP
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceManager: Progression listener was not registered"));
+        UE_LOG(LogGameplay, Warning, TEXT("ExperienceManager: Progression listener was not registered"));
     }
 }
 
@@ -328,25 +329,25 @@ bool UExperienceManager::ValidateExperienceUpdate(const FExperienceUpdateStruct&
 {
     if (ExperienceUpdate.characterId <= 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceManager: Invalid character ID: %d"), ExperienceUpdate.characterId);
+        UE_LOG(LogGameplay, Warning, TEXT("ExperienceManager: Invalid character ID: %d"), ExperienceUpdate.characterId);
         return false;
     }
 
     if (ExperienceUpdate.newLevel < 1 || ExperienceUpdate.newLevel > MaxLevel)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceManager: Invalid new level: %d"), ExperienceUpdate.newLevel);
+        UE_LOG(LogGameplay, Warning, TEXT("ExperienceManager: Invalid new level: %d"), ExperienceUpdate.newLevel);
         return false;
     }
 
     if (ExperienceUpdate.oldLevel < 1 || ExperienceUpdate.oldLevel > MaxLevel)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceManager: Invalid old level: %d"), ExperienceUpdate.oldLevel);
+        UE_LOG(LogGameplay, Warning, TEXT("ExperienceManager: Invalid old level: %d"), ExperienceUpdate.oldLevel);
         return false;
     }
 
     if (ExperienceUpdate.newExperience < 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceManager: Invalid new experience: %d"), ExperienceUpdate.newExperience);
+        UE_LOG(LogGameplay, Warning, TEXT("ExperienceManager: Invalid new experience: %d"), ExperienceUpdate.newExperience);
         return false;
     }
 
@@ -357,19 +358,19 @@ bool UExperienceManager::ValidateCharacterProgression(const FPlayerProgressionSt
 {
     if (Progression.characterId <= 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceManager: Invalid character ID in progression: %d"), Progression.characterId);
+        UE_LOG(LogGameplay, Warning, TEXT("ExperienceManager: Invalid character ID in progression: %d"), Progression.characterId);
         return false;
     }
 
     if (Progression.currentLevel < 1 || Progression.currentLevel > MaxLevel)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceManager: Invalid current level in progression: %d"), Progression.currentLevel);
+        UE_LOG(LogGameplay, Warning, TEXT("ExperienceManager: Invalid current level in progression: %d"), Progression.currentLevel);
         return false;
     }
 
     if (Progression.currentExperience < 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceManager: Invalid current experience in progression: %d"), Progression.currentExperience);
+        UE_LOG(LogGameplay, Warning, TEXT("ExperienceManager: Invalid current experience in progression: %d"), Progression.currentExperience);
         return false;
     }
 
@@ -386,7 +387,7 @@ void UExperienceManager::CleanupInvalidListeners()
         
         if (!Listener.GetInterface() || !Listener.GetObject() || !IsValid(Listener.GetObject()))
         {
-            UE_LOG(LogTemp, Warning, TEXT("ExperienceManager: Removing invalid progression listener at index %d"), i);
+            UE_LOG(LogGameplay, Warning, TEXT("ExperienceManager: Removing invalid progression listener at index %d"), i);
             ProgressionListeners.RemoveAt(i);
         }
     }
@@ -406,6 +407,6 @@ void UExperienceManager::LogExperienceEvent(const FString& Event, const FString&
 {
     if (bDebugLogging)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ExperienceManager [%s]: %s"), *Event, *Details);
+        UE_LOG(LogGameplay, Warning, TEXT("ExperienceManager [%s]: %s"), *Event, *Details);
     }
 }

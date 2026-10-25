@@ -1,4 +1,5 @@
 #include "Services/TimeSyncService.h"
+#include "Prototyping.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/DateTime.h"
 #include "Misc/Guid.h"
@@ -22,7 +23,7 @@ FString UTimeSyncService::GenerateAndRegisterSyncRequest(EServerType ServerType,
     int64 TimeoutTime = CurrentTime + RequestTimeoutMs;
     PendingRequests.Add(FPendingSyncRequest(RequestId, ServerType, CurrentTime, TimeoutTime));
     
-    UE_LOG(LogTemp, Verbose, TEXT("TimeSyncService: Generated request ID for %s: %s at %lld"), 
+    UE_LOG(LogPing, Verbose, TEXT("TimeSyncService: Generated request ID for %s: %s at %lld"), 
         *GetServerTypeName(ServerType), *RequestId, CurrentTime);
     
     return RequestId;
@@ -34,7 +35,7 @@ bool UTimeSyncService::UpdateTimeSyncData(const FString& RequestId, int64 Server
     FPendingSyncRequest* PendingRequest = FindPendingRequest(RequestId);
     if (!PendingRequest)
     {
-        UE_LOG(LogTemp, Verbose, TEXT("TimeSyncService: Received response for unknown or expired request ID: %s"), *RequestId);
+        UE_LOG(LogPing, Verbose, TEXT("TimeSyncService: Received response for unknown or expired request ID: %s"), *RequestId);
         // Don't return false - this is normal for regular game requests that don't need sync tracking
         return true;
     }
@@ -57,7 +58,7 @@ bool UTimeSyncService::UpdateTimeSyncData(const FString& RequestId, int64 Server
     // Validate sample quality
     if (!IsSampleValid(NewSyncData))
     {
-        UE_LOG(LogTemp, Warning, TEXT("TimeSyncService: Discarding invalid sample for %s - RTT: %.1fms, Quality: %.1f"),
+        UE_LOG(LogPing, Warning, TEXT("TimeSyncService: Discarding invalid sample for %s - RTT: %.1fms, Quality: %.1f"),
             *GetServerTypeName(PendingRequest->ServerType), NewSyncData.RoundTripTimeMs, NewSyncData.SampleQuality);
         RemovePendingRequest(RequestId);
         return false;
@@ -70,7 +71,7 @@ bool UTimeSyncService::UpdateTimeSyncData(const FString& RequestId, int64 Server
     // Check if this is a "near-best" sample worth using for filtering
     if (!IsNearBestSample(PendingRequest->ServerType, NewSyncData))
     {
-        UE_LOG(LogTemp, Verbose, TEXT("TimeSyncService: Discarding poor quality sample for %s - RTT: %.1fms not near-best"),
+        UE_LOG(LogPing, Verbose, TEXT("TimeSyncService: Discarding poor quality sample for %s - RTT: %.1fms not near-best"),
             *GetServerTypeName(PendingRequest->ServerType), NewSyncData.RoundTripTimeMs);
         RemovePendingRequest(RequestId);
         return true; // Return true as this is not an error, just filtering
@@ -86,7 +87,7 @@ bool UTimeSyncService::UpdateTimeSyncData(const FString& RequestId, int64 Server
     UpdateAveragedSyncData(PendingRequest->ServerType);
 
     int64 ServerProcessingTimeMs = NewSyncData.ServerSendMs - NewSyncData.ServerRecvMs;
-    UE_LOG(LogTemp, Log, TEXT("TimeSyncService: Updated %s - RTT: %.1fms, Latency: %.1fms, Offset: %lldms, ServerProcessing: %lldms, Quality: %.1f"),
+    UE_LOG(LogPing, Verbose, TEXT("TimeSyncService: Updated %s - RTT: %.1fms, Latency: %.1fms, Offset: %lldms, ServerProcessing: %lldms, Quality: %.1f"),
         *GetServerTypeName(PendingRequest->ServerType), NewSyncData.RoundTripTimeMs, NewSyncData.NetworkLatencyMs, 
         NewSyncData.TimeOffsetMs, ServerProcessingTimeMs, NewSyncData.SampleQuality);
 
@@ -120,7 +121,7 @@ void UTimeSyncService::RequestTimeSync(EServerType ServerType)
     
     // TODO: Send time sync request to server with RequestId
     // This would be implemented by the networking system
-    UE_LOG(LogTemp, Log, TEXT("TimeSyncService: Requesting time sync for %s with ID: %s"), 
+    UE_LOG(LogPing, Verbose, TEXT("TimeSyncService: Requesting time sync for %s with ID: %s"), 
         *GetServerTypeName(ServerType), *RequestId);
 }
 
@@ -142,24 +143,24 @@ void UTimeSyncService::LogTimeSyncStats(EServerType ServerType) const
     const FServerTimeSyncData* ServerData = ServerSyncData.Find(ServerType);
     if (!ServerData)
     {
-        UE_LOG(LogTemp, Warning, TEXT("=== %s Time Sync Statistics ==="), *GetServerTypeName(ServerType));
-        UE_LOG(LogTemp, Warning, TEXT("No sync data available"));
-        UE_LOG(LogTemp, Warning, TEXT("============================"));
+        UE_LOG(LogPing, Verbose, TEXT("=== %s Time Sync Statistics ==="), *GetServerTypeName(ServerType));
+        UE_LOG(LogPing, Verbose, TEXT("No sync data available"));
+        UE_LOG(LogPing, Verbose, TEXT("============================"));
         return;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("=== %s Time Sync Statistics ==="), *GetServerTypeName(ServerType));
-    UE_LOG(LogTemp, Warning, TEXT("Samples: %d"), ServerData->SyncHistory.Num());
+    UE_LOG(LogPing, Verbose, TEXT("=== %s Time Sync Statistics ==="), *GetServerTypeName(ServerType));
+    UE_LOG(LogPing, Verbose, TEXT("Samples: %d"), ServerData->SyncHistory.Num());
     
     if (ServerData->SampleCount > 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Filtered Latency: %.2fms"), ServerData->FilteredLatencyMs);
-        UE_LOG(LogTemp, Warning, TEXT("Filtered Offset: %.2fms"), ServerData->FilteredOffsetMs);
+        UE_LOG(LogPing, Verbose, TEXT("Filtered Latency: %.2fms"), ServerData->FilteredLatencyMs);
+        UE_LOG(LogPing, Verbose, TEXT("Filtered Offset: %.2fms"), ServerData->FilteredOffsetMs);
     }
     
-    UE_LOG(LogTemp, Warning, TEXT("Current Latency: %.2fms"), ServerData->CurrentSyncData.NetworkLatencyMs);
-    UE_LOG(LogTemp, Warning, TEXT("Current Offset: %lldms"), ServerData->CurrentSyncData.TimeOffsetMs);
-    UE_LOG(LogTemp, Warning, TEXT("Sync Valid: %s"), IsTimeSyncValid(ServerType) ? TEXT("Yes") : TEXT("No"));
+    UE_LOG(LogPing, Verbose, TEXT("Current Latency: %.2fms"), ServerData->CurrentSyncData.NetworkLatencyMs);
+    UE_LOG(LogPing, Verbose, TEXT("Current Offset: %lldms"), ServerData->CurrentSyncData.TimeOffsetMs);
+    UE_LOG(LogPing, Verbose, TEXT("Sync Valid: %s"), IsTimeSyncValid(ServerType) ? TEXT("Yes") : TEXT("No"));
     
     if (ServerData->SyncHistory.Num() > 0)
     {
@@ -178,19 +179,19 @@ void UTimeSyncService::LogTimeSyncStats(EServerType ServerType) const
             }
         }
         
-        UE_LOG(LogTemp, Warning, TEXT("Average Latency: %.2fms"), AvgLatency);
-        UE_LOG(LogTemp, Warning, TEXT("Average Offset: %lldms"), AvgOffset);
-        UE_LOG(LogTemp, Warning, TEXT("Last RTT: %.2fms"), Latest.RoundTripTimeMs);
-        UE_LOG(LogTemp, Warning, TEXT("Best RTT (last 10): %.2fms"), BestRTT);
-        UE_LOG(LogTemp, Warning, TEXT("Last Quality: %.2f"), Latest.SampleQuality);
+        UE_LOG(LogPing, Verbose, TEXT("Average Latency: %.2fms"), AvgLatency);
+        UE_LOG(LogPing, Verbose, TEXT("Average Offset: %lldms"), AvgOffset);
+        UE_LOG(LogPing, Verbose, TEXT("Last RTT: %.2fms"), Latest.RoundTripTimeMs);
+        UE_LOG(LogPing, Verbose, TEXT("Best RTT (last 10): %.2fms"), BestRTT);
+        UE_LOG(LogPing, Verbose, TEXT("Last Quality: %.2f"), Latest.SampleQuality);
     }
     
-    UE_LOG(LogTemp, Warning, TEXT("Current Client Time: %lld"), GetCurrentClientTimeMs());
-    UE_LOG(LogTemp, Warning, TEXT("Estimated Server Time: %lld"), GetEstimatedServerTimeMs(ServerType));
-    UE_LOG(LogTemp, Warning, TEXT("EWMA Smoothing Factor: %.3f"), FMath::Clamp(EWMASmoothingFactor, 0.01f, 0.5f));
-    UE_LOG(LogTemp, Warning, TEXT("Max Offset Step: %.1fms"), MaxOffsetStepMs);
-    UE_LOG(LogTemp, Warning, TEXT("Max Latency Step: %.1fms"), MaxLatencyStepMs);
-    UE_LOG(LogTemp, Warning, TEXT("============================"));
+    UE_LOG(LogPing, Verbose, TEXT("Current Client Time: %lld"), GetCurrentClientTimeMs());
+    UE_LOG(LogPing, Verbose, TEXT("Estimated Server Time: %lld"), GetEstimatedServerTimeMs(ServerType));
+    UE_LOG(LogPing, Verbose, TEXT("EWMA Smoothing Factor: %.3f"), FMath::Clamp(EWMASmoothingFactor, 0.01f, 0.5f));
+    UE_LOG(LogPing, Verbose, TEXT("Max Offset Step: %.1fms"), MaxOffsetStepMs);
+    UE_LOG(LogPing, Verbose, TEXT("Max Latency Step: %.1fms"), MaxLatencyStepMs);
+    UE_LOG(LogPing, Verbose, TEXT("============================"));
 }
 
 void UTimeSyncService::LogAllServersTimeSyncStats() const
@@ -199,15 +200,15 @@ void UTimeSyncService::LogAllServersTimeSyncStats() const
     LogTimeSyncStats(EServerType::GameServer);
     LogTimeSyncStats(EServerType::ChunkServer);
     
-    UE_LOG(LogTemp, Warning, TEXT("=== Pending Requests ==="));
-    UE_LOG(LogTemp, Warning, TEXT("Count: %d"), PendingRequests.Num());
+    UE_LOG(LogPing, Verbose, TEXT("=== Pending Requests ==="));
+    UE_LOG(LogPing, Verbose, TEXT("Count: %d"), PendingRequests.Num());
     for (const FPendingSyncRequest& Request : PendingRequests)
     {
-        UE_LOG(LogTemp, Warning, TEXT("  ID: %s, Server: %s, Age: %lldms"), 
+        UE_LOG(LogPing, Verbose, TEXT("  ID: %s, Server: %s, Age: %lldms"), 
             *Request.RequestId, *GetServerTypeName(Request.ServerType), 
             GetCurrentClientTimeMs() - Request.ClientSendMs);
     }
-    UE_LOG(LogTemp, Warning, TEXT("========================"));
+    UE_LOG(LogPing, Verbose, TEXT("========================"));
 }
 
 void UTimeSyncService::CleanupExpiredRequests()
@@ -218,7 +219,7 @@ void UTimeSyncService::CleanupExpiredRequests()
     {
         if (CurrentTime > PendingRequests[i].TimeoutMs)
         {
-            UE_LOG(LogTemp, Warning, TEXT("TimeSyncService: Request %s to %s expired"), 
+            UE_LOG(LogPing, Verbose, TEXT("TimeSyncService: Request %s to %s expired"), 
                 *PendingRequests[i].RequestId, *GetServerTypeName(PendingRequests[i].ServerType));
             PendingRequests.RemoveAt(i);
         }

@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/SpawnZoneManager.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "CrashDiagnostics.h"
 
@@ -22,11 +23,11 @@ void USpawnZoneManager::Initialize(UNetworkManager* NetworkManager)
 
 	if (gameInstance)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("GameInstance found"));
+		UE_LOG(LogGameplay, Warning, TEXT("GameInstance found"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("GameInstance not found"));
+		UE_LOG(LogGameplay, Error, TEXT("GameInstance not found"));
 	}
 }
 
@@ -40,23 +41,23 @@ void USpawnZoneManager::SubscribeToNetworkManager()
 {
 	if (networkManager != nullptr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Network Manager found and subscribed to ChunkServerResponse delegate"));
+		UE_LOG(LogGameplay, Warning, TEXT("Network Manager found and subscribed to ChunkServerResponse delegate"));
 
 		if (IsValid(networkManager))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Network Manager is valid"));
+			UE_LOG(LogGameplay, Warning, TEXT("Network Manager is valid"));
 
 			networkManager->OnChunkServerDataReceived.RemoveDynamic(this, &USpawnZoneManager::ProcessGameServerData);
 			networkManager->OnChunkServerDataReceived.AddDynamic(this, &USpawnZoneManager::ProcessGameServerData);
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("Network Manager is not valid"));
+			UE_LOG(LogGameplay, Error, TEXT("Network Manager is not valid"));
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("Network manager not found"));
+		UE_LOG(LogGameplay, Error, TEXT("Network manager not found"));
 	}
 }
 
@@ -75,7 +76,6 @@ void USpawnZoneManager::ProcessGameServerData(const FString& ReceivedData)
     CRASH_GUARD("SpawnZoneManager::ProcessGameServerData");
     if (!worldContext) return;
 
-    //UE_LOG(LogTemp, Warning, TEXT("SpawnZoneManager received data: %s"), *ReceivedData);
 
 	// Process time sync data first
 	//if (gameInstance && gameInstance->GetTimeSyncService())
@@ -87,7 +87,7 @@ void USpawnZoneManager::ProcessGameServerData(const FString& ReceivedData)
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(ReceivedData);
 
 	//log the event type
-	UE_LOG(LogTemp, Warning, TEXT("SpawnZoneManager: Received event type: %s"), *MessageData.eventType);
+	UE_LOG(LogGameplay, Warning, TEXT("SpawnZoneManager: Received event type: %s"), *MessageData.eventType);
 
 	// NOTE: spawnMobsInZone no longer contains spawn zone geometry data (removed server-side v0.2.16).
 	// Spawn zone creation from server packets is no longer supported.
@@ -120,17 +120,17 @@ void USpawnZoneManager::SendGetSpawnZonesData(const FClientDataStruct& ClientDat
 		networkManager->SendDataToGameServer(JsonString);
 	}
 	else {
-		UE_LOG(LogTemp, Error, TEXT("Network manager not found"));
+		UE_LOG(LogGameplay, Error, TEXT("Network manager not found"));
 	}
 }
 
 void USpawnZoneManager::CreateSpawnZone(const FSpawnZoneStruct& SpawnZoneData)
 {
-	UE_LOG(LogTemp, Warning, TEXT("Creating spawn zone"));
+	UE_LOG(LogGameplay, Warning, TEXT("Creating spawn zone"));
 
 	if (!worldContext || !worldContext->IsValidLowLevel())
 	{
-		UE_LOG(LogTemp, Error, TEXT("SpawnZoneManager: Cannot create spawn zone - no valid world context"));
+		UE_LOG(LogGameplay, Error, TEXT("SpawnZoneManager: Cannot create spawn zone - no valid world context"));
 		return;
 	}
 
@@ -139,7 +139,7 @@ void USpawnZoneManager::CreateSpawnZone(const FSpawnZoneStruct& SpawnZoneData)
 	// if spawn zone does not exist in the world by tag
 	if (SpawnZoneExists(worldContext, FName(Tag)))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Spawn Zone already exists"));
+		UE_LOG(LogGameplay, Warning, TEXT("Spawn Zone already exists"));
 		return;
 	}
 
@@ -152,7 +152,7 @@ void USpawnZoneManager::CreateSpawnZone(const FSpawnZoneStruct& SpawnZoneData)
 
 		if (BasicSpawnZoneClass == nullptr)
 		{
-			UE_LOG(LogTemp, Error, TEXT("Basic Spawn Zone BP Class not found"));
+			UE_LOG(LogGameplay, Error, TEXT("Basic Spawn Zone BP Class not found"));
 			return;
 		}
 
@@ -165,7 +165,7 @@ void USpawnZoneManager::CreateSpawnZone(const FSpawnZoneStruct& SpawnZoneData)
 
 		if (BasicSpawnZone == nullptr)
 		{
-			UE_LOG(LogTemp, Error, TEXT("Spawn Zone not created"));
+			UE_LOG(LogGameplay, Error, TEXT("Spawn Zone not created"));
 			return;
 		}
 
@@ -186,7 +186,7 @@ bool USpawnZoneManager::SpawnZoneExists(UWorld* World, const FName& Tag)
 {
 	if (!World || !World->IsValidLowLevel())
 	{
-		UE_LOG(LogTemp, Error, TEXT("SpawnZoneManager::SpawnZoneExists: Invalid world context"));
+		UE_LOG(LogGameplay, Error, TEXT("SpawnZoneManager::SpawnZoneExists: Invalid world context"));
 		return false;
 	}
 

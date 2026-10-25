@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -243,7 +244,7 @@ void ABasicPlayer::UpdateExperienceData()
 
 		ExperienceManager->UpdateCharacterProgression(playerData.characterData.characterId, UpdatedProgression);
 
-		UE_LOG(LogTemp, Log, TEXT("Updated experience data for character %d: Level %d, XP %d [%d-%d]"), 
+		UE_LOG(LogGameplay, Verbose, TEXT("Updated experience data for character %d: Level %d, XP %d [%d-%d]"), 
 			playerData.characterData.characterId, 
 			UpdatedProgression.currentLevel,
 			UpdatedProgression.currentExperience,
@@ -319,7 +320,7 @@ void ABasicPlayer::SetPlayerAttributes(TMap<FString, FAttributeDataStruct> Attri
 	{
 		FString Key = Elem.Key;
 		FAttributeDataStruct Value = Elem.Value;
-		UE_LOG(LogTemp, Warning, TEXT("Player Attribute Key: %s, Value: %d"), *Key, Value.attributeValue);
+		UE_LOG(LogGameplay, Warning, TEXT("Player Attribute Key: %s, Value: %d"), *Key, Value.attributeValue);
 	}
 
 }

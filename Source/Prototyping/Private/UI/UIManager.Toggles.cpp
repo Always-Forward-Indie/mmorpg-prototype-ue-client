@@ -1,4 +1,5 @@
 #include "UI/UIManager.h"
+#include "Prototyping.h"
 #include "UI/UIManager.h"
 #include "UI/InventoryWidget.h"
 #include "UI/HarvestProgressWidget.h"
@@ -82,12 +83,12 @@ void UUIManager::ToggleEquipment()
 {
 	if (!EquipmentWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::ToggleEquipment - EquipmentWidget not initialized"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager::ToggleEquipment - EquipmentWidget not initialized"));
 		return;
 	}
 
 	EquipmentWidget->ToggleEquipment();
-	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleEquipment - Toggled"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::ToggleEquipment - Toggled"));
 }
 
 void UUIManager::ToggleAltCursor()
@@ -99,7 +100,7 @@ void UUIManager::ToggleAltCursor()
 
 	bAltCursorActive = !bAltCursorActive;
 	UpdateCursorAndInputMode();
-	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleAltCursor - %s"), bAltCursorActive ? TEXT("Active") : TEXT("Inactive"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::ToggleAltCursor - %s"), bAltCursorActive ? TEXT("Active") : TEXT("Inactive"));
 }
 
 void UUIManager::OnPreInputKeyDown(const FKeyEvent& InKeyEvent)
@@ -131,70 +132,70 @@ void UUIManager::TogglePlayerStats()
 {
 	if (!PlayerStatsWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::TogglePlayerStats - PlayerStatsWidget not initialized (assign PlayerStatsWidgetClass in Blueprint)"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager::TogglePlayerStats - PlayerStatsWidget not initialized (assign PlayerStatsWidgetClass in Blueprint)"));
 		return;
 	}
 
 	PlayerStatsWidget->ToggleStats();
-	UE_LOG(LogTemp, Log, TEXT("UIManager::TogglePlayerStats - Toggled"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::TogglePlayerStats - Toggled"));
 }
 
 void UUIManager::ToggleBestiary()
 {
 	if (!BestiaryWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::ToggleBestiary - BestiaryWidget not initialized (assign BestiaryWidgetClass in Blueprint)"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager::ToggleBestiary - BestiaryWidget not initialized (assign BestiaryWidgetClass in Blueprint)"));
 		return;
 	}
 
 	BestiaryWidget->ToggleBestiary();
-	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleBestiary - Toggled"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::ToggleBestiary - Toggled"));
 }
 
 void UUIManager::ToggleTitles()
 {
 	if (!TitlesWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::ToggleTitles - TitlesWidget not initialized (assign TitlesWidgetClass in Blueprint)"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager::ToggleTitles - TitlesWidget not initialized (assign TitlesWidgetClass in Blueprint)"));
 		return;
 	}
 
 	TitlesWidget->ToggleTitles();
-	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleTitles - Toggled"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::ToggleTitles - Toggled"));
 }
 
 void UUIManager::ToggleReputation()
 {
 	if (!ReputationWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::ToggleReputation - ReputationWidget not initialized (assign ReputationWidgetClass in Blueprint)"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager::ToggleReputation - ReputationWidget not initialized (assign ReputationWidgetClass in Blueprint)"));
 		return;
 	}
 
 	ReputationWidget->ToggleReputation();
-	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleReputation - Toggled"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::ToggleReputation - Toggled"));
 }
 
 void UUIManager::ToggleEmoteList()
 {
 	if (!EmoteListWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::ToggleEmoteList - EmoteListWidget not initialized (assign EmoteListWidgetClass in Blueprint)"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager::ToggleEmoteList - EmoteListWidget not initialized (assign EmoteListWidgetClass in Blueprint)"));
 		return;
 	}
 	EmoteListWidget->ToggleEmoteList();
-	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleEmoteList - Toggled"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::ToggleEmoteList - Toggled"));
 }
 
 void UUIManager::ToggleQuestJournal()
 {
 	if (!QuestJournalWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UIManager::ToggleQuestJournal - QuestJournalWidget not initialized"));
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager::ToggleQuestJournal - QuestJournalWidget not initialized"));
 		return;
 	}
 
 	QuestJournalWidget->ToggleJournal();
-	UE_LOG(LogTemp, Log, TEXT("UIManager::ToggleQuestJournal - Toggled"));
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::ToggleQuestJournal - Toggled"));
 }
 

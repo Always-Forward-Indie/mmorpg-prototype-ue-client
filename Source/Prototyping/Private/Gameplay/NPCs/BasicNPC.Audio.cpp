@@ -1,4 +1,5 @@
 #include "Gameplay/NPCs/BasicNPC.h"
+#include "Prototyping.h"
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/NPCs/NPCAnimInstance.h"
@@ -34,7 +35,7 @@ void ABasicNPC::PlaySoundByName(FName SoundName)
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ABasicNPC::PlaySoundByName - Sound '%s' not found"), *SoundName.ToString());
+		UE_LOG(LogGameplay, Warning, TEXT("ABasicNPC::PlaySoundByName - Sound '%s' not found"), *SoundName.ToString());
 	}
 }
 
@@ -90,7 +91,7 @@ void ABasicNPC::PlayGreetingSound()
 				AnimInst->Montage_SetEndDelegate(ActionEndedDelegate, GreetMontageAsset);
 			}
 		}
-		UE_LOG(LogTemp, Log, TEXT("[NPCAnim] '%s' playing greet montage '%s'"),
+		UE_LOG(LogGameplay, Verbose, TEXT("[NPCAnim] '%s' playing greet montage '%s'"),
 			*GetNPCName(), *GreetMontageAsset->GetName());
 	}
 	// No GreetMontage assigned — idle keeps playing undisturbed
@@ -120,7 +121,7 @@ void ABasicNPC::PlayFarewellSound()
 				AnimInst->Montage_SetEndDelegate(ActionEndedDelegate, FarewellMontageAsset);
 			}
 		}
-		UE_LOG(LogTemp, Log, TEXT("[NPCAnim] '%s' playing farewell montage '%s'"),
+		UE_LOG(LogGameplay, Verbose, TEXT("[NPCAnim] '%s' playing farewell montage '%s'"),
 			*GetNPCName(), *FarewellMontageAsset->GetName());
 	}
 	// No FarewellMontage assigned — idle keeps playing undisturbed

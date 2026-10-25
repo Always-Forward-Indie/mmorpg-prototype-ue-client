@@ -1,4 +1,5 @@
 #include "UI/HarvestLootItemWidget.h"
+#include "Prototyping.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
@@ -74,7 +75,7 @@ void UHarvestLootItemWidget::OnPickupButtonClicked()
 	// Hide tooltip when pickup button is clicked
 	OnItemHovered.Broadcast(CurrentItemData.itemId, false);
 	
-	UE_LOG(LogTemp, Warning, TEXT("HarvestLootItemWidget: Pickup button clicked for item %d"), CurrentItemData.itemId);
+	UE_LOG(LogGameplay, Verbose, TEXT("HarvestLootItemWidget: Pickup button clicked for item %d"), CurrentItemData.itemId);
 	
 	// Broadcast pickup request
 	OnItemPickupRequested.Broadcast(CurrentItemData.itemId, CurrentItemData.quantity);
@@ -213,7 +214,7 @@ void UHarvestLootItemWidget::LoadItemIcon()
 	UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetWorld()->GetGameInstance());
 	if (!GameInstance)
 	{
-		UE_LOG(LogTemp, Error, TEXT("HarvestLootItemWidget: GameInstance not found"));
+		UE_LOG(LogGameplay, Error, TEXT("HarvestLootItemWidget: GameInstance not found"));
 		SetDefaultIcon();
 		return;
 	}
@@ -221,7 +222,7 @@ void UHarvestLootItemWidget::LoadItemIcon()
 	UItemManager* ItemManager = GameInstance->GetItemManager();
 	if (!ItemManager)
 	{
-		UE_LOG(LogTemp, Error, TEXT("HarvestLootItemWidget: ItemManager not found"));
+		UE_LOG(LogGameplay, Error, TEXT("HarvestLootItemWidget: ItemManager not found"));
 		SetDefaultIcon();
 		return;
 	}
@@ -268,7 +269,7 @@ void UHarvestLootItemWidget::LoadItemIcon()
 	// Show icon
 	Image_ItemIcon->SetVisibility(ESlateVisibility::Visible);
 
-	UE_LOG(LogTemp, Log, TEXT("HarvestLootItemWidget: Loading icon for item %s (ID: %d)"), 
+	UE_LOG(LogGameplay, Verbose, TEXT("HarvestLootItemWidget: Loading icon for item %s (ID: %d)"), 
 		*CurrentItemData.name, CurrentItemData.itemId);
 }
 
@@ -280,7 +281,7 @@ void UHarvestLootItemWidget::SetIconTexture(UTexture2D* Texture)
 		Image_ItemIcon->SetColorAndOpacity(FLinearColor(1.0f, 1.0f, 1.0f, 1.0f));
 		Image_ItemIcon->SetRenderOpacity(1.0f);
 
-		UE_LOG(LogTemp, Log, TEXT("HarvestLootItemWidget: Set icon texture for item %s"), 
+		UE_LOG(LogGameplay, Verbose, TEXT("HarvestLootItemWidget: Set icon texture for item %s"), 
 			*CurrentItemData.name);
 	}
 }

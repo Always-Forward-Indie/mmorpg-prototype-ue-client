@@ -2,6 +2,7 @@
 
 
 #include "Utils/JSONParser.h"
+#include "Prototyping.h"
 #include "Services/TimeSyncService.h"
 #include "MyGameInstance.h"
 #include "Engine/World.h"
@@ -181,14 +182,14 @@ FSkillInitiationData JSONParser::DeserializeSkillInitiation(const FString& JsonS
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeSkillInitiation failed to parse JSON"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeSkillInitiation failed to parse JSON"));
 		FSkillInitiationData FailedInit; FailedInit.success = false; return FailedInit;
 	}
 
 	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
 	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeSkillInitiation missing body"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeSkillInitiation missing body"));
 		FSkillInitiationData FailedInit; FailedInit.success = false; FailedInit.errorCode = JSONParser::ResolveErrorCode(Root); FailedInit.errorReason = FailedInit.errorCode; return FailedInit;
 	}
 	TSharedPtr<FJsonObject> Body = *BodyPtr;
@@ -313,14 +314,14 @@ FSkillResultData JSONParser::DeserializeSkillResult(const FString& JsonString)
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeSkillResult failed to parse JSON"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeSkillResult failed to parse JSON"));
 		FSkillResultData FailedRes; FailedRes.success = false; return FailedRes;
 	}
 
 	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
 	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeSkillResult missing body"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeSkillResult missing body"));
 		FSkillResultData FailedRes; FailedRes.success = false; FailedRes.errorCode = JSONParser::ResolveErrorCode(Root); FailedRes.errorReason = FailedRes.errorCode; return FailedRes;
 	}
 	TSharedPtr<FJsonObject> Body = *BodyPtr;

@@ -2,6 +2,7 @@
 
 
 #include "Utils/JSONParser.h"
+#include "Prototyping.h"
 #include "Services/TimeSyncService.h"
 #include "MyGameInstance.h"
 #include "Engine/World.h"
@@ -155,14 +156,14 @@ FCharacterInventoryStruct JSONParser::DeserializeCharacterInventory(const FStrin
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCharacterInventory failed to parse JSON"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeCharacterInventory failed to parse JSON"));
 		return FCharacterInventoryStruct();
 	}
 
 	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
 	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeCharacterInventory missing body"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeCharacterInventory missing body"));
 		return FCharacterInventoryStruct();
 	}
 
@@ -231,7 +232,7 @@ FInventoryUpdateStruct JSONParser::DeserializeInventoryUpdate(const FString& Jso
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeInventoryUpdate failed to parse JSON"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeInventoryUpdate failed to parse JSON"));
 		return FInventoryUpdateStruct();
 	}
 
@@ -241,7 +242,7 @@ FInventoryUpdateStruct JSONParser::DeserializeInventoryUpdate(const FString& Jso
 	const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
 	if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("JSONParser: DeserializeInventoryUpdate missing body"));
+		UE_LOG(LogNetPacket, Error, TEXT("JSONParser: DeserializeInventoryUpdate missing body"));
 		return FInventoryUpdateStruct();
 	}
 

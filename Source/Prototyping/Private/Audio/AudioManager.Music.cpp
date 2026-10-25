@@ -1,6 +1,7 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Audio/AudioManager.h"
+#include "Prototyping.h"
 #include "Audio/AudioConfigDataAsset.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
@@ -20,13 +21,13 @@ void UAudioManager::PlayPlaylist(const FString& InPlaylistId, bool bForceRestart
 	const FMusicPlaylist* Playlist = FindPlaylist(InPlaylistId);
 	if (!Playlist)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UAudioManager::PlayPlaylist: playlist '%s' not found. "
+		UE_LOG(LogGameAudio, Warning, TEXT("UAudioManager::PlayPlaylist: playlist '%s' not found. "
 			"Add it to the Playlists array in the GameInstance Blueprint defaults."), *InPlaylistId);
 		return;
 	}
 	if (Playlist->Tracks.Num() == 0)
 	{
-		UE_LOG(LogTemp, Warning,
+		UE_LOG(LogGameAudio, Warning,
 			TEXT("UAudioManager::PlayPlaylist: playlist '%s' has no tracks."), *InPlaylistId);
 		return;
 	}
@@ -45,7 +46,7 @@ void UAudioManager::PlayPlaylist(const FString& InPlaylistId, bool bForceRestart
 	CrossfadeToTrack(Track, Playlist->FadeInTime, Playlist->FadeOutTime);
 	ScheduleNextTrack(*Playlist, Track);
 
-	UE_LOG(LogTemp, Log, TEXT("UAudioManager: started playlist '%s', track index %d"),
+	UE_LOG(LogGameAudio, Log, TEXT("UAudioManager: started playlist '%s', track index %d"),
 		*InPlaylistId, CurrentTrackIndex);
 }
 
@@ -59,7 +60,7 @@ void UAudioManager::PlayMusicForZone(const FString& ZoneName)
 			return;
 		}
 	}
-	UE_LOG(LogTemp, Log,
+	UE_LOG(LogGameAudio, Log,
 		TEXT("UAudioManager::PlayMusicForZone: no music mapping for zone '%s'."), *ZoneName);
 }
 

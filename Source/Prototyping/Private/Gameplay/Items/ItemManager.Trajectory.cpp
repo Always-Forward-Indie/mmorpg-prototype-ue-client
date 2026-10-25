@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Items/ItemManager.h"
+#include "Prototyping.h"
 #include "Gameplay/Items/DroppedItemActor.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Players/PlayerAnimInstance.h"
@@ -33,7 +34,7 @@ void UItemManager::BindPickupPointDelegate()
 	AnimInst->OnPickupPoint.AddUObject(this, &UItemManager::OnPickupPointFired);
 	bPickupDelegateBound = true;
 
-	UE_LOG(LogTemp, Log, TEXT("ItemManager: bound OnPickupPoint delegate"));
+	UE_LOG(LogGameplay, Verbose, TEXT("ItemManager: bound OnPickupPoint delegate"));
 }
 
 // ---------------------------------------------------------------------------
@@ -47,7 +48,7 @@ void UItemManager::BindPickupPointDelegate()
 // ---------------------------------------------------------------------------
 void UItemManager::OnPickupPointFired()
 {
-	UE_LOG(LogTemp, Warning, TEXT("ItemManager: OnPickupPointFired count=%d"), PendingPickupItemUIDs.Num());
+	UE_LOG(LogGameplay, Warning, TEXT("ItemManager: OnPickupPointFired count=%d"), PendingPickupItemUIDs.Num());
 
 	for (int32 i = 0; i < PendingPickupItemUIDs.Num(); ++i)
 	{

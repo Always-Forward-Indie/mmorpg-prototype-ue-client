@@ -1,4 +1,5 @@
 #include "Gameplay/NPCs/BasicNPC.h"
+#include "Prototyping.h"
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/NPCs/NPCAnimInstance.h"
@@ -23,9 +24,9 @@
 
 void ABasicNPC::SetupNPCVisual(FName NPCSlug)
 {
-	if (!NPCDefinitionTable) { UE_LOG(LogTemp, Warning, TEXT("No NPCDefinitionTable")); return; }
+	if (!NPCDefinitionTable) { UE_LOG(LogGameplay, Warning, TEXT("No NPCDefinitionTable")); return; }
 	const FNPCDefinition* Def = NPCDefinitionTable->FindRow<FNPCDefinition>(NPCSlug, TEXT("Load NPC Definition"));
-	if (!Def) { UE_LOG(LogTemp, Warning, TEXT("No row for %s"), *NPCSlug.ToString()); return; }
+	if (!Def) { UE_LOG(LogGameplay, Warning, TEXT("No row for %s"), *NPCSlug.ToString()); return; }
 
 	const auto SkeletalMeshSoft = Def->Visual.SkeletalMesh;
 	const auto AnimBPSoft = Def->Visual.AnimBPClass;
@@ -71,7 +72,7 @@ void ABasicNPC::SetupNPCVisual(FName NPCSlug)
 			});
 	}
 	else {
-		UE_LOG(LogTemp, Warning, TEXT("SkeletalMesh is not set for slug %s"), *NPCSlug.ToString());
+		UE_LOG(LogGameplay, Warning, TEXT("SkeletalMesh is not set for slug %s"), *NPCSlug.ToString());
 	}
 
 	if (!AnimBPSoft.IsNull())
@@ -105,7 +106,7 @@ void ABasicNPC::SetupNPCVisual(FName NPCSlug)
 						if (!VisualDataCopy.DefaultIdleMontage.IsNull())
 							Self->DefaultIdleMontageAsset = VisualDataCopy.DefaultIdleMontage.LoadSynchronous();
 
-						UE_LOG(LogTemp, Log,
+						UE_LOG(LogGameplay, Verbose,
 							TEXT("[NPCAnim] Montages loaded for '%s': greet=%s farewell=%s defaultIdle=%s idleCount=%d"),
 							*Self->GetNPCName(),
 							Self->GreetMontageAsset        ? *Self->GreetMontageAsset->GetName()        : TEXT("none"),
@@ -131,7 +132,7 @@ void ABasicNPC::SetupNPCVisual(FName NPCSlug)
 			});
 	}
 	else {
-		UE_LOG(LogTemp, Warning, TEXT("AnimBPClass is not set for slug %s"), *NPCSlug.ToString());
+		UE_LOG(LogGameplay, Warning, TEXT("AnimBPClass is not set for slug %s"), *NPCSlug.ToString());
 	}
 }
 
@@ -153,7 +154,7 @@ void ABasicNPC::StartIdleAnimCycle()
 				IdleEndedDelegate.BindUObject(this, &ABasicNPC::OnIdleMontageEnded);
 				AnimInst->Montage_SetEndDelegate(IdleEndedDelegate, DefaultIdleMontageAsset);
 			}
-			UE_LOG(LogTemp, Log, TEXT("[NPCAnim] '%s' playing DefaultIdleMontage immediately: '%s'"),
+			UE_LOG(LogGameplay, Verbose, TEXT("[NPCAnim] '%s' playing DefaultIdleMontage immediately: '%s'"),
 				*GetNPCName(), *DefaultIdleMontageAsset->GetName());
 			return;
 		}
@@ -178,7 +179,7 @@ void ABasicNPC::TriggerRandomIdleAnim()
 
 	if (IdleMontageAssets.Num() == 0)
 	{
-		UE_LOG(LogTemp, Warning,
+		UE_LOG(LogGameplay, Warning,
 			TEXT("[NPCAnim] '%s' has no IdleMontages — assign them in the NPCDefinition DataTable (Visual.IdleMontages)"),
 			*GetNPCName());
 		return; // nothing to play, don't reschedule
@@ -200,7 +201,7 @@ void ABasicNPC::TriggerRandomIdleAnim()
 			IdleEndedDelegate.BindUObject(this, &ABasicNPC::OnIdleMontageEnded);
 			AnimInst->Montage_SetEndDelegate(IdleEndedDelegate, Montage);
 		}
-		UE_LOG(LogTemp, Log, TEXT("[NPCAnim] '%s' playing idle variant %d: '%s'"),
+		UE_LOG(LogGameplay, Verbose, TEXT("[NPCAnim] '%s' playing idle variant %d: '%s'"),
 			*GetNPCName(), Idx, *Montage->GetName());
 	}
 	else

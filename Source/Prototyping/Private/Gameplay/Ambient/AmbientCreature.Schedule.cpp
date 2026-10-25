@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Gameplay/Ambient/AmbientCreatureActor.h"
+#include "Prototyping.h"
 #include "Gameplay/Ambient/AmbientCreatureDefinition.h"
 #include "Gameplay/Ambient/AmbientScheduleAsset.h"
 #include "Gameplay/Ambient/AmbientBehaviorBase.h"
@@ -101,7 +102,7 @@ void AAmbientCreatureActor::StartSchedule()
 		CurrentEntryIndex = 0;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[AmbientCreature] '%s' — StartSchedule, %d entries, random=%s"),
+	UE_LOG(LogGameplay, Verbose, TEXT("[AmbientCreature] '%s' — StartSchedule, %d entries, random=%s"),
 		*GetName(), RuntimeBehaviors.Num(),
 		(ScheduleAsset && ScheduleAsset->bRandomOrder) ? TEXT("true") : TEXT("false"));
 
@@ -119,7 +120,7 @@ void AAmbientCreatureActor::ExecuteNextEntry()
 
 	if (!RuntimeBehaviors.IsValidIndex(EntryArrayIndex))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[AmbientCreature] '%s' — EntryArrayIndex %d out of range (%d entries)."),
+		UE_LOG(LogGameplay, Warning, TEXT("[AmbientCreature] '%s' — EntryArrayIndex %d out of range (%d entries)."),
 			*GetName(), EntryArrayIndex, RuntimeBehaviors.Num());
 		return;
 	}
@@ -127,12 +128,12 @@ void AAmbientCreatureActor::ExecuteNextEntry()
 	UAmbientBehaviorBase* Behavior = RuntimeBehaviors[EntryArrayIndex];
 	if (!Behavior)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[AmbientCreature] '%s' — null behavior at index %d, skipping."), *GetName(), EntryArrayIndex);
+		UE_LOG(LogGameplay, Warning, TEXT("[AmbientCreature] '%s' — null behavior at index %d, skipping."), *GetName(), EntryArrayIndex);
 		OnEntryCompleted();
 		return;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[AmbientCreature] '%s' — executing entry [%d] '%s'"),
+	UE_LOG(LogGameplay, Verbose, TEXT("[AmbientCreature] '%s' — executing entry [%d] '%s'"),
 		*GetName(), EntryArrayIndex, *Behavior->GetClass()->GetName());
 
 	ActiveBehavior = Behavior;
@@ -152,12 +153,12 @@ void AAmbientCreatureActor::OnEntryCompleted()
 	{
 		if (!ScheduleAsset || !ScheduleAsset->bLoopSchedule)
 		{
-			UE_LOG(LogTemp, Log, TEXT("[AmbientCreature] '%s' — schedule finished (no loop)."), *GetName());
+			UE_LOG(LogGameplay, Verbose, TEXT("[AmbientCreature] '%s' — schedule finished (no loop)."), *GetName());
 			bScheduleRunning = false;
 			return;
 		}
 
-		UE_LOG(LogTemp, Log, TEXT("[AmbientCreature] '%s' — schedule looped."), *GetName());
+		UE_LOG(LogGameplay, Verbose, TEXT("[AmbientCreature] '%s' — schedule looped."), *GetName());
 
 		// Loop: rebuild shuffle if needed
 		if (ScheduleAsset && ScheduleAsset->bRandomOrder)

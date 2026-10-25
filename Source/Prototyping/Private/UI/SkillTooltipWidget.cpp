@@ -1,4 +1,5 @@
 #include "UI/SkillTooltipWidget.h"
+#include "Prototyping.h"
 #include "Services/LocalizationSubsystem.h"
 #include "Components/ScrollBox.h"
 #include "Components/TextBlock.h"
@@ -36,7 +37,7 @@ void USkillTooltipWidget::NativeConstruct()
     // Set initial visibility
     SetVisibility(ESlateVisibility::Hidden);
     
-    UE_LOG(LogTemp, Log, TEXT("SkillTooltipWidget: NativeConstruct completed"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillTooltipWidget: NativeConstruct completed"));
 }
 
 void USkillTooltipWidget::SetSkillData(const FPlayerSkillData& SkillData)
@@ -44,7 +45,7 @@ void USkillTooltipWidget::SetSkillData(const FPlayerSkillData& SkillData)
     CurrentSkillData = SkillData;
     UpdateTooltipContent();
     
-    UE_LOG(LogTemp, Log, TEXT("SkillTooltipWidget: Set skill data for %s"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillTooltipWidget: Set skill data for %s"), 
         *SkillData.networkData.skillSlug);
 }
 
@@ -102,7 +103,7 @@ void USkillTooltipWidget::ShowTooltip()
     // You can add UMG animation here or use a simple opacity tween
     SetRenderOpacity(1.0f); // For now, just show immediately
     
-    UE_LOG(LogTemp, Log, TEXT("SkillTooltipWidget: Tooltip shown"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillTooltipWidget: Tooltip shown"));
 }
 
 void USkillTooltipWidget::HideTooltip()
@@ -112,7 +113,7 @@ void USkillTooltipWidget::HideTooltip()
     bIsVisible = false;
     SetVisibility(ESlateVisibility::Hidden);
     
-    UE_LOG(LogTemp, Log, TEXT("SkillTooltipWidget: Tooltip hidden"));
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillTooltipWidget: Tooltip hidden"));
 }
 
 void USkillTooltipWidget::UpdateTooltipContent()

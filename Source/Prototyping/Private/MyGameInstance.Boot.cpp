@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Prototyping.h"
 #include "Components/ArrowComponent.h"
 #include "ShaderCompiler.h"
 #include "ContentStreaming.h"
@@ -109,23 +110,23 @@ void UMyGameInstance::Init()
 if (FParse::Param(FCommandLine::Get(), TEXT("devmode")))
 {
 DevModeConfig.bEnabled = true;
-UE_LOG(LogTemp, Warning, TEXT("GameInstance: DevMode force-enabled via -devmode command line (skips login, uses Config/DevMode/*.json)"));
+UE_LOG(LogGameplay, Warning, TEXT("GameInstance: DevMode force-enabled via -devmode command line (skips login, uses Config/DevMode/*.json)"));
 }
 if (FParse::Value(FCommandLine::Get(), TEXT("devmode="), DevModeAutoScenario) && !DevModeAutoScenario.IsEmpty())
 {
 DevModeConfig.bEnabled = true;
-UE_LOG(LogTemp, Warning, TEXT("GameInstance: DevMode auto-scenario '%s' requested"), *DevModeAutoScenario);
+UE_LOG(LogGameplay, Warning, TEXT("GameInstance: DevMode auto-scenario '%s' requested"), *DevModeAutoScenario);
 }
 if (FParse::Value(FCommandLine::Get(), TEXT("bot-live="), LiveBotScenario) && !LiveBotScenario.IsEmpty())
 {
-UE_LOG(LogTemp, Warning, TEXT("GameInstance: live-bot scenario '%s' requested (DEV-ONLY: needs -botlogin= -botpass=, dev servers)"), *LiveBotScenario);
+UE_LOG(LogGameplay, Warning, TEXT("GameInstance: live-bot scenario '%s' requested (DEV-ONLY: needs -botlogin= -botpass=, dev servers)"), *LiveBotScenario);
 }
 FString DevModeMapOverride;
 if (FParse::Value(FCommandLine::Get(), TEXT("devmode-map="), DevModeMapOverride) && !DevModeMapOverride.IsEmpty())
 {
 DevModeConfig.bEnabled = true;
 DevModeConfig.LevelOverride = FName(*DevModeMapOverride);
-UE_LOG(LogTemp, Warning, TEXT("GameInstance: DevMode level override '%s'"), *DevModeMapOverride);
+UE_LOG(LogGameplay, Warning, TEXT("GameInstance: DevMode level override '%s'"), *DevModeMapOverride);
 }
 
 	// set the network manager
@@ -246,11 +247,11 @@ UE_LOG(LogTemp, Warning, TEXT("GameInstance: DevMode level override '%s'"), *Dev
 	{
 		TimeSyncService->SetWorldContext(GetWorld());
 		TimeSyncService->Initialize();
-		UE_LOG(LogTemp, Warning, TEXT("TimeSyncService initialized with world context"));
+		UE_LOG(LogGameplay, Warning, TEXT("TimeSyncService initialized with world context"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to create TimeSyncService"));
+		UE_LOG(LogGameplay, Error, TEXT("Failed to create TimeSyncService"));
 	}
 
 	// Initialize localization subsystem with the configured data assets
@@ -258,7 +259,7 @@ UE_LOG(LogTemp, Warning, TEXT("GameInstance: DevMode level override '%s'"), *Dev
 	{
 		if (!LocalizationDataAsset && !LocalizationDataAssetRU && !LocalizationDataAssetEN)
 		{
-			UE_LOG(LogTemp, Error, TEXT("Localization: ALL DataAssets are NULL! Assign at least LocalizationDataAsset in BP_MyGameInstance defaults. Locale switching will not work."));
+			UE_LOG(LogGameplay, Error, TEXT("Localization: ALL DataAssets are NULL! Assign at least LocalizationDataAsset in BP_MyGameInstance defaults. Locale switching will not work."));
 		}
 
 		LocSys->SetLocalizationData(LocalizationDataAsset);
@@ -277,7 +278,7 @@ UE_LOG(LogTemp, Warning, TEXT("GameInstance: DevMode level override '%s'"), *Dev
 	// Handles survive level transitions so they're available immediately in game world too.
 	PreloadWorldInteractionCursors();
 
-	UE_LOG(LogTemp, Warning, TEXT("GameInstance Init called"));
+	UE_LOG(LogGameplay, Warning, TEXT("GameInstance Init called"));
 
 	// Register PostLoadMapWithWorld — fires after EVERY OpenLevel completes.
 	// Replaces the old OnLoginLevelLoaded streaming callback with a single
@@ -293,7 +294,7 @@ UE_LOG(LogTemp, Warning, TEXT("GameInstance: DevMode level override '%s'"), *Dev
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("GetWorld() returned nullptr, level load delayed."));
+		UE_LOG(LogConnection, Verbose, TEXT("GetWorld() returned nullptr, level load delayed."));
 	}
 
 	// Start Ping for servers

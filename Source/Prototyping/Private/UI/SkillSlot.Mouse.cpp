@@ -1,5 +1,6 @@
 ﻿#include "UI/SkillSlotWidget.h"
 #include "UI/SkillSlotWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
@@ -16,7 +17,7 @@ FReply USkillSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 {
     if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: MouseDown — bIsDragging=%d bMousePressed=%d slug='%s'"),
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillSlotWidget[%d]: MouseDown — bIsDragging=%d bMousePressed=%d slug='%s'"),
             SlotIndex, bIsDragging ? 1 : 0, bMousePressed ? 1 : 0, *AssignedSkillSlug);
 
         // Safety reset: if bIsDragging is stuck from a prior drag that never
@@ -24,7 +25,7 @@ FReply USkillSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
         // force-reset it here so the slot remains usable.
         if (bIsDragging)
         {
-            UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: NativeOnMouseButtonDown found stuck bIsDragging=true — force-resetting"),
+            UE_LOG(LogGameplay, Warning, TEXT("SkillSlotWidget[%d]: NativeOnMouseButtonDown found stuck bIsDragging=true — force-resetting"),
                 SlotIndex);
             ForceResetDragState();
         }
@@ -35,11 +36,11 @@ FReply USkillSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
         // If a skill is assigned, allow initiating a drag to remove it
         if (!AssignedSkillSlug.IsEmpty())
         {
-            UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: MouseDown — returning DetectDrag for '%s'"), SlotIndex, *AssignedSkillSlug);
+            UE_LOG(LogGameplay, Verbose, TEXT("SkillSlotWidget[%d]: MouseDown — returning DetectDrag for '%s'"), SlotIndex, *AssignedSkillSlug);
             return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
         }
 
-        UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: MouseDown — empty slot, no drag"), SlotIndex);
+        UE_LOG(LogGameplay, Log, TEXT("SkillSlotWidget[%d]: MouseDown — empty slot, no drag"), SlotIndex);
         return FReply::Handled();
     }
 
@@ -56,7 +57,7 @@ FReply USkillSlotWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, cons
 {
     if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SkillSlotWidget[%d]: MouseUp — bIsDragging=%d bMousePressed=%d"),
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillSlotWidget[%d]: MouseUp — bIsDragging=%d bMousePressed=%d"),
             SlotIndex, bIsDragging ? 1 : 0, bMousePressed ? 1 : 0);
     }
 
@@ -77,7 +78,7 @@ FReply USkillSlotWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, cons
         }
 
         bIsDragging = false;
-        UE_LOG(LogTemp, Log, TEXT("SkillSlotWidget[%d]: NativeOnMouseButtonUp reset bIsDragging=false"), SlotIndex);
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillSlotWidget[%d]: NativeOnMouseButtonUp reset bIsDragging=false"), SlotIndex);
         return FReply::Handled();
     }
     return Super::NativeOnMouseButtonUp(InGeometry, InMouseEvent);

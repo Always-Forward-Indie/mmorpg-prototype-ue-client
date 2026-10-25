@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -82,7 +83,7 @@ void ABasicPlayer::StopAutoAttack()
 
     GetWorld()->GetTimerManager().ClearTimer(AutoAttackRetryTimerHandle);
 
-    UE_LOG(LogTemp, Log, TEXT("BasicPlayer: Auto-attack stopped (target lock retained)"));
+    UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Auto-attack stopped (target lock retained)"));
 }
 
 void ABasicPlayer::FaceLockedTarget()
@@ -227,7 +228,7 @@ void ABasicPlayer::UpdateApproach(float DeltaTime)
 
         if (bIsPendingSkill)
         {
-            UE_LOG(LogTemp, Log, TEXT("BasicPlayer: UpdateApproach - reached range (%.0f <= %.0f), casting %s"),
+            UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: UpdateApproach - reached range (%.0f <= %.0f), casting %s"),
                 Dist, EffectiveRange, *PendingSkillSlug);
 
             FaceLockedTarget();
@@ -252,7 +253,7 @@ void ABasicPlayer::UpdateApproach(float DeltaTime)
         }
         else
         {
-            UE_LOG(LogTemp, Log, TEXT("BasicPlayer: UpdateApproach - reached target (%.0f <= %.0f), attacking"),
+            UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: UpdateApproach - reached target (%.0f <= %.0f), attacking"),
                 Dist, EffectiveRange);
             DoAutoAttack();
         }

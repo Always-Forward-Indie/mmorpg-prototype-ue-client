@@ -1,4 +1,5 @@
 #include "DevMode/DevModeConsoleCommands.h"
+#include "Prototyping.h"
 #include "DevMode/DevModeBotBrain.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Mobs/MOBManager.h"
@@ -23,14 +24,14 @@ void UDevModeConsoleCommands::Cmd_SetPlayerHP(const TArray<FString>& Args) const
 {
     if (Args.Num() < 1)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Usage: devmode.setplayerhp <Value>"));
+        UE_LOG(LogGameplay, Warning, TEXT("Usage: devmode.setplayerhp <Value>"));
         return;
     }
     if (!GameInstance || !GameInstance->Player) return;
 
     const int32 NewHP = FCString::Atoi(*Args[0]);
     GameInstance->Player->SetPlayerCurrentHPPoints(NewHP);
-    UE_LOG(LogTemp, Log, TEXT("devmode.setplayerhp: Player HP set to %d"), NewHP);
+    UE_LOG(LogGameplay, Verbose, TEXT("devmode.setplayerhp: Player HP set to %d"), NewHP);
 }
 
 // ============================================================================
@@ -53,7 +54,7 @@ void UDevModeConsoleCommands::Cmd_ReloadMobs(const TArray<FString>& Args) const
     {
         A->Destroy();
     }
-    UE_LOG(LogTemp, Log, TEXT("devmode.reloadmobs: Destroyed %d mobs"), ToDestroy.Num());
+    UE_LOG(LogGameplay, Verbose, TEXT("devmode.reloadmobs: Destroyed %d mobs"), ToDestroy.Num());
 
     UDevModeDataProvider* Provider = NewObject<UDevModeDataProvider>(GameInstance);
     if (Provider)
@@ -87,7 +88,7 @@ void UDevModeConsoleCommands::Cmd_ListMobs(const TArray<FString>& Args) const
     UWorld* World = GameInstance ? GameInstance->GetWorld() : nullptr;
     if (!World)
     {
-        UE_LOG(LogTemp, Warning, TEXT("devmode.listmobs: No world"));
+        UE_LOG(LogGameplay, Warning, TEXT("devmode.listmobs: No world"));
         return;
     }
 
@@ -98,13 +99,13 @@ void UDevModeConsoleCommands::Cmd_ListMobs(const TArray<FString>& Args) const
         const FVector Loc = Mob->GetActorLocation();
         const int32 State = Mob->MOBMovementComponent
             ? Mob->MOBMovementComponent->GetCombatState() : -1;
-        UE_LOG(LogTemp, Log,
+        UE_LOG(LogGameplay, Verbose,
             TEXT("  [%d] %s  uid=%s  loc=(%.0f,%.0f,%.0f)  combatState=%d"),
             Count, *Mob->GetMobName(), *Mob->GetMOBUId(),
             Loc.X, Loc.Y, Loc.Z, State);
         ++Count;
     }
-    UE_LOG(LogTemp, Log, TEXT("devmode.listmobs: Total %d mobs"), Count);
+    UE_LOG(LogGameplay, Verbose, TEXT("devmode.listmobs: Total %d mobs"), Count);
 }
 
 // ============================================================================

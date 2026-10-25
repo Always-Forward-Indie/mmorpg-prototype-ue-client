@@ -1,4 +1,5 @@
 #include "Services/LocalizationSubsystem.h"
+#include "Prototyping.h"
 #include "Data/LocalizationDataAsset.h"
 #include "Engine/DataTable.h"
 #include "Misc/ConfigCacheIni.h"
@@ -39,7 +40,7 @@ void ULocalizationSubsystem::SetLocalizationData(ULocalizationDataAsset* InAsset
     CachedRaceLocaleTable         = nullptr;
     CachedGenderLocaleTable       = nullptr;
 
-    UE_LOG(LogTemp, Log, TEXT("LocalizationSubsystem: data asset %s"),
+    UE_LOG(LogGameplay, Log, TEXT("LocalizationSubsystem: data asset %s"),
         InAsset ? TEXT("assigned") : TEXT("cleared"));
 }
 
@@ -52,7 +53,7 @@ void ULocalizationSubsystem::SetLocale(const FString& InLocale)
 
     if (!Target)
     {
-        UE_LOG(LogTemp, Error, TEXT("LocalizationSubsystem: no DataAsset for locale '%s' — LocalizationData%s is NULL. Check BP_MyGameInstance defaults."),
+        UE_LOG(LogGameplay, Error, TEXT("LocalizationSubsystem: no DataAsset for locale '%s' — LocalizationData%s is NULL. Check BP_MyGameInstance defaults."),
             *InLocale, bIsRussian ? TEXT("RU") : TEXT("EN"));
         return;
     }
@@ -68,7 +69,7 @@ void ULocalizationSubsystem::SetLocale(const FString& InLocale)
 
     OnLocaleChanged.Broadcast(CurrentLocale);
 
-    UE_LOG(LogTemp, Log, TEXT("LocalizationSubsystem: locale set to '%s'"), *InLocale);
+    UE_LOG(LogGameplay, Verbose, TEXT("LocalizationSubsystem: locale set to '%s'"), *InLocale);
 }
 
 // ?? Private helpers ???????????????????????????????????????????????????????????

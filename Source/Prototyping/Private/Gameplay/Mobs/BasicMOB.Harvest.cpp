@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Prototyping.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Mobs/MOBAnimInstance.h"
@@ -48,14 +49,14 @@ void ABasicMOB::SetHarvested(bool bHarvested)
 
 	if (bHarvested)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("MOB %s (ID:%d) has been harvested"), *MOBData.mobName, MOBData.mobID);
+		UE_LOG(LogGameplay, Warning, TEXT("MOB %s (ID:%d) has been harvested"), *MOBData.mobName, MOBData.mobID);
 	}
 }
 
 void ABasicMOB::SetCurrentHarvesterId(int32 HarvesterId)
 {
 	MOBData.currentHarvesterId = HarvesterId;
-	UE_LOG(LogTemp, Warning, TEXT("MOB %s (ID:%d) currentHarvesterId=%d"), *MOBData.mobName, MOBData.mobID, HarvesterId);
+	UE_LOG(LogGameplay, Warning, TEXT("MOB %s (ID:%d) currentHarvesterId=%d"), *MOBData.mobName, MOBData.mobID, HarvesterId);
 }
 
 void ABasicMOB::RefreshHarvestableVFX()

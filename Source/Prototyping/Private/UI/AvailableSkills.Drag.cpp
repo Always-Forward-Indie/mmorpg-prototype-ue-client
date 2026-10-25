@@ -1,5 +1,6 @@
 ﻿#include "UI/AvailableSkillsWidget.h"
 #include "UI/AvailableSkillsWidget.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
@@ -46,7 +47,7 @@ void UAvailableSkillsWidget::OnChildSkillDragStarted()
     // of stopping at our Z = 50 panel.
     SetVisibility(ESlateVisibility::HitTestInvisible);
 
-    UE_LOG(LogTemp, Log, TEXT("AvailableSkillsWidget: Skill drag started — panel is now HitTestInvisible"));
+    UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Skill drag started — panel is now HitTestInvisible"));
 }
 
 void UAvailableSkillsWidget::OnChildSkillDragEnded()
@@ -62,5 +63,5 @@ void UAvailableSkillsWidget::OnChildSkillDragEnded()
         SetVisibility(ESlateVisibility::SelfHitTestInvisible);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("AvailableSkillsWidget: Skill drag ended — panel restored"));
+    UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Skill drag ended — panel restored"));
 }

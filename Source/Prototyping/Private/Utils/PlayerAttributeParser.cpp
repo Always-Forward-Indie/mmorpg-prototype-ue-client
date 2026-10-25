@@ -1,4 +1,5 @@
 #include "Utils/PlayerAttributeParser.h"
+#include "Prototyping.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonReader.h"
@@ -13,7 +14,7 @@ FPlayerStatsUpdateStruct PlayerAttributeParser::DeserializePlayerStatsUpdate(con
     
     if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerAttributeParser: Failed to parse JSON string"));
+        UE_LOG(LogNetPacket, Error, TEXT("PlayerAttributeParser: Failed to parse JSON string"));
         return StatsUpdate;
     }
     
@@ -21,7 +22,7 @@ FPlayerStatsUpdateStruct PlayerAttributeParser::DeserializePlayerStatsUpdate(con
     const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
     if (!Root->TryGetObjectField(TEXT("body"), BodyPtr) || !BodyPtr || !(*BodyPtr).IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerAttributeParser: No valid body found in JSON"));
+        UE_LOG(LogNetPacket, Error, TEXT("PlayerAttributeParser: No valid body found in JSON"));
         return StatsUpdate;
     }
     TSharedPtr<FJsonObject> Body = *BodyPtr;
@@ -35,7 +36,7 @@ FPlayerStatsUpdateStruct PlayerAttributeParser::DeserializePlayerStatsUpdate(con
     
     if (!Body.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerAttributeParser: Invalid body object"));
+        UE_LOG(LogNetPacket, Error, TEXT("PlayerAttributeParser: Invalid body object"));
         return StatsUpdate;
     }
     
@@ -140,11 +141,11 @@ FPlayerStatsUpdateStruct PlayerAttributeParser::DeserializePlayerStatsUpdate(con
     // Validate the parsed data
     if (!ValidateStatsData(StatsUpdate))
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerAttributeParser: Validation failed for stats data"));
+        UE_LOG(LogNetPacket, Warning, TEXT("PlayerAttributeParser: Validation failed for stats data"));
     }
     else
     {
-        UE_LOG(LogTemp, Log, TEXT("PlayerAttributeParser: Successfully parsed stats - CharID: %d, Level: %d, HP: %d/%d, MP: %d/%d"),
+        UE_LOG(LogNetPacket, Verbose, TEXT("PlayerAttributeParser: Successfully parsed stats - CharID: %d, Level: %d, HP: %d/%d, MP: %d/%d"),
             StatsUpdate.characterId, StatsUpdate.level, 
             StatsUpdate.healthCurrent, StatsUpdate.healthMax,
             StatsUpdate.manaCurrent, StatsUpdate.manaMax);
@@ -157,7 +158,7 @@ void PlayerAttributeParser::ParseHealthData(const TSharedPtr<FJsonObject>& Healt
 {
     if (!HealthObj.IsValid())
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerAttributeParser: Invalid health object"));
+        UE_LOG(LogNetPacket, Warning, TEXT("PlayerAttributeParser: Invalid health object"));
         return;
     }
     
@@ -165,14 +166,14 @@ void PlayerAttributeParser::ParseHealthData(const TSharedPtr<FJsonObject>& Healt
     
         HealthObj->TryGetNumberField(TEXT("max"), OutMax);
     
-    UE_LOG(LogTemp, VeryVerbose, TEXT("PlayerAttributeParser: Parsed health - Current: %d, Max: %d"), OutCurrent, OutMax);
+    UE_LOG(LogGameplay, VeryVerbose, TEXT("PlayerAttributeParser: Parsed health - Current: %d, Max: %d"), OutCurrent, OutMax);
 }
 
 void PlayerAttributeParser::ParseManaData(const TSharedPtr<FJsonObject>& ManaObj, int32& OutCurrent, int32& OutMax)
 {
     if (!ManaObj.IsValid())
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerAttributeParser: Invalid mana object"));
+        UE_LOG(LogNetPacket, Warning, TEXT("PlayerAttributeParser: Invalid mana object"));
         return;
     }
     
@@ -180,7 +181,7 @@ void PlayerAttributeParser::ParseManaData(const TSharedPtr<FJsonObject>& ManaObj
     
         ManaObj->TryGetNumberField(TEXT("max"), OutMax);
     
-    UE_LOG(LogTemp, VeryVerbose, TEXT("PlayerAttributeParser: Parsed mana - Current: %d, Max: %d"), OutCurrent, OutMax);
+    UE_LOG(LogGameplay, VeryVerbose, TEXT("PlayerAttributeParser: Parsed mana - Current: %d, Max: %d"), OutCurrent, OutMax);
 }
 
 bool PlayerAttributeParser::ValidateStatsData(const FPlayerStatsUpdateStruct& StatsData)
@@ -188,7 +189,7 @@ bool PlayerAttributeParser::ValidateStatsData(const FPlayerStatsUpdateStruct& St
     // Check if character ID is valid
     if (StatsData.characterId <= 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerAttributeParser: Invalid character ID: %d"), StatsData.characterId);
+        UE_LOG(LogNetPacket, Error, TEXT("PlayerAttributeParser: Invalid character ID: %d"), StatsData.characterId);
         return false;
     }
     
@@ -197,34 +198,34 @@ bool PlayerAttributeParser::ValidateStatsData(const FPlayerStatsUpdateStruct& St
     // stats_update is valid even if the server omits or zeroes the level field.
     if (StatsData.level <= 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerAttributeParser: Unexpected level value: %d (packet still processed)"), StatsData.level);
+        UE_LOG(LogNetPacket, Warning, TEXT("PlayerAttributeParser: Unexpected level value: %d (packet still processed)"), StatsData.level);
     }
     
     // Check if health values are valid
     if (StatsData.healthCurrent < 0 || StatsData.healthMax <= 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerAttributeParser: Invalid health values - Current: %d, Max: %d"), 
+        UE_LOG(LogNetPacket, Error, TEXT("PlayerAttributeParser: Invalid health values - Current: %d, Max: %d"), 
             StatsData.healthCurrent, StatsData.healthMax);
         return false;
     }
     
     if (StatsData.healthCurrent > StatsData.healthMax)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerAttributeParser: Current health (%d) exceeds max health (%d)"), 
+        UE_LOG(LogNetPacket, Warning, TEXT("PlayerAttributeParser: Current health (%d) exceeds max health (%d)"), 
             StatsData.healthCurrent, StatsData.healthMax);
     }
     
     // Check if mana values are valid
     if (StatsData.manaCurrent < 0 || StatsData.manaMax < 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerAttributeParser: Invalid mana values - Current: %d, Max: %d"), 
+        UE_LOG(LogNetPacket, Error, TEXT("PlayerAttributeParser: Invalid mana values - Current: %d, Max: %d"), 
             StatsData.manaCurrent, StatsData.manaMax);
         return false;
     }
     
     if (StatsData.manaCurrent > StatsData.manaMax)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerAttributeParser: Current mana (%d) exceeds max mana (%d)"), 
+        UE_LOG(LogNetPacket, Warning, TEXT("PlayerAttributeParser: Current mana (%d) exceeds max mana (%d)"), 
             StatsData.manaCurrent, StatsData.manaMax);
     }
     
@@ -269,7 +270,7 @@ void PlayerAttributeParser::UpdateCharacterDataFromStatsUpdate(FCharacterDataStr
         CharacterData.characterExperienceDebt    = StatsUpdate.experienceDebt;
     }
 
-    UE_LOG(LogTemp, Log, TEXT("PlayerAttributeParser: Updated character data for CharID: %d - Level: %d, HP: %d/%d, MP: %d/%d, XP: %d [%d-%d] Debt: %d"),
+    UE_LOG(LogNetPacket, Verbose, TEXT("PlayerAttributeParser: Updated character data for CharID: %d - Level: %d, HP: %d/%d, MP: %d/%d, XP: %d [%d-%d] Debt: %d"),
         CharacterData.characterId, CharacterData.characterLevel,
         CharacterData.characterCurrentHealth, StatsUpdate.healthMax,
         CharacterData.characterCurrentMana, StatsUpdate.manaMax,

@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -86,7 +87,7 @@ static EDamageType SchoolToDamageType(ESkillSchool School)
 
 void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, ESkillSchool School, bool bIsMissed, bool bIsBlocked, const FString& SkillSlug)
 {
-    UE_LOG(LogTemp, Log, TEXT("Player %d taking %d damage (Critical: %s, School: %s, Missed: %s, Blocked: %s, Skill: %s)"),
+    UE_LOG(LogGameplay, Verbose, TEXT("Player %d taking %d damage (Critical: %s, School: %s, Missed: %s, Blocked: %s, Skill: %s)"),
         GetActorId_Implementation(), Damage,
         bIsCritical ? TEXT("true") : TEXT("false"), *UEnum::GetValueAsString(School),
         bIsMissed ? TEXT("true") : TEXT("false"),
@@ -277,7 +278,7 @@ void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritica
 
 void ABasicPlayer::ShowHealingEffect_Implementation(int32 Healing, const FString& SkillSlug)
 {
-    UE_LOG(LogTemp, Log, TEXT("Player %d healed for %d (skill: %s)"), GetActorId_Implementation(), Healing, *SkillSlug);
+    UE_LOG(LogGameplay, Verbose, TEXT("Player %d healed for %d (skill: %s)"), GetActorId_Implementation(), Healing, *SkillSlug);
 
     // Look up skill definition for sound and VFX
     if (MyGameInstance)
@@ -352,7 +353,7 @@ void ABasicPlayer::ShowManaRestoreEffect_Implementation(int32 ManaRestored)
 {
     if (ManaRestored <= 0) return;
 
-    UE_LOG(LogTemp, Log, TEXT("Player %d mana restored by %d"), GetActorId_Implementation(), ManaRestored);
+    UE_LOG(LogGameplay, Verbose, TEXT("Player %d mana restored by %d"), GetActorId_Implementation(), ManaRestored);
 
     if (UIManager)
     {
@@ -365,7 +366,7 @@ void ABasicPlayer::ShowManaRestoreEffect_Implementation(int32 ManaRestored)
 
 void ABasicPlayer::ShowBuffEffect_Implementation(const FAppliedEffectData& Effect)
 {
-    UE_LOG(LogTemp, Log, TEXT("Player %d received %s effect: %s (Value: %d, Duration: %.1f)"), 
+    UE_LOG(LogGameplay, Verbose, TEXT("Player %d received %s effect: %s (Value: %d, Duration: %.1f)"), 
         GetActorId_Implementation(), *Effect.effectType, *Effect.effectName, Effect.value, Effect.duration);
 
     if (!MyGameInstance) return;
@@ -433,20 +434,20 @@ void ABasicPlayer::OnRespawnClicked()
 
     if (!MyGameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("BasicPlayer: OnRespawnClicked - MyGameInstance is null"));
+        UE_LOG(LogGameplay, Error, TEXT("BasicPlayer: OnRespawnClicked - MyGameInstance is null"));
         return;
     }
 
     UPlayerManager* PM = MyGameInstance->GetPlayerManager();
     if (!PM)
     {
-        UE_LOG(LogTemp, Error, TEXT("BasicPlayer: OnRespawnClicked - PlayerManager is null"));
+        UE_LOG(LogGameplay, Error, TEXT("BasicPlayer: OnRespawnClicked - PlayerManager is null"));
         return;
     }
 
     FClientDataStruct ClientData = MyGameInstance->GetCurrentClientData();
     PM->SendRespawnRequest(ClientData);
-    UE_LOG(LogTemp, Warning, TEXT("BasicPlayer: Respawn requested for character %d"),
+    UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: Respawn requested for character %d"),
         playerData.characterData.characterId);
 }
 

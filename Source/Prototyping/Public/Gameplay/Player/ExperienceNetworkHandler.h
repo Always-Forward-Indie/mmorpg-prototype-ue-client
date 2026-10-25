@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "Data/DataStructs.h"
+#include "Networking/NetworkDispatcher.h"
 #include "ExperienceNetworkHandler.generated.h"
 
 // Forward declarations
@@ -37,8 +38,9 @@ public:
     void UnsubscribeFromNetworkEvents();
 
     // Network event handlers
-    UFUNCTION()
-    void HandleChunkServerData(const FString& ReceivedData);
+    // Packet entry (S05): single-parse path via the per-eventType dispatcher.
+    // Replaces HandleChunkServerData (which re-parsed every packet twice).
+    void HandleChunkPacket(const FParsedPacket& Packet);
 
     // Check if an event is experience-related
     UFUNCTION(BlueprintCallable, Category = "Experience Network Handler")

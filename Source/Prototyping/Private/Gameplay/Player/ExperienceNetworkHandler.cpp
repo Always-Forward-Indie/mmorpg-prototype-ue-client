@@ -1,5 +1,6 @@
 #include "Gameplay/Player/ExperienceNetworkHandler.h"
 #include "Prototyping.h"
+#include "Services/TimeSyncService.h"
 #include "Gameplay/Player/ExperienceManager.h"
 #include "MyGameInstance.h"
 #include "Networking/NetworkManager.h"
@@ -59,9 +60,13 @@ void UExperienceNetworkHandler::SubscribeToNetworkEvents()
         return;
     }
 
-    // Subscribe to chunk server data (where experience updates come from)
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UExperienceNetworkHandler::HandleChunkServerData);
-    NetworkManager->OnChunkServerDataReceived.AddDynamic(this, &UExperienceNetworkHandler::HandleChunkServerData);
+    // Subscribe to chunk server data (where experience updates come from).
+    // Single-parse path (S05): per-event dispatcher registration. The
+    // characterExperience quirk (header.event vs header.eventType) is handled
+    // centrally in JSONParser::ParsePacket, so routing just works.
+    NetworkManager->DispatcherFor(EServerType::ChunkServer).AddHandler(TEXT("characterExperience"), this, &UExperienceNetworkHandler::HandleChunkPacket);
+    NetworkManager->DispatcherFor(EServerType::ChunkServer).AddHandler(TEXT("experienceUpdate"), this, &UExperienceNetworkHandler::HandleChunkPacket);
+    NetworkManager->DispatcherFor(EServerType::ChunkServer).AddHandler(TEXT("levelUp"), this, &UExperienceNetworkHandler::HandleChunkPacket);
 
     bIsSubscribed = true;
     LogNetworkEvent(TEXT("Subscription"), TEXT("Subscribed to network events"));
@@ -80,57 +85,38 @@ void UExperienceNetworkHandler::UnsubscribeFromNetworkEvents()
     }
 
     // Unsubscribe from chunk server data
-    NetworkManager->OnChunkServerDataReceived.RemoveDynamic(this, &UExperienceNetworkHandler::HandleChunkServerData);
+    NetworkManager->DispatcherFor(EServerType::ChunkServer).RemoveHandler(TEXT("characterExperience"), this);
+    NetworkManager->DispatcherFor(EServerType::ChunkServer).RemoveHandler(TEXT("experienceUpdate"), this);
+    NetworkManager->DispatcherFor(EServerType::ChunkServer).RemoveHandler(TEXT("levelUp"), this);
 
     bIsSubscribed = false;
     LogNetworkEvent(TEXT("Unsubscription"), TEXT("Unsubscribed from network events"));
 }
 
-void UExperienceNetworkHandler::HandleChunkServerData(const FString& ReceivedData)
+void UExperienceNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
 {
-    if (ReceivedData.IsEmpty())
+    // Compat alias: ProcessExperienceUpdateEvent/ProcessLevelUpEvent still take
+    // the raw string (S05b follow-up converts them to Packet.Body).
+    const FString& ReceivedData = Packet.Raw;
+
+    if (!Packet.bValid || !Packet.Body.IsValid())
     {
-        UE_LOG(LogNetPacket, Warning, TEXT("ExperienceNetworkHandler: Received empty data"));
         return;
     }
 
-    // Parse raw JSON so we can check both "eventType" and "event" keys
-    TSharedPtr<FJsonObject> Root;
-    {
-        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ReceivedData);
-        if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
-            return;
-    }
-
-    // Resolve event type: try header.eventType first, then header.event (characterExperience quirk)
-    FString EventType;
-    FString Status;
-    TSharedPtr<FJsonObject> Header;
-    if (Root->HasField(TEXT("header")))
-    {
-        Header = Root->GetObjectField(TEXT("header"));
-        if (Header.IsValid())
-        {
-            Header->TryGetStringField(TEXT("eventType"), EventType);
-            if (EventType.IsEmpty())
-                Header->TryGetStringField(TEXT("event"), EventType);
-            Header->TryGetStringField(TEXT("status"), Status);
-        }
-    }
+    const FString& EventType = Packet.EventType;
+    const FString& Status = Packet.Status;
+    const TSharedPtr<FJsonObject>& Body = Packet.Body;
 
     if (EventType.IsEmpty())
         return;
 
-    // Handle characterExperience � response to getCharacterExperience
+    // Handle characterExperience — response to getCharacterExperience
     // Body fields: characterId, currentLevel, currentExperience, expForCurrentLevel,
     //              expForNextLevel, expInCurrentLevel, expNeededForNextLevel, progressToNextLevel
     if (EventType == TEXT("characterExperience") && Status == TEXT("success"))
     {
         if (!ExperienceManager || !IsValid(ExperienceManager)) return;
-
-        if (!Root->HasField(TEXT("body"))) return;
-        TSharedPtr<FJsonObject> Body = Root->GetObjectField(TEXT("body"));
-        if (!Body.IsValid()) return;
 
         FPlayerProgressionStruct Prog;
         Body->TryGetNumberField(TEXT("characterId"),       Prog.characterId);

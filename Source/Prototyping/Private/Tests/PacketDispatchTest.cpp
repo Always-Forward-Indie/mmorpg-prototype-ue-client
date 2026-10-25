@@ -40,6 +40,18 @@ bool FPacketParseTest::RunTest(const FString& Parameters)
         JSONParser::ParsePacket(TEXT("{\"body\":{\"a\":1}}")).bValid);
     TestFalse(TEXT("empty eventType invalid"),
         JSONParser::ParsePacket(TEXT("{\"header\":{\"status\":\"success\"}}")).bValid);
+    {
+        // Legacy quirk (chunk characterExperience): header.event instead of
+        // header.eventType. Routes as valid; eventType wins when both present.
+        const FParsedPacket Quirk = JSONParser::ParsePacket(
+            TEXT("{\"header\":{\"event\":\"characterExperience\",\"status\":\"success\"},\"body\":{}}"));
+        TestTrue(TEXT("event-key quirk valid"), Quirk.bValid);
+        TestEqual(TEXT("event-key quirk type"), Quirk.EventType, TEXT("characterExperience"));
+        TestEqual(TEXT("event-key quirk status"), Quirk.Status, TEXT("success"));
+        const FParsedPacket Both = JSONParser::ParsePacket(
+            TEXT("{\"header\":{\"eventType\":\"a\",\"event\":\"b\"}}"));
+        TestEqual(TEXT("eventType wins over event"), Both.EventType, TEXT("a"));
+    }
 
     // Re-parsing the same Raw twice yields equal results (deterministic).
     const FString Raw = TEXT("{\"header\":{\"eventType\":\"moveCharacter\"},\"body\":{}}");

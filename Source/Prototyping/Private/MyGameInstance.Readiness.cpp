@@ -153,10 +153,21 @@ void UMyGameInstance::CheckGameWorldReady()
 		LoadingScreenSafetyTimerHandle = FTSTicker::GetCoreTicker().AddTicker(
 			FTickerDelegate::CreateLambda([this](float)
 			{
-				// Unconditional: by now the player must see the world even if some
-				// ReadyFlags never arrived (unfocused window starves the timers and
-				// ticks that produce them). The hard 8s watchdog normally fires first;
-				// this is the second net.
+				// Second net: only fires when flags are STILL incomplete.
+				// CheckAllReadyFlags hides the screen the moment flags complete
+				// and disarms this ticker via RemoveLoadingScreen — but if the
+				// unsubscribe was ever missed, never scare the log with a
+				// bogus SAFETY: report the real state instead.
+				if ((ReadyFlags & ReadyFlag_AllRequired) == ReadyFlag_AllRequired)
+				{
+					UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] safety tick: flags already complete (0x%02X/0x%02X), standing down"),
+						ReadyFlags, ReadyFlag_AllRequired);
+					return false;
+				}
+				// Unconditional by design from here: the player must see the
+				// world even if some ReadyFlags never arrived (unfocused window
+				// starves the timers and ticks that produce them). The hard 8s
+				// watchdog normally fires first; this is the second net.
 				const double Elapsed = FPlatformTime::Seconds() - LoadingScreenShownTime;
 				UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] SAFETY: %.1fs elapsed without full flags (0x%02X/0x%02X) — force-removing loading screen"),
 					Elapsed, ReadyFlags, ReadyFlag_AllRequired);

@@ -463,6 +463,14 @@ void UMyGameInstance::RemoveLoadingScreen()
 		FTSTicker::GetCoreTicker().RemoveTicker(LoadingScreenHardSafetyTickerHandle);
 		LoadingScreenHardSafetyTickerHandle.Reset();
 	}
+	// Soft safety (S11 #125): armed at Gate1, must die here on success or it
+	// fires unconditionally after the timeout and double-hides the screen
+	// (plus yanks viewport focus mid-game).
+	if (LoadingScreenSafetyTimerHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(LoadingScreenSafetyTimerHandle);
+		LoadingScreenSafetyTimerHandle.Reset();
+	}
 	if (WindowFocusNudgeTickerHandle.IsValid())
 	{
 		FTSTicker::GetCoreTicker().RemoveTicker(WindowFocusNudgeTickerHandle);

@@ -197,7 +197,11 @@ public:
     // the recovery is proven on a second one), or at DropSocketMaxWaitSec
     // as a fallback so a bad spot fails loud instead of hanging.
     bool bDropSocketMidRun = false;
-    float DropSocketAfterSec = 15.0f;
+    // Settle after start before the drop may fire. Small on purpose (S11 #126):
+    // admin-seeded mobs die in ~2s, and a 15s settle let fast runs finish
+    // without ever dropping (false coverage). The drop still waits for the
+    // first confirmed kill — the settle only lets combat replicate.
+    float DropSocketAfterSec = 3.0f;
     float DropSocketMaxWaitSec = 90.0f;
     // live_reconnect: only chase mobs within this radius. The scenario
     // proves recovery on a guaranteed-nearby fox (topped up externally),

@@ -82,6 +82,12 @@ public:
     // New method with explicit TimeSyncService parameter and server type
     static FString SerializeJsonWithTimeSync(const FString& EventType, const TMap<FString, TSharedPtr<FJsonValue>>& HeaderData, const TMap<FString, TSharedPtr<FJsonValue>>& BodyData, UTimeSyncService* TimeSyncService, EServerType ServerType);
 
+    // Transport capability opt-in (wireFrag, S13-C1): marks a chunk-bound
+    // request body with {"frag":true}. The server learns the capability
+    // from the FIRST message that carries it (joinGameClient), so every
+    // sender uses this single helper — no forked inline copies.
+    static void AddFragOptIn(TMap<FString, TSharedPtr<FJsonValue>>& BodyData);
+
     // Helper method to get TimeSyncService instance
     static UTimeSyncService* GetTimeSyncService();
 

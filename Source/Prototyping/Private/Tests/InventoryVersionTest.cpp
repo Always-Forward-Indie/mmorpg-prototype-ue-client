@@ -1,5 +1,6 @@
 #include "Misc/AutomationTest.h"
 #include "Utils/NetCore/InventoryRules.h"
+#include "Utils/JSONParser.h"
 
 // S15a inventory generation gate (chunk InventoryManager::inventoryVersions_):
 // snapshots are authoritative, deltas apply only at exactly last+1, gaps
@@ -28,6 +29,17 @@ bool FInventoryVersionTest::RunTest(const FString& Parameters)
 	// Skipped generations demand a full refresh, never a half-merge.
 	TestEqual(TEXT("delta v3 on v0 is a gap"), FInventoryVersionRule::Classify(0, 3), V::Gap);
 	TestEqual(TEXT("delta v8 on v6 is a gap"), FInventoryVersionRule::Classify(6, 8), V::Gap);
+
+	// Version parse rides the production deserializer (S15b reconnect reads
+	// playerReady inventoryVersion the same way).
+	{
+		const FCharacterInventoryStruct WithVer = JSONParser::DeserializeCharacterInventory(
+			TEXT("{\"body\":{\"characterId\":615,\"gold\":310,\"version\":7,\"items\":[]}}"));
+		TestEqual(TEXT("snapshot version parsed"), WithVer.inventoryVersion, static_cast<int64>(7));
+		const FCharacterInventoryStruct Legacy = JSONParser::DeserializeCharacterInventory(
+			TEXT("{\"body\":{\"characterId\":615,\"gold\":310,\"items\":[]}}"));
+		TestEqual(TEXT("missing version defaults to 0"), Legacy.inventoryVersion, static_cast<int64>(0));
+	}
 
 	return true;
 }

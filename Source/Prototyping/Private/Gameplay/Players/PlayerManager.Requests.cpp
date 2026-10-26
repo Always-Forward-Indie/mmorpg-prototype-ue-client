@@ -6,6 +6,7 @@
 #include "Gameplay/Combat/CombatSystemManager.h"
 #include "Gameplay/Combat/CombatNetworkHandler.h"
 #include "Gameplay/Items/ItemManager.h"
+#include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Player/ExperienceManager.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "MyGameInstance.h"
@@ -103,6 +104,16 @@ void UPlayerManager::SendPlayerReadyRequest(const FClientDataStruct& ClientData)
 	// Per protocol: body has characterId — use ClientData exclusively
 	const int32 CharId = ClientData.characterData.characterId;
 	BodyData.Add("characterId", MakeShareable(new FJsonValueNumber(CharId)));
+	// S15b: our inventory baseline (0 = none yet) so the server replays
+	// missed deltas after it, or pushes a full snapshot with fullResync:true
+	// when the baseline fell out of its delta log.
+	int64 LastInventoryVersion = 0;
+	if (gameInstance)
+	{
+		if (UInventoryManager* InvMgr = gameInstance->GetInventoryManager())
+			LastInventoryVersion = InvMgr->GetInventory().inventoryVersion;
+	}
+	BodyData.Add("inventoryVersion", MakeShareable(new FJsonValueNumber(LastInventoryVersion)));
 	// Protocol framing (S14): declare v2 support.
 	JSONParser::AddFramingOptIn(BodyData);
 
@@ -111,7 +122,7 @@ void UPlayerManager::SendPlayerReadyRequest(const FClientDataStruct& ClientData)
 	if (networkManager != nullptr)
 	{
 		networkManager->SendDataToChunkServer(JsonString);
-		UE_LOG(LogConnection, Log, TEXT("[PHASE 3] playerReady -> ChunkServer, charId=%d"), CharId);
+		UE_LOG(LogConnection, Log, TEXT("[PHASE 3] playerReady -> ChunkServer, charId=%d inventoryVersion=%lld"), CharId, LastInventoryVersion);
 	}
 	else {
 		UE_LOG(LogConnection, Error, TEXT("PlayerManager: NetworkManager is null in SendPlayerReadyRequest"));

@@ -177,8 +177,11 @@ void UInventoryManager::ProcessInventoryData(const FString& JsonData)
 	}
 
 	bInventoryLoaded = true;
-	UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Loaded %d items, gold=%d version=%lld for character %d"),
-		CurrentInventory.items.Num(), CurrentInventory.gold, CurrentInventory.inventoryVersion, CurrentInventory.characterId);
+	bool bFullResync = false;
+	Body->TryGetBoolField(TEXT("fullResync"), bFullResync);
+	UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Loaded %d items, gold=%d version=%lld for character %d%s"),
+		CurrentInventory.items.Num(), CurrentInventory.gold, CurrentInventory.inventoryVersion, CurrentInventory.characterId,
+		bFullResync ? TEXT(" (fullResync)") : TEXT(""));
 
 	// Broadcast events
 	OnInventoryUpdated.Broadcast(CurrentInventory);

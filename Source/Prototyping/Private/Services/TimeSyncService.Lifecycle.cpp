@@ -1,5 +1,6 @@
 #include "Services/TimeSyncService.h"
 #include "Prototyping.h"
+#include "Containers/Ticker.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/DateTime.h"
 #include "Misc/Guid.h"
@@ -44,6 +45,42 @@ void UTimeSyncService::Initialize()
     {
         UE_LOG(LogPing, Error, TEXT("TimeSyncService: WorldContext is null, cannot start cleanup timer"));
     }
+
+    RegisterFpsSampler();
+}
+
+void UTimeSyncService::RegisterFpsSampler()
+{
+    // S16b client fps sampler (M4): core ticker, game thread, weak capture.
+    // Runs once for the app lifetime (world-independent); re-entry safe.
+    if (FpsSamplerHandle.IsValid())
+        return;
+    TWeakObjectPtr<UTimeSyncService> WeakThis(this);
+    FpsSamplerHandle = FTSTicker::GetCoreTicker().AddTicker(
+        FTickerDelegate::CreateLambda([WeakThis](float DeltaTime) -> bool
+        {
+            UTimeSyncService* Self = WeakThis.Get();
+            if (!Self)
+                return false; // service gone: unregister
+            Self->FpsWindow.Add(FMath::Max(DeltaTime, 0.00001f));
+            Self->FpsWindowSec += DeltaTime;
+            if (Self->FpsWindowSec >= 60.0f && Self->FpsWindow.Num() > 0)
+            {
+                float Sum = 0.0f;
+                for (float Dt : Self->FpsWindow)
+                    Sum += Dt;
+                const float AvgFps = Self->FpsWindow.Num() / FMath::Max(Sum, 0.0001f);
+                TArray<float> Sorted = Self->FpsWindow;
+                Sorted.Sort();
+                const float P95FrameMs = Sorted[FMath::Clamp(
+                    FMath::RoundToInt(Sorted.Num() * 0.95f) - 1, 0, Sorted.Num() - 1)] * 1000.0f;
+                UE_LOG(LogGameplay, Display, TEXT("CLIENT_FPS avg=%.0f p95frame=%.1fms n=%d"),
+                    AvgFps, P95FrameMs, Self->FpsWindow.Num());
+                Self->FpsWindow.Reset();
+                Self->FpsWindowSec = 0.0f;
+            }
+            return true;
+        }));
 }
 
 void UTimeSyncService::SetWorldContext(UWorld* World)

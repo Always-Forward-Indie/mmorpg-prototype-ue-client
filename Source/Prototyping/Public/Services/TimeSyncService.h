@@ -344,4 +344,12 @@ private:
     mutable FCriticalSection CalibrationCs;
     mutable int64 AnchorSystemMs = 0;
     mutable double AnchorPerfSeconds = 0.0;
+
+    // S16b client fps sampler (M4): core-ticker callback accumulates frame
+    // dts; every 60s window logs avg fps + p95 frame time (CLIENT_FPS).
+    // Weak capture unregisters itself if the service dies first.
+    FTSTicker::FDelegateHandle FpsSamplerHandle;
+    TArray<float> FpsWindow;
+    float FpsWindowSec = 0.0f;
+    void RegisterFpsSampler();
 };

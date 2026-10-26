@@ -552,11 +552,6 @@ FString JSONParser::HumanizeSlugForDisplay(const FString& Slug)
 	 return EventType;
  }
 
-void JSONParser::AddFragOptIn(TMap<FString, TSharedPtr<FJsonValue>>& BodyData)
-{
-	BodyData.Add(TEXT("frag"), MakeShareable(new FJsonValueBoolean(true)));
-}
-
 void JSONParser::AddFramingOptIn(TMap<FString, TSharedPtr<FJsonValue>>& BodyData)
 {
 	TArray<TSharedPtr<FJsonValue>> Versions;

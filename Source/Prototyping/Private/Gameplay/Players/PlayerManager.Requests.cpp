@@ -70,9 +70,6 @@ void UPlayerManager::SendJoinClientChunkRequest(const FClientDataStruct& ClientD
 	TMap<FString, TSharedPtr<FJsonValue>> HeaderData;
 	TMap<FString, TSharedPtr<FJsonValue>> BodyData;
 
-	// Transport capability (S13-C1): opt in from the FIRST message so the
-	// server knows before any fat response is queued.
-	JSONParser::AddFragOptIn(BodyData);
 	// Protocol framing (S14): declare v2 support (transport mode itself is
 	// sniffed by the server from the first bytes).
 	JSONParser::AddFramingOptIn(BodyData);
@@ -106,10 +103,6 @@ void UPlayerManager::SendPlayerReadyRequest(const FClientDataStruct& ClientData)
 	// Per protocol: body has characterId — use ClientData exclusively
 	const int32 CharId = ClientData.characterData.characterId;
 	BodyData.Add("characterId", MakeShareable(new FJsonValueNumber(CharId)));
-	// Transport fragmentation (wireFrag): the server fragments oversize
-	// lines for sockets that opt in here (single helper for all join
-	// messages — the flag is learned from the first one carrying it).
-	JSONParser::AddFragOptIn(BodyData);
 	// Protocol framing (S14): declare v2 support.
 	JSONParser::AddFramingOptIn(BodyData);
 
@@ -153,9 +146,6 @@ void UPlayerManager::SendJoinCharacterChunkRequest(const FClientDataStruct& Clie
 			CatalogVersion = ItemMgr->GetCatalogVersion();
 	}
 	BodyData.Add("itemCatalogVersion", MakeShareable(new FJsonValueNumber(CatalogVersion)));
-	// Transport capability (S13-C1): duplicate the opt-in here too — every
-	// chunk-bound join message carries it, the server learns from the first.
-	JSONParser::AddFragOptIn(BodyData);
 	// Protocol framing (S14): declare v2 support.
 	JSONParser::AddFramingOptIn(BodyData);
 

@@ -188,6 +188,13 @@ FCharacterInventoryStruct JSONParser::DeserializeCharacterInventory(const TShare
 		Inventory.gold = Gold;
 	}
 
+	// S15a: server generation (absent = 0 = legacy path, always accepted).
+	double VersionNumber = 0;
+	if (Body->TryGetNumberField(TEXT("version"), VersionNumber))
+	{
+		Inventory.inventoryVersion = static_cast<int64>(FMath::RoundToDouble(VersionNumber));
+	}
+
 	// Items
 	const TArray<TSharedPtr<FJsonValue>>* ItemsArray = nullptr;
 	if (Body->TryGetArrayField(TEXT("items"), ItemsArray))

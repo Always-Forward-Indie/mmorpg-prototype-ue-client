@@ -72,3 +72,47 @@ struct PROTOTYPING_API FInventoryRules
 		Items.RemoveAll([](const FInventoryItemStruct& It) { return It.quantity <= 0; });
 	}
 };
+
+/**
+ * S15a inventory generation gate (pure): server stamps every snapshot and
+ * delta with a per-character monotonic version (0 = absent/legacy).
+ * Snapshots are authoritative and always accepted; deltas go through
+ * Classify against the cached generation:
+ * - Incoming 0 → Accept (legacy path, never brick on missing versions).
+ * - Incoming == Last → Stale (duplicate delivery, ignore).
+ * - Incoming == Last+1 → Accept (next in order).
+ * - Incoming > Last+1 → Gap (missed delta(s) → explicit full refresh).
+ * - Incoming < Last (both nonzero, not equal) → Stale (late/out-of-order).
+ * Fresh client (Last 0) + delta v1 → Accept; delta v>1 → Gap → refresh,
+ * which is the safe catch-all for anything the client never saw.
+ */
+enum class EInventoryVersionVerdict : uint8
+{
+	Accept,
+	Stale,
+	Gap
+};
+
+struct PROTOTYPING_API FInventoryVersionRule
+{
+	static EInventoryVersionVerdict Classify(int64 LastVersion, int64 IncomingVersion)
+	{
+		if (IncomingVersion <= 0)
+		{
+			return EInventoryVersionVerdict::Accept;
+		}
+		if (IncomingVersion == LastVersion)
+		{
+			return EInventoryVersionVerdict::Stale;
+		}
+		if (IncomingVersion == LastVersion + 1)
+		{
+			return EInventoryVersionVerdict::Accept;
+		}
+		if (IncomingVersion > LastVersion + 1)
+		{
+			return EInventoryVersionVerdict::Gap;
+		}
+		return EInventoryVersionVerdict::Stale;
+	}
+};

@@ -177,8 +177,8 @@ void UInventoryManager::ProcessInventoryData(const FString& JsonData)
 	}
 
 	bInventoryLoaded = true;
-	UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Loaded %d items, gold=%d for character %d"),
-		CurrentInventory.items.Num(), CurrentInventory.gold, CurrentInventory.characterId);
+	UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Loaded %d items, gold=%d version=%lld for character %d"),
+		CurrentInventory.items.Num(), CurrentInventory.gold, CurrentInventory.inventoryVersion, CurrentInventory.characterId);
 
 	// Broadcast events
 	OnInventoryUpdated.Broadcast(CurrentInventory);
@@ -217,6 +217,30 @@ void UInventoryManager::ProcessInventoryUpdate(const FString& JsonData)
 			return;
 		}
 
+		// S15a generation gate (pure rule, NetCore): stale duplicates drop
+		// silently, gaps trigger an explicit full refresh instead of a
+		// half-applied merge. Snapshots bypass this (authoritative).
+		int64 IncomingVersion = 0;
+		double VersionNumber = 0;
+		if (Body->TryGetNumberField(TEXT("version"), VersionNumber))
+		{
+			IncomingVersion = static_cast<int64>(FMath::RoundToDouble(VersionNumber));
+		}
+		const EInventoryVersionVerdict Verdict = FInventoryVersionRule::Classify(CurrentInventory.inventoryVersion, IncomingVersion);
+		if (Verdict == EInventoryVersionVerdict::Stale)
+		{
+			UE_LOG(LogNetPacket, Verbose, TEXT("InventoryManager: Ignoring stale INVENTORY_UPDATE v%lld (current v%lld)"),
+				IncomingVersion, CurrentInventory.inventoryVersion);
+			return;
+		}
+		if (Verdict == EInventoryVersionVerdict::Gap)
+		{
+			UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: INVENTORY_UPDATE v%lld skips v%lld — requesting full refresh"),
+				IncomingVersion, CurrentInventory.inventoryVersion + 1);
+			RequestInventoryData(OwnerCharacterId > 0 ? OwnerCharacterId : CharacterId);
+			return;
+		}
+
 		TArray<FInventoryItemStruct> Changed;
 		for (const TSharedPtr<FJsonValue>& ItemValue : *ChangedArray)
 		{
@@ -243,6 +267,9 @@ void UInventoryManager::ProcessInventoryUpdate(const FString& JsonData)
 
 		FInventoryRules::ApplyInventoryDelta(CurrentInventory.items, Changed, Removed);
 		ResolveUnresolvedRows();
+		// S15a: baseline advances only on accepted deltas (gap path returns
+		// early above; legacy version-0 deltas keep baseline 0).
+		CurrentInventory.inventoryVersion = IncomingVersion;
 		OnInventoryUpdated.Broadcast(CurrentInventory);
 		return;
 	}

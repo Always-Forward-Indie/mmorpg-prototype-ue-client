@@ -1136,11 +1136,18 @@ struct FCharacterInventoryStruct
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Inventory")
 	TArray<FInventoryItemStruct> items;
 
+	// S15a: server generation of this state (monotonic per character).
+	// Snapshots and deltas both carry it; deltas apply only when it is
+	// exactly one past the cached generation (gap = explicit refresh).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Inventory")
+	int64 inventoryVersion = 0;
+
 	FCharacterInventoryStruct()
 	{
 		characterId = 0;
 		gold = 0;
 		items.Empty();
+		inventoryVersion = 0;
 	}
 };
 

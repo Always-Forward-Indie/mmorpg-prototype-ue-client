@@ -127,12 +127,12 @@ void UAuthenticationManager::ProcessLoginPacket(const FParsedPacket& Packet)
 			TArray<FLoginCharacterEntry> Entries = JSONParser::DeserializeLoginCharactersList(ReceivedData);
 			OnCharacterListReceived.Broadcast(Entries);
 
-			// Legacy compat: also populate via GameInstance ListView
+			// Compat: also populate via GameInstance ListView
 			if (gameInstance)
 			{
 				gameInstance->OnLoginResponseReceived.Broadcast(ClientData.clientId, MessageData.message);
 
-				// Build minimal FCharacterDataStruct list for legacy SetCharacterItems (uses only name + id)
+				// Build minimal FCharacterDataStruct list for SetCharacterItems (uses only name + id)
 				TArray<FCharacterDataStruct> LegacyList;
 				LegacyList.Reserve(Entries.Num());
 				for (const FLoginCharacterEntry& E : Entries)

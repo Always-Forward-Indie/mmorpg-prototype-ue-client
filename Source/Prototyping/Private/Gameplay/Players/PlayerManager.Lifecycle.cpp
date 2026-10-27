@@ -71,13 +71,13 @@ void UPlayerManager::SubscribeToNetworkManager()
 	{
 		// Subscribe to the network manager's events for game server.
 		// Single-parse path (S05): dispatcher fallback delivers the parsed
-		// packet; the legacy FString broadcast is no longer needed here.
+		// packet; the raw FString broadcast is not needed here.
 		networkManager->DispatcherFor(EServerType::GameServer).RemoveFallbackHandler(this);
 		networkManager->DispatcherFor(EServerType::GameServer).AddFallbackHandler(this, &UPlayerManager::ProcessGamePacket);
 
 		// Subscribe to the network manager's events for chunk server data.
 		// Single-parse path (S05): dispatcher fallback delivers the parsed
-		// packet; the legacy FString broadcast is no longer needed here.
+		// packet; the raw FString broadcast is not needed here.
 		networkManager->DispatcherFor(EServerType::ChunkServer).RemoveFallbackHandler(this);
 		networkManager->DispatcherFor(EServerType::ChunkServer).AddFallbackHandler(this, &UPlayerManager::ProcessChunkPacket);
 		// Rejoin trigger for mid-session reconnects (idempotent: Remove first).

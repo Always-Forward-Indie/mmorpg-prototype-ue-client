@@ -154,7 +154,7 @@ bool FSkillInitiationErrorTest::RunTest(const FString& Parameters)
     TestFalse(TEXT("stunned fails"), Stunned.success);
     TestEqual(TEXT("stun code"), Stunned.errorCode, FString(TEXT("Stunned")));
 
-    // Legacy shape without body.errorCode falls back to header.message.
+    // Error without body.errorCode falls back to header.message.
     FSkillInitiationData Legacy = JSONParser::DeserializeSkillInitiation(
         TEXT("{\"header\":{\"eventType\":\"combatInitiation\",\"status\":\"error\",\"message\":\"Silenced\"},\"body\":{}}"));
     TestFalse(TEXT("legacy fails"), Legacy.success);
@@ -175,7 +175,7 @@ bool FDurabilityZeroKeptTest::RunTest(const FString& Parameters)
     FInventoryItemStruct Broken = JSONParser::DeserializeInventoryItem(BrokenObj);
     TestEqual(TEXT("explicit zero kept"), Broken.durabilityCurrent, 0);
 
-    // Missing field (legacy packets) still falls back to max.
+    // Missing field still falls back to max.
     TSharedPtr<FJsonObject> LegacyObj;
     TestTrue(TEXT("legacy parses"), TryParseBody(
         TEXT("{\"header\":{},\"body\":{\"id\":5,\"itemId\":10,\"quantity\":1,\"durabilityMax\":100,\"isDurable\":true}}"),

@@ -109,10 +109,6 @@ public:
 	FOnNPCDataReceived OnNPCDataReceived;
 
 protected:
-	// Network event handler
-	UFUNCTION()
-	void ProcessGameServerData(const FString& ReceivedData);
-
 	// Internal spawn logic
 	ABasicNPC* CreateNPCActor(const FNPCStruct& NPCData);
 

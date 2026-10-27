@@ -80,12 +80,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSkillResultFieldsContractTest, "MMO.Protocol.S
 
 bool FSkillResultFieldsContractTest::RunTest(const FString& Parameters)
 {
-    // healAmount legacy fallback + header-wrapped success.
+    // Server heal shape + header-wrapped success.
     FSkillResultData Heal = JSONParser::DeserializeSkillResult(
         TEXT("{\"header\":{\"eventType\":\"healingResult\",\"status\":\"success\",\"message\":\"ok\"},"
         "\"body\":{\"skillResult\":{\"skillSlug\":\"mend\",\"casterId\":7,\"targetId\":7,"
-        "\"healAmount\":40,\"manaHealing\":10,\"finalTargetHealth\":120,\"success\":true}}}"));
-    TestEqual(TEXT("heal fallback"), Heal.healing, 40);
+        "\"healing\":40,\"manaHealing\":10,\"finalTargetHealth\":120,\"success\":true}}}"));
+    TestEqual(TEXT("heal amount"), Heal.healing, 40);
     TestEqual(TEXT("mana heal"), Heal.manaHealing, 10);
     TestTrue(TEXT("heal success"), Heal.success);
 

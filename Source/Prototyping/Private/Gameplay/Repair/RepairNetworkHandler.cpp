@@ -121,8 +121,7 @@ Body->TryGetStringField(TEXT("npcSlug"), Shop.npcSlug);
         Obj->TryGetNumberField(TEXT("inventoryItemId"),  Item.inventoryItemId);
         Obj->TryGetNumberField(TEXT("inventorySlotId"),  Item.inventoryItemId); // protocol uses inventorySlotId
         Obj->TryGetNumberField(TEXT("itemId"),           Item.itemId);
-        // Server sends "itemName"; legacy clients may send "slug".  Populate both and
-        // use itemName as a fallback so the row widget always has a name to display.
+        // Shop rows carry both keys (itemName primary); cross-fill so the widget always has a name.
         Obj->TryGetStringField(TEXT("slug"),     Item.slug);
         Obj->TryGetStringField(TEXT("itemName"), Item.itemName);
         if (Item.slug.IsEmpty()) Item.slug = Item.itemName;

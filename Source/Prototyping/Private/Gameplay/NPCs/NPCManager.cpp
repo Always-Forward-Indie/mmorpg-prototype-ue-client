@@ -1,6 +1,7 @@
 #include "Gameplay/NPCs/NPCManager.h"
 #include "Prototyping.h"
 #include "MyGameInstance.h"
+#include "Services/TimeSyncService.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
 #include "Engine/Engine.h"
@@ -109,17 +110,6 @@ void UNPCManager::SubscribeToNetworkManager()
 	}
 
 	UE_LOG(LogGameplay, Warning, TEXT("NPCManager: Network Manager found - NPCNetworkHandler will handle network events"));
-
-	// NPCManager ������ �� ������������� �� ������� ������� ��������
-	// ��� ������� ������� �������������� ����� NPCNetworkHandler
-	// ������� ����� �������� ������ NPCManager
-}
-
-void UNPCManager::ProcessGameServerData(const FString& ReceivedData)
-{
-	// ���� ����� ������ �� ������������
-	// ��� ��������� ������� ������ ���������� � NPCNetworkHandler
-	UE_LOG(LogGameplay, Warning, TEXT("NPCManager::ProcessGameServerData called - this should not happen! Use NPCNetworkHandler instead."));
 }
 
 void UNPCManager::SpawnNPC(const FNPCStruct& NPCData)

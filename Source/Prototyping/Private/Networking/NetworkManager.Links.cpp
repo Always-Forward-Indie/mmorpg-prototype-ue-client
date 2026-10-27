@@ -173,7 +173,7 @@ void UNetworkManager::PollLink(EServerType Type)
 	while (L.Receiver && L.Receiver->GetData(ReceivedData))
 	{
 		// Single parse per packet (S05): the parsed form feeds time-sync,
-		// the per-eventType dispatcher, and the legacy FString broadcast.
+		// the per-eventType dispatcher, and the raw FString broadcast.
 		const FParsedPacket Packet = JSONParser::ParsePacket(ReceivedData);
 
 		UE_LOG(LogNetPacket, Verbose, TEXT("Received %s Server data: %s"), *L.Tag, *ReceivedData);
@@ -184,8 +184,7 @@ void UNetworkManager::PollLink(EServerType Type)
 		// Route to packet handlers registered for this eventType.
 		DispatcherFor(Type).Dispatch(Packet);
 
-		// Legacy compat broadcast (Blueprints + not-yet-migrated handlers).
-		// Migrated handlers unsubscribe from this once they register above.
+		// Raw broadcast (Blueprints + string-based handlers).
 		switch (Type)
 		{
 		case EServerType::LoginServer:

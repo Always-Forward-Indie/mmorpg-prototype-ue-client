@@ -59,9 +59,9 @@ bool FMobDataContractTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("null id default"), Null.mobID, 0);
     TestTrue(TEXT("null uid default empty"), Null.mobUniqueID.IsEmpty());
 
-    // Object without uid keeps the legacy effective default ("0"), quietly.
+    // Object without uid keeps the missing-field default ("0"), quietly.
     FMOBStruct NoUid = JSONParser::DeserializeMobData(ParserContract_ParseObj(TEXT("{\"id\":8}")));
-    TestTrue(TEXT("nouid legacy zero string"), NoUid.mobUniqueID == FString(TEXT("0")));
+    TestTrue(TEXT("nouid missing zero string"), NoUid.mobUniqueID == FString(TEXT("0")));
     return true;
 }
 

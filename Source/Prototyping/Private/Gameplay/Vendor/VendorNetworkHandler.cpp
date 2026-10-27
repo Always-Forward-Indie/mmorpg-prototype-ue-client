@@ -226,8 +226,8 @@ FBuyItemResultData UVendorNetworkHandler::ParseBuyItemResult(const TSharedPtr<FJ
     Body->TryGetNumberField(TEXT("itemId"),         Result.itemId);
     Body->TryGetNumberField(TEXT("quantity"),       Result.quantity);
     Body->TryGetNumberField(TEXT("goldSpent"),      Result.goldSpent);
-    Body->TryGetNumberField(TEXT("totalPrice"),     Result.totalPrice); // legacy
-    // Prefer goldSpent; totalPrice is the legacy field name
+    Body->TryGetNumberField(TEXT("totalPrice"),     Result.totalPrice);
+    // Buy sends totalPrice, repair sends goldSpent: normalize into goldSpent.
     if (Result.goldSpent == 0 && Result.totalPrice > 0)
         Result.goldSpent = Result.totalPrice;
     Body->TryGetNumberField(TEXT("newGoldBalance"), Result.newGoldBalance);

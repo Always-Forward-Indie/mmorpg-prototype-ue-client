@@ -89,13 +89,13 @@ void UItemTooltipWidget::UpdateItemAttributes()
 
 	ClearDynamicAttributes();
 
-	// Use typed itemAttributes if available (has apply_on); fall back to legacy TMap
+	// Typed itemAttributes first; TMap branch serves vendor/trade rows.
 	if (CurrentItem.itemAttributes.Num() > 0)
 	{
 		ULocalizationSubsystem* LocAttr = ULocalizationSubsystem::Get(this);
 		for (const FItemAttributeStruct& Attr : CurrentItem.itemAttributes)
 		{
-			// S3a: server names first when present (legacy/full packets),
+			// S3a: server names first when present,
 			// else localized codebook lookup (humanised slug until S3b content).
 			FString DisplayName = Attr.name;
 			if (DisplayName.IsEmpty() && LocAttr && !Attr.slug.IsEmpty())
@@ -143,7 +143,7 @@ void UItemTooltipWidget::UpdateItemTypeAndLevel()
 {
 	if (ItemTypeText)
 	{
-		// Prefer itemTypeSlug (comes from protocol item.itemTypeSlug); fall back to legacy type.
+		// Prefer itemTypeSlug (protocol item.itemTypeSlug); fall back to type.
 		// S3a: localized via codebook table.
 		FString TypeKey = CurrentItem.itemTypeSlug.IsEmpty() ? CurrentItem.type : CurrentItem.itemTypeSlug;
 		FText TypeText = LOCTEXT("UnknownFallback", "Unknown");

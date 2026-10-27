@@ -73,7 +73,8 @@ static void ParseItemFields(const TSharedPtr<FJsonObject>& Src, FInventoryItemSt
 				TypedAttr.value = (float)AttrVal2;
 			Out.itemAttributes.Add(TypedAttr);
 
-			// Also populate legacy TMap for backward compat
+			// Mirror into the TMap as well (vendor/trade rows are TMap-only;
+		// the tooltip serves typed first, TMap second).
 			const FString& DisplayName = TypedAttr.name.IsEmpty() ? TypedAttr.slug : TypedAttr.name;
 			if (!DisplayName.IsEmpty())
 				Out.attributes.Add(DisplayName, FString::SanitizeFloat(TypedAttr.value));

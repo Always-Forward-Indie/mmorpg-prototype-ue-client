@@ -224,8 +224,7 @@ FSkillResultData JSONParser::DeserializeSkillResult(const TSharedPtr<FJsonObject
 	
 		ResultObj->TryGetNumberField(TEXT("damage"), SkillResult.damage);
 
-		if (!ResultObj->TryGetNumberField(TEXT("healing"), SkillResult.healing))
-			ResultObj->TryGetNumberField(TEXT("healAmount"), SkillResult.healing);
+		ResultObj->TryGetNumberField(TEXT("healing"), SkillResult.healing);
 
 		ResultObj->TryGetNumberField(TEXT("manaHealing"), SkillResult.manaHealing);
 	

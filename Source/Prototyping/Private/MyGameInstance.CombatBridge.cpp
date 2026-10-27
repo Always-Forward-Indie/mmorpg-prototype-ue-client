@@ -111,10 +111,8 @@ void UMyGameInstance::PlayCombatAnimation(const FCombatAnimationData& AnimationD
 	
 	if (SourcePlayer)
 	{
-		// Play animation on the player character
-		UE_LOG(LogGameplay, Warning, TEXT("Playing animation on player character: %s"), *AnimationData.AnimationName);
-		// TODO: Implement animation playing in BasicPlayer class
-		// SourcePlayer->PlayAnimation(AnimationData.AnimationName);
+		// Animation playback not implemented: no-op by design (logged once per call at Verbose).
+		UE_LOG(LogGameplay, Verbose, TEXT("PlayCombatAnimation no-op for player %d: %s"), AnimationData.CharacterId, *AnimationData.AnimationName);
 	}
 	else
 	{
@@ -126,11 +124,9 @@ void UMyGameInstance::PlayCombatAnimation(const FCombatAnimationData& AnimationD
 		}
 		if (MOB)
 		{
-			// Play animation on the MOB
-			UE_LOG(LogGameplay, Warning, TEXT("Playing animation on MOB %s: %s"), 
+			// Animation playback not implemented: no-op by design.
+			UE_LOG(LogGameplay, Verbose, TEXT("PlayCombatAnimation no-op for MOB %s: %s"),
 				*MOB->GetMobName(), *AnimationData.AnimationName);
-			// TODO: Implement animation playing in BasicMOB class
-			// MOB->PlayAnimation(AnimationData.AnimationName);
 		}
 	}
 }
@@ -145,11 +141,9 @@ void UMyGameInstance::ProcessCombatAction(const FCombatActionData& ActionData)
 	
 	if (SourcePlayer)
 	{
-		// Handle action on player character (e.g., play attack animation)
-		UE_LOG(LogGameplay, Verbose, TEXT("Player %d performing action %s"), 
+		// Action performing not implemented: no-op by design.
+		UE_LOG(LogGameplay, Verbose, TEXT("ProcessCombatAction no-op for player %d: %s"),
 			ActionData.CasterId, *ActionData.ActionName);
-		// TODO: Implement action performing in BasicPlayer class
-		// SourcePlayer->PerformAction(ActionData.ActionName);
 	}
 	
 	// Note: The target's response to the action (e.g., taking damage) will be handled 

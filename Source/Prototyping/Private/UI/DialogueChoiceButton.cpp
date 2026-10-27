@@ -102,7 +102,7 @@ void UDialogueChoiceButton::PopulatePreview(const FQuestPreviewData& Preview, bo
     {
         if (Preview_Rewards_Box && RewardRowClass)
         {
-            // List mode takes over; hide the legacy text element
+            // List mode takes over; hide the plain-text element
             Preview_Rewards->SetVisibility(ESlateVisibility::Collapsed);
         }
         else

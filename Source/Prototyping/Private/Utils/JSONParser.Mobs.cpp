@@ -108,7 +108,7 @@ FMOBStruct JSONParser::DeserializeMobData(const TSharedPtr<FJsonObject>& MobObje
 	if (!MobObject.IsValid()) return Mob;
 
 	MobObject->TryGetNumberField(TEXT("id"), Mob.mobID);
-	// Missing uid keeps the legacy effective default ("0"), quietly.
+	// Missing uid keeps the missing-field default ("0"), quietly.
 	int32 Uid = 0;
 	MobObject->TryGetNumberField(TEXT("uid"), Uid);
 	Mob.mobUniqueID = FString::FromInt(Uid);

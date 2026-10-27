@@ -41,11 +41,7 @@ void UItemManager::HandleChunkPacket(const FParsedPacket& Packet)
 	const FString& Status = Packet.Status;
 	const TSharedPtr<FJsonObject>& Body = Packet.Body;
 
-	// Process time sync data first
-	//if (gameInstance && gameInstance->GetTimeSyncService())
-	//{
-	//	JSONParser::ProcessTimeSyncFromHeader(ReceivedData, gameInstance->GetTimeSyncService());
-	//}
+	// Time sync is handled by the dispatcher fallback.
 
 	UE_LOG(LogGameplay, Warning, TEXT("ItemManager: Received event type: %s"), *EventType);
 

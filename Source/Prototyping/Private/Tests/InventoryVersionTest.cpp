@@ -14,7 +14,7 @@ bool FInventoryVersionTest::RunTest(const FString& Parameters)
 {
 	using V = EInventoryVersionVerdict;
 
-	// Legacy/absent version never bricks the flow.
+	// Absent version never bricks the flow.
 	TestEqual(TEXT("incoming 0 on empty baseline accepts"), FInventoryVersionRule::Classify(0, 0), V::Accept);
 	TestEqual(TEXT("incoming 0 on synced baseline accepts"), FInventoryVersionRule::Classify(7, 0), V::Accept);
 
@@ -36,9 +36,9 @@ bool FInventoryVersionTest::RunTest(const FString& Parameters)
 		const FCharacterInventoryStruct WithVer = JSONParser::DeserializeCharacterInventory(
 			TEXT("{\"body\":{\"characterId\":615,\"gold\":310,\"version\":7,\"items\":[]}}"));
 		TestEqual(TEXT("snapshot version parsed"), WithVer.inventoryVersion, static_cast<int64>(7));
-		const FCharacterInventoryStruct Legacy = JSONParser::DeserializeCharacterInventory(
+		const FCharacterInventoryStruct NoVer = JSONParser::DeserializeCharacterInventory(
 			TEXT("{\"body\":{\"characterId\":615,\"gold\":310,\"items\":[]}}"));
-		TestEqual(TEXT("missing version defaults to 0"), Legacy.inventoryVersion, static_cast<int64>(0));
+		TestEqual(TEXT("missing version defaults to 0"), NoVer.inventoryVersion, static_cast<int64>(0));
 	}
 
 	return true;

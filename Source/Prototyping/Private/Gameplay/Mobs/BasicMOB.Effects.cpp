@@ -174,7 +174,7 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
         }
     }
 
-    // Legacy fallback hit sound � only when DataTable has no hitSound assigned
+    // Inline-audio fallback hit sound — only when DataTable has no hitSound assigned
     if (!bHitSoundPlayed)
     {
         PlaySoundByName("Hit");

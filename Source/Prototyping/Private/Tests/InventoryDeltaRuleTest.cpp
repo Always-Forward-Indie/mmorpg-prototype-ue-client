@@ -41,7 +41,7 @@ bool FInventoryDeltaRuleTest::RunTest(const FString& Parameters)
         TestEqual(TEXT("no duplicate"), Items.Num(), 1);
         TestEqual(TEXT("id synced"), Items[0].id, 201);
     }
-    // Legacy id==0 never overwrites an assigned id: a new pending instance
+    // Pre-token id==0 never overwrites an assigned id: a new pending instance
     // is added alongside, the assigned row stays intact.
     {
         TArray<FInventoryItemStruct> Items = { Row(201, 46, 1) };

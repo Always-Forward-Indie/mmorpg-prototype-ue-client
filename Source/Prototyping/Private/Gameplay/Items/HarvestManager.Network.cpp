@@ -27,11 +27,7 @@ void UHarvestManager::HandleChunkPacket(const FParsedPacket& Packet)
 	const FString& Status = Packet.Status;
 	const TSharedPtr<FJsonObject>& Body = Packet.Body;
 
-	// Process time sync data first
-	//if (gameInstance && gameInstance->GetTimeSyncService())
-	//{
-	//	JSONParser::ProcessTimeSyncFromHeader(ReceivedData, gameInstance->GetTimeSyncService());
-	//}
+	// Process time sync data first (handled by the dispatcher fallback).
 
 	UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received event type: %s"), *EventType);
 

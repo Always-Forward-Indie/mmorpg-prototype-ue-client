@@ -78,12 +78,7 @@ void USpawnZoneManager::HandleChunkPacket(const FParsedPacket& Packet)
     CRASH_GUARD("SpawnZoneManager::HandleChunkPacket");
     if (!worldContext) return;
 
-
-	// Process time sync data first
-	//if (gameInstance && gameInstance->GetTimeSyncService())
-	//{
-	//	JSONParser::ProcessTimeSyncFromHeader(ReceivedData, gameInstance->GetTimeSyncService());
-	//}
+	// Time sync is handled by the dispatcher fallback.
 
 	// Deserialize the received JSON string to get MessageData struct
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(Packet);

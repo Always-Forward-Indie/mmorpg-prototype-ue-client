@@ -106,7 +106,7 @@ void ABasicNPC::SetupNPCAudio(FName NPCSlug)
 		else
 		{
 			UE_LOG(LogGameplay, Warning,
-				TEXT("ABasicNPC::SetupNPCAudio: AudioProfileId '%s' not found in EntityAudioProfilesTable for NPC '%s'. Falling back to legacy FNPCAudioData."),
+				TEXT("ABasicNPC::SetupNPCAudio: AudioProfileId '%s' not found in EntityAudioProfilesTable for NPC '%s'. Falling back to inline FNPCAudioData."),
 				*Def->AudioProfileId.ToString(), *NPCSlug.ToString());
 		}
 	}

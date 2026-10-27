@@ -29,11 +29,7 @@ void UInventoryManager::HandleChunkPacket(const FParsedPacket& Packet)
 	const FString& Status = Packet.Status;
 	const TSharedPtr<FJsonObject>& Body = Packet.Body;
 
-	// Process time sync data first
-	//if (gameInstance && gameInstance->GetTimeSyncService())
-	//{
-	//	JSONParser::ProcessTimeSyncFromHeader(ReceivedData, gameInstance->GetTimeSyncService());
-	//}
+	// Time sync is handled by the dispatcher fallback.
 
 	UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Received event type: %s"), *EventType);
 
@@ -271,7 +267,7 @@ void UInventoryManager::ProcessInventoryUpdate(const FString& JsonData)
 		FInventoryRules::ApplyInventoryDelta(CurrentInventory.items, Changed, Removed);
 		ResolveUnresolvedRows();
 		// S15a: baseline advances only on accepted deltas (gap path returns
-		// early above; legacy version-0 deltas keep baseline 0).
+		// early above; pre-token version-0 deltas keep baseline 0).
 		CurrentInventory.inventoryVersion = IncomingVersion;
 		OnInventoryUpdated.Broadcast(CurrentInventory);
 		return;
@@ -328,7 +324,7 @@ void UInventoryManager::ProcessInventoryUpdate(const FString& JsonData)
 				}
 				else
 				{
-					// Fallback: no id field — match by itemId (legacy/partial updates)
+					// Fallback: no id field — match by itemId (pre-token/partial updates)
 					ExistingItem = CurrentInventory.items.FindByPredicate(
 						[ItemId](const FInventoryItemStruct& Item) { return Item.itemId == ItemId; });
 				}

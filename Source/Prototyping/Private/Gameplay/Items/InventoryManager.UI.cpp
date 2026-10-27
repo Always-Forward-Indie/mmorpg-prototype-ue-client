@@ -79,7 +79,7 @@ void UInventoryManager::HandleSlotRightClicked(int32 SlotIndex, const FInventory
 
 void UInventoryManager::AddItemToLocalInventory(const FInventoryItemStruct& Item)
 {
-	// Find existing item by unique instance ID (id); fall back to template itemId only for legacy rows without id
+	// Find existing item by unique instance ID (id); fall back to template itemId only for pre-token rows without id
 	FInventoryItemStruct* ExistingItem = CurrentInventory.items.FindByPredicate(
 		[Item](const FInventoryItemStruct& InventoryItem) { return (Item.id > 0 && InventoryItem.id > 0) ? (InventoryItem.id == Item.id) : (InventoryItem.itemId == Item.itemId); });
 

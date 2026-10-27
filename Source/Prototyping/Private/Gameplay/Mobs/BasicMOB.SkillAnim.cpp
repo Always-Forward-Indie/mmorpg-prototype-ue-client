@@ -108,7 +108,7 @@ void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, 
         }
     }
 
-    // Legacy per-type sound fallback � only when DataTable has no castSound assigned
+    // Inline per-type sound fallback — only when DataTable has no castSound assigned
     if (!bCastSoundPlayed)
     {
         if (AnimationName.Contains(TEXT("attack"), ESearchCase::IgnoreCase))

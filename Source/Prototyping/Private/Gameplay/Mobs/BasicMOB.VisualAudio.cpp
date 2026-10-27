@@ -193,12 +193,12 @@ void ABasicMOB::SetupMobAudio(FName MobSlug)
 
 			// Idle ambient timer
 			GetWorld()->GetTimerManager().SetTimer(IdleSoundTimer, this, &ABasicMOB::PlayRandomIdleSound, FMath::RandRange(5.f, 15.f), false);
-			return;  // Profile fully loaded � skip legacy FMobAudioData below
+			return;  // Profile fully loaded — skip inline FMobAudioData below
 		}
 		else
 		{
 			UE_LOG(LogGameplay, Warning,
-				TEXT("ABasicMOB::SetupMobAudio: AudioProfileId '%s' not found in EntityAudioProfilesTable for mob '%s'. Falling back to legacy FMobAudioData."),
+				TEXT("ABasicMOB::SetupMobAudio: AudioProfileId '%s' not found in EntityAudioProfilesTable for mob '%s'. Falling back to inline FMobAudioData."),
 				*Definition->AudioProfileId.ToString(), *MobSlug.ToString());
 		}
 	}

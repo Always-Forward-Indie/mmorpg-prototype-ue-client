@@ -133,16 +133,16 @@ void UAuthenticationManager::ProcessLoginPacket(const FParsedPacket& Packet)
 				gameInstance->OnLoginResponseReceived.Broadcast(ClientData.clientId, MessageData.message);
 
 				// Build minimal FCharacterDataStruct list for SetCharacterItems (uses only name + id)
-				TArray<FCharacterDataStruct> LegacyList;
-				LegacyList.Reserve(Entries.Num());
+				TArray<FCharacterDataStruct> List;
+				List.Reserve(Entries.Num());
 				for (const FLoginCharacterEntry& E : Entries)
 				{
 					FCharacterDataStruct D;
 					D.characterId   = E.CharacterId;
 					D.characterName = E.CharacterName;
-					LegacyList.Add(MoveTemp(D));
+					List.Add(MoveTemp(D));
 				}
-				gameInstance->SetCharacterItems(LegacyList);
+				gameInstance->SetCharacterItems(List);
 			}
 		}
 		else

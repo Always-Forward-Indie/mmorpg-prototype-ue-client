@@ -115,7 +115,7 @@ FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TM
 	return OutputString;
 }
 
-// Legacy method with automatic server type detection
+// Overload with automatic server type detection (used by combat requests)
 FString JSONParser::SerializeJsonWithTimeSync(const FString& EventType, const TMap<FString, TSharedPtr<FJsonValue>>& HeaderData, const TMap<FString, TSharedPtr<FJsonValue>>& BodyData, UTimeSyncService* TimeSyncService)
 {
     // Determine server type based on event type
@@ -382,13 +382,6 @@ FClientDataStruct JSONParser::DeserializeClientData(const TSharedPtr<FJsonObject
  	if (Root->TryGetObjectField(TEXT("header"), HeaderPtr) && HeaderPtr && (*HeaderPtr).IsValid())
  	{
  		(*HeaderPtr)->TryGetStringField(TEXT("eventType"), Packet.EventType);
- 		// Legacy quirk (chunk characterExperience): header.event instead of
- 		// header.eventType. A packet carrying BOTH is a contract violation —
- 		// eventType wins. Remove once the server fleet guarantees eventType.
- 		if (Packet.EventType.IsEmpty())
- 		{
- 			(*HeaderPtr)->TryGetStringField(TEXT("event"), Packet.EventType);
- 		}
  		(*HeaderPtr)->TryGetStringField(TEXT("status"), Packet.Status);
  		(*HeaderPtr)->TryGetStringField(TEXT("message"), Packet.Message);
  	}

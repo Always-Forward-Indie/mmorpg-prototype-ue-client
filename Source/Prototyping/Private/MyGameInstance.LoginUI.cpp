@@ -197,7 +197,7 @@ void UMyGameInstance::AddLoginWidgetToViewport()
 	}
 	else if (LoginScreenWidgetClass)
 	{
-		// Legacy fallback
+		// Classic widget path (used when LoginFlowWidgetClass is not set)
 		LoginScreenWidget = CreateWidget<ULoginWidget>(this, LoginScreenWidgetClass);
 		if (LoginScreenWidget)
 		{

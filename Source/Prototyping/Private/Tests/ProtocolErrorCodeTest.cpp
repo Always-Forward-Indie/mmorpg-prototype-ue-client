@@ -68,7 +68,7 @@ bool FResolveErrorCodeTest::RunTest(const FString& Parameters)
         JSONParser::ResolveErrorCode(
             TEXT("{\"header\":{\"eventType\":\"buyItem\",\"status\":\"error\",\"message\":\"human text\"},\"body\":{\"errorCode\":\"INSUFFICIENT_GOLD\"}}")),
         FString(TEXT("INSUFFICIENT_GOLD")));
-    // Legacy packets without body.errorCode fall back to header.message.
+    // Errors without body.errorCode fall back to header.message.
     TestEqual(TEXT("header fallback"),
         JSONParser::ResolveErrorCode(
             TEXT("{\"header\":{\"eventType\":\"buyItem\",\"status\":\"error\",\"message\":\"OUT_OF_STOCK\"},\"body\":{}}")),
@@ -155,10 +155,10 @@ bool FSkillInitiationErrorTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("stun code"), Stunned.errorCode, FString(TEXT("Stunned")));
 
     // Error without body.errorCode falls back to header.message.
-    FSkillInitiationData Legacy = JSONParser::DeserializeSkillInitiation(
+    FSkillInitiationData NoCode = JSONParser::DeserializeSkillInitiation(
         TEXT("{\"header\":{\"eventType\":\"combatInitiation\",\"status\":\"error\",\"message\":\"Silenced\"},\"body\":{}}"));
-    TestFalse(TEXT("legacy fails"), Legacy.success);
-    TestEqual(TEXT("silence fallback"), Legacy.errorCode, FString(TEXT("Silenced")));
+    TestFalse(TEXT("no code fails"), NoCode.success);
+    TestEqual(TEXT("silence fallback"), NoCode.errorCode, FString(TEXT("Silenced")));
     return true;
 }
 
@@ -176,11 +176,11 @@ bool FDurabilityZeroKeptTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("explicit zero kept"), Broken.durabilityCurrent, 0);
 
     // Missing field still falls back to max.
-    TSharedPtr<FJsonObject> LegacyObj;
-    TestTrue(TEXT("legacy parses"), TryParseBody(
+    TSharedPtr<FJsonObject> NoDurObj;
+    TestTrue(TEXT("no-durability parses"), TryParseBody(
         TEXT("{\"header\":{},\"body\":{\"id\":5,\"itemId\":10,\"quantity\":1,\"durabilityMax\":100,\"isDurable\":true}}"),
-        LegacyObj));
-    FInventoryItemStruct Legacy = JSONParser::DeserializeInventoryItem(LegacyObj);
-    TestEqual(TEXT("missing falls back to max"), Legacy.durabilityCurrent, 100);
+        NoDurObj));
+    FInventoryItemStruct NoDur = JSONParser::DeserializeInventoryItem(NoDurObj);
+    TestEqual(TEXT("missing falls back to max"), NoDur.durabilityCurrent, 100);
     return true;
 }

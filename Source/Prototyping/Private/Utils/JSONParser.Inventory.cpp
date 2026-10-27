@@ -46,7 +46,7 @@ static void ParseItemFields(const TSharedPtr<FJsonObject>& Src, FInventoryItemSt
 
 	if (Src->HasField(TEXT("killCount")))     Out.killCount     = Src->GetIntegerField(TEXT("killCount"));
 
-	// Legacy: derive isEquippable from numeric equipSlot field when explicit bool is absent
+	// Fallback: derive isEquippable from numeric equipSlot field when explicit bool is absent
 	if (!Src->HasField(TEXT("isEquippable")) && Src->HasField(TEXT("equipSlot")))
 	{
 		int32 SlotId = Src->GetIntegerField(TEXT("equipSlot"));

@@ -24,7 +24,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEquipSlotUnequipRequested, const 
  *
  * Displays the equipment slots as individual UEquipmentSlotWidget instances.
  * Server slot slugs (docs/api/04): head/chest/legs/feet/hands/main_hand/off_hand/
- * neck/ring/two_hand/trinket (+ legacy ring_2 fallback, collapsed when absent).
+ * neck/ring/two_hand/trinket (+ ring_2, collapsed when absent).
  * Widget reuse without Blueprint changes: Slot_Necklace shows "neck",
  * Slot_Ring1 shows "ring", Slot_Cloak shows "two_hand", Slot_Waist shows "trinket".
  * Left-click a slot ? OnEquipSlotClicked (handled externally, e.g. opens unequip confirm).

@@ -96,10 +96,6 @@ public:
 	// Replaces ProcessLoginResponse (which re-parsed every packet).
 	void ProcessLoginPacket(const FParsedPacket& Packet);
 
-	// ── Validation (legacy — kept for API compat, but LoginFlowWidget uses LoginFlowTypes) ──
-	bool IsLoginValueValid(const FString& Login);
-	bool IsPasswordValueValid(const FString& Password);
-
 	// ── Ping ─────────────────────────────────────────────────────────────────
 	void StartPing();
 

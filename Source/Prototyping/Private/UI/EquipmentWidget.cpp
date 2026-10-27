@@ -155,12 +155,12 @@ void UEquipmentWidget::RefreshEquipmentDisplay()
         else
             (*WidgetPtr)->ClearSlot();
 }
-// Legacy second ring: server ships a single "ring" slot. Collapse the Ring2
-// widget unless a legacy "ring_2" entry is actually present in the state.
+// Second ring: collapse the Ring2 widget unless a "ring_2" entry is
+// actually present in the equipment state.
 if (Slot_Ring2)
 {
-const bool bHasLegacyRing2 = CachedState.slots.Contains(TEXT("ring_2"));
-Slot_Ring2->SetVisibility(bHasLegacyRing2 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+const bool bHasRing2 = CachedState.slots.Contains(TEXT("ring_2"));
+Slot_Ring2->SetVisibility(bHasRing2 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 }
 }
 

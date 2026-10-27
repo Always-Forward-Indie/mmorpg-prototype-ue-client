@@ -188,7 +188,7 @@ FCharacterInventoryStruct JSONParser::DeserializeCharacterInventory(const TShare
 		Inventory.gold = Gold;
 	}
 
-	// S15a: server generation (absent = 0 = legacy path, always accepted).
+	// S15a: server generation (absent = 0 = pre-version row, always accepted).
 	double VersionNumber = 0;
 	if (Body->TryGetNumberField(TEXT("version"), VersionNumber))
 	{

@@ -142,7 +142,8 @@ FItemDropResponseStruct JSONParser::DeserializeItemDropResponse(const TSharedPtr
 	FItemDropResponseStruct ItemDropResponse;
 	if (!Body.IsValid()) return ItemDropResponse;
 
-	// Server sends the array as "items" (itemDrop broadcast) or legacy "droppedItems"
+	// Dual wire shape (chunk ItemEventHandler): itemDrop carries "droppedItems",
+	// nearby-items carries "items". Unify to "items" on both ends (cleanup Slice C).
 	const TArray<TSharedPtr<FJsonValue>>* DroppedItemsArray = nullptr;
 	if (!Body->TryGetArrayField(TEXT("items"), DroppedItemsArray))
 		Body->TryGetArrayField(TEXT("droppedItems"), DroppedItemsArray);

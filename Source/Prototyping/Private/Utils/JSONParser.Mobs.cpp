@@ -9,76 +9,7 @@
 #include "Utils/PlayerAttributeParser.h"
 #include "Utils/NetCore/InventoryRules.h"
 
-//deserialize a JSON containing a list of spawn zones
-TArray<FSpawnZoneStruct> JSONParser::DeserializeSpawnZonesList(const TSharedPtr<FJsonObject>& Body)
-{
-	TArray<FSpawnZoneStruct> SpawnZonesList;
-	const TArray<TSharedPtr<FJsonValue>>* SpawnZonesArray;
-
-	if (Body.IsValid() && Body->TryGetArrayField(TEXT("spawnZones"), SpawnZonesArray))
-	{
-		for (const TSharedPtr<FJsonValue>& SpawnZoneValue : *SpawnZonesArray)
-		{
-			// TryGetObject (not AsObject): wrong-typed entries skip quietly.
-			const TSharedPtr<FJsonObject>* SpawnZonePtr = nullptr;
-			if (!SpawnZoneValue.IsValid() || !SpawnZoneValue->TryGetObject(SpawnZonePtr) || !SpawnZonePtr || !(*SpawnZonePtr).IsValid())
-			{
-				continue;
-			}
-			SpawnZonesList.Add(JSONParser::DeserializeSpawnZoneData(*SpawnZonePtr));
-		}
-	}
-
-	return SpawnZonesList;
-}
-
-
-FSpawnZoneStruct JSONParser::DeserializeSpawnZoneData(const TSharedPtr<FJsonObject>& SpawnZoneObject)
-{
-	FSpawnZoneStruct SpawnZoneData;
-
-	if (!SpawnZoneObject.IsValid()) return SpawnZoneData;
-
-	SpawnZoneObject->TryGetNumberField(TEXT("id"), SpawnZoneData.zoneID);
-	SpawnZoneObject->TryGetStringField(TEXT("name"), SpawnZoneData.zoneName);
-	SpawnZoneObject->TryGetNumberField(TEXT("spawnMobId"), SpawnZoneData.MobIDToSpawn);
-	SpawnZoneObject->TryGetNumberField(TEXT("maxSpawnCount"), SpawnZoneData.MaxMobs);
-	SpawnZoneObject->TryGetNumberField(TEXT("spawnedMobsCount"), SpawnZoneData.currentMobsCount);
-	SpawnZoneObject->TryGetNumberField(TEXT("respawnTime"), SpawnZoneData.respawnTime);
-	// Missing flag keeps the legacy effective default (disabled), quietly.
-	bool bEnabled = false;
-	SpawnZoneObject->TryGetBoolField(TEXT("spawnEnabled"), bEnabled);
-	SpawnZoneData.bSpawningEnabled = bEnabled;
-
-	const TSharedPtr<FJsonObject>* BoundsPtr = nullptr;
-	if (SpawnZoneObject->TryGetObjectField(TEXT("bounds"), BoundsPtr) && BoundsPtr && (*BoundsPtr).IsValid())
-	{
-		const TSharedPtr<FJsonObject>& Bounds = *BoundsPtr;
-		double MinX = 0.0, MinY = 0.0, MinZ = 0.0, MaxX = 0.0, MaxY = 0.0, MaxZ = 0.0;
-		Bounds->TryGetNumberField(TEXT("minX"), MinX);
-		Bounds->TryGetNumberField(TEXT("minY"), MinY);
-		Bounds->TryGetNumberField(TEXT("minZ"), MinZ);
-		Bounds->TryGetNumberField(TEXT("maxX"), MaxX);
-		Bounds->TryGetNumberField(TEXT("maxY"), MaxY);
-		Bounds->TryGetNumberField(TEXT("maxZ"), MaxZ);
-
-		// spawnStartPos = world position of the bottom-center of the zone
-		SpawnZoneData.spawnStartPos = FVector(
-			(MinX + MaxX) * 0.5f,
-			(MinY + MaxY) * 0.5f,
-			MinZ);
-
-		// spawnSize = full extents of the zone (used as BoxExtent * 2 in ChangeSpawnZoneSize)
-		SpawnZoneData.spawnSize = FVector(
-			MaxX - MinX,
-			MaxY - MinY,
-			MaxZ - MinZ);
-	}
-
-	return SpawnZoneData;
-}
-
-// deserialize a JSON containing a list of mobs
+//deserialize a JSON containing a list of mobs
 TArray<FMOBStruct> JSONParser::DeserializeMobsList(const TSharedPtr<FJsonObject>& Body)
 {
 	TArray<FMOBStruct> MobsList;
@@ -87,13 +18,8 @@ TArray<FMOBStruct> JSONParser::DeserializeMobsList(const TSharedPtr<FJsonObject>
 	const TArray<TSharedPtr<FJsonValue>>* MobsArray = nullptr;
 	if (!Body->TryGetArrayField(TEXT("mobs"), MobsArray) || MobsArray == nullptr)
 	{
-		// Fallback: legacy nested spawnZone format (body.spawnZone.mobs).
-		// Current flat format is body.zoneId + body.mobs[].
-		const TSharedPtr<FJsonObject>* SpawnZonePtr = nullptr;
-		if (Body->TryGetObjectField(TEXT("spawnZone"), SpawnZonePtr) && SpawnZonePtr != nullptr && (*SpawnZonePtr).IsValid())
-		{
-			(*SpawnZonePtr)->TryGetArrayField(TEXT("mobs"), MobsArray);
-		}
+		// No mobs array: empty. Chunk always sends the flat body.mobs[] shape.
+		return MobsList;
 	}
 
 	if (MobsArray != nullptr)

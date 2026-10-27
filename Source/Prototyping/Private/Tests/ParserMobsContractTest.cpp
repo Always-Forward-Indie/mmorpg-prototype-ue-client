@@ -104,44 +104,6 @@ bool FMobMoveUpdateContractTest::RunTest(const FString& Parameters)
     return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSpawnZoneContractTest, "MMO.Protocol.SpawnZoneContract",
-    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
-
-bool FSpawnZoneContractTest::RunTest(const FString& Parameters)
-{
-    FSpawnZoneStruct Valid = JSONParser::DeserializeSpawnZoneData(ParserContract_ParseObj(
-        TEXT("{\"id\":9,\"name\":\"Fox Den\",\"spawnMobId\":4,\"maxSpawnCount\":6,\"spawnedMobsCount\":2,"
-        "\"respawnTime\":60,\"spawnEnabled\":true,"
-        "\"bounds\":{\"minX\":0,\"minY\":0,\"minZ\":10,\"maxX\":100,\"maxY\":200,\"maxZ\":60}}")));
-    TestEqual(TEXT("valid id"), Valid.zoneID, 9);
-    TestEqual(TEXT("valid name"), Valid.zoneName, FString(TEXT("Fox Den")));
-    TestEqual(TEXT("valid mob"), Valid.MobIDToSpawn, 4);
-    TestEqual(TEXT("valid max"), Valid.MaxMobs, 6);
-    TestEqual(TEXT("valid count"), Valid.currentMobsCount, 2);
-    TestEqual(TEXT("valid respawn"), Valid.respawnTime, 60);
-    TestTrue(TEXT("valid enabled"), Valid.bSpawningEnabled);
-    TestEqual(TEXT("start x centered"), Valid.spawnStartPos.X, 50.0);
-    TestEqual(TEXT("start y centered"), Valid.spawnStartPos.Y, 100.0);
-    TestEqual(TEXT("start z at min"), Valid.spawnStartPos.Z, 10.0);
-    TestEqual(TEXT("size x extent"), Valid.spawnSize.X, 100.0);
-    TestEqual(TEXT("size z extent"), Valid.spawnSize.Z, 50.0);
-
-    // No bounds: zero vectors, rest intact.
-    FSpawnZoneStruct NoBounds = JSONParser::DeserializeSpawnZoneData(ParserContract_ParseObj(
-        TEXT("{\"id\":10,\"spawnEnabled\":true}")));
-    TestTrue(TEXT("nobounds start zero"), NoBounds.spawnStartPos.IsZero());
-    TestTrue(TEXT("nobounds size zero"), NoBounds.spawnSize.IsZero());
-
-    // Missing flag keeps the legacy effective default (disabled), quietly.
-    FSpawnZoneStruct NoFlag = JSONParser::DeserializeSpawnZoneData(ParserContract_ParseObj(TEXT("{\"id\":11}")));
-    TestFalse(TEXT("noflag disabled"), NoFlag.bSpawningEnabled);
-
-    // Null: defaults, no crash.
-    FSpawnZoneStruct Null = JSONParser::DeserializeSpawnZoneData(nullptr);
-    TestEqual(TEXT("null id default"), Null.zoneID, 0);
-    return true;
-}
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMobTargetLostContractTest, "MMO.Protocol.MobTargetLostContract",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
 
@@ -194,44 +156,9 @@ bool FMobsListContractTest::RunTest(const FString& Parameters)
         TestEqual(TEXT("second name"), Flat[1].mobName, FString(TEXT("Wolf")));
     }
 
-    // Legacy nested spawnZone format still resolves.
-    TSharedPtr<FJsonObject> Legacy = ParserContract_ParseObj(
-        TEXT("{\"spawnZone\":{\"mobs\":[{\"id\":6,\"uid\":503,\"name\":\"Boar\"}]}}"));
-    TArray<FMOBStruct> LegacyList = JSONParser::DeserializeMobsList(Legacy);
-    TestEqual(TEXT("legacy one mob"), LegacyList.Num(), 1);
-    if (LegacyList.Num() == 1)
-    {
-        TestEqual(TEXT("legacy name"), LegacyList[0].mobName, FString(TEXT("Boar")));
-    }
-
     // Missing array and null body: empty, no crash.
     TestEqual(TEXT("no array empty"), JSONParser::DeserializeMobsList(ParserContract_ParseObj(TEXT("{}"))).Num(), 0);
     TestEqual(TEXT("null empty"), JSONParser::DeserializeMobsList(nullptr).Num(), 0);
-    return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSpawnZonesListContractTest, "MMO.Protocol.SpawnZonesListContract",
-    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
-
-bool FSpawnZonesListContractTest::RunTest(const FString& Parameters)
-{
-    TSharedPtr<FJsonObject> Body = ParserContract_ParseObj(
-        TEXT("{\"spawnZones\":["
-        "{\"id\":9,\"name\":\"Fox Den\",\"spawnEnabled\":true},"
-        "13,"
-        "{\"id\":10,\"name\":\"Wolf Lair\"}"
-        "]}"));
-    TArray<FSpawnZoneStruct> Zones = JSONParser::DeserializeSpawnZonesList(Body);
-    TestEqual(TEXT("two zones"), Zones.Num(), 2);
-    if (Zones.Num() == 2)
-    {
-        TestEqual(TEXT("first name"), Zones[0].zoneName, FString(TEXT("Fox Den")));
-        TestTrue(TEXT("first enabled"), Zones[0].bSpawningEnabled);
-        TestEqual(TEXT("second id"), Zones[1].zoneID, 10);
-    }
-
-    TestEqual(TEXT("no array empty"), JSONParser::DeserializeSpawnZonesList(ParserContract_ParseObj(TEXT("{}"))).Num(), 0);
-    TestEqual(TEXT("null empty"), JSONParser::DeserializeSpawnZonesList(nullptr).Num(), 0);
     return true;
 }
 

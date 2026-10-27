@@ -47,7 +47,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Item Manager")
 	void SubscribeToNetworkManager();
 
-	// Process game server data (legacy FString entry; kept for FlushPendingEvents — forwards to HandleChunkPacket)
+	// Process game server data (queued-raw re-parse entry for FlushPendingEvents — forwards to HandleChunkPacket)
 	UFUNCTION()
 	void ProcessGameServerData(const FString& ReceivedData);
 

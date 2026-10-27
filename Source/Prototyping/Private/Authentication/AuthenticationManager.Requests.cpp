@@ -24,7 +24,7 @@ void UAuthenticationManager::SendLoginRequest(const FString& Username, const FSt
 	BodyData.Add("login",    MakeShareable(new FJsonValueString(Username)));
 	BodyData.Add("password", MakeShareable(new FJsonValueString(Password)));
 	BodyData.Add("clientVersion", MakeShareable(new FJsonValueString(
-		gameInstance ? gameInstance->ClientVersion : TEXT("0.1.0"))));
+		gameInstance ? gameInstance->ClientVersion : TEXT("0.2.0"))));
 	// Protocol framing (S14): declare v2 support (transport mode itself is
 	// sniffed by the server from the first bytes).
 	JSONParser::AddFramingOptIn(BodyData);
@@ -58,7 +58,7 @@ void UAuthenticationManager::SendRegisterRequest(const FString& Username, const 
 	BodyData.Add("login",    MakeShareable(new FJsonValueString(Username)));
 	BodyData.Add("password", MakeShareable(new FJsonValueString(Password)));
 	BodyData.Add("clientVersion", MakeShareable(new FJsonValueString(
-		gameInstance ? gameInstance->ClientVersion : TEXT("0.1.0"))));
+		gameInstance ? gameInstance->ClientVersion : TEXT("0.2.0"))));
 	// Protocol framing (S14): declare v2 support (transport mode itself is
 	// sniffed by the server from the first bytes).
 	JSONParser::AddFramingOptIn(BodyData);

@@ -19,7 +19,7 @@
 
 void UItemManager::ProcessGameServerData(const FString& ReceivedData)
 {
-	// Legacy FString entry kept for FlushPendingEvents; the live path is
+	// Queued-raw re-parse entry for FlushPendingEvents; the live path is
 	// HandleChunkPacket via the dispatcher fallback (single parse in PollLink).
 	HandleChunkPacket(JSONParser::ParsePacket(ReceivedData));
 }

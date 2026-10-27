@@ -81,10 +81,6 @@ public:
 	// Update UI with current ping values from TimeSyncService
 	void UpdatePingDisplay();
 
-	// Legacy method - now deprecated but kept for compatibility
-	UE_DEPRECATED(5.0, "Use TimeSyncService directly instead of manual ping calculation")
-	void CalculatePingTime(const TArray<FDateTime>& SendTimes, const TArray<FDateTime>& ReceiveTimes, const FString& serverName);
-
 private:
 	// Timer callback for updating ping display
 	void OnPingUpdateTimer();

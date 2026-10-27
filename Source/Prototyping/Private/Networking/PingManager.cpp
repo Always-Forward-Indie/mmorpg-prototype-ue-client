@@ -306,12 +306,3 @@ void UPingManager::OnPingRequestTimer()
 {
 	SendPingRequestToAllServers();
 }
-
-// Legacy method - now deprecated but kept for compatibility
-void UPingManager::CalculatePingTime(const TArray<FDateTime>& SendTimes, const TArray<FDateTime>& ReceiveTimes, const FString& serverName)
-{
-	UE_LOG(LogPing, Log, TEXT("PingManager: CalculatePingTime is deprecated. Use TimeSyncService instead for server: %s"), *serverName);
-	
-	// For backwards compatibility, we still update the display using TimeSyncService
-	UpdatePingDisplay();
-}

@@ -16,7 +16,6 @@ struct FNetworkHeaderStruct;
 struct FPositionDataStruct;
 struct FAttributeDataStruct;
 struct FCharacterDataStruct;
-struct FSpawnZoneStruct;
 struct FMOBStruct;
 struct FMobMoveEntryStruct;
 struct FSkillInitiationData;
@@ -134,9 +133,6 @@ public:
 	static TArray<FClientDataStruct> DeserializeCharactersList(const TSharedPtr<FJsonObject>& Body);
 
     static TArray<FLoginCharacterEntry> DeserializeLoginCharactersList(const FString& JsonString);
-
-    static TArray<FSpawnZoneStruct> DeserializeSpawnZonesList(const TSharedPtr<FJsonObject>& Body);
-    static FSpawnZoneStruct DeserializeSpawnZoneData(const TSharedPtr<FJsonObject>& Body);
 
     static FMOBStruct DeserializeMobData(const TSharedPtr<FJsonObject>& MobObject);
 

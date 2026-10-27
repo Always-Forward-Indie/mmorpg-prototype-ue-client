@@ -99,18 +99,18 @@ FSkillDefinitionData USkillDefinitionRepository::GetDefinition(const FString& Sk
         return GetDefaultDefinition(SkillSlug);
     }
     
-    UE_LOG(LogGameplay, Warning, TEXT("SkillDefinitionRepository: Getting definition for skill %s"), *SkillSlug);
+    UE_LOG(LogGameplay, Verbose, TEXT("SkillDefinitionRepository: Getting definition for skill %s"), *SkillSlug);
     
     if (const FSkillDefinitionData* Found = CachedDefinitions.Find(SkillSlug))
     {
-        UE_LOG(LogGameplay, Warning, TEXT("SkillDefinitionRepository: Found cached definition for %s - DisplayName: %s, Icon IsValid: %s"), 
+        UE_LOG(LogGameplay, Verbose, TEXT("SkillDefinitionRepository: Found cached definition for %s - DisplayName: %s, Icon IsValid: %s"), 
             *SkillSlug, 
             *Found->displayName.ToString(),
             Found->skillIcon.IsValid() ? TEXT("true") : TEXT("false"));
             
         if (Found->skillIcon.IsValid())
         {
-            UE_LOG(LogGameplay, Warning, TEXT("SkillDefinitionRepository: Icon path: %s"), 
+            UE_LOG(LogGameplay, Verbose, TEXT("SkillDefinitionRepository: Icon path: %s"), 
                 *Found->skillIcon.ToSoftObjectPath().ToString());
         }
         
@@ -179,7 +179,7 @@ void USkillDefinitionRepository::LoadDefinitionsFromTable()
             
             // Debug icon loading
             FString IconPath = RowData->skillIcon.ToSoftObjectPath().ToString();
-            UE_LOG(LogGameplay, Warning, TEXT("SkillDefinitionRepository: Loading skill %s - Icon path: '%s', IsValid: %s, DisplayName: '%s'"), 
+            UE_LOG(LogGameplay, Verbose, TEXT("SkillDefinitionRepository: Loading skill %s - Icon path: '%s', IsValid: %s, DisplayName: '%s'"), 
                 *SkillSlug,
                 *IconPath,
                 RowData->skillIcon.IsValid() ? TEXT("true") : TEXT("false"),

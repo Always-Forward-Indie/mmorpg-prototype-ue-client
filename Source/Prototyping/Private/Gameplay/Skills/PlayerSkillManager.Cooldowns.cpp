@@ -51,7 +51,7 @@ FPlayerSkillData UPlayerSkillManager::CreatePlayerSkillData(const FPlayerSkillNe
             
         if (SkillData.definitionData.skillIcon.IsValid())
         {
-            UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Icon path: %s"), 
+            UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillManager: Icon path: %s"), 
                 *SkillData.definitionData.skillIcon.ToSoftObjectPath().ToString());
         }
     }

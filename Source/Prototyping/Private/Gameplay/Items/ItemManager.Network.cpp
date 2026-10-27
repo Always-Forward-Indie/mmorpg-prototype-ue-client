@@ -43,7 +43,7 @@ void UItemManager::HandleChunkPacket(const FParsedPacket& Packet)
 
 	// Time sync is handled by the dispatcher fallback.
 
-	UE_LOG(LogGameplay, Warning, TEXT("ItemManager: Received event type: %s"), *EventType);
+	UE_LOG(LogGameplay, Verbose, TEXT("ItemManager: Received event type: %s"), *EventType);
 
 	if (EventType == "itemDrop" && Status == "success")
 	{

@@ -1,0 +1,99 @@
+# Known-good client warnings (normalized).
+# New entries appear only via --update-allowlist + human review.
+'/Script/Prototyping.EDamageType' and '/Script/Engine.DamageType' have the same name (DamageType) when exposed to Python. Rename one of them using 'ScriptName' meta-data.
+'DeathScreenWidget.DeathHintText' and 'DeathScreenWidget.DeathHint_Text' have the same name (death_hint_text) when exposed to Python. Rename one of them using 'ScriptName' meta-data (or 'ScriptMethod' or 'ScriptConstant'
+'DeathScreenWidget.DeathTitleText' and 'DeathScreenWidget.DeathTitle_Text' have the same name (death_title_text) when exposed to Python. Rename one of them using 'ScriptName' meta-data (or 'ScriptMethod' or 'ScriptConsta
+'InventoryItemStruct.levelRequirement' and 'InventoryItemStruct.level_requirement' have the same name (level_requirement) when exposed to Python. Rename one of them using 'ScriptName' meta-data (or 'ScriptMethod' or 'Scr
+'TradeStateData.bMyConfirmed' and 'TradeStateData.myConfirmed' have the same name (my_confirmed) when exposed to Python. Rename one of them using 'ScriptName' meta-data (or 'ScriptMethod' or 'ScriptConstant' for extensio
+AmbientSpeechNetworkHandler initialized and subscribed
+BestiaryNetworkHandler initialized and subscribed
+ChatManager initialized
+ChatNetworkHandler initialized and subscribed
+CombatNetworkHandler initialized centrally
+CombatNetworkHandler: Initialized
+CombatNetworkHandler: Subscribed to network events
+CombatSystemManager initialized with UINTERFACE effect handlers
+CombatSystemManager: Initialized with UE# interface system
+Device level sample rate conversion will be used.
+DialogueManager initialized
+DialogueNetworkHandler initialized and subscribed
+EmoteNetworkHandler initialized and subscribed
+EquipmentManager initialized
+EquipmentNetworkHandler initialized and subscribed
+ExperienceManager [Initialization]: ExperienceManager initialized successfully
+ExperienceManager initialized
+ExperienceNetworkHandler [Initialization]: ExperienceNetworkHandler initialized successfully
+ExperienceNetworkHandler [Subscription]: Subscribed to network events
+ExperienceNetworkHandler initialized and subscribed
+GameInstance Constructor called
+GameInstance Init called
+GameInstance found
+GameInstance found in ItemManager
+HarvestManager: Constructor - UObject version
+HarvestManager: GameInstance found
+HarvestManager: Started ticking with timer
+HarvestManager: World context set to Valid
+InventoryManager: GameInstance found
+ItemManager: Network Manager found and subscribed to ChunkServerResponse delegate
+ItemManager: Network Manager is valid
+MasteryNetworkHandler initialized and subscribed
+NPCManager initialized
+NPCManager: GameInstance found and initialized
+NPCManager: Initialized successfully
+NPCManager: NPCDefinitionTable assigned from GameInstance
+NPCManager: Network Manager found - NPCNetworkHandler will handle network events
+NPCManager: World context set to Valid
+NPCNetworkHandler [Initialization]: NPCNetworkHandler initialized successfully
+NPCNetworkHandler [Subscription]: Subscribed to network events
+NPCNetworkHandler initialized
+Network Manager found and subscribed to ChunkServerResponse delegate
+Network Manager is valid
+OnPostLoginLevelLoaded: LoginLevel
+OnPostLoginLevelLoaded: None
+Player skill system created successfully
+PlayerSkillSystemFactory: Created complete player skill system successfully
+PlayerStatsNetworkHandler initialized and subscribed
+QuestManager initialized
+QuestNetworkHandler initialized and subscribed
+Recreating dtNavMesh instance (RecastNavMesh-big) due mismatch in number of bytes required to store serialized maxTiles (serialized: #, # bits) vs calculated required (#, # bits)
+Recreating dtNavMesh instance (RecastNavMesh-small) due mismatch in number of bytes required to store serialized maxTiles (serialized: #, # bits) vs calculated required (#, # bits)
+RepairManager initialized
+RepairNetworkHandler initialized and subscribed
+ReputationNetworkHandler initialized and subscribed
+Sample rate mismatch. Engine sample rate: # Device sample rate: #
+Script Msg: No game viewport was found.
+SkillDefinitionRepository: Loading from DataTable with # rows
+SkillShopManager initialized
+SkillShopNetworkHandler initialized and subscribed
+SkillSystemManager initialized
+SkillSystemManager: Initialized with default skills
+Text translation conflict for namespace "UMG" and key "TextBlockDefaultValue".
+TimeSyncService initialized with world context
+TitleNetworkHandler initialized and subscribed
+TradeManager initialized
+TradeNetworkHandler initialized and subscribed
+Unable to register widget factory 'ActorLayersWidgetConstructor' as purpose '#' isn't registered.
+Unable to register widget factory 'AlertHeaderWidgetConstructor' as purpose '#' isn't registered.
+Unable to register widget factory 'AlertWidgetConstructor' as purpose '#' isn't registered.
+Unable to register widget factory 'AssetDataItemTypeWidgetConstructor' as purpose '#' isn't registered.
+Unable to register widget factory 'AssetDataLabelWidgetConstructor' as purpose '#' isn't registered.
+Unable to register widget factory 'AssetDataVirtualPathWidgetConstructor' as purpose '#' isn't registered.
+Unable to register widget factory 'AssetNameWidgetConstructor' as purpose '#' isn't registered.
+Unable to register widget factory 'DiskSizeWidgetConstructor' as purpose '#' isn't registered.
+Unable to register widget factory 'DynamicAssetDataColumnBaseWidgetConstructor' as purpose '#' isn't registered.
+Unable to register widget factory 'FolderCompatibilityWidgetConstructor' as purpose '#' isn't registered.
+Unable to register widget factory 'OutlinerUnsavedHeaderConstructor' as purpose '#' isn't registered.
+Unable to register widget factory 'OutlinerUnsavedWidgetConstructor' as purpose '#' isn't registered.
+Unable to register widget factory 'SocketWidgetConstructor' as purpose '#' isn't registered.
+Unable to register widget factory 'StaticMeshTrianglesWidgetConstructor' as purpose '#' isn't registered.
+Unable to register widget factory 'TypeInfoWidgetConstructor' as purpose '#' isn't registered.
+Unable to register widget factory 'UObjectLabelWidgetConstructor' as purpose '#' isn't registered.
+Unable to register widget factory 'VisibilityWidgetConstructor' as purpose '#' isn't registered.
+VendorManager initialized
+VendorNetworkHandler initialized and subscribed
+WIONetworkHandler initialized and subscribed
+WorldObjectManager initialized
+WorldObjectManager: WIODefaultActorClass assigned from GameInstance
+WorldObjectManager: WIODefinitionTable assigned from GameInstance
+[LOADSEQ] #. RemoveLoadingScreen called � loading screen going away NOW
+[LOADSEQ] Travel START: map 'LoginLevel' (t=#.#s, frame #)

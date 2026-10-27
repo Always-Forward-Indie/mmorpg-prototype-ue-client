@@ -84,7 +84,7 @@ void USpawnZoneManager::HandleChunkPacket(const FParsedPacket& Packet)
 	FMessageDataStruct MessageData = JSONParser::DeserializeMessageData(Packet);
 
 	//log the event type
-	UE_LOG(LogGameplay, Warning, TEXT("SpawnZoneManager: Received event type: %s"), *MessageData.eventType);
+	UE_LOG(LogGameplay, Verbose, TEXT("SpawnZoneManager: Received event type: %s"), *MessageData.eventType);
 
 	// NOTE: spawnMobsInZone no longer contains spawn zone geometry data (removed server-side v0.2.16).
 	// Spawn zone creation from server packets is no longer supported.

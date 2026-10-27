@@ -362,7 +362,7 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 void ABasicPlayer::HandleStatsManagerUpdate(const FPlayerStatsUpdateStruct& NewStats)
 {
 	// Log BEFORE any early return so we can see if the function is ever called at all.
-	UE_LOG(LogGameplay, Warning, TEXT("[EFFECTS] HandleStatsManagerUpdate: ENTER charId=%d myCharId=%d isOtherClient=%d effects=%d"),
+	UE_LOG(LogGameplay, Verbose, TEXT("[EFFECTS] HandleStatsManagerUpdate: ENTER charId=%d myCharId=%d isOtherClient=%d effects=%d"),
 		NewStats.characterId, playerData.characterData.characterId, (int)playerData.isOtherClient, NewStats.activeEffects.Num());
 
 	// Only handle updates for the local player and for our own character.

@@ -29,7 +29,7 @@ void UHarvestManager::HandleChunkPacket(const FParsedPacket& Packet)
 
 	// Process time sync data first (handled by the dispatcher fallback).
 
-	UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received event type: %s"), *EventType);
+	UE_LOG(LogGameplay, Verbose, TEXT("HarvestManager: Received event type: %s"), *EventType);
 
 	// Handle harvest started response
 	if (EventType == "harvestStarted" && Status == "success")

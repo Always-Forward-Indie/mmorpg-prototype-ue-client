@@ -24,7 +24,7 @@ void UMOBManager::HandleChunkPacket(const FParsedPacket& Packet)
 	const TSharedPtr<FJsonObject>& Root = Packet.Root;
 	const TSharedPtr<FJsonObject>& Body = Packet.Body;
 
-	UE_LOG(LogGameplay, Warning, TEXT("MOBManager: Received event type: %s"), *EventType);
+	UE_LOG(LogGameplay, Verbose, TEXT("MOBManager: Received event type: %s"), *EventType);
 
 	// Check if this is a combat event - if so, let CombatNetworkHandler handle it
 	//if (IsCombatEvent(EventType))

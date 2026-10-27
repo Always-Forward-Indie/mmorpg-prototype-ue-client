@@ -31,7 +31,7 @@ void UInventoryManager::HandleChunkPacket(const FParsedPacket& Packet)
 
 	// Time sync is handled by the dispatcher fallback.
 
-	UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Received event type: %s"), *EventType);
+	UE_LOG(LogGameplay, Verbose, TEXT("InventoryManager: Received event type: %s"), *EventType);
 
 	// Handle inventory data response
 	if (EventType == "getPlayerInventory" && Status == "success")

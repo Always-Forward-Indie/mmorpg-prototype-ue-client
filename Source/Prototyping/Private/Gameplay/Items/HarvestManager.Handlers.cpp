@@ -42,7 +42,7 @@ void UHarvestManager::UpdateHarvestProgress(float DeltaTime)
 	// Auto-complete if progress reaches 100% (fallback in case server message is missed)
 	if (Progress >= 1.0f)
 	{
-		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Harvest progress completed locally"));
+		UE_LOG(LogGameplay, Verbose, TEXT("HarvestManager: Harvest progress completed locally"));
 		// Note: We don't auto-complete here, we wait for server response
 	}
 }

@@ -231,7 +231,7 @@ void UHarvestManager::SendHarvestCancelRequest(int32 CorpseUID)
 
 float UHarvestManager::GetHarvestProgress() const
 {
-	UE_LOG(LogGameplay, Warning, TEXT("HarvestManager::GetHarvestProgress - Starting calculation"));
+	UE_LOG(LogGameplay, Verbose, TEXT("HarvestManager::GetHarvestProgress - Starting calculation"));
 	
 	if (!bIsHarvesting || HarvestDuration <= 0.0f)
 	{

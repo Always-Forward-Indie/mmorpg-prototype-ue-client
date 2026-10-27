@@ -494,5 +494,5 @@ void UPlayerExperienceWidget::UpdateExperienceTextDisplay(int32 CurrentExp, int3
 
     ExperienceText->SetText(FText::FromString(ExpString));
 
-    UE_LOG(LogGameplay, Warning, TEXT("PlayerExperienceWidget: Updated experience text to: %s"), *ExpString);
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerExperienceWidget: Updated experience text to: %s"), *ExpString);
 }

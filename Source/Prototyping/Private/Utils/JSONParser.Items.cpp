@@ -142,11 +142,10 @@ FItemDropResponseStruct JSONParser::DeserializeItemDropResponse(const TSharedPtr
 	FItemDropResponseStruct ItemDropResponse;
 	if (!Body.IsValid()) return ItemDropResponse;
 
-	// Dual wire shape (chunk ItemEventHandler): itemDrop carries "droppedItems",
-	// nearby-items carries "items". Unify to "items" on both ends (cleanup Slice C).
+	// Single wire shape: "items" (chunk itemDrop + nearby).
+	// A missing array means no items, not an error.
 	const TArray<TSharedPtr<FJsonValue>>* DroppedItemsArray = nullptr;
-	if (!Body->TryGetArrayField(TEXT("items"), DroppedItemsArray))
-		Body->TryGetArrayField(TEXT("droppedItems"), DroppedItemsArray);
+	Body->TryGetArrayField(TEXT("items"), DroppedItemsArray);
 
 	if (DroppedItemsArray)
 	{

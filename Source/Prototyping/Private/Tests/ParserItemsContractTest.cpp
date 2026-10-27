@@ -92,11 +92,6 @@ bool FItemDropResponseContractTest::RunTest(const FString& Parameters)
         TestEqual(TEXT("second uid"), Cur.droppedItems[1].uid, 702);
     }
 
-    // Legacy "droppedItems" array shape still resolves.
-    FItemDropResponseStruct Legacy = JSONParser::DeserializeItemDropResponse(ParserContract_ParseObj(
-        TEXT("{\"droppedItems\":[{\"uid\":703,\"itemId\":48}]}")));
-    TestEqual(TEXT("legacy one item"), Legacy.droppedItems.Num(), 1);
-
     // Missing arrays and null body: empty, no crash.
     TestEqual(TEXT("no array empty"), JSONParser::DeserializeItemDropResponse(ParserContract_ParseObj(TEXT("{}"))).droppedItems.Num(), 0);
     TestEqual(TEXT("null empty"), JSONParser::DeserializeItemDropResponse(nullptr).droppedItems.Num(), 0);

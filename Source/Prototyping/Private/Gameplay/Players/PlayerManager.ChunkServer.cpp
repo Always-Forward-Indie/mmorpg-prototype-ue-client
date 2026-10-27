@@ -452,5 +452,38 @@ void UPlayerManager::ProcessChunkPacket(const FParsedPacket& Packet)
 			}
 		}
 	}
+
+	// Handle playerTeleported - server-directed teleport (admin/GM).
+	// Unlike positional broadcasts (other clients' views), this unicast is
+	// applied to the locally-controlled actor: hard snap, no interpolation,
+	// same as respawnResult (MovePlayerForClient skips our own ClientID).
+	if (MessageData.eventType == "playerTeleported")
+	{
+		if (gameInstance && IsValid(gameInstance) && Body.IsValid())
+		{
+			int32 TeleportCharId = 0;
+			Body->TryGetNumberField(TEXT("characterId"), TeleportCharId);
+			ABasicPlayer* TeleportPlayer = (TeleportCharId > 0)
+				? gameInstance->GetPlayerByCharacterId(TeleportCharId)
+				: nullptr;
+			if (TeleportPlayer && IsValid(TeleportPlayer))
+			{
+				double TX = 0, TY = 0, TZ = 0, TRot = 0;
+				Body->TryGetNumberField(TEXT("x"), TX);
+				Body->TryGetNumberField(TEXT("y"), TY);
+				Body->TryGetNumberField(TEXT("z"), TZ);
+				Body->TryGetNumberField(TEXT("rotZ"), TRot);
+				TeleportPlayer->SetActorLocation(FVector(TX, TY, TZ), false, nullptr, ETeleportType::TeleportPhysics);
+				TeleportPlayer->SetActorRotation(FRotator(0.0, TRot, 0.0));
+				TeleportPlayer->SetCoordinates(TX, TY, TZ, TRot, false);
+				UE_LOG(LogConnection, Log, TEXT("playerTeleported: charId=%d snapped to (%d, %d, %d)"),
+					TeleportCharId, (int32)TX, (int32)TY, (int32)TZ);
+			}
+			else
+			{
+				UE_LOG(LogConnection, Warning, TEXT("playerTeleported: player not found for charId=%d"), TeleportCharId);
+			}
+		}
+	}
 }
 

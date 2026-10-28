@@ -60,3 +60,27 @@ bool FAuthLoginFlowEmailTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("charname cap"), V::MaxCharNameLen == 20);
     return true;
 }
+
+// Gender row match: the SELECTED display must match the row — a self-compare
+// (RowDisplay vs the row's own Label/Name) matches the first row forever and
+// silently forces male. Pinned after the create-preview/select-screen bug.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLoginFlowGenderMatchTest, "MMO.Auth.LoginFlowGender",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+
+bool FLoginFlowGenderMatchTest::RunTest(const FString& Parameters)
+{
+    namespace V = LoginFlowValidation;
+    // Selected "Female" must match the female row only.
+    TestTrue(TEXT("female matches female row"),
+        V::GenderOptionMatches(TEXT("Female"), TEXT("Female"), TEXT("Female"), TEXT("female")));
+    TestFalse(TEXT("female does not match male row"),
+        V::GenderOptionMatches(TEXT("Female"), TEXT("Male"), TEXT("Male"), TEXT("male")));
+    // Symmetrically, "Male" must not match the female row.
+    TestTrue(TEXT("male matches male row"),
+        V::GenderOptionMatches(TEXT("Male"), TEXT("Male"), TEXT("Male"), TEXT("male")));
+    TestFalse(TEXT("male does not match female row"),
+        V::GenderOptionMatches(TEXT("Male"), TEXT("Female"), TEXT("Female"), TEXT("female")));
+    // Slug/name identity also resolve (server-shaped payloads).
+    TestTrue(TEXT("slug identity"), V::GenderOptionMatches(TEXT("female"), TEXT("Female"), TEXT("Female"), TEXT("female")));
+    return true;
+}

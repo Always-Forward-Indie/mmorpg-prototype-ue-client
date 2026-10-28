@@ -203,6 +203,19 @@ struct FLoginErrorTableRow : public FTableRowBase
 
 namespace LoginFlowValidation
 {
+	/** Gender row match: the SELECTED display string must equal one of the
+	 *  row's identities. Compare against the selection — never RowDisplay
+	 *  against the row's own Label/Name (that self-compare matches the first
+	 *  row unconditionally and silently forces male).
+	 */
+	inline bool GenderOptionMatches(const FString& SelectedDisplay, const FString& RowDisplay,
+		const FString& RowLabel, const FString& RowName)
+	{
+		return SelectedDisplay == RowDisplay
+			|| SelectedDisplay == RowLabel
+			|| SelectedDisplay == RowName;
+	}
+
 	// Input limits — single source of truth for both the submit-time checks
 	// below and the EditableTextBox MaxLength set in NativeConstruct, so the
 	// field can never hold more than the validator accepts.

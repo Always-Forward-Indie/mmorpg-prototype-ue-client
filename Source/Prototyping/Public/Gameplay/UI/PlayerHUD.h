@@ -16,6 +16,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "HUD")
 	void SetMana(float NewMana, float MaxMana);
 
+	// Snap displayed bars to their current targets, skipping interpolation.
+	// For discontinuous state changes (revive, travel, first spawn) where
+	// lerping from the stale value would look like a glitch.
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	void SnapBarsToTarget();
+
 	// Optional player portrait (BindWidgetOptional UImage named 'Portrait_Image'
 	// in the HUD Blueprint). No-op when the image is not bound.
 	UFUNCTION(BlueprintCallable, Category = "HUD")

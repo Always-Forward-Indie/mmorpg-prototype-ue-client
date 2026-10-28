@@ -283,6 +283,20 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 	// Refresh the HP/MP HUD
 	RefreshHUD();
 
+	// Discontinuous state change (death → alive): snap bars to the fresh
+	// server values instead of lerping from the corpse. Stale hp==0 echoes
+	// (sent before the server processed the revive) must not consume the
+	// snap, so only positive updates trigger it. Continuous damage
+	// and healing keep their smooth interpolation.
+	if (bJustRevived && !playerData.isOtherClient && StatsUpdate.healthCurrent > 0)
+	{
+		bJustRevived = false;
+		if (PlayerHUD)
+		{
+			PlayerHUD->SnapBarsToTarget();
+		}
+	}
+
 	// Signal the loading screen gate: HUD has real server data.
 	// GameInstance guards against double-firing internally.
 	if (!playerData.isOtherClient && MyGameInstance)

@@ -131,6 +131,14 @@ void UPlayerHUD::SetMana(float NewMana, float MaxMana)
 	}
 }
 
+void UPlayerHUD::SnapBarsToTarget()
+{
+	DisplayedHPPercent = TargetHPPercent;
+	DisplayedMPPercent = TargetMPPercent;
+	if (HealthBar) HealthBar->SetPercent(DisplayedHPPercent);
+	if (ManaBar)   ManaBar->SetPercent(DisplayedMPPercent);
+}
+
 bool UPlayerHUD::IsHUDReady() const
 {
 	return HealthBar != nullptr && HealthBarTextValue != nullptr

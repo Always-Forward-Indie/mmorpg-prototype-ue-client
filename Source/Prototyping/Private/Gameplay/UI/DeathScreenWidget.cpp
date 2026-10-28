@@ -94,6 +94,13 @@ void UDeathScreenWidget::ShowDeathScreen(int32 ExperienceDebt)
 
 void UDeathScreenWidget::HideDeathScreen()
 {
+    // Cancel the respawn safety timeout: the server answered (respawnResult
+    // hides the screen), so a later fire would falsely claim no response.
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(RespawnTimeoutHandle);
+    }
+
     PlayHideAnimation();
     SetVisibility(ESlateVisibility::Collapsed);
 

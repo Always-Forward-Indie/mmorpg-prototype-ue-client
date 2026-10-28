@@ -236,6 +236,12 @@ private:
 	// Cast lock: true while a skill with cast time is in progress
 	bool bIsCasting = false;
 
+	// Set on revive; the next stats_update snaps HP/MP bars to the server
+	// values instantly instead of lerping from the corpse state. Continuous
+	// damage/heal keeps the smooth interpolation — only the discontinuous
+	// death→alive jump is snapped (same rule as teleport/travel).
+	bool bJustRevived = false;
+
 	// Auto-attack animation delegate handle
 	FDelegateHandle AutoAttackAnimEndDelegateHandle;
 

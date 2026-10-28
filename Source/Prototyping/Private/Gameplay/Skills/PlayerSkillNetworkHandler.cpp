@@ -282,7 +282,17 @@ void UPlayerSkillNetworkHandler::HandleSkillBarState(const FParsedPacket& Packet
         if (SkillSlug.IsEmpty()) continue;
 
         // Server-authoritative: apply directly. No outbound packet; this IS the server state.
-        SkillManager->SetSkillSlot(SlotIndex, SkillSlug, FKey());
+        // Order hazard: skillBarState can arrive before initializePlayerSkills
+        // (boot snapshot). Unknown-for-now skills are queued and applied when
+        // the skill list arrives instead of being dropped with a warning.
+        if (SkillManager->HasSkill(SkillSlug))
+        {
+            SkillManager->SetSkillSlot(SlotIndex, SkillSlug, FKey());
+        }
+        else
+        {
+            SkillManager->QueuePendingSkillSlot(SlotIndex, SkillSlug);
+        }
         ++LoadedSlots;
     }
 

@@ -147,6 +147,12 @@ public:
     double TravelGCDRemaining = 0.0;
     bool bHasTravelSnapshot = false;
 
+    // Server-sent slot assignments that arrived before the skill list
+    // (boot snapshot order: skillBarState can precede initializePlayerSkills).
+    // Flushed at the end of InitializePlayerSkills; genuinely unknown skills
+    // still warn through SetSkillSlot at flush time.
+    void QueuePendingSkillSlot(int32 SlotIndex, const FString& SkillSlug);
+
 protected:
     // Get world for time calculations
     UWorld* GetWorld() const;
@@ -168,6 +174,10 @@ protected:
     // Skill slots
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Player Skills")
     TMap<int32, FSkillSlotData> SkillSlots;
+
+    // Deferred slot assignments (see QueuePendingSkillSlot). Newest wins
+    // per slot index; drained by InitializePlayerSkills.
+    TArray<TPair<int32, FString>> PendingSkillSlots;
 
     // Character data
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Player Data")

@@ -46,6 +46,28 @@ void UPlayerSkillManager::SetSkillSlot(int32 SlotIndex, const FString& SkillSlug
         SlotIndex, *SkillSlug);
 }
 
+void UPlayerSkillManager::QueuePendingSkillSlot(int32 SlotIndex, const FString& SkillSlug)
+{
+    if (!ValidateSkillSlot(SlotIndex) || SkillSlug.IsEmpty())
+    {
+        return;
+    }
+
+    // Newest wins: replace any earlier queued assignment for this slot.
+    for (TPair<int32, FString>& Pending : PendingSkillSlots)
+    {
+        if (Pending.Key == SlotIndex)
+        {
+            Pending.Value = SkillSlug;
+            return;
+        }
+    }
+    PendingSkillSlots.Emplace(SlotIndex, SkillSlug);
+
+    UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillManager: Queued slot %d -> %s until skills initialize"),
+        SlotIndex, *SkillSlug);
+}
+
 FSkillSlotData UPlayerSkillManager::GetSkillSlot(int32 SlotIndex) const
 {
     if (const FSkillSlotData* Found = SkillSlots.Find(SlotIndex))

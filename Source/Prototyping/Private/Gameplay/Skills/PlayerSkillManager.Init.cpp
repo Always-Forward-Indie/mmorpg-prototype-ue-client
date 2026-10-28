@@ -92,6 +92,18 @@ void UPlayerSkillManager::InitializePlayerSkills(const FPlayerSkillsInitializati
     TArray<FPlayerSkillData> AllSkills = GetAllPlayerSkills();
     OnSkillsInitialized.Broadcast(AllSkills);
 
+    // Drain slot assignments that arrived before the skill list
+    // (boot snapshot order). Genuinely unknown skills still warn via SetSkillSlot.
+    if (PendingSkillSlots.Num() > 0)
+    {
+        UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Applying %d queued slot assignment(s)"), PendingSkillSlots.Num());
+        for (const TPair<int32, FString>& Pending : PendingSkillSlots)
+        {
+            SetSkillSlot(Pending.Key, Pending.Value, FKey());
+        }
+        PendingSkillSlots.Empty();
+    }
+
     UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Initialized %d skills for character %d"), 
         PlayerSkills.Num(), CharacterId);
 }

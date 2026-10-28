@@ -101,6 +101,42 @@ void ABasicPlayer::UpdatePlayerStats(const FPlayerStatsUpdateStruct& StatsUpdate
 		StatsUpdate.manaCurrent, StatsUpdate.manaMax);
 }
 
+void ABasicPlayer::ApplyRespawnVitals(int32 NewHP, int32 NewMaxHP, int32 NewMP, int32 NewMaxMP)
+{
+	// Authoritative snapshot from respawnResult: no validation against
+	// ValidateStatsData (partial by design), just sanity-clamp so a
+	// malformed packet can never show negative HP or HP above max.
+	const int32 ClampedMaxHP = FMath::Max(1, NewMaxHP);
+	const int32 ClampedMaxMP = FMath::Max(1, NewMaxMP);
+	playerData.characterData.characterCurrentHealth = FMath::Clamp(NewHP, 0, ClampedMaxHP);
+	playerData.characterData.characterCurrentMana = FMath::Clamp(NewMP, 0, ClampedMaxMP);
+
+	// RefreshHUD derives max from characterAttributes, so mirror the
+	// effective max here (the periodic stats_update will confirm it).
+	FAttributeDataStruct HealthAttr;
+	HealthAttr.attributeSlug = TEXT("max_health");
+	HealthAttr.attributeName = TEXT("Max Health");
+	HealthAttr.attributeValue = ClampedMaxHP;
+	playerData.characterData.characterAttributes.attributesData.Add(TEXT("max_health"), HealthAttr);
+
+	FAttributeDataStruct ManaAttr;
+	ManaAttr.attributeSlug = TEXT("max_mana");
+	ManaAttr.attributeName = TEXT("Max Mana");
+	ManaAttr.attributeValue = ClampedMaxMP;
+	playerData.characterData.characterAttributes.attributesData.Add(TEXT("max_mana"), ManaAttr);
+
+	UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: Respawn vitals applied for character %d - HP: %d/%d, MP: %d/%d"),
+		playerData.characterData.characterId,
+		playerData.characterData.characterCurrentHealth, ClampedMaxHP,
+		playerData.characterData.characterCurrentMana, ClampedMaxMP);
+
+	RefreshHUD();
+	if (PlayerHUD)
+	{
+		PlayerHUD->SnapBarsToTarget();
+	}
+}
+
 void ABasicPlayer::ApplyServerMoveSpeed(float ServerMoveSpeed)
 {
 	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
@@ -263,6 +299,25 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 	LastPreUpdateHP = playerData.characterData.characterCurrentHealth;
 	LastPreUpdateMP = playerData.characterData.characterCurrentMana;
 
+	// Sync experience fields only when the packet actually carries them.
+	// Partial packets (e.g. regen ticks) omit the "experience" block so all
+	// four fields arrive as 0 -- we must not overwrite the last known values.
+	// Computed early: the corpse-duplicate skip below must not swallow XP debt.
+	const bool bHasExpData = (StatsUpdate.experienceCurrent > 0
+		|| StatsUpdate.experienceNextLevel  > 0
+		|| StatsUpdate.experienceLevelStart > 0);
+
+	// Corpse spam: the server emits one stats_update per in-flight hit that
+	// lands after death (HP already 0, nothing changed). Re-processing them
+	// re-renders the HUD and re-fires widget listeners with identical values,
+	// which reads as HP flicker on the corpse. Skip presentation only — the
+	// first (killing) packet already handled death state and XP debt.
+	const bool bIsCorpseDuplicate = playerData.characterData.bIsDead
+		&& StatsUpdate.healthCurrent == 0
+		&& StatsUpdate.healthCurrent == playerData.characterData.characterCurrentHealth
+		&& StatsUpdate.manaCurrent == playerData.characterData.characterCurrentMana
+		&& !bHasExpData;
+
 	// Guard: if the player is already dead and the incoming packet carries positive HP
 	// (a stale regen or damage snapshot that was queued before the kill was processed),
 	// skip the HP/MP update to prevent the HUD showing rising HP on a corpse.
@@ -272,6 +327,11 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 	{
 		// Update HP/MP/level on the character data
 		UpdatePlayerStats(StatsUpdate);
+	}
+
+	if (bIsCorpseDuplicate)
+	{
+		return;
 	}
 
 	if (playerData.isOtherClient && NameplateComponent)
@@ -320,6 +380,13 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 		if (TimeSinceRespawn >= RespawnGraceSeconds)
 		{
 			SetDead_Implementation(true);
+			// Death is a discontinuous state change (mirror of the revive
+			// snap): pin the bars to 0 instantly instead of lerping down
+			// from the last living value while the text already reads 0.
+			if (!playerData.isOtherClient && PlayerHUD)
+			{
+				PlayerHUD->SnapBarsToTarget();
+			}
 		}
 		else
 		{
@@ -329,12 +396,7 @@ void ABasicPlayer::ProcessStatsUpdate(const FPlayerStatsUpdateStruct& StatsUpdat
 		}
 	}
 
-	// Sync experience fields only when the packet actually carries them.
-	// Partial packets (e.g. regen ticks) omit the "experience" block so all
-	// four fields arrive as 0 -- we must not overwrite the last known values.
-	const bool bHasExpData = (StatsUpdate.experienceCurrent > 0
-		|| StatsUpdate.experienceNextLevel  > 0
-		|| StatsUpdate.experienceLevelStart > 0);
+	// Sync experience fields (bHasExpData computed above for the corpse skip).
 	if (bHasExpData)
 	{
 		playerData.characterData.characterExperiencePoints = StatsUpdate.experienceCurrent;

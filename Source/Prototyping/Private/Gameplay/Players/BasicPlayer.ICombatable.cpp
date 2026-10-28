@@ -103,6 +103,14 @@ int32 ABasicPlayer::GetMaxMana_Implementation() const
 
 void ABasicPlayer::SetDead_Implementation(bool bNewDead)
 {
+    // Idempotent transition: repeated SetDead(true) calls (one stats_update
+    // per in-flight hit landing after death) must not re-run OnDeath —
+    // no replayed death sounds, anims or wipes of interaction locks.
+    if (playerData.characterData.bIsDead == bNewDead)
+    {
+        return;
+    }
+
     playerData.characterData.bIsDead = bNewDead;
 
     // Sync dead state on the nameplate (works for both local and remote пїЅ local is already hidden)

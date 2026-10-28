@@ -738,6 +738,13 @@ public:
 			UFUNCTION(BlueprintCallable, Category = "UI")
 			void RefreshHUD();
 
+			// Apply the authoritative vitals carried by respawnResult (HP/MP +
+			// effective max) BEFORE SetDead(false) unlocks movement, so the
+			// player never runs around with stale corpse values waiting for
+			// the next periodic stats_update. Ends with Displayed=Target snap.
+			UFUNCTION(BlueprintCallable, Category = "Player Data")
+			void ApplyRespawnVitals(int32 NewHP, int32 NewMaxHP, int32 NewMP, int32 NewMaxMP);
+
 			UFUNCTION(BlueprintCallable, Category = "UI")
 			UUIManager* GetUIManager() const { return UIManager; }
 

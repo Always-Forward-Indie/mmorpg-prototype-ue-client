@@ -440,7 +440,34 @@ void UPlayerManager::ProcessChunkPacket(const FParsedPacket& Packet)
 					UE_LOG(LogConnection, Warning, TEXT("respawnResult: position field missing or null for charId=%d — reviving in-place"), RespawnCharId);
 				}
 
-				// Revive the player: restores movement mode, hides death screen,
+				// Authoritative vitals (chunk includes HP/MP + effective max in
+			// respawnResult): apply BEFORE SetDead(false) unlocks movement,
+			// so the player never runs with stale corpse values waiting for
+			// the next periodic stats_update. Absent on old servers — then
+			// the bJustRevived snap covers the first stats_update instead.
+			const TSharedPtr<FJsonObject>* HealthObj = nullptr;
+			const TSharedPtr<FJsonObject>* ManaObj = nullptr;
+			int32 RespawnHP = -1, RespawnMaxHP = -1, RespawnMP = -1, RespawnMaxMP = -1;
+			if (Body->TryGetObjectField(TEXT("health"), HealthObj) && HealthObj)
+			{
+				(*HealthObj)->TryGetNumberField(TEXT("current"), RespawnHP);
+				(*HealthObj)->TryGetNumberField(TEXT("max"), RespawnMaxHP);
+			}
+			if (Body->TryGetObjectField(TEXT("mana"), ManaObj) && ManaObj)
+			{
+				(*ManaObj)->TryGetNumberField(TEXT("current"), RespawnMP);
+				(*ManaObj)->TryGetNumberField(TEXT("max"), RespawnMaxMP);
+			}
+			if (RespawnHP >= 0 && RespawnMaxHP > 0 && RespawnMP >= 0 && RespawnMaxMP > 0)
+			{
+				RespawnPlayer->ApplyRespawnVitals(RespawnHP, RespawnMaxHP, RespawnMP, RespawnMaxMP);
+			}
+			else
+			{
+				UE_LOG(LogConnection, Verbose, TEXT("respawnResult: no vitals in body for charId=%d — waiting for stats_update"), RespawnCharId);
+			}
+
+			// Revive the player: restores movement mode, hides death screen,
 				// plays revive sound, notifies AnimBP. Must happen AFTER teleport so
 				// CMC re-enables walking at the correct world position.
 				RespawnPlayer->SetDead_Implementation(false);

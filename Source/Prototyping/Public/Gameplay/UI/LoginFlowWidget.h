@@ -226,6 +226,7 @@ protected:
 	UFUNCTION() void HandleCharCreateBackClicked();
 	UFUNCTION() void HandleLoginTextCommitted(const FText& Text, ETextCommit::Type CommitMethod);
 	UFUNCTION() void HandleRegisterTextCommitted(const FText& Text, ETextCommit::Type CommitMethod);
+	UFUNCTION() void HandleLoginInputChanged(const FText& Text);
 	UFUNCTION() void HandleClassSelectionChanged(FString SelectedItem, ESelectInfo::Type SelectionType);
 	UFUNCTION() void HandleRaceSelectionChanged(FString SelectedItem, ESelectInfo::Type SelectionType);
 	UFUNCTION() void HandleGenderSelectionChanged(FString SelectedItem, ESelectInfo::Type SelectionType);

@@ -107,13 +107,16 @@ namespace CharacterVisualHelper
 	 *   1) classSlug_raceSlug_genderName  (exact)
 	 *   2) classSlug_raceSlug_male        (gender fallback)
 	 *   3) classSlug_human_male           (race+gender fallback)
-	 * Returns nullptr if nothing found.
+	 * Returns nullptr if nothing found. When OutMatchedKey is provided it
+	 * receives the row name that actually hit, so callers can warn when a
+	 * non-exact (e.g. male) row is used for an explicit gender request.
 	 */
 	inline const FCharacterVisualDefinition* FindVisualDefinition(
 		const UDataTable* Table,
 		const FString& ClassSlug,
 		const FString& RaceSlug,
-		const FString& GenderName)
+		const FString& GenderName,
+		FName* OutMatchedKey = nullptr)
 	{
 		if (!Table) return nullptr;
 
@@ -123,18 +126,25 @@ namespace CharacterVisualHelper
 		const FString EffectiveGender = GenderName.IsEmpty() ? TEXT("female") : GenderName;
 		Key = MakeRowKey(ClassSlug, RaceSlug, EffectiveGender);
 		if (const FCharacterVisualDefinition* Found = Table->FindRow<FCharacterVisualDefinition>(Key, TEXT("CharVisual")))
+		{
+			if (OutMatchedKey) *OutMatchedKey = Key;
 			return Found;
+		}
 
 		// Try male if female not found OR if the original gender was explicitly not empty and not male
 		if (!EffectiveGender.Equals(TEXT("male"), ESearchCase::IgnoreCase))
 		{
 			Key = MakeRowKey(ClassSlug, RaceSlug, TEXT("male"));
 			if (const FCharacterVisualDefinition* Found = Table->FindRow<FCharacterVisualDefinition>(Key, TEXT("CharVisual")))
+			{
+				if (OutMatchedKey) *OutMatchedKey = Key;
 				return Found;
+			}
 		}
 
 		// Fallback: race → human, gender → male
 		Key = MakeRowKey(ClassSlug, TEXT("human"), TEXT("male"));
+		if (OutMatchedKey) *OutMatchedKey = Key;
 		return Table->FindRow<FCharacterVisualDefinition>(Key, TEXT("CharVisual"));
 	}
 }

@@ -51,6 +51,25 @@ void ULoginFlowWidget::NativeConstruct()
 	if (Register_PasswordInput) Register_PasswordInput->OnTextCommitted.AddDynamic(this, &ULoginFlowWidget::HandleRegisterTextCommitted);
 	if (Register_EmailInput)    Register_EmailInput->OnTextCommitted.AddDynamic(this, &ULoginFlowWidget::HandleRegisterTextCommitted);
 
+	// ── Input limits + masking ───────────────────────────────────────────────
+	// UEditableTextBox has no MaxLength API: enforce the LoginFlowValidation
+	// caps on every keystroke so a field can never hold more than the
+	// submit-time validator accepts (also bounds outgoing JSON payloads).
+	if (Login_UsernameInput)    Login_UsernameInput->OnTextChanged.AddDynamic(this, &ULoginFlowWidget::HandleLoginInputChanged);
+	if (Login_PasswordInput)
+	{
+		Login_PasswordInput->SetIsPassword(true);
+		Login_PasswordInput->OnTextChanged.AddDynamic(this, &ULoginFlowWidget::HandleLoginInputChanged);
+	}
+	if (Register_UsernameInput) Register_UsernameInput->OnTextChanged.AddDynamic(this, &ULoginFlowWidget::HandleLoginInputChanged);
+	if (Register_PasswordInput)
+	{
+		Register_PasswordInput->SetIsPassword(true);
+		Register_PasswordInput->OnTextChanged.AddDynamic(this, &ULoginFlowWidget::HandleLoginInputChanged);
+	}
+	if (Register_EmailInput)    Register_EmailInput->OnTextChanged.AddDynamic(this, &ULoginFlowWidget::HandleLoginInputChanged);
+	if (CharCreate_NameInput)   CharCreate_NameInput->OnTextChanged.AddDynamic(this, &ULoginFlowWidget::HandleLoginInputChanged);
+
 	// Combo selection changes → update description + live preview
 	if (CharCreate_ClassComboBox)
 	{
@@ -104,8 +123,39 @@ AuthManagerRef->OnAccountBanned.AddDynamic(this, &ULoginFlowWidget::OnAccountBan
 	UpdateCharSelectButtons();
 }
 
+void ULoginFlowWidget::HandleLoginInputChanged(const FText& /*Text*/)
+{
+	// UEditableTextBox has no MaxLength API: truncate any over-long input back
+	// to the LoginFlowValidation caps. Runs on every keystroke in any of the
+	// six boxes; the parameter is unused because the sender isn't passed.
+	auto ClampBox = [](UEditableTextBox* Box, int32 MaxLen)
+	{
+		if (!IsValid(Box)) return;
+		const FString S = Box->GetText().ToString();
+		if (S.Len() > MaxLen)
+		{
+			Box->SetText(FText::FromString(S.Left(MaxLen)));
+		}
+	};
+
+	ClampBox(Login_UsernameInput, LoginFlowValidation::MaxLoginLen);
+	ClampBox(Login_PasswordInput, LoginFlowValidation::MaxPasswordLen);
+	ClampBox(Register_UsernameInput, LoginFlowValidation::MaxLoginLen);
+	ClampBox(Register_PasswordInput, LoginFlowValidation::MaxPasswordLen);
+	ClampBox(Register_EmailInput, LoginFlowValidation::MaxEmailLen);
+	ClampBox(CharCreate_NameInput, LoginFlowValidation::MaxCharNameLen);
+}
+
 void ULoginFlowWidget::NativeDestruct()
 {
+	// Unbind input-limit handlers (bound in NativeConstruct).
+	if (Login_UsernameInput)    Login_UsernameInput->OnTextChanged.RemoveDynamic(this, &ULoginFlowWidget::HandleLoginInputChanged);
+	if (Login_PasswordInput)    Login_PasswordInput->OnTextChanged.RemoveDynamic(this, &ULoginFlowWidget::HandleLoginInputChanged);
+	if (Register_UsernameInput) Register_UsernameInput->OnTextChanged.RemoveDynamic(this, &ULoginFlowWidget::HandleLoginInputChanged);
+	if (Register_PasswordInput) Register_PasswordInput->OnTextChanged.RemoveDynamic(this, &ULoginFlowWidget::HandleLoginInputChanged);
+	if (Register_EmailInput)    Register_EmailInput->OnTextChanged.RemoveDynamic(this, &ULoginFlowWidget::HandleLoginInputChanged);
+	if (CharCreate_NameInput)   CharCreate_NameInput->OnTextChanged.RemoveDynamic(this, &ULoginFlowWidget::HandleLoginInputChanged);
+
 	// Unbind delegates to avoid dangling references
 	if (AuthManagerRef)
 	{

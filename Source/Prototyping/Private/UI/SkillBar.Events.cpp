@@ -9,7 +9,6 @@
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/UniformGridSlot.h"
 #include "Framework/Application/SlateApplication.h"
-#include "Kismet/GameplayStatics.h"
 
 void USkillBarWidget::OnSkillSlotClicked(int32 SlotIndex, const FString& SkillSlug)
 {
@@ -138,7 +137,8 @@ void USkillBarWidget::OnSkillReady(const FString& SkillSlug)
         FPlayerSkillData SkillData = SkillManager->GetSkillData(SkillSlug);
         if (!SkillData.definitionData.skillReadySound.IsNull())
         {
-            UGameplayStatics::PlaySound2D(this, SkillData.definitionData.skillReadySound.LoadSynchronous());
+            if (GameInstance && GameInstance->AudioManager)
+                GameInstance->AudioManager->PlayUISoundAsset(SkillData.definitionData.skillReadySound.LoadSynchronous());
             return;
         }
     }

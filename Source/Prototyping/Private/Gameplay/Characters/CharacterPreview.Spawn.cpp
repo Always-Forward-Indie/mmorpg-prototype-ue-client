@@ -67,14 +67,23 @@ void UCharacterPreviewManager::ApplyVisualToActor(ABasicPlayer* Actor, const FSt
 		return;
 	}
 
-	const FCharacterVisualDefinition* Def = CharacterVisualHelper::FindVisualDefinition(
-		Table, ClassSlug, RaceSlug, GenderName);
+	const FCharacterVisualDefinition* Def = nullptr;
+	FName MatchedKey = NAME_None;
+	Def = CharacterVisualHelper::FindVisualDefinition(
+		Table, ClassSlug, RaceSlug, GenderName, &MatchedKey);
 
 	if (!Def)
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("CharacterPreviewManager: No visual definition found for %s_%s_%s"),
 			*ClassSlug, *RaceSlug, *GenderName);
 		return;
+	}
+
+	if (!GenderName.IsEmpty()
+		&& MatchedKey != CharacterVisualHelper::MakeRowKey(ClassSlug, RaceSlug, GenderName))
+	{
+		UE_LOG(LogGameplay, Warning, TEXT("CharacterPreviewManager: gender '%s' resolved to fallback row '%s' (exact %s_%s_%s missing)"),
+			*GenderName, *MatchedKey.ToString(), *ClassSlug, *RaceSlug, *GenderName);
 	}
 
 	const FCharacterVisualData& VisualData = Def->Visual;
@@ -89,7 +98,7 @@ void UCharacterPreviewManager::ApplyVisualToActor(ABasicPlayer* Actor, const FSt
 
 	if (!SoftMesh.IsNull())
 	{
-		Streamable.RequestAsyncLoad(SoftMesh.ToSoftObjectPath(), [WeakActor, SoftMesh]()
+		Streamable.RequestAsyncLoad(SoftMesh.ToSoftObjectPath(), [WeakActor, SoftMesh, MatchedKey]()
 		{
 			if (!WeakActor.IsValid()) return;
 			if (USkeletalMesh* LoadedMesh = SoftMesh.Get())
@@ -117,17 +126,27 @@ void UCharacterPreviewManager::ApplyVisualToActor(ABasicPlayer* Actor, const FSt
 					}
 				}
 			}
+			else
+			{
+				UE_LOG(LogGameplay, Warning, TEXT("CharacterPreviewManager: visual mesh failed to load for row '%s'"),
+					*MatchedKey.ToString());
+			}
 		});
 	}
 
 	if (!SoftAnimBP.IsNull())
 	{
-		Streamable.RequestAsyncLoad(SoftAnimBP.ToSoftObjectPath(), [WeakActor, SoftAnimBP]()
+		Streamable.RequestAsyncLoad(SoftAnimBP.ToSoftObjectPath(), [WeakActor, SoftAnimBP, MatchedKey]()
 		{
 			if (!WeakActor.IsValid()) return;
 			if (UClass* AnimClass = SoftAnimBP.Get())
 			{
 				WeakActor->GetMesh()->SetAnimInstanceClass(AnimClass);
+			}
+			else
+			{
+				UE_LOG(LogGameplay, Warning, TEXT("CharacterPreviewManager: AnimBP failed to load for row '%s'"),
+					*MatchedKey.ToString());
 			}
 		});
 	}

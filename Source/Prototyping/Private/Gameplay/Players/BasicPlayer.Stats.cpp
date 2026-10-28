@@ -126,14 +126,29 @@ void ABasicPlayer::ApplyVisualFromDataTable(UDataTable* VisualTable)
 			playerData.characterData.characterId);
 	}
 
-	const FCharacterVisualDefinition* Def = CharacterVisualHelper::FindVisualDefinition(
-		VisualTable, ClassSlug, RaceSlug, GenderName);
+	const FCharacterVisualDefinition* Def = nullptr;
+	FName MatchedKey = NAME_None;
+	{
+		Def = CharacterVisualHelper::FindVisualDefinition(
+			VisualTable, ClassSlug, RaceSlug, GenderName, &MatchedKey);
+	}
 
 	if (!Def)
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer::ApplyVisualFromDataTable: No definition for %s_%s_%s"),
 			*ClassSlug, *RaceSlug, *GenderName);
 		return;
+	}
+
+	// A non-exact row (e.g. male mesh for an explicit female request) means
+	// the visual will NOT match the selected gender — loud by design so data
+	// gaps can't hide behind the fallback chain again.
+	if (!GenderName.IsEmpty()
+		&& MatchedKey != CharacterVisualHelper::MakeRowKey(ClassSlug, RaceSlug, GenderName))
+	{
+		UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer::ApplyVisualFromDataTable: gender '%s' resolved to fallback row '%s' (exact %s_%s_%s missing) for charId=%d"),
+			*GenderName, *MatchedKey.ToString(), *ClassSlug, *RaceSlug, *GenderName,
+			playerData.characterData.characterId);
 	}
 
 	const FCharacterVisualData& VisualData = Def->Visual;
@@ -146,7 +161,7 @@ void ABasicPlayer::ApplyVisualFromDataTable(UDataTable* VisualTable)
 
 	if (!SoftMesh.IsNull())
 	{
-		Streamable.RequestAsyncLoad(SoftMesh.ToSoftObjectPath(), [WeakThis, SoftMesh]()
+		Streamable.RequestAsyncLoad(SoftMesh.ToSoftObjectPath(), [WeakThis, SoftMesh, MatchedKey]()
 		{
 			if (!WeakThis.IsValid()) return;
 			ABasicPlayer* Self = WeakThis.Get();
@@ -179,17 +194,27 @@ void ABasicPlayer::ApplyVisualFromDataTable(UDataTable* VisualTable)
 					}
 				}
 			}
+			else
+			{
+				UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer::ApplyVisualFromDataTable: visual mesh failed to load for row '%s' (charId=%d) — keeping previous mesh"),
+					*MatchedKey.ToString(), Self->GetActorId_Implementation());
+			}
 		});
 	}
 
 	if (!SoftAnimBP.IsNull())
 	{
-		Streamable.RequestAsyncLoad(SoftAnimBP.ToSoftObjectPath(), [WeakThis, SoftAnimBP]()
+		Streamable.RequestAsyncLoad(SoftAnimBP.ToSoftObjectPath(), [WeakThis, SoftAnimBP, MatchedKey]()
 		{
 			if (!WeakThis.IsValid()) return;
 			if (UClass* AnimClass = SoftAnimBP.Get())
 			{
 				WeakThis->GetMesh()->SetAnimInstanceClass(AnimClass);
+			}
+			else
+			{
+				UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer::ApplyVisualFromDataTable: AnimBP failed to load for row '%s'"),
+					*MatchedKey.ToString());
 			}
 		});
 	}

@@ -932,6 +932,13 @@ public:
 	/** Helper: returns InteractionRange from CursorInteractionComponent config, or 280 cm. */
 	float GetInteractionRange() const;
 
+	/** Single source of truth for hint visibility: the max distance at which
+	 *  pressing the interact key actually does something for this type.
+	 *  Harvest/inspect share the harvest distance, pickup its own range,
+	 *  everything else (NPC talk, remote inspect) the generic interact range.
+	 *  Hover and proximity hints must both gate on this. */
+	float GetHintRangeForType(EInteractableType Type) const;
+
 	/** Returns true when a UI window is open and should consume mouse input exclusively. */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "World Interaction")
 	bool IsUIBlockingInteraction() const;

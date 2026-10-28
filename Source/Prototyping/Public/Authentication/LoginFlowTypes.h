@@ -203,6 +203,17 @@ struct FLoginErrorTableRow : public FTableRowBase
 
 namespace LoginFlowValidation
 {
+	// Input limits — single source of truth for both the submit-time checks
+	// below and the EditableTextBox MaxLength set in NativeConstruct, so the
+	// field can never hold more than the validator accepts.
+	constexpr int32 MaxLoginLen = 20;
+	constexpr int32 MinLoginLen = 3;
+	constexpr int32 MaxPasswordLen = 100;
+	constexpr int32 MinPasswordLen = 8;
+	constexpr int32 MaxEmailLen = 254;
+	constexpr int32 MaxCharNameLen = 20;
+	constexpr int32 MinCharNameLen = 2;
+
 	/** Login: 3–20 chars, [A-Za-z0-9_]. */
 	inline bool IsLoginValid(const FString& Login, FText& OutError)
 	{
@@ -211,12 +222,12 @@ namespace LoginFlowValidation
 			OutError = NSLOCTEXT("LoginFlow", "LoginEmpty", "Login cannot be empty.");
 			return false;
 		}
-		if (Login.Len() < 3)
+		if (Login.Len() < MinLoginLen)
 		{
 			OutError = NSLOCTEXT("LoginFlow", "LoginTooShort", "Login must be at least 3 characters.");
 			return false;
 		}
-		if (Login.Len() > 20)
+		if (Login.Len() > MaxLoginLen)
 		{
 			OutError = NSLOCTEXT("LoginFlow", "LoginTooLong", "Login must be 20 characters or fewer.");
 			return false;
@@ -239,12 +250,12 @@ namespace LoginFlowValidation
 			OutError = NSLOCTEXT("LoginFlow", "PasswordEmpty", "Password cannot be empty.");
 			return false;
 		}
-		if (Password.Len() < 8)
+		if (Password.Len() < MinPasswordLen)
 		{
 			OutError = NSLOCTEXT("LoginFlow", "PasswordTooShort", "Password must be at least 8 characters.");
 			return false;
 		}
-		if (Password.Len() > 100)
+		if (Password.Len() > MaxPasswordLen)
 		{
 			OutError = NSLOCTEXT("LoginFlow", "PasswordTooLong", "Password must be 100 characters or fewer.");
 			return false;
@@ -252,11 +263,22 @@ namespace LoginFlowValidation
 		return true;
 	}
 
-	/** Email: either empty (optional) or contains '@'. */
+	/** Email: required, must match local@domain.tld (dot in domain required). */
 	inline bool IsEmailValid(const FString& Email, FText& OutError)
 	{
-		if (Email.IsEmpty()) return true;
-		if (!Email.Contains(TEXT("@")))
+		if (Email.IsEmpty())
+		{
+			OutError = NSLOCTEXT("LoginFlow", "EmailEmpty", "Email cannot be empty.");
+			return false;
+		}
+		if (Email.Len() > MaxEmailLen)
+		{
+			OutError = NSLOCTEXT("LoginFlow", "EmailTooLong", "Email address is too long.");
+			return false;
+		}
+		static const FRegexPattern EmailPattern(TEXT("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"));
+		FRegexMatcher Matcher(EmailPattern, Email);
+		if (!Matcher.FindNext())
 		{
 			OutError = NSLOCTEXT("LoginFlow", "EmailInvalid", "Invalid email address.");
 			return false;
@@ -272,12 +294,12 @@ namespace LoginFlowValidation
 			OutError = NSLOCTEXT("LoginFlow", "CharNameEmpty", "Character name cannot be empty.");
 			return false;
 		}
-		if (Name.Len() < 2)
+		if (Name.Len() < MinCharNameLen)
 		{
 			OutError = NSLOCTEXT("LoginFlow", "CharNameTooShort", "Character name must be at least 2 characters.");
 			return false;
 		}
-		if (Name.Len() > 20)
+		if (Name.Len() > MaxCharNameLen)
 		{
 			OutError = NSLOCTEXT("LoginFlow", "CharNameTooLong", "Character name must be 20 characters or fewer.");
 			return false;

@@ -126,9 +126,10 @@ void UAudioManager::InvalidateAudioComponents()
 void UAudioManager::ApplyClassVolume(USoundClass* SoundClass, float Volume)
 {
 	if (!MasterSoundMix || !SoundClass || !WorldContextObject) { return; }
-	// Use a tiny non-zero minimum to prevent the audio engine from
-	// deactivating/virtualizing components when volume reaches 0.
-	const float SafeVolume = FMath::Max(FMath::Clamp(Volume, 0.0f, 1.0f), 0.005f);
+	// True zero means silent-but-playing: the transport keeps running (music
+	// resumes seamlessly on unmute) and the engine virtualizes inaudible
+	// voices itself. Never floor to epsilon — that audibly leaks at "0".
+	const float SafeVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
 	UGameplayStatics::SetSoundMixClassOverride(
 		WorldContextObject, MasterSoundMix, SoundClass,
 		SafeVolume, /*Pitch*/ 1.0f, /*FadeInTime*/ 0.0f,

@@ -146,6 +146,14 @@ void ABasicPlayer::CheckForNPC()
         UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: CheckForNPC hit NPC '%s' but IsNPCInteractable() is false"), *HitNPC->GetNPCName());
     }
 
+    // Talk range == click range (GetInteractionRange). The crosshair trace
+    // reaches 1500 units, but F must not open dialogue the click handler
+    // would refuse — and the hint must not promise it either.
+    if (HitNPC && FVector::Dist(GetActorLocation(), HitNPC->GetActorLocation()) > GetInteractionRange())
+    {
+        HitNPC = nullptr;
+    }
+
     TrackedNPC = (HitNPC && HitNPC->IsNPCInteractable()) ? HitNPC : nullptr;
 }
 
@@ -222,8 +230,9 @@ void ABasicPlayer::OnInteractInput()
 		}
 	}
 
-	// Priority 4: NPC dialogue
-	if (TrackedNPC)
+	// Priority 4: NPC dialogue (range-gated like the click path: no
+	// cross-map talks — the hint is only shown inside this radius too).
+	if (TrackedNPC && FVector::Dist(GetActorLocation(), TrackedNPC->GetActorLocation()) <= GetInteractionRange())
 	{
 		UDialogueManager* DlgManager = MyGameInstance->GetDialogueManager();
 		if (DlgManager)

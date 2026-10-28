@@ -38,6 +38,18 @@
 #include "Gameplay/SkillShop/SkillShopManager.h"
 #include "Gameplay/Trade/TradeManager.h"
 #include "UI/PlayerStatsWidget.h"
+
+// Window widgets use a mix of Visible / SelfHitTestInvisible / HitTestInvisible
+// (set by the widget or its Blueprint), so "open" must never be tested by
+// comparing against one exact enum value — that silently desyncs the flag
+// (e.g. stats set Visible while the check wanted SelfHitTestInvisible) and
+// breaks everything downstream (camera zoom, click-through, cursor mode).
+static bool IsEffectivelyVisible(const UWidget* Widget)
+{
+	return IsValid(Widget)
+		&& Widget->GetVisibility() != ESlateVisibility::Collapsed
+		&& Widget->GetVisibility() != ESlateVisibility::Hidden;
+}
 #include "UI/BestiaryWidget.h"
 #include "UI/ChatWidget.h"
 #include "UI/GameMenuBarWidget.h"
@@ -218,7 +230,7 @@ void UUIManager::OnEquipmentVisibilityChanged(bool bIsVisible)
 
 void UUIManager::OnPlayerStatsVisibilityChanged()
 {
-	bPlayerStatsVisible = PlayerStatsWidget && PlayerStatsWidget->GetVisibility() == ESlateVisibility::SelfHitTestInvisible;
+	bPlayerStatsVisible = IsEffectivelyVisible(PlayerStatsWidget);
 	UpdateCursorAndInputMode();
 	
 	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Player stats visibility synced: %s"), 
@@ -227,14 +239,14 @@ void UUIManager::OnPlayerStatsVisibilityChanged()
 
 void UUIManager::OnTitlesVisibilityChanged()
 {
-	bTitlesVisible = TitlesWidget && TitlesWidget->GetVisibility() == ESlateVisibility::Visible;
+	bTitlesVisible = IsEffectivelyVisible(TitlesWidget);
 	UpdateCursorAndInputMode();
 	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Titles visibility synced: %s"), bTitlesVisible ? TEXT("Visible") : TEXT("Hidden"));
 }
 
 void UUIManager::OnReputationVisibilityChanged()
 {
-	bReputationVisible = ReputationWidget && ReputationWidget->GetVisibility() == ESlateVisibility::Visible;
+	bReputationVisible = IsEffectivelyVisible(ReputationWidget);
 	UpdateCursorAndInputMode();
 	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Reputation visibility synced: %s"), bReputationVisible ? TEXT("Visible") : TEXT("Hidden"));
 }

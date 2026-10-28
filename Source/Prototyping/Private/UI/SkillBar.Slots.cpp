@@ -9,7 +9,6 @@
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/UniformGridSlot.h"
 #include "Framework/Application/SlateApplication.h"
-#include "Kismet/GameplayStatics.h"
 
 void USkillBarWidget::BarInitialize(UMyGameInstance* InGameInstance)
 {
@@ -198,7 +197,8 @@ void USkillBarWidget::CastSkillFromSlot(int32 SlotIndex)
         FPlayerSkillData SkillData = SkillManager->GetSkillData(SkillSlug);
         if (!SkillData.definitionData.skillOnCooldownSound.IsNull())
         {
-            UGameplayStatics::PlaySound2D(this, SkillData.definitionData.skillOnCooldownSound.LoadSynchronous());
+            if (GameInstance && GameInstance->AudioManager)
+                GameInstance->AudioManager->PlayUISoundAsset(SkillData.definitionData.skillOnCooldownSound.LoadSynchronous());
         }
         else if (GameInstance && GameInstance->AudioManager)
         {
@@ -213,7 +213,8 @@ void USkillBarWidget::CastSkillFromSlot(int32 SlotIndex)
         FPlayerSkillData SkillData = SkillManager->GetSkillData(SkillSlug);
         if (!SkillData.definitionData.notEnoughManaSound.IsNull())
         {
-            UGameplayStatics::PlaySound2D(this, SkillData.definitionData.notEnoughManaSound.LoadSynchronous());
+            if (GameInstance && GameInstance->AudioManager)
+                GameInstance->AudioManager->PlayUISoundAsset(SkillData.definitionData.notEnoughManaSound.LoadSynchronous());
         }
         else if (GameInstance && GameInstance->AudioManager)
         {

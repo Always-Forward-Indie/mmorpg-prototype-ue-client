@@ -319,6 +319,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Audio|UI Sounds")
 	void PlayUISound(EUISoundEvent InEvent);
 
+	/** Play an arbitrary asset through the UI sound class (UIClass, else
+	 *  SFXClass) so volume sliders apply. Use for per-skill UI overrides and
+	 *  any other code-driven UI feedback instead of raw PlaySound2D, which
+	 *  bypasses the mix. No-op on null. */
+	UFUNCTION(BlueprintCallable, Category = "Audio|UI Sounds")
+	void PlayUISoundAsset(USoundBase* Sound);
+
 	// -----------------------------------------------------------------------
 	// Settings persistence
 	// -----------------------------------------------------------------------

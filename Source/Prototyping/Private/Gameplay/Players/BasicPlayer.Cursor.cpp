@@ -278,9 +278,40 @@ void ABasicPlayer::DispatchCursorInteract(AActor* Target, EInteractableType Type
 
 void ABasicPlayer::HandleInteractiveHoverChanged(AActor* OldTarget, AActor* NewTarget, EInteractableType NewType)
 {
-	if (UIManager)
+	if (!UIManager) return;
+
+	// The hint promises that pressing the key works — hide it when the target
+	// is beyond the range the interact handler actually honors.
+	if (IsValid(NewTarget) && NewType != EInteractableType::None)
 	{
-		UIManager->ShowInteractionHint(NewType);
+		const float Dist = FVector::Dist(GetActorLocation(), NewTarget->GetActorLocation());
+		if (Dist > GetHintRangeForType(NewType))
+		{
+			UIManager->HideInteractionHint();
+			return;
+		}
+	}
+	UIManager->ShowInteractionHint(NewType);
+}
+
+float ABasicPlayer::GetHintRangeForType(EInteractableType Type) const
+{
+	switch (Type)
+	{
+	case EInteractableType::MOB_Harvestable:
+	case EInteractableType::MOB_Harvested:
+		if (MyGameInstance)
+		{
+			if (UHarvestManager* HMgr = MyGameInstance->GetHarvestManager())
+				return HMgr->GetMaxHarvestDistance();
+		}
+		return 180.f;
+	case EInteractableType::DroppedItem:
+		return CursorInteractionComponent ? CursorInteractionComponent->GetItemPickupRange() : 180.f;
+	case EInteractableType::NPC:
+	case EInteractableType::RemotePlayer:
+	default:
+		return GetInteractionRange();
 	}
 }
 
@@ -335,7 +366,9 @@ void ABasicPlayer::UpdateProximityHint()
 
 	if (UNPCManager* NpcMgr = MyGameInstance ? MyGameInstance->GetNPCManager() : nullptr)
 	{
-		const float R = 250.f;
+		// Same range the interact handler honors (GetHintRangeForType) — the
+		// hint must never promise an interaction F cannot perform.
+		const float R = GetHintRangeForType(EInteractableType::NPC);
 		if (ABasicNPC* NPC = NpcMgr->GetNearestNPC(MyLoc, R))
 		{
 			const float D = FVector::Dist(MyLoc, NPC->GetActorLocation());

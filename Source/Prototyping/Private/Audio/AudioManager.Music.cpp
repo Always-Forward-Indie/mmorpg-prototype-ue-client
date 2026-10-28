@@ -151,28 +151,35 @@ void UAudioManager::PlayUISound(EUISoundEvent InEvent)
 	{
 		if (Entry.Event == InEvent && Entry.Sound)
 		{
-			USoundClass* TargetClass = UIClass ? UIClass : SFXClass;
-			if (TargetClass)
-			{
-				// SpawnSound2D with bAutoActivate=false so we can set the class
-				// override BEFORE Play() — post-play overrides are ignored by the
-				// audio engine.
-				UAudioComponent* AC = UGameplayStatics::SpawnSound2D(
-					WorldContextObject, Entry.Sound,
-					1.0f, 1.0f, 0.0f, nullptr,
-					/*bAutoDestroy=*/true, /*bAutoActivate=*/false);
-				if (AC)
-				{
-					AC->SoundClassOverride = TargetClass;
-					AC->Play();
-				}
-			}
-			else
-			{
-				UGameplayStatics::PlaySound2D(WorldContextObject, Entry.Sound);
-			}
+			PlayUISoundAsset(Entry.Sound);
 			return;
 		}
+	}
+}
+
+void UAudioManager::PlayUISoundAsset(USoundBase* Sound)
+{
+	if (!Sound) return;
+
+	USoundClass* TargetClass = UIClass ? UIClass : SFXClass;
+	if (TargetClass)
+	{
+		// SpawnSound2D with bAutoActivate=false so we can set the class
+		// override BEFORE Play() — post-play overrides are ignored by the
+		// audio engine.
+		UAudioComponent* AC = UGameplayStatics::SpawnSound2D(
+			WorldContextObject, Sound,
+			1.0f, 1.0f, 0.0f, nullptr,
+			/*bAutoDestroy=*/true, /*bAutoActivate=*/false);
+		if (AC)
+		{
+			AC->SoundClassOverride = TargetClass;
+			AC->Play();
+		}
+	}
+	else
+	{
+		UGameplayStatics::PlaySound2D(WorldContextObject, Sound);
 	}
 }
 

@@ -155,8 +155,23 @@ void UHarvestManager::HandleLootPickupResponse(const FCorpseLootPickupResponseSt
 					}
 				}
 
-				// Add to local inventory (this will trigger UI updates)
-				InventoryManager->AddItemToLocalInventory(InventoryItem);
+				// The server emits INVENTORY_UPDATE (absolute row state) and this
+				// response in the same millisecond with no guaranteed order.
+				// The delta owns existing rows; the optimistic add only fills
+				// the unknown (brand-new template) so a delta-first arrival
+				// can never double-add. Either order converges on the
+				// authoritative quantity; the toast (server quantity) is the
+				// instant feedback.
+				if (!InventoryManager->HasItem(PickedUpItem.itemId))
+				{
+					// Add to local inventory (this will trigger UI updates)
+					InventoryManager->AddItemToLocalInventory(InventoryItem);
+				}
+				else
+				{
+					UE_LOG(LogGameplay, Verbose, TEXT("HarvestManager: Skipping optimistic add for item %d - authoritative delta owns the row"),
+						PickedUpItem.itemId);
+				}
 			}
 		}
 	}

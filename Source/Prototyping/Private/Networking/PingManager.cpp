@@ -154,7 +154,7 @@ void UPingManager::SendPingRequestToServer(EServerType ServerType)
 	}
 	if (!bConnected)
 	{
-		UE_LOG(LogPing, Warning, TEXT("PingManager: %s not connected, skipping ping request"),
+		UE_LOG(LogPing, Verbose, TEXT("PingManager: %s not connected, skipping ping request"),
 			*TimeSyncService->GetServerTypeName(ServerType));
 		return;
 	}
@@ -233,7 +233,7 @@ void UPingManager::SendPingRequestToServer(EServerType ServerType)
 			break;
 	}
 
-	UE_LOG(LogPing, Warning, TEXT("PingManager: Sent ping request %s to %s (t0=%lld)"),
+	UE_LOG(LogPing, Verbose, TEXT("PingManager: Sent ping request %s to %s (t0=%lld)"),
 		*RequestId, *TimeSyncService->GetServerTypeName(ServerType), ClientSendMs);
 }
 
@@ -254,10 +254,20 @@ void UPingManager::UpdatePingDisplay()
 	bool bGameValid = TimeSyncService->IsTimeSyncValid(EServerType::GameServer);
 	bool bChunkValid = TimeSyncService->IsTimeSyncValid(EServerType::ChunkServer);
 	
-	// Format and display Login Server ping
-	if (bLoginValid && LoginServerPing > 0.0f)
+	// Format ping values: validity alone decides availability. A valid but
+	// sub-resolution latency displays as "<1 ms" instead of "-- ms" so that
+	// fast local links don't flicker into the unavailable state.
+	auto FormatPing = [](float PingMs) -> FString
 	{
-		FString LoginPingText = FString::Printf(TEXT("%.1f ms"), LoginServerPing);
+		if (PingMs <= 0.0f)
+			return TEXT("<1 ms");
+		return FString::Printf(TEXT("%.1f ms"), PingMs);
+	};
+
+	// Format and display Login Server ping
+	if (bLoginValid)
+	{
+		const FString LoginPingText = FormatPing(LoginServerPing);
 		MonitorStatsWidget->SetLoginServerPingValue(LoginPingText);
 		UE_LOG(LogPing, VeryVerbose, TEXT("PingManager: Updated Login Server ping: %s"), *LoginPingText);
 	}
@@ -269,9 +279,9 @@ void UPingManager::UpdatePingDisplay()
 	}
 	
 	// Format and display Game Server ping
-	if (bGameValid && GameServerPing > 0.0f)
+	if (bGameValid)
 	{
-		FString GamePingText = FString::Printf(TEXT("%.1f ms"), GameServerPing);
+		const FString GamePingText = FormatPing(GameServerPing);
 		MonitorStatsWidget->SetGameServerPingValue(GamePingText);
 		UE_LOG(LogPing, VeryVerbose, TEXT("PingManager: Updated Game Server ping: %s"), *GamePingText);
 	}
@@ -283,9 +293,9 @@ void UPingManager::UpdatePingDisplay()
 	}
 	
 	// Format and display Chunk Server ping
-	if (bChunkValid && ChunkServerPing > 0.0f)
+	if (bChunkValid)
 	{
-		FString ChunkPingText = FString::Printf(TEXT("%.1f ms"), ChunkServerPing);
+		const FString ChunkPingText = FormatPing(ChunkServerPing);
 		MonitorStatsWidget->SetChunkServerPingValue(ChunkPingText);
 		UE_LOG(LogPing, VeryVerbose, TEXT("PingManager: Updated Chunk Server ping: %s"), *ChunkPingText);
 	}

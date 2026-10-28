@@ -31,6 +31,12 @@ struct PROTOTYPING_API FInventoryRules
 	 * id==0 row of the same template is the id-sync case (update in place,
 	 * never duplicate). Rows at quantity<=0 vanish (server deletes at 0).
 	 * Full loads still replace wholesale; this only merges mutations.
+	 *
+	 * Row shapes: a FULL row carries statics (slug/itemSlug set) and replaces
+	 * the cached row wholesale (server-authoritative). A SLIM row carries only
+	 * instance state (id/itemId/quantity/...) and must never wipe statics that
+	 * a snapshot or local enrichment already provided (e.g. harvest pickup
+	 * enriches name/slug locally before the slim INVENTORY_UPDATE lands).
 	 */
 	static void ApplyInventoryDelta(TArray<FInventoryItemStruct>& Items,
 		const TArray<FInventoryItemStruct>& Changed, const TArray<int32>& RemovedIds)
@@ -62,14 +68,48 @@ struct PROTOTYPING_API FInventoryRules
 			}
 			if (Existing)
 			{
-				*Existing = Ch;
+				MergeChangedRow(*Existing, Ch);
 			}
 			else
 			{
-				Items.Add(Ch);
+				FInventoryItemStruct Fresh = Ch;
+				NormalizeSlugs(Fresh);
+				Items.Add(Fresh);
 			}
 		}
 		Items.RemoveAll([](const FInventoryItemStruct& It) { return It.quantity <= 0; });
+	}
+
+	/**
+	 * Merge one changed row onto a cached row. Full rows (statics present)
+	 * replace wholesale; slim rows update instance state only so display
+	 * statics never regress to empty.
+	 */
+	static void MergeChangedRow(FInventoryItemStruct& Existing, const FInventoryItemStruct& Ch)
+	{
+		if (!Ch.slug.IsEmpty() || !Ch.itemSlug.IsEmpty())
+		{
+			Existing = Ch;
+			NormalizeSlugs(Existing);
+			return;
+		}
+		// Slim row: instance state is authoritative, statics are kept.
+		if (Ch.id > 0)
+			Existing.id = Ch.id;
+		Existing.quantity = Ch.quantity;
+		Existing.slotIndex = Ch.slotIndex;
+		Existing.durabilityCurrent = Ch.durabilityCurrent;
+		Existing.is_equipped = Ch.is_equipped;
+		Existing.killCount = Ch.killCount;
+	}
+
+	/** Ensure slug/itemSlug mirror each other so every resolver works. */
+	static void NormalizeSlugs(FInventoryItemStruct& Row)
+	{
+		if (Row.slug.IsEmpty() && !Row.itemSlug.IsEmpty())
+			Row.slug = Row.itemSlug;
+		else if (Row.itemSlug.IsEmpty() && !Row.slug.IsEmpty())
+			Row.itemSlug = Row.slug;
 	}
 };
 

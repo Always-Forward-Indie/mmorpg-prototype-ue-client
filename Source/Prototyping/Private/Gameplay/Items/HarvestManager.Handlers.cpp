@@ -4,6 +4,8 @@
 #include "MyGameInstance.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "Utils/JSONParser.h"
+#include "Utils/NetCore/HarvestRules.h"
+#include "Services/LocalizationSubsystem.h"
 #include "Engine/World.h"
 #include "Gameplay/Mobs/BasicMOB.h"
 #include "Gameplay/Mobs/MOBManager.h"
@@ -102,17 +104,57 @@ void UHarvestManager::HandleLootPickupResponse(const FCorpseLootPickupResponseSt
 		{
 			for (const FHarvestItemStruct& PickedUpItem : PickupData.pickedUpItems)
 			{
-				// Convert HarvestItemStruct to InventoryItemStruct
+				// Convert HarvestItemStruct to InventoryItemStruct.
+				// The server omits display strings (S1a: only itemId/itemSlug/
+				// rarityId travel), so resolve name/description locally by slug
+				// (same source the loot window and toast already use). Packet
+				// values win when present.
 				FInventoryItemStruct InventoryItem;
 				InventoryItem.itemId = PickedUpItem.itemId;
 				InventoryItem.quantity = PickedUpItem.quantity;
-				InventoryItem.name = PickedUpItem.name;
 				InventoryItem.slug = PickedUpItem.itemSlug;
+				InventoryItem.itemSlug = PickedUpItem.itemSlug;
 				InventoryItem.description = PickedUpItem.description;
 				InventoryItem.type = PickedUpItem.itemType;
-				InventoryItem.rarity = PickedUpItem.rarityName;
+				InventoryItem.itemTypeSlug = PickedUpItem.itemTypeSlug;
+				InventoryItem.rarityId = PickedUpItem.rarityId;
+				InventoryItem.rarity = !PickedUpItem.rarityName.IsEmpty()
+					? PickedUpItem.rarityName
+					: FHarvestRules::RaritySlugForId(PickedUpItem.rarityId);
+				InventoryItem.raritySlug = FHarvestRules::RaritySlugForId(PickedUpItem.rarityId);
 				InventoryItem.weight = PickedUpItem.weight;
-				
+				InventoryItem.isHarvestItem = true;
+
+				if (!InventoryItem.slug.IsEmpty() && gameInstance)
+				{
+					if (ULocalizationSubsystem* Loc = gameInstance->GetSubsystem<ULocalizationSubsystem>())
+					{
+						if (InventoryItem.name.IsEmpty())
+							InventoryItem.name = PickedUpItem.name;
+						if (InventoryItem.name.IsEmpty() || InventoryItem.name == InventoryItem.slug)
+						{
+							const FText LocName = Loc->GetItemDisplayName(InventoryItem.slug);
+							if (!LocName.IsEmpty() && LocName.ToString() != InventoryItem.slug)
+								InventoryItem.name = LocName.ToString();
+						}
+						if (InventoryItem.name.IsEmpty())
+						{
+							InventoryItem.name = JSONParser::HumanizeSlugForDisplay(InventoryItem.slug);
+						}
+						if (InventoryItem.description.IsEmpty())
+						{
+							const FText LocDesc = Loc->GetItemDescription(InventoryItem.slug);
+							if (!LocDesc.IsEmpty())
+								InventoryItem.description = LocDesc.ToString();
+						}
+						if (InventoryItem.type.IsEmpty() && !InventoryItem.itemTypeSlug.IsEmpty())
+						{
+							InventoryItem.type = Loc->GetItemTypeDisplayName(InventoryItem.itemTypeSlug).ToString();
+							InventoryItem.itemTypeName = InventoryItem.type;
+						}
+					}
+				}
+
 				// Add to local inventory (this will trigger UI updates)
 				InventoryManager->AddItemToLocalInventory(InventoryItem);
 			}

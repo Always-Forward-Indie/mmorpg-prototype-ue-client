@@ -266,6 +266,20 @@ void UInventoryManager::ProcessInventoryUpdate(const FString& JsonData)
 
 		FInventoryRules::ApplyInventoryDelta(CurrentInventory.items, Changed, Removed);
 		ResolveUnresolvedRows();
+		// Never display undecodable rows: a row with a template id but no
+		// slug can resolve neither a name nor an icon. Withhold the broadcast
+		// and ask for a full snapshot (full rows carry slugs) instead of
+		// showing blanks. No loop risk: snapshots don't re-trigger this path
+		// and redelivered versions are dropped as stale above.
+		const bool bHasUndecodable = CurrentInventory.items.ContainsByPredicate(
+			[](const FInventoryItemStruct& Item) { return Item.itemId > 0 && Item.slug.IsEmpty() && Item.itemSlug.IsEmpty(); });
+		if (bHasUndecodable)
+		{
+			UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: INVENTORY_UPDATE v%lld left undecodable rows — requesting full refresh"),
+				IncomingVersion);
+			RequestInventoryData(OwnerCharacterId > 0 ? OwnerCharacterId : CharacterId);
+			return;
+		}
 		// S15a: baseline advances only on accepted deltas (gap path returns
 		// early above; pre-token version-0 deltas keep baseline 0).
 		CurrentInventory.inventoryVersion = IncomingVersion;

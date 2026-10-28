@@ -5,6 +5,7 @@
 #include "Misc/Guid.h"
 #include "HAL/CriticalSection.h"
 #include "Utils/NetCore/TimeSyncMath.h"
+#include "Utils/NetCore/SampleRule.h"
 
 FString UTimeSyncService::GenerateAndRegisterSyncRequest(EServerType ServerType, int64 InClientSendMs)
 {
@@ -21,7 +22,10 @@ FString UTimeSyncService::GenerateAndRegisterSyncRequest(EServerType ServerType,
     
     // Register pending request
     int64 TimeoutTime = CurrentTime + RequestTimeoutMs;
-    PendingRequests.Add(FPendingSyncRequest(RequestId, ServerType, CurrentTime, TimeoutTime));
+    const int32 PendingIdx = PendingRequests.Add(FPendingSyncRequest(RequestId, ServerType, CurrentTime, TimeoutTime));
+    // Pin the high-resolution send moment for sub-ms RTT measurement
+    // (perf-counter epoch — only the delta against receive time is used).
+    PendingRequests[PendingIdx].HiResSendSec = FPlatformTime::Seconds();
     
     UE_LOG(LogPing, Verbose, TEXT("TimeSyncService: Generated request ID for %s: %s at %lld"), 
         *GetServerTypeName(ServerType), *RequestId, CurrentTime);
@@ -42,6 +46,13 @@ bool UTimeSyncService::UpdateTimeSyncData(const FString& RequestId, int64 Server
 
     // Get current time for client receive timestamp
     int64 ClientRecvMs = GetCurrentClientTimeMs();
+
+    // Sub-ms RTT from the high-resolution send pin. Falls back to the integer
+    // t3-t0 when the request predates the hi-res pin (never in practice).
+    const double HiResSendSec = PendingRequest->HiResSendSec;
+    const double HiResRTTMs = (HiResSendSec > 0.0)
+        ? (FPlatformTime::Seconds() - HiResSendSec) * 1000.0
+        : static_cast<double>(ClientRecvMs - PendingRequest->ClientSendMs);
     
     // Create new sync data with NTP-style timestamps
     FTimeSyncData NewSyncData;
@@ -51,22 +62,32 @@ bool UTimeSyncService::UpdateTimeSyncData(const FString& RequestId, int64 Server
     NewSyncData.ClientRecvMs = ClientRecvMs;                  // t3
     NewSyncData.ServerType = PendingRequest->ServerType;
 
-    // Calculate RTT and sample quality
-    NewSyncData.RoundTripTimeMs = static_cast<float>(NewSyncData.ClientRecvMs - NewSyncData.ClientSendMs);
+    // Calculate RTT and sample quality with the hi-res measurement so that
+    // sub-ms/localhost round trips are not quantized to zero.
+    NewSyncData.RoundTripTimeMs = static_cast<float>(FMath::Max(0.0, HiResRTTMs));
     NewSyncData.SampleQuality = CalculateSampleQuality(NewSyncData);
 
-    // Validate sample quality
-    if (!IsSampleValid(NewSyncData))
+    // Validate sample quality (hi-res variant keeps the pinned ms-quantum
+    // semantics for WAN while accepting sub-quantum localhost samples;
+    // pre-pin requests without a hi-res stamp fall back to the ms rule).
+    const bool bSampleValid = (HiResSendSec > 0.0)
+        ? FSampleRule::IsValidSampleHiRes(HiResRTTMs, ServerRecvMs, ServerSendMs,
+            MaxValidRTTMs, MaxValidServerProcessingMs)
+        : IsSampleValid(NewSyncData);
+    if (!bSampleValid)
     {
-        UE_LOG(LogPing, Warning, TEXT("TimeSyncService: Discarding invalid sample for %s - RTT: %.1fms, Quality: %.1f"),
-            *GetServerTypeName(PendingRequest->ServerType), NewSyncData.RoundTripTimeMs, NewSyncData.SampleQuality);
+        UE_LOG(LogPing, Warning, TEXT("TimeSyncService: Discarding invalid sample for %s - RTT: %.3fms, Quality: %.1f"),
+            *GetServerTypeName(PendingRequest->ServerType), HiResRTTMs, NewSyncData.SampleQuality);
         RemovePendingRequest(RequestId);
         return false;
     }
 
-    // Calculate NTP-style offset and latency with high precision
+    // Calculate NTP-style offset and latency with high precision.
+    // Latency clamps at zero: with ms-quantized server timestamps the formula
+    // can dip fractionally negative on localhost; that means "below clock
+    // resolution", not a clock issue (rejected samples never reach here).
     NewSyncData.TimeOffsetMs = CalculateNTPOffset(NewSyncData);
-    NewSyncData.NetworkLatencyMs = CalculateNTPLatency(NewSyncData);
+    NewSyncData.NetworkLatencyMs = FMath::Max(0.0f, CalculateNTPLatency(NewSyncData));
 
     // Check if this is a "near-best" sample worth using for filtering
     if (!IsNearBestSample(PendingRequest->ServerType, NewSyncData))

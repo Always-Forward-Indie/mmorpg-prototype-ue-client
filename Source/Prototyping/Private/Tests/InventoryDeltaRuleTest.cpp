@@ -62,5 +62,58 @@ bool FInventoryDeltaRuleTest::RunTest(const FString& Parameters)
         R::ApplyInventoryDelta(Items, {}, { 999 });
         TestEqual(TEXT("untouched"), Items.Num(), 1);
     }
+    // Slim delta never wipes enriched statics: a locally enriched row
+    // (slug/name from harvest pickup) survives the slim INVENTORY_UPDATE.
+    {
+        FInventoryItemStruct Enriched = Row(0, 63, 1);
+        Enriched.slug = TEXT("undead_dust");
+        Enriched.itemSlug = TEXT("undead_dust");
+        Enriched.name = TEXT("Undead Dust");
+        TArray<FInventoryItemStruct> Items = { Enriched };
+        R::ApplyInventoryDelta(Items, { Row(0, 63, 1) }, {});
+        TestEqual(TEXT("still one"), Items.Num(), 1);
+        TestEqual(TEXT("slug kept"), Items[0].slug, FString(TEXT("undead_dust")));
+        TestEqual(TEXT("name kept"), Items[0].name, FString(TEXT("Undead Dust")));
+    }
+    // Slim id-sync keeps statics while adopting the assigned instance id.
+    {
+        FInventoryItemStruct Enriched = Row(0, 63, 1);
+        Enriched.slug = TEXT("undead_dust");
+        Enriched.name = TEXT("Undead Dust");
+        TArray<FInventoryItemStruct> Items = { Enriched };
+        FInventoryItemStruct Synced = Row(600, 63, 1);
+        R::ApplyInventoryDelta(Items, { Synced }, {});
+        TestEqual(TEXT("no duplicate on sync"), Items.Num(), 1);
+        TestEqual(TEXT("id adopted"), Items[0].id, 600);
+        TestEqual(TEXT("slug kept on sync"), Items[0].slug, FString(TEXT("undead_dust")));
+        TestEqual(TEXT("name kept on sync"), Items[0].name, FString(TEXT("Undead Dust")));
+    }
+    // Slim delta never regresses an assigned id to 0.
+    {
+        FInventoryItemStruct Assigned = Row(600, 63, 1);
+        Assigned.slug = TEXT("undead_dust");
+        TArray<FInventoryItemStruct> Items = { Assigned };
+        // A legacy id==0 slim row for the same template is added alongside
+        // (existing rule) and must not touch the assigned row.
+        R::ApplyInventoryDelta(Items, { Row(0, 63, 2) }, {});
+        TestEqual(TEXT("two rows"), Items.Num(), 2);
+        TestEqual(TEXT("assigned id kept"), Items[0].id, 600);
+        TestEqual(TEXT("assigned slug kept"), Items[0].slug, FString(TEXT("undead_dust")));
+    }
+    // Full row (statics present) replaces wholesale, incl. renames.
+    {
+        FInventoryItemStruct Enriched = Row(600, 63, 1);
+        Enriched.slug = TEXT("old_slug");
+        Enriched.name = TEXT("Old Name");
+        TArray<FInventoryItemStruct> Items = { Enriched };
+        FInventoryItemStruct Full = Row(600, 63, 3);
+        Full.slug = TEXT("undead_dust");
+        Full.name = TEXT("Undead Dust");
+        R::ApplyInventoryDelta(Items, { Full }, {});
+        TestEqual(TEXT("one row after full"), Items.Num(), 1);
+        TestEqual(TEXT("qty from full"), Items[0].quantity, 3);
+        TestEqual(TEXT("name from full"), Items[0].name, FString(TEXT("Undead Dust")));
+        TestEqual(TEXT("itemSlug mirrored"), Items[0].itemSlug, FString(TEXT("undead_dust")));
+    }
     return true;
 }

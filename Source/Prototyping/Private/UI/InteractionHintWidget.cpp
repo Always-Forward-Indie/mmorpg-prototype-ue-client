@@ -2,11 +2,16 @@
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
+#include "Gameplay/Players/BasicPlayer.h"
 
 void UInteractionHintWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
+	// The widget is created by UIManager without a link to the player, so
+	// resolve the binding here (and again lazily in ShowHint in case the
+	// pawn was not possessed yet at construct time).
 	ResolveKeyBinding();
 
 	if (HintText)
@@ -18,6 +23,20 @@ void UInteractionHintWidget::NativeConstruct()
 void UInteractionHintWidget::ResolveKeyBinding()
 {
 	ResolvedKeyBinding.Empty();
+
+	// Single source of truth: the possessed player's InteractAction.
+	// The widget is created by UIManager with no link to the player, so
+	// resolve it here (covers both BP-assigned actions and code defaults).
+	if (!InteractAction)
+	{
+		if (APawn* Pawn = GetOwningPlayerPawn())
+		{
+			if (const ABasicPlayer* Player = Cast<ABasicPlayer>(Pawn))
+			{
+				InteractAction = Player->InteractAction;
+			}
+		}
+	}
 
 	if (!InteractAction) return;
 
@@ -50,10 +69,19 @@ void UInteractionHintWidget::ShowHint(EInteractableType Type, bool bShowHotkey)
 	}
 
 	FString Text = Template.ToString();
-	if (!ResolvedKeyBinding.IsEmpty())
+
+	// Re-resolve lazily: at NativeConstruct the pawn may not be possessed yet.
+	if (ResolvedKeyBinding.IsEmpty())
 	{
-		Text = Text.Replace(TEXT("{key}"), bShowHotkey ? *ResolvedKeyBinding : TEXT(""));
+		ResolveKeyBinding();
 	}
+
+	// The {key} template must never leak to the screen. If the binding is
+	// genuinely unknown, fall back to the documented default ("F").
+	const FString KeyLabel = !ResolvedKeyBinding.IsEmpty()
+		? ResolvedKeyBinding
+		: FString(TEXT("F"));
+	Text = Text.Replace(TEXT("{key}"), bShowHotkey ? *KeyLabel : TEXT(""));
 	Text = Text.TrimStartAndEnd().Replace(TEXT("  "), TEXT(" "));
 
 	HintText->SetText(FText::FromString(Text));

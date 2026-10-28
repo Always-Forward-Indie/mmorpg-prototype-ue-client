@@ -48,6 +48,47 @@ struct PROTOTYPING_API FSampleRule
 	}
 
 	/**
+	 * Hi-res variant: RTT measured with sub-ms precision (FPlatformTime),
+	 * server timestamps stay ms integers. Below the 2ms quantum floor the
+	 * integer server processing cannot resolve a processing/RTT ratio, so
+	 * only the ratio gate is relaxed there (processing beyond RTT + 1ms
+	 * slop still fails as a clock issue). Every other bound matches
+	 * IsValidSample. Used by UTimeSyncService on all networks; the ms
+	 * variant above keeps its pinned integer-quantum semantics.
+	 */
+	static bool IsValidSampleHiRes(double RttMs, int64 T1, int64 T2,
+		float MaxRTTMs = 1000.0f, float MaxProcessingMs = 100.0f, float MaxRatio = 0.8f)
+	{
+		// True-zero RTT is a clock anomaly, not a fast network.
+		if (!(RttMs >= 0.001) || RttMs > MaxRTTMs)
+		{
+			return false;
+		}
+
+		const double ServerProcessing = static_cast<double>(T2 - T1);
+
+		// Server processing bounds.
+		if (ServerProcessing < 0.0 || ServerProcessing > MaxProcessingMs)
+		{
+			return false;
+		}
+
+		// Ratio gate only where it is measurable (RTT at/above quantum floor).
+		if (RttMs >= 2.0 && ServerProcessing / RttMs > MaxRatio)
+		{
+			return false;
+		}
+
+		// Negative NTP latency beyond 1ms quantum slop indicates clock issues.
+		if (RttMs + 1.0 < ServerProcessing)
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
 	 * Near-best filter: accept the sample when history is thin (< 3),
 	 * else require it within Tolerance of the best (lowest) RTT over
 	 * the trailing Window samples (best seeds from the new sample,

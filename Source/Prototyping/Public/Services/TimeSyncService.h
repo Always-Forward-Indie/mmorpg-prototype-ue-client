@@ -92,6 +92,12 @@ struct FPendingSyncRequest
     UPROPERTY()
     int64 TimeoutMs = 0;
 
+    // High-resolution send timestamp (FPlatformTime::Seconds, perf-counter
+    // epoch — deltas only) for sub-ms RTT measurement. The integer
+    // ClientSendMs above stays the wire t0 for the NTP formula.
+    UPROPERTY()
+    double HiResSendSec = 0.0;
+
     FPendingSyncRequest()
     {
         RequestId = TEXT("");

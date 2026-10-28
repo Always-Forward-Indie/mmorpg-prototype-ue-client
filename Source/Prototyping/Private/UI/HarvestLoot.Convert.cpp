@@ -9,6 +9,7 @@
 #include "UI/ItemTooltipWidget.h"
 #include "Engine/Engine.h"
 #include "Gameplay/Items/HarvestManager.h"
+#include "Utils/NetCore/HarvestRules.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/CanvasPanelSlot.h"
 
@@ -24,16 +25,8 @@ FInventoryItemStruct UHarvestLootWidget::ConvertHarvestItemToInventoryItem(const
 	InventoryItem.type = HarvestItem.itemType;
 	InventoryItem.weight = HarvestItem.weight;
 	
-	// Convert rarity from ID to string
-	switch (HarvestItem.rarityId)
-	{
-		case 1: InventoryItem.rarity = TEXT("common"); break;
-		case 2: InventoryItem.rarity = TEXT("uncommon"); break;
-		case 3: InventoryItem.rarity = TEXT("rare"); break;
-		case 4: InventoryItem.rarity = TEXT("epic"); break;
-		case 5: InventoryItem.rarity = TEXT("legendary"); break;
-		default: InventoryItem.rarity = TEXT("common"); break;
-	}
+	// Single source of truth for the rarity mapping (FHarvestRules).
+	InventoryItem.rarity = FHarvestRules::RaritySlugForId(HarvestItem.rarityId);
 	
 	return InventoryItem;
 }

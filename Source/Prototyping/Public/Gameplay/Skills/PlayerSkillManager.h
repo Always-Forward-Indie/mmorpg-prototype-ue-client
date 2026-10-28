@@ -113,11 +113,13 @@ public:
     // Called when the attack animation finishes to release the cast lock
     void NotifyAnimationEnded();
 
-    double GetServerSeconds() const;
-
     double GetWorldSeconds() const;
 
-    double NowFor(const FPlayerSkillData* Skill) const;
+    // Travel support: world clocks reset on OpenLevel, so active cooldowns
+    // must be re-anchored or they stick (old-world endTime vs new-world now).
+    // GI calls Begin before teardown and Apply after the new world is ready.
+    void BeginTravelCooldownSnapshot();
+    void ApplyTravelCooldownSnapshot();
 
     // GCD query
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Skill Manager")
@@ -139,12 +141,11 @@ public:
     // Returns true when TimeSyncService has enough samples for reliable timing.
     bool HasReliableTimeSync() const;
 
-    // Called when time-sync drops out (e.g. window focus loss) to convert all
-    // server-clock cooldowns to world-time equivalents. This prevents skills
-    // from getting permanently stuck when server-epoch endTimes (1.75B) are
-    // compared against world-time fallback values (~70).
-    UFUNCTION(BlueprintCallable, Category = "Player Skill Manager")
-    void ConvertServerClockCooldownsToWorldTime();
+    // Travel snapshot: remaining seconds per skill (+GCD), captured before a
+    // level transition and re-anchored to the new world's clock after load.
+    TMap<FString, double> TravelCooldownRemaining;
+    double TravelGCDRemaining = 0.0;
+    bool bHasTravelSnapshot = false;
 
 protected:
     // Get world for time calculations
@@ -188,9 +189,8 @@ private:
 
     bool bIsInitialized = false;
 
-    // Global Cooldown (GCD) tracking
+    // Global Cooldown (GCD) tracking — world-time, like per-skill cooldowns.
     double GCDEndTime = 0.0;
-    bool   bGCDUsesServerClock = true;
 
     // ── Animation cast lock ──────────────────────────────────────────────────
     // Set to true by HandleSkillInitiation when the server confirms a non-auto-attack
@@ -214,8 +214,4 @@ private:
     // via GetConfirmationTimeout() and clamped to this range.
     static constexpr double MinConfirmationTimeoutSec = 2.0;
     static constexpr double MaxConfirmationTimeoutSec = 5.0;
-
-    // Tracks time-sync validity across ticks so UpdateCooldowns can detect
-    // when it drops out and convert server-clock cooldowns to world-time.
-    bool bWasTimeSyncValid = true;
 };

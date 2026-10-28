@@ -146,6 +146,10 @@ void UMyGameInstance::InvalidateManagerWorldContexts(const FString& /*MapName*/)
 	if (NPCManager)          { NPCManager->SetWorldContext(nullptr); NPCManager->ClearWorldState(); }
 	if (WorldObjectManager)  { WorldObjectManager->SetWorldContext(nullptr); WorldObjectManager->ClearWorldState(); }
 	if (TimeSyncService)     { TimeSyncService->SetWorldContext(nullptr); }
+	// Snapshot active cooldowns in old-world seconds BEFORE the world goes
+	// away; the new world's clock restarts near zero, so raw endTimes would
+	// read as permanently on cooldown. Re-anchored in RefreshManagerWorldContexts.
+	if (PlayerSkillManager)  { PlayerSkillManager->BeginTravelCooldownSnapshot(); }
 	// Release audio components that belong to the dying world so CrossfadeToTrack
 	// re-creates them in the new world instead of silently replaying on a dead device.
 	if (AudioManager)        { AudioManager->InvalidateAudioComponents(); }
@@ -216,6 +220,9 @@ void UMyGameInstance::RefreshManagerWorldContexts()
 	if (NPCManager) { NPCManager->SetWorldContext(World); }
 	if (WorldObjectManager) { WorldObjectManager->SetWorldContext(World); }
 	if (TimeSyncService) { TimeSyncService->SetWorldContext(World); }
+	// Re-anchor travel-persisted cooldowns to the new world's clock (it
+	// restarted near zero; raw old-world endTimes would read as stuck).
+	if (PlayerSkillManager) { PlayerSkillManager->ApplyTravelCooldownSnapshot(); }
 
 	// Re-push the SoundMix and re-apply all cached volume overrides.
 	// The audio device loses its SoundMix modifier stack on world teardown,

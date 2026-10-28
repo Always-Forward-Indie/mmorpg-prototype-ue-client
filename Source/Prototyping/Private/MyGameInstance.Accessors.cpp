@@ -342,8 +342,8 @@ void UMyGameInstance::RouteEmoteActionToPlayer(int32 CharacterId, const FString&
 void UMyGameInstance::OnApplicationReactivated()
 {
     // When the window regains focus, the world FTimerManager resumes.
-    // Force a fresh ping + time-sync so skills don't get stuck on stale
-    // server-epoch cooldowns from IsTimeSyncValid() having dropped out.
+    // Force a fresh ping + time-sync. Cooldowns need no conversion: they all
+    // run on the single world-time clock, which never desyncs from itself.
     if (PingManager)
     {
         PingManager->RestartPingUpdates();
@@ -353,12 +353,5 @@ void UMyGameInstance::OnApplicationReactivated()
         TimeSyncService->RequestTimeSync();
     }
 
-    // Defence in depth: immediately convert any server-clock cooldowns to
-    // world-time so skills don't stay stuck even before time-sync recovers.
-    if (UPlayerSkillManager* SkillMgr = GetPlayerSkillManager())
-    {
-        SkillMgr->ConvertServerClockCooldownsToWorldTime();
-    }
-
-    UE_LOG(LogGameplay, Verbose, TEXT("GameInstance: Application reactivated — ping + time sync + cooldown conversion done"));
+    UE_LOG(LogGameplay, Verbose, TEXT("GameInstance: Application reactivated — ping + time sync requested"));
 }

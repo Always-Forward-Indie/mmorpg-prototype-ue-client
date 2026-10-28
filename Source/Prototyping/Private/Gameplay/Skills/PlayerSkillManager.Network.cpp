@@ -46,15 +46,16 @@ void UPlayerSkillManager::HandleSkillInitiation(const FString& SkillSlug, int32 
     {
         if (FPlayerSkillData* S = PlayerSkills.Find(SkillSlug))
         {
-            // Use per-cast cooldownMs if provided, otherwise fall back to networkData.cooldownMs
+            // Use per-cast cooldownMs if provided, otherwise fall back to networkData.cooldownMs.
+            // Single world-time clock for all countdowns (server sends durations,
+            // never absolute timestamps) — mixing server-epoch and world-time in
+            // one comparison produced permanent cooldowns on sync loss.
             const int32 EffectiveCooldownMs = (CooldownMs > 0) ? CooldownMs : S->networkData.cooldownMs;
             const double CooldownSec = static_cast<double>(EffectiveCooldownMs) / 1000.0;
 
             if (CooldownSec > 0.0)
             {
-                const bool bSyncValid = TimeSyncService && TimeSyncService->IsTimeSyncValid();
-                S->bCooldownUsesServerClock = bSyncValid;
-                S->cooldownEndTime = (bSyncValid ? GetServerSeconds() : GetWorldSeconds()) + CooldownSec;
+                S->cooldownEndTime = GetWorldSeconds() + CooldownSec;
                 S->bIsOnCooldown = true;
                 S->bIsReady = false;
 
@@ -68,11 +69,10 @@ void UPlayerSkillManager::HandleSkillInitiation(const FString& SkillSlug, int32 
         UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillManager: Server confirmed skill %s but we don't have it"), *SkillSlug);
     }
 
-    // Start GCD (affects all skills)
+    // Start GCD (affects all skills) — world-time, like per-skill cooldowns.
     if (GcdMs > 0)
     {
         const double GcdSec = static_cast<double>(GcdMs) / 1000.0;
-        bGCDUsesServerClock = false;
         GCDEndTime = GetWorldSeconds() + GcdSec;
         UE_LOG(LogGameplay, Verbose, TEXT("PlayerSkillManager: Started GCD %.1fs"), GcdSec);
     }
@@ -116,8 +116,8 @@ void UPlayerSkillManager::ApplyServerCooldowns(const TArray<FSkillCooldownEntry>
         const int32 ClampedMs = FMath::Clamp(Entry.remainingMs, 1, MaxMs);
 
         const double RemainingSec = static_cast<double>(ClampedMs) / 1000.0;
-        // Use the same clock that was used to compute Now — keeps set/check consistent.
-        S->bCooldownUsesServerClock = false;
+        // Single world-time clock (see HandleSkillInitiation): the endTime is
+        // always comparable with GetWorldSeconds(), no conversion ever needed.
         S->cooldownEndTime          = Now + RemainingSec;
         S->bIsOnCooldown            = true;
         S->bIsReady                 = false;

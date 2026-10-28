@@ -51,7 +51,7 @@ bool UPlayerSkillManager::TryCastSkill(const FString& SkillSlug, int32 TargetId,
 bool UPlayerSkillManager::IsSkillOnCooldown(const FString& SkillSlug) const
 {
     if (const FPlayerSkillData* S = PlayerSkills.Find(SkillSlug)) {
-        const double now = NowFor(S);
+        const double now = GetWorldSeconds();
         return now < S->cooldownEndTime;
     }
     return false;
@@ -60,7 +60,7 @@ bool UPlayerSkillManager::IsSkillOnCooldown(const FString& SkillSlug) const
 float UPlayerSkillManager::GetSkillCooldownRemaining(const FString& SkillSlug) const
 {
     if (const FPlayerSkillData* S = PlayerSkills.Find(SkillSlug)) {
-        const double now = NowFor(S);
+        const double now = GetWorldSeconds();
         const double rem = S->cooldownEndTime - now;
         if (rem <= 0.0) return 0.0f;
         // Bug 8 fix: clamp to the skill's maximum cooldown duration so that a loss
@@ -81,9 +81,10 @@ void UPlayerSkillManager::StartSkillCooldown(const FString& SkillSlug)
         const double dur = static_cast<double>(S->networkData.cooldownMs) / 1000.0;
         if (dur <= 0.0) { UE_LOG(LogGameplay, Error, TEXT("Invalid cooldown")); return; }
 
-        S->bCooldownUsesServerClock = true;              // ������ ��������
-        const double now = GetServerSeconds();
-        S->cooldownEndTime = now + dur;                  // double + server seconds
+        // Single world-time clock (see HandleSkillInitiation). No server-epoch
+        // math: mixing epochs produced permanent cooldowns on sync loss.
+        const double now = GetWorldSeconds();
+        S->cooldownEndTime = now + dur;
         S->bIsOnCooldown = true;
         S->bIsReady = false;
 

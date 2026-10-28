@@ -2070,8 +2070,6 @@ struct FPlayerSkillData
     UPROPERTY(BlueprintReadOnly, Category = "Player Skill")
     bool bIsReady = true;
 
-    bool   bCooldownUsesServerClock = true;
-
     FPlayerSkillData()
     {
         networkData = FPlayerSkillNetworkData();

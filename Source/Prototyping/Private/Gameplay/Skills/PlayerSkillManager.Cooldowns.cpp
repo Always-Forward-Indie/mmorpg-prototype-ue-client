@@ -8,20 +8,13 @@
 
 void UPlayerSkillManager::UpdateCooldowns(float DeltaTime)
 {
-    // Detect time-sync loss: when IsTimeSyncValid() transitions from true to false,
-    // server-clock cooldowns (endTime ~1.75B) would be compared against world-time
-    // (~70) causing permanent cooldown. Convert them to world-time immediately.
-    const bool bTimeSyncNowValid = TimeSyncService && TimeSyncService->IsTimeSyncValid();
-    if (bWasTimeSyncValid && !bTimeSyncNowValid)
-    {
-        ConvertServerClockCooldownsToWorldTime();
-    }
-    bWasTimeSyncValid = bTimeSyncNowValid;
-
+    // Single world-time clock for every countdown (see HandleSkillInitiation).
+    // No server-epoch math here and no sync-loss conversion: there is nothing
+    // to convert, so a dropped ping can no longer freeze a cooldown forever.
     for (auto& Pair : PlayerSkills) {
         FPlayerSkillData& S = Pair.Value;
         if (!S.bIsOnCooldown) continue;
-        const double now = NowFor(&S);
+        const double now = GetWorldSeconds();
         if (now >= S.cooldownEndTime) {
             S.bIsOnCooldown = false;
             S.bIsReady = true;

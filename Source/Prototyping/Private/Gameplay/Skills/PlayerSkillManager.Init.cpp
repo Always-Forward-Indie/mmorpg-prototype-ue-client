@@ -58,6 +58,12 @@ void UPlayerSkillManager::InitializePlayerSkills(const FPlayerSkillsInitializati
     CharacterId = SkillsData.characterId;
     PlayerSkills.Empty();
 
+    // A rebuilt skill set owns no travel state: drop any pending snapshot so
+    // stale pre-logout remainings can never resurrect on the next refresh.
+    TravelCooldownRemaining.Empty();
+    TravelGCDRemaining = 0.0;
+    bHasTravelSnapshot = false;
+
     // Process each skill from server
     for (const FPlayerSkillNetworkData& NetworkSkill : SkillsData.skills)
     {

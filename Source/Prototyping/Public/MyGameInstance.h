@@ -209,6 +209,10 @@ FDateTime ReceiveTimeLoginServer;
 	// world-dependent pointers before the old world is torn down.
 	FDelegateHandle PreLoadMapDelegateHandle;
 
+	// Handle for FWorldDelegates::OnWorldBeginTearDown — quiesces async
+	// navmesh builds (covers PIE exit, which PreLoadMap does not).
+	FDelegateHandle WorldBeginTearDownHandle;
+
 	// Handle for PostLoadMapWithWorld — fires after every OpenLevel completes.
 	FDelegateHandle PostLoadMapWorldHandle;
 
@@ -285,6 +289,13 @@ public:
 	// Called from the FCoreUObjectDelegates::PreLoadMap callback so in-flight
 	// network packets cannot dereference a stale TObjectPtr<UWorld> handle.
 	void InvalidateManagerWorldContexts(const FString& MapName);
+
+	// Quiesce async navmesh builds when a world begins tearing down (PIE exit
+	// AND OpenLevel travel — PreLoadMap does not cover PIE exit). Without this,
+	// completed tile tasks get processed against a half-destroyed tile cache
+	// (RemoveTileCacheLayers use-after-free, 0xFFFFFFFFFFFFFFFF in Core.dll).
+	// Called from FWorldDelegates::OnWorldBeginTearDown.
+	void QuiesceNavMeshBuilds(UWorld* World);
 
 	// Called when the game world is fully loaded and ready for gameplay
 	void OnGameWorldReady();

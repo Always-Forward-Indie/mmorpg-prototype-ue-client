@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Engine/World.h"
 #include "Authentication/AuthenticationManager.h"
 #include "Gameplay/Players/PlayerManager.h"
 #include "Gameplay/Mobs/SpawnZoneManager.h"
@@ -312,6 +313,13 @@ UE_LOG(LogGameplay, Warning, TEXT("GameInstance: DevMode level override '%s'"), 
 	// when in-flight network packets arrive during level transition.
 	PreLoadMapDelegateHandle = FCoreUObjectDelegates::PreLoadMap.AddUObject(
 		this, &UMyGameInstance::InvalidateManagerWorldContexts);
+
+	// Quiesce async navmesh builds when a world begins tearing down (PIE exit
+	// AND OpenLevel travel — PreLoadMap does not cover PIE exit). Without this,
+	// completed tile tasks get processed against a half-destroyed tile cache
+	// (RemoveTileCacheLayers use-after-free, 0xC005 in Core.dll).
+	WorldBeginTearDownHandle = FWorldDelegates::OnWorldBeginTearDown.AddUObject(
+		this, &UMyGameInstance::QuiesceNavMeshBuilds);
 
 	InitGameSystems();
 

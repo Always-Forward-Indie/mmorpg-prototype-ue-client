@@ -104,6 +104,8 @@
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/CoreDelegates.h"
+#include "Engine/World.h"
+#include "NavigationSystem.h"
 
 
 void UMyGameInstance::InvalidateManagerWorldContexts(const FString& /*MapName*/)
@@ -147,6 +149,26 @@ void UMyGameInstance::InvalidateManagerWorldContexts(const FString& /*MapName*/)
 	// Release audio components that belong to the dying world so CrossfadeToTrack
 	// re-creates them in the new world instead of silently replaying on a dead device.
 	if (AudioManager)        { AudioManager->InvalidateAudioComponents(); }
+}
+
+void UMyGameInstance::QuiesceNavMeshBuilds(UWorld* World)
+{
+	if (!IsValid(World)) return;
+
+	// Only our own world: never stall on another PIE instance's navmesh
+	// (each client has its own GameInstance + world in this process).
+	UWorld* MyWorld = GetWorld();
+	if (!IsValid(MyWorld) || MyWorld != World)
+	{
+		return;
+	}
+
+	if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
+	{
+		UE_LOG(LogConnection, Warning, TEXT("QuiesceNavMeshBuilds: cancelling async navmesh builds for world '%s'"),
+			*World->GetName());
+		NavSys->CancelBuild();
+	}
 }
 
 void UMyGameInstance::RefreshManagerWorldContexts()

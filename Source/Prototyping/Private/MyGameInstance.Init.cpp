@@ -184,6 +184,12 @@ void UMyGameInstance::Shutdown()
 		PreLoadMapDelegateHandle.Reset();
 	}
 
+	if (WorldBeginTearDownHandle.IsValid())
+	{
+		FWorldDelegates::OnWorldBeginTearDown.Remove(WorldBeginTearDownHandle);
+		WorldBeginTearDownHandle.Reset();
+	}
+
 	if (PostLoadMapWorldHandle.IsValid())
 	{
 		FCoreUObjectDelegates::PostLoadMapWithWorld.Remove(PostLoadMapWorldHandle);

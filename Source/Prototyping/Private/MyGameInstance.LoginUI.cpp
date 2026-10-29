@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
+#include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/UI/LoginWidget.h"
 #include "Gameplay/UI/W_LoginLogoWidget.h"
 #include "Gameplay/UI/SocialLinksWidget.h"
@@ -440,6 +441,29 @@ void UMyGameInstance::SetupMoviePlayerLoadingScreen()
 
 void UMyGameInstance::RemoveLoadingScreen()
 {
+	// Final streaming fence: requests queued AFTER Gate5 passed (pawn, UI
+	// widgets, nameplates, camera settle) must not meet the player. Hold the
+	// screen a bounded number of extra polls while the queue is non-empty.
+	// Login level excluded (no world streaming there); the hard safety
+	// timeout stays the last net so this can never hang forever.
+	if (LevelBeingLoaded != LoginLevelName && StreamingFenceExtraFrames < StreamingFenceMaxExtraFrames)
+	{
+		if (IStreamingManager::Get().StreamAllResources(0.0f) > 0)
+		{
+			++StreamingFenceExtraFrames;
+			UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] FENCE: streaming still pending at hide time - holding screen (%d/%d)"),
+				StreamingFenceExtraFrames, StreamingFenceMaxExtraFrames);
+			FTSTicker::GetCoreTicker().AddTicker(
+				FTickerDelegate::CreateLambda([this](float) -> bool
+				{
+					RemoveLoadingScreen();
+					return false;
+				}),
+				0.1f);
+			return;
+		}
+	}
+
 	if (LoadingScreenShownTime > 0.0)
 	{
 		UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] loading screen was up for %.1fs"), FPlatformTime::Seconds() - LoadingScreenShownTime);
@@ -500,6 +524,31 @@ void UMyGameInstance::RemoveLoadingScreen()
 	if (FSlateApplication::IsInitialized() && LevelBeingLoaded != LoginLevelName)
 	{
 		FSlateApplication::Get().SetAllUserFocusToGameViewport();
+	}
+
+	// Canonical cursor/input-mode sync at the moment the world becomes
+	// interactive. OnGameWorldReady already syncs, but UI init can finish
+	// later (UIInitialized flag); re-sync here when every window state is
+	// final so a login-menu GameAndUI mode can never leak into gameplay.
+	// Single source of truth: UIManager decides by open windows.
+	if (LevelBeingLoaded != LoginLevelName)
+	{
+		if (UWorld* GTWorld = GetWorld())
+		{
+			if (APlayerController* GTPC = GTWorld->GetFirstPlayerController())
+			{
+				if (APawn* GTPawn = GTPC->GetPawn())
+				{
+					if (ABasicPlayer* GTPlayer = Cast<ABasicPlayer>(GTPawn))
+					{
+						if (UUIManager* GTUIMgr = GTPlayer->GetUIManager())
+						{
+							GTUIMgr->UpdateCursorAndInputMode();
+						}
+					}
+				}
+			}
+		}
 	}
 
 	if (LoadingScreenWidget)

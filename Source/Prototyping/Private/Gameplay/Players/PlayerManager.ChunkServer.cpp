@@ -136,6 +136,17 @@ void UPlayerManager::ProcessChunkPacket(const FParsedPacket& Packet)
 		}
 	}
 
+	// Logout handshake: chunk confirms farewell saves (position/HP/playtime)
+	// are done — safe to tear down. Without this the farewell write races
+	// the next login's join read and loses, spawning at a stale spot.
+	if (MessageData.eventType == "disconnectAck") {
+		if (gameInstance && IsValid(gameInstance)) {
+			UE_LOG(LogConnection, Warning, TEXT("[LOGOUT] disconnectAck received from chunk server"));
+			gameInstance->NotifyDisconnectAck();
+		}
+		return;
+	}
+
 	// Handle positionCorrection (anti-cheat server correction)
 	if (MessageData.eventType == "positionCorrection") {
 		if (gameInstance && IsValid(gameInstance) && gameInstance->IsGameWorldReady()) {

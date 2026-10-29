@@ -141,6 +141,12 @@ void UMyGameInstance::LoadLoginLevel()
 	// PostLoadMapWithWorld → OnPostLoginLevelLoaded will handle initialization
 }
 
+void UMyGameInstance::NotifyDisconnectAck()
+{
+	bDisconnectAckReceived = true;
+	UE_LOG(LogConnection, Warning, TEXT("[LOGOUT] disconnectAck received — server farewell saves complete"));
+}
+
 void UMyGameInstance::ReturnToLoginLevel()
 {
 	if (bReturningToLogin)
@@ -158,6 +164,17 @@ void UMyGameInstance::ReturnToLoginLevel()
 		IdleTimeoutManager->StopTracking();
 	}
 
+	// 0. Flush the freshest position through the normal validated move path
+	// BEFORE the leave packet: periodic move sends are throttled (threshold
+	// + interval), so ClientData can lag the pawn. Without this flush the
+	// farewell save persists a stale spot and the next login spawns behind.
+	// Runs through server validation like any other move — no cheat vector.
+	if (Player && IsValid(Player) && PlayerManager && !DevModeConfig.bEnabled)
+	{
+		Player->SyncPawnTransformToPlayerData();
+		PlayerManager->SendMovePlayerRequest(Player->GetPlayerDataRef());
+	}
+
 	// 1. Send disconnect packets to Login Server and Chunk Server.
 	//    The server session is terminated; the client will re-authenticate when
 	//    logging in again. Skipped in DevMode offline (never connected).
@@ -172,6 +189,49 @@ void UMyGameInstance::ReturnToLoginLevel()
 			PlayerManager->SendLeaveGameRequest(ClientData);
 		}
 	}
+
+	// Logout handshake: wait for the chunk's disconnectAck (farewell saves
+	// done) before tearing down. Without this the farewell write races the
+	// next login's join read and loses — spawning the player at a stale spot.
+	// DevMode/offline or no-connection: no server to wait for, finish now.
+	bDisconnectAckReceived = false;
+	FTSTicker::GetCoreTicker().RemoveTicker(LogoutAckWaiterHandle);
+	LogoutAckWaiterHandle.Reset();
+	if (DevModeConfig.bEnabled || ClientData.clientId <= 0)
+	{
+		FinishReturnToLoginLevel();
+		return;
+	}
+
+	bReturningToLogin = true;
+	LogoutAckWaitStartTime = FPlatformTime::Seconds();
+	LogoutAckWaiterHandle = FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateLambda([this](float) -> bool
+		{
+			const double Elapsed = FPlatformTime::Seconds() - LogoutAckWaitStartTime;
+			if (bDisconnectAckReceived)
+			{
+				UE_LOG(LogConnection, Warning, TEXT("[LOGOUT] farewell confirmed after %.2fs — finishing return to login"), Elapsed);
+				FinishReturnToLoginLevel();
+				return false;
+			}
+			// Timeout (2s): never hang logout on a lost ACK — proceed with
+			// whatever the server persisted (periodic 30s save bounds it).
+			if (Elapsed >= 2.0)
+			{
+				UE_LOG(LogConnection, Warning, TEXT("[LOGOUT] disconnectAck timeout (%.1fs) — finishing return to login anyway"), Elapsed);
+				FinishReturnToLoginLevel();
+				return false;
+			}
+			return true;
+		}),
+		0.05f);
+}
+
+void UMyGameInstance::FinishReturnToLoginLevel()
+{
+	FTSTicker::GetCoreTicker().RemoveTicker(LogoutAckWaiterHandle);
+	LogoutAckWaiterHandle.Reset();
 
 	// 2. Tear down all network connections WITHOUT setting bIsShutDown.
 	//    Disconnect() closes sockets and stops worker threads, but leaves the
@@ -194,6 +254,8 @@ void UMyGameInstance::ReturnToLoginLevel()
 	bTransitioningToGameWorld = false;
 	ReadyFlags = 0;
 	AnnouncedGatesMask = 0;
+	StreamingCleanTicks = 0;
+	StreamingFenceExtraFrames = 0;
 	ConnectedPlayers.Empty();
 	SpawnedPlayers.Empty();
 	Player = nullptr;
@@ -329,6 +391,8 @@ void UMyGameInstance::TransitionToGameWorld()
 	bPendingSpawnDispatched = false;
 	ReadyFlags = 0;
 	AnnouncedGatesMask = 0;
+	StreamingCleanTicks = 0;
+	StreamingFenceExtraFrames = 0;
 	RenderedFrameCount.Store(0);
 	bLoadingScreenRemovePending.Store(false);
 

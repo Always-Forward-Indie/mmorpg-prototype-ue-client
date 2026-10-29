@@ -125,6 +125,15 @@ FDateTime ReceiveTimeLoginServer;
 	// True while returning from game world to login level (reverse transition)
 	bool bReturningToLogin = false;
 
+	// Set by NotifyDisconnectAck: chunk confirmed farewell saves done.
+	// Reset at the start of every ReturnToLoginLevel.
+	bool bDisconnectAckReceived = false;
+
+	// Logout waiter: counts down while polling for disconnectAck; proceeds
+	// to FinishReturnToLoginLevel on ACK or timeout (never hangs logout).
+	FTSTicker::FDelegateHandle LogoutAckWaiterHandle;
+	double LogoutAckWaitStartTime = 0.0;
+
 	// True once CheckGameWorldReady has dispatched the pending player spawn.
 	// Prevents SpawnPlayerForClient / RefreshManagerWorldContexts being called
 	// more than once per session from the 200ms polling ticker.
@@ -146,6 +155,19 @@ FDateTime ReceiveTimeLoginServer;
 	// every 33ms, so Gate PASS logs would spam at 30Hz while later gates wait.
 	// Bit N = gate N already announced; reset together with ReadyFlags.
 	uint8 AnnouncedGatesMask = 0;
+
+	// Texture-streaming settle: Gate5 passes only after K CONSECUTIVE polls
+	// with zero pending requests. A single clean poll proves nothing — the
+	// queue refills as the camera/pawn/UI spawn after the check.
+	int32 StreamingCleanTicks = 0;
+	static constexpr int32 StreamingSettleTicksRequired = 5;
+
+	// Final streaming fence at hide time (RemoveLoadingScreen path): if new
+	// requests appeared after Gate5 (pawn/UI/nameplate spawns, camera settle),
+	// hold the screen a bounded number of extra frames instead of uncovering
+	// mid-pop-in. The hard safety timeout below stays the last net.
+	int32 StreamingFenceExtraFrames = 0;
+	static constexpr int32 StreamingFenceMaxExtraFrames = 30;
 
 	// Wall-clock moment the safety net was armed (game-world load started).
 	// Logged on hide so slow loads can be measured instead of guessed.
@@ -321,6 +343,14 @@ public:
 	// Called by BasicPlayer once the local pawn is physically present in the game world
 	// (InitializeLocalUI has run, all widgets are up). Triggers the frame-counter gate.
 	void NotifyPlayerSpawned();
+
+	// Called by PlayerManager when the chunk server acknowledges our disconnect
+	// (disconnectAck): farewell saves (position/HP/playtime) are done server-side,
+	// so leaving the world now cannot roll the next login back to a stale spot.
+	void NotifyDisconnectAck();
+
+	// True once NotifyDisconnectAck fired for the current logout.
+	bool HasDisconnectAck() const { return bDisconnectAckReceived; }
 
 private:
 	// Checks whether all ReadyFlags are set and hides the loading screen if so.
@@ -813,6 +843,11 @@ public:
 	// Disconnect from all servers, clear game state, and return to login level
 	UFUNCTION(BlueprintCallable, Category = "Level")
 	void ReturnToLoginLevel();
+
+	// Second phase of ReturnToLoginLevel: tears down connections and opens
+	// the login level. Runs after disconnectAck arrives (or the wait times
+	// out) so the server farewell save always lands before we leave.
+	void FinishReturnToLoginLevel();
 
 	// PostLoadMapWithWorld handler — fires after every OpenLevel, replaces OnLoginLevelLoaded
 	void OnPostLoginLevelLoaded(UWorld* LoadedWorld);

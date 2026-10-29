@@ -1,6 +1,7 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
+#include "Gameplay/Players/BasicPlayer.h"
 #include "EngineUtils.h"
 #include "Prototyping.h"
 #include "Components/ArrowComponent.h"
@@ -150,6 +151,8 @@ void UMyGameInstance::CheckGameWorldReady()
 		// would rather see the loaded world than a stuck loading screen.
 		ReadyFlags = 0;
 		AnnouncedGatesMask = 0;
+		StreamingCleanTicks = 0;
+		StreamingFenceExtraFrames = 0;
 		LoadingScreenShownTime = FPlatformTime::Seconds();
 		FTSTicker::GetCoreTicker().RemoveTicker(LoadingScreenSafetyTimerHandle);
 		LoadingScreenSafetyTimerHandle = FTSTicker::GetCoreTicker().AddTicker(
@@ -234,17 +237,27 @@ void UMyGameInstance::CheckGameWorldReady()
 
 	// Gate 5: Texture streaming — prevent mip pop-in on first rendered
 	// frames by waiting until all streaming requests are fulfilled.
+	// Settle rule: K CONSECUTIVE clean polls, not one. The queue refills as
+	// the pawn, UI widgets, nameplates and mobs spawn after each check —
+	// a single zero-pending poll proves nothing and uncovers mid-pop-in.
 	{
 		const int32 PendingStreaming = IStreamingManager::Get().StreamAllResources(0.0f);
 		if (PendingStreaming > 0)
 		{
+			StreamingCleanTicks = 0;
 			UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] Gate5 WAIT: %d streaming requests still pending..."), PendingStreaming);
+			return;
+		}
+		++StreamingCleanTicks;
+		if (StreamingCleanTicks < StreamingSettleTicksRequired)
+		{
+			UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] Gate5 WAIT: streaming clean %d/%d..."), StreamingCleanTicks, StreamingSettleTicksRequired);
 			return;
 		}
 		if (!(AnnouncedGatesMask & (1u << 5)))
 		{
 			AnnouncedGatesMask |= (1u << 5);
-			UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Gate5 PASS: texture streaming complete"));
+			UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Gate5 PASS: texture streaming settled (%d clean polls)"), StreamingSettleTicksRequired);
 		}
 	}
 
@@ -274,7 +287,35 @@ void UMyGameInstance::OnGameWorldReady()
 	}
 
 	APlayerController* PC = GameWorld->GetFirstPlayerController();
-	if (PC) { PC->bShowMouseCursor = false; }
+	// Canonical cursor/input-mode sync (single source of truth: UIManager).
+	// The old code only cleared bShowMouseCursor here, leaving the input mode
+	// at GameAndUI from the login menu: mouse-look stayed dead and WASD ran
+	// mesh-relative ("sideways") until the first RMB press re-captured input.
+	// UpdateCursorAndInputMode hides the cursor AND restores GameOnly when no
+	// UI window is open; with a window open it keeps cursor + GameAndUI.
+	if (PC)
+	{
+		if (APawn* LocalPawn = PC->GetPawn())
+		{
+			if (ABasicPlayer* LocalPlayer = Cast<ABasicPlayer>(LocalPawn))
+			{
+				if (UUIManager* UIMgr = LocalPlayer->GetUIManager())
+				{
+					UIMgr->UpdateCursorAndInputMode();
+					UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] OnGameWorldReady: cursor/input mode synced (cursor %s)"),
+						PC->bShowMouseCursor ? TEXT("shown") : TEXT("hidden"));
+				}
+				else
+				{
+					PC->bShowMouseCursor = false;
+				}
+			}
+			else
+			{
+				PC->bShowMouseCursor = false;
+			}
+		}
+	}
 
 	// Phase 4 data (getConnectedCharacters, joinGameCharacter broadcasts) can arrive
 	// after ProcessPendingSpawns was called at Gate 1 but before bGameWorldReady=true.

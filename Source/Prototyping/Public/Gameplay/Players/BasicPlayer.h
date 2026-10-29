@@ -485,6 +485,11 @@ public:
 	// Update LOCAL player movement
 	void UpdateCurrentPlayerMovement(float DeltaTime);
 
+	// Copy the live actor transform (and falling state) into playerData so
+	// the next outbound packet carries the true logout/farewell position.
+	// Same source lines as the throttled move sender, without the throttle.
+	void SyncPawnTransformToPlayerData();
+
 	// Update REMOTE player movement
 	void UpdateRemotePlayerMovement();
 	float CalculateRotationInterpSpeed();
@@ -721,6 +726,10 @@ public:
 
 			UFUNCTION(BlueprintCallable, Category = "Player Data")
 			FClientDataStruct GetPlayerData() const { return playerData; }
+
+			// Mutable access for farewell/logout flush (sync pawn transform,
+			// then hand to SendMovePlayerRequest). Same data Move() sends.
+			FClientDataStruct& GetPlayerDataRef() { return playerData; }
 
 			// Get just the position data from playerData
 			UFUNCTION(BlueprintCallable, Category = "Player Data")

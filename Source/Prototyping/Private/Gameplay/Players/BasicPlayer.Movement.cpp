@@ -73,6 +73,20 @@
 #include "Data/CharacterVisualData.h"
 #include "Engine/AssetManager.h"
 
+void ABasicPlayer::SyncPawnTransformToPlayerData()
+{
+	const FVector PawnLoc = GetActorLocation();
+	const FRotator PawnRot = GetActorRotation();
+	playerData.characterData.characterPosition.positionX = PawnLoc.X;
+	playerData.characterData.characterPosition.positionY = PawnLoc.Y;
+	playerData.characterData.characterPosition.positionZ = PawnLoc.Z;
+	playerData.characterData.characterPosition.rotationZ = PawnRot.Yaw;
+	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+	{
+		playerData.characterData.bIsFalling = CMC->IsFalling();
+	}
+}
+
 void ABasicPlayer::UpdateCurrentPlayerMovement(float DeltaTime)
 {
     FVector currentLocation = GetActorLocation();

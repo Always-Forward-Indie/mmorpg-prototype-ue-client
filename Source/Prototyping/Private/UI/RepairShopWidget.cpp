@@ -6,6 +6,7 @@
 #include "Gameplay/NPCs/NPCManager.h"
 #include "MyGameInstance.h"
 #include "Services/LocalizationSubsystem.h"
+#include "Utils/NetCore/RepairAllOutcome.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
 #include "Components/ScrollBox.h"
@@ -196,7 +197,10 @@ void URepairShopWidget::RefreshDisplay()
 
     if (Repair_All_Btn)
     {
-        Repair_All_Btn->SetIsEnabled(CachedShop.items.Num() > 0);
+        // Pre-click signal only (server is authority): grey out when there is
+        // nothing to repair or the bill is visibly unaffordable.
+        const bool bAffordable = CachedGoldBalance >= CachedShop.totalRepairCost;
+        Repair_All_Btn->SetIsEnabled(CachedShop.items.Num() > 0 && bAffordable);
     }
 
     UpdateGoldText();
@@ -275,11 +279,23 @@ void URepairShopWidget::HandleRepairItemResult(const FRepairItemResultData& Resu
 
 void URepairShopWidget::HandleRepairAllResult(const FRepairAllResultData& Result)
 {
-	if (!Result.errorCode.IsEmpty())
+	switch (FRepairAllOutcome::Classify(!Result.errorCode.IsEmpty(), Result.repairedItems.Num()))
+	{
+	case ERepairAllOutcome::Failed:
 	{
 		const FText Friendly = GetVendorErrorText(Result.errorCode);
 		ShowStatus(FText::Format(LOCTEXT("RepairAllFailed", "Repair all failed: {0}"), Friendly));
 		return;
+	}
+	case ERepairAllOutcome::NothingToRepair:
+		// Defense in depth: the server reports real failures with errorCode,
+		// but an empty success (nothing repaired, nothing spent) must never be
+		// celebrated as "All repaired" nor wipe the list (e.g. repairAll with
+		// no damaged items, or a legacy hollow success).
+		ShowStatus(LOCTEXT("RepairAllNothing", "Nothing repaired"));
+		return;
+	case ERepairAllOutcome::Repaired:
+		break;
 	}
 
     const int32 TotalSpent = Result.goldSpent > 0 ? Result.goldSpent : Result.totalGoldSpent;
@@ -327,6 +343,12 @@ void URepairShopWidget::UpdateGoldText()
     if (Player_Gold_Text)
         Player_Gold_Text->SetText(FText::Format(LOCTEXT("GoldValue", "Gold: {0}"),
             FText::AsNumber(CachedGoldBalance)));
+    // Keep the Repair All affordance in sync with the visible balance.
+    if (Repair_All_Btn)
+    {
+        const bool bAffordable = CachedGoldBalance >= CachedShop.totalRepairCost;
+        Repair_All_Btn->SetIsEnabled(CachedShop.items.Num() > 0 && bAffordable);
+    }
 }
 
 void URepairShopWidget::ShowStatus(const FText& Msg)

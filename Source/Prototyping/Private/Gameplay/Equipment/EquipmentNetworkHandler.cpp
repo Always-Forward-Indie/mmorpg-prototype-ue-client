@@ -105,6 +105,19 @@ void UEquipmentNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
     {
         EquipmentManager->OnRemoteEquipmentStateReceived(ParseEquipmentState(Body));
     }
+    else if (EventType == TEXT("durabilityUpdate"))
+    {
+        // Single durability channel (wear, death penalty, repair): the server
+        // owns the numbers, the client only applies them to both snapshots.
+        int32 CharacterId = 0, InventoryItemId = 0, DurabilityCurrent = 0, DurabilityMax = 0;
+        bool bWarning = false;
+        Body->TryGetNumberField(TEXT("characterId"), CharacterId);
+        Body->TryGetNumberField(TEXT("inventoryItemId"), InventoryItemId);
+        Body->TryGetNumberField(TEXT("durabilityCurrent"), DurabilityCurrent);
+        Body->TryGetNumberField(TEXT("durabilityMax"), DurabilityMax);
+        Body->TryGetBoolField(TEXT("isDurabilityWarning"), bWarning);
+        EquipmentManager->ApplyDurabilityUpdate(CharacterId, InventoryItemId, DurabilityCurrent, DurabilityMax, bWarning);
+    }
 }
 
 // EventTypes owned by this handler (single list drives dispatcher registration).
@@ -113,7 +126,8 @@ const TArray<FString>& UEquipmentNetworkHandler::HandledEvents()
     static const TArray<FString> Events = {
         TEXT("EQUIPMENT_STATE"), TEXT("EQUIP_RESULT"),
         TEXT("WEIGHT_STATUS"),   TEXT("charAttributesUpdate"),
-        TEXT("PLAYER_EQUIPMENT_UPDATE"), TEXT("useItem")
+        TEXT("PLAYER_EQUIPMENT_UPDATE"), TEXT("useItem"),
+        TEXT("durabilityUpdate")
     };
     return Events;
 }

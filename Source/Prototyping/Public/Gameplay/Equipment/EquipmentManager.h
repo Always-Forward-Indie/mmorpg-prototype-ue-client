@@ -70,6 +70,12 @@ public:
     // Called when the server sends a PLAYER_EQUIPMENT_UPDATE for a remote character.
     void OnRemoteEquipmentStateReceived(const FEquipmentStateData& State);
 
+    // Single-channel durability apply (wear, death penalty, repair): patches
+    // the matching equipment slot AND the matching inventory row, then
+    // re-broadcasts both states so equipment window, tooltips and shop stay
+    // in sync. No-op for other characters' packets and unknown item ids.
+    void ApplyDurabilityUpdate(int32 CharacterId, int32 InventoryItemId, int32 DurabilityCurrent, int32 DurabilityMax, bool bWarning);
+
     // Returns the last PLAYER_EQUIPMENT_UPDATE received for the given character, or nullptr.
     // Used by SpawnPlayerForClient to replay equipment that arrived before the actor was spawned.
     const FEquipmentStateData* GetCachedRemoteEquipmentState(int32 CharacterId) const;

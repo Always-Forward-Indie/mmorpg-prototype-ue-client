@@ -8,6 +8,7 @@
 #include "Audio/AudioManager.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "Utils/AudioSpawnHelpers.h"
+#include "Utils/NetCore/DurabilityMerge.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
@@ -188,6 +189,44 @@ void UEquipmentManager::OnEquipResultReceived(const FEquipResultData& Result)
     }
 
     SyncEquippedFlagsToInventory();
+}
+
+void UEquipmentManager::ApplyDurabilityUpdate(int32 CharacterId, int32 InventoryItemId, int32 DurabilityCurrent, int32 DurabilityMax, bool bWarning)
+{
+    if (GameInstance && CharacterId > 0 &&
+        CharacterId != GameInstance->GetCurrentCharacterID())
+    {
+        return;
+    }
+    if (InventoryItemId <= 0) return;
+
+    bool bEquipChanged = false;
+    for (auto& Pair : EquipmentState.slots)
+    {
+        if (FDurabilityMerge::ApplyToSlot(Pair.Value, InventoryItemId, DurabilityCurrent, DurabilityMax, bWarning))
+            bEquipChanged = true;
+    }
+    if (bEquipChanged)
+    {
+        OnEquipmentStateChangedDelegate.Broadcast(EquipmentState);
+    }
+
+    if (InventoryManager)
+    {
+        bool bInvChanged = false;
+        for (FInventoryItemStruct& Item : InventoryManager->CurrentInventory.items)
+        {
+            if (FDurabilityMerge::ApplyToItem(Item, InventoryItemId, FDurabilityMerge::ClampCurrent(DurabilityCurrent, DurabilityMax)))
+            {
+                bInvChanged = true;
+                break;
+            }
+        }
+        if (bInvChanged)
+        {
+            InventoryManager->OnInventoryUpdated.Broadcast(InventoryManager->CurrentInventory);
+        }
+    }
 }
 
 void UEquipmentManager::OnWeightStatusReceived(const FWeightStatusData& Status)

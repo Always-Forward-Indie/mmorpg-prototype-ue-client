@@ -3,6 +3,7 @@
 #include "Gameplay/Combat/SkillSystemManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Services/TimeSyncService.h"
+#include "Utils/NetCore/CooldownFormat.h"
 
 bool UPlayerSkillManager::TryCastSkill(const FString& SkillSlug, int32 TargetId, ECasterType TargetType)
 {
@@ -51,8 +52,9 @@ bool UPlayerSkillManager::TryCastSkill(const FString& SkillSlug, int32 TargetId,
 bool UPlayerSkillManager::IsSkillOnCooldown(const FString& SkillSlug) const
 {
     if (const FPlayerSkillData* S = PlayerSkills.Find(SkillSlug)) {
-        const double now = GetWorldSeconds();
-        return now < S->cooldownEndTime;
+        // Predicate lives in FCooldownState (pinned by MMO.Skills.CooldownState).
+        return FCooldownState::IsOnCooldown(
+            static_cast<float>(GetWorldSeconds()), static_cast<float>(S->cooldownEndTime));
     }
     return false;
 }

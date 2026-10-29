@@ -3,26 +3,7 @@
 #include "Gameplay/Combat/SkillSystemManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Services/TimeSyncService.h"
-#include "Utils/NetCore/CooldownFormat.h"
 #include "Utils/NetCore/SkillSlotRule.h"
-
-void UPlayerSkillManager::UpdateCooldowns(float DeltaTime)
-{
-    // Single world-time clock for every countdown (see HandleSkillInitiation).
-    // No server-epoch math here and no sync-loss conversion: there is nothing
-    // to convert, so a dropped ping can no longer freeze a cooldown forever.
-    for (auto& Pair : PlayerSkills) {
-        FPlayerSkillData& S = Pair.Value;
-        if (!S.bIsOnCooldown) continue;
-        const double now = GetWorldSeconds();
-        if (now >= S.cooldownEndTime) {
-            S.bIsOnCooldown = false;
-            S.bIsReady = true;
-            S.cooldownEndTime = 0.0;
-            OnSkillReady.Broadcast(Pair.Key);
-        }
-    }
-}
 
 FPlayerSkillData UPlayerSkillManager::CreatePlayerSkillData(const FPlayerSkillNetworkData& NetworkData) const
 {
@@ -96,14 +77,6 @@ UWorld* UPlayerSkillManager::GetWorld() const
     }
     
     return nullptr;
-}
-
-void UPlayerSkillManager::UpdateSkillCooldownState(FPlayerSkillData& SkillData)
-{
-    float CurrentTime = GetCurrentTime();
-    // Predicate lives in FCooldownState (pinned by MMO.Skills.CooldownState).
-    SkillData.bIsOnCooldown = FCooldownState::IsOnCooldown(CurrentTime, SkillData.cooldownEndTime);
-    SkillData.bIsReady = !SkillData.bIsOnCooldown;
 }
 
 bool UPlayerSkillManager::ValidateSkillSlot(int32 SlotIndex) const

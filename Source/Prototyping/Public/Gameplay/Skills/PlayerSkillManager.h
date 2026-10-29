@@ -85,9 +85,6 @@ public:
 
     // Utils
     UFUNCTION(BlueprintCallable, Category = "Player Skill Manager")
-    void UpdateCooldowns(float DeltaTime);
-
-    UFUNCTION(BlueprintCallable, Category = "Player Skill Manager")
     int32 GetCharacterId() const { return CharacterId; }
 
     // Public access for time synchronization with UI
@@ -190,7 +187,6 @@ protected:
 private:
     // Internals
     FPlayerSkillData CreatePlayerSkillData(const FPlayerSkillNetworkData& NetworkData) const;
-    void UpdateSkillCooldownState(FPlayerSkillData& SkillData);
     bool ValidateSkillSlot(int32 SlotIndex) const;
 
     // Resolves the final TargetId and TargetType for a skill based on its target policy.

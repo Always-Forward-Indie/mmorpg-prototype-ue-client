@@ -25,7 +25,11 @@ void USkillSlotWidget::SlotInitialize(int32 InSlotIndex, UPlayerSkillManager* In
 
     if (SkillManager)
     {
-        // Subscribe to cooldown events for more efficient updates
+        // Re-bind safe: SlotInitialize runs again when the bar is rebuilt, so
+        // drop previous bindings first — otherwise every rebind double-fires
+        // the handlers (double sounds, double refresh work per event).
+        SkillManager->OnSkillCooldownStarted.RemoveDynamic(this, &USkillSlotWidget::OnSkillCooldownStarted);
+        SkillManager->OnSkillReady.RemoveDynamic(this, &USkillSlotWidget::OnSkillReady);
         SkillManager->OnSkillCooldownStarted.AddDynamic(this, &USkillSlotWidget::OnSkillCooldownStarted);
         SkillManager->OnSkillReady.AddDynamic(this, &USkillSlotWidget::OnSkillReady);
 

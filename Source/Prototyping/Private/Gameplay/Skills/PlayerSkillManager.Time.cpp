@@ -3,6 +3,7 @@
 #include "Gameplay/Combat/SkillSystemManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Services/TimeSyncService.h"
+#include "Utils/NetCore/CooldownFormat.h"
 
 double UPlayerSkillManager::GetWorldSeconds() const {
     if (UWorld* W = GetWorld()) return static_cast<double>(W->GetTimeSeconds());
@@ -49,7 +50,8 @@ float UPlayerSkillManager::GetGCDRemaining() const
     const double Rem = GCDEndTime - GetWorldSeconds();
     if (Rem <= 0.0) return 0.0f;
     // Bug 8 fix: clamp GCD remaining to a sane maximum (no GCD should exceed 10 s).
-    return FMath::Min(static_cast<float>(Rem), 10.0f);
+    // Cap owned by FCooldownAnchor (single source with the travel carry cap).
+    return FMath::Min(static_cast<float>(Rem), static_cast<float>(FCooldownAnchor::MaxGcdCarrySec));
 }
 
 void UPlayerSkillManager::BeginTravelCooldownSnapshot()
@@ -83,13 +85,33 @@ void UPlayerSkillManager::ApplyTravelCooldownSnapshot()
         if (const double* Remaining = TravelCooldownRemaining.Find(Pair.Key))
         {
             FPlayerSkillData& S = Pair.Value;
-            S.cooldownEndTime = Now + *Remaining;
-            S.bIsOnCooldown = (*Remaining > 0.0);
-            S.bIsReady = !S.bIsOnCooldown;
+            // Cap at the skill's own base duration: a remaining can never
+            // legitimately exceed it, so anything larger is clock garbage.
+            // Dropped entries are reset to the fresh state (never left with
+            // an old-world endTime, which would read as stuck).
+            const double MaxSec = S.networkData.cooldownMs > 0
+                ? static_cast<double>(S.networkData.cooldownMs) / 1000.0
+                : 300.0;
+            if (FCooldownAnchor::Reanchor(Now, *Remaining, MaxSec, S.cooldownEndTime))
+            {
+                S.bIsOnCooldown = true;
+                S.bIsReady = false;
+            }
+            else
+            {
+                S.cooldownEndTime = Now;
+                S.bIsOnCooldown = false;
+                S.bIsReady = true;
+            }
         }
     }
     TravelCooldownRemaining.Empty();
-    GCDEndTime = Now + TravelGCDRemaining;
+    // Same rule for GCD: drop instead of re-arming garbage. EndTime stays in
+    // the new clock base either way (never an old-world residue).
+    if (!FCooldownAnchor::Reanchor(Now, TravelGCDRemaining, FCooldownAnchor::MaxGcdCarrySec, GCDEndTime))
+    {
+        GCDEndTime = Now;
+    }
     TravelGCDRemaining = 0.0;
     // No re-broadcast needed: SkillSlotWidget ticks IsSkillOnCooldown/
     // GetSkillCooldownRemaining every frame and picks the new state up.

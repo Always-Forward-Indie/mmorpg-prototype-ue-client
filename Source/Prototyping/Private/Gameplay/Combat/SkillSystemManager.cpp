@@ -73,14 +73,6 @@ bool USkillSystemManager::CanCastSkill(int32 CasterId, const FString& SkillSlug)
         return false;
     }
 
-    // Check cooldown
-    if (IsSkillOnCooldown(CasterId, SkillSlug))
-    {
-        UE_LOG(LogGameplay, Verbose, TEXT("SkillSystemManager: Skill %s is on cooldown for caster %d"), 
-            *SkillSlug, CasterId);
-        return false;
-    }
-
     // Check mana
     if (!HasSufficientMana(CasterId, SkillSlug))
     {
@@ -122,56 +114,6 @@ bool USkillSystemManager::CastSkill(int32 CasterId, int32 TargetId, const FStrin
 
     UE_LOG(LogGameplay, Error, TEXT("SkillSystemManager: Combat system manager not available"));
     return false;
-}
-
-bool USkillSystemManager::IsSkillOnCooldown(int32 CasterId, const FString& SkillSlug) const
-{
-    if (const TMap<FString, float>* CasterCooldowns = SkillCooldowns.Find(CasterId))
-    {
-        if (const float* EndTime = CasterCooldowns->Find(SkillSlug))
-        {
-            // Use server-synchronized time for more accurate cooldown checking
-            float CurrentTime = GetSynchronizedWorldTime();
-            return CurrentTime < *EndTime;
-        }
-    }
-    return false;
-}
-
-float USkillSystemManager::GetSkillCooldownRemaining(int32 CasterId, const FString& SkillSlug) const
-{
-    if (const TMap<FString, float>* CasterCooldowns = SkillCooldowns.Find(CasterId))
-    {
-        if (const float* EndTime = CasterCooldowns->Find(SkillSlug))
-        {
-            // Use server-synchronized time for accurate remaining time calculation
-            float CurrentTime = GetSynchronizedWorldTime();
-            float Remaining = *EndTime - CurrentTime;
-            return FMath::Max(0.0f, Remaining);
-        }
-    }
-    return 0.0f;
-}
-
-void USkillSystemManager::StartSkillCooldown(int32 CasterId, const FString& SkillSlug)
-{
-    const FSkillData SkillData = GetSkillData(SkillSlug);
-    if (SkillData.cooldown > 0.0f)
-    {
-        // Use server-synchronized time for cooldown start
-        float CurrentTime = GetSynchronizedWorldTime();
-        float EndTime = CurrentTime + SkillData.cooldown;
-        
-        if (!SkillCooldowns.Contains(CasterId))
-        {
-            SkillCooldowns.Add(CasterId, TMap<FString, float>());
-        }
-        
-        SkillCooldowns[CasterId].Add(SkillSlug, EndTime);
-        
-        UE_LOG(LogGameplay, Verbose, TEXT("SkillSystemManager: Started cooldown for %s (%.1fs) at synchronized time %.3f"), 
-            *SkillSlug, SkillData.cooldown, CurrentTime);
-    }
 }
 
 bool USkillSystemManager::HasSufficientMana(int32 CasterId, const FString& SkillSlug) const

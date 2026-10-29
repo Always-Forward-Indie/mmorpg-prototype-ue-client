@@ -64,6 +64,16 @@ void UPlayerSkillManager::InitializePlayerSkills(const FPlayerSkillsInitializati
     TravelGCDRemaining = 0.0;
     bHasTravelSnapshot = false;
 
+    // A rebuilt skill set owns no live combat state either. Only PlayerSkills
+    // used to be reset here, so a stale GCD (and animation lock / pending
+    // confirmations) survived every login: the travel snapshot then re-anchored
+    // it into the new world, where the display clamp turned it into a
+    // permanent gray slot. Wipe all transients at the source.
+    GCDEndTime = 0.0;
+    bIsAnimationPlaying = false;
+    AnimationStartWorldTime = 0.0;
+    PendingConfirmations.Empty();
+
     // Process each skill from server
     for (const FPlayerSkillNetworkData& NetworkSkill : SkillsData.skills)
     {

@@ -59,10 +59,12 @@ struct FSkillData
 };
 
 /**
- * Manages skill execution, cooldowns, and casting
- * Separate from combat system to handle skill-specific logic
- * Uses TimeSyncService for accurate cooldown calculations
- * Now integrates with the new PlayerSkillManager for enhanced functionality
+ * Manages skill execution and casting.
+ * Cooldowns are owned exclusively by UPlayerSkillManager (world-time clock);
+ * the old server-epoch map lived here and was removed (dead, never written).
+ * Separate from combat system to handle skill-specific logic.
+ * Uses TimeSyncService for accurate cooldown calculations.
+ * Now integrates with the new PlayerSkillManager for enhanced functionality.
  */
 UCLASS(BlueprintType)
 class PROTOTYPING_API USkillSystemManager : public UObject
@@ -97,16 +99,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Skill System")
     bool CastSkill(int32 CasterId, int32 TargetId, const FString& SkillSlug, ECasterType TargetType);
 
-    // Cooldown management
-    UFUNCTION(BlueprintCallable, Category = "Skill System")
-    bool IsSkillOnCooldown(int32 CasterId, const FString& SkillSlug) const;
-
-    UFUNCTION(BlueprintCallable, Category = "Skill System")
-    float GetSkillCooldownRemaining(int32 CasterId, const FString& SkillSlug) const;
-
-    UFUNCTION(BlueprintCallable, Category = "Skill System")
-    void StartSkillCooldown(int32 CasterId, const FString& SkillSlug);
-
     // Resource checking
     UFUNCTION(BlueprintCallable, Category = "Skill System")
     bool HasSufficientMana(int32 CasterId, const FString& SkillSlug) const;
@@ -137,9 +129,6 @@ private:
     // Skill database
     UPROPERTY()
     TMap<FString, FSkillData> RegisteredSkills;
-
-    // Cooldown tracking - maps CasterId -> SkillSlug -> EndTime
-    TMap<int32, TMap<FString, float>> SkillCooldowns;
 
     // Helper to get TimeSyncService instance
     UTimeSyncService* GetTimeSyncService() const;

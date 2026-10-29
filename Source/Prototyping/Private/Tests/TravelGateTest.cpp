@@ -24,5 +24,9 @@ bool FTravelGateTest::RunTest(const FString& Parameters)
     TestFalse(TEXT("slow but rendering"), G::HasTravelStalled(10.0, 300));
     TestTrue(TEXT("crawl detected"), G::HasTravelStalled(10.0, 10));
     TestFalse(TEXT("zero time"), G::HasTravelStalled(0.0, 0));
+    TestEqual(TEXT("shader cap"), G::ShaderGateCapSec, 8.0);
+    TestFalse(TEXT("shader waits"), G::ShouldBypassShaderGate(7.9));
+    TestTrue(TEXT("shader bypass at cap"), G::ShouldBypassShaderGate(8.0));
+    TestTrue(TEXT("shader bypass past cap"), G::ShouldBypassShaderGate(30.0));
     return true;
 }

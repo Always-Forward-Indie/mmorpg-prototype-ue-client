@@ -29,6 +29,13 @@ struct PROTOTYPING_API FTravelGate
 	static constexpr double FrameCountdownTimeoutSec = 3.0;
 	static bool ShouldGiveUpFrameCountdown(double ElapsedSec) { return ElapsedSec >= FrameCountdownTimeoutSec; }
 
+	/** Shader gate cap: in-editor shader compiles must not hold the loading
+	 *  screen forever (a stuck compiler would trap every PIE load). After
+	 *  this many seconds the gate is bypassed with a warning — packaged
+	 *  builds keep waiting (PSO warm-up matters there). */
+	static constexpr double ShaderGateCapSec = 8.0;
+	static bool ShouldBypassShaderGate(double ElapsedSec) { return ElapsedSec >= ShaderGateCapSec; }
+
 	/** Travel crawl diagnostic: slow wall-clock with (near-)zero rendered frames
 	 *  means the engine travel itself was throttled (unfocused window / RHI fence
 	 *  waits), not that gates/flags stalled. Used to escalate the Travel DONE log. */

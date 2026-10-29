@@ -48,11 +48,14 @@ void UDamageEffectHandler::ProcessSkillResult_Implementation(const FSkillResultD
     // the new mob-AI victim push). A deferred combatResult carries an OLD
     // finalTargetHealth and would yank the bar backward (log-proven 46->61,
     // 15->30 jumps under fox packs). Damage numbers, death detection and
-    // mob/remote handling below are unaffected. Mobs and remote players keep
-    // combat-driven HP — they get no per-hit stats_updates.
+    // mob/remote handling below are unaffected. Remote players keep
+    // combat-driven HP — they get no per-hit stats_updates. Mobs are
+    // single-channel on mobHealthUpdate (server pushes one per landed hit,
+    // plus regen/effectTick/spawn) — see bSkipVitalsForMob below.
     else if (!SkillResult.isMissed)
     {
         bool bSkipVitalsForLocalPlayer = false;
+        bool bSkipVitalsForMob = (Cast<ABasicMOB>(TargetObject) != nullptr);
         if (ABasicPlayer* TargetPlayer = Cast<ABasicPlayer>(TargetObject))
         {
             bSkipVitalsForLocalPlayer = !TargetPlayer->GetIsOtherClient();
@@ -60,6 +63,11 @@ void UDamageEffectHandler::ProcessSkillResult_Implementation(const FSkillResultD
         if (bSkipVitalsForLocalPlayer)
         {
             UE_LOG(LogGameplay, Verbose, TEXT("DamageEffectHandler: skipping combat HP set for local player %s (stats_update owns vitals; result HP=%d)"),
+                *GetNameSafe(TargetObject), SkillResult.finalTargetHealth);
+        }
+        else if (bSkipVitalsForMob)
+        {
+            UE_LOG(LogGameplay, Verbose, TEXT("DamageEffectHandler: skipping combat HP set for mob %s (mobHealthUpdate owns vitals; result HP=%d)"),
                 *GetNameSafe(TargetObject), SkillResult.finalTargetHealth);
         }
         else

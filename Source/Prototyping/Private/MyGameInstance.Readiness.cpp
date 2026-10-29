@@ -220,20 +220,40 @@ void UMyGameInstance::CheckGameWorldReady()
 		UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Gate3 SKIP: no WorldPartitionSubsystem (not a WP map)"));
 	}
 
-	// Gate 4: Shader compilation must be complete (relevant on first run / cold PSO cache
-	// in packaged builds). Skip in Editor where shaders compile in background normally.
-#if !WITH_EDITOR
+	// Gate 4: Shader compilation must be complete before uncovering the scene.
+	// Packaged builds wait unconditionally (cold PSO cache / first-run compile).
+	// In-editor shaders normally compile in background, but a stuck compiler
+	// would trap every PIE load — so the gate is active in editor too, with a
+	// bounded cap owned by FTravelGate (bypass with a warning, never hang).
 	if (GShaderCompilingManager && GShaderCompilingManager->IsCompiling())
 	{
+#if WITH_EDITOR
+		const double ShaderElapsed = LoadingScreenShownTime > 0.0
+			? (FPlatformTime::Seconds() - LoadingScreenShownTime)
+			: 0.0;
+		if (FTravelGate::ShouldBypassShaderGate(ShaderElapsed))
+		{
+			if (!(AnnouncedGatesMask & (1u << 4)))
+			{
+				AnnouncedGatesMask |= (1u << 4);
+				UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Gate4 BYPASS: shader compiler still running after %.1fs in editor — uncovering anyway"), ShaderElapsed);
+			}
+		}
+		else
+		{
+			UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] Gate4 WAIT: shader compiler still running..."));
+			return;
+		}
+#else
 		UE_LOG(LogConnection, Verbose, TEXT("[LOADSEQ] Gate4 WAIT: shader compiler still running..."));
 		return;
+#endif
 	}
 	if (!(AnnouncedGatesMask & (1u << 4)))
 	{
 		AnnouncedGatesMask |= (1u << 4);
 		UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Gate4 PASS: shader compiler idle"));
 	}
-#endif
 
 	// Gate 5: Texture streaming — prevent mip pop-in on first rendered
 	// frames by waiting until all streaming requests are fulfilled.

@@ -250,7 +250,7 @@ FInventoryItemStruct UEquipmentWidget::BuildTooltipItem(const FEquipmentSlotData
 {
     if (InventoryManager)
     {
-        const FInventoryItemStruct Found = InventoryManager->GetItemById(SlotData.inventoryItemId);
+        const FInventoryItemStruct Found = InventoryManager->GetItemByInstanceId(SlotData.inventoryItemId);
         if (Found.id > 0) return Found;
     }
     FInventoryItemStruct Stub;

@@ -31,6 +31,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Item Tooltip")
 	void UpdateTooltipPosition(FVector2D ScreenPosition);
 
+	// Currently displayed item (empty id == none). Used to re-resolve an
+	// open tooltip after the inventory grid rebuilds underneath it.
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Item Tooltip")
+	FInventoryItemStruct GetCurrentItem() const { return CurrentItem; }
+
 	// Show tooltip with animation
 	UFUNCTION(BlueprintCallable, Category = "Item Tooltip")
 	void ShowTooltip();

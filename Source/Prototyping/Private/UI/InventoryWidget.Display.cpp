@@ -18,6 +18,16 @@
 
 void UInventoryWidget::UpdateInventoryDisplay(const FCharacterInventoryStruct& Inventory)
 {
+	// Preserve an open tooltip across the rebuild: rows may reorder between
+	// snapshots, so re-resolve the shown item by instance id in the new
+	// array; hide it when the row is gone. Without this the tooltip keeps
+	// showing the pre-refresh item while the grid underneath has moved on.
+	int32 OpenTooltipInstanceId = 0;
+	if (ItemTooltipWidget && ItemTooltipWidget->IsVisible())
+	{
+		OpenTooltipInstanceId = ItemTooltipWidget->GetCurrentItem().id;
+	}
+
 	CurrentInventory = Inventory;
 
 	// Clear all slots first so dropped items don't leave stale visuals
@@ -38,6 +48,32 @@ void UInventoryWidget::UpdateInventoryDisplay(const FCharacterInventoryStruct& I
 
 	// Update inventory statistics
 	UpdateInventoryStats();
+
+	if (OpenTooltipInstanceId > 0)
+	{
+		bool bFound = false;
+		for (int32 i = 0; i < InventorySlots.Num(); ++i)
+		{
+			UInventorySlotWidget* SlotWidget = GetSlotWidget(i);
+			if (SlotWidget && SlotWidget->HasItem() && SlotWidget->GetItemData().id == OpenTooltipInstanceId)
+			{
+				FVector2D MousePosition = FVector2D::ZeroVector;
+				if (GetWorld() && GetWorld()->GetFirstPlayerController())
+				{
+					GetWorld()->GetFirstPlayerController()->GetMousePosition(MousePosition.X, MousePosition.Y);
+				}
+				HoveredSlotIndex = i;
+				ShowTooltip(SlotWidget->GetItemData(), MousePosition);
+				bFound = true;
+				break;
+			}
+		}
+		if (!bFound)
+		{
+			HoveredSlotIndex = -1;
+			HideTooltip();
+		}
+	}
 
 	UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Updated display with %d items"), Inventory.items.Num());
 }

@@ -249,14 +249,21 @@ void UInventorySlotWidget::LoadItemIcon()
 		}
 		else
 		{
-			// Load asynchronously
+			// Load asynchronously (guarded against grid rebuilds; see below)
 			TWeakObjectPtr<UInventorySlotWidget> WeakThis = this;
+			const int32 ExpectedInstanceId = CurrentItem.id;
+			const int32 ExpectedTemplateId = CurrentItem.itemId;
 
 			AsyncLoad(IconSoftPtr.ToSoftObjectPath(),
-				FStreamableDelegate::CreateLambda([WeakThis, IconSoftPtr]()
+				FStreamableDelegate::CreateLambda([WeakThis, IconSoftPtr, ExpectedInstanceId, ExpectedTemplateId]()
 					{
 						if (WeakThis.IsValid())
 						{
+							const FInventoryItemStruct& NowShowing = WeakThis->GetItemData();
+							if (NowShowing.id != ExpectedInstanceId || NowShowing.itemId != ExpectedTemplateId)
+							{
+								return; // Slot moved on; its own load will paint it.
+							}
 							if (UTexture2D* LoadedTexture = IconSoftPtr.Get())
 							{
 								WeakThis->SetIconTexture(LoadedTexture);

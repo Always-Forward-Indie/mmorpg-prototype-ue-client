@@ -101,11 +101,13 @@ void UItemTooltipWidget::LoadItemIcon()
 		{
 			// Load asynchronously
 			TWeakObjectPtr<UItemTooltipWidget> WeakThis = this;
+			const int32 ExpectedInstanceId = CurrentItem.id;
+			const int32 ExpectedTemplateId = CurrentItem.itemId;
 
 			AsyncLoad(IconSoftPtr.ToSoftObjectPath(),
-				FStreamableDelegate::CreateLambda([WeakThis, IconSoftPtr]()
+				FStreamableDelegate::CreateLambda([WeakThis, IconSoftPtr, ExpectedInstanceId, ExpectedTemplateId]()
 					{
-						if (WeakThis.IsValid())
+						if (WeakThis.IsValid() && WeakThis->GetCurrentItem().id == ExpectedInstanceId && WeakThis->GetCurrentItem().itemId == ExpectedTemplateId)
 						{
 							if (UTexture2D* LoadedTexture = IconSoftPtr.Get())
 							{

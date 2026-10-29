@@ -2,6 +2,7 @@
 #include "Networking/NetworkManager.h"
 #include "Prototyping.h"
 #include "MyGameInstance.h"
+#include "Services/TimeSyncService.h"
 #include "Gameplay/Items/HarvestManager.h"
 #include "Utils/JSONParser.h"
 #include "Engine/World.h"

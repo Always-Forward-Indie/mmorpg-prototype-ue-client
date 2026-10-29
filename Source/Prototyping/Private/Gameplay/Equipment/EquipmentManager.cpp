@@ -161,7 +161,7 @@ void UEquipmentManager::OnEquipResultReceived(const FEquipResultData& Result)
 
         if (InventoryManager && GameInstance)
         {
-            FInventoryItemStruct Item = InventoryManager->GetItemById(Result.inventoryItemId);
+            FInventoryItemStruct Item = InventoryManager->GetItemByInstanceId(Result.inventoryItemId);
             if (!Item.itemSlug.IsEmpty())
             {
                 FItemVisualData Vis = GameInstance->GetItemManager()->GetItemVisualDataBySlug(Item.itemSlug);

@@ -15,20 +15,27 @@
 
 bool UInventoryManager::HasItem(int32 ItemId) const
 {
-	// Lookup lives in FInventoryQuery (pinned by MMO.Inventory.Query).
+	// Kind check: template identity (use/drop preconditions, harvest checks).
 	return FInventoryQuery::HasItem(CurrentInventory.items, ItemId);
 }
 
-FInventoryItemStruct UInventoryManager::GetItemById(int32 ItemId) const
+FInventoryItemStruct UInventoryManager::GetItemByInstanceId(int32 InstanceId) const
 {
-	// Lookup lives in FInventoryQuery (pinned by MMO.Inventory.Query).
-	const int32 Idx = FInventoryQuery::IndexOf(CurrentInventory.items, ItemId);
+	// Row identity: tooltips, equip visuals, durability, kill-count.
+	const int32 Idx = FInventoryQuery::IndexOfInstance(CurrentInventory.items, InstanceId);
+	return Idx != INDEX_NONE ? CurrentInventory.items[Idx] : FInventoryItemStruct();
+}
+
+FInventoryItemStruct UInventoryManager::GetItemByTemplateId(int32 TemplateId) const
+{
+	// Kind lookup: first row of a template (sounds, icons).
+	const int32 Idx = FInventoryQuery::IndexOfTemplate(CurrentInventory.items, TemplateId);
 	return Idx != INDEX_NONE ? CurrentInventory.items[Idx] : FInventoryItemStruct();
 }
 
 int32 UInventoryManager::GetItemQuantity(int32 ItemId) const
 {
-	// Lookup lives in FInventoryQuery (pinned by MMO.Inventory.Query).
+	// Total across all rows of the template (stackables may split rows).
 	return FInventoryQuery::QuantityOf(CurrentInventory.items, ItemId);
 }
 

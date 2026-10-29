@@ -52,17 +52,22 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	FCharacterInventoryStruct GetInventory() const { return CurrentInventory; }
 
-	// Check if item exists in inventory
+	// Check if a template exists in inventory (kind check: use/drop preconditions)
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
-	bool HasItem(int32 ItemId) const;
+	bool HasItem(int32 TemplateId) const;
 
-	// Get item by ID
+	// Get one row by instance id (row identity: tooltips, equip, durability).
+	// Missing rows surface as a default struct (id == 0).
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
-	FInventoryItemStruct GetItemById(int32 ItemId) const;
+	FInventoryItemStruct GetItemByInstanceId(int32 InstanceId) const;
 
-	// Get item quantity
+	// Get first row of a template (kind lookup: sounds, icons).
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
-	int32 GetItemQuantity(int32 ItemId) const;
+	FInventoryItemStruct GetItemByTemplateId(int32 TemplateId) const;
+
+	// Total quantity across all rows of a template
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	int32 GetItemQuantity(int32 TemplateId) const;
 
 	// Get all items of specific type
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")

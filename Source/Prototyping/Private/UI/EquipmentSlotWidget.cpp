@@ -85,11 +85,12 @@ void UEquipmentSlotWidget::RefreshIcon()
     }
 
     TWeakObjectPtr<UEquipmentSlotWidget> WeakThis = this;
+    const int32 ExpectedInstanceId = CachedSlotData.inventoryItemId;
     TSoftObjectPtr<UTexture2D> SoftIcon = VisualData.Icon;
     AsyncLoad(SoftIcon.ToSoftObjectPath(), FStreamableDelegate::CreateLambda(
-        [WeakThis, SoftIcon]()
+        [WeakThis, SoftIcon, ExpectedInstanceId]()
         {
-            if (WeakThis.IsValid())
+            if (WeakThis.IsValid() && WeakThis->GetSlotData().inventoryItemId == ExpectedInstanceId)
             {
                 if (UTexture2D* Tex = SoftIcon.Get())
                     WeakThis->SetIconTexture(Tex);

@@ -1,6 +1,7 @@
 #include "Gameplay/Combat/HealingEffectHandler.h"
 #include "Prototyping.h"
 #include "Gameplay/Combat/ICombatable.h"
+#include "Gameplay/Players/BasicPlayer.h"
 
 UHealingEffectHandler::UHealingEffectHandler()
 {
@@ -32,15 +33,33 @@ void UHealingEffectHandler::ProcessSkillResult_Implementation(const FSkillResult
 
     // Use server-authoritative finalTargetHealth instead of local calculation.
     // The server already computed the correct HP after healing (clamped to max).
+    // Single-authority rule for the LOCAL player (same as DamageEffectHandler):
+    // vitals are owned exclusively by stats_update; a deferred heal result
+    // carries an OLD finalTargetHealth and would yank the bar. Numbers still
+    // display from the factual heal amounts via the edge cases below.
     int32 OldHealth = ICombatable::Execute_GetCurrentHealth(TargetObject);
     int32 OldMana   = ICombatable::Execute_GetCurrentMana(TargetObject);
+    bool bSkipVitalsForLocalPlayer = false;
+    if (ABasicPlayer* TargetPlayer = Cast<ABasicPlayer>(TargetObject))
+    {
+        bSkipVitalsForLocalPlayer = !TargetPlayer->GetIsOtherClient();
+    }
     int32 NewHealth = SkillResult.finalTargetHealth;
-    ICombatable::Execute_SetCurrentHealth(TargetObject, NewHealth);
+    if (bSkipVitalsForLocalPlayer)
+    {
+        UE_LOG(LogGameplay, Verbose, TEXT("HealingEffectHandler: skipping combat HP set for local player %d (stats_update owns vitals; result HP=%d)"),
+            ICombatable::Execute_GetActorId(TargetObject), SkillResult.finalTargetHealth);
+        NewHealth = OldHealth;
+    }
+    else
+    {
+        ICombatable::Execute_SetCurrentHealth(TargetObject, NewHealth);
+    }
 
     // Only overwrite mana if the server sent a meaningful value; 0 means the field
     // was not included in this packet (e.g. HP-only skill packets) and we must not
     // zero out the player's current mana.
-    if (SkillResult.finalTargetMana > 0)
+    if (SkillResult.finalTargetMana > 0 && !bSkipVitalsForLocalPlayer)
     {
         ICombatable::Execute_SetCurrentMana(TargetObject, SkillResult.finalTargetMana);
     }

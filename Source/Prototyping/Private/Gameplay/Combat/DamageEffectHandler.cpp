@@ -42,13 +42,33 @@ void UDamageEffectHandler::ProcessSkillResult_Implementation(const FSkillResultD
             *SkillResult.skillName, *SkillResult.errorReason);
     }
     // Apply HP/Mana changes for hits and blocks — skip only for misses
-    // (server doesn't send finalTargetHealth for error/miss results)
+    // (server doesn't send finalTargetHealth for error/miss results).
+    // Single-authority rule for the LOCAL player: vitals are owned exclusively
+    // by stats_update (the server pushes one per damage/heal event, including
+    // the new mob-AI victim push). A deferred combatResult carries an OLD
+    // finalTargetHealth and would yank the bar backward (log-proven 46->61,
+    // 15->30 jumps under fox packs). Damage numbers, death detection and
+    // mob/remote handling below are unaffected. Mobs and remote players keep
+    // combat-driven HP — they get no per-hit stats_updates.
     else if (!SkillResult.isMissed)
     {
-        ICombatable::Execute_SetCurrentHealth(TargetObject, SkillResult.finalTargetHealth);
-        if (SkillResult.finalTargetMana > 0)
+        bool bSkipVitalsForLocalPlayer = false;
+        if (ABasicPlayer* TargetPlayer = Cast<ABasicPlayer>(TargetObject))
         {
-            ICombatable::Execute_SetCurrentMana(TargetObject, SkillResult.finalTargetMana);
+            bSkipVitalsForLocalPlayer = !TargetPlayer->GetIsOtherClient();
+        }
+        if (bSkipVitalsForLocalPlayer)
+        {
+            UE_LOG(LogGameplay, Verbose, TEXT("DamageEffectHandler: skipping combat HP set for local player %s (stats_update owns vitals; result HP=%d)"),
+                *GetNameSafe(TargetObject), SkillResult.finalTargetHealth);
+        }
+        else
+        {
+            ICombatable::Execute_SetCurrentHealth(TargetObject, SkillResult.finalTargetHealth);
+            if (SkillResult.finalTargetMana > 0)
+            {
+                ICombatable::Execute_SetCurrentMana(TargetObject, SkillResult.finalTargetMana);
+            }
         }
     }
 

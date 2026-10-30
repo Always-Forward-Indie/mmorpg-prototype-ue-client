@@ -2889,6 +2889,11 @@ struct PROTOTYPING_API FVendorShopData
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop")
     int32 goldBalance = 0;
 
+    /** Effective sell tax (0..1) for this shop, reputation-adjusted server-side.
+     *  Added to the vendorShop payload so the sell preview matches the payout. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop")
+    float sellTaxPct = 0.0f;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor Shop")
     TArray<FVendorShopItemData> items;
 

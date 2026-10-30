@@ -3,6 +3,7 @@
 #include "MyGameInstance.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "Services/LocalizationSubsystem.h"
+#include "Utils/NetCore/VendorSellRule.h"
 #include "Engine/AssetManager.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 
@@ -90,7 +91,7 @@ void UVendorTooltipWidget::SetDataFromInventoryItem(const FInventoryItemStruct& 
     if (StockText) StockText->SetVisibility(ESlateVisibility::Collapsed);
 }
 
-void UVendorTooltipWidget::SetDataFromCartEntry(const FVendorCartEntry& Entry)
+void UVendorTooltipWidget::SetDataFromCartEntry(const FVendorCartEntry& Entry, float SellTaxPct)
 {
     if (ItemNameText)
     {
@@ -116,9 +117,12 @@ void UVendorTooltipWidget::SetDataFromCartEntry(const FVendorCartEntry& Entry)
     if (DurabilityText)  DurabilityText->SetVisibility(ESlateVisibility::Collapsed);
     if (StockText)       StockText->SetVisibility(ESlateVisibility::Collapsed);
 
-    // Price per unit
+    // Price per unit + line total (tax-adjusted on the sell side)
     if (PriceLabelText) { PriceLabelText->SetText(LOCTEXT("PricePerPc", "Price / pc:")); PriceLabelText->SetVisibility(ESlateVisibility::Visible); }
-    if (PriceText)      { PriceText->SetText(FText::Format(LOCTEXT("PriceTotal", "{0} g  (total: {1} g)"), FText::AsNumber(Entry.pricePerUnit), FText::AsNumber(Entry.pricePerUnit * Entry.quantity))); PriceText->SetVisibility(ESlateVisibility::Visible); }
+    const int32 LineTotal = (SellTaxPct >= 0.0f)
+        ? FVendorSellRule::LineGold(Entry.pricePerUnit, Entry.quantity, SellTaxPct)
+        : Entry.pricePerUnit * Entry.quantity;
+    if (PriceText)      { PriceText->SetText(FText::Format(LOCTEXT("PriceTotal", "{0} g  (total: {1} g)"), FText::AsNumber(Entry.pricePerUnit), FText::AsNumber(LineTotal))); PriceText->SetVisibility(ESlateVisibility::Visible); }
 
     // Quantity in cart
     if (QuantityText)

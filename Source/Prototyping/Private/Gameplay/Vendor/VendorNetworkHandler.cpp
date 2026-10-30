@@ -111,6 +111,9 @@ FVendorShopData UVendorNetworkHandler::ParseVendorShop(const TSharedPtr<FJsonObj
     Body->TryGetStringField(TEXT("npcName"),      Shop.npcName);
     Body->TryGetStringField(TEXT("npcSlug"),      Shop.npcSlug);
     Body->TryGetNumberField(TEXT("goldBalance"),  Shop.goldBalance);
+    double SellTaxPct = 0.0;
+    if (Body->TryGetNumberField(TEXT("sellTaxPct"), SellTaxPct))
+        Shop.sellTaxPct = static_cast<float>(SellTaxPct);
 
     const TArray<TSharedPtr<FJsonValue>>* ItemsArray = nullptr;
     if (!Body->TryGetArrayField(TEXT("items"), ItemsArray)) return Shop;

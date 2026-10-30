@@ -3,6 +3,7 @@
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "UI/VendorTooltipWidget.h"
+#include "Utils/NetCore/VendorSellRule.h"
 #include "MyGameInstance.h"
 #include "Services/LocalizationSubsystem.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
@@ -52,7 +53,7 @@ void UVendorShopWidget::HandleSellCartSlotHovered(int32 SlotIndex, bool bIsHover
         if (Found)
             VendorTooltipWidget->SetDataFromInventoryItem(*Found);
         else
-            VendorTooltipWidget->SetDataFromCartEntry(Entry);
+            VendorTooltipWidget->SetDataFromCartEntry(Entry, CachedShop.sellTaxPct);
         VendorTooltipWidget->ShowTooltip();
     }
     else VendorTooltipWidget->HideTooltip();
@@ -70,7 +71,8 @@ void UVendorShopWidget::UpdateSellTotalText()
 {
     if (!Sell_Total_Text) return;
     int32 Total = 0;
-    for (const FVendorCartEntry& E : SellCart) Total += E.pricePerUnit * E.quantity;
+    for (const FVendorCartEntry& E : SellCart)
+        Total += FVendorSellRule::LineGold(E.pricePerUnit, E.quantity, CachedShop.sellTaxPct);
     Sell_Total_Text->SetText(FText::Format(LOCTEXT("YouGetValue", "You get: {0} g"), FText::AsNumber(Total)));
 }
 
@@ -90,7 +92,7 @@ void UVendorShopWidget::UpdatePlayerGoldText()
     else
     {
         for (const FVendorCartEntry& E : SellCart)
-            Delta += E.pricePerUnit * E.quantity;
+            Delta += FVendorSellRule::LineGold(E.pricePerUnit, E.quantity, CachedShop.sellTaxPct);
     }
 
     if (Delta == 0)

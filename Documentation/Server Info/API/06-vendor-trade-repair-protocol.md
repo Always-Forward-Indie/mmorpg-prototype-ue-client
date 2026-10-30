@@ -49,6 +49,7 @@
 | `items[].priceBuy` | int | Цена покупки 1 шт (с наценкой и скидкой за репутацию) |
 | `items[].priceSell` | int | Цена выкупа 1 шт у игрока |
 | `items[].stockCurrent` | int | Остаток на складе. **-1 = бесконечный** |
+| `sellTaxPct` | float | Effective sell tax (0..1) after reputation discount |
 | `items[].stockMax` | int | Максимум склада (-1 = бесконечный) |
 
 > Проверено по коду (`VendorManager::buildShopJson`): ключи именно `priceBuy`/`priceSell`/`stockCurrent`/`stockMax`.
@@ -235,7 +236,7 @@ unit_price = ceil(vendorPriceBuy × (1.0 + markup - discount))  // округл�
 ```
 tax = economy.vendor_sell_tax_pct            // default: 0.0
 effective_tax = max(0, tax - reputation_discount)
-goldReceived = floor(vendorPriceSell × quantity × (1.0 - effective_tax))
+goldReceived = max(1, floor(vendorPriceSell × quantity × (1.0 - effective_tax))) for vendorPriceSell > 0 (valued loot never sells for 0; a 1g bone at 5% tax pays 1g). The effective tax is echoed as body.sellTaxPct in vendorShop so the client preview matches.
 ```
 
 #### Ошибки покупки/продажи

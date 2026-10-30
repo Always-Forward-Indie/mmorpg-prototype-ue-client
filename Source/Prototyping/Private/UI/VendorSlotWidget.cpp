@@ -1,6 +1,7 @@
 ﻿#include "UI/VendorSlotWidget.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Items/ItemManager.h"
+#include "Utils/NetCore/VendorSellRule.h"
 #include "Engine/AssetManager.h"
 #include "Components/SizeBox.h"
 
@@ -70,7 +71,15 @@ void UVendorSlotWidget::SetupAsCartSlot(int32 InSlotIndex, const FVendorCartEntr
     CartQuantity  = InEntry.quantity;
     bInCart       = true;
     bIsDisabled   = false;
+    SellLineTaxPct = -1.0f;
     RefreshVisuals();
+}
+
+void UVendorSlotWidget::SetSellLineTax(float InSellTaxPct)
+{
+    SellLineTaxPct = InSellTaxPct;
+    if (Mode == EVendorSlotMode::CartEntry)
+        RefreshVisuals();
 }
 
 void UVendorSlotWidget::SetInCart(bool bNewInCart)
@@ -210,7 +219,7 @@ void UVendorSlotWidget::RefreshVisuals()
     // Price text:
     //   ShopItem  -> buy price per unit  ("150 g")
     //   InvItem   -> sell price per unit ("50 g")
-    //   CartEntry -> total line price    ("300 g")
+    //   CartEntry -> total line price    ("300 g", tax-adjusted on sell side)
     if (PriceText)
     {
         FString PriceStr;
@@ -218,6 +227,9 @@ void UVendorSlotWidget::RefreshVisuals()
             PriceStr = FString::Printf(TEXT("%d g"), ShopItemData.priceBuy);
         else if (Mode == EVendorSlotMode::InvItem)
         PriceStr = FString::Printf(TEXT("%d g"), InvItemData.priceSell);
+        else if (SellLineTaxPct >= 0.0f)
+            PriceStr = FString::Printf(TEXT("%d g"),
+                FVendorSellRule::LineGold(CartEntryData.pricePerUnit, CartEntryData.quantity, SellLineTaxPct));
         else
             PriceStr = FString::Printf(TEXT("%d g"), CartEntryData.pricePerUnit * CartEntryData.quantity);
 

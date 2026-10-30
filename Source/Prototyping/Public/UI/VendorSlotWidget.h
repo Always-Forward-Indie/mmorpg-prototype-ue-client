@@ -45,7 +45,7 @@ enum class EVendorSlotMode : uint8
  *   SlotButton        UButton
  *   ItemIcon          UImage
  *   OverlayBadgeText  UTextBlock   stock count (ShopItem: "\u221E"/"5") or inv qty (InvItem: "x10")  (BindWidgetOptional)
- *   CartQtyText       UTextBlock   entry quantity in cart ("x2") — CartEntry only              (BindWidgetOptional)
+ *   CartQtyText       UTextBlock   entry quantity in cart ("x2") ï¿½ CartEntry only              (BindWidgetOptional)
  *   PriceText         UTextBlock   price label below slot: buy/sell price per unit, cart line total  (BindWidgetOptional)
  *   InCartImage       UImage       green checkmark overlay when item is in cart                      (BindWidgetOptional)
  *   DisabledOverlay   UImage       grey darkening overlay when slot is disabled                      (BindWidgetOptional)
@@ -58,7 +58,7 @@ class PROTOTYPING_API UVendorSlotWidget : public UUserWidget
 
 public:
     // -----------------------------------------------------------------------
-    // Setup — call one of these depending on the mode
+    // Setup ï¿½ call one of these depending on the mode
     // -----------------------------------------------------------------------
 
     UFUNCTION(BlueprintCallable, Category = "Vendor Slot")
@@ -69,6 +69,12 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Vendor Slot")
     void SetupAsCartSlot(int32 InSlotIndex, const FVendorCartEntry& InEntry);
+
+    // Sell-side cart lines are tax-adjusted (server pays floor(taxed line),
+    // min 1g). Call after SetupAsCartSlot for sell-cart slots so the line
+    // total matches the payout; buy-cart slots skip this (raw unit x qty).
+    UFUNCTION(BlueprintCallable, Category = "Vendor Slot")
+    void SetSellLineTax(float InSellTaxPct);
 
     // Mark / unmark "in cart" state without full rebuild
     UFUNCTION(BlueprintCallable, Category = "Vendor Slot")
@@ -88,11 +94,11 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Vendor Slot")
     EVendorSlotMode GetMode() const { return Mode; }
 
-    // Returns FInventoryItemStruct preview — works for all modes via conversion
+    // Returns FInventoryItemStruct preview ï¿½ works for all modes via conversion
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Vendor Slot")
     FInventoryItemStruct GetTooltipData() const;
 
-    // Raw data accessors — prefer these for typed tooltip population
+    // Raw data accessors ï¿½ prefer these for typed tooltip population
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Vendor Slot")
     const FVendorShopItemData& GetShopItemData() const { return ShopItemData; }
 
@@ -191,6 +197,9 @@ private:
     FVendorShopItemData   ShopItemData;
     FInventoryItemStruct  InvItemData;
     FVendorCartEntry      CartEntryData;
+
+    // Sell-side line tax (see SetSellLineTax). < 0 = buy/raw line, no tax.
+    float SellLineTaxPct = -1.0f;
 
     // -----------------------------------------------------------------------
     // Internals

@@ -177,6 +177,7 @@ void UVendorShopWidget::RefreshSellCartDisplay()
         NewSlot->OnRemoveFromCart   .AddDynamic(this, &UVendorShopWidget::HandleSellCartSlotRemove);
         Sell_Cart_Box->AddChild(NewSlot);
         NewSlot->SetupAsCartSlot(i, SellCart[i]);
+        NewSlot->SetSellLineTax(CachedShop.sellTaxPct);
         SellCartSlots.Add(NewSlot);
     }
 

@@ -14,9 +14,9 @@
  * UVendorTooltipWidget
  *
  * Tooltip shown when hovering over any slot in the vendor shop:
- *   - Vendor catalogue (buy tab)  — shows buy price
- *   - Player inventory (sell tab) — shows sell price
- *   - Cart entries (both tabs)    — shows price per unit and total
+ *   - Vendor catalogue (buy tab)  ï¿½ shows buy price
+ *   - Player inventory (sell tab) ï¿½ shows sell price
+ *   - Cart entries (both tabs)    ï¿½ shows price per unit and total
  *
  * Blueprint subclass must bind:
  *   TooltipBorder      UBorder
@@ -55,9 +55,11 @@ public:
     /**
      * Populate the tooltip from a cart entry.
      * Displays price per unit, quantity in cart and subtotal.
+     * Pass SellTaxPct >= 0 for sell-cart entries (tax-adjusted subtotal);
+     * buy-cart entries keep the default (raw unit x qty).
      */
     UFUNCTION(BlueprintCallable, Category = "Vendor Tooltip")
-    void SetDataFromCartEntry(const FVendorCartEntry& Entry);
+    void SetDataFromCartEntry(const FVendorCartEntry& Entry, float SellTaxPct = -1.0f);
 
     UFUNCTION(BlueprintCallable, Category = "Vendor Tooltip")
     void ShowTooltip();
@@ -143,7 +145,7 @@ protected:
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
     UTextBlock* FlagsText = nullptr;
 
-    // Item attributes (Attack, Defense …) — one TextBlock, newline-joined
+    // Item attributes (Attack, Defense ï¿½) ï¿½ one TextBlock, newline-joined
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
     UTextBlock* AttributesText = nullptr;
 

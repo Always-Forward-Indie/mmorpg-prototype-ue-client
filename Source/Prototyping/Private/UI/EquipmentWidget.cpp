@@ -1,7 +1,9 @@
 #include "UI/EquipmentWidget.h"
 #include "Prototyping.h"
+#include "Audio/AudioManager.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "Gameplay/Items/InventoryManager.h"
+#include "MyGameInstance.h"
 #include "Components/Button.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/CanvasPanelSlot.h"
@@ -190,7 +192,14 @@ void UEquipmentWidget::HandleEquipmentStateChanged(const FEquipmentStateData& St
 void UEquipmentWidget::HandleEquipResultReceived(const FEquipResultData& Result)
 {
     if (!Result.errorCode.IsEmpty())
+    {
         UE_LOG(LogGameplay, Warning, TEXT("EquipmentWidget: equip error - %s"), *Result.errorCode);
+        if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+        {
+            if (GI->AudioManager)
+                GI->AudioManager->PlayUISound(EUISoundEvent::ErrorSound);
+        }
+    }
 }
 
 void UEquipmentWidget::HandleCloseButtonClicked()

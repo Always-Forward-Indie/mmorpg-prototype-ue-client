@@ -11,6 +11,7 @@
 #include "UI/VendorSlotWidget.h"
 #include "UI/QuantityPopupWidget.h"
 #include "UI/VendorTooltipWidget.h"
+#include "Utils/NetCore/ShopStatusStyle.h"
 #include "VendorShopWidget.generated.h"
 
 class UVendorManager;
@@ -200,7 +201,7 @@ UPROPERTY() UVendorTooltipWidget* VendorTooltipWidget = nullptr;
     UPROPERTY() TArray<UVendorSlotWidget*> SellCartSlots;
 
     // Helpers
-    void ShowStatus(const FText& Msg);
+    void ShowStatus(const FText& Msg, EShopStatusSeverity Severity = EShopStatusSeverity::Info);
     FText GetVendorErrorText(const FString& ErrorCode) const;
     void UpdateBuyTotalText();
     void UpdateSellTotalText();

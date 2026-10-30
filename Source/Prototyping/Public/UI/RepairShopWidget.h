@@ -9,6 +9,7 @@
 #include "Components/ScrollBox.h"
 #include "Data/DataStructs.h"
 #include "UI/RepairShopRowWidget.h"
+#include "Utils/NetCore/ShopStatusStyle.h"
 #include "RepairShopWidget.generated.h"
 
 class URepairManager;
@@ -102,7 +103,7 @@ private:
     FRepairShopData CachedShop;
     int32           CachedGoldBalance = 0;
 
-    void ShowStatus(const FText& Msg);
+    void ShowStatus(const FText& Msg, EShopStatusSeverity Severity = EShopStatusSeverity::Info);
     void UpdateGoldText();
     FText GetVendorErrorText(const FString& ErrorCode) const;
 

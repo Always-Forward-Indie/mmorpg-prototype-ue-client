@@ -1,5 +1,6 @@
 #include "UI/SkillShopWidget.h"
 #include "Prototyping.h"
+#include "Audio/AudioManager.h"
 #include "Services/LocalizationSubsystem.h"
 #include "UI/SkillShopRowWidget.h"
 #include "Gameplay/SkillShop/SkillShopManager.h"
@@ -202,7 +203,7 @@ void USkillShopWidget::HandleSkillLearned(const FLearnSkillResultData& Result)
     if (ULocalizationSubsystem* Loc = ULocalizationSubsystem::Get(this))
         LearnedName = ULocalizationSubsystem::PickTableOrServer(
             Loc->GetSkillDisplayName(Result.skillSlug), Result.skillSlug, Result.skillName);
-    ShowStatus(FText::Format(LOCTEXT("LearnedValue", "Learned: {0}"), LearnedName));
+    ShowStatus(FText::Format(LOCTEXT("LearnedValue", "Learned: {0}"), LearnedName), EShopStatusSeverity::Success);
 
     // Refresh the shop display from the updated manager state
     if (SkillShopManager)
@@ -224,7 +225,7 @@ void USkillShopWidget::HandleSkillLearnFailed(const FString& SkillSlug, const FS
     else if (Reason == TEXT("insufficient_level"))Msg = FText::Format(LOCTEXT("LevelTooLow", "Level too low to learn {0}"), SkillName);
     else if (Reason == TEXT("missing_prerequisite")) Msg = FText::Format(LOCTEXT("MissingPrereq", "Missing prerequisite for {0}"), SkillName);
     else if (Reason == TEXT("out_of_range"))      Msg = LOCTEXT("MoveCloser", "Move closer to the trainer");
-    ShowStatus(Msg);
+    ShowStatus(Msg, EShopStatusSeverity::Error);
 }
 
 void USkillShopWidget::HandleCloseButtonClicked()
@@ -331,12 +332,21 @@ void USkillShopWidget::SetRowState(UUserWidget* /*Row*/, const FSkillShopSkillDa
 {
 }
 
-void USkillShopWidget::ShowStatus(const FText& Msg)
+void USkillShopWidget::ShowStatus(const FText& Msg, EShopStatusSeverity Severity)
 {
     if (Status_Text)
     {
         Status_Text->SetText(Msg);
+        Status_Text->SetColorAndOpacity(FShopStatusStyle::ColorFor(Severity));
         Status_Text->SetVisibility(ESlateVisibility::Visible);
+    }
+    if (Severity == EShopStatusSeverity::Error)
+    {
+        if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+        {
+            if (GI->AudioManager)
+                GI->AudioManager->PlayUISound(EUISoundEvent::ErrorSound);
+        }
     }
 }
 

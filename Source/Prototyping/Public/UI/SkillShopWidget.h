@@ -9,6 +9,7 @@
 #include "Components/ScrollBox.h"
 #include "Components/Image.h"
 #include "Data/DataStructs.h"
+#include "Utils/NetCore/ShopStatusStyle.h"
 #include "SkillShopWidget.generated.h"
 
 class USkillShopManager;
@@ -115,7 +116,7 @@ protected:
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UWidget*    DragHandle       = nullptr;
 
 private:
-    void ShowStatus(const FText& Msg);
+    void ShowStatus(const FText& Msg, EShopStatusSeverity Severity = EShopStatusSeverity::Info);
     void ClearStatus();
     void UpdateHeaderDisplay();
     void PopulateSkillRows();

@@ -1,5 +1,6 @@
 #include "UI/RepairShopWidget.h"
 #include "UI/RepairShopRowWidget.h"
+#include "Audio/AudioManager.h"
 #include "Gameplay/Repair/RepairManager.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/NPCs/BasicNPC.h"
@@ -249,10 +250,10 @@ void URepairShopWidget::HandleRepairItemResult(const FRepairItemResultData& Resu
 	if (!Result.errorCode.IsEmpty())
 	{
 		const FText Friendly = GetVendorErrorText(Result.errorCode);
-		ShowStatus(FText::Format(LOCTEXT("RepairFailed", "Repair failed: {0}"), Friendly));
+		ShowStatus(FText::Format(LOCTEXT("RepairFailed", "Repair failed: {0}"), Friendly), EShopStatusSeverity::Error);
 		return;
 	}
-    ShowStatus(FText::Format(LOCTEXT("RepairedSpent", "Repaired  (-{0} g)"), FText::AsNumber(Result.goldSpent)));
+    ShowStatus(FText::Format(LOCTEXT("RepairedSpent", "Repaired  (-{0} g)"), FText::AsNumber(Result.goldSpent)), EShopStatusSeverity::Success);
 
     // Update gold balance immediately (server also sends a follow-up repairShop
     // packet, but we update now for visual responsiveness)
@@ -284,7 +285,7 @@ void URepairShopWidget::HandleRepairAllResult(const FRepairAllResultData& Result
 	case ERepairAllOutcome::Failed:
 	{
 		const FText Friendly = GetVendorErrorText(Result.errorCode);
-		ShowStatus(FText::Format(LOCTEXT("RepairAllFailed", "Repair all failed: {0}"), Friendly));
+		ShowStatus(FText::Format(LOCTEXT("RepairAllFailed", "Repair all failed: {0}"), Friendly), EShopStatusSeverity::Error);
 		return;
 	}
 	case ERepairAllOutcome::NothingToRepair:
@@ -299,7 +300,7 @@ void URepairShopWidget::HandleRepairAllResult(const FRepairAllResultData& Result
 	}
 
     const int32 TotalSpent = Result.goldSpent > 0 ? Result.goldSpent : Result.totalGoldSpent;
-    ShowStatus(FText::Format(LOCTEXT("AllRepairedSpent", "All repaired  (-{0} g)"), FText::AsNumber(TotalSpent)));
+    ShowStatus(FText::Format(LOCTEXT("AllRepairedSpent", "All repaired  (-{0} g)"), FText::AsNumber(TotalSpent)), EShopStatusSeverity::Success);
 
     // Update gold balance immediately
     if (Result.newGoldBalance > 0)
@@ -351,12 +352,21 @@ void URepairShopWidget::UpdateGoldText()
     }
 }
 
-void URepairShopWidget::ShowStatus(const FText& Msg)
+void URepairShopWidget::ShowStatus(const FText& Msg, EShopStatusSeverity Severity)
 {
     if (Status_Text)
     {
         Status_Text->SetText(Msg);
+        Status_Text->SetColorAndOpacity(FShopStatusStyle::ColorFor(Severity));
         Status_Text->SetVisibility(ESlateVisibility::Visible);
+    }
+    if (Severity == EShopStatusSeverity::Error)
+    {
+        if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+        {
+            if (GI->AudioManager)
+                GI->AudioManager->PlayUISound(EUISoundEvent::ErrorSound);
+        }
     }
 }
 

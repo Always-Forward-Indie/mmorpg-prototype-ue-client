@@ -19,6 +19,8 @@ void UVendorShopWidget::OpenShop(EVendorTab DefaultTab)
     BuyCart.Reset();
     SellCart.Reset();
     PendingSellExpected = 0;
+    PreSellGold = -1;
+    PreSellRowQty.Reset();
     if (Status_Text) Status_Text->SetVisibility(ESlateVisibility::Collapsed);
 
     RefreshShopDisplay();

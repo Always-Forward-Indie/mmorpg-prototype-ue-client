@@ -11,6 +11,16 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 
+void UNotificationStackWidget::NativeOnInitialized()
+{
+    Super::NativeOnInitialized();
+    // THE visual-tree hook: RebuildWidget() consumes WidgetTree->RootWidget
+    // BEFORE NativeConstruct() ever runs, so a tree built in NativeConstruct
+    // renders nothing forever (silent blackout, zero errors). Initializing
+    // here guarantees the root exists before Slate is built.
+    EnsureStackBox();
+}
+
 void UNotificationStackWidget::NativeConstruct()
 {
     Super::NativeConstruct();
@@ -50,6 +60,12 @@ void UNotificationStackWidget::AnchorTopRight()
 void UNotificationStackWidget::ShowNotification(const FWorldNotificationStruct& Notification)
 {
     EnsureStackBox();
+    if (!StackBox || !RootCanvas)
+    {
+        UE_LOG(LogGameplay, Error, TEXT("NotificationStack: no visual tree for '%s' — toast invisible"),
+            *Notification.notificationType);
+        return;
+    }
     if (UNotificationToastWidget* Entry = AcquireEntry())
     {
         ShowSequence.Add(Entry, ++ShowCounter);

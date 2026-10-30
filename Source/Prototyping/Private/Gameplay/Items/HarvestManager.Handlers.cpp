@@ -15,6 +15,9 @@
 #include "Engine/Engine.h"
 #include "UI/HarvestProgressWidget.h"
 #include "UI/HarvestLootWidget.h"
+#include "UI/UIManager.h"
+#include "UI/WorldNotificationManager.h"
+#include "UI/NotificationStackWidget.h"
 #include "TimerManager.h"
 #include "CrashDiagnostics.h"
 
@@ -184,11 +187,24 @@ void UHarvestManager::HandleLootPickupResponse(const FCorpseLootPickupResponseSt
 		CurrentCorpseUID = 0;
 	}
 
-	// Show pickup success message
-	if (GEngine)
+	// Pickup receipts go to the toast stack (one per taken item, real server
+	// quantity) — replacing the old on-screen debug print.
+	if (gameInstance && gameInstance->Player)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Green, 
-			FString::Printf(TEXT("Picked up %d items"), PickupData.itemsPickedUp));
+		UUIManager* UIMgr = gameInstance->Player->GetUIManager();
+		UWorldNotificationManager* NotifMgr = UIMgr ? UIMgr->GetWorldNotificationManager() : nullptr;
+		if (UNotificationStackWidget* Stack = NotifMgr ? NotifMgr->GetToastWidget() : nullptr)
+		{
+			for (const FHarvestItemStruct& PickedUpItem : PickupData.pickedUpItems)
+			{
+				if (PickedUpItem.itemSlug.IsEmpty()) continue;
+				TMap<FString, FString> Fields;
+				Fields.Add(TEXT("itemId"), FString::FromInt(PickedUpItem.itemId));
+				Fields.Add(TEXT("itemSlug"), PickedUpItem.itemSlug);
+				Fields.Add(TEXT("quantity"), FString::FromInt(FMath::Max(1, PickedUpItem.quantity)));
+				Stack->EnqueueActionToast(TEXT("item_received"), Fields);
+			}
+		}
 	}
 
 	OnLootPickupSuccess.Broadcast(PickupData);

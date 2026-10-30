@@ -1,5 +1,6 @@
 #include "UI/VendorShopWidget.h"
 #include "UI/VendorShopWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -40,6 +41,21 @@ void UVendorShopWidget::HandleConfirmSellCart()
     PendingSellExpected = 0;
     for (const FVendorCartEntry& E : SellCart)
         PendingSellExpected += FVendorSellRule::LineGold(E.pricePerUnit, E.quantity, CachedShop.sellTaxPct);
+
+    // Snapshot pre-sale state so the result applies idempotently (see header).
+    PreSellGold = CachedInventory.gold;
+    PreSellRowQty.Reset();
+    for (const FVendorCartEntry& E : SellCart)
+    {
+        for (const FInventoryItemStruct& InvItem : CachedInventory.items)
+        {
+            if (InvItem.id == E.inventoryItemId)
+            {
+                PreSellRowQty.Add(E.inventoryItemId, InvItem.quantity);
+                break;
+            }
+        }
+    }
 
     // Optimistic UI update: clear the cart immediately so the seller sees instant feedback.
     // The server response (sellItemBatchResult or getPlayerInventory) will correct
@@ -148,6 +164,11 @@ void UVendorShopWidget::HandleBuyItemResult(const FBuyItemResultData& Result)
 	else
 	{
 		FString ItemName = ResolveItemNameFromShop(Result.itemId);
+		if (Result.quantity > 0 && Result.totalPrice == 0)
+		{
+			UE_LOG(LogGameplay, Warning, TEXT("VendorShop: buy success pays 0 (npc=%d item=%d qty=%d)"),
+				CachedShop.npcId, Result.itemId, Result.quantity);
+		}
 		ShowStatus(FText::Format(LOCTEXT("BoughtQty", "Bought {0} x{1}  (-{2} g)"),
 			FText::FromString(ItemName), FText::AsNumber(Result.quantity), FText::AsNumber(Result.totalPrice)), EShopStatusSeverity::Success);
 		TMap<FString, FString> ToastFields;
@@ -169,6 +190,11 @@ void UVendorShopWidget::HandleSellItemResult(const FSellItemResultData& Result)
 	else
 	{
 		FString ItemName = ResolveItemNameFromInventory(Result.inventoryItemId);
+		if (Result.quantity > 0 && Result.goldReceived == 0)
+		{
+			UE_LOG(LogGameplay, Warning, TEXT("VendorShop: sell success pays 0 (npc=%d invrow=%d qty=%d)"),
+				CachedShop.npcId, Result.inventoryItemId, Result.quantity);
+		}
 		ShowStatus(FText::Format(LOCTEXT("SoldGain", "Sold {0}  (+{1} g)"),
 			FText::FromString(ItemName), FText::AsNumber(Result.goldReceived)), EShopStatusSeverity::Success);
 		TMap<FString, FString> ToastFields;
@@ -186,6 +212,11 @@ void UVendorShopWidget::HandleBuyItemBatchResult(const FBuyItemBatchResultData& 
 		const FText Friendly = GetVendorErrorText(Result.errorCode);
 		ShowStatus(FText::Format(LOCTEXT("BuyFailed", "Buy failed: {0}"), Friendly), EShopStatusSeverity::Error);
 		return;
+	}
+	if (Result.items.Num() > 0 && Result.totalGoldSpent == 0)
+	{
+		UE_LOG(LogGameplay, Warning, TEXT("VendorShop: batch buy success spends 0 (npc=%d lines=%d)"),
+			CachedShop.npcId, Result.items.Num());
 	}
 	FString FirstItemName;
 	if (Result.items.Num() > 0)
@@ -221,6 +252,15 @@ void UVendorShopWidget::HandleSellItemBatchResult(const FSellItemBatchResultData
 		RefreshInventoryDisplay();
 		return;
 	}
+	if (Result.items.Num() > 0 && Result.totalGoldReceived == 0)
+	{
+		FString Dump;
+		for (const FSellBatchItemResult& It : Result.items)
+			Dump += FString::Printf(TEXT("[inv=%d qty=%d line=%d]"),
+				It.inventoryItemId, It.quantity, It.goldReceived);
+		UE_LOG(LogGameplay, Warning, TEXT("VendorShop: batch sell success pays 0 (npc=%d): %s"),
+			CachedShop.npcId, *Dump);
+	}
     FString FirstItemName;
     if (Result.items.Num() > 0)
         FirstItemName = ResolveItemNameFromInventory(Result.items[0].inventoryItemId);
@@ -235,25 +275,36 @@ void UVendorShopWidget::HandleSellItemBatchResult(const FSellItemBatchResultData
 	SendShopToast(TEXT("gold_received"), ToastFields);
 
     // Update CachedInventory quantities based on what was actually sold.
-    // Only subtract if the item still exists — getPlayerInventory may have already
-    // replaced CachedInventory with the post-sale state before this result arrived.
+    // Idempotent: an absolute getPlayerInventory may have landed first and
+    // already absorbed the sale — only subtract rows still holding the
+    // pre-sale quantity.
     for (const FSellBatchItemResult& SoldItem : Result.items)
     {
+        const int32* PreQty = PreSellRowQty.Find(SoldItem.inventoryItemId);
         for (int32 i = CachedInventory.items.Num() - 1; i >= 0; --i)
         {
             if (CachedInventory.items[i].id == SoldItem.inventoryItemId)
             {
-                CachedInventory.items[i].quantity -= SoldItem.quantity;
-                if (CachedInventory.items[i].quantity <= 0)
-                    CachedInventory.items.RemoveAt(i);
+                if (!PreQty || CachedInventory.items[i].quantity == *PreQty)
+                {
+                    CachedInventory.items[i].quantity -= SoldItem.quantity;
+                    if (CachedInventory.items[i].quantity <= 0)
+                        CachedInventory.items.RemoveAt(i);
+                }
                 break;
             }
         }
     }
+    PreSellRowQty.Reset();
 
     // Server-authoritative gold: credit the player immediately so the UI doesn't
-    // stall waiting for the next getPlayerInventory packet.
-    CachedInventory.gold += Result.totalGoldReceived;
+    // stall waiting for the next getPlayerInventory packet — unless the
+    // snapshot shows gold already moved (inventory-first arrival).
+    if (PreSellGold < 0 || CachedInventory.gold == PreSellGold)
+    {
+        CachedInventory.gold += Result.totalGoldReceived;
+    }
+    PreSellGold = -1;
 
     SellCart.Reset();
     RefreshSellCartDisplay();

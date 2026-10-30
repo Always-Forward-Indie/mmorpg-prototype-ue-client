@@ -1,6 +1,10 @@
 #include "UI/TradeWidget.h"
 #include "Prototyping.h"
 #include "Gameplay/Trade/TradeManager.h"
+#include "Gameplay/Players/BasicPlayer.h"
+#include "UI/UIManager.h"
+#include "UI/WorldNotificationManager.h"
+#include "UI/NotificationStackWidget.h"
 #include "Utils/NetCore/TradeStatusRule.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "MyGameInstance.h"
@@ -233,7 +237,33 @@ void UTradeWidget::HandleTradeCancelled(const FTradeCancelledData& Data)
 
 void UTradeWidget::HandleTradeCompleted(const FTradeCompleteData& Data)
 {
-    UE_LOG(LogGameplay, Warning, TEXT("TradeWidget: Trade completed � session %s"), *Data.sessionId);
+    UE_LOG(LogGameplay, Warning, TEXT("TradeWidget: Trade completed, session %s"), *Data.sessionId);
+    // Completion receipts go to the toast stack (the window closes immediately,
+    // so Status_Text-style feedback would never be seen).
+    if (Data.bSuccess)
+    {
+        const APlayerController* PC = GetOwningPlayer();
+        const ABasicPlayer* Pawn = PC ? Cast<ABasicPlayer>(PC->GetPawn()) : nullptr;
+        UUIManager* UIMgr = Pawn ? Pawn->GetUIManager() : nullptr;
+        UWorldNotificationManager* NotifMgr = UIMgr ? UIMgr->GetWorldNotificationManager() : nullptr;
+        if (UNotificationStackWidget* Stack = NotifMgr ? NotifMgr->GetToastWidget() : nullptr)
+        {
+            for (const FTradeReceivedItem& Item : Data.receivedItems)
+            {
+                TMap<FString, FString> Fields;
+                Fields.Add(TEXT("itemId"), FString::FromInt(Item.itemId));
+                Fields.Add(TEXT("itemSlug"), Item.slug);
+                Fields.Add(TEXT("quantity"), FString::FromInt(Item.quantity));
+                Stack->EnqueueActionToast(TEXT("item_received"), Fields);
+            }
+            if (Data.receivedGold > 0)
+            {
+                TMap<FString, FString> GoldFields;
+                GoldFields.Add(TEXT("amount"), FString::FromInt(Data.receivedGold));
+                Stack->EnqueueActionToast(TEXT("gold_received"), GoldFields);
+            }
+        }
+    }
     CloseTrade();
 }
 

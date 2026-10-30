@@ -1,5 +1,6 @@
 #include "UI/VendorShopWidget.h"
 #include "UI/VendorShopWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "UI/VendorTooltipWidget.h"
@@ -64,6 +65,14 @@ void UVendorShopWidget::UpdateBuyTotalText()
     if (!Buy_Total_Text) return;
     int32 Total = 0;
     for (const FVendorCartEntry& E : BuyCart) Total += E.pricePerUnit * E.quantity;
+    if (Total == 0 && BuyCart.Num() > 0)
+    {
+        FString Dump;
+        for (const FVendorCartEntry& E : BuyCart)
+            Dump += FString::Printf(TEXT("[item=%d unit=%d qty=%d]"), E.itemId, E.pricePerUnit, E.quantity);
+        UE_LOG(LogGameplay, Warning, TEXT("VendorShop: non-empty buy cart totals 0 (npc=%d): %s"),
+            CachedShop.npcId, *Dump);
+    }
     Buy_Total_Text->SetText(FText::Format(LOCTEXT("TotalValue", "Total: {0} g"), FText::AsNumber(Total)));
 }
 
@@ -78,6 +87,15 @@ void UVendorShopWidget::UpdateSellTotalText()
     int32 Total = 0;
     for (const FVendorCartEntry& E : SellCart)
         Total += FVendorSellRule::LineGold(E.pricePerUnit, E.quantity, CachedShop.sellTaxPct);
+    if (Total == 0 && SellCart.Num() > 0)
+    {
+        FString Dump;
+        for (const FVendorCartEntry& E : SellCart)
+            Dump += FString::Printf(TEXT("[inv=%d unit=%d qty=%d tax=%.2f]"),
+                E.inventoryItemId, E.pricePerUnit, E.quantity, CachedShop.sellTaxPct);
+        UE_LOG(LogGameplay, Warning, TEXT("VendorShop: non-empty sell cart totals 0 (npc=%d): %s"),
+            CachedShop.npcId, *Dump);
+    }
     Sell_Total_Text->SetText(FText::Format(LOCTEXT("YouGetValue", "You get: {0} g"), FText::AsNumber(Total)));
 }
 

@@ -63,6 +63,7 @@ public:
     float DisplayDuration = 4.0f;
 
 protected:
+    virtual void NativeOnInitialized() override;
     virtual void NativeConstruct() override;
 
 private:

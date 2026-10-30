@@ -24,6 +24,7 @@ class UDevModeBotBrain;
 //   devmode.reloadinventory            - clear and re-populate inventory from JSON
 //   devmode.listmobs                   - print all spawned mobs to log
 //   devmode.scenario <combat|reset|full_sweep|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery> - one-shot QA flows (teleport/reload presets)
+//   devmode.scenario <toast_verify> - fire the toast mix, assert the stack shows it, quit (tombstone DEVMODE_TOAST_RESULT)
 //   devmode.bot <combat_patrol|loot_pickup|death_respawn|harvest_run|periphery>      - start the L1 action bot (real movement/combat, see DevModeBotBrain)
 //   devmode.toast [type] [count]    - fire test toasts at the notification stack (no args = 6-toast severity mix)
 // Assert markers for external log scan: "DEVMODE_ASSERT <PASS|FAIL> ...",
@@ -81,6 +82,8 @@ private:
     void Cmd_KillMob(const TArray<FString>& Args) const;
     // Fire test toasts at the notification stack (visual proof for the toast UI).
     void Cmd_Toast(const TArray<FString>& Args) const;
+    // Fire the toast mix and assert the stack shows it (self-test with tombstone).
+    void Cmd_ToastVerify(const TArray<FString>& Args) const;
     void Cmd_ClearCorpses(const TArray<FString>& Args) const;
     // A2 reconnect hook: closes the chunk socket so the drop detector and
     // bounded reconnect run exactly like on a real network drop. Offline

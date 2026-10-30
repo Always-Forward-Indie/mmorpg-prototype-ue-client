@@ -46,6 +46,11 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Notification|Stack")
     void AnchorTopRight();
 
+    /** Snapshot for the toast self-test (devmode scenario): pool sizes and
+     *  whether the Slate tree was built before first paint. */
+    void GetToastDiagnostics(int32& OutTotalEntries, int32& OutVisibleEntries,
+        int32& OutQueued, bool& OutTreeBuilt) const;
+
     /** Widget class used for stack entries (the WBP toast). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Notification|Stack|Config")
     TSubclassOf<UNotificationToastWidget> EntryClass;

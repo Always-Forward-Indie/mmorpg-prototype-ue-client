@@ -15,6 +15,7 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Engine/World.h"
+#include "Engine/Engine.h"
 #include "HighResScreenshot.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -24,7 +25,7 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
 {
     if (Args.Num() < 1)
     {
-        UE_LOG(LogGameplay, Warning, TEXT("Usage: devmode.scenario <combat|reset|full_sweep|soak|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery>"));
+        UE_LOG(LogGameplay, Warning, TEXT("Usage: devmode.scenario <combat|reset|full_sweep|soak|toast_verify|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery>"));
         return;
     }
     if (!GameInstance) return;
@@ -96,6 +97,23 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
         BrainScenario.RemoveFromStart(TEXT("bot_"));
         StartBotBrain(BrainScenario);
     }
+    else if (Name == TEXT("toast_verify"))
+    {
+        // Toast stack self-test: fires the mix, asserts visibility, quits.
+        Cmd_ToastVerify(NoArgs);
+        if (GameInstance && GameInstance->bDevModeAutoQuit)
+        {
+            GameInstance->bDevModeAutoQuit = false;
+            GameInstance->DevModeAutoScenario.Empty();
+            if (UWorld* World = GameInstance->GetWorld())
+            {
+                if (GEngine)
+                {
+                    GEngine->Exec(World, TEXT("quit"));
+                }
+            }
+        }
+    }
     else if (Name == TEXT("bot_vendor_repair"))
     {
         // Economy shops need the server round-trip — live only.
@@ -103,7 +121,7 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
     }
     else
     {
-        UE_LOG(LogGameplay, Warning, TEXT("devmode.scenario: unknown '%s' (use combat|reset|full_sweep|soak|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery)"), *Args[0]);
+        UE_LOG(LogGameplay, Warning, TEXT("devmode.scenario: unknown '%s' (use combat|reset|full_sweep|soak|toast_verify|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery)"), *Args[0]);
     }
 }
 

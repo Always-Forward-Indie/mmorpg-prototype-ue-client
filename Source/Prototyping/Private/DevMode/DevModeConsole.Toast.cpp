@@ -70,3 +70,54 @@ void UDevModeConsoleCommands::Cmd_Toast(const TArray<FString>& Args) const
     }
     UE_LOG(LogGameplay, Warning, TEXT("devmode.toast: fired %dx '%s'"), Count, *Type);
 }
+
+// ============================================================================
+// devmode.toastverify — self-test: fire the 6-toast mix, then assert the
+// stack actually shows it (tree built, 5 visible with text, 1 queued).
+// Tombstone for log scan: "DEVMODE_TOAST_RESULT <PASS|FAIL> ...".
+// ============================================================================
+void UDevModeConsoleCommands::Cmd_ToastVerify(const TArray<FString>& Args) const
+{
+    TArray<FString> NoArgs;
+    Cmd_Toast(NoArgs);
+
+    FString FailReason;
+    int32 Total = 0, Visible = 0, Queued = 0;
+    bool bTreeBuilt = false;
+    if (!GameInstance || !GameInstance->Player)
+    {
+        FailReason = TEXT("no player");
+    }
+    else
+    {
+        UUIManager* UIMgr = GameInstance->Player->GetUIManager();
+        UWorldNotificationManager* NotifMgr = UIMgr ? UIMgr->GetWorldNotificationManager() : nullptr;
+        UNotificationStackWidget* Stack = NotifMgr ? NotifMgr->GetToastWidget() : nullptr;
+        if (!Stack)
+        {
+            FailReason = TEXT("no stack");
+        }
+        else
+        {
+            Stack->GetToastDiagnostics(Total, Visible, Queued, bTreeBuilt);
+            if (!bTreeBuilt)
+                FailReason = TEXT("slate tree missing");
+            else if (Total != 5)
+                FailReason = FString::Printf(TEXT("entries=%d want 5"), Total);
+            else if (Visible != 5)
+                FailReason = FString::Printf(TEXT("visible=%d want 5"), Visible);
+            else if (Queued != 1)
+                FailReason = FString::Printf(TEXT("queued=%d want 1"), Queued);
+        }
+    }
+
+    if (FailReason.IsEmpty())
+    {
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_TOAST_RESULT PASS visible=%d queued=%d"), Visible, Queued);
+    }
+    else
+    {
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_TOAST_RESULT FAIL %s"), *FailReason);
+    }
+    (void)Args;
+}

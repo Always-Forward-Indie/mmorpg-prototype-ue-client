@@ -157,6 +157,13 @@ void UDevModeConsoleCommands::RegisterCommands(UMyGameInstance* InGameInstance)
             if (UDevModeConsoleCommands* Cmd = WeakThis.Get()) { Cmd->Cmd_Toast(A); }
         }));
 
+    Reg(TEXT("devmode.toastverify"),
+        TEXT("DevMode: fire the toast mix and assert the stack shows it (logs DEVMODE_TOAST_RESULT)."),
+        FConsoleCommandWithArgsDelegate::CreateLambda([WeakThis](const TArray<FString>& A)
+        {
+            if (UDevModeConsoleCommands* Cmd = WeakThis.Get()) { Cmd->Cmd_ToastVerify(A); }
+        }));
+
     UE_LOG(LogGameplay, Verbose, TEXT("DevMode: %d console commands registered"), RegisteredCommandNames.Num());
 }
 

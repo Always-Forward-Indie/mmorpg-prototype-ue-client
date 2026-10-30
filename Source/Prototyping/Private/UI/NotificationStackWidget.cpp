@@ -57,6 +57,25 @@ void UNotificationStackWidget::AnchorTopRight()
     EnsureStackBox();
 }
 
+void UNotificationStackWidget::GetToastDiagnostics(int32& OutTotalEntries, int32& OutVisibleEntries,
+    int32& OutQueued, bool& OutTreeBuilt) const
+{
+    OutTotalEntries = 0;
+    OutVisibleEntries = 0;
+    for (UNotificationToastWidget* Entry : Entries)
+    {
+        if (!IsValid(Entry)) continue;
+        ++OutTotalEntries;
+        if (Entry->IsShowing() && Entry->GetVisibility() != ESlateVisibility::Collapsed
+            && !Entry->GetCurrentBody().IsEmpty())
+        {
+            ++OutVisibleEntries;
+        }
+    }
+    OutQueued = PendingQueue.Num();
+    OutTreeBuilt = (WidgetTree && WidgetTree->RootWidget == RootCanvas && RootCanvas && StackBox);
+}
+
 void UNotificationStackWidget::ShowNotification(const FWorldNotificationStruct& Notification)
 {
     EnsureStackBox();
@@ -84,7 +103,7 @@ void UNotificationStackWidget::ShowNotification(const FWorldNotificationStruct& 
         PendingQueue.RemoveAt(0);
     }
     PendingQueue.Add(Notification);
-    UE_LOG(LogGameplay, Verbose, TEXT("NotificationStack: all entries busy, queued '%s' (queued=%d)"),
+    UE_LOG(LogGameplay, Warning, TEXT("NotificationStack: pool exhausted, queued '%s' (queued=%d)"),
         *Notification.notificationType, PendingQueue.Num());
 }
 
@@ -141,40 +160,50 @@ APlayerController* UNotificationStackWidget::ResolvePlayerController() const
 
 UNotificationToastWidget* UNotificationStackWidget::AcquireEntry()
 {
-    for (UNotificationToastWidget* Entry : Entries)
+    for (int32 i = 0; i < Entries.Num(); ++i)
     {
+        UNotificationToastWidget* Entry = Entries[i];
         if (IsValid(Entry) && !Entry->IsShowing()
             && Entry->GetVisibility() == ESlateVisibility::Collapsed)
         {
+            UE_LOG(LogGameplay, Verbose, TEXT("NotificationStack: reusing entry %d (pool=%d)"),
+                i, Entries.Num());
             return Entry;
         }
     }
     if (!EntryClass || Entries.Num() >= MaxVisible)
     {
+        UE_LOG(LogGameplay, Warning, TEXT("NotificationStack: pool exhausted (class=%s total=%d max=%d)"),
+            EntryClass ? *EntryClass->GetName() : TEXT("NONE"), Entries.Num(), MaxVisible);
         return nullptr;
     }
-    if (APlayerController* PC = ResolvePlayerController())
+    APlayerController* PC = ResolvePlayerController();
+    if (!PC)
     {
-        if (UNotificationToastWidget* Fresh = CreateWidget<UNotificationToastWidget>(PC, EntryClass))
+        UE_LOG(LogGameplay, Warning, TEXT("NotificationStack: no player controller for new entry"));
+        return nullptr;
+    }
+    UNotificationToastWidget* Fresh = CreateWidget<UNotificationToastWidget>(PC, EntryClass);
+    if (!Fresh)
+    {
+        UE_LOG(LogGameplay, Warning, TEXT("NotificationStack: CreateWidget failed (class=%s)"),
+            EntryClass ? *EntryClass->GetName() : TEXT("NONE"));
+        return nullptr;
+    }
+    UE_LOG(LogGameplay, Verbose, TEXT("NotificationStack: spawned entry %d"), Entries.Num() + 1);
+    Fresh->DisplayDuration = DisplayDuration;
+    Fresh->OnToastExpired.AddUObject(this, &UNotificationStackWidget::HandleEntryExpired);
+    Entries.Add(Fresh);
+    if (StackBox)
+    {
+        if (UVerticalBoxSlot* BoxSlot = StackBox->AddChildToVerticalBox(Fresh))
         {
-            Fresh->DisplayDuration = DisplayDuration;
-            Fresh->OnToastExpired.AddUObject(this, &UNotificationStackWidget::HandleEntryExpired);
-            Entries.Add(Fresh);
-            if (StackBox)
-            {
-                if (UVerticalBoxSlot* BoxSlot = StackBox->AddChildToVerticalBox(Fresh))
-                {
-                    BoxSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 6.0f));
-                    BoxSlot->SetHorizontalAlignment(HAlign_Right);
-                }
-            }
-            return Fresh;
+            BoxSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 6.0f));
+            BoxSlot->SetHorizontalAlignment(HAlign_Right);
         }
     }
-    UE_LOG(LogGameplay, Error, TEXT("NotificationStack: failed to spawn entry (class=%s, pc=%s)"),
-        EntryClass ? *EntryClass->GetName() : TEXT("NONE"),
-        ResolvePlayerController() ? TEXT("ok") : TEXT("null"));
-    return nullptr;
+    UE_LOG(LogGameplay, Verbose, TEXT("NotificationStack: spawned entry %d"), Entries.Num());
+    return Fresh;
 }
 
 void UNotificationStackWidget::PromoteNext()

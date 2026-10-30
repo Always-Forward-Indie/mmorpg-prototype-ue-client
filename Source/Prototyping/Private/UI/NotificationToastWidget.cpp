@@ -1,4 +1,5 @@
 #include "UI/NotificationToastWidget.h"
+#include "Prototyping.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "MyGameInstance.h"
@@ -11,8 +12,16 @@
 void UNotificationToastWidget::NativeConstruct()
 {
     Super::NativeConstruct();
-    SetVisibility(ESlateVisibility::Collapsed);
-    bIsShowing = false;
+    // State-preserving construct: the stack re-parents entries to reorder
+    // them, which rebuilds their Slate and refires this. Wiping live state
+    // here collapses visible toasts and frees them for overwrite (the pool
+    // never grows past 1). Only fresh entries start collapsed.
+    if (!bEverShown)
+    {
+        UE_LOG(LogGameplay, Verbose, TEXT("ToastEntry: constructed %p"), this);
+        SetVisibility(ESlateVisibility::Collapsed);
+        bIsShowing = false;
+    }
 }
 
 void UNotificationToastWidget::ShowNotification(const FWorldNotificationStruct& Notification)
@@ -55,7 +64,10 @@ void UNotificationToastWidget::Dismiss()
 
 void UNotificationToastWidget::DisplayNotificationImmediate(const FWorldNotificationStruct& Notification)
 {
+    UE_LOG(LogGameplay, Verbose, TEXT("ToastEntry: displaying '%s' on %p"),
+        *Notification.notificationType, this);
     bIsShowing = true;
+    bEverShown = true;
 
     // Clear any previous auto-hide timer
     if (UWorld* World = GetWorld())
@@ -109,6 +121,11 @@ void UNotificationToastWidget::OnAutoHideElapsed()
     bIsShowing = false;
     PlayHideAnimation();
     OnToastExpired.Broadcast(this);
+}
+
+FText UNotificationToastWidget::GetCurrentBody() const
+{
+    return Toast_Body_Text ? Toast_Body_Text->GetText() : FText::GetEmpty();
 }
 
 void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& Notification,

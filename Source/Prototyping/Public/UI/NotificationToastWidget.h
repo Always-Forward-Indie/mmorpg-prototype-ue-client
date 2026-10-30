@@ -62,6 +62,9 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Notification|Toast")
     bool IsShowing() const { return bIsShowing; }
 
+    /** Current body text (empty until shown). Test hook for the toast stack. */
+    FText GetCurrentBody() const;
+
     /** Hide immediately and report expiry (used when the stack recycles us). */
     UFUNCTION(BlueprintCallable, Category = "Notification|Toast")
     void Dismiss();
@@ -105,6 +108,10 @@ private:
 
     /** True while a toast is visible (between show and hide). */
     bool bIsShowing = false;
+
+    /** Latched on first display: NativeConstruct refires when the stack
+     *  re-parents the entry, and must not wipe live state then. */
+    bool bEverShown = false;
 
     EShopStatusSeverity Severity = EShopStatusSeverity::Info;
 };

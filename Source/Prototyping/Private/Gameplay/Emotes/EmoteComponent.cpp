@@ -136,7 +136,18 @@ void UEmoteComponent::StopCurrentEmote()
     ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
     if (OwnerChar && CurrentMontageAsset)
     {
-        OwnerChar->StopAnimMontage(CurrentMontageAsset);
+        // Explicit blend-out so the cut back to locomotion is a smooth
+        // ~0.35s crossfade instead of the engine-default snap.
+        // (ACharacter::StopAnimMontage takes no blend time; route through
+        // the anim instance, which does.)
+        if (UAnimInstance* AnimInst = OwnerChar->GetMesh() ? OwnerChar->GetMesh()->GetAnimInstance() : nullptr)
+        {
+            AnimInst->Montage_Stop(0.35f, CurrentMontageAsset);
+        }
+        else
+        {
+            OwnerChar->StopAnimMontage(CurrentMontageAsset);
+        }
     }
 
     // Destroy any looping VFX

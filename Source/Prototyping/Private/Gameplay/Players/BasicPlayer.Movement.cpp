@@ -68,6 +68,7 @@
 #include "Gameplay/Emotes/EmoteNetworkHandler.h"
 #include "Gameplay/Emotes/EmoteComponent.h"
 #include "Utils/NetCore/RemoteLandingRule.h"
+#include "Utils/NetCore/RemoteTakeoffRule.h"
 #include "Gameplay/WorldObjects/WorldInteractiveObjectActor.h"
 #include "Gameplay/WorldObjects/WorldObjectManager.h"
 #include "Utils/AudioSpawnHelpers.h"
@@ -263,19 +264,30 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
         EmoteComponent->NotifyMovementStarted();
     }
 
+    // Rendered vertical speed (shared by the air-state fusion and the trace).
+    const float ZNow = GetActorLocation().Z;
+    if (!bRemoteTraceZSeeded)
+    {
+        RemoteLastTraceZ = ZNow;
+        bRemoteTraceZSeeded = true;
+    }
+    const float RenderedVz = DeltaTime > 0.f ? (ZNow - RemoteLastTraceZ) / DeltaTime : 0.f;
+    RemoteLastTraceZ = ZNow;
+
+    // Air-state fusion: the server flag lags jump start by whole packet
+    // intervals (rendered actor already rising). Fast vertical motion means
+    // airborne even when the flag still reads ground.
+    if (FRemoteTakeoffRule::ShouldTakeOff(bRemoteIsInAir, RenderedVz))
+    {
+        bRemoteIsInAir = true;
+        UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] air 0->1 via takeoff (Vz=%+.1f)"), RenderedVz);
+    }
+
     // FLIGHT-TRACE: rendered vertical speed + flag state per tick.
     {
-        const float ZNow = GetActorLocation().Z;
-        if (!bRemoteTraceZSeeded)
-        {
-            RemoteLastTraceZ = ZNow;
-            bRemoteTraceZSeeded = true;
-        }
-        const float Vz = DeltaTime > 0.f ? (ZNow - RemoteLastTraceZ) / DeltaTime : 0.f;
-        RemoteLastTraceZ = ZNow;
         UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] tick air=%d moving=%d idle=%.2f grace=%.2f actorZ=%.1f targetZ=%.1f Vz=%+.1f"),
             bRemoteIsInAir ? 1 : 0, bRemoteIsMoving ? 1 : 0, RemoteIdleTime, GracePeriod,
-            ZNow, TargetReceivedPosition.Z, Vz);
+            ZNow, TargetReceivedPosition.Z, RenderedVz);
     }
 
     // Landed-by-stillness: the airborne flag arrives only inside movement

@@ -83,6 +83,14 @@ public:
     // ── Interruption ────────────────────────────────────────────────────────
 
     /**
+     * Whether the emote row interrupts on movement start (false for unknown
+     * slugs). Used to refuse playback when already moving instead of flashing
+     * one frame and dying on the movement edge.
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Emotes")
+    bool InterruptsOnMove(const FString& EmoteSlug) const;
+
+    /**
      * Call when the character begins moving.
      * Stops any emote whose FEmoteTableRow::bInterruptOnMove is true.
      */

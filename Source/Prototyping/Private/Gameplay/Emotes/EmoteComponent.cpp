@@ -152,6 +152,12 @@ void UEmoteComponent::NotifyMovementStarted()
     }
 }
 
+bool UEmoteComponent::InterruptsOnMove(const FString& EmoteSlug) const
+{
+    const FEmoteTableRow* Row = FindTableRow(EmoteSlug);
+    return Row ? Row->bInterruptOnMove : false;
+}
+
 void UEmoteComponent::NotifyDamageReceived()
 {
     if (bIsPlaying && bCurrentInterruptOnDmg)

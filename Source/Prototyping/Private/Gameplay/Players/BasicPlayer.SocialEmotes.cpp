@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -76,6 +77,17 @@ void ABasicPlayer::PlayEmoteForCharacter(const FString& EmoteSlug, const FString
 {
     if (EmoteComponent)
     {
+        // Already moving + interrupt-on-move row: refuse playback instead of
+        // flashing one frame (the movement edge fires only on start, so an
+        // emote begun mid-motion would otherwise never be interrupted).
+        const bool bMoving = playerData.isOtherClient
+            ? bRemoteIsMoving
+            : playerData.characterData.bIsMoving;
+        if (bMoving && EmoteComponent->InterruptsOnMove(EmoteSlug))
+        {
+            UE_LOG(LogGameplay, Verbose, TEXT("PlayEmoteForCharacter: refusing '%s' while moving"), *EmoteSlug);
+            return;
+        }
         if (!playerData.isOtherClient)
         {
             LockMovement();

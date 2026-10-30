@@ -1,8 +1,10 @@
 #include "Gameplay/Chat/ChatManager.h"
 #include "Prototyping.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Players/BasicPlayer.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
+#include "Utils/NetCore/ChatWhisperRule.h"
 #include "Services/TimeSyncService.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
@@ -62,6 +64,23 @@ void UChatManager::SendChatMessage(const FString& Channel, const FString& Text, 
     );
 
     NetworkManager->SendDataToChunkServer(JsonString);
+
+    // Whispers are delivered to the target only — the server never echoes
+    // them to the sender. Show our own line immediately (optimistic echo);
+    // a "not found" error still arrives separately and renders red.
+    if (FChatWhisperRule::NeedsLocalEcho(Channel) && GameInstance->Player)
+    {
+        FChatMessageStruct Echo;
+        Echo.channel    = Channel;
+        Echo.senderName = GameInstance->Player->GetPlayerData().characterData.characterName;
+        Echo.senderId   = GameInstance->GetCurrentCharacterID();
+        Echo.text       = Text;
+        if (UTimeSyncService* Sync = GameInstance->GetTimeSyncService())
+        {
+            Echo.timestamp = Sync->GetEstimatedServerTimeMs();
+        }
+        OnMessageReceived(Echo);
+    }
 }
 
 void UChatManager::OnMessageReceived(const FChatMessageStruct& Message)

@@ -67,6 +67,7 @@
 #include "Gameplay/Emotes/EmoteManager.h"
 #include "Gameplay/Emotes/EmoteNetworkHandler.h"
 #include "Gameplay/Emotes/EmoteComponent.h"
+#include "Utils/NetCore/RemoteLandingRule.h"
 #include "Gameplay/WorldObjects/WorldInteractiveObjectActor.h"
 #include "Gameplay/WorldObjects/WorldObjectManager.h"
 #include "Utils/AudioSpawnHelpers.h"
@@ -240,14 +241,35 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     const float GraceWindow = FMath::Max(ServerPositionUpdateInterval, 0.05f);
     const float GracePeriod = GraceWindow * 1.5f;
 
+    const bool bWasMovingRemote = bRemoteIsMoving;
+    // Idle clock runs whenever there is no displacement (packets reset it) —
+    // including airborne-but-still vertical jumps that never set the moving
+    // flag, so the landing rule below also fires for those.
+    RemoteIdleTime += DeltaTime;
     if (bRemoteIsMoving)
     {
-        RemoteIdleTime += DeltaTime;
         if (RemoteIdleTime >= GracePeriod)
         {
             // No displacement in the last packet — begin fade-out.
             bRemoteIsMoving = false;
         }
+    }
+
+    // Movement edge: an emote playing while motion starts dies here. The
+    // packet path (SetCoordinates) only sets flags — nobody else notifies.
+    if (!bWasMovingRemote && bRemoteIsMoving && EmoteComponent)
+    {
+        EmoteComponent->NotifyMovementStarted();
+    }
+
+    // Landed-by-stillness: the airborne flag arrives only inside movement
+    // packets, so a remote that lands and stands still would play fall
+    // forever (until the next move/rotate packet). No displacement for a
+    // full grace window means it is on the ground.
+    if (FRemoteLandingRule::ShouldLand(bRemoteIsInAir, bRemoteIsMoving, RemoteIdleTime, GracePeriod))
+    {
+        bRemoteIsInAir = false;
+        UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: remote landed by stillness (idle=%.2fs)"), RemoteIdleTime);
     }
 
     // Target values for this tick.

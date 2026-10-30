@@ -8,6 +8,8 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
+#include "Gameplay/Players/BasicPlayer.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "CrashDiagnostics.h"
 
 static constexpr float FloorInterpSpeed = 15.f;
@@ -44,6 +46,22 @@ void UTargetDecalComponent::TickComponent(float DeltaTime, ELevelTick TickType,
     if (!DecalComp || !DecalComp->IsVisible() || !KnownConfig)
     {
         return;
+    }
+
+    // Freeze the floor track while the owner is airborne: tracing from a
+    // falling actor swings the ring between air and ground (blink before
+    // landing). The track resumes on the next grounded tick via the same
+    // interpolation, so touchdown stays smooth.
+    if (const ABasicPlayer* TargetPlayer = Cast<ABasicPlayer>(GetOwner()))
+    {
+        const bool bIsRemote = TargetPlayer->GetPlayerData().isOtherClient;
+        const bool bRemoteAir = bIsRemote && TargetPlayer->GetRemoteIsInAir();
+        const UCharacterMovementComponent* CMC = TargetPlayer->GetCharacterMovement();
+        const bool bLocalAir = !bIsRemote && CMC && CMC->IsFalling();
+        if (bRemoteAir || bLocalAir)
+        {
+            return;
+        }
     }
 
     UpdateFloorTrace();

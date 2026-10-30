@@ -452,10 +452,11 @@ Toast->ShowNotification(OverNotif);
 }
 }
 }
-    // Weight status is informational only (used by UI weight bar).
-    // Movement speed is fully server-authoritative and arrives via move_speed in stats_update.
+    // Weight status is informational only (used by UI weight bar + toast).
+    // Movement speed is fully server-authoritative and arrives factored via
+    // move_speed in stats_update (overweight row included in activeEffects).
     // No client-side speed penalty is applied here.
-    UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Weight status updated вЂ” current=%.1f limit=%.1f overweight=%d (speed unchanged)"),
+    UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Weight status updated — current=%.1f limit=%.1f overweight=%d (speed via stats_update)"),
         WeightStatus.currentWeight, WeightStatus.weightLimit, (int)WeightStatus.isOverweight);
 }
 

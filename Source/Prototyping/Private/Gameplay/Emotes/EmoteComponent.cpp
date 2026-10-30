@@ -36,6 +36,15 @@ void UEmoteComponent::PlayEmoteBySlug(const FString& EmoteSlug, const FString& A
         return;
     }
 
+    // EMOTE-TRACE: every play/stop decision with row flags.
+    {
+        const FEmoteTableRow* TraceRow = FindTableRow(EmoteSlug);
+        UE_LOG(LogGameplay, Verbose, TEXT("[EMOTE] play '%s' owner='%s' wasPlaying=%d intMov=%d intDmg=%d"),
+            *EmoteSlug, *GetOwner()->GetName(), bIsPlaying ? 1 : 0,
+            TraceRow && TraceRow->bInterruptOnMove ? 1 : 0,
+            TraceRow && TraceRow->bInterruptOnDamage ? 1 : 0);
+    }
+
     // Stop any running emote first
     if (bIsPlaying)
     {
@@ -148,7 +157,12 @@ void UEmoteComponent::NotifyMovementStarted()
 {
     if (bIsPlaying && bCurrentInterruptOnMov)
     {
+        UE_LOG(LogGameplay, Verbose, TEXT("[EMOTE] stop-on-move '%s'"), *CurrentEmoteSlug);
         StopCurrentEmote();
+    }
+    else if (bIsPlaying)
+    {
+        UE_LOG(LogGameplay, Verbose, TEXT("[EMOTE] keep-on-move '%s' (row allows motion)"), *CurrentEmoteSlug);
     }
 }
 

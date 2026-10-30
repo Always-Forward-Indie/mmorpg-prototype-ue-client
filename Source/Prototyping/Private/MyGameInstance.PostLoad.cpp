@@ -114,6 +114,18 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 {
 	if (!LoadedWorld) return;
 
+	// Multi-PIE: PostLoadMapWithWorld is process-global — every GameInstance
+	// receives it for every PIE world's map loads. Ignore sibling instances'
+	// worlds, or one login load double-inits everything (duplicate delegate
+	// binds, cameras, UI, socket connects). Same guard shape as
+	// QuiesceNavMeshBuilds. Null GetWorld falls through to legacy behavior.
+	if (IsValid(GetWorld()) && GetWorld() != LoadedWorld)
+	{
+		UE_LOG(LogConnection, Verbose, TEXT("OnPostLoginLevelLoaded: SKIPPED world '%s' (not ours)"),
+			*LoadedWorld->GetName());
+		return;
+	}
+
 	UE_LOG(LogConnection, Warning, TEXT("OnPostLoginLevelLoaded: %s"), *LevelBeingLoaded.ToString());
 
 	// Travel measurement: how long the travel took in wall-clock and frames.

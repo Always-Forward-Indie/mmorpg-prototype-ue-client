@@ -263,6 +263,21 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
         EmoteComponent->NotifyMovementStarted();
     }
 
+    // FLIGHT-TRACE: rendered vertical speed + flag state per tick.
+    {
+        const float ZNow = GetActorLocation().Z;
+        if (!bRemoteTraceZSeeded)
+        {
+            RemoteLastTraceZ = ZNow;
+            bRemoteTraceZSeeded = true;
+        }
+        const float Vz = DeltaTime > 0.f ? (ZNow - RemoteLastTraceZ) / DeltaTime : 0.f;
+        RemoteLastTraceZ = ZNow;
+        UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] tick air=%d moving=%d idle=%.2f grace=%.2f actorZ=%.1f targetZ=%.1f Vz=%+.1f"),
+            bRemoteIsInAir ? 1 : 0, bRemoteIsMoving ? 1 : 0, RemoteIdleTime, GracePeriod,
+            ZNow, TargetReceivedPosition.Z, Vz);
+    }
+
     // Landed-by-stillness: the airborne flag arrives only inside movement
     // packets, so a remote that lands and stands still would play fall
     // forever (until the next move/rotate packet). No displacement for a

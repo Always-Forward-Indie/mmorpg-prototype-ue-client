@@ -254,7 +254,10 @@ void UMyGameInstance::InitCharacterNets()
 		EmoteNetworkHandler->Initialize(EmoteManager, GetNetworkManager(), this);
 		EmoteNetworkHandler->SubscribeToNetworkEvents();
 
-		// Route emoteAction broadcasts to the correct ABasicPlayer in the world
+		// Route emoteAction broadcasts to the correct ABasicPlayer in the world.
+		// Remove-then-add: InitCharacterNets can re-run (travel, sibling PIE
+		// broadcasts) and a duplicate bind both trips ensure and double-fires.
+		EmoteManager->OnEmoteActionReceived.RemoveDynamic(this, &UMyGameInstance::RouteEmoteActionToPlayer);
 		EmoteManager->OnEmoteActionReceived.AddDynamic(this, &UMyGameInstance::RouteEmoteActionToPlayer);
 
 		UE_LOG(LogGameplay, Warning, TEXT("EmoteNetworkHandler initialized and subscribed"));

@@ -107,6 +107,10 @@ private:
 	// True when the remote player is in the air (jumping/falling), driven by isFalling from server.
 	bool bRemoteIsInAir = false;
 
+	// Previous tick's rendered Z for the flight-trace vertical speed.
+	float RemoteLastTraceZ = 0.0f;
+	bool bRemoteTraceZSeeded = false;
+
 	// When true, UpdateRemotePlayerMovement is skipped so CharacterPreviewManager
 	// can drive position and animation directly during character-select podium walks.
 	bool bPreviewMovementActive = false;

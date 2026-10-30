@@ -25,6 +25,11 @@ public:
 	/** Destroy all preview actors and reset state. Call when leaving the login level. */
 	void Cleanup();
 
+	/** Travel fast-path: hide preview actors, unregister nameplates, drop all
+	 *  refs — without synchronous Destroy. OpenLevel's CleanupWorld reclaims
+	 *  the actors; avoids the hitch of tearing down skeletal actors here. */
+	void TeardownForTravel();
+
 	// ─── Character Select ────────────────────────────────────────────────────
 
 	/** Spawn preview actors for each character in the list on the podium. */

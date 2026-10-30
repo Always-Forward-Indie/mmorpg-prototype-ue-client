@@ -334,6 +334,13 @@ private:
 	bool bEnterWasDownLastTick = false;
 
 public:
+	// Join chain failed (local validation or server error response):
+	// release the busy state and show the reason on the character panel.
+	// Public (unlike the AuthManager-bound handlers above) so GameInstance
+	// and PlayerManager can report failures across classes.
+	UFUNCTION(BlueprintCallable, Category = "Login Flow")
+	void OnJoinGameFailed(const FString& Reason);
+
 	// ── Data-driven error message table ──────────────────────────────────────
 
 	/**

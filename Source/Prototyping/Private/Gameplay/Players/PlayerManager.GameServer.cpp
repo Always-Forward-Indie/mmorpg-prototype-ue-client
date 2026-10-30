@@ -37,6 +37,18 @@ void UPlayerManager::ProcessGamePacket(const FParsedPacket& Packet)
 		}
 	}
 
+	// Join rejected by the Game Server: release the guard so the player can
+	// retry, and surface the reason on the login UI (previously hung forever).
+	if (MessageData.eventType == "joinGameClient" && MessageData.status != "success" && ClientData.clientId != 0) {
+		if (gameInstance && IsValid(gameInstance) && gameInstance->IsJoinInProgress()
+			&& ClientData.clientId == gameInstance->GetCurrentClientID()) {
+			const FString Reason = !MessageData.errorCode.IsEmpty() ? MessageData.errorCode
+				: (!MessageData.message.IsEmpty() ? MessageData.message : TEXT("join_rejected"));
+			UE_LOG(LogConnection, Warning, TEXT("[PHASE PRE] joinGameClient FAILED on GameServer: %s"), *Reason);
+			gameInstance->NotifyJoinFailed(Reason);
+		}
+	}
+
 	// If the data is a response to a leave game request
 	if (MessageData.eventType == "disconnectClient" && ClientData.clientId != 0) {
 		if (gameInstance) {

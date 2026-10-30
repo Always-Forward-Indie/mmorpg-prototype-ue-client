@@ -349,6 +349,10 @@ void UMyGameInstance::TransitionToGameWorld()
 		return;
 	}
 
+	// The join flow settles here: travel started, the guard must not stay
+	// latched for the whole session (failure branches gate on IsJoinInProgress).
+	JoinGuard.Reset();
+
 	// Extract just the map name from the soft object path
 	// E.g., "/Game/Maps/WorldMapV1.WorldMapV1" -> "WorldMapV1"
 	FString MapAssetPath = GameWorldMap.ToSoftObjectPath().GetAssetPath().ToString();
@@ -420,7 +424,10 @@ void UMyGameInstance::TransitionToGameWorld()
 	RemoveLoginWidgetFromViewport();
 	if (CharacterPreviewManager)
 	{
-		CharacterPreviewManager->Cleanup();
+		// Travel fast-path: hide + unregister + drop refs, no synchronous
+		// Destroy of the preview actors — OpenLevel's CleanupWorld reclaims
+		// them. Saves the hitch of tearing down skeletal preview actors here.
+		CharacterPreviewManager->TeardownForTravel();
 	}
 	if (LoginLevelCamera)
 	{
@@ -453,12 +460,20 @@ void UMyGameInstance::TransitionToGameWorld()
 	SpawnedPlayers.Empty();
 	Player = nullptr;
 
-	// Defer DoOpenLevel by one tick so Slate has a full frame to composite the
-	// loading screen before the world begins to tear down.
+	// Defer DoOpenLevel by two ticks so Slate composites AND presents the
+	// loading screen before the world begins to tear down. A single tick only
+	// covers the Slate tick — the render/present of the first loading frame
+	// lands on the second, otherwise the login frame freezes until travel ends.
 	FTSTicker::GetCoreTicker().AddTicker(
 		FTickerDelegate::CreateLambda([this](float) -> bool
 		{
-			DoOpenLevel();
+			FTSTicker::GetCoreTicker().AddTicker(
+				FTickerDelegate::CreateLambda([this](float) -> bool
+				{
+					DoOpenLevel();
+					return false;
+				}),
+				0.0f);
 			return false;
 		}),
 		0.0f);
@@ -482,14 +497,18 @@ void UMyGameInstance::DoOpenLevel()
 	if (ActiveNow != 0)
 	{
 		// Another PIE is inside OpenLevel/GenerateStreaming — wait and retry.
+		// Core ticker: survives world teardown and fires even when this
+		// window's world timer is throttled (unfocused) or already destroyed.
 		UE_LOG(LogConnection, Warning,
 			TEXT("[LOADSEQ] DoOpenLevel: another PIE transition in progress, retrying in 3s"));
-		CurrentWorld->GetTimerManager().SetTimer(
-			OpenLevelRetryTimerHandle,
-			this,
-			&UMyGameInstance::DoOpenLevel,
-			3.0f,
-			false);
+		FTSTicker::GetCoreTicker().RemoveTicker(OpenLevelRetryTickerHandle);
+		OpenLevelRetryTickerHandle = FTSTicker::GetCoreTicker().AddTicker(
+			FTickerDelegate::CreateLambda([this](float) -> bool
+			{
+				DoOpenLevel();
+				return false;
+			}),
+			3.0f);
 		return;
 	}
 

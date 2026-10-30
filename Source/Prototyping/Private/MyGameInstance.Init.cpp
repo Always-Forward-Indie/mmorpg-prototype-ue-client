@@ -227,6 +227,11 @@ void UMyGameInstance::Shutdown()
 		FTSTicker::GetCoreTicker().RemoveTicker(WindowFocusNudgeTickerHandle);
 		WindowFocusNudgeTickerHandle.Reset();
 	}
+	if (OpenLevelRetryTickerHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(OpenLevelRetryTickerHandle);
+		OpenLevelRetryTickerHandle.Reset();
+	}
 
 	// Only send disconnect packets when this PIE instance was actually authenticated.
 	// Guards against: (a) PIE stopped before login, (b) crash before auth completes.

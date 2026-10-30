@@ -25,7 +25,14 @@ void ULoginFlowWidget::HandlePlayClicked()
 	if (GameInstanceRef)
 	{
 		GameInstanceRef->SetCurrentCharacterID(CharId);
-		GameInstanceRef->JoinSelectedCharacterToGame();
+		// Instant feedback: spinner + disabled buttons cover the multi-RTT
+		// join chain (game → chunk → character) before travel starts.
+		// Busy is set only when the join actually started; local rejections
+		// report through OnJoinGameFailed without ever latching busy.
+		if (GameInstanceRef->JoinSelectedCharacterToGame())
+		{
+			SetPanelBusy(ELoginFlowPanel::CharacterSelect, true);
+		}
 	}
 }
 

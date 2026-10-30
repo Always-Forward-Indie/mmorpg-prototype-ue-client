@@ -3,6 +3,7 @@
 #include "Gameplay/Players/PlayerManager.h"
 #include "Gameplay/Mobs/MOBManager.h"
 #include "Gameplay/UI/LoginWidget.h"
+#include "Gameplay/UI/LoginFlowWidget.h"
 #include "Gameplay/UI/CharacterListItem.h"
 #include "Components/ListView.h"
 #include "Blueprint/UserWidget.h"
@@ -146,26 +147,28 @@ int32 UMyGameInstance::GetCurrentCharacterID()
 	return CurrentCharacterID;
 }
 
-void UMyGameInstance::JoinSelectedCharacterToGame()
+bool UMyGameInstance::JoinSelectedCharacterToGame()
 {
 	UE_LOG(LogConnection, Verbose, TEXT("JoinSelectedCharacterToGame called with CharacterID: %d"), CurrentCharacterID);
 
 	if (!JoinGuard.TryEnter())
 	{
 		UE_LOG(LogConnection, Verbose, TEXT("JoinSelectedCharacterToGame: join already in progress, ignoring duplicate call (charId=%d)"), CurrentCharacterID);
-		return;
+		return false;
 	}
 
 	if (CurrentCharacterID <= 0)
 	{
 		UE_LOG(LogConnection, Error, TEXT("Cannot join game: No character selected."));
-		return;
+		NotifyJoinFailed(TEXT("no_character_selected"));
+		return false;
 	}
 
 	if (CurrentClientID <= 0 || CurrentClientSecret.IsEmpty())
 	{
 		UE_LOG(LogConnection, Error, TEXT("Cannot join game: Client not authenticated."));
-		return;
+		NotifyJoinFailed(TEXT("not_authenticated"));
+		return false;
 	}
 
 	// PRE-PHASE: Send joinGameClient to Game Server first (latch held by TryEnter above).
@@ -176,11 +179,23 @@ void UMyGameInstance::JoinSelectedCharacterToGame()
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("PRE-PHASE: Sending joinGameClient to Game Server for character %d"), CurrentCharacterID);
 		PlayerManager->SendJoinGameRequest(ClientData);
+		return true;
 	}
 	else
 	{
 		UE_LOG(LogGameplay, Error, TEXT("Cannot join game: PlayerManager is null."));
-		JoinGuard.Reset();
+		NotifyJoinFailed(TEXT("client_error"));
+		return false;
+	}
+}
+
+void UMyGameInstance::NotifyJoinFailed(const FString& Reason)
+{
+	JoinGuard.Reset();
+	UE_LOG(LogConnection, Warning, TEXT("JoinSelectedCharacterToGame: join failed (%s), guard released"), *Reason);
+	if (IsValid(LoginFlowWidget))
+	{
+		LoginFlowWidget->OnJoinGameFailed(Reason);
 	}
 }
 

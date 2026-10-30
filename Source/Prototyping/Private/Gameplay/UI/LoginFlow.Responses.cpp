@@ -109,6 +109,12 @@ void ULoginFlowWidget::OnDeleteCharacterResponse(bool bSuccess, const FString& M
 	}
 }
 
+void ULoginFlowWidget::OnJoinGameFailed(const FString& Reason)
+{
+	SetPanelBusy(ELoginFlowPanel::CharacterSelect, false);
+	SetError(CharSelect_ErrorText, ResolveErrorMessage(Reason));
+}
+
 void ULoginFlowWidget::OnSessionExpired()
 {
 	// Clear previews first

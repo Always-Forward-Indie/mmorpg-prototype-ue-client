@@ -136,6 +136,20 @@ void UPlayerManager::ProcessChunkPacket(const FParsedPacket& Packet)
 		}
 	}
 
+	// Join rejected mid-chain (chunk joinGameClient / joinGameCharacter):
+	// release the guard so the player can retry instead of hanging on a spinner.
+	if ((MessageData.eventType == "joinGameClient" || MessageData.eventType == "joinGameCharacter")
+		&& MessageData.status != "success" && ClientData.clientId != 0) {
+		if (gameInstance && IsValid(gameInstance) && gameInstance->IsJoinInProgress()
+			&& ClientData.clientId == gameInstance->GetCurrentClientID()) {
+			const FString Reason = !MessageData.errorCode.IsEmpty() ? MessageData.errorCode
+				: (!MessageData.message.IsEmpty() ? MessageData.message : TEXT("join_rejected"));
+			UE_LOG(LogConnection, Warning, TEXT("[PHASE 1/2] %s FAILED on ChunkServer: %s"),
+				*MessageData.eventType, *Reason);
+			gameInstance->NotifyJoinFailed(Reason);
+		}
+	}
+
 	// Logout handshake: chunk confirms farewell saves (position/HP/playtime)
 	// are done — safe to tear down. Without this the farewell write races
 	// the next login's join read and loses, spawning at a stale spot.

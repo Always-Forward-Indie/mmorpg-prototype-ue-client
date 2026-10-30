@@ -238,12 +238,14 @@ FDateTime ReceiveTimeLoginServer;
 	// Handle for PostLoadMapWithWorld — fires after every OpenLevel completes.
 	FDelegateHandle PostLoadMapWorldHandle;
 
-	// Timer used to retry OpenLevel if another PIE instance is already in the
-	// middle of World Partition GenerateStreaming (prevents WorldDataLayers ensure).
-	FTimerHandle OpenLevelRetryTimerHandle;
+	// Retry for OpenLevel when another PIE instance is already inside World
+	// Partition GenerateStreaming. Core ticker (not the world TimerManager):
+	// it survives the world teardown that OpenLevel itself triggers and does
+	// not depend on the throttled world timer of an unfocused window.
+	FTSTicker::FDelegateHandle OpenLevelRetryTickerHandle;
 
 	// Performs the actual UGameplayStatics::OpenLevel call and arms the ready-ticker.
-	// Called directly by TransitionToGameWorld, or deferred by the retry timer.
+	// Called deferred by TransitionToGameWorld, or by the retry ticker.
 	void DoOpenLevel();
 
 	// InitNetworkingSetup factories (defined in MyGameInstance.InitSystemsA/B.cpp).
@@ -896,9 +898,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Character")
 	int32 GetCurrentCharacterID();
 
-	// Join the selected character to the game
+	// Join the selected character to the game. Returns true when the join
+	// actually started (caller should show busy UI); false when rejected
+	// locally (duplicate, no character, not authenticated).
 	UFUNCTION(BlueprintCallable, Category = "Game")
-	void JoinSelectedCharacterToGame();
+	bool JoinSelectedCharacterToGame();
+
+	// Join failed anywhere along the chain (local validation or a server
+	// error response): release the guard and surface the reason on login UI.
+	void NotifyJoinFailed(const FString& Reason);
+
+	// True while a join started by JoinSelectedCharacterToGame is in flight.
+	bool IsJoinInProgress() const { return JoinGuard.IsEntered(); }
 
 	// Game world map asset (World Partition). Pick the map directly in the Details panel.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Level", meta = (AllowedClasses = "/Script/Engine.World"))

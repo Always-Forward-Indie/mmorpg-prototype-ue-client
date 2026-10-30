@@ -2,6 +2,7 @@
 
 
 #include "Gameplay/Mobs/MOBMovementComponent.h"
+#include "Utils/NetCore/MobFollowRule.h"
 #include "GameFramework/Character.h"
 #include "Components/CapsuleComponent.h"
 #include "DrawDebugHelpers.h"
@@ -44,12 +45,9 @@ void UMOBMovementComponent::ProcessCombatMovement(float DeltaTime)
         return;
     }
 
-    // Extrapolation cap: if no movement packet arrived within ExtrapolationMaxTime,
-    // stop dead-reckoning and gently settle toward the last known server position.
-    // Root cause of "mob runs away forever": when the server stops broadcasting
-    // (e.g. mob is waitingForMeleeSlot / blocked), TimeSinceLastPacket grows
-    // unboundedly and dead reckoning runs indefinitely at LatestServerSpeed.
-    if (TimeSinceLastPacket >= ExtrapolationMaxTime)
+    // Extrapolation cap: freeze only after a sustained packet drought (the
+    // server streams 10 Hz holds, so anything shorter is jitter, not loss).
+    if (FMobFollowRule::ShouldFreeze(TimeSinceLastPacket, ExtrapolationMaxTime))
     {
         FVector SettleLoc = FMath::VInterpTo(CurrentLocation,
             FVector(LatestServerPos.X, LatestServerPos.Y, CurrentLocation.Z),
@@ -116,15 +114,23 @@ void UMOBMovementComponent::ProcessCombatMovement(float DeltaTime)
     NewLocation = AdjustToGround(NewLocation, DeltaTime, 1.0f);
     GetOwner()->SetActorLocation(NewLocation);
 
-    // 6. Rotation: derive from actual frame-to-frame movement delta.
-    //    This avoids jitter from server deflection avoidance — the mob's visual
-    //    facing follows its actual screen-space path, not the raw server direction.
+    // 6. Rotation: face along the smoothed server intent (DeadReckonDir),
+    //    NOT the frame-to-frame correction delta. The delta includes the
+    //    proportional correction step toward EstimatedServerPos, which can
+    //    point sideways/backward on overshoot — deriving facing from it made
+    //    the mob visibly wag its heading every packet (correction jitter).
     const FVector MoveDelta = FVector(NewLocation.X - PrevFramePos.X,
                                        NewLocation.Y - PrevFramePos.Y, 0.f);
     const float MoveDist = MoveDelta.Size();
     PrevFramePos = NewLocation;
 
-    if (MoveDist > 1.f)
+    if (!DeadReckonDir.IsNearlyZero())
+    {
+        SmoothedFacingDir = FMath::VInterpNormalRotationTo(
+            SmoothedFacingDir, DeadReckonDir, DeltaTime, 540.f);
+        HandleRotation(SmoothedFacingDir, DeltaTime);
+    }
+    else if (MoveDist > 1.f)
     {
         const FVector ActualDir = MoveDelta / MoveDist;
         SmoothedFacingDir = FMath::VInterpNormalRotationTo(

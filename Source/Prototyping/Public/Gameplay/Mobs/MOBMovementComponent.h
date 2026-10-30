@@ -83,9 +83,11 @@ public:
 	float StateTransitionBlendTime = 0.12f;
 
 	// Max time (sec) to extrapolate beyond the last packet before freezing.
-	// Protocol: cap at 200ms for combat states.
+	// Combat packets arrive at 10 Hz (holds with speed=0 included), so 0.6 s
+	// tolerates ~5 consecutive lost packets before the mob visibly halts.
+	// Shorter values (0.2 s) caused stop-start flicker on normal jitter.
 	UPROPERTY(EditAnywhere, Category = "Movement|Correction")
-	float ExtrapolationMaxTime = 0.2f;
+	float ExtrapolationMaxTime = 0.6f;
 
 	// Distance (units) above which a patrol-to-patrol packet triggers a blend
 	// instead of relying on continuous correction alone.  Covers the case where

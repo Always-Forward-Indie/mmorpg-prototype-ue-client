@@ -3,6 +3,7 @@
 
 #include "Gameplay/Mobs/MOBMovementComponent.h"
 #include "Data/DataStructs.h"
+#include "Utils/NetCore/MobFollowRule.h"
 #include "GameFramework/Character.h"
 #include "Components/CapsuleComponent.h"
 #include "DrawDebugHelpers.h"
@@ -159,16 +160,27 @@ void UMOBMovementComponent::OnReceiveMovePacket(const FMobMoveEntryStruct& MoveE
             // BlendDuration scales with positional gap so the mob visually moves
             // at roughly patrol/return speed → prevents fast-blend "teleports" when
             // dead-reckoning drifted during RETURNING (state 5) or long chases.
+            // AAA: skip the blend for small gaps (short return / EVADING hold):
+            // the client is already at the server position and blending backward
+            // toward BlendToPos reads as a rollback snap. The patrol tick's
+            // settle logic absorbs residual gaps <= PatrolSnapThreshold.
             const FVector ClientPos = GetOwner()->GetActorLocation();
             const float TransitionGap = FVector::Dist2D(ClientPos, NewPos);
-            const float SafeSpeed = FMath::Max(
-                LatestServerSpeed > 0.f ? LatestServerSpeed : PatrolSpeed, 100.f);
-            BlendFromPos  = ClientPos;
-            BlendToPos    = NewPos;
-            BlendElapsed  = 0.f;
-            BlendDuration = FMath::Clamp(TransitionGap / SafeSpeed,
-                                         StateTransitionBlendTime, 1.5f);
-            bBlendActive  = true;
+            if (FMobFollowRule::ShouldBlendOnTransition(TransitionGap, PatrolSnapThreshold))
+            {
+                const float SafeSpeed = FMath::Max(
+                    LatestServerSpeed > 0.f ? LatestServerSpeed : PatrolSpeed, 100.f);
+                BlendFromPos  = ClientPos;
+                BlendToPos    = NewPos;
+                BlendElapsed  = 0.f;
+                BlendDuration = FMobFollowRule::TransitionBlendTime(TransitionGap, SafeSpeed,
+                                             StateTransitionBlendTime, 1.5f);
+                bBlendActive  = true;
+            }
+            else
+            {
+                bBlendActive = false;
+            }
         }
         // Normal patrol packets: ProcessPatrolMovement smoothly moves
         // the mob toward LatestServerPos. No blend needed.
@@ -197,5 +209,6 @@ void UMOBMovementComponent::OnReceiveMovePacket(const FMobMoveEntryStruct& MoveE
 //    jitter (mobs steering ±30-90° to avoid each other).
 // 2. Dead-reckon forward in the smoothed direction at server speed.
 // 3. Correct toward the estimated server position proportionally to gap size.
-// 4. Derive rotation from actual frame-to-frame delta (not server direction).
-// 5. No freeze on missed packets — dead reckoning continues naturally.
+// 4. Face along smoothed server intent (not the correction delta).
+// 5. Freeze only after ExtrapolationMaxTime without packets (server now sends
+//    continuous 10 Hz holds, so this fires solely on real connection loss).

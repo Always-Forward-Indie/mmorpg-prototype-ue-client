@@ -213,8 +213,12 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 			UE_LOG(LogConnection, Warning, TEXT("LoginLevelSetupActor not found in Login Level — using Blueprint-configured values."));
 		}
 
-		// Spawn login camera
-		LoginLevelCamera = LoadedWorld->SpawnActor<AMyCameraActor>(LoginCameraClass, LoginLevelCameraLocation, LoginLevelCameraRotation);
+		// Spawn login camera (idempotent: PostLoadMap can fire twice for the
+		// login map — reuse the live camera instead of stacking actors).
+		if (!IsValid(LoginLevelCamera) || LoginLevelCamera->GetWorld() != LoadedWorld)
+		{
+			LoginLevelCamera = LoadedWorld->SpawnActor<AMyCameraActor>(LoginCameraClass, LoginLevelCameraLocation, LoginLevelCameraRotation);
+		}
 		if (LoginLevelCamera)
 		{
 			if (LoadedWorld->GetFirstPlayerController())

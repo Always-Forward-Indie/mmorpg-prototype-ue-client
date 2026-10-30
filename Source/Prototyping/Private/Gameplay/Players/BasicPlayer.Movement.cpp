@@ -241,7 +241,6 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     const float GraceWindow = FMath::Max(ServerPositionUpdateInterval, 0.05f);
     const float GracePeriod = GraceWindow * 1.5f;
 
-    const bool bWasMovingRemote = bRemoteIsMoving;
     // Idle clock runs whenever there is no displacement (packets reset it) —
     // including airborne-but-still vertical jumps that never set the moving
     // flag, so the landing rule below also fires for those.
@@ -255,9 +254,10 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
         }
     }
 
-    // Movement edge: an emote playing while motion starts dies here. The
-    // packet path (SetCoordinates) only sets flags — nobody else notifies.
-    if (!bWasMovingRemote && bRemoteIsMoving && EmoteComponent)
+    // Movement interrupt: notify EVERY tick while moving, not just on the
+    // edge. An emote begun mid-motion (flag already set, no new edge) would
+    // otherwise play forever. NotifyMovementStarted is idempotent.
+    if (bRemoteIsMoving && EmoteComponent)
     {
         EmoteComponent->NotifyMovementStarted();
     }

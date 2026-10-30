@@ -3,6 +3,7 @@
 
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Prototyping.h"
+#include "Utils/NetCore/RemoteIdleResetRule.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
@@ -458,10 +459,17 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ, boo
         RemoteVelocity.Z = 0.0f;
         RemoteSpeed = Dist2D / ServerPositionUpdateInterval;
 
+        // Idle clock resets on ANY displacement (planar or vertical): a
+        // vertical in-place jump must not run the idle clock mid-flight.
+        // bRemoteIsMoving stays planar-only (no walk anim for straight jumps).
+        if (FRemoteIdleResetRule::ShouldResetIdle(Dist2D, Delta3D.Z))
+        {
+            RemoteIdleTime = 0.0f;
+        }
+
         if (Dist2D > 1.0f)
         {
             bRemoteIsMoving = true;
-            RemoteIdleTime  = 0.0f;
 
             const FVector Delta2D = FVector(Delta3D.X, Delta3D.Y, 0.0f).GetSafeNormal();
 

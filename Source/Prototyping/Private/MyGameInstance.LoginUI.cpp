@@ -161,6 +161,11 @@ void UMyGameInstance::AddMonitorStatsWidgetToViewport()
 
 void UMyGameInstance::AddLoginWidgetToViewport()
 {
+	// Idempotent: PostLoadMap can fire twice for the login map (reloads, PIE
+	// re-runs). Without this the widgets double up — the old pointers are
+	// overwritten and the orphaned copies stay on screen.
+	RemoveLoginWidgetFromViewport();
+
 	// Logo sits at the very bottom (Z-order 5), below the login form.
 	if (LoginLogoWidgetClass)
 	{

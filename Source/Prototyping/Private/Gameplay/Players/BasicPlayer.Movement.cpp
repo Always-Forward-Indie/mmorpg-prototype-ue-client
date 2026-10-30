@@ -69,6 +69,7 @@
 #include "Gameplay/Emotes/EmoteComponent.h"
 #include "Utils/NetCore/RemoteLandingRule.h"
 #include "Utils/NetCore/RemoteTakeoffRule.h"
+#include "Utils/NetCore/RemoteTurnRule.h"
 #include "Gameplay/WorldObjects/WorldInteractiveObjectActor.h"
 #include "Gameplay/WorldObjects/WorldObjectManager.h"
 #include "Utils/AudioSpawnHelpers.h"
@@ -312,15 +313,18 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
             RemoteDirection, SmoothedRemoteDirection, SmoothedRemoteSpeed);
     }
 
-    // Landed-by-stillness: the airborne flag arrives only inside movement
-    // packets, so a remote that lands and stands still would play fall
-    // forever (until the next move/rotate packet). No displacement for a
-    // full grace window means it is on the ground.
-    if (FRemoteLandingRule::ShouldLand(bRemoteIsInAir, bRemoteIsMoving, RemoteIdleTime, GracePeriod))
+    // Landing: displacement-idle races the ~200ms broadcast rate and fires
+    // BETWEEN packets mid-flight, so stillness alone never lands. Land only
+    // when the body is vertically still, converged onto the server target,
+    // AND no packet arrived recently (a live flag is always trusted as-is).
+    // Covers the land-then-silence case (no touchdown packet ever comes).
+    if (FRemoteLandingRule::ShouldLand(bRemoteIsInAir, bRemoteIsMoving,
+        FMath::Abs(RenderedVz), FRemoteTakeoffRule::AirborneVzThreshold(),
+        FMath::Abs(TargetReceivedPosition.Z - ZNow), TimeSinceLastPositionUpdate))
     {
         bRemoteIsInAir = false;
-        UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] air 1->0 via stillness (idle=%.2f grace=%.2f)"),
-            RemoteIdleTime, GracePeriod);
+        UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] air 1->0 via landing (quiet=%.2fs)"),
+            TimeSinceLastPositionUpdate);
     }
 
     // Target values for this tick.
@@ -364,12 +368,13 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     // blend-space axis while standing still (causes foot-sliding pop on restart).
     if (SmoothedRemoteSpeed > 2.0f)
     {
-        const float DirAlpha = FMath::Clamp(DeltaTime / 0.10f, 0.0f, 1.0f);  // ~100 ms turn
         // Angle-aware interpolation: avoids the ±180° wrap-around issue where
         // FMath::Lerp on raw degrees crosses zero instead of staying near ±180,
         // causing the blend-space to sweep through all directions during
-        // backward movement.
+        // backward movement. Rate is proportional (FRemoteTurnRule): small
+        // corrections stay smooth, full reversals pivot instead of swimming.
         const float DeltaAngle = FMath::FindDeltaAngleDegrees(SmoothedRemoteDirection, RemoteDirection);
+        const float DirAlpha = FRemoteTurnRule::TurnAlpha(DeltaTime, DeltaAngle);
         SmoothedRemoteDirection = FMath::UnwindDegrees(SmoothedRemoteDirection + DeltaAngle * DirAlpha);
     }
     // else: keep last known direction so the blend-space doesn't pop to 0 on stop.

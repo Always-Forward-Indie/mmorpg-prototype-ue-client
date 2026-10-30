@@ -14,6 +14,7 @@
 #include "UI/UIManager.h"
 #include "UI/WorldNotificationManager.h"
 #include "UI/NotificationToastWidget.h"
+#include "UI/NotificationStackWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/AssetManager.h"
 #include "CrashDiagnostics.h"
@@ -34,7 +35,7 @@ void UItemManager::ProcessItemPickup(const FItemBaseStruct& Item)
 			{
 				if (UWorldNotificationManager* NotifMgr = UIMgr->GetWorldNotificationManager())
 				{
-					if (UNotificationToastWidget* Toast = NotifMgr->GetToastWidget())
+					if (UNotificationStackWidget* Toast = NotifMgr->GetToastWidget())
 					{
 						TMap<FString, FString> DataFields;
 						DataFields.Add(TEXT("itemSlug"), Item.slug);

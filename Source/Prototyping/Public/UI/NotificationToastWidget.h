@@ -1,29 +1,35 @@
 #pragma once
-#pragma once
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Data/DataStructs.h"
+#include "Utils/NetCore/ShopStatusStyle.h"
 #include "NotificationToastWidget.generated.h"
 
 class UTextBlock;
 class UImage;
-class UVerticalBox;
+class UNotificationToastWidget;
+
+/** Fired when an entry's auto-hide timer elapses (after its hide starts). */
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnToastExpired, UNotificationToastWidget* /*ExpiredEntry*/);
 
 /**
  * NotificationToastWidget
  *
- * Small pop-up notification for channel "toast".
- * Appears at the top-right corner (or wherever anchored in UMG),
- * auto-dismisses after DisplayDuration seconds.
+ * Single toast entry renderer. Shows ONE notification, auto-hides after
+ * DisplayDuration, then reports expiry via OnToastExpired so the owning
+ * UNotificationStackWidget can recycle the entry and promote the queue.
+ *
+ * Appears at the top-right corner (or wherever the stack anchors it),
+ * severity-tinted via SetSeverity (green receipt / white info / red error).
  *
  * Handles notification types:
  *   zone_explored, bestiary_tier_unlocked, zone_entered (secondary toast),
  *   mastery_tier_up, and any unknown type as fallback.
  *
  * Blueprint subclass must bind:
- *   Toast_Title_Text   UTextBlock   — bold title line  (BindWidgetOptional)
- *   Toast_Body_Text    UTextBlock   — body / detail line
+ *   Toast_Title_Text   UTextBlock â€” bold title line  (BindWidgetOptional)
+ *   Toast_Body_Text    UTextBlock â€” body / detail line
  *   Toast_Icon         UImage       (BindWidgetOptional)
  */
 UCLASS(Abstract, BlueprintType, Blueprintable)
@@ -32,29 +38,37 @@ class PROTOTYPING_API UNotificationToastWidget : public UUserWidget
     GENERATED_BODY()
 
 public:
+    /** Fired when the auto-hide timer elapses (after PlayHideAnimation starts). */
+    FOnToastExpired OnToastExpired;
+
     /**
-     * Show the toast for the given notification.
-     * If a toast is already visible, the new one is queued and will
-     * be shown automatically after the current one hides.
+     * Show a single notification immediately, replacing any current content.
+     * The entry hides itself after DisplayDuration and broadcasts OnToastExpired.
      */
     UFUNCTION(BlueprintCallable, Category = "Notification|Toast")
     void ShowNotification(const FWorldNotificationStruct& Notification);
 
     /**
-     * Queue a lightweight "action" toast from game systems.
-     * Builds an FWorldNotificationStruct internally so callers don't
-     * need to construct one.
+     * Build a lightweight "action" notification and show it immediately.
      */
     UFUNCTION(BlueprintCallable, Category = "Notification|Toast")
     void EnqueueActionToast(const FString& NotificationType, const TMap<FString, FString>& DataFields);
 
+    /** Severity tint applied to the title line (default Info). */
+    UFUNCTION(BlueprintCallable, Category = "Notification|Toast")
+    void SetSeverity(EShopStatusSeverity InSeverity);
+
+    /** True while this entry is on screen (between show and hide). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Notification|Toast")
+    bool IsShowing() const { return bIsShowing; }
+
+    /** Hide immediately and report expiry (used when the stack recycles us). */
+    UFUNCTION(BlueprintCallable, Category = "Notification|Toast")
+    void Dismiss();
+
     /** How many seconds the toast stays visible before auto-hiding. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Notification|Toast|Config")
     float DisplayDuration = 4.0f;
-
-    /** Maximum number of toasts that can be queued. Oldest are dropped. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Notification|Toast|Config")
-    int32 MaxQueueSize = 8;
 
 protected:
     virtual void NativeConstruct() override;
@@ -85,14 +99,12 @@ private:
     /** Display the notification immediately (no queue check). */
     void DisplayNotificationImmediate(const FWorldNotificationStruct& Notification);
 
-    /** Show the next queued notification, or mark as idle if empty. */
-    void ShowNextInQueue();
+    void OnAutoHideElapsed();
 
     FTimerHandle AutoHideTimer;
 
-    /** Queue of pending notifications waiting to be displayed. */
-    TArray<FWorldNotificationStruct> PendingQueue;
-
     /** True while a toast is visible (between show and hide). */
     bool bIsShowing = false;
+
+    EShopStatusSeverity Severity = EShopStatusSeverity::Info;
 };

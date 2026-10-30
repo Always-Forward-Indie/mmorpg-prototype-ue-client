@@ -17,17 +17,6 @@ void UNotificationToastWidget::NativeConstruct()
 
 void UNotificationToastWidget::ShowNotification(const FWorldNotificationStruct& Notification)
 {
-    if (bIsShowing)
-    {
-        // Queue the notification; drop oldest if queue is full
-        if (PendingQueue.Num() >= MaxQueueSize)
-        {
-            PendingQueue.RemoveAt(0);
-        }
-        PendingQueue.Add(Notification);
-        return;
-    }
-
     DisplayNotificationImmediate(Notification);
 }
 
@@ -39,6 +28,29 @@ void UNotificationToastWidget::EnqueueActionToast(const FString& NotificationTyp
     Notif.priority         = TEXT("medium");
     Notif.dataFields       = DataFields;
     ShowNotification(Notif);
+}
+
+void UNotificationToastWidget::SetSeverity(EShopStatusSeverity InSeverity)
+{
+    Severity = InSeverity;
+    if (Toast_Title_Text)
+        Toast_Title_Text->SetColorAndOpacity(FShopStatusStyle::ColorFor(Severity));
+}
+
+void UNotificationToastWidget::Dismiss()
+{
+    if (UWorld* World = GetWorld())
+        World->GetTimerManager().ClearTimer(AutoHideTimer);
+    if (bIsShowing)
+    {
+        bIsShowing = false;
+        PlayHideAnimation();
+        OnToastExpired.Broadcast(this);
+    }
+    else
+    {
+        SetVisibility(ESlateVisibility::Collapsed);
+    }
 }
 
 void UNotificationToastWidget::DisplayNotificationImmediate(const FWorldNotificationStruct& Notification)
@@ -56,6 +68,8 @@ void UNotificationToastWidget::DisplayNotificationImmediate(const FWorldNotifica
         Toast_Title_Text->SetText(Title);
     if (Toast_Body_Text)
         Toast_Body_Text->SetText(Body.IsEmpty() ? Title : Body);
+    if (Toast_Title_Text)
+        Toast_Title_Text->SetColorAndOpacity(FShopStatusStyle::ColorFor(Severity));
 
     // Optional icon from locale
     if (Toast_Icon)
@@ -84,35 +98,17 @@ void UNotificationToastWidget::DisplayNotificationImmediate(const FWorldNotifica
     // Schedule auto-hide
     if (UWorld* World = GetWorld())
     {
-        World->GetTimerManager().SetTimer(AutoHideTimer, FTimerDelegate::CreateWeakLambda(this,
-            [this]()
-            {
-                PlayHideAnimation();
-                // After hide animation starts, schedule showing next queued toast
-                // Give a small delay for the hide animation to play
-                if (UWorld* W = GetWorld())
-                {
-                    FTimerHandle NextTimer;
-                    W->GetTimerManager().SetTimer(NextTimer, FTimerDelegate::CreateWeakLambda(this,
-                        [this]()
-                        {
-                            ShowNextInQueue();
-                        }), 0.3f, false);
-                }
-            }), DisplayDuration, false);
+        World->GetTimerManager().SetTimer(AutoHideTimer, this,
+            &UNotificationToastWidget::OnAutoHideElapsed, DisplayDuration, false);
     }
 }
 
-void UNotificationToastWidget::ShowNextInQueue()
+void UNotificationToastWidget::OnAutoHideElapsed()
 {
+    if (!bIsShowing) return;
     bIsShowing = false;
-
-    if (PendingQueue.Num() > 0)
-    {
-        FWorldNotificationStruct Next = PendingQueue[0];
-        PendingQueue.RemoveAt(0);
-        DisplayNotificationImmediate(Next);
-    }
+    PlayHideAnimation();
+    OnToastExpired.Broadcast(this);
 }
 
 void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& Notification,

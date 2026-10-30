@@ -43,6 +43,7 @@
 #include "UI/GameMenuWidget.h"
 #include "UI/W_SettingsWidget.h"
 #include "UI/NotificationToastWidget.h"
+#include "UI/NotificationStackWidget.h"
 #include "UI/NotificationZoneBannerWidget.h"
 #include "UI/NotificationScreenCenterWidget.h"
 #include "UI/NotificationAtmosphereWidget.h"
@@ -245,18 +246,20 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 	// World Notification Widgets
 	// ====================================================================
 
-	// Toast widget (top-right corner pop-ups for medium-priority events)
-	if (NotificationToastWidgetClass && !NotificationToastWidget)
+	// Toast stack (top-right pop-ups for medium-priority events, newest on top)
+	if (NotificationToastWidgetClass && !NotificationToastStack)
 	{
-		NotificationToastWidget = CreateWidget<UNotificationToastWidget>(GetWorld(), NotificationToastWidgetClass);
-		if (NotificationToastWidget)
+		NotificationToastStack = CreateWidget<UNotificationStackWidget>(GetWorld(), UNotificationStackWidget::StaticClass());
+		if (NotificationToastStack)
 		{
-			NotificationToastWidget->AddToViewport(50);
-			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: NotificationToastWidget created"));
+			NotificationToastStack->EntryClass = NotificationToastWidgetClass;
+			NotificationToastStack->AddToViewport(50);
+			NotificationToastStack->AnchorTopRight();
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: NotificationToastStack created"));
 		}
 		else
 		{
-			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create NotificationToastWidget"));
+			UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create NotificationToastStack"));
 		}
 	}
 	else if (!NotificationToastWidgetClass)
@@ -338,7 +341,7 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 				GI,
 				NetMgr,
 				InBestiaryHandler,
-				NotificationToastWidget,
+				NotificationToastStack,
 				NotificationZoneBannerWidget,
 				NotificationScreenCenterWidget,
 				NotificationAtmosphereWidget,

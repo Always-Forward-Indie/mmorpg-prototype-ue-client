@@ -8,6 +8,7 @@
 #include "Gameplay/Players/PlayerManager.h"
 #include "UI/UIManager.h"
 #include "UI/NotificationToastWidget.h"
+#include "UI/NotificationStackWidget.h"
 #include "UI/ChatWidget.h"
 #include "UI/SkillBarWidget.h"
 #include "Gameplay/Items/InventoryManager.h"
@@ -440,7 +441,7 @@ if (WeightStatus.isOverweight != bCachedOverweight)
 bCachedOverweight = WeightStatus.isOverweight;
 if (UIManager)
 {
-if (UNotificationToastWidget* Toast = UIManager->GetNotificationToastWidget())
+if (UNotificationStackWidget* Toast = UIManager->GetNotificationToastWidget())
 {
 FWorldNotificationStruct OverNotif;
 OverNotif.notificationType = bCachedOverweight ? TEXT("overweight_started") : TEXT("overweight_ended");

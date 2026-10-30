@@ -1,6 +1,7 @@
 #include "UI/WorldNotificationManager.h"
 #include "Prototyping.h"
 #include "UI/BestiaryWidget.h"
+#include "UI/NotificationStackWidget.h"
 #include "UI/NotificationToastWidget.h"
 #include "UI/NotificationZoneBannerWidget.h"
 #include "UI/NotificationScreenCenterWidget.h"
@@ -22,7 +23,7 @@ void UWorldNotificationManager::Initialize(
     UMyGameInstance*                   InGameInstance,
     UNetworkManager*                   InNetworkManager,
     UBestiaryNetworkHandler*           InBestiaryHandler,
-    UNotificationToastWidget*          InToastWidget,
+    UNotificationStackWidget*          InToastWidget,
     UNotificationZoneBannerWidget*     InZoneBannerWidget,
     UNotificationScreenCenterWidget*   InScreenCenterWidget,
     UNotificationAtmosphereWidget*     InAtmosphereWidget,

@@ -11,6 +11,7 @@ class UMyGameInstance;
 class UBestiaryWidget;
 class UBestiaryNetworkHandler;
 class UNotificationToastWidget;
+class UNotificationStackWidget;
 class UNotificationZoneBannerWidget;
 class UNotificationScreenCenterWidget;
 class UNotificationAtmosphereWidget;
@@ -51,7 +52,7 @@ public:
         UMyGameInstance*                   InGameInstance,
         UNetworkManager*                   InNetworkManager,
         UBestiaryNetworkHandler*           InBestiaryHandler,
-        UNotificationToastWidget*          InToastWidget,
+        UNotificationStackWidget*          InToastWidget,
         UNotificationZoneBannerWidget*     InZoneBannerWidget,
         UNotificationScreenCenterWidget*   InScreenCenterWidget,
         UNotificationAtmosphereWidget*     InAtmosphereWidget,
@@ -72,8 +73,8 @@ public:
     UFUNCTION(BlueprintCallable, Category = "World Notification")
     void UnsubscribeFromNetworkEvents();
 
-    /** Access the toast widget for direct enqueuing (e.g. item pickup notifications). */
-    UNotificationToastWidget* GetToastWidget() const { return ToastWidget; }
+    /** Access the toast stack for direct enqueuing (e.g. item pickup notifications). */
+    UNotificationStackWidget* GetToastWidget() const { return ToastWidget; }
 
 private:
     // Packet entry (S05): single-parse path via the per-eventType dispatcher.
@@ -96,7 +97,7 @@ private:
     UBestiaryNetworkHandler* BestiaryHandler = nullptr;
 
     UPROPERTY()
-    UNotificationToastWidget* ToastWidget = nullptr;
+    UNotificationStackWidget* ToastWidget = nullptr;
 
     UPROPERTY()
     UNotificationZoneBannerWidget* ZoneBannerWidget = nullptr;

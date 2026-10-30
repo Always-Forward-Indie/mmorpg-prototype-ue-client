@@ -51,6 +51,7 @@ class UGameMenuBarWidget;
 class UW_SettingsWidget;
 class UAudioManager;
 class UNotificationToastWidget;
+class UNotificationStackWidget;
 class UNotificationZoneBannerWidget;
 class UNotificationScreenCenterWidget;
 class UNotificationAtmosphereWidget;
@@ -287,7 +288,7 @@ public:
 	UWorldNotificationManager* GetWorldNotificationManager() const { return WorldNotificationManager; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
-	UNotificationToastWidget* GetNotificationToastWidget() const { return NotificationToastWidget; }
+	UNotificationStackWidget* GetNotificationToastWidget() const { return NotificationToastStack; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UWIOInteractionPromptWidget* GetWIOInteractionPromptWidget() const { return WIOInteractionPromptWidget; }
@@ -667,9 +668,9 @@ protected:
 	UPROPERTY()
 	UW_SettingsWidget* GameSettingsWidget;
 
-	// Notification widget instances
+	// Notification widget instances (toast channel is a stack of pooled entries)
 	UPROPERTY()
-	UNotificationToastWidget* NotificationToastWidget = nullptr;
+	UNotificationStackWidget* NotificationToastStack = nullptr;
 
 	UPROPERTY()
 	UNotificationZoneBannerWidget* NotificationZoneBannerWidget = nullptr;

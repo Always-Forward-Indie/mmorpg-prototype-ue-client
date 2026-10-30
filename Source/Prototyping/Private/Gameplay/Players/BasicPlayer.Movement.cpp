@@ -275,19 +275,41 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     RemoteLastTraceZ = ZNow;
 
     // Air-state fusion: the server flag lags jump start by whole packet
-    // intervals (rendered actor already rising). Fast vertical motion means
-    // airborne even when the flag still reads ground.
-    if (FRemoteTakeoffRule::ShouldTakeOff(bRemoteIsInAir, RenderedVz))
+    // intervals (rendered actor already rising). Takeoff is corroborated:
+    // fast vertical motion PLUS the server target leading the same way, so
+    // snap artifacts (huge Vz, target reached) and the landing tail
+    // (descending fresh off air) never assert air.
+    if (bRemoteIsInAir)
     {
-        bRemoteIsInAir = true;
-        UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] air 0->1 via takeoff (Vz=%+.1f)"), RenderedVz);
+        TimeSinceAirborne = 0.0f;
+    }
+    else
+    {
+        TimeSinceAirborne += DeltaTime;
+        const float TargetLeadZ = TargetReceivedPosition.Z - ZNow;
+        if (FRemoteTakeoffRule::ShouldTakeOffRising(RenderedVz, TargetLeadZ))
+        {
+            bRemoteIsInAir = true;
+            TimeSinceAirborne = 0.0f;
+            UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] air 0->1 via takeoff-rise (Vz=%+.1f lead=%+.1f)"),
+                RenderedVz, TargetLeadZ);
+        }
+        else if (FRemoteTakeoffRule::ShouldTakeOffFalling(RenderedVz, TargetLeadZ, TimeSinceAirborne))
+        {
+            bRemoteIsInAir = true;
+            TimeSinceAirborne = 0.0f;
+            UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] air 0->1 via takeoff-fall (Vz=%+.1f lead=%+.1f)"),
+                RenderedVz, TargetLeadZ);
+        }
     }
 
     // FLIGHT-TRACE: rendered vertical speed + flag state per tick.
+    // Direction/speed fields diagnose locomotion flaps on reversal/start.
     {
-        UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] tick air=%d moving=%d idle=%.2f grace=%.2f actorZ=%.1f targetZ=%.1f Vz=%+.1f"),
+        UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] tick air=%d moving=%d idle=%.2f grace=%.2f actorZ=%.1f targetZ=%.1f Vz=%+.1f rawDir=%+.1f smoothDir=%+.1f smoothSpd=%.1f"),
             bRemoteIsInAir ? 1 : 0, bRemoteIsMoving ? 1 : 0, RemoteIdleTime, GracePeriod,
-            ZNow, TargetReceivedPosition.Z, RenderedVz);
+            ZNow, TargetReceivedPosition.Z, RenderedVz,
+            RemoteDirection, SmoothedRemoteDirection, SmoothedRemoteSpeed);
     }
 
     // Landed-by-stillness: the airborne flag arrives only inside movement

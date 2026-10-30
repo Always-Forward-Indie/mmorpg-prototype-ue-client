@@ -111,6 +111,11 @@ private:
 	float RemoteLastTraceZ = 0.0f;
 	bool bRemoteTraceZSeeded = false;
 
+	// Seconds since the avatar was last flagged airborne. Suppresses falling
+	// takeoffs in the landing tail (flag already reads ground while
+	// interpolation still descends). Neutral 10s at spawn = allow.
+	float TimeSinceAirborne = 10.0f;
+
 	// When true, UpdateRemotePlayerMovement is skipped so CharacterPreviewManager
 	// can drive position and animation directly during character-select podium walks.
 	bool bPreviewMovementActive = false;

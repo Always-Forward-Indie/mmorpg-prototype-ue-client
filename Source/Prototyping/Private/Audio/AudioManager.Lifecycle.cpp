@@ -3,10 +3,12 @@
 #include "Audio/AudioManager.h"
 #include "Prototyping.h"
 #include "Audio/AudioConfigDataAsset.h"
+#include "Audio/UISlateSoundDevice.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "Engine/World.h"
 #include "Audio/AudioHelpers.h"
+#include "Framework/Application/SlateApplication.h"
 
 // ---------------------------------------------------------------------------
 // Lifecycle
@@ -41,6 +43,8 @@ void UAudioManager::Init(UObject* InWorldContext, UAudioConfigDataAsset* InConfi
 	// Only load saved volume values here — SoundMix push is deferred to ReapplySoundMix()
 	// because GetWorld() on GameInstance returns null during Init() (world not yet created).
 	ApplySavedSettings();
+
+	InstallSlateSoundBridge();
 
 	if (!MasterSoundMix)
 	{
@@ -77,6 +81,10 @@ void UAudioManager::ReapplySoundMix()
 	ApplyClassVolume(SFXClass,     CachedSFXVolume);
 	ApplyClassVolume(AmbientClass, CachedAmbientVolume);
 	ApplyClassVolume(UIClass ? UIClass : SFXClass, CachedUIVolume);
+
+	// The Slate bridge holds a weak ref to this manager — re-install so the
+	// device never dangles across manager recreations.
+	InstallSlateSoundBridge();
 
 	// If audio components were invalidated by a world transition and a playlist
 	// was active, restart it now in the new world so music resumes automatically.
@@ -122,6 +130,12 @@ void UAudioManager::InvalidateAudioComponents()
 // ---------------------------------------------------------------------------
 // Volume helpers
 // ---------------------------------------------------------------------------
+
+void UAudioManager::InstallSlateSoundBridge()
+{
+	if (!FSlateApplication::IsInitialized()) return;
+	FSlateApplication::Get().InitializeSound(MakeShared<FUIMixSlateSoundDevice>(this));
+}
 
 void UAudioManager::ApplyClassVolume(USoundClass* SoundClass, float Volume)
 {

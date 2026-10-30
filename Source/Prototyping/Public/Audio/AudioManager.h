@@ -384,4 +384,8 @@ private:
 
 	void  OnTrackNearEnd();
 	void  ApplyClassVolume(USoundClass* SoundClass, float Volume);
+
+	/** Route Slate UI sounds (button style sounds in every WBP) through the
+	 *  UI sound class so volume sliders apply. Safe to call repeatedly. */
+	void  InstallSlateSoundBridge();
 };

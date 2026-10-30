@@ -305,12 +305,15 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     }
 
     // FLIGHT-TRACE: rendered vertical speed + flag state per tick.
-    // Direction/speed fields diagnose locomotion flaps on reversal/start.
+    // Direction/speed fields diagnose locomotion flaps on reversal/start;
+    // XY pair diagnoses positional snaps at movement start.
     {
-        UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] tick air=%d moving=%d idle=%.2f grace=%.2f actorZ=%.1f targetZ=%.1f Vz=%+.1f rawDir=%+.1f smoothDir=%+.1f smoothSpd=%.1f"),
+        const FVector AXY = GetActorLocation();
+        UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] tick air=%d moving=%d idle=%.2f grace=%.2f actorZ=%.1f targetZ=%.1f Vz=%+.1f rawDir=%+.1f smoothDir=%+.1f smoothSpd=%.1f aXY=(%.1f,%.1f) tXY=(%.1f,%.1f)"),
             bRemoteIsInAir ? 1 : 0, bRemoteIsMoving ? 1 : 0, RemoteIdleTime, GracePeriod,
             ZNow, TargetReceivedPosition.Z, RenderedVz,
-            RemoteDirection, SmoothedRemoteDirection, SmoothedRemoteSpeed);
+            RemoteDirection, SmoothedRemoteDirection, SmoothedRemoteSpeed,
+            AXY.X, AXY.Y, TargetReceivedPosition.X, TargetReceivedPosition.Y);
     }
 
     // Landing: displacement-idle races the ~200ms broadcast rate and fires

@@ -24,6 +24,9 @@ public:
     void UnsubscribeFromNetworkEvents();
 
     // Pure packet parsers (public for Automation contract specs).
+    // Message is the NORMALIZED discriminator (FResultStatusRule output):
+    // "success", else an error code. Never pass raw header.message — success
+    // packets carry none, and every total would parse as zero.
     // RequestIdEcho binds the result to its request (empty = predates echo).
     FVendorShopData         ParseVendorShop(const TSharedPtr<FJsonObject>& Body) const;
     FBuyItemResultData       ParseBuyItemResult(const TSharedPtr<FJsonObject>& Body, const FString& Message, const FString& RequestIdEcho = FString()) const;

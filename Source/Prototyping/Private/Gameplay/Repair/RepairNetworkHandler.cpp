@@ -4,6 +4,7 @@
 #include "Services/TimeSyncService.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
+#include "Utils/NetCore/ResultStatusRule.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonReader.h"
@@ -55,12 +56,12 @@ void URepairNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
     if (!Root.IsValid()) return;
 
     FString Message;
-    // Centralized error resolution: body.errorCode wins, header.message is the fallback.
-    // Success packets carry neither; normalize those to "success" for the parsers below.
+    // Centralized error resolution (FResultStatusRule, shared with vendor):
+    // body.errorCode wins, header.message is the fallback; success packets
+    // carry neither and normalize to "success" for the parsers below.
     // Note: repair errors reuse the request eventType ("repairItem"/"repairAll"/"repairShop").
     const FString ResolvedCode = JSONParser::ResolveErrorCode(Root);
-    const bool bIsRepairError = Packet.Status.Equals(TEXT("error"), ESearchCase::IgnoreCase)
-        || (!ResolvedCode.IsEmpty() && !ResolvedCode.Equals(TEXT("success"), ESearchCase::IgnoreCase));
+    const bool bIsRepairError = FResultStatusRule::IsError(Packet.Status, ResolvedCode);
     Message = bIsRepairError ? ResolvedCode : TEXT("success");
 
     const TSharedPtr<FJsonObject>* BodyPtr = nullptr;

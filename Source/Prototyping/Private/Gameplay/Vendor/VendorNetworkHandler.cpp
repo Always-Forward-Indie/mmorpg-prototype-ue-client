@@ -4,6 +4,7 @@
 #include "Services/TimeSyncService.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
+#include "Utils/NetCore/ResultStatusRule.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonReader.h"
@@ -59,9 +60,14 @@ void UVendorNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
     const TSharedPtr<FJsonObject>* HeaderPtr = nullptr;
     if (Root->TryGetObjectField(TEXT("header"), HeaderPtr))
     {
-        (*HeaderPtr)->TryGetStringField(TEXT("message"), Message);
         (*HeaderPtr)->TryGetStringField(TEXT("requestIdEcho"), RequestIdEcho);
     }
+
+    // Status normalization (FResultStatusRule): success packets carry
+    // header.status and NO message — feeding parsers the raw message treats
+    // every success as an error with an empty code and zeroes all totals.
+    // Body.errorCode wins, header.message is the fallback.
+    Message = FResultStatusRule::ResolveMessage(Packet.Status, JSONParser::ResolveErrorCode(Root));
 
     const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
     if (!Root->TryGetObjectField(TEXT("body"), BodyPtr)) return;
@@ -80,31 +86,36 @@ void UVendorNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
         UE_LOG(LogGameplay, Warning, TEXT("VendorNetworkHandler: parsed shop npcId=%d items=%d"), ShopData.npcId, ShopData.items.Num());
         VendorManager->OnVendorShopReceived(ShopData);
     }
-    else if (EventType == TEXT("buyItemResult"))
+    else if (EventType == TEXT("buyItemResult") || EventType == TEXT("buyItem"))
     {
         VendorManager->OnBuyItemResultReceived(ParseBuyItemResult(Body, Message, RequestIdEcho));
     }
-    else if (EventType == TEXT("sellItemResult"))
+    else if (EventType == TEXT("sellItemResult") || EventType == TEXT("sellItem"))
     {
         VendorManager->OnSellItemResultReceived(ParseSellItemResult(Body, Message, RequestIdEcho));
     }
-    else if (EventType == TEXT("buyItemBatchResult"))
+    else if (EventType == TEXT("buyItemBatchResult") || EventType == TEXT("buyItemBatch"))
     {
         VendorManager->OnBuyItemBatchResultReceived(ParseBuyItemBatchResult(Body, Message, RequestIdEcho));
     }
-    else if (EventType == TEXT("sellItemBatchResult"))
+    else if (EventType == TEXT("sellItemBatchResult") || EventType == TEXT("sellItemBatch"))
     {
         VendorManager->OnSellItemBatchResultReceived(ParseSellItemBatchResult(Body, Message, RequestIdEcho));
     }
 }
 
 // EventTypes owned by this handler (single list drives dispatcher registration).
+// Result events carry success payloads; the bare request types carry server
+// errors (out_of_range, insufficient_gold, ...) — both route to the same
+// parsers so failures surface instead of hanging the confirm buttons.
 const TArray<FString>& UVendorNetworkHandler::HandledEvents()
 {
     static const TArray<FString> Events = {
         TEXT("openVendorShop"), TEXT("vendorShop"),
         TEXT("buyItemResult"),  TEXT("sellItemResult"),
-        TEXT("buyItemBatchResult"), TEXT("sellItemBatchResult")
+        TEXT("buyItemBatchResult"), TEXT("sellItemBatchResult"),
+        TEXT("buyItem"), TEXT("sellItem"),
+        TEXT("buyItemBatch"), TEXT("sellItemBatch")
     };
     return Events;
 }

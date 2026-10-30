@@ -70,6 +70,11 @@ void UVendorShopWidget::UpdateBuyTotalText()
 void UVendorShopWidget::UpdateSellTotalText()
 {
     if (!Sell_Total_Text) return;
+    if (SellCart.IsEmpty() && PendingSellExpected > 0)
+    {
+        Sell_Total_Text->SetText(FText::Format(LOCTEXT("YouGetPendingValue", "You get: {0} g …"), FText::AsNumber(PendingSellExpected)));
+        return;
+    }
     int32 Total = 0;
     for (const FVendorCartEntry& E : SellCart)
         Total += FVendorSellRule::LineGold(E.pricePerUnit, E.quantity, CachedShop.sellTaxPct);
@@ -93,6 +98,10 @@ void UVendorShopWidget::UpdatePlayerGoldText()
     {
         for (const FVendorCartEntry& E : SellCart)
             Delta += FVendorSellRule::LineGold(E.pricePerUnit, E.quantity, CachedShop.sellTaxPct);
+        // In-flight batch (cart cleared optimistically): keep showing the
+        // expected gain until the server result lands.
+        if (SellCart.IsEmpty())
+            Delta += PendingSellExpected;
     }
 
     if (Delta == 0)

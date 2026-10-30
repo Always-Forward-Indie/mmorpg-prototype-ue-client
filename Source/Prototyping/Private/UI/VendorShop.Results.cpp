@@ -2,7 +2,12 @@
 #include "UI/VendorShopWidget.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Gameplay/Items/InventoryManager.h"
+#include "Gameplay/Players/BasicPlayer.h"
 #include "UI/VendorTooltipWidget.h"
+#include "UI/UIManager.h"
+#include "UI/WorldNotificationManager.h"
+#include "UI/NotificationStackWidget.h"
+#include "Utils/NetCore/VendorSellRule.h"
 #include "Audio/AudioManager.h"
 #include "MyGameInstance.h"
 #include "Services/LocalizationSubsystem.h"
@@ -30,6 +35,12 @@ void UVendorShopWidget::HandleConfirmSellCart()
     if (Sell_Confirm_Button) Sell_Confirm_Button->SetIsEnabled(false);
     VendorManager->RequestSellItemBatch(GetCharacterId(), CachedShop.npcId, SellCart, GetPlayerPosition());
 
+    // Remember the expected gain so the totals keep showing it (as pending)
+    // instead of dropping to an empty-cart zero before the server answers.
+    PendingSellExpected = 0;
+    for (const FVendorCartEntry& E : SellCart)
+        PendingSellExpected += FVendorSellRule::LineGold(E.pricePerUnit, E.quantity, CachedShop.sellTaxPct);
+
     // Optimistic UI update: clear the cart immediately so the seller sees instant feedback.
     // The server response (sellItemBatchResult or getPlayerInventory) will correct
     // CachedInventory to the authoritative state if anything differs.
@@ -50,6 +61,19 @@ void UVendorShopWidget::HandleClearSellCart()
     SellCart.Reset();
     RefreshSellCartDisplay();
     RefreshInventoryDisplay();
+}
+
+void UVendorShopWidget::SendShopToast(const FString& NotificationType, const TMap<FString, FString>& DataFields)
+{
+    const APlayerController* PC = GetOwningPlayer();
+    const ABasicPlayer* Pawn = PC ? Cast<ABasicPlayer>(PC->GetPawn()) : nullptr;
+    UUIManager* UIMgr = Pawn ? Pawn->GetUIManager() : nullptr;
+    UWorldNotificationManager* NotifMgr = UIMgr ? UIMgr->GetWorldNotificationManager() : nullptr;
+    UNotificationStackWidget* Stack = NotifMgr ? NotifMgr->GetToastWidget() : nullptr;
+    if (Stack)
+    {
+        Stack->EnqueueActionToast(NotificationType, DataFields);
+    }
 }
 
 void UVendorShopWidget::HandleVendorShopOpened(const FVendorShopData& ShopData)
@@ -126,6 +150,11 @@ void UVendorShopWidget::HandleBuyItemResult(const FBuyItemResultData& Result)
 		FString ItemName = ResolveItemNameFromShop(Result.itemId);
 		ShowStatus(FText::Format(LOCTEXT("BoughtQty", "Bought {0} x{1}  (-{2} g)"),
 			FText::FromString(ItemName), FText::AsNumber(Result.quantity), FText::AsNumber(Result.totalPrice)), EShopStatusSeverity::Success);
+		TMap<FString, FString> ToastFields;
+		ToastFields.Add(TEXT("itemId"), FString::FromInt(Result.itemId));
+		ToastFields.Add(TEXT("itemSlug"), ResolveItemSlugFromShop(Result.itemId));
+		ToastFields.Add(TEXT("quantity"), FString::FromInt(Result.quantity));
+		SendShopToast(TEXT("item_received"), ToastFields);
 	}
 	RefreshShopDisplay();
 }
@@ -142,6 +171,9 @@ void UVendorShopWidget::HandleSellItemResult(const FSellItemResultData& Result)
 		FString ItemName = ResolveItemNameFromInventory(Result.inventoryItemId);
 		ShowStatus(FText::Format(LOCTEXT("SoldGain", "Sold {0}  (+{1} g)"),
 			FText::FromString(ItemName), FText::AsNumber(Result.goldReceived)), EShopStatusSeverity::Success);
+		TMap<FString, FString> ToastFields;
+		ToastFields.Add(TEXT("amount"), FString::FromInt(Result.goldReceived));
+		SendShopToast(TEXT("gold_received"), ToastFields);
 	}
 	RefreshInventoryDisplay();
 }
@@ -164,6 +196,14 @@ void UVendorShopWidget::HandleBuyItemBatchResult(const FBuyItemBatchResultData& 
 	else
 		ShowStatus(FText::Format(LOCTEXT("BoughtMoreSpent", "Bought {0} [+{1} more]  (-{2} g)"),
 			FText::FromString(FirstItemName), FText::AsNumber(Result.items.Num() - 1), FText::AsNumber(Result.totalGoldSpent)), EShopStatusSeverity::Success);
+	if (Result.items.Num() > 0)
+	{
+		TMap<FString, FString> ToastFields;
+		ToastFields.Add(TEXT("itemId"), FString::FromInt(Result.items[0].itemId));
+		ToastFields.Add(TEXT("itemSlug"), ResolveItemSlugFromShop(Result.items[0].itemId));
+		ToastFields.Add(TEXT("quantity"), FString::FromInt(Result.items[0].quantity));
+		SendShopToast(TEXT("item_received"), ToastFields);
+	}
 	BuyCart.Reset();
 	RefreshBuyCartDisplay();
 	RefreshShopDisplay(); // stock may have changed
@@ -172,6 +212,7 @@ void UVendorShopWidget::HandleBuyItemBatchResult(const FBuyItemBatchResultData& 
 void UVendorShopWidget::HandleSellItemBatchResult(const FSellItemBatchResultData& Result)
 {
 	if (Sell_Confirm_Button) Sell_Confirm_Button->SetIsEnabled(true);
+	PendingSellExpected = 0;
 	if (!Result.errorCode.IsEmpty())
 	{
 		const FText Friendly = GetVendorErrorText(Result.errorCode);
@@ -189,6 +230,9 @@ void UVendorShopWidget::HandleSellItemBatchResult(const FSellItemBatchResultData
     else
         ShowStatus(FText::Format(LOCTEXT("SoldMoreGain", "Sold {0} [+{1} more]  (+{2} g)"),
             FText::FromString(FirstItemName), FText::AsNumber(Result.items.Num() - 1), FText::AsNumber(Result.totalGoldReceived)), EShopStatusSeverity::Success);
+	TMap<FString, FString> ToastFields;
+	ToastFields.Add(TEXT("amount"), FString::FromInt(Result.totalGoldReceived));
+	SendShopToast(TEXT("gold_received"), ToastFields);
 
     // Update CachedInventory quantities based on what was actually sold.
     // Only subtract if the item still exists — getPlayerInventory may have already

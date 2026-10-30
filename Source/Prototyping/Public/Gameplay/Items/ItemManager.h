@@ -75,7 +75,7 @@ public:
 
 	// Process successful item pickup
 	UFUNCTION(BlueprintCallable, Category = "Item Manager")
-	void ProcessItemPickup(const FItemBaseStruct& Item);
+	void ProcessItemPickup(const FItemBaseStruct& Item, int32 Quantity = 1);
 
 protected:
 	// Called when the component is created

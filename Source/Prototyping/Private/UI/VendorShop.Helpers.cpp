@@ -107,6 +107,16 @@ FString UVendorShopWidget::ResolveItemNameFromShop(int32 ItemId) const
     return TEXT("Item");
 }
 
+FString UVendorShopWidget::ResolveItemSlugFromShop(int32 ItemId) const
+{
+    for (const FVendorShopItemData& ShopItem : CachedShop.items)
+    {
+        if (ShopItem.itemId == ItemId)
+            return ShopItem.itemSlug.IsEmpty() ? ShopItem.slug : ShopItem.itemSlug;
+    }
+    return TEXT("");
+}
+
 FString UVendorShopWidget::ResolveItemNameFromInventory(int32 InventoryItemId) const
 {
     for (const FInventoryItemStruct& InvItem : CachedInventory.items)

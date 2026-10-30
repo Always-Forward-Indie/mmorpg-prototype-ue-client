@@ -18,6 +18,7 @@ void UVendorShopWidget::OpenShop(EVendorTab DefaultTab)
     // Reset state on every open
     BuyCart.Reset();
     SellCart.Reset();
+    PendingSellExpected = 0;
     if (Status_Text) Status_Text->SetVisibility(ESlateVisibility::Collapsed);
 
     RefreshShopDisplay();

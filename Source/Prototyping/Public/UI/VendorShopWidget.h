@@ -194,6 +194,11 @@ UPROPERTY() UVendorTooltipWidget* VendorTooltipWidget = nullptr;
     TArray<FVendorCartEntry> BuyCart;
     TArray<FVendorCartEntry> SellCart;
 
+    // Expected gold for the in-flight sell batch (set on confirm, cleared on
+    // result). While set, the sell total shows the pending gain instead of
+    // dropping to an empty-cart "0 g" before the server answers.
+    int32 PendingSellExpected = 0;
+
     // Slot widget arrays (kept for index lookup)
     UPROPERTY() TArray<UVendorSlotWidget*> ShopSlots;
     UPROPERTY() TArray<UVendorSlotWidget*> InvSlots;
@@ -202,6 +207,7 @@ UPROPERTY() UVendorTooltipWidget* VendorTooltipWidget = nullptr;
 
     // Helpers
     void ShowStatus(const FText& Msg, EShopStatusSeverity Severity = EShopStatusSeverity::Info);
+    void SendShopToast(const FString& NotificationType, const TMap<FString, FString>& DataFields);
     FText GetVendorErrorText(const FString& ErrorCode) const;
     void UpdateBuyTotalText();
     void UpdateSellTotalText();
@@ -226,6 +232,9 @@ UPROPERTY() UVendorTooltipWidget* VendorTooltipWidget = nullptr;
 
     // Look up an item in CachedShop by itemId and return its localised name
     FString ResolveItemNameFromShop(int32 ItemId) const;
+
+    // Look up an item in CachedShop by itemId and return its slug (for toasts)
+    FString ResolveItemSlugFromShop(int32 ItemId) const;
 
     // Look up an item in CachedInventory by inventory item id and return its localised name
     FString ResolveItemNameFromInventory(int32 InventoryItemId) const;

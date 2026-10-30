@@ -102,6 +102,7 @@
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/CoreDelegates.h"
+#include "Utils/NetCore/TravelGate.h"
 
 
 // load LoginLevel
@@ -461,21 +462,49 @@ void UMyGameInstance::TransitionToGameWorld()
 	SpawnedPlayers.Empty();
 	Player = nullptr;
 
-	// Defer DoOpenLevel by two ticks so Slate composites AND presents the
-	// loading screen before the world begins to tear down. A single tick only
-	// covers the Slate tick — the render/present of the first loading frame
-	// lands on the second, otherwise the login frame freezes until travel ends.
-	// FlushRenderingCommands then forces that frame out before OpenLevel blocks
-	// the game thread: the display shows a (static) loading screen instead of
-	// a frozen login frame for the whole synchronous load.
+	// Defer DoOpenLevel until the loading screen is PRESENTED, in three stages:
+	// 1. Two game ticks so Slate composites the widget;
+	// 2. N rendered frames (OnEndFrameRT) so the composited frame provably
+	//    reaches the display — game ticks alone pass in ~4ms at menu fps while
+	//    a vsync-capped render thread never presents the widget, leaving a
+	//    frozen login frame for the whole synchronous OpenLevel block;
+	// 3. FlushRenderingCommands so the presented frame is forced out before
+	//    OpenLevel blocks the game thread.
+	// A 3s wall-clock fallback (FTravelGate, same as the hide countdown) keeps
+	// travel from hanging when the render thread is stalled (headless/throttled).
+	TravelPresentRTCount.Store(0);
+	TravelPresentStartTime = FPlatformTime::Seconds();
 	FTSTicker::GetCoreTicker().AddTicker(
 		FTickerDelegate::CreateLambda([this](float) -> bool
 		{
 			FTSTicker::GetCoreTicker().AddTicker(
 				FTickerDelegate::CreateLambda([this](float) -> bool
 				{
-					FlushRenderingCommands();
-					DoOpenLevel();
+					TravelPresentRTHandle = FCoreDelegates::OnEndFrameRT.AddLambda([this]()
+					{
+						TravelPresentRTCount.IncrementExchange();
+					});
+					TravelPresentTickerHandle = FTSTicker::GetCoreTicker().AddTicker(
+						FTickerDelegate::CreateLambda([this](float) -> bool
+						{
+							const int32 Presented = TravelPresentRTCount.Load();
+							const double Elapsed = FPlatformTime::Seconds() - TravelPresentStartTime;
+							if (Presented < 3 && !FTravelGate::ShouldGiveUpFrameCountdown(Elapsed))
+							{
+								return true;
+							}
+							if (TravelPresentRTHandle.IsValid())
+							{
+								FCoreDelegates::OnEndFrameRT.Remove(TravelPresentRTHandle);
+								TravelPresentRTHandle.Reset();
+							}
+							UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] 0. Loading screen presented (%d RT frames, %.2fs) — starting OpenLevel"),
+								Presented, Elapsed);
+							FlushRenderingCommands();
+							DoOpenLevel();
+							return false;
+						}),
+						0.0f);
 					return false;
 				}),
 				0.0f);

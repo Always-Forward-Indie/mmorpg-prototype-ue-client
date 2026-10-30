@@ -232,6 +232,16 @@ void UMyGameInstance::Shutdown()
 		FTSTicker::GetCoreTicker().RemoveTicker(OpenLevelRetryTickerHandle);
 		OpenLevelRetryTickerHandle.Reset();
 	}
+	if (TravelPresentRTHandle.IsValid())
+	{
+		FCoreDelegates::OnEndFrameRT.Remove(TravelPresentRTHandle);
+		TravelPresentRTHandle.Reset();
+	}
+	if (TravelPresentTickerHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(TravelPresentTickerHandle);
+		TravelPresentTickerHandle.Reset();
+	}
 
 	// Only send disconnect packets when this PIE instance was actually authenticated.
 	// Guards against: (a) PIE stopped before login, (b) crash before auth completes.

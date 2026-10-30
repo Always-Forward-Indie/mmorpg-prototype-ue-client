@@ -55,21 +55,35 @@ void UItemManager::OnPickupPointFired()
 	{
 		const int32 UID = PendingPickupItemUIDs[i];
 
-		// Destroy the world item and play pickup VFX
+		// Resolve the real picked quantity from the dropped actor before the
+		// effect below recycles it (server confirmations often omit it).
+		int32 PickupQty = 1;
+		ADroppedItemActor* DroppedActor = nullptr;
 		if (UID > 0 && DroppedItemsMap.Contains(UID))
 		{
-			ADroppedItemActor* DroppedActor = DroppedItemsMap[UID];
+			DroppedActor = DroppedItemsMap[UID];
 			if (IsValid(DroppedActor))
 			{
-				DroppedActor->PlayPickupEffect();
+				PickupQty = FMath::Max(1, DroppedActor->GetItemData().quantity);
 			}
+		}
+
+		// Destroy the world item and play pickup VFX
+		if (IsValid(DroppedActor))
+		{
+			DroppedActor->PlayPickupEffect();
+		}
+		if (UID > 0)
+		{
 			DroppedItemsMap.Remove(UID);
 		}
 
-		// Broadcast item to inventory/UI systems
-		if (i < PendingPickupItems.Num() && !PendingPickupItems[i].name.IsEmpty())
+		// Broadcast item to inventory/UI systems. Catalog-resolved drops carry
+		// slug but no name — gate on either, matching the toast path below.
+		if (i < PendingPickupItems.Num()
+			&& (!PendingPickupItems[i].name.IsEmpty() || !PendingPickupItems[i].slug.IsEmpty()))
 		{
-			ProcessItemPickup(PendingPickupItems[i]);
+			ProcessItemPickup(PendingPickupItems[i], PickupQty);
 		}
 	}
 

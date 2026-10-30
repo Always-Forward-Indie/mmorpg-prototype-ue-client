@@ -19,12 +19,12 @@
 #include "Engine/AssetManager.h"
 #include "CrashDiagnostics.h"
 
-void UItemManager::ProcessItemPickup(const FItemBaseStruct& Item)
+void UItemManager::ProcessItemPickup(const FItemBaseStruct& Item, int32 Quantity)
 {
 	// Broadcast the item pickup event
 	OnItemPickedUp.Broadcast(Item);
 
-	UE_LOG(LogGameplay, Warning, TEXT("Picked up item: %s"), *Item.name);
+	UE_LOG(LogGameplay, Warning, TEXT("Picked up item: %s x%d"), *Item.name, Quantity);
 
 	// Show a toast notification with localised item name
 	if (!Item.slug.IsEmpty())
@@ -40,7 +40,7 @@ void UItemManager::ProcessItemPickup(const FItemBaseStruct& Item)
 						TMap<FString, FString> DataFields;
 						DataFields.Add(TEXT("itemSlug"), Item.slug);
 						DataFields.Add(TEXT("itemId"), FString::FromInt(Item.id));
-						DataFields.Add(TEXT("quantity"), TEXT("1"));
+						DataFields.Add(TEXT("quantity"), FString::FromInt(FMath::Max(1, Quantity)));
 						Toast->EnqueueActionToast(TEXT("item_received"), DataFields);
 					}
 				}

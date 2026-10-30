@@ -127,6 +127,20 @@ void UItemManager::HandleChunkPacket(const FParsedPacket& Packet)
 		// Cache the dropped item UID so OnPickupPointFired knows which actor to destroy
 		int32 NewUID = -1;
 		Body->TryGetNumberField(TEXT("droppedItemUID"), NewUID);
+
+		// The server omits the item object on some pickup confirmations — resolve
+		// from the local dropped actor (spawned from itemDrop with full data).
+		// Without this the pickup completes silently: no log, no toast.
+		if (PickedItem.slug.IsEmpty() && NewUID > 0)
+		{
+			if (ADroppedItemActor* const* FoundActor = DroppedItemsMap.Find(NewUID))
+			{
+				if (IsValid(*FoundActor))
+				{
+					PickedItem = (*FoundActor)->GetItemBaseData();
+				}
+			}
+		}
 		if (NewUID > 0)
 		{
 			PendingPickupItemUIDs.Add(NewUID);

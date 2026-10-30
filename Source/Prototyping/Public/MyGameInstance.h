@@ -244,6 +244,15 @@ FDateTime ReceiveTimeLoginServer;
 	// not depend on the throttled world timer of an unfocused window.
 	FTSTicker::FDelegateHandle OpenLevelRetryTickerHandle;
 
+	// Pre-travel present gate: DoOpenLevel runs only after the loading screen
+	// has been PRESENTED (rendered frames), not merely ticked. Game-thread
+	// ticks alone are worthless at 500+ fps menu rates — two ticks pass in
+	// ~4ms while a vsync-capped render thread never presents the widget.
+	TAtomic<int32> TravelPresentRTCount{ 0 };
+	double TravelPresentStartTime = 0.0;
+	FDelegateHandle TravelPresentRTHandle;
+	FTSTicker::FDelegateHandle TravelPresentTickerHandle;
+
 	// Performs the actual UGameplayStatics::OpenLevel call and arms the ready-ticker.
 	// Called deferred by TransitionToGameWorld, or by the retry ticker.
 	void DoOpenLevel();

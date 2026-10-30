@@ -439,6 +439,18 @@ void UMyGameInstance::SetupMoviePlayerLoadingScreen()
 	StartLoadingScreenMusic();
 }
 
+bool UMyGameInstance::IsLoadingScreenAlive() const
+{
+#if WITH_EDITOR
+	if (GIsEditor)
+	{
+		return IsValid(LoadingScreenWidget) && LoadingScreenWidget->IsInViewport();
+	}
+#endif
+	IGameMoviePlayer* MoviePlayer = GetMoviePlayer();
+	return MoviePlayer && MoviePlayer->IsMovieCurrentlyPlaying();
+}
+
 void UMyGameInstance::RemoveLoadingScreen()
 {
 	// Final streaming fence: requests queued AFTER Gate5 passed (pawn, UI

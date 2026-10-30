@@ -87,6 +87,7 @@
 #include "Windows/HideWindowsPlatformTypes.h"
 #endif
 #include "Engine/GameViewportClient.h"
+#include "RHICommandList.h"
 #include "Camera/CameraComponent.h"
 #include "UObject/UObjectGlobals.h"
 #include "Audio/MusicZoneActor.h"
@@ -464,12 +465,16 @@ void UMyGameInstance::TransitionToGameWorld()
 	// loading screen before the world begins to tear down. A single tick only
 	// covers the Slate tick — the render/present of the first loading frame
 	// lands on the second, otherwise the login frame freezes until travel ends.
+	// FlushRenderingCommands then forces that frame out before OpenLevel blocks
+	// the game thread: the display shows a (static) loading screen instead of
+	// a frozen login frame for the whole synchronous load.
 	FTSTicker::GetCoreTicker().AddTicker(
 		FTickerDelegate::CreateLambda([this](float) -> bool
 		{
 			FTSTicker::GetCoreTicker().AddTicker(
 				FTickerDelegate::CreateLambda([this](float) -> bool
 				{
+					FlushRenderingCommands();
 					DoOpenLevel();
 					return false;
 				}),

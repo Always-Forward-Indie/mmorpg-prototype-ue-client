@@ -827,8 +827,6 @@ public:
 
 	void UpdatePlayerCoordinates(int32 PlayerID, double x, double y, double z, double rotZ);
 
-	void SetCharacterItems(TArray<FCharacterDataStruct> Items);
-
 	// spawn players
 	void SpawnPlayerForClient(int32 ClientID);
 
@@ -880,6 +878,12 @@ public:
 	// the user clicks). Readiness (gates + flags) is covered by the UMG
 	// overlay (EnsureReadinessOverlay), removed by RemoveLoadingScreen().
 	void SetupMoviePlayerLoadingScreen();
+
+	// True when the travel loading screen is currently alive: the MoviePlayer
+	// movie in packaged builds, the plain viewport widget in editor builds
+	// (which never configure the MoviePlayer, so IsMovieCurrentlyPlaying()
+	// would always report "lost" there).
+	bool IsLoadingScreenAlive() const;
 
 	// Shows the plain-UMG readiness overlay (no-op if already shown). Safe to
 	// call every tick — creation happens once.

@@ -1,6 +1,7 @@
-// Login Flow Widget — Implementation
+// Login Flow Widget - Implementation
 
 #include "Gameplay/UI/LoginFlowWidget.h"
+#include "Prototyping.h"
 #include "Gameplay/UI/DeleteConfirmWidget.h"
 #include "MyGameInstance.h"
 #include "Authentication/AuthenticationManager.h"
@@ -121,6 +122,28 @@ AuthManagerRef->OnAccountBanned.AddDynamic(this, &ULoginFlowWidget::OnAccountBan
 
 	// Disable play/delete until a character is selected
 	UpdateCharSelectButtons();
+
+	// Binding audit: every silent null-guard above degrades invisibly when the
+	// Blueprint is missing a widget. Scream once per missing binding instead —
+	// required ones break flows, optional throbbers only lose the spinner.
+	auto CheckRequired = [](const UWidget* Widget, const TCHAR* Name)
+	{
+		if (!IsValid(Widget))
+			UE_LOG(LogGameplay, Error, TEXT("LoginFlowWidget: REQUIRED binding '%s' missing in Blueprint — flow broken"), Name);
+	};
+	auto CheckThrobber = [](const UWidget* Widget, const TCHAR* Name)
+	{
+		if (!IsValid(Widget))
+			UE_LOG(LogGameplay, Warning, TEXT("LoginFlowWidget: throbber '%s' missing in Blueprint — busy state shows as disabled buttons only"), Name);
+	};
+	CheckRequired(PanelSwitcher, TEXT("PanelSwitcher"));
+	CheckRequired(CharacterSelectListView, TEXT("CharacterSelectListView"));
+	CheckRequired(CharSelect_PlayButton, TEXT("CharSelect_PlayButton"));
+	CheckRequired(CharSelect_ErrorText, TEXT("CharSelect_ErrorText"));
+	CheckThrobber(Login_Throbber, TEXT("Login_Throbber"));
+	CheckThrobber(Register_Throbber, TEXT("Register_Throbber"));
+	CheckThrobber(CharSelect_Throbber, TEXT("CharSelect_Throbber"));
+	CheckThrobber(CharCreate_Throbber, TEXT("CharCreate_Throbber"));
 }
 
 void ULoginFlowWidget::HandleLoginInputChanged(const FText& /*Text*/)

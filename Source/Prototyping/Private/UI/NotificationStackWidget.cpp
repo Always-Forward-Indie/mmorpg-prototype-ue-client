@@ -2,35 +2,54 @@
 #include "UI/NotificationToastWidget.h"
 #include "Audio/AudioManager.h"
 #include "MyGameInstance.h"
+#include "Prototyping.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
-#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Blueprint/WidgetTree.h"
-#include "Components/CanvasPanelSlot.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 
 void UNotificationStackWidget::NativeConstruct()
 {
     Super::NativeConstruct();
-    if (!StackBox)
+    EnsureStackBox();
+    UE_LOG(LogGameplay, Warning, TEXT("NotificationStack: ready (entries=%s, max=%d)"),
+        EntryClass ? *EntryClass->GetName() : TEXT("NONE"), MaxVisible);
+}
+
+void UNotificationStackWidget::EnsureStackBox()
+{
+    if (!WidgetTree) return;
+    if (!RootCanvas)
+    {
+        RootCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("ToastRoot"));
+        WidgetTree->RootWidget = RootCanvas;
+    }
+    if (RootCanvas && !StackBox)
     {
         StackBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ToastStack"));
-        WidgetTree->RootWidget = StackBox;
+        if (UCanvasPanelSlot* CanvasSlot = RootCanvas->AddChildToCanvas(StackBox))
+        {
+            CanvasSlot->SetAnchors(FAnchors(1.0f, 0.0f, 1.0f, 0.0f));
+            CanvasSlot->SetAlignment(FVector2D(1.0f, 0.0f));
+            CanvasSlot->SetPosition(FVector2D(-16.0f, 16.0f));
+            CanvasSlot->SetAutoSize(true);
+        }
     }
 }
 
 void UNotificationStackWidget::AnchorTopRight()
 {
-    if (UCanvasPanelSlot* CanvasSlot = UWidgetLayoutLibrary::SlotAsCanvasSlot(this))
-    {
-        CanvasSlot->SetAnchors(FAnchors(1.0f, 0.0f, 1.0f, 0.0f));
-        CanvasSlot->SetAlignment(FVector2D(1.0f, 0.0f));
-        CanvasSlot->SetPosition(FVector2D(-16.0f, 16.0f));
-        CanvasSlot->SetAutoSize(true);
-    }
+    // The canvas slot is pinned in EnsureStackBox; re-assert in case the
+    // widget was re-parented after construction.
+    EnsureStackBox();
 }
 
 void UNotificationStackWidget::ShowNotification(const FWorldNotificationStruct& Notification)
 {
+    EnsureStackBox();
     if (UNotificationToastWidget* Entry = AcquireEntry())
     {
         ShowSequence.Add(Entry, ++ShowCounter);
@@ -40,6 +59,8 @@ void UNotificationStackWidget::ShowNotification(const FWorldNotificationStruct& 
         Entry->ShowNotification(Notification);
         PlaySeveritySound(Severity);
         ReorderNewestFirst();
+        UE_LOG(LogGameplay, Verbose, TEXT("NotificationStack: showing '%s' (visible=%d, queued=%d)"),
+            *Notification.notificationType, Entries.Num(), PendingQueue.Num());
         return;
     }
     if (PendingQueue.Num() >= MaxQueueSize)
@@ -47,6 +68,8 @@ void UNotificationStackWidget::ShowNotification(const FWorldNotificationStruct& 
         PendingQueue.RemoveAt(0);
     }
     PendingQueue.Add(Notification);
+    UE_LOG(LogGameplay, Verbose, TEXT("NotificationStack: all entries busy, queued '%s' (queued=%d)"),
+        *Notification.notificationType, PendingQueue.Num());
 }
 
 void UNotificationStackWidget::EnqueueActionToast(const FString& NotificationType, const TMap<FString, FString>& DataFields)
@@ -88,6 +111,18 @@ void UNotificationStackWidget::PlaySeveritySound(EShopStatusSeverity Severity)
     }
 }
 
+APlayerController* UNotificationStackWidget::ResolvePlayerController() const
+{
+    // Never trust a cached owning player across level transitions: resolve
+    // from the live world every time an entry is spawned.
+    if (UWorld* World = GetWorld())
+    {
+        if (APlayerController* PC = World->GetFirstPlayerController())
+            return PC;
+    }
+    return GetOwningPlayer();
+}
+
 UNotificationToastWidget* UNotificationStackWidget::AcquireEntry()
 {
     for (UNotificationToastWidget* Entry : Entries)
@@ -102,7 +137,7 @@ UNotificationToastWidget* UNotificationStackWidget::AcquireEntry()
     {
         return nullptr;
     }
-    if (APlayerController* PC = GetOwningPlayer())
+    if (APlayerController* PC = ResolvePlayerController())
     {
         if (UNotificationToastWidget* Fresh = CreateWidget<UNotificationToastWidget>(PC, EntryClass))
         {
@@ -120,6 +155,9 @@ UNotificationToastWidget* UNotificationStackWidget::AcquireEntry()
             return Fresh;
         }
     }
+    UE_LOG(LogGameplay, Error, TEXT("NotificationStack: failed to spawn entry (class=%s, pc=%s)"),
+        EntryClass ? *EntryClass->GetName() : TEXT("NONE"),
+        ResolvePlayerController() ? TEXT("ok") : TEXT("null"));
     return nullptr;
 }
 

@@ -127,22 +127,11 @@ void UAuthenticationManager::ProcessLoginPacket(const FParsedPacket& Packet)
 			TArray<FLoginCharacterEntry> Entries = JSONParser::DeserializeLoginCharactersList(ReceivedData);
 			OnCharacterListReceived.Broadcast(Entries);
 
-			// Compat: also populate via GameInstance ListView
+			// The login flow populates its own list from the delegate above;
+			// no legacy ListView feed here (it only Error-spammed on a null widget).
 			if (gameInstance)
 			{
 				gameInstance->OnLoginResponseReceived.Broadcast(ClientData.clientId, MessageData.message);
-
-				// Build minimal FCharacterDataStruct list for SetCharacterItems (uses only name + id)
-				TArray<FCharacterDataStruct> List;
-				List.Reserve(Entries.Num());
-				for (const FLoginCharacterEntry& E : Entries)
-				{
-					FCharacterDataStruct D;
-					D.characterId   = E.CharacterId;
-					D.characterName = E.CharacterName;
-					List.Add(MoveTemp(D));
-				}
-				gameInstance->SetCharacterItems(List);
 			}
 		}
 		else

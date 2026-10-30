@@ -420,8 +420,7 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 	// polling for game-world readiness.
 	if (bTransitioningToGameWorld)
 	{
-		IGameMoviePlayer* MoviePlayer = GetMoviePlayer();
-		if (!MoviePlayer || !MoviePlayer->IsMovieCurrentlyPlaying())
+		if (!IsLoadingScreenAlive())
 		{
 			// Headless (-nullrhi) has no renderer: MoviePlayer can never play,
 			// so "lost" is expected there — Warning, still reconfigure.
@@ -438,7 +437,7 @@ void UMyGameInstance::OnPostLoginLevelLoaded(UWorld* LoadedWorld)
 		}
 		else
 		{
-			UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Loading screen survived level transition (MoviePlayer)"));
+			UE_LOG(LogConnection, Warning, TEXT("[LOADSEQ] Loading screen survived level transition"));
 		}
 
 		// The MoviePlayer covers travel and auto-exits at load end (it must never

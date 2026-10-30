@@ -4,8 +4,6 @@
 #include "Gameplay/Mobs/MOBManager.h"
 #include "Gameplay/UI/LoginWidget.h"
 #include "Gameplay/UI/LoginFlowWidget.h"
-#include "Gameplay/UI/CharacterListItem.h"
-#include "Components/ListView.h"
 #include "Blueprint/UserWidget.h"
 #include "Prototyping.h"
 #include "Components/ArrowComponent.h"
@@ -354,55 +352,6 @@ void UMyGameInstance::UpdatePlayerCoordinates(int32 PlayerID, double x, double y
 				PlayerToMove->SetActorLocationAndRotation(NewLocation, NewRotation);
 			}
 		}
-	}
-}
-
-// Set character items to list view widget
-void UMyGameInstance::SetCharacterItems(TArray<FCharacterDataStruct> Items)
-{
-	if (!LoginScreenWidget)
-	{
-		// Live-bot flow (headless auto-login) intentionally has no login UI:
-		// the driver consumes the character list directly. Quiet Verbose there;
-		// a null widget in the manual flow is still an Error (empty list).
-		if (!LiveBotScenario.IsEmpty())
-		{
-			UE_LOG(LogGameplay, Verbose, TEXT("SetCharacterItems: no login widget in live-bot flow, items consumed by driver"));
-			return;
-		}
-		UE_LOG(LogGameplay, Error, TEXT("Failed to set character items - LoginScreenWidget is null"));
-		return;
-	}
-
-	UListView* CharacterListView = LoginScreenWidget->GetCharactersListView();
-
-	if (CharacterListView)
-	{
-		// Clear existing items first
-		CharacterListView->ClearListItems();
-		
-		// Populate the list with character items
-		for (const FCharacterDataStruct& Character : Items)
-		{
-			UCharacterListItem* CharacterListItemWidget = CreateWidget<UCharacterListItem>(this, CharactersListItemWidgetClass);
-
-			// Check if the widget creation was successful
-			if (CharacterListItemWidget)
-			{
-				// Set character data in the list item widget
-				CharacterListItemWidget->SetCharacterItemData(Character.characterName, Character.characterId);
-				
-				// Add the item to the List View
-				CharacterListView->AddItem(CharacterListItemWidget);
-				
-				UE_LOG(LogGameplay, Warning, TEXT("Added character to list: %s (ID: %d)"), 
-					*Character.characterName, Character.characterId);
-			}
-		}
-	}
-	else
-	{
-		UE_LOG(LogGameplay, Error, TEXT("Failed to set character items - LoginScreenWidget or CharacterListView is null"));
 	}
 }
 

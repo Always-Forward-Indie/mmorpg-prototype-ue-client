@@ -6,6 +6,7 @@
 #include "UI/NotificationToastWidget.h"
 #include "NotificationStackWidget.generated.h"
 
+class UCanvasPanel;
 class UVerticalBox;
 
 /**
@@ -16,13 +17,16 @@ class UVerticalBox;
  * expire. Each entry is a pooled UNotificationToastWidget so show/hide
  * animations and locale text stay in one place.
  *
+ * Layout is code-owned (no Blueprint needed): a fullscreen CanvasPanel root
+ * with a VerticalBox child anchored top-right. Entry visuals come from
+ * EntryClass (the existing WBP toast).
+ *
  * Severity (green / white / red title + Notification / Error sound) is
  * derived from the notification type: *failed* errors, reward receipts
  * (received/learned/unlocked/up/explored) success, everything else info.
  *
- * Created in C++ by UIManager (no Blueprint subclass needed); entry
- * visuals come from EntryClass (the existing WBP toast). Call
- * AnchorTopRight() after AddToViewport.
+ * Created in C++ by UIManager; call AnchorTopRight() after AddToViewport
+ * (harmless no-op — the canvas slot is pinned at build time).
  */
 UCLASS(BlueprintType, Blueprintable)
 class PROTOTYPING_API UNotificationStackWidget : public UUserWidget
@@ -38,7 +42,7 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Notification|Stack")
     void EnqueueActionToast(const FString& NotificationType, const TMap<FString, FString>& DataFields);
 
-    /** Pin the stack to the viewport's top-right corner (call after AddToViewport). */
+    /** Re-pin the stack box to the viewport's top-right corner. */
     UFUNCTION(BlueprintCallable, Category = "Notification|Stack")
     void AnchorTopRight();
 
@@ -67,6 +71,12 @@ private:
 
     void PlaySeveritySound(EShopStatusSeverity Severity);
 
+    /** Build the canvas root + anchored stack box (idempotent, any order). */
+    void EnsureStackBox();
+
+    /** Owning player from the CURRENT world (never a stale cached one). */
+    APlayerController* ResolvePlayerController() const;
+
     /** Free hidden entry, or a new one when under MaxVisible; null when full. */
     UNotificationToastWidget* AcquireEntry();
 
@@ -78,6 +88,9 @@ private:
 
     /** Newest-first ordering after every show/promote. */
     void ReorderNewestFirst();
+
+    UPROPERTY()
+    UCanvasPanel* RootCanvas = nullptr;
 
     UPROPERTY()
     UVerticalBox* StackBox = nullptr;

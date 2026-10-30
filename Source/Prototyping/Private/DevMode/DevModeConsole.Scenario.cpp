@@ -114,6 +114,24 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
             }
         }
     }
+    else if (Name == TEXT("coalesce_verify"))
+    {
+        // Coalesce self-test: 8 identical receipts collapse to one, quits.
+        // Runs on an idle stack — never chain after toast_verify.
+        Cmd_CoalesceVerify(NoArgs);
+        if (GameInstance && GameInstance->bDevModeAutoQuit)
+        {
+            GameInstance->bDevModeAutoQuit = false;
+            GameInstance->DevModeAutoScenario.Empty();
+            if (UWorld* World = GameInstance->GetWorld())
+            {
+                if (GEngine)
+                {
+                    GEngine->Exec(World, TEXT("quit"));
+                }
+            }
+        }
+    }
     else if (Name == TEXT("bot_vendor_repair"))
     {
         // Economy shops need the server round-trip — live only.

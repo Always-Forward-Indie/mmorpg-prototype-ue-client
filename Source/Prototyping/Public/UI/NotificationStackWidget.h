@@ -4,6 +4,7 @@
 #include "Blueprint/UserWidget.h"
 #include "Data/DataStructs.h"
 #include "UI/NotificationToastWidget.h"
+#include "Utils/NetCore/ToastCoalesceRule.h"
 #include "NotificationStackWidget.generated.h"
 
 class UCanvasPanel;
@@ -24,6 +25,10 @@ class UVerticalBox;
  * Severity (green / white / red title + Notification / Error sound) is
  * derived from the notification type: *failed* errors, reward receipts
  * (received/learned/unlocked/up/explored) success, everything else info.
+ *
+ * Coalescing (FToastCoalesceRule): identical gains inside 1.5s merge into
+ * one entry (single sound), in the visible pool and in the overflow queue.
+ * Losses never toast — gains-only policy, see FToastCoalesceRule::IsGainType.
  *
  * Created in C++ by UIManager; call AnchorTopRight() after AddToViewport
  * (harmless no-op — the canvas slot is pinned at build time).
@@ -50,6 +55,12 @@ public:
      *  whether the Slate tree was built before first paint. */
     void GetToastDiagnostics(int32& OutTotalEntries, int32& OutVisibleEntries,
         int32& OutQueued, bool& OutTreeBuilt) const;
+
+    /** Bodies of currently visible entries (coalesce self-test hook). */
+    void GetVisibleToastBodies(TArray<FString>& OutBodies) const;
+
+    /** How many incoming toasts merged into an existing entry (self-test). */
+    int32 GetCoalescedCount() const { return CoalescedCount; }
 
     /** Widget class used for stack entries (the WBP toast). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Notification|Stack|Config")
@@ -95,6 +106,9 @@ private:
     /** Newest-first ordering after every show/promote. */
     void ReorderNewestFirst();
 
+    /** Merge into a matching visible/queued toast inside the window (true). */
+    bool TryCoalesce(const FWorldNotificationStruct& Notification);
+
     UPROPERTY()
     UCanvasPanel* RootCanvas = nullptr;
 
@@ -109,4 +123,11 @@ private:
     int32 ShowCounter = 0;
 
     TArray<FWorldNotificationStruct> PendingQueue;
+
+    /** Live notification per entry (coalesce matching + re-display). */
+    TMap<UNotificationToastWidget*, FWorldNotificationStruct> ActiveNotif;
+    /** Last show time per entry (coalesce window, perf-counter seconds). */
+    TMap<UNotificationToastWidget*, double> ActiveTime;
+    /** Total merges since construction (self-test counter). */
+    int32 CoalescedCount = 0;
 };

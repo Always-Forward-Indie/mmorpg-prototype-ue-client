@@ -83,6 +83,12 @@ void UInventoryManager::HandleChunkPacket(const FParsedPacket& Packet)
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Item dropped successfully"));
 		ProcessInventoryUpdate(ReceivedData);
+		// Gains-only toast policy: losses stay inline (inventory refresh
+		// above) plus a UI sound — no toast for drops.
+		if (gameInstance && gameInstance->AudioManager)
+		{
+			gameInstance->AudioManager->PlayUISound(EUISoundEvent::ItemDrop);
+		}
 	}
 	// Handle weapon kill count update (item soul system — server pushes new count on every kill)
 	else if (EventType == "world_notification")

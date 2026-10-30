@@ -121,3 +121,62 @@ void UDevModeConsoleCommands::Cmd_ToastVerify(const TArray<FString>& Args) const
     }
     (void)Args;
 }
+
+// ============================================================================
+// devmode.coalesceverify — self-test: fire 8 identical bone receipts, assert
+// they collapse to ONE visible entry with merged quantity 8 (tombstone
+// "DEVMODE_COALESCE_RESULT <PASS|FAIL> ..."). Must run on an idle stack.
+// ============================================================================
+void UDevModeConsoleCommands::Cmd_CoalesceVerify(const TArray<FString>& Args) const
+{
+    FString FailReason;
+    if (!GameInstance || !GameInstance->Player)
+    {
+        FailReason = TEXT("no player");
+    }
+    else
+    {
+        UUIManager* UIMgr = GameInstance->Player->GetUIManager();
+        UWorldNotificationManager* NotifMgr = UIMgr ? UIMgr->GetWorldNotificationManager() : nullptr;
+        UNotificationStackWidget* Stack = NotifMgr ? NotifMgr->GetToastWidget() : nullptr;
+        if (!Stack)
+        {
+            FailReason = TEXT("no stack");
+        }
+        else
+        {
+            const int32 CoalescedBefore = Stack->GetCoalescedCount();
+            for (int32 i = 0; i < 8; ++i)
+            {
+                TMap<FString, FString> Fields;
+                Fields.Add(TEXT("itemSlug"), TEXT("animal_bone"));
+                Fields.Add(TEXT("quantity"), TEXT("1"));
+                Stack->EnqueueActionToast(TEXT("item_received"), Fields);
+            }
+            const int32 Merged = Stack->GetCoalescedCount() - CoalescedBefore;
+            TArray<FString> Bodies;
+            Stack->GetVisibleToastBodies(Bodies);
+            bool bFoundEight = false;
+            for (const FString& Body : Bodies)
+            {
+                if (Body.Contains(TEXT("8"))) { bFoundEight = true; break; }
+            }
+            if (Merged != 7)
+                FailReason = FString::Printf(TEXT("merged=%d want 7"), Merged);
+            else if (Bodies.Num() != 1)
+                FailReason = FString::Printf(TEXT("visible=%d want 1"), Bodies.Num());
+            else if (!bFoundEight)
+                FailReason = TEXT("no x8 body");
+        }
+    }
+
+    if (FailReason.IsEmpty())
+    {
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_COALESCE_RESULT PASS merged=7 visible=1 qty=8"));
+    }
+    else
+    {
+        UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_COALESCE_RESULT FAIL %s"), *FailReason);
+    }
+    (void)Args;
+}

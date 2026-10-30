@@ -76,6 +76,16 @@ void UNotificationStackWidget::GetToastDiagnostics(int32& OutTotalEntries, int32
     OutTreeBuilt = (WidgetTree && WidgetTree->RootWidget == RootCanvas && RootCanvas && StackBox);
 }
 
+void UNotificationStackWidget::GetVisibleToastBodies(TArray<FString>& OutBodies) const
+{
+    OutBodies.Reset();
+    for (UNotificationToastWidget* Entry : Entries)
+    {
+        if (!IsValid(Entry) || !Entry->IsShowing()) continue;
+        OutBodies.Add(Entry->GetCurrentBody().ToString());
+    }
+}
+
 void UNotificationStackWidget::ShowNotification(const FWorldNotificationStruct& Notification)
 {
     EnsureStackBox();
@@ -85,9 +95,16 @@ void UNotificationStackWidget::ShowNotification(const FWorldNotificationStruct& 
             *Notification.notificationType);
         return;
     }
+    // Anti-spam first: identical gains inside the window refresh one entry.
+    if (TryCoalesce(Notification))
+    {
+        return;
+    }
     if (UNotificationToastWidget* Entry = AcquireEntry())
     {
         ShowSequence.Add(Entry, ++ShowCounter);
+        ActiveNotif.Add(Entry, Notification);
+        ActiveTime.Add(Entry, FPlatformTime::Seconds());
         const EShopStatusSeverity Severity = SeverityForType(Notification.notificationType);
         Entry->DisplayDuration = DisplayDuration;
         Entry->SetSeverity(Severity);
@@ -109,12 +126,80 @@ void UNotificationStackWidget::ShowNotification(const FWorldNotificationStruct& 
 
 void UNotificationStackWidget::EnqueueActionToast(const FString& NotificationType, const TMap<FString, FString>& DataFields)
 {
+    // Zero-amount tripwire: a gain toast carrying nothing names its cause.
+    // (The vendor floor guarantees >= 1g server-side; a 0 here means a
+    // zero-price item or a broken amount field upstream.)
+    if (FToastCoalesceRule::IsGainType(NotificationType))
+    {
+        const FString AmountField = FToastCoalesceRule::AmountField(NotificationType);
+        if (!AmountField.IsEmpty())
+        {
+            const FString* AmountPtr = DataFields.Find(AmountField);
+            if (AmountPtr && FCString::Atoi(**AmountPtr) <= 0)
+            {
+                FString Dump;
+                for (const auto& Pair : DataFields)
+                    Dump += FString::Printf(TEXT("[%s=%s]"), *Pair.Key, *Pair.Value);
+                UE_LOG(LogGameplay, Warning, TEXT("NotificationStack: '%s' carries %s<=0: %s"),
+                    *NotificationType, *AmountField, *Dump);
+            }
+        }
+    }
     FWorldNotificationStruct Notif;
     Notif.notificationType = NotificationType;
     Notif.channel          = TEXT("toast");
     Notif.priority         = TEXT("medium");
     Notif.dataFields       = DataFields;
     ShowNotification(Notif);
+}
+
+bool UNotificationStackWidget::TryCoalesce(const FWorldNotificationStruct& Notification)
+{
+    const FString Key = FToastCoalesceRule::CoalesceKey(Notification.notificationType, Notification.dataFields);
+    if (Key.IsEmpty()) return false;
+    const FString Field = FToastCoalesceRule::AmountField(Notification.notificationType);
+    if (Field.IsEmpty()) return false;
+    const double Now = FPlatformTime::Seconds();
+    const float Window = FToastCoalesceRule::CoalesceWindowSec();
+
+    // Visible entries first: merge and refresh the one entry (no extra sound).
+    for (auto& Pair : ActiveNotif)
+    {
+        UNotificationToastWidget* Entry = Pair.Key;
+        if (!IsValid(Entry) || !Entry->IsShowing()) continue;
+        FWorldNotificationStruct& Live = Pair.Value;
+        if (Live.notificationType != Notification.notificationType) continue;
+        if (FToastCoalesceRule::CoalesceKey(Live.notificationType, Live.dataFields) != Key) continue;
+        const double* ShownAt = ActiveTime.Find(Entry);
+        if (!ShownAt || (Now - *ShownAt) > Window) continue;
+        const int32 Merged = FToastCoalesceRule::MergeAmounts(
+            Live.dataFields.FindRef(Field), Notification.dataFields.FindRef(Field));
+        Live.dataFields.Add(Field, FString::FromInt(Merged));
+        Entry->ShowNotification(Live);
+        ShowSequence.Add(Entry, ++ShowCounter);
+        ActiveTime.Add(Entry, Now);
+        ++CoalescedCount;
+        ReorderNewestFirst();
+        UE_LOG(LogGameplay, Verbose, TEXT("NotificationStack: coalesced '%s' (%s=%d)"),
+            *Notification.notificationType, *Field, Merged);
+        return true;
+    }
+
+    // Overflow queue: merge in place so a burst behind a full pool still
+    // collapses to one promotion.
+    for (FWorldNotificationStruct& Queued : PendingQueue)
+    {
+        if (Queued.notificationType != Notification.notificationType) continue;
+        if (FToastCoalesceRule::CoalesceKey(Queued.notificationType, Queued.dataFields) != Key) continue;
+        const int32 Merged = FToastCoalesceRule::MergeAmounts(
+            Queued.dataFields.FindRef(Field), Notification.dataFields.FindRef(Field));
+        Queued.dataFields.Add(Field, FString::FromInt(Merged));
+        ++CoalescedCount;
+        UE_LOG(LogGameplay, Verbose, TEXT("NotificationStack: coalesced queued '%s' (%s=%d)"),
+            *Notification.notificationType, *Field, Merged);
+        return true;
+    }
+    return false;
 }
 
 EShopStatusSeverity UNotificationStackWidget::SeverityForType(const FString& NotificationType)
@@ -214,6 +299,8 @@ void UNotificationStackWidget::PromoteNext()
         const FWorldNotificationStruct Next = PendingQueue[0];
         PendingQueue.RemoveAt(0);
         ShowSequence.Add(Entry, ++ShowCounter);
+        ActiveNotif.Add(Entry, Next);
+        ActiveTime.Add(Entry, FPlatformTime::Seconds());
         const EShopStatusSeverity Severity = SeverityForType(Next.notificationType);
         Entry->DisplayDuration = DisplayDuration;
         Entry->SetSeverity(Severity);
@@ -229,6 +316,8 @@ void UNotificationStackWidget::HandleEntryExpired(UNotificationToastWidget* Expi
     {
         ExpiredEntry->SetVisibility(ESlateVisibility::Collapsed);
     }
+    ActiveNotif.Remove(ExpiredEntry);
+    ActiveTime.Remove(ExpiredEntry);
     PromoteNext();
     ReorderNewestFirst();
 }

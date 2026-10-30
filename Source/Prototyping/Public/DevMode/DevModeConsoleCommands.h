@@ -84,6 +84,8 @@ private:
     void Cmd_Toast(const TArray<FString>& Args) const;
     // Fire the toast mix and assert the stack shows it (self-test with tombstone).
     void Cmd_ToastVerify(const TArray<FString>& Args) const;
+    // Fire 8 identical receipts and assert they coalesce to one entry.
+    void Cmd_CoalesceVerify(const TArray<FString>& Args) const;
     void Cmd_ClearCorpses(const TArray<FString>& Args) const;
     // A2 reconnect hook: closes the chunk socket so the drop detector and
     // bounded reconnect run exactly like on a real network drop. Offline

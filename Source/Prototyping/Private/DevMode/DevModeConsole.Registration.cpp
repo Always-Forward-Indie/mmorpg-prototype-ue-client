@@ -164,6 +164,13 @@ void UDevModeConsoleCommands::RegisterCommands(UMyGameInstance* InGameInstance)
             if (UDevModeConsoleCommands* Cmd = WeakThis.Get()) { Cmd->Cmd_ToastVerify(A); }
         }));
 
+    Reg(TEXT("devmode.coalesceverify"),
+        TEXT("DevMode: fire 8 identical receipts and assert they coalesce to one (logs DEVMODE_COALESCE_RESULT)."),
+        FConsoleCommandWithArgsDelegate::CreateLambda([WeakThis](const TArray<FString>& A)
+        {
+            if (UDevModeConsoleCommands* Cmd = WeakThis.Get()) { Cmd->Cmd_CoalesceVerify(A); }
+        }));
+
     UE_LOG(LogGameplay, Verbose, TEXT("DevMode: %d console commands registered"), RegisteredCommandNames.Num());
 }
 

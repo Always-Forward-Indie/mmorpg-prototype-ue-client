@@ -155,6 +155,16 @@ void UAudioManager::PlayUISound(EUISoundEvent InEvent)
 			return;
 		}
 	}
+	// Silence-by-default is banned: an unmapped event warns once so a
+	// missing DA_AudioConfig entry surfaces in logs/smoke instead of a
+	// silent button. Designer fix: fill UISounds in DA_AudioConfig.
+	static TSet<EUISoundEvent> WarnedMissing;
+	if (!WarnedMissing.Contains(InEvent))
+	{
+		WarnedMissing.Add(InEvent);
+		UE_LOG(LogGameAudio, Warning, TEXT("AudioManager: no UISound mapped for event %d — assign it in DA_AudioConfig (UI Sounds)"),
+			static_cast<int32>(InEvent));
+	}
 }
 
 void UAudioManager::PlayUISoundAsset(USoundBase* Sound)

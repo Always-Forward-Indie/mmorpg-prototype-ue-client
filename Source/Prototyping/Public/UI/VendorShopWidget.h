@@ -199,12 +199,12 @@ UPROPERTY() UVendorTooltipWidget* VendorTooltipWidget = nullptr;
     // dropping to an empty-cart "0 g" before the server answers.
     int32 PendingSellExpected = 0;
 
-    // Pre-sale snapshot for idempotent result application: the server answers
-    // with BOTH a batch result AND an absolute inventory snapshot in no
-    // guaranteed order. Qty/gold apply only when the snapshot proves the
-    // inventory hasn't already absorbed them (else double-spend/double-credit).
-    int32 PreSellGold = -1;
-    TMap<int32, int32> PreSellRowQty;
+    // Result-to-request binding: the server echoes our batch requestId.
+    // Results apply only to their own request, once — no snapshot heuristics.
+    FString PendingBuyBatchRequestId;
+    FString PendingSellBatchRequestId;
+    bool bBuyBatchApplied = false;
+    bool bSellBatchApplied = false;
 
     // Slot widget arrays (kept for index lookup)
     UPROPERTY() TArray<UVendorSlotWidget*> ShopSlots;

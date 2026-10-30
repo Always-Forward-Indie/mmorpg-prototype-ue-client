@@ -136,6 +136,8 @@ void UVendorManager::RequestBuyItemBatch(int32 CharacterId, int32 NpcId,
     Header->SetStringField(TEXT("eventType"), TEXT("buyItemBatch"));
     Header->SetNumberField(TEXT("clientId"),  GameInstance->GetCurrentClientID());
     Header->SetStringField(TEXT("hash"),      GameInstance->GetCurrentClientHash());
+    LastBuyBatchRequestId = FGuid::NewGuid().ToString();
+    Header->SetStringField(TEXT("requestId"), LastBuyBatchRequestId);
 
     Pos->SetNumberField(TEXT("x"), PlayerPosition.X);
     Pos->SetNumberField(TEXT("y"), PlayerPosition.Y);
@@ -178,6 +180,8 @@ void UVendorManager::RequestSellItemBatch(int32 CharacterId, int32 NpcId,
     Header->SetStringField(TEXT("eventType"), TEXT("sellItemBatch"));
     Header->SetNumberField(TEXT("clientId"),  GameInstance->GetCurrentClientID());
     Header->SetStringField(TEXT("hash"),      GameInstance->GetCurrentClientHash());
+    LastSellBatchRequestId = FGuid::NewGuid().ToString();
+    Header->SetStringField(TEXT("requestId"), LastSellBatchRequestId);
 
     Pos->SetNumberField(TEXT("x"), PlayerPosition.X);
     Pos->SetNumberField(TEXT("y"), PlayerPosition.Y);

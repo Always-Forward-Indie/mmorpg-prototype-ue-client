@@ -45,6 +45,13 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Vendor")
     void RequestSellItemBatch(int32 CharacterId, int32 NpcId, const TArray<FVendorCartEntry>& Cart, const FVector& PlayerPosition);
 
+    /** RequestId of the last batch request sent (matched against result echo). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Vendor")
+    FString GetLastBuyBatchRequestId() const { return LastBuyBatchRequestId; }
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Vendor")
+    FString GetLastSellBatchRequestId() const { return LastSellBatchRequestId; }
+
     // --- Queries ---
 
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Vendor")
@@ -77,6 +84,10 @@ public:
 
 private:
     FVendorShopData CurrentShop;
+
+    // RequestIds of the last batch requests (result echo matching).
+    FString LastBuyBatchRequestId;
+    FString LastSellBatchRequestId;
 
     UPROPERTY()
     UNetworkManager* NetworkManager = nullptr;

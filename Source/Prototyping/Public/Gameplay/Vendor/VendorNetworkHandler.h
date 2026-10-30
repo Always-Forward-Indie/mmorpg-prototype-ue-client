@@ -24,11 +24,12 @@ public:
     void UnsubscribeFromNetworkEvents();
 
     // Pure packet parsers (public for Automation contract specs).
+    // RequestIdEcho binds the result to its request (empty = predates echo).
     FVendorShopData         ParseVendorShop(const TSharedPtr<FJsonObject>& Body) const;
-    FBuyItemResultData       ParseBuyItemResult(const TSharedPtr<FJsonObject>& Body, const FString& Message) const;
-    FSellItemResultData      ParseSellItemResult(const TSharedPtr<FJsonObject>& Body, const FString& Message) const;
-    FBuyItemBatchResultData  ParseBuyItemBatchResult(const TSharedPtr<FJsonObject>& Body, const FString& Message) const;
-    FSellItemBatchResultData ParseSellItemBatchResult(const TSharedPtr<FJsonObject>& Body, const FString& Message) const;
+    FBuyItemResultData       ParseBuyItemResult(const TSharedPtr<FJsonObject>& Body, const FString& Message, const FString& RequestIdEcho = FString()) const;
+    FSellItemResultData      ParseSellItemResult(const TSharedPtr<FJsonObject>& Body, const FString& Message, const FString& RequestIdEcho = FString()) const;
+    FBuyItemBatchResultData  ParseBuyItemBatchResult(const TSharedPtr<FJsonObject>& Body, const FString& Message, const FString& RequestIdEcho = FString()) const;
+    FSellItemBatchResultData ParseSellItemBatchResult(const TSharedPtr<FJsonObject>& Body, const FString& Message, const FString& RequestIdEcho = FString()) const;
 
 private:
     // Packet entry (S05): single-parse path via the per-eventType dispatcher.

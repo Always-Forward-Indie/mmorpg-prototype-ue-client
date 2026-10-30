@@ -9,6 +9,7 @@
 #include "UI/WorldNotificationManager.h"
 #include "UI/NotificationStackWidget.h"
 #include "Utils/NetCore/VendorSellRule.h"
+#include "Utils/NetCore/VendorResultMatchRule.h"
 #include "Audio/AudioManager.h"
 #include "MyGameInstance.h"
 #include "Services/LocalizationSubsystem.h"
@@ -28,6 +29,8 @@ void UVendorShopWidget::HandleConfirmBuyCart()
     if (!VendorManager || BuyCart.IsEmpty()) return;
     if (Buy_Confirm_Button) Buy_Confirm_Button->SetIsEnabled(false);
     VendorManager->RequestBuyItemBatch(GetCharacterId(), CachedShop.npcId, BuyCart, GetPlayerPosition());
+    PendingBuyBatchRequestId = VendorManager->GetLastBuyBatchRequestId();
+    bBuyBatchApplied = false;
 }
 
 void UVendorShopWidget::HandleConfirmSellCart()
@@ -35,27 +38,14 @@ void UVendorShopWidget::HandleConfirmSellCart()
     if (!VendorManager || SellCart.IsEmpty()) return;
     if (Sell_Confirm_Button) Sell_Confirm_Button->SetIsEnabled(false);
     VendorManager->RequestSellItemBatch(GetCharacterId(), CachedShop.npcId, SellCart, GetPlayerPosition());
+    PendingSellBatchRequestId = VendorManager->GetLastSellBatchRequestId();
+    bSellBatchApplied = false;
 
     // Remember the expected gain so the totals keep showing it (as pending)
     // instead of dropping to an empty-cart zero before the server answers.
     PendingSellExpected = 0;
     for (const FVendorCartEntry& E : SellCart)
         PendingSellExpected += FVendorSellRule::LineGold(E.pricePerUnit, E.quantity, CachedShop.sellTaxPct);
-
-    // Snapshot pre-sale state so the result applies idempotently (see header).
-    PreSellGold = CachedInventory.gold;
-    PreSellRowQty.Reset();
-    for (const FVendorCartEntry& E : SellCart)
-    {
-        for (const FInventoryItemStruct& InvItem : CachedInventory.items)
-        {
-            if (InvItem.id == E.inventoryItemId)
-            {
-                PreSellRowQty.Add(E.inventoryItemId, InvItem.quantity);
-                break;
-            }
-        }
-    }
 
     // Optimistic UI update: clear the cart immediately so the seller sees instant feedback.
     // The server response (sellItemBatchResult or getPlayerInventory) will correct
@@ -213,6 +203,14 @@ void UVendorShopWidget::HandleBuyItemBatchResult(const FBuyItemBatchResultData& 
 		ShowStatus(FText::Format(LOCTEXT("BuyFailed", "Buy failed: {0}"), Friendly), EShopStatusSeverity::Error);
 		return;
 	}
+	// Echo-bound: stale/duplicate answers never touch the cart.
+	if (!FVendorResultMatchRule::ShouldApply(PendingBuyBatchRequestId, Result.requestIdEcho, bBuyBatchApplied))
+	{
+		UE_LOG(LogGameplay, Warning, TEXT("VendorShop: stale buy batch result ignored (echo='%s')"),
+			*Result.requestIdEcho);
+		return;
+	}
+	bBuyBatchApplied = true;
 	if (Result.items.Num() > 0 && Result.totalGoldSpent == 0)
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("VendorShop: batch buy success spends 0 (npc=%d lines=%d)"),
@@ -252,6 +250,14 @@ void UVendorShopWidget::HandleSellItemBatchResult(const FSellItemBatchResultData
 		RefreshInventoryDisplay();
 		return;
 	}
+	// Echo-bound: stale/duplicate answers never credit twice.
+	if (!FVendorResultMatchRule::ShouldApply(PendingSellBatchRequestId, Result.requestIdEcho, bSellBatchApplied))
+	{
+		UE_LOG(LogGameplay, Warning, TEXT("VendorShop: stale sell batch result ignored (echo='%s')"),
+			*Result.requestIdEcho);
+		return;
+	}
+	bSellBatchApplied = true;
 	if (Result.items.Num() > 0 && Result.totalGoldReceived == 0)
 	{
 		FString Dump;
@@ -274,37 +280,15 @@ void UVendorShopWidget::HandleSellItemBatchResult(const FSellItemBatchResultData
 	ToastFields.Add(TEXT("amount"), FString::FromInt(Result.totalGoldReceived));
 	SendShopToast(TEXT("gold_received"), ToastFields);
 
-    // Update CachedInventory quantities based on what was actually sold.
-    // Idempotent: an absolute getPlayerInventory may have landed first and
-    // already absorbed the sale — only subtract rows still holding the
-    // pre-sale quantity.
-    for (const FSellBatchItemResult& SoldItem : Result.items)
+    // Server-authoritative gold: the result carries the absolute post-sale
+    // balance — order-independent, idempotent by the echo match above.
+    // Item rows converge via the absolute inventory snapshot
+    // (HandleInventoryUpdated); the result never mutates rows, so a
+    // snapshot-first arrival cannot double-remove.
+    if (!Result.requestIdEcho.IsEmpty())
     {
-        const int32* PreQty = PreSellRowQty.Find(SoldItem.inventoryItemId);
-        for (int32 i = CachedInventory.items.Num() - 1; i >= 0; --i)
-        {
-            if (CachedInventory.items[i].id == SoldItem.inventoryItemId)
-            {
-                if (!PreQty || CachedInventory.items[i].quantity == *PreQty)
-                {
-                    CachedInventory.items[i].quantity -= SoldItem.quantity;
-                    if (CachedInventory.items[i].quantity <= 0)
-                        CachedInventory.items.RemoveAt(i);
-                }
-                break;
-            }
-        }
+        CachedInventory.gold = Result.newGoldBalance;
     }
-    PreSellRowQty.Reset();
-
-    // Server-authoritative gold: credit the player immediately so the UI doesn't
-    // stall waiting for the next getPlayerInventory packet — unless the
-    // snapshot shows gold already moved (inventory-first arrival).
-    if (PreSellGold < 0 || CachedInventory.gold == PreSellGold)
-    {
-        CachedInventory.gold += Result.totalGoldReceived;
-    }
-    PreSellGold = -1;
 
     SellCart.Reset();
     RefreshSellCartDisplay();

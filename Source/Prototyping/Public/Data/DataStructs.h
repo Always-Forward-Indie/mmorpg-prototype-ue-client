@@ -2929,6 +2929,10 @@ struct PROTOTYPING_API FBuyItemResultData
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Item Result")
     FString errorCode = "";
 
+    /** Echo of the client requestId (empty when the server predates echo). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Item Result")
+    FString requestIdEcho = "";
+
     FBuyItemResultData() {}
 };
 
@@ -2960,6 +2964,10 @@ struct PROTOTYPING_API FSellItemResultData
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Item Result")
     FString errorCode = "";
+
+    /** Echo of the client requestId (empty when the server predates echo). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Item Result")
+    FString requestIdEcho = "";
 
     FSellItemResultData() {}
 };
@@ -3001,6 +3009,10 @@ struct PROTOTYPING_API FBuyItemBatchResultData
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Batch Result")
     FString errorCode = "";
 
+    /** Echo of the client requestId (empty when the server predates echo). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buy Batch Result")
+    FString requestIdEcho = "";
+
     FBuyItemBatchResultData() {}
 };
 
@@ -3036,10 +3048,17 @@ struct PROTOTYPING_API FSellItemBatchResultData
     int32 totalGoldReceived = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Batch Result")
+    int32 newGoldBalance = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Batch Result")
     TArray<FSellBatchItemResult> items;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Batch Result")
     FString errorCode = "";
+
+    /** Echo of the client requestId (empty when the server predates echo). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sell Batch Result")
+    FString requestIdEcho = "";
 
     FSellItemBatchResultData() {}
 };

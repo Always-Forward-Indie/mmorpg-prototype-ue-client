@@ -55,15 +55,24 @@ void UVendorNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
     if (!Root.IsValid()) return;
 
     FString Message;
+    FString RequestIdEcho;
     const TSharedPtr<FJsonObject>* HeaderPtr = nullptr;
     if (Root->TryGetObjectField(TEXT("header"), HeaderPtr))
     {
         (*HeaderPtr)->TryGetStringField(TEXT("message"), Message);
+        (*HeaderPtr)->TryGetStringField(TEXT("requestIdEcho"), RequestIdEcho);
     }
 
     const TSharedPtr<FJsonObject>* BodyPtr = nullptr;
     if (!Root->TryGetObjectField(TEXT("body"), BodyPtr)) return;
     const TSharedPtr<FJsonObject>& Body = *BodyPtr;
+
+    // Result-to-request binding: header echo wins, body copy is the fallback
+    // (timestamps mirror it into both).
+    if (RequestIdEcho.IsEmpty())
+    {
+        Body->TryGetStringField(TEXT("requestIdEcho"), RequestIdEcho);
+    }
 
     if (EventType == TEXT("openVendorShop") || EventType == TEXT("vendorShop"))
     {
@@ -73,19 +82,19 @@ void UVendorNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
     }
     else if (EventType == TEXT("buyItemResult"))
     {
-        VendorManager->OnBuyItemResultReceived(ParseBuyItemResult(Body, Message));
+        VendorManager->OnBuyItemResultReceived(ParseBuyItemResult(Body, Message, RequestIdEcho));
     }
     else if (EventType == TEXT("sellItemResult"))
     {
-        VendorManager->OnSellItemResultReceived(ParseSellItemResult(Body, Message));
+        VendorManager->OnSellItemResultReceived(ParseSellItemResult(Body, Message, RequestIdEcho));
     }
     else if (EventType == TEXT("buyItemBatchResult"))
     {
-        VendorManager->OnBuyItemBatchResultReceived(ParseBuyItemBatchResult(Body, Message));
+        VendorManager->OnBuyItemBatchResultReceived(ParseBuyItemBatchResult(Body, Message, RequestIdEcho));
     }
     else if (EventType == TEXT("sellItemBatchResult"))
     {
-        VendorManager->OnSellItemBatchResultReceived(ParseSellItemBatchResult(Body, Message));
+        VendorManager->OnSellItemBatchResultReceived(ParseSellItemBatchResult(Body, Message, RequestIdEcho));
     }
 }
 
@@ -217,9 +226,10 @@ FVendorShopData UVendorNetworkHandler::ParseVendorShop(const TSharedPtr<FJsonObj
     return Shop;
 }
 
-FBuyItemResultData UVendorNetworkHandler::ParseBuyItemResult(const TSharedPtr<FJsonObject>& Body, const FString& Message) const
+FBuyItemResultData UVendorNetworkHandler::ParseBuyItemResult(const TSharedPtr<FJsonObject>& Body, const FString& Message, const FString& RequestIdEcho) const
 {
     FBuyItemResultData Result;
+    Result.requestIdEcho = RequestIdEcho;
     if (Message != TEXT("success"))
     {
         Result.errorCode = Message;
@@ -237,9 +247,10 @@ FBuyItemResultData UVendorNetworkHandler::ParseBuyItemResult(const TSharedPtr<FJ
     return Result;
 }
 
-FSellItemResultData UVendorNetworkHandler::ParseSellItemResult(const TSharedPtr<FJsonObject>& Body, const FString& Message) const
+FSellItemResultData UVendorNetworkHandler::ParseSellItemResult(const TSharedPtr<FJsonObject>& Body, const FString& Message, const FString& RequestIdEcho) const
 {
     FSellItemResultData Result;
+    Result.requestIdEcho = RequestIdEcho;
     if (Message != TEXT("success"))
     {
         Result.errorCode = Message;
@@ -253,15 +264,17 @@ FSellItemResultData UVendorNetworkHandler::ParseSellItemResult(const TSharedPtr<
     return Result;
 }
 
-FBuyItemBatchResultData UVendorNetworkHandler::ParseBuyItemBatchResult(const TSharedPtr<FJsonObject>& Body, const FString& Message) const
+FBuyItemBatchResultData UVendorNetworkHandler::ParseBuyItemBatchResult(const TSharedPtr<FJsonObject>& Body, const FString& Message, const FString& RequestIdEcho) const
 {
     FBuyItemBatchResultData Result;
+    Result.requestIdEcho = RequestIdEcho;
     if (Message != TEXT("success"))
     {
         Result.errorCode = Message;
         return Result;
     }
     Body->TryGetNumberField(TEXT("totalGoldSpent"), Result.totalGoldSpent);
+    Body->TryGetNumberField(TEXT("newGoldBalance"), Result.newGoldBalance);
 
     const TArray<TSharedPtr<FJsonValue>>* ItemsArray = nullptr;
     if (Body->TryGetArrayField(TEXT("items"), ItemsArray))
@@ -280,15 +293,17 @@ FBuyItemBatchResultData UVendorNetworkHandler::ParseBuyItemBatchResult(const TSh
     return Result;
 }
 
-FSellItemBatchResultData UVendorNetworkHandler::ParseSellItemBatchResult(const TSharedPtr<FJsonObject>& Body, const FString& Message) const
+FSellItemBatchResultData UVendorNetworkHandler::ParseSellItemBatchResult(const TSharedPtr<FJsonObject>& Body, const FString& Message, const FString& RequestIdEcho) const
 {
     FSellItemBatchResultData Result;
+    Result.requestIdEcho = RequestIdEcho;
     if (Message != TEXT("success"))
     {
         Result.errorCode = Message;
         return Result;
     }
     Body->TryGetNumberField(TEXT("totalGoldReceived"), Result.totalGoldReceived);
+    Body->TryGetNumberField(TEXT("newGoldBalance"), Result.newGoldBalance);
 
     const TArray<TSharedPtr<FJsonValue>>* ItemsArray = nullptr;
     if (Body->TryGetArrayField(TEXT("items"), ItemsArray))

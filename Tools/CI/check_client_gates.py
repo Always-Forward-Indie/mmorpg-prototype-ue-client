@@ -24,6 +24,9 @@ GitHub-hosted runners:
 7. No world scans in hot paths (S02): no GetAllActorsOfClass /
    GetAllActorsWithTag calls under Private/Gameplay/{Players,Items,Mobs} —
    use the manager registries (MOBManager / NPCManager / ItemManager) instead.
+# 8. UI-sound coverage: AudioUISoundTest must drive StaticEnum<EUISoundEvent>
+#    (new events covered automatically), and unmapped PlayUISound must warn
+#    (silence-by-default is banned).
 
 Exit 0 = all green, exit 1 = red (blocks the PR).
 Usage: python3 Tools/CI/check_client_gates.py [--root <repo root>]
@@ -199,6 +202,47 @@ def main() -> int:
                     f"world scan banned: {path.relative_to(root).as_posix()} calls "
                     "GetAllActors* — use MOBManager/NPCManager/ItemManager registries (S02)"
                 )
+
+    # 8. UI-sound coverage: silence-by-default is banned.
+    # (a) every EUISoundEvent value must be exercised by the router spec
+    #     (AudioUISoundTest drives StaticEnum<EUISoundEvent>, future-proof);
+    # (b) the unmapped path must warn (pinned string), so a missing
+    #     DA_AudioConfig entry surfaces in logs instead of silent buttons.
+    audio_mgr_h = src / "Public" / "Audio" / "AudioManager.h"
+    try:
+        mgr_text = audio_mgr_h.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        failures.append(f"cannot read {audio_mgr_h}: {exc}")
+        mgr_text = ""
+    enum_block = re.search(r"enum class EUISoundEvent[^{]*\{(.*?)\};", mgr_text, re.S)
+    if not enum_block:
+        failures.append("audio gate: EUISoundEvent enum not found in Audio/AudioManager.h")
+    else:
+        values = re.findall(r"^\s*(\w+)\s+UMETA", enum_block.group(1), re.M)
+        if not values:
+            failures.append("audio gate: no EUISoundEvent values parsed")
+    ui_test = tests_dir / "AudioUISoundTest.cpp"
+    try:
+        ui_test_text = ui_test.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        failures.append(f"cannot read {ui_test}: {exc}")
+        ui_test_text = ""
+    if "StaticEnum<EUISoundEvent>" not in ui_test_text:
+        failures.append(
+            "audio gate: AudioUISoundTest must drive StaticEnum<EUISoundEvent> "
+            "so new events are covered automatically"
+        )
+    music_cpp = src / "Private" / "Audio" / "AudioManager.Music.cpp"
+    try:
+        music_text = music_cpp.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        failures.append(f"cannot read {music_cpp}: {exc}")
+        music_text = ""
+    if "no UISound mapped for event" not in music_text:
+        failures.append(
+            "audio gate: PlayUISound must warn on unmapped events "
+            "(silence-by-default is banned)"
+        )
 
     if failures:
         print("CLIENT GATES: FAIL")

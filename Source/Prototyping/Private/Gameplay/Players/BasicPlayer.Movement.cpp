@@ -192,6 +192,7 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     if (DistToTarget > 1000.f)
     {
         // Hard-snap on large gaps (teleport / zone change).
+        UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] hard-snap %.0f (teleport/zone)"), DistToTarget);
         SetActorLocation(TargetReceivedPosition, false, nullptr, ETeleportType::TeleportPhysics);
         // Buffered past positions no longer describe this location.
         MoveSnapshotBuf.Reset();
@@ -269,7 +270,8 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     if (FRemoteLandingRule::ShouldLand(bRemoteIsInAir, bRemoteIsMoving, RemoteIdleTime, GracePeriod))
     {
         bRemoteIsInAir = false;
-        UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: remote landed by stillness (idle=%.2fs)"), RemoteIdleTime);
+        UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] air 1->0 via stillness (idle=%.2f grace=%.2f)"),
+            RemoteIdleTime, GracePeriod);
     }
 
     // Target values for this tick.

@@ -110,6 +110,17 @@ public:
     /** Returns true if the caster has pending skill results still waiting for hit-point or projectile impact. */
     bool HasPendingResults(int32 CasterId) const;
 
+    /** Rendezvous for mobHealthUpdate (impact-sync): hold the HP briefly.
+     *  Returns true when held (caller must skip the immediate apply); the
+     *  matching queued combatResult claims it and the hit-point flush sets it
+     *  in the same frame as the damage number. Unclaimed entries (regen,
+     *  foreign hits without a result, spawn sync) apply via TTL. */
+    bool HoldMobHPForImpact(int32 MobUID, int32 HP, UObject* MobObject);
+
+    /** Claim a held update when queuing a combatResult for this mob.
+     *  The flush carries the same absolute value, so the held copy is dropped. */
+    void ClaimHeldMobHP(int32 MobUID);
+
 protected:
     // Find the appropriate effect handler for the skill type
     TScriptInterface<ISkillEffectHandler> FindEffectHandler(ESkillEffectType EffectType);
@@ -185,6 +196,26 @@ private:
     // Timer handles for safety timeouts, keyed by CasterId.
     // Allows cancelling stale timers when results are flushed normally.
     TMap<int32, FTimerHandle> PendingResultTimerHandles;
+
+    // --- Mob HP rendezvous (impact-sync) ---
+    // mobHealthUpdate arrives BEFORE its combatResult (server pushes during
+    // execute, broadcasts the result after). Applying it immediately drops the
+    // bar a full swing ahead of the damage number. Held here briefly; claimed
+    // by the queued combatResult and applied in the hit-point flush instead
+    // (same frame as the number). Unclaimed entries (regen, foreign hits
+    // without a result, spawn sync) flush via TTL — max 0.5 s late, invisible
+    // in practice. Absolute values, TCP order: duplicates converge.
+    struct FHeldMobHP
+    {
+        TWeakObjectPtr<UObject> Mob;
+        int32 HP = 0;
+    };
+    TMap<int32, FHeldMobHP> HeldMobHP; // mobUID -> held update
+    TMap<int32, FTimerHandle> HeldMobHPTimers;
+    static constexpr double HeldMobHPWindowSeconds = 0.5;
+
+    // TTL expiry for an unclaimed held update: apply it (guarded, no resurrect).
+    void FlushHeldMobHP(int32 MobUID);
 
     // Flush pending results for a caster.
     // bSkipProjectileWaiters = true  -> skip results that need a projectile hit

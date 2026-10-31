@@ -6,6 +6,7 @@
 #include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Gameplay/Combat/CombatSystemManager.h"
 #include "CrashDiagnostics.h"
 
 void UMOBManager::HandleChunkPacket(const FParsedPacket& Packet)
@@ -167,7 +168,22 @@ void UMOBManager::HandleChunkPacket(const FParsedPacket& Packet)
 				HealthUpdate.mobId  = Body.IsValid() ? Body->GetIntegerField(TEXT("mobId")) : 0;
 				HealthUpdate.currentHealth = CurrentHP;
 				HealthUpdate.maxHealth = MaxHP;
-				MOB->OnReceiveMobHealthUpdate(HealthUpdate);
+				// Impact-sync rendezvous: hold the HP briefly so the matching
+				// combatResult (arrives right after) sets it in the hit-point
+				// flush together with the damage number. Falls back to the
+				// immediate apply when nothing can hold it (no manager/world).
+				bool bHeld = false;
+				if (gameInstance)
+				{
+					if (UCombatSystemManager* CombatMgr = gameInstance->GetCombatSystemManager())
+					{
+						bHeld = CombatMgr->HoldMobHPForImpact(MobUID, CurrentHP, MOB);
+					}
+				}
+				if (!bHeld)
+				{
+					MOB->OnReceiveMobHealthUpdate(HealthUpdate);
+				}
 			}
 			else
 			{

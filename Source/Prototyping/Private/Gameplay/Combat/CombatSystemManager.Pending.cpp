@@ -29,6 +29,67 @@ bool UCombatSystemManager::HasPendingResults(int32 CasterId) const
     return false;
 }
 
+bool UCombatSystemManager::HoldMobHPForImpact(int32 MobUID, int32 HP, UObject* MobObject)
+{
+    if (MobUID <= 0 || !IsValid(MobObject)) return false;
+    if (!WorldContext || !WorldContext->IsValidLowLevel()) return false;
+
+    FHeldMobHP Held;
+    Held.Mob = MobObject;
+    Held.HP = HP;
+    HeldMobHP.Add(MobUID, Held);
+
+    // (Re)arm the TTL: unclaimed updates (regen, foreign hits without a
+    // result, spawn sync) apply here, at most 0.5 s late.
+    if (FTimerHandle* Existing = HeldMobHPTimers.Find(MobUID))
+    {
+        WorldContext->GetTimerManager().ClearTimer(*Existing);
+    }
+    FTimerHandle TimerHandle;
+    TWeakObjectPtr<UCombatSystemManager> WeakSelf(this);
+    WorldContext->GetTimerManager().SetTimer(TimerHandle, [WeakSelf, MobUID]()
+    {
+        if (WeakSelf.IsValid())
+        {
+            WeakSelf->FlushHeldMobHP(MobUID);
+        }
+    }, static_cast<float>(HeldMobHPWindowSeconds), false);
+    HeldMobHPTimers.Add(MobUID, TimerHandle);
+    return true;
+}
+
+void UCombatSystemManager::ClaimHeldMobHP(int32 MobUID)
+{
+    // The hit-point flush carries the same absolute HP from combatResult,
+    // so the held copy is simply dropped (and its TTL disarmed).
+    HeldMobHP.Remove(MobUID);
+    if (FTimerHandle* Handle = HeldMobHPTimers.Find(MobUID))
+    {
+        if (WorldContext && WorldContext->IsValidLowLevel())
+        {
+            WorldContext->GetTimerManager().ClearTimer(*Handle);
+        }
+        HeldMobHPTimers.Remove(MobUID);
+    }
+}
+
+void UCombatSystemManager::FlushHeldMobHP(int32 MobUID)
+{
+    FHeldMobHP Held;
+    if (!HeldMobHP.RemoveAndCopyValue(MobUID, Held))
+    {
+        return;
+    }
+    HeldMobHPTimers.Remove(MobUID);
+
+    UObject* TargetObject = Held.Mob.Get();
+    if (!IsValid(TargetObject)) return;
+    // Never resurrect: a stale held HP must not raise a corpse
+    // (spawn/revive owns revival; Die() pins 0).
+    if (ICombatable::Execute_IsDead(TargetObject) && Held.HP > 0) return;
+    ICombatable::Execute_SetCurrentHealth(TargetObject, Held.HP);
+}
+
 void UCombatSystemManager::FlushPendingResults(int32 CasterId, bool bSkipProjectileWaiters)
 {
     TArray<FPendingResult>* Queue = PendingSkillResults.Find(CasterId);

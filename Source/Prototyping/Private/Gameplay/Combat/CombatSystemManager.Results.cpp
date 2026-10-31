@@ -95,6 +95,14 @@ void UCombatSystemManager::ProcessSkillResult(const FSkillResultData& SkillResul
     TArray<FPendingResult>& Queue = PendingSkillResults.FindOrAdd(Result.casterId);
     Queue.Add(MoveTemp(Pending));
 
+    // Impact-sync rendezvous: a mobHealthUpdate for this hit arrived first and
+    // is being held — the hit-point flush sets the same absolute HP together
+    // with the damage number, so drop the held copy (and its TTL).
+    if (MapNetCasterType(Result.targetType, Result.targetTypeString) == ECasterType::Mob)
+    {
+        ClaimHeldMobHP(Result.targetId);
+    }
+
     UE_LOG(LogGameplay, Verbose, TEXT("CombatSystemManager: Queued pending result for caster %d (%d in queue)"),
         Result.casterId, Queue.Num());
 

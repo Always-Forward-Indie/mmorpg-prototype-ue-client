@@ -173,6 +173,14 @@ void ABasicPlayer::UnlockMovementAfterPickup()
 
 void ABasicPlayer::LockMovement()
 {
+    // Corpses don't lock: input is already gated by bIsDead, and there is
+    // no live mode to preserve. Capturing the corpse's MOVE_None here would
+    // make UnlockMovement restore it AFTER revive (no gravity, no
+    // translation) — the teleport cover flow relies on this for respawns.
+    if (playerData.characterData.bIsDead)
+    {
+        return;
+    }
     if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
     {
         SavedMovementMode = MoveComp->MovementMode;

@@ -7,7 +7,9 @@ teleports) run through one flow. No bare `SetActorLocation` pops.
 
 1. **Freeze** — `ABasicPlayer::BeginTeleportCover`: cancel auto-attack /
    target / cast bar / pending interactions, flush pending combat results,
-   `LockMovement()`, spring-arm camera lag OFF.
+   `LockMovement()`, spring-arm camera lag OFF. Corpses never lock (input
+   is already dead-gated; locking would capture `MOVE_None` and the reveal
+   would restore it over `WALKING`). Revive defensively resets lock state.
 2. **Fade out** — `PlayerCameraManager::StartCameraFade` to black, 0.22s.
 3. **Apply (at fade peak, invisible)** — `SnapToAuthoritativePosition`:
    validate (finite + 50km bound, `FTeleportRule`), drain velocity/input,

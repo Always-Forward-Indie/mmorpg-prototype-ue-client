@@ -91,9 +91,12 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
                 FTimerHandle TeleportCheckHandle;
                 World->GetTimerManager().SetTimer(TeleportCheckHandle, [this, WeakP, From, Dest]()
                 {
+                    // Arrival + cover closed + movement unlocked (regression:
+                    // a stuck lock leaves the pawn spinning in place).
                     const bool bPass = WeakP.IsValid()
                         && FVector::Dist2D(WeakP->GetActorLocation(), Dest) < 150.0f
-                        && !WeakP->IsTeleportCoverActive();
+                        && !WeakP->IsTeleportCoverActive()
+                        && !WeakP->IsMovementLocked();
                     UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT_RESULT scenario=teleport %s (from (%.0f,%.0f) to (%.0f,%.0f))"),
                         bPass ? TEXT("PASS") : TEXT("FAIL"), From.X, From.Y,
                         WeakP.IsValid() ? WeakP->GetActorLocation().X : 0.0f,

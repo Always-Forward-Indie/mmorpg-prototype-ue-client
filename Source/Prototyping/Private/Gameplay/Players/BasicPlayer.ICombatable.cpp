@@ -143,6 +143,12 @@ void ABasicPlayer::SetDead_Implementation(bool bNewDead)
         // Revive: clear any lingering combat / interaction state (#6)
         bIsPickingUp = false;
         bIsCasting   = false;
+        // Defensive reset: a lock captured before death (pickup/cast safety
+        // timers firing into the corpse, or any future locker) must not
+        // survive the revive — movement starts clean, and whoever needs a
+        // lock (e.g. the teleport cover) takes it explicitly afterwards.
+        bMovementLocked = false;
+        SavedMovementMode = MOVE_Walking;
         // Next stats_update snaps HP/MP bars to the server values instead of
         // lerping up from the corpse state (see ProcessStatsUpdate).
         if (!playerData.isOtherClient)

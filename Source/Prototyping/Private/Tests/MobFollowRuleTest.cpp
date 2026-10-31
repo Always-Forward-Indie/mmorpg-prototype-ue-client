@@ -25,5 +25,10 @@ bool FMobFollowRuleTest::RunTest(const FString& Parameters)
     TestFalse(TEXT("fresh packets never freeze"), R::ShouldFreeze(0.1f, 0.6f));
     TestFalse(TEXT("jitter below cap never freezes"), R::ShouldFreeze(0.59f, 0.6f));
     TestTrue(TEXT("sustained drought freezes"), R::ShouldFreeze(0.7f, 0.6f));
+
+    TestFalse(TEXT("combat jitter never snaps"), R::ShouldSnapCombatTeleport(35.0f, 150.0f));
+    TestFalse(TEXT("3 lost packets never snap"), R::ShouldSnapCombatTeleport(110.0f, 150.0f));
+    TestFalse(TEXT("boundary gap never snaps"), R::ShouldSnapCombatTeleport(150.0f, 150.0f));
+    TestTrue(TEXT("stuck-guard teleport snaps"), R::ShouldSnapCombatTeleport(300.0f, 150.0f));
     return true;
 }

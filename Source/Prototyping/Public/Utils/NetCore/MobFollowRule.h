@@ -35,4 +35,15 @@ struct PROTOTYPING_API FMobFollowRule
 	{
 		return TimeSinceLastPacket >= MaxTime;
 	}
+
+	// Honest combat teleport: snap when the gap is physically impossible in
+	// one combat tick. Chase peaks at ~350 u/s over 100 ms ticks (~35 u);
+	// even 3 lost packets stay under ~110 u. Anything beyond the snap
+	// threshold is a server teleport (stuck-guard) — gliding there reads
+	// as a slide, snapping reads as the truth. Patrol is excluded: patrol
+	// steps legitimately span 200-450 u between packets.
+	static bool ShouldSnapCombatTeleport(float Gap, float SnapThreshold)
+	{
+		return Gap > SnapThreshold;
+	}
 };

@@ -104,6 +104,23 @@ void UMOBMovementComponent::OnReceiveMovePacket(const FMobMoveEntryStruct& MoveE
 
     // --- Teleport check -------------------------------------------------------
     const float DistToNew = FVector::Dist2D(GetOwner()->GetActorLocation(), NewPos);
+    // AAA honest teleports: combat gaps beyond physical movement are server
+    // teleports (stuck-guard) — snap, don't glide. Patrol excluded (legit
+    // 200-450 u steps). The global TeleportThreshold stays as the last resort.
+    if (CombatState != 0 && FMobFollowRule::ShouldSnapCombatTeleport(DistToNew, CombatTeleportSnapThreshold))
+    {
+        GetOwner()->SetActorLocation(NewPos);
+        LatestServerPos        = NewPos;
+        PatrolSpeed            = LatestServerSpeed;
+        bPatrolReachedWaypoint = false;
+        bBlendActive           = false;
+        bHasReceivedPacket     = true;
+        PrevFramePos           = NewPos;
+        SmoothedFacingDir      = LatestServerDir.IsNearlyZero() ? GetOwner()->GetActorForwardVector() : LatestServerDir;
+        DeadReckonDir          = SmoothedFacingDir;
+        SnapToGround();
+        return;
+    }
     if (DistToNew > TeleportThreshold)
     {
         GetOwner()->SetActorLocation(NewPos);

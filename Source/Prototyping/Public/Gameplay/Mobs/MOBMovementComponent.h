@@ -95,6 +95,13 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Movement|Correction")
 	float PatrolSnapThreshold = 40.f;
 
+	// Gap (units) above which a combat-state packet snaps instead of gliding.
+	// Chase peaks ~350 u/s at 10 Hz (~35 u/tick); 3 lost packets stay <110 u.
+	// Beyond this is a server teleport (stuck-guard) — snap reads as truth,
+	// gliding reads as a slide. Patrol excluded (legit 200-450 u steps).
+	UPROPERTY(EditAnywhere, Category = "Movement|Correction")
+	float CombatTeleportSnapThreshold = 150.f;
+
 	UPROPERTY(EditAnywhere, Category = "Movement|Blend")
 	float StoppedSpeedThreshold = 5.f;
 

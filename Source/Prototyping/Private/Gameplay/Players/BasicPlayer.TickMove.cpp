@@ -183,7 +183,11 @@ void ABasicPlayer::Tick(float DeltaTime)
     // Keep the locked-target frame in sync every Tick
     if (IsValid(LockedTarget) && UIManager && !playerData.isOtherClient)
     {
-        const int32 CurrentHP = LockedTarget->GetMOBCurrentHealth();
+        // AAA: a dead lock target always shows 0 HP. The killing packet, effect
+        // ticks and mobDeath can arrive in any order (or a path can be skipped
+        // when the mob dies off-screen) — never display stale pre-kill HP on
+        // a corpse. The lock itself is kept for harvest interaction.
+        const int32 CurrentHP = LockedTarget->GetMOBIsDead() ? 0 : LockedTarget->GetMOBCurrentHealth();
         const int32 MaxHP = LockedTarget->GetMOBAttributes().attributesData.Contains(TEXT("max_health"))
             ? LockedTarget->GetMOBAttributes().attributesData[TEXT("max_health")].attributeValue
             : 100;

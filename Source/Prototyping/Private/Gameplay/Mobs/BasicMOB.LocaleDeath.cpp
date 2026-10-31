@@ -42,6 +42,11 @@ void ABasicMOB::Die()
 	// Must be set here, not only from server packets — offline kills (and any
 	// path that calls Die() directly) would otherwise leave a "living" corpse.
 	MOBData.bIsDead = true;
+	// AAA: a corpse has 0 HP, unconditionally. Kill packets, effect ticks and
+	// mobDeath broadcasts can arrive in any order (or a path can be skipped
+	// entirely when the mob dies off-screen); pinning HP here guarantees the
+	// target frame and nameplates never show a stale pre-kill value.
+	SetMOBCurrentHealth(0);
 	PlaySoundByName("Death");
 
 	// Spawn death VFX if defined in MobDefinitionTable

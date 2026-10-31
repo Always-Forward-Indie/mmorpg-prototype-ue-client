@@ -26,18 +26,44 @@ void UMOBAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 
 	ABasicMOB* MOB = OwnerMOB.Get();
 
-	// Use the server-driven movement component speed so bIsMoving and Speed
-	// reflect network-authoritative state rather than CharacterMovementComponent
-	// (which is always 0 because we use SetActorLocation, not AddMovementInput).
-	if (UMOBMovementComponent* MoveComp = MOB->MOBMovementComponent)
+	// AAA locomotion sync: Speed follows RENDERED motion (actual actor
+	// displacement per frame), not the commanded server speed. The commanded
+	// value lags reality through interpolation and disagrees with the ground
+	// during accel / decel / correction snaps (foot sliding, moonwalking).
+	// Rendered speed matches the feet to the ground by construction.
+	// Mirrors remote-player handling (BasicPlayer EMA + SpeedNormalized).
+	UMOBMovementComponent* MoveComp = MOB->MOBMovementComponent;
+	if (MoveComp)
 	{
-		Speed      = MoveComp->GetCurrentSpeed();
 		bIsMoving  = MoveComp->IsMoving();
 		bIsFleeing = MoveComp->IsFleeing();
+
+		const FVector MobLoc = MOB->GetActorLocation();
+		float RenderInst = 0.0f;
+		if (bHasRenderSample && DeltaSeconds > 0.0f)
+		{
+			RenderInst = FVector::Dist2D(MobLoc, PrevRenderPos) / DeltaSeconds;
+			// Clamp snap spikes (teleports, correction snaps) so the cycle
+			// doesn't hyperdrive on a single-frame jump.
+			RenderInst = FMath::Min(RenderInst, FMath::Max(AnimMaxSpeed * 1.5f, 400.0f));
+		}
+		PrevRenderPos = MobLoc;
+		bHasRenderSample = true;
+
+		const float EmaAlpha = (DeltaSeconds > 0.0f) ? 1.0f - FMath::Exp(-DeltaSeconds / 0.1f) : 1.0f;
+		RenderSpeedEMA = RenderSpeedEMA * (1.0f - EmaAlpha) + RenderInst * EmaAlpha;
+
+		// Adaptive per-mob max: peak-hold of commanded speed. Tracks each mob
+		// type's top speed with zero data dependency.
+		AnimMaxSpeed = FMath::Max(AnimMaxSpeed, MoveComp->GetCurrentSpeed());
+
+		Speed = RenderSpeedEMA;
+		SpeedNormalized = FMath::Clamp(RenderSpeedEMA / FMath::Max(AnimMaxSpeed, 1.0f), 0.0f, 1.0f);
 	}
 	else
 	{
-		Speed      = 0.0f;
+		Speed           = 0.0f;
+		SpeedNormalized = 0.0f;
 		bIsMoving  = MOB->GetMOBIsMoving();
 		bIsFleeing = false;
 	}

@@ -11,7 +11,7 @@
 /**
  * C++ AnimInstance for BasicMOB.
  * Stores all animation state variables in one place.
- * Anim BP inherits from this class and reads variables directly — no casting needed every tick.
+ * Anim BP inherits from this class and reads variables directly ï¿½ no casting needed every tick.
  *
  * HOW PLAYRATE WORKS:
  *   combatInitiation sends animationDuration = how long the attack should take (seconds).
@@ -33,8 +33,22 @@ public:
 	// Movement
 	//////////////////////////////////////////////////////////////////////////
 
+	// Rendered-motion speed (EMA of actual actor displacement). Feeds the
+	// locomotion Blend Space axis directly: unlike a commanded value it matches
+	// the feet to the ground â€” no sliding during accel / decel / correction
+	// snaps. Mirrors remote-player handling.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MOB|Movement")
 	float Speed = 0.0f;
+
+	// Normalized rendered speed 0..1 vs adaptive per-mob max. Prefer this over
+	// raw Speed for the Blend Space axis so the cycle rate matches ground speed
+	// for every mob type. Mirrors UPlayerAnimInstance::SpeedNormalized.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MOB|Movement")
+	float SpeedNormalized = 0.0f;
+
+	// Adaptive top speed for normalization (peak-hold of commanded speed).
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MOB|Movement")
+	float AnimMaxSpeed = 250.0f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MOB|Movement")
 	bool bIsMoving = false;
@@ -54,7 +68,7 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MOB|Combat")
 	bool bIsAggressive = false;
 
-	// Latched true on death — never reset
+	// Latched true on death ï¿½ never reset
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MOB|Combat")
 	bool bIsDead = false;
 
@@ -71,7 +85,7 @@ public:
 	float CurrentAttackPlayRate = 1.0f;
 
 	//////////////////////////////////////////////////////////////////////////
-	// Montage map — assign in Blueprint defaults or via code
+	// Montage map ï¿½ assign in Blueprint defaults or via code
 	// Key   = animationName string from server (e.g. "attack_slash")
 	// Value = UAnimMontage asset to play
 	//////////////////////////////////////////////////////////////////////////
@@ -113,6 +127,10 @@ TWeakObjectPtr<class ABasicMOB> OwnerMOB;
 
 FOnMontageEnded MontageEndedDelegate;
 
+// Rendered-motion EMA state (locomotion sync). Not UPROPERTY â€” internal only.
+FVector PrevRenderPos = FVector::ZeroVector;
+bool bHasRenderSample = false;
+float RenderSpeedEMA = 0.0f;
 	// CasterId of the currently playing attack (set in StartAttack, cleared on montage end)
 	int32 CurrentCasterId = 0;
 

@@ -366,12 +366,6 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ, boo
 
     if (playerData.isOtherClient)
     {
-        // FLIGHT-TRACE (diagnostic): log every airborne-flag flip with cause.
-        if (bRemoteIsInAir != bIsFalling)
-        {
-            UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] air %d->%d via packet (z=%.1f)"),
-                bRemoteIsInAir ? 1 : 0, bIsFalling ? 1 : 0, z);
-        }
         bRemoteIsInAir = bIsFalling;
     }
 
@@ -432,7 +426,6 @@ void ABasicPlayer::SetCoordinates(double x, double y, double z, double rotZ, boo
         static constexpr float TeleportThreshold = 500.0f;
         if (Dist2D > TeleportThreshold)
         {
-            UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] teleport-snap %.0f"), Dist2D);
             SetActorLocation(NewTarget, false, nullptr, ETeleportType::TeleportPhysics);
             SetActorRotation(FRotator(0.0, rotZ, 0.0));
             LastReceivedPosition       = NewTarget;

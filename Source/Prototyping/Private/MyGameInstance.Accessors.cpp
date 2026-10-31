@@ -333,8 +333,6 @@ UChatManager* UMyGameInstance::GetChatManager() const
 void UMyGameInstance::RouteEmoteActionToPlayer(int32 CharacterId, const FString& EmoteSlug, const FString& AnimationName)
 {
     ABasicPlayer* TargetPlayer = GetPlayerByCharacterId(CharacterId);
-    UE_LOG(LogGameplay, Verbose, TEXT("[EMOTE] route char=%d slug='%s' found=%d"),
-        CharacterId, *EmoteSlug, TargetPlayer ? 1 : 0);
     if (TargetPlayer)
     {
         TargetPlayer->PlayEmoteForCharacter(EmoteSlug, AnimationName);

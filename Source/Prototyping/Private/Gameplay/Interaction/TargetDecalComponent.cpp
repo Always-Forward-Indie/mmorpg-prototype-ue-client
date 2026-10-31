@@ -61,8 +61,6 @@ void UTargetDecalComponent::TickComponent(float DeltaTime, ELevelTick TickType,
         const bool bLocalAir = !bIsRemote && CMC && CMC->IsFalling();
         if (bRemoteAir || bLocalAir)
         {
-            UE_LOG(LogGameplay, Verbose, TEXT("[RING] frozen (airborne, actorZ=%.1f, holding %+.1f)"),
-                TargetPlayer->GetActorLocation().Z, CachedFloorZ);
             return;
         }
     }
@@ -71,8 +69,6 @@ void UTargetDecalComponent::TickComponent(float DeltaTime, ELevelTick TickType,
     CachedFloorZ = FMath::FInterpTo(CachedFloorZ, TargetFloorZ, DeltaTime, FloorInterpSpeed);
 
     const float DecalCenterZ = CachedFloorZ - KnownConfig->DecalDepth * 0.5f;
-    UE_LOG(LogGameplay, Verbose, TEXT("[RING] target=%+.1f cached=%+.1f center=%+.1f"),
-        TargetFloorZ, CachedFloorZ, DecalCenterZ);
     DecalComp->SetRelativeLocation(FVector(0.f, 0.f, DecalCenterZ));
 }
 
@@ -177,17 +173,10 @@ void UTargetDecalComponent::UpdateFloorTrace()
     }
 
     FHitResult Hit;
+    // On miss TargetFloorZ intentionally keeps its last value (no stale snap).
     if (World->LineTraceSingleByChannel(Hit, Start, End, ECC_WorldStatic, Params))
     {
         TargetFloorZ = Hit.ImpactPoint.Z - RootLoc.Z;
-        UE_LOG(LogGameplay, Verbose, TEXT("[RING] trace HIT floor=%+.1f (actorZ=%.1f)"),
-            TargetFloorZ, RootLoc.Z);
-    }
-    else
-    {
-        // Miss: TargetFloorZ intentionally keeps its stale value (see Tick).
-        UE_LOG(LogGameplay, Verbose, TEXT("[RING] trace MISS (actorZ=%.1f, holding %+.1f)"),
-            RootLoc.Z, TargetFloorZ);
     }
 }
 

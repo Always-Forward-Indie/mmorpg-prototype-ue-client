@@ -194,7 +194,6 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
     if (DistToTarget > 1000.f)
     {
         // Hard-snap on large gaps (teleport / zone change).
-        UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] hard-snap %.0f (teleport/zone)"), DistToTarget);
         SetActorLocation(TargetReceivedPosition, false, nullptr, ETeleportType::TeleportPhysics);
         // Buffered past positions no longer describe this location.
         MoveSnapshotBuf.Reset();
@@ -265,7 +264,7 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
         EmoteComponent->NotifyMovementStarted();
     }
 
-    // Rendered vertical speed (shared by the air-state fusion and the trace).
+    // Rendered vertical speed (shared by the air-state fusion below).
     const float ZNow = GetActorLocation().Z;
     if (!bRemoteTraceZSeeded)
     {
@@ -292,28 +291,12 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
         {
             bRemoteIsInAir = true;
             TimeSinceAirborne = 0.0f;
-            UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] air 0->1 via takeoff-rise (Vz=%+.1f lead=%+.1f)"),
-                RenderedVz, TargetLeadZ);
         }
         else if (FRemoteTakeoffRule::ShouldTakeOffFalling(RenderedVz, TargetLeadZ, TimeSinceAirborne))
         {
             bRemoteIsInAir = true;
             TimeSinceAirborne = 0.0f;
-            UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] air 0->1 via takeoff-fall (Vz=%+.1f lead=%+.1f)"),
-                RenderedVz, TargetLeadZ);
         }
-    }
-
-    // FLIGHT-TRACE: rendered vertical speed + flag state per tick.
-    // Direction/speed fields diagnose locomotion flaps on reversal/start;
-    // XY pair diagnoses positional snaps at movement start.
-    {
-        const FVector AXY = GetActorLocation();
-        UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] tick air=%d moving=%d idle=%.2f grace=%.2f actorZ=%.1f targetZ=%.1f Vz=%+.1f rawDir=%+.1f smoothDir=%+.1f smoothSpd=%.1f aXY=(%.1f,%.1f) tXY=(%.1f,%.1f)"),
-            bRemoteIsInAir ? 1 : 0, bRemoteIsMoving ? 1 : 0, RemoteIdleTime, GracePeriod,
-            ZNow, TargetReceivedPosition.Z, RenderedVz,
-            RemoteDirection, SmoothedRemoteDirection, SmoothedRemoteSpeed,
-            AXY.X, AXY.Y, TargetReceivedPosition.X, TargetReceivedPosition.Y);
     }
 
     // Landing: displacement-idle races the ~200ms broadcast rate and fires
@@ -326,8 +309,6 @@ void ABasicPlayer::UpdateRemotePlayerMovement()
         FMath::Abs(TargetReceivedPosition.Z - ZNow), TimeSinceLastPositionUpdate))
     {
         bRemoteIsInAir = false;
-        UE_LOG(LogGameplay, Verbose, TEXT("[FLIGHT] air 1->0 via landing (quiet=%.2fs)"),
-            TimeSinceLastPositionUpdate);
     }
 
     // Target values for this tick.

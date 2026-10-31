@@ -1,8 +1,9 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 
 #include "Gameplay/Players/PlayerManager.h"
+#include "Gameplay/Teleport/TeleportManager.h"
 #include "Gameplay/Combat/CombatSystemManager.h"
 #include "Gameplay/Combat/CombatNetworkHandler.h"
 #include "Gameplay/Player/ExperienceManager.h"
@@ -171,6 +172,20 @@ void UPlayerManager::ProcessChunkPacket(const FParsedPacket& Packet)
 					double CorrY = PosObj->GetNumberField(TEXT("y"));
 					double CorrZ = PosObj->GetNumberField(TEXT("z"));
 					double CorrRotZ = PosObj->GetNumberField(TEXT("rotationZ"));
+					int32 CorrCharId = 0;
+					Body->TryGetNumberField(TEXT("characterId"), CorrCharId);
+					// Cover guard: a correction racing a teleport/respawn
+					// cover (or its 1s reveal tail) is stale pre-teleport
+					// history — applying it yanks the pawn back. The server
+					// drops such moves now; this covers residual races.
+					// Genuine drift (small nudges) still applies.
+					if (UTeleportManager* TeleportMgr = gameInstance->GetTeleportManager())
+					{
+						if (!TeleportMgr->ShouldApplyCorrection(CorrCharId, FVector(CorrX, CorrY, CorrZ)))
+						{
+							return;
+						}
+					}
 					UE_LOG(LogConnection, Log, TEXT("positionCorrection: clientId=%d (%.1f, %.1f, %.1f) rot=%.2f"),
 						ClientData.clientId, CorrX, CorrY, CorrZ, CorrRotZ);
 					gameInstance->UpdatePlayerCoordinates(ClientData.clientId, CorrX, CorrY, CorrZ, CorrRotZ);
@@ -396,146 +411,8 @@ void UPlayerManager::ProcessChunkPacket(const FParsedPacket& Packet)
 		}
 	}
 
-	// Handle respawnResult - server response to respawnRequest
-	if (MessageData.eventType == "respawnResult")
-	{
-		if (MessageData.status != "success")
-		{
-			UE_LOG(LogConnection, Error, TEXT("respawnResult failed: %s"), *MessageData.message);
-
-			int32 RespawnCharId = 0;
-			if (Body.IsValid()) Body->TryGetNumberField(TEXT("characterId"), RespawnCharId);
-			if (RespawnCharId <= 0 && ClientData.clientId > 0)
-			{
-				if (const FClientDataStruct* Stored = gameInstance->ConnectedPlayers.Find(ClientData.clientId))
-					RespawnCharId = Stored->characterData.characterId;
-			}
-			ABasicPlayer* RespawnPlayer = gameInstance->GetPlayerByCharacterId(RespawnCharId);
-			if (RespawnPlayer && IsValid(RespawnPlayer))
-			{
-				// Server says "already alive" — client-server desync. Force-revive to reconcile.
-				if (MessageData.message.Contains(TEXT("not dead")) || MessageData.message.Contains(TEXT("already alive")) || MessageData.message.Contains(TEXT("not_dead")) || MessageData.message.Contains(TEXT("while alive")))
-				{
-					UE_LOG(LogConnection, Warning, TEXT("respawnResult: server says player is already alive — force-reviving client"));
-					RespawnPlayer->SetDead_Implementation(false);
-				}
-			}
-			return;
-		}
-
-		if (gameInstance && IsValid(gameInstance) && Body.IsValid())
-		{
-			int32 RespawnCharId = 0;
-			Body->TryGetNumberField(TEXT("characterId"), RespawnCharId);
-
-			if (RespawnCharId <= 0 && ClientData.clientId > 0)
-			{
-				// Server omitted characterId — resolve it from the connected player map
-				// using the clientId that was deserialized from this packet.
-				if (const FClientDataStruct* Stored = gameInstance->ConnectedPlayers.Find(ClientData.clientId))
-				{
-					RespawnCharId = Stored->characterData.characterId;
-				}
-			}
-
-			ABasicPlayer* RespawnPlayer = gameInstance->GetPlayerByCharacterId(RespawnCharId);
-			if (RespawnPlayer && IsValid(RespawnPlayer))
-			{
-				// Parse respawn position
-				const TSharedPtr<FJsonObject>* PosObj = nullptr;
-				if (Body->TryGetObjectField(TEXT("position"), PosObj) && PosObj)
-				{
-					double RX = 0, RY = 0, RZ = 0, RRot = 0;
-					(*PosObj)->TryGetNumberField(TEXT("x"), RX);
-					(*PosObj)->TryGetNumberField(TEXT("y"), RY);
-					(*PosObj)->TryGetNumberField(TEXT("z"), RZ);
-					(*PosObj)->TryGetNumberField(TEXT("rotationZ"), RRot);
-
-					// Teleport the actor immediately (no interpolation for respawn) and
-					// sync playerData so subsequent movement packets use the correct origin.
-					// SetCoordinates only updates the interpolation targets; we also call
-					// SetActorLocation/Rotation so the actor snaps to the respawn point
-					// before movement is re-enabled by SetDead_Implementation(false).
-					RespawnPlayer->SetActorLocation(FVector(RX, RY, RZ), false, nullptr, ETeleportType::TeleportPhysics);
-					RespawnPlayer->SetActorRotation(FRotator(0.0, RRot, 0.0));
-					RespawnPlayer->SetCoordinates(RX, RY, RZ, RRot, false);
-				}
-				else
-				{
-					UE_LOG(LogConnection, Warning, TEXT("respawnResult: position field missing or null for charId=%d — reviving in-place"), RespawnCharId);
-				}
-
-				// Authoritative vitals (chunk includes HP/MP + effective max in
-			// respawnResult): apply BEFORE SetDead(false) unlocks movement,
-			// so the player never runs with stale corpse values waiting for
-			// the next periodic stats_update. Absent on old servers — then
-			// the bJustRevived snap covers the first stats_update instead.
-			const TSharedPtr<FJsonObject>* HealthObj = nullptr;
-			const TSharedPtr<FJsonObject>* ManaObj = nullptr;
-			int32 RespawnHP = -1, RespawnMaxHP = -1, RespawnMP = -1, RespawnMaxMP = -1;
-			if (Body->TryGetObjectField(TEXT("health"), HealthObj) && HealthObj)
-			{
-				(*HealthObj)->TryGetNumberField(TEXT("current"), RespawnHP);
-				(*HealthObj)->TryGetNumberField(TEXT("max"), RespawnMaxHP);
-			}
-			if (Body->TryGetObjectField(TEXT("mana"), ManaObj) && ManaObj)
-			{
-				(*ManaObj)->TryGetNumberField(TEXT("current"), RespawnMP);
-				(*ManaObj)->TryGetNumberField(TEXT("max"), RespawnMaxMP);
-			}
-			if (RespawnHP >= 0 && RespawnMaxHP > 0 && RespawnMP >= 0 && RespawnMaxMP > 0)
-			{
-				RespawnPlayer->ApplyRespawnVitals(RespawnHP, RespawnMaxHP, RespawnMP, RespawnMaxMP);
-			}
-			else
-			{
-				UE_LOG(LogConnection, Verbose, TEXT("respawnResult: no vitals in body for charId=%d — waiting for stats_update"), RespawnCharId);
-			}
-
-			// Revive the player: restores movement mode, hides death screen,
-				// plays revive sound, notifies AnimBP. Must happen AFTER teleport so
-				// CMC re-enables walking at the correct world position.
-				RespawnPlayer->SetDead_Implementation(false);
-				UE_LOG(LogConnection, Log, TEXT("respawnResult: charId=%d respawned"), RespawnCharId);
-			}
-			else
-			{
-				UE_LOG(LogConnection, Error, TEXT("respawnResult: player not found for charId=%d"), RespawnCharId);
-			}
-		}
-	}
-
-	// Handle playerTeleported - server-directed teleport (admin/GM).
-	// Unlike positional broadcasts (other clients' views), this unicast is
-	// applied to the locally-controlled actor: hard snap, no interpolation,
-	// same as respawnResult (MovePlayerForClient skips our own ClientID).
-	if (MessageData.eventType == "playerTeleported")
-	{
-		if (gameInstance && IsValid(gameInstance) && Body.IsValid())
-		{
-			int32 TeleportCharId = 0;
-			Body->TryGetNumberField(TEXT("characterId"), TeleportCharId);
-			ABasicPlayer* TeleportPlayer = (TeleportCharId > 0)
-				? gameInstance->GetPlayerByCharacterId(TeleportCharId)
-				: nullptr;
-			if (TeleportPlayer && IsValid(TeleportPlayer))
-			{
-				double TX = 0, TY = 0, TZ = 0, TRot = 0;
-				Body->TryGetNumberField(TEXT("x"), TX);
-				Body->TryGetNumberField(TEXT("y"), TY);
-				Body->TryGetNumberField(TEXT("z"), TZ);
-				Body->TryGetNumberField(TEXT("rotZ"), TRot);
-				TeleportPlayer->SetActorLocation(FVector(TX, TY, TZ), false, nullptr, ETeleportType::TeleportPhysics);
-				TeleportPlayer->SetActorRotation(FRotator(0.0, TRot, 0.0));
-				TeleportPlayer->SetCoordinates(TX, TY, TZ, TRot, false);
-				UE_LOG(LogConnection, Log, TEXT("playerTeleported: charId=%d snapped to (%d, %d, %d)"),
-					TeleportCharId, (int32)TX, (int32)TY, (int32)TZ);
-			}
-			else
-			{
-				UE_LOG(LogConnection, Warning, TEXT("playerTeleported: player not found for charId=%d"), TeleportCharId);
-			}
-		}
-	}
+	// respawnResult / playerTeleported are owned by UTeleportNetworkHandler
+	// (dispatcher-registered). UTeleportManager runs the cover transition.
 }
+
 

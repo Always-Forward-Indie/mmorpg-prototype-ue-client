@@ -7,6 +7,7 @@
 #include "Gameplay/Mobs/MOBMovementComponent.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Gameplay/Teleport/TeleportManager.h"
 #include "DevMode/DevModeDataProvider.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/FileManager.h"
@@ -25,7 +26,7 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
 {
     if (Args.Num() < 1)
     {
-        UE_LOG(LogGameplay, Warning, TEXT("Usage: devmode.scenario <combat|reset|full_sweep|soak|toast_verify|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery>"));
+        UE_LOG(LogGameplay, Warning, TEXT("Usage: devmode.scenario <combat|reset|teleport|full_sweep|soak|toast_verify|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery>"));
         return;
     }
     if (!GameInstance) return;
@@ -68,6 +69,54 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
             GameInstance->Player->SetActorLocation(FVector(0.0f, 0.0f, 90.0f));
         }
         UE_LOG(LogGameplay, Verbose, TEXT("devmode.scenario reset: world re-seeded, player at spawn"));
+    }
+    else if (Name == TEXT("teleport"))
+    {
+        // AAA cover-transition self-test: fade -> covered snap -> reveal,
+        // then assert arrival and emit the bot tombstone.
+        if (!GameInstance->Player)
+        {
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT_RESULT scenario=teleport FAIL (no player)"));
+        }
+        else if (UTeleportManager* TM = GameInstance->GetTeleportManager())
+        {
+            ABasicPlayer* P = GameInstance->Player;
+            const FVector From = P->GetActorLocation();
+            const FVector Dest = From + FVector(2000.0f, 0.0f, 300.0f);
+            TM->SetWorldContext(GameInstance->GetWorld());
+            TM->ApplyLocalTeleport(P, Dest, P->GetActorRotation().Yaw, TEXT("devmode-scenario"));
+            if (UWorld* World = GameInstance->GetWorld())
+            {
+                TWeakObjectPtr<ABasicPlayer> WeakP(P);
+                FTimerHandle TeleportCheckHandle;
+                World->GetTimerManager().SetTimer(TeleportCheckHandle, [this, WeakP, From, Dest]()
+                {
+                    const bool bPass = WeakP.IsValid()
+                        && FVector::Dist2D(WeakP->GetActorLocation(), Dest) < 150.0f
+                        && !WeakP->IsTeleportCoverActive();
+                    UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT_RESULT scenario=teleport %s (from (%.0f,%.0f) to (%.0f,%.0f))"),
+                        bPass ? TEXT("PASS") : TEXT("FAIL"), From.X, From.Y,
+                        WeakP.IsValid() ? WeakP->GetActorLocation().X : 0.0f,
+                        WeakP.IsValid() ? WeakP->GetActorLocation().Y : 0.0f);
+                    if (GameInstance && GameInstance->bDevModeAutoQuit)
+                    {
+                        GameInstance->bDevModeAutoQuit = false;
+                        GameInstance->DevModeAutoScenario.Empty();
+                        if (UWorld* QuitWorld = GameInstance->GetWorld())
+                        {
+                            if (GEngine)
+                            {
+                                GEngine->Exec(QuitWorld, TEXT("quit"));
+                            }
+                        }
+                    }
+                }, 1.5f, false);
+            }
+        }
+        else
+        {
+            UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_BOT_RESULT scenario=teleport FAIL (no TeleportManager)"));
+        }
     }
     else if (Name == TEXT("full_sweep"))
     {
@@ -139,7 +188,7 @@ void UDevModeConsoleCommands::Cmd_Scenario(const TArray<FString>& Args) const
     }
     else
     {
-        UE_LOG(LogGameplay, Warning, TEXT("devmode.scenario: unknown '%s' (use combat|reset|full_sweep|soak|toast_verify|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery)"), *Args[0]);
+        UE_LOG(LogGameplay, Warning, TEXT("devmode.scenario: unknown '%s' (use combat|reset|teleport|full_sweep|soak|toast_verify|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery)"), *Args[0]);
     }
 }
 
@@ -231,8 +280,10 @@ void UDevModeConsoleCommands::RunSweepPhase1() const
     Cmd_ReloadInventory(NoArgs);
     if (GameInstance && GameInstance->Player)
     {
-        GameInstance->Player->SetActorLocation(FVector(0.0f, 0.0f, 90.0f));
-        SnapPlayerToGround();
+        FString SweepSnapError;
+        GameInstance->Player->SnapToAuthoritativePosition(FVector(0.0f, 0.0f, 90.0f),
+            GameInstance->Player->GetActorRotation().Yaw, SweepSnapError);
+        GameInstance->Player->SnapToGround();
     }
     SweepShot(TEXT("phase1-seeded"));
     // NOTE: no PerfMark here — reset and mark would land on the same frame

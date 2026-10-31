@@ -304,7 +304,8 @@ bool UDevModeBotBrain::SteerToward(ABasicPlayer* Player, const FVector& Dest, fl
         if (bDirectMove)
         {
             // Live: the chunk server reverts off-pace moves
-            // (positionCorrection), so admin teleports never stick.
+            // (positionCorrection), but teleports stick — stale pre-teleport
+            // moves die in the commit grace window (commitTeleportPosition).
             LastChasePos = PlayerAt;
             if (bNavPathValid && NavPathIndex < NavPathPoints.Num())
             {

@@ -125,6 +125,11 @@ UPlayerManager* UMyGameInstance::GetPlayerManager()
 	return PlayerManager;
 }
 
+UTeleportManager* UMyGameInstance::GetTeleportManager()
+{
+	return TeleportManager;
+}
+
 UMOBManager* UMyGameInstance::GetMOBManager()
 {
 	return MOBManager;

@@ -2,6 +2,8 @@
 #include "MyGameInstance.h"
 #include "Authentication/AuthenticationManager.h"
 #include "Gameplay/Players/PlayerManager.h"
+#include "Gameplay/Teleport/TeleportManager.h"
+#include "Gameplay/Teleport/TeleportNetworkHandler.h"
 #include "Gameplay/Mobs/SpawnZoneManager.h"
 #include "Gameplay/Mobs/MOBManager.h"
 #include "Gameplay/Items/ItemManager.h"
@@ -141,6 +143,18 @@ void UMyGameInstance::InitCoreNetworking()
 		PlayerManager->Initialize(NetworkManager, PingManager);
 		// subscribe to the network manager
 		PlayerManager->SubscribeToNetworkManager();
+	}
+
+	if (TeleportManager != nullptr) {
+		// set WorldContext
+		TeleportManager->SetWorldContext(GetWorld());
+		// Initialize the teleport manager (cover-transition teleports + respawns)
+		TeleportManager->Initialize(NetworkManager, this);
+	}
+
+	if (TeleportNetworkHandler != nullptr && TeleportManager != nullptr) {
+		TeleportNetworkHandler->Initialize(TeleportManager, NetworkManager);
+		TeleportNetworkHandler->SubscribeToNetworkEvents();
 	}
 
 

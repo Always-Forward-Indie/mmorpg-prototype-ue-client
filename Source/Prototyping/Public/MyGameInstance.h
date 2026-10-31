@@ -15,6 +15,8 @@ class UNetworkManager;
 class UPingManager;
 class UAuthenticationManager;
 class UPlayerManager;
+class UTeleportManager;
+class UTeleportNetworkHandler;
 class UMOBManager;
 class USpawnZoneManager;
 class UItemManager;
@@ -400,6 +402,14 @@ public:
 	UPlayerManager* PlayerManager;
 
 	UPROPERTY()
+	// Teleport manager (cover-transition teleports + respawns)
+	class UTeleportManager* TeleportManager;
+
+	UPROPERTY()
+	// Teleport network handler (respawnResult / playerTeleported)
+	class UTeleportNetworkHandler* TeleportNetworkHandler;
+
+	UPROPERTY()
 	// MOB manager
 	UMOBManager* MOBManager;
 
@@ -702,6 +712,10 @@ public:
 	// get Player manager
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	UPlayerManager* GetPlayerManager();
+
+	// get Teleport manager
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	UTeleportManager* GetTeleportManager();
 
 	// get MOB manager
 	UFUNCTION(BlueprintCallable, Category = "Network")

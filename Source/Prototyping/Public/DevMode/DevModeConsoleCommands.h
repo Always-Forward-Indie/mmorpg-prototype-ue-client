@@ -23,7 +23,7 @@ class UDevModeBotBrain;
 //   devmode.reloadmobs                 - destroy all dev mobs and re-spawn from JSON
 //   devmode.reloadinventory            - clear and re-populate inventory from JSON
 //   devmode.listmobs                   - print all spawned mobs to log
-//   devmode.scenario <combat|reset|full_sweep|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery> - one-shot QA flows (teleport/reload presets)
+//   devmode.scenario <combat|reset|teleport|full_sweep|bot_combat_patrol|bot_loot_pickup|bot_death_respawn|bot_harvest_run|bot_periphery> - one-shot QA flows (teleport/reload presets)
 //   devmode.scenario <toast_verify> - fire the toast mix, assert the stack shows it, quit (tombstone DEVMODE_TOAST_RESULT)
 //   devmode.bot <combat_patrol|loot_pickup|death_respawn|harvest_run|periphery>      - start the L1 action bot (real movement/combat, see DevModeBotBrain)
 //   devmode.toast [type] [count]    - fire test toasts at the notification stack (no args = 6-toast severity mix)
@@ -69,9 +69,6 @@ private:
     void Cmd_SpawnMob(const TArray<FString>& Args) const;
     void Cmd_SetCombatState(const TArray<FString>& Args) const;
     void Cmd_Teleport(const TArray<FString>& Args) const;
-    // Drop the player straight down onto walkable ground (handy after teleports
-    // to hand-authored coordinates that may hover or sit inside geometry).
-    void SnapPlayerToGround() const;
     void Cmd_SetPlayerHP(const TArray<FString>& Args) const;
     void Cmd_ReloadMobs(const TArray<FString>& Args) const;
     void Cmd_ReloadInventory(const TArray<FString>& Args) const;

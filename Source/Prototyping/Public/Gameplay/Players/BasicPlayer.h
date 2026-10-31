@@ -242,6 +242,10 @@ private:
 	// block input across all lock sources (cast, pickup, harvest, emote).
 	bool bMovementLocked = false;
 
+	// True while a teleport cover transition (fade..reveal) owns the pawn.
+	// Set by BeginTeleportCover, cleared by FinishTeleportReveal.
+	bool bTeleportCoverActive = false;
+
 	// Cast lock: true while a skill with cast time is in progress
 	bool bIsCasting = false;
 
@@ -1045,6 +1049,22 @@ public:
 
 	// Called when the player is revived
 	void OnRevive();
+
+	// ── AAA cover-transition teleport (UTeleportManager use) ──────────────
+	// Single source of truth for authoritative snaps: validates the target,
+	// drains motion state, snaps actor + controller yaw + coordinates.
+	// Returns false with OutError on an insane target (caller logs error).
+	bool SnapToAuthoritativePosition(const FVector& Target, float Yaw, FString& OutError);
+	// Cancel combat/interaction state before a jump (no post-teleport ghosts).
+	void CancelActionsForTeleport();
+	// Freeze the pawn behind a camera fade (fade out + hold black).
+	void BeginTeleportCover(const FString& Reason);
+	// Fade back in and unlock input. No-op unless cover is active.
+	void FinishTeleportReveal();
+	// Drop onto WorldStatic ground under the current position. False when
+	// no ground was found (position kept as-is).
+	bool SnapToGround(float UpTraceCm = 2000.0f, float DownTraceCm = 5000.0f);
+	bool IsTeleportCoverActive() const { return bTeleportCoverActive; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Data")
 	float GetRemoteSpeed() const { return SmoothedRemoteSpeed; }

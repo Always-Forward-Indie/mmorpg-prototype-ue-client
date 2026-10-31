@@ -3,6 +3,8 @@
 #include "Engine/World.h"
 #include "Authentication/AuthenticationManager.h"
 #include "Gameplay/Players/PlayerManager.h"
+#include "Gameplay/Teleport/TeleportManager.h"
+#include "Gameplay/Teleport/TeleportNetworkHandler.h"
 #include "Gameplay/Mobs/SpawnZoneManager.h"
 #include "Gameplay/Mobs/MOBManager.h"
 #include "Gameplay/Items/ItemManager.h"
@@ -147,6 +149,10 @@ UE_LOG(LogGameplay, Warning, TEXT("GameInstance: DevMode level override '%s'"), 
 
 	// set the player manager
 	PlayerManager = NewObject<UPlayerManager>(this);
+
+	// set the teleport manager + network handler (cover-transition teleports)
+	TeleportManager = NewObject<UTeleportManager>(this);
+	TeleportNetworkHandler = NewObject<UTeleportNetworkHandler>(this);
 
 	// set the MOB manager
 	MOBManager = NewObject<UMOBManager>(this);

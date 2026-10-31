@@ -2,6 +2,7 @@
 #include "MyGameInstance.h"
 #include "Authentication/AuthenticationManager.h"
 #include "Gameplay/Players/PlayerManager.h"
+#include "Gameplay/Teleport/TeleportManager.h"
 #include "Gameplay/Mobs/MOBManager.h"
 #include "Gameplay/Mobs/SpawnZoneManager.h"
 #include "Gameplay/Items/ItemManager.h"
@@ -211,6 +212,7 @@ void UMyGameInstance::RefreshManagerWorldContexts()
 	}
 	if (AuthenticationManager) { AuthenticationManager->SetWorldContext(World); }
 	if (PlayerManager) { PlayerManager->SetWorldContext(World); }
+	if (TeleportManager) { TeleportManager->SetWorldContext(World); }
 	if (MOBManager) { MOBManager->SetWorldContext(World); }
 	if (SpawnZoneManager) { SpawnZoneManager->SetWorldContext(World); }
 	if (ItemManager) { ItemManager->SetWorldContext(World); }

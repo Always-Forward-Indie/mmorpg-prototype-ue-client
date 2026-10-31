@@ -147,36 +147,15 @@ void UDevModeConsoleCommands::Cmd_Teleport(const TArray<FString>& Args) const
     const float Y = FCString::Atof(*Args[1]);
     const float Z = FCString::Atof(*Args[2]);
 
-    GameInstance->Player->SetActorLocation(FVector(X, Y, Z));
-    UE_LOG(LogGameplay, Verbose, TEXT("devmode.teleport: Player teleported to (%.0f, %.0f, %.0f)"), X, Y, Z);
-    SnapPlayerToGround();
-}
-
-void UDevModeConsoleCommands::SnapPlayerToGround() const
-{
-    if (!GameInstance || !GameInstance->Player) return;
-    UWorld* World = GameInstance->GetWorld();
     ABasicPlayer* Player = GameInstance->Player;
-    if (!World || !Player) return;
-
-    const FVector From = Player->GetActorLocation() + FVector(0.0f, 0.0f, 2000.0f);
-    const FVector To = Player->GetActorLocation() - FVector(0.0f, 0.0f, 5000.0f);
-    FHitResult Hit;
-    FCollisionQueryParams Params(SCENE_QUERY_STAT(DevModeSnapToGround), false, Player);
-    if (World->LineTraceSingleByChannel(Hit, From, To, ECC_WorldStatic, Params) && Hit.bBlockingHit)
+    FString SnapError;
+    if (!Player->SnapToAuthoritativePosition(FVector(X, Y, Z), Player->GetActorRotation().Yaw, SnapError))
     {
-        float HalfHeight = 90.0f;
-        if (const UCapsuleComponent* Capsule = Player->GetCapsuleComponent())
-        {
-            HalfHeight = Capsule->GetScaledCapsuleHalfHeight();
-        }
-        Player->SetActorLocation(Hit.Location + FVector(0.0f, 0.0f, HalfHeight + 2.0f));
-        UE_LOG(LogGameplay, Verbose, TEXT("devmode: player snapped to ground Z=%.0f"), Hit.Location.Z);
+        UE_LOG(LogGameplay, Error, TEXT("devmode.teleport: rejected target: %s"), *SnapError);
+        return;
     }
-    else
-    {
-        UE_LOG(LogGameplay, Warning, TEXT("devmode: no ground under player, keeping position"));
-    }
+    Player->SnapToGround();
+    UE_LOG(LogGameplay, Verbose, TEXT("devmode.teleport: Player teleported to (%.0f, %.0f, %.0f)"), X, Y, Z);
 }
 
 // ============================================================================

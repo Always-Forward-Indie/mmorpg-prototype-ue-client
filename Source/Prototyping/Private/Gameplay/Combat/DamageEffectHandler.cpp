@@ -49,13 +49,15 @@ void UDamageEffectHandler::ProcessSkillResult_Implementation(const FSkillResultD
     // finalTargetHealth and would yank the bar backward (log-proven 46->61,
     // 15->30 jumps under fox packs). Damage numbers, death detection and
     // mob/remote handling below are unaffected. Remote players keep
-    // combat-driven HP — they get no per-hit stats_updates. Mobs are
-    // single-channel on mobHealthUpdate (server pushes one per landed hit,
-    // plus regen/effectTick/spawn) — see bSkipVitalsForMob below.
+    // combat-driven HP — they get no per-hit stats_updates.
+    // Mobs apply HP from this same combatResult (same hit-point flush as the
+    // damage number): number and both bars move on the same frame. The old
+    // single-channel skip (mobHealthUpdate owns vitals) split them across
+    // two packets and read as bar lag; mobHealthUpdate stays as idempotent
+    // confirmation (absolute values, TCP order — duplicates are harmless).
     else if (!SkillResult.isMissed)
     {
         bool bSkipVitalsForLocalPlayer = false;
-        bool bSkipVitalsForMob = (Cast<ABasicMOB>(TargetObject) != nullptr);
         if (ABasicPlayer* TargetPlayer = Cast<ABasicPlayer>(TargetObject))
         {
             bSkipVitalsForLocalPlayer = !TargetPlayer->GetIsOtherClient();
@@ -65,10 +67,23 @@ void UDamageEffectHandler::ProcessSkillResult_Implementation(const FSkillResultD
             UE_LOG(LogGameplay, Verbose, TEXT("DamageEffectHandler: skipping combat HP set for local player %s (stats_update owns vitals; result HP=%d)"),
                 *GetNameSafe(TargetObject), SkillResult.finalTargetHealth);
         }
-        else if (bSkipVitalsForMob)
+        else if (ABasicMOB* TargetMob = Cast<ABasicMOB>(TargetObject))
         {
-            UE_LOG(LogGameplay, Verbose, TEXT("DamageEffectHandler: skipping combat HP set for mob %s (mobHealthUpdate owns vitals; result HP=%d)"),
-                *GetNameSafe(TargetObject), SkillResult.finalTargetHealth);
+            // Never resurrect: a stale result must not raise a corpse's HP
+            // (spawn/respawn owns revival; Die() pins 0).
+            if (!TargetMob->GetMOBIsDead() || SkillResult.finalTargetHealth <= 0)
+            {
+                ICombatable::Execute_SetCurrentHealth(TargetObject, SkillResult.finalTargetHealth);
+                if (SkillResult.finalTargetMana > 0)
+                {
+                    ICombatable::Execute_SetCurrentMana(TargetObject, SkillResult.finalTargetMana);
+                }
+            }
+            else
+            {
+                UE_LOG(LogGameplay, Verbose, TEXT("DamageEffectHandler: ignoring stale combat HP %d for dead mob %s"),
+                    SkillResult.finalTargetHealth, *GetNameSafe(TargetObject));
+            }
         }
         else
         {

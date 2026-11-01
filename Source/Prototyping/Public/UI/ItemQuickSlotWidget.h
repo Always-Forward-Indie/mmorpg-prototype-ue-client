@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Data/DataStructs.h"
+#include "Engine/StreamableManager.h"
 #include "ItemQuickSlotWidget.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnQuickSlotUsed, int32, SlotIndex);
@@ -67,6 +68,10 @@ private:
 	UFUNCTION()
 	void OnSlotClicked();
 
+	void LoadIconBySlug(const FString& Slug, int32 ExpectedItemId);
+	void SetIconTexture(UTexture2D* Texture);
+
 	UInventoryManager* InventoryManager = nullptr;
 	FItemQuickSlotData SlotData;
+	TSharedPtr<FStreamableHandle> StreamableHandle;
 };

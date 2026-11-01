@@ -61,6 +61,7 @@ void UInventoryManager::HandleChunkPacket(const FParsedPacket& Packet)
 		{
 			// Template echo from the server: kind lookup for the sound/visual only.
 			FInventoryItemStruct Item = GetItemByTemplateId(UsedItemId);
+			OnItemUsed.Broadcast(UsedItemId, Item.itemSlug, Item.name);
 			if (!Item.itemSlug.IsEmpty())
 			{
 				FItemVisualData Vis = gameInstance->GetItemManager()->GetItemVisualDataBySlug(Item.itemSlug);

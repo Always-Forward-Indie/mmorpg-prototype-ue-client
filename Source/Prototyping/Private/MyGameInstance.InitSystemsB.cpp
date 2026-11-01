@@ -68,6 +68,7 @@
 
 #include "Gameplay/Bestiary/BestiaryNetworkHandler.h"
 #include "Gameplay/Chat/ChatManager.h"
+#include "Gameplay/Combat/CombatLogManager.h"
 #include "Gameplay/Chat/ChatNetworkHandler.h"
 #include "Gameplay/Player/PlayerStatsNetworkHandler.h"
 #include "Services/LocalizationSubsystem.h"
@@ -210,6 +211,13 @@ void UMyGameInstance::InitEconomy()
 		BestiaryNetworkHandler->Initialize(this, GetNetworkManager());
 		BestiaryNetworkHandler->SubscribeToNetworkEvents();
 		UE_LOG(LogGameplay, Warning, TEXT("BestiaryNetworkHandler initialized and subscribed"));
+	}
+
+	// Combat log: subscribes to manager delegates (read-only, no packets).
+	if (CombatLogManager)
+	{
+		CombatLogManager->Initialize(this);
+		UE_LOG(LogGameplay, Warning, TEXT("CombatLogManager initialized"));
 	}
 
 }

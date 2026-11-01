@@ -3,7 +3,12 @@
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "Engine/Texture2D.h"
+#include "Engine/AssetManager.h"
+#include "Engine/StreamableManager.h"
 #include "Gameplay/Items/InventoryManager.h"
+#include "Gameplay/Items/ItemManager.h"
+#include "Data/ItemStruct.h"
+#include "MyGameInstance.h"
 
 void UItemQuickSlotWidget::NativeConstruct()
 {
@@ -47,6 +52,12 @@ void UItemQuickSlotWidget::AssignItem(int32 ItemId, const FString& ItemSlug, int
 			ItemIcon->SetBrushFromTexture(Tex);
 			ItemIcon->SetVisibility(ESlateVisibility::HitTestInvisible);
 		}
+	}
+	else if (!ItemSlug.IsEmpty())
+	{
+		// No cached path (menu-assigned items): resolve through the item
+		// catalog exactly like inventory slots do.
+		LoadIconBySlug(ItemSlug, ItemId);
 	}
 
 	if (QuantityText)
@@ -101,6 +112,47 @@ void UItemQuickSlotWidget::UseItem()
 void UItemQuickSlotWidget::OnSlotClicked()
 {
 	UseItem();
+}
+
+void UItemQuickSlotWidget::LoadIconBySlug(const FString& Slug, int32 ExpectedItemId)
+{
+	if (!ItemIcon) return;
+	UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
+	if (!GI) return;
+	UItemManager* ItemMgr = GI->GetItemManager();
+	if (!ItemMgr) return;
+
+	const FItemVisualData Vis = ItemMgr->GetItemVisualDataBySlug(Slug);
+	if (Vis.Icon.IsNull()) return;
+
+	if (UTexture2D* Loaded = Vis.Icon.Get())
+	{
+		SetIconTexture(Loaded);
+		return;
+	}
+
+	TWeakObjectPtr<UItemQuickSlotWidget> WeakThis(this);
+	const FSoftObjectPath Path = Vis.Icon.ToSoftObjectPath();
+	TSoftObjectPtr<UTexture2D> IconSoft = Vis.Icon;
+	if (UAssetManager* AM = UAssetManager::GetIfInitialized())
+	{
+		StreamableHandle = AM->GetStreamableManager().RequestAsyncLoad(Path,
+			FStreamableDelegate::CreateLambda([WeakThis, IconSoft, ExpectedItemId]()
+			{
+				if (!WeakThis.IsValid() || WeakThis->GetItemId() != ExpectedItemId) return;
+				if (UTexture2D* Tex = IconSoft.Get())
+					WeakThis->SetIconTexture(Tex);
+			}));
+	}
+}
+
+void UItemQuickSlotWidget::SetIconTexture(UTexture2D* Texture)
+{
+	if (ItemIcon && Texture)
+	{
+		ItemIcon->SetBrushFromTexture(Texture);
+		ItemIcon->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
 }
 
 FReply UItemQuickSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)

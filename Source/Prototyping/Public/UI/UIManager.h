@@ -43,6 +43,7 @@ class UEquipmentWidget;
 class UPlayerStatsWidget;
 class UBestiaryWidget;
 class UChatWidget;
+class UCombatLogWidget;
 class UPlayerStatsManager;
 class UBestiaryNetworkHandler;
 class UChatManager;
@@ -274,6 +275,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UChatWidget* GetChatWidget() const { return ChatWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UCombatLogWidget* GetCombatLogWidget() const { return CombatLogWidget; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UGameMenuBarWidget* GetGameMenuBarWidget() const { return GameMenuBarWidget; }
@@ -541,6 +545,11 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UChatWidget> ChatWidgetClass;
 
+	// Optional BP override for the combat log (pure C++ layout is used
+	// when unset — the window works with zero editor setup).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UCombatLogWidget> CombatLogWidgetClass;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UGameMenuBarWidget> GameMenuBarWidgetClass;
 
@@ -658,6 +667,9 @@ protected:
 
 	UPROPERTY()
 	UChatWidget* ChatWidget;
+
+	UPROPERTY()
+	UCombatLogWidget* CombatLogWidget = nullptr;
 
 	UPROPERTY()
 	UGameMenuBarWidget* GameMenuBarWidget;

@@ -4620,6 +4620,19 @@ struct PROTOTYPING_API FItemQuickSlotData
     FItemQuickSlotData() {}
 };
 
+// Per-character quickbar snapshot (TMap value wrapper — UHT forbids
+// TArray directly as a TMap value).
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FCharacterQuickBarState
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quickbar")
+    TArray<FItemQuickSlotData> Slots;
+
+    FCharacterQuickBarState() {}
+};
+
 // ============================================================
 // Title Locale Definition
 // ============================================================

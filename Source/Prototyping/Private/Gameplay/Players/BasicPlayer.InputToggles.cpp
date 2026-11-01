@@ -353,3 +353,20 @@ void ABasicPlayer::OnSkill5Input()
     }
 }
 
+void ABasicPlayer::UseQuickBarSlot(int32 SlotIndex)
+{
+    if (playerData.characterData.bIsDead) return;
+    if (!UIManager) return;
+    UPlayerInterfaceWidget* PIW = UIManager->GetPlayerInterfaceWidget();
+    if (!PIW) return;
+    UItemQuickBarWidget* QuickBar = PIW->GetItemQuickBar();
+    if (!QuickBar) return;
+    QuickBar->UseSlot(SlotIndex);
+}
+
+void ABasicPlayer::OnQuickSlot1Input() { UseQuickBarSlot(0); }
+void ABasicPlayer::OnQuickSlot2Input() { UseQuickBarSlot(1); }
+void ABasicPlayer::OnQuickSlot3Input() { UseQuickBarSlot(2); }
+void ABasicPlayer::OnQuickSlot4Input() { UseQuickBarSlot(3); }
+void ABasicPlayer::OnQuickSlot5Input() { UseQuickBarSlot(4); }
+

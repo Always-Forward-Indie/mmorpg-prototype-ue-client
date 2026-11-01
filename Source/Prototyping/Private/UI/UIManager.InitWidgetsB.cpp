@@ -14,6 +14,8 @@
 #include "UI/SkillShopWidget.h"
 #include "UI/TradeWidget.h"
 #include "UI/EquipmentWidget.h"
+#include "UI/CombatLogWidget.h"
+#include "Gameplay/Combat/CombatLogManager.h"
 #include "Gameplay/UI/PlayerExperienceWidget.h"
 #include "Gameplay/UI/PlayerInterfaceWidget.h"
 #include "Gameplay/UI/DamageCanvasWidget.h"
@@ -240,6 +242,32 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 	else if (!ChatWidgetClass)
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("UIManager: ChatWidgetClass is not set in Blueprint"));
+	}
+
+	// Combat log window: BP override when assigned, native layout otherwise
+	// (works with zero editor setup — filters and scrollback built in C++).
+	if (!CombatLogWidget)
+	{
+		if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetWorld()->GetGameInstance()))
+		{
+			if (UCombatLogManager* LogMgr = GameInstance->GetCombatLogManager())
+			{
+				if (CombatLogWidgetClass)
+					CombatLogWidget = CreateWidget<UCombatLogWidget>(GetWorld(), CombatLogWidgetClass);
+				else
+					CombatLogWidget = CreateWidget<UCombatLogWidget>(GetWorld(), UCombatLogWidget::StaticClass());
+				if (CombatLogWidget)
+				{
+					CombatLogWidget->AddToViewport(14); // Just under chat (15)
+					CombatLogWidget->BindToManager(LogMgr);
+					UE_LOG(LogGameplay, Verbose, TEXT("UIManager: CombatLogWidget created and bound"));
+				}
+				else
+				{
+					UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create CombatLogWidget"));
+				}
+			}
+		}
 	}
 
 	// ====================================================================

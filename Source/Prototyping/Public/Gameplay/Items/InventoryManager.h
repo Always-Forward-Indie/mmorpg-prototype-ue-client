@@ -17,6 +17,9 @@ class UMyGameInstance;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnInventoryUpdated, const FCharacterInventoryStruct&, Inventory);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemAdded, const FInventoryItemStruct&, Item, int32, NewQuantity);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemRemoved, const FInventoryItemStruct&, Item, int32, RemainingQuantity);
+// Authoritative use confirmation (server consumed exactly one): feeds the
+// combat log and quickbar refresh. Params are the template echo (kind info).
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnItemUsed, int32, ItemId, const FString&, ItemSlug, const FString&, ItemName);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnInventoryLoadComplete, bool, bSuccess);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnItemPickupAttempted, const FItemBaseStruct&, Item);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnNoItemsInRange);
@@ -102,6 +105,9 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Inventory Events")
 	FOnItemRemoved OnItemRemoved;
+
+	UPROPERTY(BlueprintAssignable, Category = "Inventory Events")
+	FOnItemUsed OnItemUsed;
 
 	UPROPERTY(BlueprintAssignable, Category = "Inventory Events")
 	FOnInventoryLoadComplete OnInventoryLoadComplete;

@@ -184,6 +184,32 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
             EnhancedInputComponent->BindAction(Skill5Action, ETriggerEvent::Triggered, this, &ABasicPlayer::OnSkill5Input);
         }
 
+        // Item quickbar hotkeys (null-safe: assign in the player Blueprint)
+        if (QuickSlot1Action)
+        {
+            EnhancedInputComponent->BindAction(QuickSlot1Action, ETriggerEvent::Triggered, this, &ABasicPlayer::OnQuickSlot1Input);
+        }
+
+        if (QuickSlot2Action)
+        {
+            EnhancedInputComponent->BindAction(QuickSlot2Action, ETriggerEvent::Triggered, this, &ABasicPlayer::OnQuickSlot2Input);
+        }
+
+        if (QuickSlot3Action)
+        {
+            EnhancedInputComponent->BindAction(QuickSlot3Action, ETriggerEvent::Triggered, this, &ABasicPlayer::OnQuickSlot3Input);
+        }
+
+        if (QuickSlot4Action)
+        {
+            EnhancedInputComponent->BindAction(QuickSlot4Action, ETriggerEvent::Triggered, this, &ABasicPlayer::OnQuickSlot4Input);
+        }
+
+        if (QuickSlot5Action)
+        {
+            EnhancedInputComponent->BindAction(QuickSlot5Action, ETriggerEvent::Triggered, this, &ABasicPlayer::OnQuickSlot5Input);
+        }
+
         // Interact with NPC
         if (InteractAction)
         {

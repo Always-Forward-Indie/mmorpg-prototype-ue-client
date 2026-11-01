@@ -664,6 +664,23 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* Skill5Action;
 
+	// Item quickbar input actions (consumables). Assign F6-F10 in the
+	// player Blueprint input mapping; null actions are skipped safely.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* QuickSlot1Action;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* QuickSlot2Action;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* QuickSlot3Action;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* QuickSlot4Action;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* QuickSlot5Action;
+
 	// Reference to the login camera actor
 	UPROPERTY()
 	ACameraActor* LoginCameraActor;
@@ -810,6 +827,26 @@ public:
 
 	UFUNCTION()
 	void OnSkill5Input();
+
+	// Item quickbar hotkeys (F6-F10 by default in UItemQuickBarWidget).
+	// Unbound actions are skipped silently — assign in the player Blueprint.
+	UFUNCTION()
+	void OnQuickSlot1Input();
+
+	UFUNCTION()
+	void OnQuickSlot2Input();
+
+	UFUNCTION()
+	void OnQuickSlot3Input();
+
+	UFUNCTION()
+	void OnQuickSlot4Input();
+
+	UFUNCTION()
+	void OnQuickSlot5Input();
+
+	/** Shared quickbar hotkey path (dead/locked guards live here). */
+	void UseQuickBarSlot(int32 SlotIndex);
 
 	UFUNCTION()
 	void OnTargetSelfInput();

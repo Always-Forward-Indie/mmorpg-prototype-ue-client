@@ -1,6 +1,10 @@
 #include "UI/ItemQuickBarWidget.h"
 #include "UI/ItemQuickSlotWidget.h"
 #include "Gameplay/Items/InventoryManager.h"
+#include "Gameplay/Items/ItemManager.h"
+#include "Data/ItemStruct.h"
+#include "Audio/AudioManager.h"
+#include "Prototyping.h"
 #include "Components/HorizontalBox.h"
 #include "MyGameInstance.h"
 
@@ -12,13 +16,19 @@ void UItemQuickBarWidget::NativeConstruct()
 void UItemQuickBarWidget::InitQuickBar(UInventoryManager* InInventoryManager, int32 NumSlots)
 {
 	InventoryManager = InInventoryManager;
-	if (!SlotsBox || !SlotWidgetClass) return;
+	if (!SlotsBox || !SlotWidgetClass)
+	{
+		UE_LOG(LogGameplay, Error, TEXT("ItemQuickBarWidget: cannot init — SlotsBox=%p SlotWidgetClass=%p. Bind SlotsBox in WBP and set SlotWidgetClass in BP_MyGameInstance/player interface defaults."),
+			SlotsBox, SlotWidgetClass.Get());
+		return;
+	}
 
 	const int32 Count = NumSlots > 0 ? NumSlots : DefaultSlotCount;
 	Slots.Empty();
 
+	// F6-F10: F1 is TargetSelf, 1-5 drive the skill bar.
 	const TArray<FKey> DefaultKeys = {
-		EKeys::F1, EKeys::F2, EKeys::F3, EKeys::F4, EKeys::F5
+		EKeys::F6, EKeys::F7, EKeys::F8, EKeys::F9, EKeys::F10
 	};
 
 	for (int32 i = 0; i < Count; ++i)
@@ -55,6 +65,65 @@ void UItemQuickBarWidget::UseSlot(int32 SlotIndex)
 {
 	if (!Slots.IsValidIndex(SlotIndex)) return;
 	Slots[SlotIndex]->UseItem();
+}
+
+int32 UItemQuickBarWidget::FindSlotWithItem(int32 ItemId) const
+{
+	if (ItemId <= 0) return INDEX_NONE;
+	for (int32 i = 0; i < Slots.Num(); ++i)
+	{
+		if (Slots[i] && Slots[i]->GetItemId() == ItemId)
+			return i;
+	}
+	return INDEX_NONE;
+}
+
+int32 UItemQuickBarWidget::FindFirstEmptySlot() const
+{
+	for (int32 i = 0; i < Slots.Num(); ++i)
+	{
+		if (Slots[i] && Slots[i]->IsEmpty())
+			return i;
+	}
+	return INDEX_NONE;
+}
+
+void UItemQuickBarWidget::ToggleQuickbarItem(const FInventoryItemStruct& Item)
+{
+	if (Item.itemId <= 0 || !InventoryManager) return;
+
+	const int32 Existing = FindSlotWithItem(Item.itemId);
+	if (Existing != INDEX_NONE)
+	{
+		ClearSlot(Existing);
+		return;
+	}
+
+	const int32 Empty = FindFirstEmptySlot();
+	if (Empty == INDEX_NONE)
+	{
+		UE_LOG(LogGameplay, Warning, TEXT("ItemQuickBarWidget: bar is full — clear a slot (RMB) first"));
+		if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+		{
+			if (GI->AudioManager)
+				GI->AudioManager->PlayUISound(EUISoundEvent::ErrorSound);
+		}
+		return;
+	}
+
+	// Resolve the catalog slug (rows carry both; either may be populated).
+	FString Slug = !Item.slug.IsEmpty() ? Item.slug : Item.itemSlug;
+	FString IconPath;
+	if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+	{
+		if (UItemManager* ItemMgr = GI->GetItemManager())
+		{
+			const FItemVisualData Vis = ItemMgr->GetItemVisualDataBySlug(Slug);
+			if (!Vis.Icon.IsNull())
+				IconPath = Vis.Icon.ToSoftObjectPath().ToString();
+		}
+	}
+	AssignItemToSlot(Empty, Item.itemId, Slug, Item.quantity, IconPath);
 }
 
 void UItemQuickBarWidget::RefreshFromInventory()
@@ -106,23 +175,33 @@ void UItemQuickBarWidget::SaveSlotsState()
 	UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
 	if (!GI) return;
 
-	// Store current quickbar state on the GameInstance for persistence across level loads
-	GI->QuickBarSlots.Empty();
+	// Per-character persistence: shared TArray would leak one character's
+	// bar into another's after relog / character switch.
+	const int32 CharId = InventoryManager->GetInventory().characterId;
+	FCharacterQuickBarState SlotsData;
 	for (const UItemQuickSlotWidget* Sl : Slots)
 	{
 		if (Sl && !Sl->IsEmpty())
 		{
-			GI->QuickBarSlots.Add(Sl->GetSlotData());
+			SlotsData.Slots.Add(Sl->GetSlotData());
 		}
 	}
+	if (CharId > 0)
+		GI->QuickBarSlotsByCharacter.Add(CharId, MoveTemp(SlotsData));
 }
 
 void UItemQuickBarWidget::LoadSlotsState()
 {
 	UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
-	if (!GI) return;
+	if (!GI || !InventoryManager) return;
 
-	for (const FItemQuickSlotData& SavedSlot : GI->QuickBarSlots)
+	const int32 CharId = InventoryManager->GetInventory().characterId;
+	const FCharacterQuickBarState* SavedState = (CharId > 0)
+		? GI->QuickBarSlotsByCharacter.Find(CharId)
+		: nullptr;
+	if (!SavedState) return;
+
+	for (const FItemQuickSlotData& SavedSlot : SavedState->Slots)
 	{
 		if (Slots.IsValidIndex(SavedSlot.slotIndex))
 		{

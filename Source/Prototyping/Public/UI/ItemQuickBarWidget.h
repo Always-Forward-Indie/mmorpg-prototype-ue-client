@@ -27,6 +27,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "QuickBar")
 	void UseSlot(int32 SlotIndex);
 
+	/** Toggle a usable item on the bar: remove when present, else occupy
+	 *  the first empty slot (no-op + error sound when full). */
+	UFUNCTION(BlueprintCallable, Category = "QuickBar")
+	void ToggleQuickbarItem(const FInventoryItemStruct& Item);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "QuickBar")
+	bool HasItem(int32 ItemId) const { return FindSlotWithItem(ItemId) != INDEX_NONE; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "QuickBar")
+	int32 FindSlotWithItem(int32 ItemId) const;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "QuickBar")
+	int32 FindFirstEmptySlot() const;
+
 	UFUNCTION(BlueprintCallable, Category = "QuickBar")
 	void RefreshFromInventory();
 

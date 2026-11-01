@@ -613,6 +613,10 @@ public:
 	UPROPERTY()
 	class UChatNetworkHandler* ChatNetworkHandler;
 
+	// Combat log manager (read-only sink for server facts, no handler)
+	UPROPERTY()
+	class UCombatLogManager* CombatLogManager;
+
 	// Emote manager
 	UPROPERTY()
 	class UEmoteManager* EmoteManager;
@@ -1328,6 +1332,10 @@ public:
 		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
 		class UChatManager* GetChatManager() const;
 
+		// Combat log manager (read-only sink, no network handler)
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
+		class UCombatLogManager* GetCombatLogManager() const { return CombatLogManager; }
+
 		// World Object manager
 		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
 		class UWorldObjectManager* GetWorldObjectManager() const { return WorldObjectManager; }
@@ -1366,9 +1374,11 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Data")
 	UDataTable* GetNPCDefinitionTable() const { return NPCDefinitionTable; }
 
-	/** Serialised state for the item quickbar. Saved across map loads. */
+	/** Serialised state for the item quickbar. Keyed by character id so a
+	 *  relog or character switch never leaks one character's bar into
+	 *  another's. Saved across map loads. */
 	UPROPERTY()
-	TArray<struct FItemQuickSlotData> QuickBarSlots;
+	TMap<int32, struct FCharacterQuickBarState> QuickBarSlotsByCharacter;
 };
 
 // Forward declarations

@@ -391,6 +391,9 @@ FReply UEquipmentWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 {
     if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
     {
+        // Close context menu when clicking outside its action rows
+        // (mirrors UInventoryWidget — pass-through, drag logic runs next).
+        CloseEquipContextMenu();
         bool bShouldDrag = false;
         if (DragHandle)
         {

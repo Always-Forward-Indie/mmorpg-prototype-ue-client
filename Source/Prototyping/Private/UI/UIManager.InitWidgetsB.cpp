@@ -253,8 +253,7 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 		if (UMyGameInstance* GameInstance = Cast<UMyGameInstance>(GetWorld()->GetGameInstance()))
 		{
 			if (UCombatLogManager* LogMgr = GameInstance->GetCombatLogManager())
-			{
-				if (CombatLogWidgetClass)
+			{				if (CombatLogWidgetClass)
 					CombatLogWidget = CreateWidget<UCombatLogWidget>(GetWorld(), CombatLogWidgetClass);
 				else
 					CombatLogWidget = CreateWidget<UCombatLogWidget>(GetWorld(), UCombatLogWidget::StaticClass());
@@ -271,6 +270,11 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 				{
 					UE_LOG(LogGameplay, Error, TEXT("UIManager: Failed to create CombatLogWidget"));
 				}
+			}
+			else
+			{
+				// Loud skip: no retry — the window would never appear.
+				UE_LOG(LogGameplay, Warning, TEXT("UIManager: skipping CombatLogWidget - CombatLogManager is null"));
 			}
 		}
 	}

@@ -393,6 +393,11 @@ void ABasicPlayer::InitializeLocalUI()
 					playerData.characterData.characterId);
 			}
 		}
+	else
+		{
+			// Loud skip: chat, toasts AND the combat log live behind this call.
+			UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: skipping InitializeNotificationSystem - BestiaryNetworkHandler is null (chat/toasts/combat log will be missing)"));
+		}
 
 	// Initialize WIO (World Interactive Objects) widgets
 	if (MyGameInstance && MyGameInstance->GetWorldObjectManager())

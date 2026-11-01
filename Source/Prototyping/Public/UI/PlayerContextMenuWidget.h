@@ -3,29 +3,29 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/TextBlock.h"
-#include "Components/Button.h"
+#include "Components/VerticalBox.h"
 #include "Utils/NetCore/PlayerSocialRule.h"
 #include "PlayerContextMenuWidget.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnPlayerSocialActionSelected,
 	EPlayerSocialAction, Action, int32, TargetCharacterId);
 
+class UPlayerMenuRowWidget;
+
 /**
  * Unit context menu (WoW-style right-click on a player): Whisper / Trade /
- * Inspect. Two interaction models:
+ * Inspect. Rows follow the ItemActionMenu pattern: a bound VerticalBox
+ * plus a row widget class, hit-tested by slate geometry with mouse capture,
+ * so the RMB release that opened the menu never leaks through.
  *
- * Code fallback (default): rows are built in C++ (Border + TextBlock) and
- * hit-tested by slate geometry with mouse capture, so the RMB release that
- * opened the menu never leaks through.
- *
- * Blueprint layout (optional): create a BP subclass, bind these names,
- * assign it to UIManager.PlayerMenuWidgetClass. Real buttons replace the
- * hit-testing (no mouse capture in BP mode); unavailable actions hide:
- *   Menu_Title_Text   UTextBlock  "Name [Level]" header
- *   Menu_Whisper_Btn  UButton     whisper (always shown)
- *   Menu_Trade_Btn    UButton     trade (hidden for invalid targets)
- *   Menu_Inspect_Btn  UButton     inspect (hidden when not allowed)
- * Bind all four or none.
+ * Blueprint layout (optional): create a BP subclass and bind these names,
+ * assign it to UIManager.PlayerMenuWidgetClass. Rows are built dynamically
+ * (unavailable actions are skipped, never greyed out):
+ *   Menu_Title_Text   UTextBlock   "Name [Level]" header (optional)
+ *   Menu_Action_List  UVerticalBox rows go here (optional)
+ *   MenuRowWidgetClass (EditAnywhere) row design; unset = code Border rows.
+ *   Row BP binds MenuRow_Label (UTextBlock, required).
+ * With nothing bound the whole menu is built in C++ (headless-safe).
  *
  * Created at runtime by UUIManager (viewport Z-order 1100).
  */
@@ -57,16 +57,13 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Player Menu")
 	int32 TargetCharacterId = 0;
 
-	// Blueprint layout slots (BindWidgetOptional — see class doc).
+	// Blueprint layout (optional — see class doc).
 	UPROPERTY(meta = (BindWidgetOptional)) UTextBlock* Menu_Title_Text = nullptr;
-	UPROPERTY(meta = (BindWidgetOptional)) UButton* Menu_Whisper_Btn = nullptr;
-	UPROPERTY(meta = (BindWidgetOptional)) UButton* Menu_Trade_Btn = nullptr;
-	UPROPERTY(meta = (BindWidgetOptional)) UButton* Menu_Inspect_Btn = nullptr;
+	UPROPERTY(meta = (BindWidgetOptional)) UVerticalBox* Menu_Action_List = nullptr;
 
-protected:
-	UFUNCTION() void HandleWhisperClicked();
-	UFUNCTION() void HandleTradeClicked();
-	UFUNCTION() void HandleInspectClicked();
+	/** Row widget class for BP-styled rows. Unset = code-built Border rows. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Menu")
+	TSubclassOf<UPlayerMenuRowWidget> MenuRowWidgetClass;
 
 private:
 	struct FMenuRow
@@ -78,12 +75,8 @@ private:
 	int32 PressedRowIndex = -1;
 
 	void RebuildRows(const FString& DisplayName, bool bCanTrade, bool bCanInspect);
-	void AddRow(EPlayerSocialAction Action, const FText& Label);
+	void AddRow(EPlayerSocialAction Action, const FText& Label, UVerticalBox* List);
 	int32 HitTestRowIndex(const FVector2D& AbsoluteScreenPos) const;
 
 	void FireAction(EPlayerSocialAction Action);
-
-	// True when a BP subclass provides buttons (no mouse capture then).
-	bool bUsingBpLayout = false;
-	bool bWired = false;
 };

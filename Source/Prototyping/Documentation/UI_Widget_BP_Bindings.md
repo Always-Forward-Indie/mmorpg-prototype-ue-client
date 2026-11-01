@@ -116,7 +116,7 @@ Unassigned `*WidgetClass` = code fallback (headless-safe, bots cover it).
 | `UBuybackWidget` | `UVendorShopWidget.BuybackWidgetClass` | `Buyback_Title_Text` (Text), `Buyback_List_Box` (ScrollBox), `Buyback_Close_Btn` (Button) |
 | `UKeybindWidget` (standalone fallback) | — (created from C++ class) | `Keybinds_List_Box` (ScrollBox), `Keybinds_Reset_Btn` (Button), `Keybinds_Close_Btn` (Button, standalone only) |
 | `UKeybindWidget` (settings tab) | place as slot 3 of `WBP_Settings.TabContentSwitcher` + `Tab_ControlsButton`; set `bManageViewportPlacement=false` on the instance | same three binds, Close unbound (settings has its own close) |
-| `UPlayerContextMenuWidget` | `UIManager.PlayerMenuWidgetClass` | `Menu_Title_Text` (Text), `Menu_Whisper_Btn`, `Menu_Trade_Btn`, `Menu_Inspect_Btn` (Buttons; unavailable actions auto-hide) |
+| `UPlayerContextMenuWidget` | `UIManager.PlayerMenuWidgetClass` | `Menu_Title_Text` (Text, optional), `Menu_Action_List` (VerticalBox, optional), `MenuRowWidgetClass` (row design; row BP binds `MenuRow_Label`) |
 | `UPlayerInspectWidget` | `UIManager.PlayerInspectWidgetClass` | `Inspect_Title_Text` (Text), `Inspect_Gear_Box` (ScrollBox), `Inspect_Close_Btn` (Button) |
 
 Settings tab order is index-bound (`ESettingsTab`: Audio=0, Graphics=1,

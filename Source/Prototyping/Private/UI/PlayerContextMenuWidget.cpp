@@ -1,4 +1,5 @@
 #include "UI/PlayerContextMenuWidget.h"
+#include "UI/PlayerMenuRowWidget.h"
 #include "Prototyping.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
@@ -17,25 +18,8 @@ UPlayerContextMenuWidget::UPlayerContextMenuWidget(const FObjectInitializer& Obj
 void UPlayerContextMenuWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	// Blueprint buttons win when bound; otherwise the code fallback with
-	// manual hit-testing is used (see RebuildRows).
-	if (!bWired)
-	{
-		bWired = true;
-		if (Menu_Whisper_Btn || Menu_Trade_Btn || Menu_Inspect_Btn || Menu_Title_Text)
-		{
-			bUsingBpLayout = true;
-			if (Menu_Whisper_Btn) Menu_Whisper_Btn->OnClicked.AddDynamic(this, &UPlayerContextMenuWidget::HandleWhisperClicked);
-			if (Menu_Trade_Btn)   Menu_Trade_Btn->OnClicked.AddDynamic(this, &UPlayerContextMenuWidget::HandleTradeClicked);
-			if (Menu_Inspect_Btn) Menu_Inspect_Btn->OnClicked.AddDynamic(this, &UPlayerContextMenuWidget::HandleInspectClicked);
-		}
-	}
 	SetVisibility(ESlateVisibility::Collapsed);
 }
-
-void UPlayerContextMenuWidget::HandleWhisperClicked() { FireAction(EPlayerSocialAction::Whisper); }
-void UPlayerContextMenuWidget::HandleTradeClicked()   { FireAction(EPlayerSocialAction::Trade); }
-void UPlayerContextMenuWidget::HandleInspectClicked() { FireAction(EPlayerSocialAction::Inspect); }
 
 void UPlayerContextMenuWidget::FireAction(EPlayerSocialAction Action)
 {
@@ -46,13 +30,6 @@ void UPlayerContextMenuWidget::FireAction(EPlayerSocialAction Action)
 
 FReply UPlayerContextMenuWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
-	if (bUsingBpLayout)
-	{
-		// Real buttons own LMB; only swallow RMB (the release that opened us).
-		if (InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
-			return FReply::Handled();
-		return FReply::Unhandled();
-	}
 	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
 		PressedRowIndex = HitTestRowIndex(InMouseEvent.GetScreenSpacePosition());
@@ -66,12 +43,6 @@ FReply UPlayerContextMenuWidget::NativeOnMouseButtonDown(const FGeometry& InGeom
 
 FReply UPlayerContextMenuWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
-	if (bUsingBpLayout)
-	{
-		if (InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
-			return FReply::Handled();
-		return FReply::Unhandled();
-	}
 	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
 		const int32 UpRow = HitTestRowIndex(InMouseEvent.GetScreenSpacePosition());
@@ -94,18 +65,10 @@ void UPlayerContextMenuWidget::ShowForPlayer(int32 InCharacterId, const FString&
 	TargetCharacterId = InCharacterId;
 	PressedRowIndex = -1;
 
-	if (bUsingBpLayout)
-	{
-		const bool bCanTrade = InCharacterId > 0;
-		if (Menu_Title_Text) Menu_Title_Text->SetText(FText::FromString(DisplayName));
-		if (Menu_Whisper_Btn) Menu_Whisper_Btn->SetVisibility(ESlateVisibility::Visible);
-		if (Menu_Trade_Btn)   Menu_Trade_Btn->SetVisibility(bCanTrade ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-		if (Menu_Inspect_Btn) Menu_Inspect_Btn->SetVisibility(bCanInspect ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-	}
-	else
-	{
-		RebuildRows(DisplayName, InCharacterId > 0, bCanInspect);
-	}
+	if (Menu_Title_Text)
+		Menu_Title_Text->SetText(FText::FromString(DisplayName));
+
+	RebuildRows(DisplayName, InCharacterId > 0, bCanInspect);
 
 	const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
 	SetPositionInViewport(ScreenPosition / Scale, false);
@@ -130,40 +93,69 @@ void UPlayerContextMenuWidget::RebuildRows(const FString& DisplayName, bool bCan
 	UWidgetTree* Tree = WidgetTree;
 	if (!Tree) return;
 
-	UBorder* Root = Tree->ConstructWidget<UBorder>(UBorder::StaticClass());
-	Root->SetBrushColor(FLinearColor(0.04f, 0.04f, 0.04f, 0.95f));
-	Root->SetPadding(FMargin(8.f, 6.f));
-	Tree->RootWidget = Root;
-
-	UVerticalBox* List = Tree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-	Root->AddChild(List);
-
-	UTextBlock* Title = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-	Title->SetText(FText::FromString(DisplayName));
-	Title->SetColorAndOpacity(FSlateColor(FLinearColor(1.f, 0.85f, 0.3f)));
-	if (UVerticalBoxSlot* TitleSlot = Cast<UVerticalBoxSlot>(List->AddChildToVerticalBox(Title)))
-		TitleSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
-
-	AddRow(EPlayerSocialAction::Whisper, LOCTEXT("Whisper", "Whisper"));
-	if (bCanTrade)
-		AddRow(EPlayerSocialAction::Trade, LOCTEXT("Trade", "Trade"));
-	if (bCanInspect)
-		AddRow(EPlayerSocialAction::Inspect, LOCTEXT("Inspect", "Inspect"));
-
-	// Attach rows to the list (AddRow only records; widgets parent here).
-	for (const FMenuRow& Row : Rows)
+	// Bound list wins; otherwise build the code fallback root.
+	UVerticalBox* List = Menu_Action_List;
+	if (!List)
 	{
-		if (UVerticalBoxSlot* RowSlot = Cast<UVerticalBoxSlot>(List->AddChildToVerticalBox(Row.Widget)))
-		{
-			RowSlot->SetPadding(FMargin(0.f, 1.f));
-			RowSlot->SetHorizontalAlignment(HAlign_Fill);
-		}
+		UBorder* Root = Tree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		Root->SetBrushColor(FLinearColor(0.04f, 0.04f, 0.04f, 0.95f));
+		Root->SetPadding(FMargin(8.f, 6.f));
+		Tree->RootWidget = Root;
+
+		List = Tree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
+		Root->AddChild(List);
 	}
+	else
+	{
+		List->ClearChildren();
+	}
+
+	// Title: bound TextBlock wins, otherwise a code row on top of the list.
+	if (Menu_Title_Text)
+	{
+		Menu_Title_Text->SetText(FText::FromString(DisplayName));
+	}
+	else
+	{
+		UTextBlock* Title = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
+		Title->SetText(FText::FromString(DisplayName));
+		Title->SetColorAndOpacity(FSlateColor(FLinearColor(1.f, 0.85f, 0.3f)));
+		if (UVerticalBoxSlot* TitleSlot = Cast<UVerticalBoxSlot>(List->AddChildToVerticalBox(Title)))
+			TitleSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+	}
+
+	AddRow(EPlayerSocialAction::Whisper, LOCTEXT("Whisper", "Whisper"), List);
+	if (bCanTrade)
+		AddRow(EPlayerSocialAction::Trade, LOCTEXT("Trade", "Trade"), List);
+	if (bCanInspect)
+		AddRow(EPlayerSocialAction::Inspect, LOCTEXT("Inspect", "Inspect"), List);
 }
 
-void UPlayerContextMenuWidget::AddRow(EPlayerSocialAction Action, const FText& Label)
+void UPlayerContextMenuWidget::AddRow(EPlayerSocialAction Action, const FText& Label, UVerticalBox* List)
 {
-	if (!WidgetTree) return;
+	if (!WidgetTree || !List) return;
+
+	// Custom row widget from Blueprint
+	if (MenuRowWidgetClass)
+	{
+		if (UPlayerMenuRowWidget* Row = CreateWidget<UPlayerMenuRowWidget>(this, MenuRowWidgetClass))
+		{
+			Row->SetActionLabel(Label);
+			Row->SetBoundAction(Action);
+			FMenuRow Rec;
+			Rec.Action = Action;
+			Rec.Widget = Row;
+			Rows.Add(Rec);
+			if (UVerticalBoxSlot* RowSlot = List->AddChildToVerticalBox(Row))
+			{
+				RowSlot->SetPadding(FMargin(0.f, 1.f));
+				RowSlot->SetHorizontalAlignment(HAlign_Fill);
+			}
+		}
+		return;
+	}
+
+	// Fallback: programmatic Border > TextBlock
 	UBorder* Bg = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
 	Bg->SetBrushColor(FLinearColor(0.05f, 0.05f, 0.05f, 0.9f));
 	Bg->SetPadding(FMargin(12.f, 6.f));
@@ -178,6 +170,12 @@ void UPlayerContextMenuWidget::AddRow(EPlayerSocialAction Action, const FText& L
 	Row.Action = Action;
 	Row.Widget = Bg;
 	Rows.Add(Row);
+
+	if (UVerticalBoxSlot* RowSlot = List->AddChildToVerticalBox(Bg))
+	{
+		RowSlot->SetPadding(FMargin(0.f, 1.f));
+		RowSlot->SetHorizontalAlignment(HAlign_Fill);
+	}
 }
 
 int32 UPlayerContextMenuWidget::HitTestRowIndex(const FVector2D& AbsoluteScreenPos) const

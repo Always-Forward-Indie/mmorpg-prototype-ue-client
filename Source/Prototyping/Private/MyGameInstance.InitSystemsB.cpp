@@ -71,6 +71,7 @@
 #include "Gameplay/Combat/CombatLogManager.h"
 #include "Gameplay/Social/PlayerInspectManager.h"
 #include "Gameplay/Social/PlayerInspectNetworkHandler.h"
+#include "Gameplay/UI/TutorialHintManager.h"
 #include "Gameplay/Chat/ChatNetworkHandler.h"
 #include "Gameplay/Player/PlayerStatsNetworkHandler.h"
 #include "Services/LocalizationSubsystem.h"
@@ -234,6 +235,13 @@ void UMyGameInstance::InitEconomy()
 		PlayerInspectNetworkHandler->Initialize(PlayerInspectManager, GetNetworkManager());
 		PlayerInspectNetworkHandler->SubscribeToNetworkEvents();
 		UE_LOG(LogGameplay, Warning, TEXT("PlayerInspectNetworkHandler initialized and subscribed"));
+	}
+
+	// Tutorial hints (no packets; triggers resolve UI lazily at show time).
+	if (TutorialHintManager)
+	{
+		TutorialHintManager->Initialize(this);
+		UE_LOG(LogGameplay, Warning, TEXT("TutorialHintManager initialized"));
 	}
 
 }

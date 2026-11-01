@@ -5,6 +5,7 @@
 #include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
+#include "Gameplay/UI/TutorialHintManager.h"
 #include "Gameplay/Players/PlayerManager.h"
 #include "UI/UIManager.h"
 #include "UI/NotificationToastWidget.h"
@@ -139,6 +140,12 @@ void ABasicPlayer::DispatchCursorSelect(AActor* Target, EInteractableType Type)
         if (ABasicPlayer* OtherPlayer = Cast<ABasicPlayer>(Target))
         {
             SetLockedPlayerTarget(OtherPlayer);
+            // First select teaches the unit menu (one-time hint).
+            if (MyGameInstance)
+            {
+                if (UTutorialHintManager* Hints = MyGameInstance->GetTutorialHintManager())
+                    Hints->MaybeShowHint(ETutorialHintKind::PlayerMenu);
+            }
         }
         break;
 

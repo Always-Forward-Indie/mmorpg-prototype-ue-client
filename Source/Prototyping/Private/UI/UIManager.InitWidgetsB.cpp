@@ -16,6 +16,7 @@
 #include "UI/EquipmentWidget.h"
 #include "UI/CombatLogWidget.h"
 #include "Gameplay/Combat/CombatLogManager.h"
+#include "Gameplay/UI/TutorialHintManager.h"
 #include "Gameplay/UI/PlayerExperienceWidget.h"
 #include "Gameplay/UI/PlayerInterfaceWidget.h"
 #include "Gameplay/UI/DamageCanvasWidget.h"
@@ -261,6 +262,9 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 					CombatLogWidget->AddToViewport(14); // Just under chat (15)
 					CombatLogWidget->BindToManager(LogMgr);
 					UE_LOG(LogGameplay, Verbose, TEXT("UIManager: CombatLogWidget created and bound"));
+					// The log exists now: teach it once (one-time hint).
+					if (UTutorialHintManager* Hints = GameInstance->GetTutorialHintManager())
+						Hints->MaybeShowHint(ETutorialHintKind::CombatLog);
 				}
 				else
 				{

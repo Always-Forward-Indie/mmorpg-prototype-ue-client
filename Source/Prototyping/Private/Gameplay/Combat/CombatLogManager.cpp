@@ -1,6 +1,7 @@
 #include "Gameplay/Combat/CombatLogManager.h"
 #include "Prototyping.h"
 #include "MyGameInstance.h"
+#include "Gameplay/UI/TutorialHintManager.h"
 #include "Gameplay/Combat/CombatSystemManager.h"
 #include "Gameplay/Player/ExperienceManager.h"
 #include "Gameplay/Items/InventoryManager.h"
@@ -122,6 +123,13 @@ void UCombatLogManager::HandleItemAdded(const FInventoryItemStruct& Item, int32 
 	// Gains-only policy (mirrors the toast stack): removals stay inline in
 	// the inventory grid; the log records what arrived.
 	AddEntry(ECombatLogCategory::Loot, FCombatLogRule::FormatLoot(DisplayName(Item), Item.quantity));
+
+	// First usable loot teaches the quickbar (one-time hint).
+	if (Item.isUsable && GameInstance)
+	{
+		if (UTutorialHintManager* Hints = GameInstance->GetTutorialHintManager())
+			Hints->MaybeShowHint(ETutorialHintKind::Quickbar);
+	}
 }
 
 void UCombatLogManager::HandleItemUsed(int32 /*ItemId*/, const FString& ItemSlug, const FString& ItemName)

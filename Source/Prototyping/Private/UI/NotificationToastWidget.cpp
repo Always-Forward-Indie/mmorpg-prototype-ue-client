@@ -316,6 +316,23 @@ void UNotificationToastWidget::BuildDisplayText(const FWorldNotificationStruct& 
         if (Delta.StartsWith(TEXT("-"))) Prefix = TEXT("");
         OutBody  = FText::Format(LOCTEXT("ReputationBody", "{0}: {1}{2}"), FText::FromString(Faction), FText::FromString(Prefix), FText::FromString(Delta));
     }
+    else if (Type == TEXT("hint"))
+    {
+        // One-time tutorial hints (UTutorialHintManager): title/body come
+        // preformatted from FTutorialHintRule, locale table may override.
+        const FString Title = Notification.dataFields.FindRef(TEXT("title"));
+        const FString Body  = Notification.dataFields.FindRef(TEXT("body"));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title
+            : (!Title.IsEmpty() ? FText::FromString(Title) : LOCTEXT("HintTitle", "Tip"));
+        OutBody = FText::FromString(Body);
+    }
+    else if (Type == TEXT("trade_invite"))
+    {
+        const FString From = Notification.dataFields.FindRef(TEXT("fromName"));
+        OutTitle = (bHasLocale && !NotifDef.title.IsEmpty()) ? NotifDef.title : LOCTEXT("TradeInviteTitle", "Trade request");
+        OutBody  = FText::Format(LOCTEXT("TradeInviteBody", "{0} wants to trade"),
+            FText::FromString(From.IsEmpty() ? TEXT("?") : From));
+    }
     else
     {
         // Generic fallback: use textTemplate from locale, or the raw type slug

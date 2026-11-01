@@ -621,6 +621,10 @@ public:
 	UPROPERTY()
 	class UPlayerInspectManager* PlayerInspectManager;
 
+	// One-time tutorial hints (config-backed, session-driven)
+	UPROPERTY()
+	class UTutorialHintManager* TutorialHintManager;
+
 	// Player inspect network handler
 	UPROPERTY()
 	class UPlayerInspectNetworkHandler* PlayerInspectNetworkHandler;
@@ -1347,6 +1351,10 @@ public:
 		// Player inspect manager
 		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
 		class UPlayerInspectManager* GetPlayerInspectManager() const { return PlayerInspectManager; }
+
+		// Tutorial hints (one-time toasts)
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
+		class UTutorialHintManager* GetTutorialHintManager() const { return TutorialHintManager; }
 
 		// World Object manager
 		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")

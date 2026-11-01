@@ -5,6 +5,7 @@
 #include "UI/UIManager.h"
 #include "UI/WorldNotificationManager.h"
 #include "UI/NotificationStackWidget.h"
+#include "Audio/AudioManager.h"
 #include "Utils/NetCore/TradeStatusRule.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "MyGameInstance.h"
@@ -202,10 +203,32 @@ void UTradeWidget::HandleTradeInviteReceived(const FTradeInviteData& Invite)
     {
         Invite_Banner->SetVisibility(ESlateVisibility::Visible);
     }
+    const FString FromName = !Invite.fromCharacterName.IsEmpty() ? Invite.fromCharacterName : Invite.initiatorName;
     if (Invite_Name_Text)
     {
         Invite_Name_Text->SetText(FText::Format(LOCTEXT("WantsToTrade", "{0} wants to trade"),
-            FText::FromString(Invite.fromCharacterName)));
+            FText::FromString(FromName)));
+    }
+    // Toast + sound: the banner alone is easy to miss behind other windows.
+    if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (GI->AudioManager)
+            GI->AudioManager->PlayUISound(EUISoundEvent::Notification);
+        if (ABasicPlayer* Pawn = GetOwningPlayerPawn<ABasicPlayer>())
+        {
+            if (UUIManager* UIMgr = Pawn->GetUIManager())
+            {
+                if (UWorldNotificationManager* NotifMgr = UIMgr->GetWorldNotificationManager())
+                {
+                    if (UNotificationStackWidget* Stack = NotifMgr->GetToastWidget())
+                    {
+                        TMap<FString, FString> Fields;
+                        Fields.Add(TEXT("fromName"), FromName);
+                        Stack->EnqueueActionToast(TEXT("trade_invite"), Fields);
+                    }
+                }
+            }
+        }
     }
     // Show the widget so the invite banner is visible
     if (GetVisibility() != ESlateVisibility::Visible)

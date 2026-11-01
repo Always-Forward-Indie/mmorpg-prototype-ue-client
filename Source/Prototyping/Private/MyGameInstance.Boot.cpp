@@ -64,6 +64,7 @@
 #include "Gameplay/Combat/CombatLogManager.h"
 #include "Gameplay/Social/PlayerInspectManager.h"
 #include "Gameplay/Social/PlayerInspectNetworkHandler.h"
+#include "Gameplay/UI/TutorialHintManager.h"
 #include "Gameplay/Trade/TradeNetworkHandler.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "Gameplay/Equipment/EquipmentNetworkHandler.h"
@@ -264,6 +265,9 @@ UE_LOG(LogGameplay, Warning, TEXT("GameInstance: DevMode level override '%s'"), 
 	// Player inspect (unit menu): manager + network handler pair.
 	PlayerInspectManager = NewObject<UPlayerInspectManager>(this);
 	PlayerInspectNetworkHandler = NewObject<UPlayerInspectNetworkHandler>(this);
+
+	// One-time tutorial hints (config-backed seen flags).
+	TutorialHintManager = NewObject<UTutorialHintManager>(this);
 
 	// Initialize time sync service
 	TimeSyncService = NewObject<UTimeSyncService>(this);

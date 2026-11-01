@@ -54,11 +54,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat Log")
 	void ClearLog();
 
+	/** Latest locale snapshot (RU templates when the client runs Russian). */
+	UPROPERTY(BlueprintReadOnly, Category = "Combat Log")
+	bool bRussianLocale = false;
+
 	UPROPERTY(BlueprintAssignable, Category = "Combat Log")
 	FOnCombatLogEntryAdded OnLogEntryAdded;
 
 protected:
 	// --- Upstream subscriptions (all guard against null managers) ---
+	UFUNCTION() void HandleLocaleChanged(const FString& NewLocale);
 	UFUNCTION() void HandleSkillResult(const FSkillResultData& Result);
 	UFUNCTION() void HandleExpGained(const FExperienceGainEventStruct& Event);
 	UFUNCTION() void HandleLevelUp(int32 OldLevel, int32 NewLevel, int32 NewTotalExperience);

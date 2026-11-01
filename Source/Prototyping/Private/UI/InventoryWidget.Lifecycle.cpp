@@ -99,6 +99,15 @@ void UInventoryWidget::NativeConstruct()
 		}
 	}
 
+	// Optional view controls (sort button + search box live in the BP layout).
+	if (SortButton)
+		SortButton->OnClicked.AddDynamic(this, &UInventoryWidget::CycleSortMode);
+	if (SearchBox)
+	{
+		SearchBox->OnTextChanged.AddDynamic(this, &UInventoryWidget::HandleSearchTextChanged);
+		UpdateSortLabel();
+	}
+
 	// Create drop quantity popup widget
 	if (DropQuantityPopupWidgetClass)
 	{

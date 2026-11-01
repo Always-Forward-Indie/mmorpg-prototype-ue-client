@@ -5,6 +5,7 @@
 #include "Components/GridPanel.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
+#include "Components/EditableTextBox.h"
 #include "Data/DataStructs.h"
 #include "UI/InventorySlotWidget.h"
 #include "UI/ItemTooltipWidget.h"
@@ -17,6 +18,16 @@
 
 // Forward declarations
 class UInventoryManager;
+
+// View-only inventory ordering (never touches the server snapshot).
+UENUM(BlueprintType)
+enum class EInventorySortMode : uint8
+{
+	Off      UMETA(DisplayName = "Unsorted"),
+	ByName   UMETA(DisplayName = "Name"),
+	ByRarity UMETA(DisplayName = "Rarity"),
+	ByType   UMETA(DisplayName = "Type"),
+};
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInventorySlotClicked, int32, SlotIndex, const FInventoryItemStruct&, Item);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInventorySlotRightClicked, int32, SlotIndex, const FInventoryItemStruct&, Item);
@@ -56,6 +67,17 @@ public:
 	// Get inventory visibility
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory UI")
 	bool IsInventoryVisible() const;
+
+	/** Cycle the view sort mode (Off → ByName → ByRarity → ByType). */
+	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
+	void CycleSortMode();
+
+	/** Free-text filter (name/slug/type, case-insensitive). Empty = show all. */
+	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
+	void SetSearchFilter(const FString& Filter);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory UI")
+	EInventorySortMode GetSortMode() const { return SortMode; }
 
 	// Events
 	UPROPERTY(BlueprintAssignable, Category = "Inventory UI Events")
@@ -140,6 +162,9 @@ protected:
 	UFUNCTION()
 	void HandleContextAction(EItemContextAction Action, const FInventoryItemStruct& Item);
 
+	UFUNCTION()
+	void HandleSearchTextChanged(const FText& Text);
+
 	// Drop quantity popup handlers
 	UFUNCTION()
 	void HandleDropConfirmed(const FInventoryItemStruct& Item, int32 Quantity);
@@ -191,6 +216,14 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	UTextBlock* GoldText;
 
+	// Optional sort button (cycles CycleSortMode). Label child "Sort_Label" updated when present.
+	UPROPERTY(meta = (BindWidgetOptional))
+	UButton* SortButton = nullptr;
+
+	// Optional free-text search filter (filters SetSearchFilter on change).
+	UPROPERTY(meta = (BindWidgetOptional))
+	UEditableTextBox* SearchBox = nullptr;
+
 	// Tooltip widget
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory UI")
 	TSubclassOf<UItemTooltipWidget> ItemTooltipWidgetClass;
@@ -228,6 +261,13 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory UI")
 	int32 InventoryRows = 6;
 
+	// View-only ordering/filtering (never touches the server snapshot).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory UI")
+	EInventorySortMode SortMode = EInventorySortMode::Off;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory UI")
+	FString SearchFilter;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory UI")
 	int32 InventoryColumns = 8;
 
@@ -263,6 +303,10 @@ private:
 	int32 GetSlotIndexFromPosition(int32 Row, int32 Column) const;
 	void GetPositionFromSlotIndex(int32 SlotIndex, int32& OutRow, int32& OutColumn) const;
 	int32 GetTotalSlots() const { return InventoryRows * InventoryColumns; }
+
+	/** View copy of the server snapshot with search filter + sort applied. */
+	TArray<FInventoryItemStruct> BuildDisplayList() const;
+	void UpdateSortLabel();
 
 	// Handle close button click
 	UFUNCTION()

@@ -114,3 +114,8 @@ void UInventoryWidget::OnCloseButtonClicked()
 	SetInventoryVisible(false);
 }
 
+void UInventoryWidget::HandleSearchTextChanged(const FText& Text)
+{
+	SetSearchFilter(Text.ToString());
+}
+

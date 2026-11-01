@@ -79,7 +79,7 @@ UCheckBox* UCombatLogWidget::AddFilterCheck(ECombatLogCategory Category, const F
 
 	UTextBlock* Txt = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
 	Txt->SetText(FText::FromString(Label));
-	Txt->SetColorAndOpacity(FSlateColor(FCombatLogRule::ColorFor(Category)));
+	Txt->SetColorAndOpacity(FSlateColor(ColorFor(Category)));
 
 	UHorizontalBox* Cell = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 	Cell->AddChildToHorizontalBox(Box);
@@ -152,6 +152,9 @@ void UCombatLogWidget::AppendEntry(const FCombatLogEntry& Entry)
 		DisplayText = FString::Printf(TEXT("[%s] %s"), *Entry.Timestamp.ToString(TEXT("%H:%M:%S")), *Entry.Text);
 	Line->SetText(FText::FromString(DisplayText));
 	Line->SetColorAndOpacity(FSlateColor(ColorFor(Entry.Category)));
+	FSlateFontInfo LineFont = Line->GetFont();
+	LineFont.Size = LineFontSize;
+	Line->SetFont(LineFont);
 	Line->SetShadowColorAndOpacity(FLinearColor::Black);
 	Line->SetShadowOffset(FVector2D(1.f, 1.f));
 	Line->SetAutoWrapText(true);
@@ -188,6 +191,21 @@ bool UCombatLogWidget::IsAtBottom() const
 {
 	if (!LogScroll) return true;
 	return LogScroll->GetScrollOffset() >= LogScroll->GetScrollOffsetOfEnd() - 20.f;
+}
+
+FLinearColor UCombatLogWidget::ColorFor(ECombatLogCategory Category) const
+{
+	if (!bOverrideCategoryColors)
+		return FCombatLogRule::ColorFor(Category);
+	switch (Category)
+	{
+	case ECombatLogCategory::Damage:     return DamageColor;
+	case ECombatLogCategory::Heal:       return HealColor;
+	case ECombatLogCategory::Loot:       return LootColor;
+	case ECombatLogCategory::Experience: return ExperienceColor;
+	case ECombatLogCategory::System:
+	default:                            return SystemColor;
+	}
 }
 
 void UCombatLogWidget::HandleUserScrolled(float /*CurrentOffset*/)

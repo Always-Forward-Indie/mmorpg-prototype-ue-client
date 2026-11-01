@@ -9,6 +9,62 @@
 #include "Gameplay/Quest/QuestManager.h"
 #include "Gameplay/Trade/TradeManager.h"
 #include "Gameplay/Chat/ChatManager.h"
+#include "Services/LocalizationSubsystem.h"
+
+#define LOCTEXT_NAMESPACE "CombatLog"
+
+namespace
+{
+bool IsRussianLocale(const UMyGameInstance* GI)
+{
+	if (const ULocalizationSubsystem* Loc = GI ? GI->GetSubsystem<ULocalizationSubsystem>() : nullptr)
+		return Loc->GetCurrentLocale().StartsWith(TEXT("ru"), ESearchCase::IgnoreCase);
+	return false;
+}
+
+FString RuDamage(const FString& Skill, const FString& Target, int32 Dmg, bool bCrit, bool bBlocked, bool bDied, bool bOut, bool bMissed)
+{
+	if (bMissed && Dmg <= 0)
+		return FText::Format(LOCTEXT("MissFmt", "{0} промах {1}"), FText::FromString(bOut ? TEXT("Вы") : TEXT("Враг")), FText::FromString(Skill)).ToString();
+	FString Line = bOut
+		? FText::Format(LOCTEXT("DmgOutFmt", "Вы ударили {0} ({1}) на {2}"), FText::FromString(Target), FText::FromString(Skill), FText::AsNumber(Dmg)).ToString()
+		: FText::Format(LOCTEXT("DmgInFmt", "Вас ударил {0} на {1}"), FText::FromString(Skill), FText::AsNumber(Dmg)).ToString();
+	if (bCrit)    Line += TEXT(" (крит!)");
+	if (bBlocked) Line += TEXT(" (блок)");
+	if (bDied)    Line += TEXT(" — убит");
+	return Line;
+}
+
+FString RuHeal(const FString& Skill, const FString& Target, int32 N, bool bOut, bool bCrit)
+{
+	FString Line = bOut
+		? FText::Format(LOCTEXT("HealOutFmt", "Ваш {0} исцелил {1} на {2}"), FText::FromString(Skill), FText::FromString(Target), FText::AsNumber(N)).ToString()
+		: FText::Format(LOCTEXT("HealInFmt", "{0} исцелил вас на {1}"), FText::FromString(Skill), FText::AsNumber(N)).ToString();
+	if (bCrit) Line += TEXT(" (крит!)");
+	return Line;
+}
+
+FString RuMana(const FString& Skill, int32 N, bool bOut)
+{
+	return bOut
+		? FText::Format(LOCTEXT("ManaOutFmt", "Ваш {0} восстановил {1} маны"), FText::FromString(Skill), FText::AsNumber(N)).ToString()
+		: FText::Format(LOCTEXT("ManaInFmt", "{0} восстановил вам {1} маны"), FText::FromString(Skill), FText::AsNumber(N)).ToString();
+}
+
+FString RuExp(int32 N, const FString& Reason)
+{
+	return Reason.IsEmpty()
+		? FText::Format(LOCTEXT("ExpFmt", "+{0} опыта"), FText::AsNumber(N)).ToString()
+		: FText::Format(LOCTEXT("ExpReasonFmt", "+{0} опыта ({1})"), FText::AsNumber(N), FText::FromString(Reason)).ToString();
+}
+
+FString RuGold(int32 N, const FString& Source)
+{
+	return Source.IsEmpty()
+		? FText::Format(LOCTEXT("GoldFmt", "+{0} золота"), FText::AsNumber(N)).ToString()
+		: FText::Format(LOCTEXT("GoldSrcFmt", "+{0} золота ({1})"), FText::AsNumber(N), FText::FromString(Source)).ToString();
+}
+} // namespace
 
 void UCombatLogManager::Initialize(UMyGameInstance* InGameInstance)
 {
@@ -41,6 +97,11 @@ void UCombatLogManager::Initialize(UMyGameInstance* InGameInstance)
 		Trade->OnTradeCompletedDelegate.AddDynamic(this, &UCombatLogManager::HandleTradeCompleted);
 	if (UChatManager* Chat = GameInstance->GetChatManager())
 		Chat->OnChatMessageReceived.AddDynamic(this, &UCombatLogManager::HandleChatMessage);
+	if (ULocalizationSubsystem* LocSys = GameInstance->GetSubsystem<ULocalizationSubsystem>())
+	{
+		bRussianLocale = LocSys->GetCurrentLocale().StartsWith(TEXT("ru"), ESearchCase::IgnoreCase);
+		LocSys->OnLocaleChanged.AddDynamic(this, &UCombatLogManager::HandleLocaleChanged);
+	}
 }
 
 void UCombatLogManager::AddEntry(ECombatLogCategory Category, const FString& Text)
@@ -59,6 +120,11 @@ void UCombatLogManager::AddEntry(ECombatLogCategory Category, const FString& Tex
 void UCombatLogManager::ClearLog()
 {
 	Entries.Reset();
+}
+
+void UCombatLogManager::HandleLocaleChanged(const FString& NewLocale)
+{
+	bRussianLocale = NewLocale.StartsWith(TEXT("ru"), ESearchCase::IgnoreCase);
 }
 
 bool UCombatLogManager::IsOwnCharacter(int32 CharacterId) const
@@ -92,30 +158,39 @@ void UCombatLogManager::HandleSkillResult(const FSkillResultData& Result)
 
 	if (Result.damage > 0)
 		AddEntry(ECombatLogCategory::Damage,
-			FCombatLogRule::FormatDamage(Skill, Target, Result.damage, Result.isCritical,
+			bRussianLocale ? RuDamage(Skill, Target, Result.damage, Result.isCritical,
+				Result.isBlocked, Result.targetDied, bOutgoing, Result.isMissed)
+			: FCombatLogRule::FormatDamage(Skill, Target, Result.damage, Result.isCritical,
 				Result.isBlocked, Result.targetDied, bOutgoing, Result.isMissed));
 	else if (Result.isMissed)
 		AddEntry(ECombatLogCategory::Damage,
-			FCombatLogRule::FormatDamage(Skill, Target, 0, false, false, false, bOutgoing, true));
+			bRussianLocale ? RuDamage(Skill, Target, 0, false, false, false, bOutgoing, true)
+			: FCombatLogRule::FormatDamage(Skill, Target, 0, false, false, false, bOutgoing, true));
 
 	if (Result.healing > 0)
 		AddEntry(ECombatLogCategory::Heal,
-			FCombatLogRule::FormatHeal(Skill, Target, Result.healing, bOutgoing, Result.isCritical));
+			bRussianLocale ? RuHeal(Skill, Target, Result.healing, bOutgoing, Result.isCritical)
+			: FCombatLogRule::FormatHeal(Skill, Target, Result.healing, bOutgoing, Result.isCritical));
 	if (Result.manaHealing > 0)
 		AddEntry(ECombatLogCategory::Heal,
-			FCombatLogRule::FormatManaRestore(Skill, Result.manaHealing, bOutgoing));
+			bRussianLocale ? RuMana(Skill, Result.manaHealing, bOutgoing)
+			: FCombatLogRule::FormatManaRestore(Skill, Result.manaHealing, bOutgoing));
 }
 
 void UCombatLogManager::HandleExpGained(const FExperienceGainEventStruct& Event)
 {
 	if (Event.experienceGained <= 0) return;
 	AddEntry(ECombatLogCategory::Experience,
-		FCombatLogRule::FormatExp(Event.experienceGained, Event.reasonText));
+		bRussianLocale ? RuExp(Event.experienceGained, Event.reasonText)
+		: FCombatLogRule::FormatExp(Event.experienceGained, Event.reasonText));
 }
 
 void UCombatLogManager::HandleLevelUp(int32 OldLevel, int32 NewLevel, int32 /*NewTotalExperience*/)
 {
-	AddEntry(ECombatLogCategory::System, FCombatLogRule::FormatLevelUp(OldLevel, NewLevel));
+	AddEntry(ECombatLogCategory::System,
+		bRussianLocale
+		? FText::Format(LOCTEXT("LevelUpFmt", "Уровень повышен! {0} → {1}"), FText::AsNumber(OldLevel), FText::AsNumber(NewLevel)).ToString()
+		: FCombatLogRule::FormatLevelUp(OldLevel, NewLevel));
 }
 
 void UCombatLogManager::HandleItemAdded(const FInventoryItemStruct& Item, int32 /*NewQuantity*/)
@@ -135,7 +210,10 @@ void UCombatLogManager::HandleItemAdded(const FInventoryItemStruct& Item, int32 
 void UCombatLogManager::HandleItemUsed(int32 /*ItemId*/, const FString& ItemSlug, const FString& ItemName)
 {
 	const FString Name = !ItemName.IsEmpty() ? ItemName : ItemSlug;
-	AddEntry(ECombatLogCategory::System, FCombatLogRule::FormatUsedItem(Name));
+	AddEntry(ECombatLogCategory::System,
+		bRussianLocale
+		? FText::Format(LOCTEXT("UsedFmt", "Использовано: {0}"), FText::FromString(Name)).ToString()
+		: FCombatLogRule::FormatUsedItem(Name));
 }
 
 void UCombatLogManager::HandleLootPickup(const FCorpseLootPickupResponseStruct& Pickup)
@@ -148,7 +226,9 @@ void UCombatLogManager::HandleLootPickup(const FCorpseLootPickupResponseStruct& 
 void UCombatLogManager::HandleQuestExp(const FExpReceivedData& Data)
 {
 	if (Data.amount <= 0) return;
-	AddEntry(ECombatLogCategory::Experience, FCombatLogRule::FormatExp(Data.amount, Data.source));
+	AddEntry(ECombatLogCategory::Experience,
+		bRussianLocale ? RuExp(Data.amount, Data.source)
+		: FCombatLogRule::FormatExp(Data.amount, Data.source));
 }
 
 void UCombatLogManager::HandleQuestItem(const FItemReceivedData& Data)
@@ -160,26 +240,34 @@ void UCombatLogManager::HandleQuestItem(const FItemReceivedData& Data)
 void UCombatLogManager::HandleQuestGold(const FGoldReceivedData& Data)
 {
 	if (Data.amount <= 0) return;
-	AddEntry(ECombatLogCategory::Loot, FCombatLogRule::FormatGold(Data.amount, Data.source));
+	AddEntry(ECombatLogCategory::Loot,
+		bRussianLocale ? RuGold(Data.amount, Data.source)
+		: FCombatLogRule::FormatGold(Data.amount, Data.source));
 }
 
 void UCombatLogManager::HandleQuestTurnedIn(const FQuestTurnedInData& Data)
 {
 	AddEntry(ECombatLogCategory::System,
-		FString::Printf(TEXT("Quest complete (id %d): %d reward(s)"), Data.questId, Data.rewardsReceived.Num()));
+		bRussianLocale
+		? FText::Format(LOCTEXT("QuestDoneFmt", "Задание выполнено (id {0}): наград: {1}"), FText::AsNumber(Data.questId), FText::AsNumber(Data.rewardsReceived.Num())).ToString()
+		: FString::Printf(TEXT("Quest complete (id %d): %d reward(s)"), Data.questId, Data.rewardsReceived.Num()));
 }
 
 void UCombatLogManager::HandleQuestFailed(const FQuestFailedData& Data)
 {
 	AddEntry(ECombatLogCategory::System,
-		FString::Printf(TEXT("Quest failed (id %d)"), Data.questId));
+		bRussianLocale
+		? FText::Format(LOCTEXT("QuestFailFmt", "Задание провалено (id {0})"), FText::AsNumber(Data.questId)).ToString()
+		: FString::Printf(TEXT("Quest failed (id %d)"), Data.questId));
 }
 
 void UCombatLogManager::HandleTradeCompleted(const FTradeCompleteData& Data)
 {
 	if (!Data.bSuccess) return;
 	AddEntry(ECombatLogCategory::System,
-		FCombatLogRule::FormatTradeComplete(Data.receivedGold, Data.receivedItems.Num()));
+		bRussianLocale
+		? FText::Format(LOCTEXT("TradeDoneFmt", "Обмен завершён: +{0} золота, предметов: {1}"), FText::AsNumber(Data.receivedGold), FText::AsNumber(Data.receivedItems.Num())).ToString()
+		: FCombatLogRule::FormatTradeComplete(Data.receivedGold, Data.receivedItems.Num()));
 	for (const FTradeReceivedItem& Item : Data.receivedItems)
 	{
 		const FString Name = !Item.slug.IsEmpty()
@@ -188,12 +276,18 @@ void UCombatLogManager::HandleTradeCompleted(const FTradeCompleteData& Data)
 		AddEntry(ECombatLogCategory::Loot, FCombatLogRule::FormatLoot(Name, Item.quantity));
 	}
 	if (Data.receivedGold > 0)
-		AddEntry(ECombatLogCategory::Loot, FCombatLogRule::FormatGold(Data.receivedGold, TEXT("trade")));
+		AddEntry(ECombatLogCategory::Loot,
+			bRussianLocale ? RuGold(Data.receivedGold, TEXT("trade"))
+			: FCombatLogRule::FormatGold(Data.receivedGold, TEXT("trade")));
 }
 
 void UCombatLogManager::HandleChatMessage(const FChatMessageStruct& Message)
 {
 	// Errors only: normal chat stays in the chat window (single owner).
 	if (Message.bIsError && !Message.errorMessage.IsEmpty())
-		AddEntry(ECombatLogCategory::System, FString::Printf(TEXT("[chat] %s"), *Message.errorMessage));
+		AddEntry(ECombatLogCategory::System, bRussianLocale
+			? FString::Printf(TEXT("[чат] %s"), *Message.errorMessage)
+			: FString::Printf(TEXT("[chat] %s"), *Message.errorMessage));
 }
+
+#undef LOCTEXT_NAMESPACE

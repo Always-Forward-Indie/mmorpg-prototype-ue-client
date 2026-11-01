@@ -1,7 +1,12 @@
 #include "UI/ChatWidget.h"
 #include "Prototyping.h"
 #include "UI/ChatMessageLineWidget.h"
+#include "UI/CombatLogWidget.h"
+#include "UI/InventoryWidget.h"
+#include "UI/UIManager.h"
+#include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Chat/ChatManager.h"
+#include "MyGameInstance.h"
 #include "Components/TextBlock.h"
 #include "Components/ScrollBoxSlot.h"
 #include "Framework/Application/SlateApplication.h"
@@ -195,6 +200,52 @@ void UChatWidget::SubmitCurrentInput()
     FString Text = InputTextBox->GetText().ToString().TrimStartAndEnd();
     if (Text.IsEmpty())
     {
+        return;
+    }
+
+    // Local client commands (never sent to the server).
+    if (Text.Equals(TEXT("/clearlog"), ESearchCase::IgnoreCase))
+    {
+        InputTextBox->SetText(FText::GetEmpty());
+        if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+        {
+            if (ABasicPlayer* Pawn = GI->Player)
+            {
+                if (UUIManager* UIMgr = Pawn->GetUIManager())
+                {
+                    if (UCombatLogWidget* Log = UIMgr->GetCombatLogWidget())
+                        Log->ClearLog();
+                }
+            }
+        }
+        return;
+    }
+    if (Text.StartsWith(TEXT("/sort"), ESearchCase::IgnoreCase))
+    {
+        InputTextBox->SetText(FText::GetEmpty());
+        if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+        {
+            if (ABasicPlayer* Pawn = GI->Player)
+            {
+                if (UUIManager* UIMgr = Pawn->GetUIManager())
+                {
+                    if (UInventoryWidget* Inv = UIMgr->GetInventoryWidget())
+                    {
+                        const FString Arg = Text.RightChop(5).TrimStartAndEnd().ToLower();
+                        if (Arg.IsEmpty())
+                            Inv->CycleSortMode();
+                        else if (Arg == TEXT("off") || Arg == TEXT("none"))
+                            { while (Inv->GetSortMode() != EInventorySortMode::Off) Inv->CycleSortMode(); }
+                        else if (Arg == TEXT("name"))
+                            { while (Inv->GetSortMode() != EInventorySortMode::ByName) Inv->CycleSortMode(); }
+                        else if (Arg == TEXT("rarity"))
+                            { while (Inv->GetSortMode() != EInventorySortMode::ByRarity) Inv->CycleSortMode(); }
+                        else if (Arg == TEXT("type"))
+                            { while (Inv->GetSortMode() != EInventorySortMode::ByType) Inv->CycleSortMode(); }
+                    }
+                }
+            }
+        }
         return;
     }
 

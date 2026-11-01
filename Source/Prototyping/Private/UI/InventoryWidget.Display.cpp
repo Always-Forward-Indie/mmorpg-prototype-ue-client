@@ -17,8 +17,7 @@
 #include "Components/CanvasPanelSlot.h"
 
 void UInventoryWidget::UpdateInventoryDisplay(const FCharacterInventoryStruct& Inventory)
-{
-	// Preserve an open tooltip across the rebuild: rows may reorder between
+{	// Preserve an open tooltip across the rebuild: rows may reorder between
 	// snapshots, so re-resolve the shown item by instance id in the new
 	// array; hide it when the row is gone. Without this the tooltip keeps
 	// showing the pre-refresh item while the grid underneath has moved on.
@@ -36,12 +35,14 @@ void UInventoryWidget::UpdateInventoryDisplay(const FCharacterInventoryStruct& I
 		ClearSlot(i);
 	}
 
-	// Fill slots with items; items with itemId == 0 are placeholders - skip them
-	for (int32 i = 0; i < Inventory.items.Num() && i < InventorySlots.Num(); i++)
+	// Fill slots from the view list (search filter + sort applied);
+	// items with itemId == 0 are placeholders - skip them
+	const TArray<FInventoryItemStruct> DisplayItems = BuildDisplayList();
+	for (int32 i = 0; i < DisplayItems.Num() && i < InventorySlots.Num(); i++)
 	{
-		if (Inventory.items[i].itemId > 0)
+		if (DisplayItems[i].itemId > 0)
 		{
-			UpdateSlot(i, Inventory.items[i]);
+			UpdateSlot(i, DisplayItems[i]);
 		}
 		// else: slot already cleared above
 	}
@@ -200,5 +201,82 @@ void UInventoryWidget::ClearSlot(int32 SlotIndex)
 	{
 		SlotWidget->ClearSlot();
 	}
+}
+
+void UInventoryWidget::CycleSortMode()
+{
+	SortMode = static_cast<EInventorySortMode>((static_cast<uint8>(SortMode) + 1) % 4);
+	UpdateSortLabel();
+	UpdateInventoryDisplay(CurrentInventory);
+}
+
+void UInventoryWidget::SetSearchFilter(const FString& Filter)
+{
+	SearchFilter = Filter;
+	UpdateInventoryDisplay(CurrentInventory);
+}
+
+TArray<FInventoryItemStruct> UInventoryWidget::BuildDisplayList() const
+{
+	TArray<FInventoryItemStruct> Out;
+	Out.Reserve(CurrentInventory.items.Num());
+
+	const FString Needle = SearchFilter.TrimStartAndEnd().ToLower();
+	for (const FInventoryItemStruct& Item : CurrentInventory.items)
+	{
+		if (Item.itemId <= 0) continue;
+		if (!Needle.IsEmpty())
+		{
+			const FString Haystack = (Item.name + TEXT(" ") + Item.slug + TEXT(" ") + Item.itemTypeSlug).ToLower();
+			if (!Haystack.Contains(Needle)) continue;
+		}
+		Out.Add(Item);
+	}
+
+	switch (SortMode)
+	{
+	case EInventorySortMode::ByName:
+		Out.Sort([](const FInventoryItemStruct& A, const FInventoryItemStruct& B) {
+			const FString NA = !A.name.IsEmpty() ? A.name : A.slug;
+			const FString NB = !B.name.IsEmpty() ? B.name : B.slug;
+			return NA < NB;
+		});
+		break;
+	case EInventorySortMode::ByRarity:
+		Out.Sort([](const FInventoryItemStruct& A, const FInventoryItemStruct& B) {
+			if (A.rarityId != B.rarityId) return A.rarityId > B.rarityId;
+			const FString NA = !A.name.IsEmpty() ? A.name : A.slug;
+			const FString NB = !B.name.IsEmpty() ? B.name : B.slug;
+			return NA < NB;
+		});
+		break;
+	case EInventorySortMode::ByType:
+		Out.Sort([](const FInventoryItemStruct& A, const FInventoryItemStruct& B) {
+			if (A.itemTypeSlug != B.itemTypeSlug) return A.itemTypeSlug < B.itemTypeSlug;
+			return A.itemId < B.itemId;
+		});
+		break;
+	case EInventorySortMode::Off:
+	default:
+		break;
+	}
+	return Out;
+}
+
+void UInventoryWidget::UpdateSortLabel()
+{
+	if (!SortButton) return;
+	FString ModeName;
+	switch (SortMode)
+	{
+	case EInventorySortMode::ByName:   ModeName = TEXT("Name"); break;
+	case EInventorySortMode::ByRarity: ModeName = TEXT("Rarity"); break;
+	case EInventorySortMode::ByType:   ModeName = TEXT("Type"); break;
+	case EInventorySortMode::Off:
+	default:                          ModeName = TEXT("Unsorted"); break;
+	}
+	// Tooltip needs no knowledge of the BP's inner layout (a Sort_Label
+	// child would be nicer but cannot be required headless).
+	SortButton->SetToolTipText(FText::FromString(FString::Printf(TEXT("Sort: %s"), *ModeName)));
 }
 

@@ -40,6 +40,8 @@ void UVendorShopWidget::NativeConstruct()
         Buy_Clear_Button->OnClicked.AddDynamic(this, &UVendorShopWidget::HandleClearBuyCart);
     if (Sell_Clear_Button)
         Sell_Clear_Button->OnClicked.AddDynamic(this, &UVendorShopWidget::HandleClearSellCart);
+    if (Sell_Junk_Button)
+        Sell_Junk_Button->OnClicked.AddDynamic(this, &UVendorShopWidget::SellJunkItems);
 
     if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
     {

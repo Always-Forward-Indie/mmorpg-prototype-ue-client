@@ -22,6 +22,8 @@ enum class EItemContextAction : uint8
 	Drop     UMETA(DisplayName = "Drop"),
 	// Toggle presence on the item quickbar (usable items only).
 	Quickbar UMETA(DisplayName = "Quickbar"),
+	// Toggle the junk mark (sell-junk helper). Never quest items.
+	Junk     UMETA(DisplayName = "Junk"),
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemContextActionSelected, EItemContextAction, Action, const FInventoryItemStruct&, Item);

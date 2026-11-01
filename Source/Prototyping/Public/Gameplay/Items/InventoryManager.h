@@ -100,6 +100,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void DropItem(int32 ItemId, int32 Quantity = 1);
 
+	// Junk marks (per-character, persisted on the GameInstance): "all wolf
+	// fangs are junk". Powering the sell-junk helper, not the server.
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory|Junk")
+	bool IsJunkSlug(const FString& Slug) const;
+
+	UFUNCTION(BlueprintCallable, Category = "Inventory|Junk")
+	void ToggleJunkSlug(const FString& Slug);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory|Junk")
+	int32 GetJunkRowCount() const;
+
 	// Events
 	UPROPERTY(BlueprintAssignable, Category = "Inventory Events")
 	FOnInventoryUpdated OnInventoryUpdated;

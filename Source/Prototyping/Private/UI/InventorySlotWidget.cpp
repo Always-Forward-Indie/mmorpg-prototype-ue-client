@@ -103,6 +103,7 @@ void UInventorySlotWidget::ClearSlot()
 	CurrentItem = FInventoryItemStruct();
 	bIsOccupied = false;
 	bIsSelected = false;
+	bIsJunked = false;
 
 	// Clear visual components
 	if (ItemIcon)
@@ -124,6 +125,13 @@ void UInventorySlotWidget::SetSlotHighlight(bool bHighlighted)
 {
 	bIsHighlighted = bHighlighted;
 	UpdateSlotAppearance();
+}
+
+void UInventorySlotWidget::SetJunked(bool bJunked)
+{
+	bIsJunked = bJunked;
+	if (ItemIcon && HasItem())
+		ItemIcon->SetColorAndOpacity(bIsJunked ? FLinearColor(0.45f, 0.45f, 0.45f, 1.f) : FLinearColor::White);
 }
 
 void UInventorySlotWidget::SetSlotSelected(bool bSelected)
@@ -290,7 +298,7 @@ void UInventorySlotWidget::SetIconTexture(UTexture2D* Texture)
 	if (ItemIcon && Texture)
 	{
 		ItemIcon->SetBrushFromTexture(Texture);
-		ItemIcon->SetColorAndOpacity(FLinearColor(1.0f, 1.0f, 1.0f, 1.0f));
+		ItemIcon->SetColorAndOpacity(bIsJunked ? FLinearColor(0.45f, 0.45f, 0.45f, 1.f) : FLinearColor(1.0f, 1.0f, 1.0f, 1.0f));
 		//ItemIcon->SetColorAndOpacity(FLinearColor::White);
 		ItemIcon->SetRenderOpacity(1.0f);
 

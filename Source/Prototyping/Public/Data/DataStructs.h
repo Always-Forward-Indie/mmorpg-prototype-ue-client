@@ -4620,6 +4620,19 @@ struct PROTOTYPING_API FItemQuickSlotData
     FItemQuickSlotData() {}
 };
 
+// Per-character junk-mark set (TMap value wrapper — UHT forbids TArray
+// directly as a TMap value). Slugs, not instance ids: "all wolf fangs".
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FCharacterJunkState
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Junk")
+    TArray<FString> Slugs;
+
+    FCharacterJunkState() {}
+};
+
 // Per-character quickbar snapshot (TMap value wrapper — UHT forbids
 // TArray directly as a TMap value).
 USTRUCT(BlueprintType)

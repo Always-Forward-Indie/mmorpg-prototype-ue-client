@@ -74,7 +74,16 @@ void UPlayerInspectWidget::ShowInspect(const FPlayerInspectData& Data)
 		AddGearRow(TEXT("Race"), Data.RaceSlug);
 	for (const FPlayerInspectGearEntry& Gear : Data.Gear)
 		AddGearRow(Gear.SlotSlug, LocalizeItem(Gear.ItemSlug));
-	if (Data.Gear.Num() == 0 && Data.RaceSlug.IsEmpty() && GearBox)
+	if (Data.Attributes.Num() > 0)
+	{
+		AddGearRow(TEXT("Stats"), TEXT(""));
+		for (const FPlayerInspectAttrEntry& Attr : Data.Attributes)
+		{
+			FString Pretty = Attr.Slug.Replace(TEXT("_"), TEXT(" "));
+			AddGearRow(Pretty, FString::FromInt(Attr.Value));
+		}
+	}
+	if (Data.Gear.Num() == 0 && Data.RaceSlug.IsEmpty() && Data.Attributes.Num() == 0 && GearBox)
 	{
 		UTextBlock* Empty = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
 		Empty->SetText(FText::FromString(TEXT("No equipment")));

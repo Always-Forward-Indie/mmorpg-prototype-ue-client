@@ -40,6 +40,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory Slot")
 	void ClearSlot();
 
+	// Dim the icon for junk-marked rows (sell-junk helper visual).
+	UFUNCTION(BlueprintCallable, Category = "Inventory Slot")
+	void SetJunked(bool bJunked);
+
 	// Get current item data
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory Slot")
 	FInventoryItemStruct GetItemData() const { return CurrentItem; }
@@ -154,6 +158,9 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Slot")
 	bool bIsOccupied = false;
+
+	// Junk-mark visual (sell-junk helper). Applied in SetJunked/SetIconTexture.
+	bool bIsJunked = false;
 
 	// Visual settings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Slot")

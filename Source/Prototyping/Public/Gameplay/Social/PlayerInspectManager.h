@@ -26,6 +26,21 @@ struct PROTOTYPING_API FPlayerInspectGearEntry
 	FPlayerInspectGearEntry() {}
 };
 
+/** One attribute total in a public inspect snapshot. */
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FPlayerInspectAttrEntry
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inspect")
+	FString Slug;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inspect")
+	int32 Value = 0;
+
+	FPlayerInspectAttrEntry() {}
+};
+
 /** Read-only public snapshot of another player (no inventory/gold/position). */
 USTRUCT(BlueprintType)
 struct PROTOTYPING_API FPlayerInspectData
@@ -52,6 +67,9 @@ struct PROTOTYPING_API FPlayerInspectData
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inspect")
 	TArray<FPlayerInspectGearEntry> Gear;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inspect")
+	TArray<FPlayerInspectAttrEntry> Attributes;
 
 	FPlayerInspectData() {}
 };

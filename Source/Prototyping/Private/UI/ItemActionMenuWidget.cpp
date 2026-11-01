@@ -145,6 +145,16 @@ void UItemActionMenuWidget::RebuildActions()
 
 	if (!CurrentItem.isQuestItem && bAllowDrop)
 		AddActionRow(LOCTEXT("Drop", "Drop"), EItemContextAction::Drop);
+
+	// Junk toggle (sell-junk helper). Label reflects state.
+	if (!CurrentItem.isQuestItem && InventoryManager)
+	{
+		const FString Slug = !CurrentItem.itemSlug.IsEmpty() ? CurrentItem.itemSlug : CurrentItem.slug;
+		const bool bIsJunk = !Slug.IsEmpty() && InventoryManager->IsJunkSlug(Slug);
+		AddActionRow(bIsJunk ? LOCTEXT("UnmarkJunk", "Unmark as junk")
+		                     : LOCTEXT("MarkJunk", "Mark as junk"),
+		             EItemContextAction::Junk);
+	}
 }
 
 void UItemActionMenuWidget::AddActionRow(const FText& Label, EItemContextAction Action)
@@ -256,6 +266,15 @@ void UItemActionMenuWidget::ExecuteAction(EItemContextAction Action)
 		case EItemContextAction::Quickbar:
 			if (QuickBarWidget)
 				QuickBarWidget->ToggleQuickbarItem(CurrentItem);
+			break;
+
+		case EItemContextAction::Junk:
+			if (InventoryManager && !CurrentItem.isQuestItem)
+			{
+				const FString Slug = !CurrentItem.itemSlug.IsEmpty() ? CurrentItem.itemSlug : CurrentItem.slug;
+				if (!Slug.IsEmpty())
+					InventoryManager->ToggleJunkSlug(Slug);
+			}
 			break;
 		}
 	}

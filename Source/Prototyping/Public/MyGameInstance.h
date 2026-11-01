@@ -1399,6 +1399,10 @@ public:
 	 *  another's. Saved across map loads. */
 	UPROPERTY()
 	TMap<int32, struct FCharacterQuickBarState> QuickBarSlotsByCharacter;
+
+	/** Junk-marked item slugs per character (sell-junk helper state). */
+	UPROPERTY()
+	TMap<int32, struct FCharacterJunkState> JunkSlugsByCharacter;
 };
 
 // Forward declarations

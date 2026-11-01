@@ -191,6 +191,8 @@ void UInventoryWidget::UpdateSlot(int32 SlotIndex, const FInventoryItemStruct& I
 	if (SlotWidget)
 	{
 		SlotWidget->SetItemData(Item);
+		const FString Slug = !Item.itemSlug.IsEmpty() ? Item.itemSlug : Item.slug;
+		SlotWidget->SetJunked(InventoryManager && !Slug.IsEmpty() && InventoryManager->IsJunkSlug(Slug));
 	}
 }
 

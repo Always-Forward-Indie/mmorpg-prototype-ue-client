@@ -61,3 +61,41 @@ int32 UInventoryManager::GetTotalItemCount() const
 	return TotalCount;
 }
 
+static TArray<FString>& JunkSlugsFor(UMyGameInstance* GI, int32 CharacterId)
+{
+	static TArray<FString> Empty;
+	if (!GI || CharacterId <= 0) return Empty;
+	FCharacterJunkState& State = GI->JunkSlugsByCharacter.FindOrAdd(CharacterId);
+	return State.Slugs;
+}
+
+bool UInventoryManager::IsJunkSlug(const FString& Slug) const
+{
+	if (Slug.IsEmpty() || !gameInstance) return false;
+	return JunkSlugsFor(gameInstance, CurrentInventory.characterId).Contains(Slug);
+}
+
+void UInventoryManager::ToggleJunkSlug(const FString& Slug)
+{
+	if (Slug.IsEmpty() || !gameInstance) return;
+	TArray<FString>& Slugs = JunkSlugsFor(gameInstance, CurrentInventory.characterId);
+	if (Slugs.Contains(Slug))
+		Slugs.Remove(Slug);
+	else
+		Slugs.Add(Slug);
+}
+
+int32 UInventoryManager::GetJunkRowCount() const
+{
+	if (!gameInstance) return 0;
+	const TArray<FString>& Slugs = JunkSlugsFor(gameInstance, CurrentInventory.characterId);
+	int32 Count = 0;
+	for (const FInventoryItemStruct& Item : CurrentInventory.items)
+	{
+		if (Item.itemId <= 0 || Item.is_equipped) continue;
+		const FString ItemSlug = !Item.itemSlug.IsEmpty() ? Item.itemSlug : Item.slug;
+		if (Slugs.Contains(ItemSlug)) ++Count;
+	}
+	return Count;
+}
+

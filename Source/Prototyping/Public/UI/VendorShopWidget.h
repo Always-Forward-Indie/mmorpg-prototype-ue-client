@@ -49,6 +49,7 @@ enum class EVendorTab : uint8
  *   Sell_Confirm_Button  UButton                            (BindWidgetOptional)
  *   Buy_Clear_Button     UButton                            (BindWidgetOptional)
  *   Sell_Clear_Button    UButton                            (BindWidgetOptional)
+ *   Sell_Junk_Button     UButton  sell all junk-marked rows (BindWidgetOptional)
  *   Player_Gold_Text     UTextBlock  player's current gold  (BindWidgetOptional)
  *   DragHandle           UWidget                            (BindWidgetOptional)
  *
@@ -93,6 +94,10 @@ public:
     // Widget classes -- assign in Blueprint
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor UI")
     TSubclassOf<UVendorSlotWidget> VendorSlotClass;
+
+    /** Sell all junk-marked rows in one batch (optional button, no BP edit needed otherwise). */
+    UFUNCTION(BlueprintCallable, Category = "Vendor UI")
+    void SellJunkItems();
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor UI")
     TSubclassOf<UQuantityPopupWidget> QuantityPopupClass;
@@ -172,6 +177,7 @@ void UpdateWindowDragPosition(const FVector2D& ScreenCursorPos);
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UButton*    Sell_Confirm_Button = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UButton*    Buy_Clear_Button    = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UButton*    Sell_Clear_Button   = nullptr;
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UButton*    Sell_Junk_Button    = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UWidget*    DragHandle          = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UTextBlock* Player_Gold_Text    = nullptr;
 

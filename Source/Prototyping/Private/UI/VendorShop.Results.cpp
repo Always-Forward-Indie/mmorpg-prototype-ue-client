@@ -69,6 +69,39 @@ void UVendorShopWidget::HandleClearSellCart()
     RefreshInventoryDisplay();
 }
 
+void UVendorShopWidget::SellJunkItems()
+{
+    if (!VendorManager || !InventoryManager) return;
+    TArray<FVendorCartEntry> JunkCart;
+    for (const FInventoryItemStruct& Item : CachedInventory.items)
+    {
+        if (Item.id <= 0 || Item.quantity <= 0 || Item.is_equipped) continue;
+        const FString Slug = !Item.itemSlug.IsEmpty() ? Item.itemSlug : Item.slug;
+        if (Slug.IsEmpty() || !InventoryManager->IsJunkSlug(Slug)) continue;
+        FVendorCartEntry E;
+        E.itemId = Item.itemId;
+        E.inventoryItemId = Item.id;
+        E.itemSlug = Slug;
+        E.itemName = Item.name;
+        E.slug = Slug;
+        E.quantity = Item.quantity;
+        E.maxQuantity = Item.quantity;
+        E.pricePerUnit = Item.priceSell;
+        JunkCart.Add(E);
+    }
+    if (JunkCart.IsEmpty())
+    {
+        ShowStatus(LOCTEXT("NoJunkMarked", "No junk marked — mark items via the inventory menu."), EShopStatusSeverity::Info);
+        return;
+    }
+    VendorManager->RequestSellItemBatch(GetCharacterId(), CachedShop.npcId, JunkCart, GetPlayerPosition());
+    PendingSellBatchRequestId = VendorManager->GetLastSellBatchRequestId();
+    bSellBatchApplied = false;
+    PendingSellExpected = 0;
+    for (const FVendorCartEntry& E : JunkCart)
+        PendingSellExpected += FVendorSellRule::LineGold(E.pricePerUnit, E.quantity, CachedShop.sellTaxPct);
+}
+
 void UVendorShopWidget::SendShopToast(const FString& NotificationType, const TMap<FString, FString>& DataFields)
 {
     const APlayerController* PC = GetOwningPlayer();

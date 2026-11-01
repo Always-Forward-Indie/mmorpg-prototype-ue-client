@@ -108,5 +108,20 @@ FPlayerInspectData UPlayerInspectNetworkHandler::ParseInspect(const TSharedPtr<F
 				Data.Gear.Add(MoveTemp(Gear));
 		}
 	}
+	// attributes: [{slug, value}] — public totals, same shape as server send.
+	const TArray<TSharedPtr<FJsonValue>>* AttrsPtr = nullptr;
+	if (Body->TryGetArrayField(TEXT("attributes"), AttrsPtr) && AttrsPtr)
+	{
+		for (const TSharedPtr<FJsonValue>& Val : *AttrsPtr)
+		{
+			const TSharedPtr<FJsonObject>* ObjPtr = nullptr;
+			if (!Val.IsValid() || !Val->TryGetObject(ObjPtr) || !ObjPtr || !(*ObjPtr).IsValid()) continue;
+			FPlayerInspectAttrEntry Attr;
+			(*ObjPtr)->TryGetStringField(TEXT("slug"), Attr.Slug);
+			(*ObjPtr)->TryGetNumberField(TEXT("value"), Attr.Value);
+			if (!Attr.Slug.IsEmpty())
+				Data.Attributes.Add(MoveTemp(Attr));
+		}
+	}
 	return Data;
 }

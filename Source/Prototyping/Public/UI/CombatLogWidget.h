@@ -8,6 +8,7 @@
 #include "Components/VerticalBox.h"
 #include "Components/HorizontalBox.h"
 #include "Components/SizeBox.h"
+#include "Components/PanelWidget.h"
 #include "Data/DataStructs.h"
 #include "Utils/NetCore/CombatLogRule.h"
 #include "CombatLogWidget.generated.h"
@@ -16,6 +17,7 @@ class UCombatLogManager;
 class UScrollBox;
 class UCheckBox;
 class UVerticalBox;
+class UPanelWidget;
 struct FCombatLogEntry;
 
 /**
@@ -23,8 +25,15 @@ struct FCombatLogEntry;
  *
  * History window for damage / heal / loot / XP / system lines — the same
  * role as the chat log, but fed by UCombatLogManager (authoritative server
- * facts only). Builds its whole layout in C++ (filter row + scrollback),
- * so it works with zero Blueprint setup; a BP subclass may still restyle it.
+ * facts only).
+ *
+ * Blueprint layout (optional): create a BP subclass, bind these names,
+ * assign it to UIManager.CombatLogWidgetClass. Bind both or none — a
+ * scroll box without a filter row simply shows unfiltered lines:
+ *   Log_Scroll_Box  UScrollBox    line list (AppendEntry targets it)
+ *   Log_Filter_Row  any UPanelWidget (HorizontalBox recommended) —
+ *                   the five channel checkboxes are built into it in code
+ * With no subclass assigned the whole layout is built in C++ (headless-safe).
  *
  * Clicks: the scroll area is Visible (consistent with the chat window);
  * only the filter checkboxes are interactive.
@@ -61,6 +70,10 @@ protected:
 	UFUNCTION() void HandleLogEntryAdded(const FCombatLogEntry& Entry);
 	UFUNCTION() void HandleFilterChanged(bool bIsChecked);
 	UFUNCTION() void HandleUserScrolled(float CurrentOffset);
+
+	// --- Blueprint layout slots (BindWidgetOptional — see class doc) ---
+	UPROPERTY(meta = (BindWidgetOptional)) UScrollBox* Log_Scroll_Box = nullptr;
+	UPROPERTY(meta = (BindWidgetOptional)) UPanelWidget* Log_Filter_Row = nullptr;
 
 	// --- C++-built layout (no BP bindings required) ---
 	UPROPERTY() UScrollBox* LogScroll = nullptr;
@@ -116,8 +129,11 @@ private:
 	bool bFollowTail = true;
 
 	void BuildLayout();
-	UCheckBox* AddFilterCheck(ECombatLogCategory Category, const FString& Label, class UHorizontalBox* Row);
+	UCheckBox* AddFilterCheck(ECombatLogCategory Category, const FString& Label, UPanelWidget* Row);
 	void TrimLines();
 	bool IsAtBottom() const;
 	FLinearColor ColorFor(ECombatLogCategory Category) const;
+
+	// Wiring happens once (NativeConstruct may re-run on re-add to viewport).
+	bool bWired = false;
 };

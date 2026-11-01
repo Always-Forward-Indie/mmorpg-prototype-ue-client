@@ -15,7 +15,28 @@ void UCombatLogWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	BuildLayout();
+	// Blueprint layout wins when bound; otherwise build the code fallback.
+	if (!bWired)
+	{
+		bWired = true;
+		if (Log_Scroll_Box)
+		{
+			LogScroll = Log_Scroll_Box;
+			LogScroll->OnUserScrolled.AddDynamic(this, &UCombatLogWidget::HandleUserScrolled);
+			if (Log_Filter_Row)
+			{
+				AddFilterCheck(ECombatLogCategory::Damage, TEXT("Dmg"), Log_Filter_Row);
+				AddFilterCheck(ECombatLogCategory::Heal, TEXT("Heal"), Log_Filter_Row);
+				AddFilterCheck(ECombatLogCategory::Loot, TEXT("Loot"), Log_Filter_Row);
+				AddFilterCheck(ECombatLogCategory::Experience, TEXT("XP"), Log_Filter_Row);
+				AddFilterCheck(ECombatLogCategory::System, TEXT("Sys"), Log_Filter_Row);
+			}
+		}
+		else
+		{
+			BuildLayout();
+		}
+	}
 
 	// Left edge, vertically biased above the chat row. Size/pos/anchors are
 	// UPROPERTY-tunable without touching code or Blueprints.
@@ -69,7 +90,7 @@ void UCombatLogWidget::BuildLayout()
 	}
 }
 
-UCheckBox* UCombatLogWidget::AddFilterCheck(ECombatLogCategory Category, const FString& Label, UHorizontalBox* Row)
+UCheckBox* UCombatLogWidget::AddFilterCheck(ECombatLogCategory Category, const FString& Label, UPanelWidget* Row)
 {
 	if (!WidgetTree || !Row) return nullptr;
 	UCheckBox* Box = WidgetTree->ConstructWidget<UCheckBox>(UCheckBox::StaticClass());
@@ -87,9 +108,12 @@ UCheckBox* UCombatLogWidget::AddFilterCheck(ECombatLogCategory Category, const F
 	{
 		TxtSlot->SetVerticalAlignment(VAlign_Center);
 	}
-	if (UHorizontalBoxSlot* CellSlot = Cast<UHorizontalBoxSlot>(Row->AddChildToHorizontalBox(Cell)))
+	// HorizontalBox-specific padding is best-effort: any other UPanelWidget
+	// subclass still gets the cell (AddChild), just without the gap.
+	if (UPanelSlot* CellSlot = Row->AddChild(Cell))
 	{
-		CellSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+		if (UHorizontalBoxSlot* HSlot = Cast<UHorizontalBoxSlot>(CellSlot))
+			HSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 	}
 
 	// Channel is tracked in the FilterBoxes map (reverse lookup on toggle).

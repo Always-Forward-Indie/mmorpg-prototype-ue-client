@@ -27,12 +27,12 @@ void UUIManager::OpenPlayerContextMenu(ABasicPlayer* TargetPlayer)
 	const bool bLocalDead = Local && Local->GetIsDead();
 	const bool bTargetDead = TargetData.characterData.bIsDead;
 	const FString TargetName = TargetData.characterData.characterName;
-	// Diagnostic (user report: no menu on RMB): log every gate input.
-	UE_LOG(LogGameplay, Warning, TEXT("UIManager: OpenPlayerContextMenu target=%d self=%d localDead=%d targetDead=%d name='%s'"),
+	// Gate inputs (Verbose: per-click diagnostics).
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: OpenPlayerContextMenu target=%d self=%d localDead=%d targetDead=%d name='%s'"),
 		TargetId, bIsSelf ? 1 : 0, bLocalDead ? 1 : 0, bTargetDead ? 1 : 0, *TargetName);
 	if (!FPlayerSocialRule::CanOpenMenu(bLocalDead, TargetId > 0, bIsSelf, bTargetDead))
 	{
-		UE_LOG(LogGameplay, Warning, TEXT("UIManager: unit menu blocked by CanOpenMenu gate"));
+		UE_LOG(LogGameplay, Verbose, TEXT("UIManager: unit menu blocked by CanOpenMenu gate"));
 		return;
 	}
 

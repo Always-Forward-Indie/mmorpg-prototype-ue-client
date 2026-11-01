@@ -69,8 +69,7 @@ void UPlayerContextMenuWidget::ShowForPlayer(int32 InCharacterId, const FString&
 		Menu_Title_Text->SetText(FText::FromString(DisplayName));
 
 	RebuildRows(DisplayName, InCharacterId > 0, bCanInspect);
-	// Diagnostic: rows actually built + where the menu lands on screen.
-	UE_LOG(LogGameplay, Warning, TEXT("PlayerMenu: ShowForPlayer target=%d rows=%d pos=(%.0f, %.0f) bpList=%d"),
+	UE_LOG(LogGameplay, Verbose, TEXT("PlayerMenu: ShowForPlayer target=%d rows=%d pos=(%.0f, %.0f) bpList=%d"),
 		InCharacterId, Rows.Num(), ScreenPosition.X, ScreenPosition.Y, Menu_Action_List ? 1 : 0);
 
 	const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);

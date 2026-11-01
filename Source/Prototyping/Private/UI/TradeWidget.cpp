@@ -21,22 +21,6 @@
 #define LOCTEXT_NAMESPACE "Trade"
 
 // ---------------------------------------------------------------------------
-// UTradeInvItemRowBinding
-// ---------------------------------------------------------------------------
-
-void UTradeInvItemRowBinding::Setup(UTradeWidget* InWidget, int32 InInventoryItemId, int32 InItemId)
-{
-    Widget          = InWidget;
-    InventoryItemId = InInventoryItemId;
-    ItemId          = InItemId;
-}
-
-void UTradeInvItemRowBinding::HandleClicked()
-{
-    if (Widget) Widget->DispatchAddItem(InventoryItemId, ItemId);
-}
-
-// ---------------------------------------------------------------------------
 // UTradeWidget
 // ---------------------------------------------------------------------------
 

@@ -9,11 +9,12 @@
 #include "Components/ScrollBox.h"
 #include "Components/EditableTextBox.h"
 #include "Data/DataStructs.h"
+#include "UI/VendorSlotWidget.h"
+#include "UI/ItemTooltipWidget.h"
 #include "TradeWidget.generated.h"
 
 class UTradeManager;
 class UInventoryManager;
-class UTradeInvItemRowBinding;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTradeWidgetVisibilityChanged, bool, bIsVisible);
 
@@ -44,9 +45,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTradeWidgetVisibilityChanged, boo
  *   Invite_Accept_Btn  UButton      (BindWidgetOptional)
  *   Invite_Decline_Btn UButton      (BindWidgetOptional)
  *
- * Each inv-row widget (InvRowClass) needs:
- *   Row_Name_Text      UTextBlock
- *   Row_Add_Btn        UButton
+ * Inventory pick list uses UVendorSlotWidget rows (TradeSlotClass — same
+ * BP asset as the vendor shop; click = add to offer, hover = tooltip via
+ * TradeTooltipWidgetClass, optional). Offer lists stay text rows.
  */
 UCLASS(Abstract, BlueprintType, Blueprintable)
 class PROTOTYPING_API UTradeWidget : public UFocusableWindowWidget
@@ -66,13 +67,25 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Trade UI")
     void CloseTrade();
 
+    /**
+     * Slot widget for the inventory pick list (icons + hover tooltip).
+     * Reuse the vendor slot BP (same asset as the shop uses).
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade UI")
+    TSubclassOf<UVendorSlotWidget> TradeSlotClass;
+
+    /** Row widget for the text offer lists ("name xN"). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade UI")
     TSubclassOf<UUserWidget> InvRowClass;
+
+    /** Item tooltip for pick-list hover. Optional — icons work without it. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade UI")
+    TSubclassOf<UItemTooltipWidget> TradeTooltipWidgetClass;
 
     UPROPERTY(BlueprintAssignable, Category = "Trade UI Events")
     FOnTradeWidgetVisibilityChanged OnTradeVisibilityChanged;
 
-    // Called by row binding helpers
+    // Called by pick-list slots
     void DispatchAddItem(int32 InventoryItemId, int32 ItemId);
 
 protected:
@@ -129,8 +142,15 @@ private:
     UPROPERTY() UTradeManager*    TradeManager    = nullptr;
     UPROPERTY() UInventoryManager* InventoryManager = nullptr;
 
-    // Inv row binding helpers
-    UPROPERTY() TArray<UTradeInvItemRowBinding*> InvRowBindings;
+    // Slot widget arrays (kept for index lookup)
+    UPROPERTY() TArray<UVendorSlotWidget*> TradeInvSlots;
+
+    // Pick-list hover tooltip (created in NativeConstruct when assigned).
+    UPROPERTY() UItemTooltipWidget* TradeTooltip = nullptr;
+
+    UFUNCTION() void HandleTradeInvSlotClicked(int32 SlotIndex);
+    UFUNCTION() void HandleTradeInvSlotHovered(int32 SlotIndex, bool bIsHovered);
+    void EnsureTradeTooltip();
 
     FTradeStateData CurrentState;
     FCharacterInventoryStruct CachedInventory;
@@ -154,25 +174,4 @@ private:
 
     UFUNCTION()
     void HandleLocaleChanged(const FString& NewLocale);
-};
-
-// ---------------------------------------------------------------------------
-// Per-row binding helper
-// ---------------------------------------------------------------------------
-
-UCLASS()
-class PROTOTYPING_API UTradeInvItemRowBinding : public UObject
-{
-    GENERATED_BODY()
-
-public:
-    void Setup(UTradeWidget* InWidget, int32 InInventoryItemId, int32 InItemId);
-
-    UFUNCTION()
-    void HandleClicked();
-
-private:
-    UPROPERTY() UTradeWidget* Widget = nullptr;
-    int32 InventoryItemId = 0;
-    int32 ItemId          = 0;
 };

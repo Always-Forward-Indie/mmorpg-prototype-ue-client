@@ -14,7 +14,10 @@
 void UUIManager::OpenPlayerContextMenu(ABasicPlayer* TargetPlayer)
 {
 	if (!TargetPlayer || !GetWorld() || !GetWorld()->GetFirstPlayerController())
+	{
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: OpenPlayerContextMenu aborted - null target/world/PC"));
 		return;
+	}
 
 	UMyGameInstance* GI = Cast<UMyGameInstance>(GetWorld()->GetGameInstance());
 	ABasicPlayer* Local = GI ? GI->Player : nullptr;
@@ -23,12 +26,19 @@ void UUIManager::OpenPlayerContextMenu(ABasicPlayer* TargetPlayer)
 	const bool bIsSelf = Local && Local->GetPlayerCharacterID() == TargetId;
 	const bool bLocalDead = Local && Local->GetIsDead();
 	const bool bTargetDead = TargetData.characterData.bIsDead;
+	const FString TargetName = TargetData.characterData.characterName;
+	// Diagnostic (user report: no menu on RMB): log every gate input.
+	UE_LOG(LogGameplay, Warning, TEXT("UIManager: OpenPlayerContextMenu target=%d self=%d localDead=%d targetDead=%d name='%s'"),
+		TargetId, bIsSelf ? 1 : 0, bLocalDead ? 1 : 0, bTargetDead ? 1 : 0, *TargetName);
 	if (!FPlayerSocialRule::CanOpenMenu(bLocalDead, TargetId > 0, bIsSelf, bTargetDead))
+	{
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager: unit menu blocked by CanOpenMenu gate"));
 		return;
+	}
 
 	if (!PlayerContextMenu)
 	{
-		// Blueprint subclass wins when assigned (binds its named buttons),
+		// Blueprint subclass wins when assigned (binds its named rows),
 		// otherwise the code-built fallback is used (headless-safe).
 		TSubclassOf<UPlayerContextMenuWidget> MenuClass =
 			PlayerMenuWidgetClass ? *PlayerMenuWidgetClass : UPlayerContextMenuWidget::StaticClass();

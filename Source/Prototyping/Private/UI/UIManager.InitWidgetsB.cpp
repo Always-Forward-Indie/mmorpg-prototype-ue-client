@@ -261,7 +261,12 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 				{
 					CombatLogWidget->AddToViewport(14); // Just under chat (15)
 					CombatLogWidget->BindToManager(LogMgr);
-					UE_LOG(LogGameplay, Verbose, TEXT("UIManager: CombatLogWidget created and bound"));
+					// Diagnostic (user report: log invisible): class source,
+					// replayed history size, final visibility.
+					UE_LOG(LogGameplay, Warning, TEXT("UIManager: CombatLogWidget created (%s), bound, history=%d, vis=%d"),
+						CombatLogWidgetClass ? *CombatLogWidgetClass->GetName() : TEXT("code-fallback"),
+						LogMgr->GetEntries().Num(),
+						(int32)CombatLogWidget->GetVisibility());
 					// The log exists now: teach it once (one-time hint).
 					if (UTutorialHintManager* Hints = GameInstance->GetTutorialHintManager())
 						Hints->MaybeShowHint(ETutorialHintKind::CombatLog);

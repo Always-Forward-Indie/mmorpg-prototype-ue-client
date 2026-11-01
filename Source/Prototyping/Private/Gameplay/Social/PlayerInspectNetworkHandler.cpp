@@ -62,6 +62,19 @@ void UPlayerInspectNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet
 		}
 		InspectManager->OnInspectReceived(ParseInspect(Packet.Body));
 	}
+	else if (Packet.EventType == TEXT("playerInspectRequest")
+		&& Packet.Status.Equals(TEXT("error"), ESearchCase::IgnoreCase))
+	{
+		// Request-echo errors (defensive: the server answers on playerInspect,
+		// but any error echo must still surface instead of hanging the window).
+		FString Reason;
+		Packet.Body->TryGetStringField(TEXT("reason"), Reason);
+		if (Reason.IsEmpty())
+			Reason = JSONParser::ResolveErrorCode(Packet.Root);
+		if (Reason.IsEmpty())
+			Reason = Packet.Message;
+		InspectManager->OnInspectError(Reason);
+	}
 }
 
 FPlayerInspectData UPlayerInspectNetworkHandler::ParseInspect(const TSharedPtr<FJsonObject>& Body) const

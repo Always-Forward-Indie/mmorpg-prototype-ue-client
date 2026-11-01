@@ -28,6 +28,11 @@ void UInventoryManager::UseItem(int32 ItemId, int32 Quantity)
 		return;
 	}
 
+	// Predictive cooldown echo for the quickbar overlay (server authoritative).
+	const FInventoryItemStruct Row = GetItemByTemplateId(ItemId);
+	if (Row.useEffects.Num() > 0 && Row.useEffects[0].cooldownSeconds > 0)
+		OnItemCooldown.Broadcast(ItemId, Row.useEffects[0].cooldownSeconds);
+
 	SendUseItemRequest(ItemId, Quantity);
 }
 

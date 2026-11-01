@@ -30,6 +30,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "QuickSlot")
 	void UseItem();
 
+	/** Predictive cooldown overlay (seconds). The server enforces the real
+	 *  cooldown; this is display only and refreshes from use events. */
+	UFUNCTION(BlueprintCallable, Category = "QuickSlot")
+	void StartCooldown(float CooldownSeconds);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "QuickSlot")
+	bool IsOnCooldown() const;
+
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "QuickSlot")
 	bool IsEmpty() const { return SlotData.itemId == 0; }
 
@@ -44,6 +52,7 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 
 	UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "QuickSlot")
@@ -74,4 +83,8 @@ private:
 	UInventoryManager* InventoryManager = nullptr;
 	FItemQuickSlotData SlotData;
 	TSharedPtr<FStreamableHandle> StreamableHandle;
+
+	// Predictive cooldown display (world time; server authoritative).
+	double CooldownEndTime = 0.0;
+	bool bCoolingDown = false;
 };

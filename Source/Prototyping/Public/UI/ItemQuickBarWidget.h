@@ -47,6 +47,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "QuickBar")
 	void HandleInventoryUpdated(const FCharacterInventoryStruct& Inventory);
 
+	UFUNCTION()
+	void HandleItemCooldown(int32 ItemId, int32 CooldownSeconds);
+
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "QuickBar")
 	int32 GetSlotCount() const { return Slots.Num(); }
 

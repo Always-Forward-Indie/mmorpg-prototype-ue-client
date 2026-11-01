@@ -114,6 +114,36 @@ void UItemQuickSlotWidget::OnSlotClicked()
 	UseItem();
 }
 
+void UItemQuickSlotWidget::StartCooldown(float CooldownSeconds)
+{
+	if (CooldownSeconds <= 0.f || SlotData.itemId <= 0) return;
+	if (UWorld* World = GetWorld())
+	{
+		CooldownEndTime = World->GetTimeSeconds() + static_cast<double>(CooldownSeconds);
+		bCoolingDown = true;
+		if (CooldownOverlay)
+			CooldownOverlay->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+}
+
+bool UItemQuickSlotWidget::IsOnCooldown() const
+{
+	return bCoolingDown;
+}
+
+void UItemQuickSlotWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+	if (!bCoolingDown) return;
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	if (Now >= CooldownEndTime)
+	{
+		bCoolingDown = false;
+		if (CooldownOverlay)
+			CooldownOverlay->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
 void UItemQuickSlotWidget::LoadIconBySlug(const FString& Slug, int32 ExpectedItemId)
 {
 	if (!ItemIcon) return;

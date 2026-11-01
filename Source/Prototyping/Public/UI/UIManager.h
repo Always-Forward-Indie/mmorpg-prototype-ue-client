@@ -18,6 +18,7 @@ struct FKeyEvent;
 class ABasicPlayer;
 class UPlayerContextMenuWidget;
 class UPlayerInspectWidget;
+class UTradeInviteWidget;
 class UCombatScreenFlashWidget;
 class UInventoryManager;
 class UHarvestManager;
@@ -282,6 +283,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UCombatLogWidget* GetCombatLogWidget() const { return CombatLogWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UTradeInviteWidget* GetTradeInviteWidget() const { return TradeInviteWidget; }
 
 	/** Open the unit context menu for a remote player (WoW-style RMB menu). */
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
@@ -687,6 +691,9 @@ protected:
 
 	UPROPERTY()
 	UCombatLogWidget* CombatLogWidget = nullptr;
+
+	UPROPERTY()
+	UTradeInviteWidget* TradeInviteWidget = nullptr;
 
 	// Unit context menu + inspect window (runtime-created, no BP setup).
 	UPROPERTY()

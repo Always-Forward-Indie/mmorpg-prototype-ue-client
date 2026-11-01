@@ -45,6 +45,9 @@ void UItemQuickBarWidget::InitQuickBar(UInventoryManager* InInventoryManager, in
 	}
 
 	LoadSlotsState();
+
+	if (InventoryManager)
+		InventoryManager->OnItemCooldown.AddDynamic(this, &UItemQuickBarWidget::HandleItemCooldown);
 }
 
 void UItemQuickBarWidget::AssignItemToSlot(int32 SlotIndex, int32 ItemId, const FString& ItemSlug, int32 Quantity, const FString& IconPath)
@@ -161,6 +164,14 @@ void UItemQuickBarWidget::RefreshFromInventory()
 void UItemQuickBarWidget::HandleInventoryUpdated(const FCharacterInventoryStruct& Inventory)
 {
 	RefreshFromInventory();
+}
+
+void UItemQuickBarWidget::HandleItemCooldown(int32 ItemId, int32 CooldownSeconds)
+{
+	if (ItemId <= 0 || CooldownSeconds <= 0) return;
+	const int32 SlotIndex = FindSlotWithItem(ItemId);
+	if (Slots.IsValidIndex(SlotIndex))
+		Slots[SlotIndex]->StartCooldown(static_cast<float>(CooldownSeconds));
 }
 
 void UItemQuickBarWidget::OnSlotUsed(int32 SlotIndex)

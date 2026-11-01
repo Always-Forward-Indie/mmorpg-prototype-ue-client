@@ -13,6 +13,7 @@
 #include "UI/RepairShopWidget.h"
 #include "UI/SkillShopWidget.h"
 #include "UI/TradeWidget.h"
+#include "UI/TradeInviteWidget.h"
 #include "UI/EquipmentWidget.h"
 #include "Gameplay/UI/PlayerExperienceWidget.h"
 #include "Gameplay/UI/PlayerInterfaceWidget.h"
@@ -248,6 +249,18 @@ void UUIManager::InitializeItemSystemWidgets(UEquipmentManager* InEquipmentManag
 	else if (!TradeWidgetClass)
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("UIManager: TradeWidgetClass is not set in Blueprint"));
+	}
+
+	// Standalone invite dialog (primary invite UI; the window opens on accept).
+	if (!TradeInviteWidget && InTradeManager)
+	{
+		TradeInviteWidget = CreateWidget<UTradeInviteWidget>(GetWorld(), UTradeInviteWidget::StaticClass());
+		if (TradeInviteWidget)
+		{
+			TradeInviteWidget->AddToViewport(96);
+			TradeInviteWidget->BindToTradeManager(InTradeManager);
+			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: TradeInviteWidget created and bound"));
+		}
 	}
 
 	UE_LOG(LogGameplay, Log, TEXT("UIManager::InitializeItemSystemWidgets - Completed"));

@@ -17,6 +17,10 @@ class UMyGameInstance;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnInventoryUpdated, const FCharacterInventoryStruct&, Inventory);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemAdded, const FInventoryItemStruct&, Item, int32, NewQuantity);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemRemoved, const FInventoryItemStruct&, Item, int32, RemainingQuantity);
+// Predictive cooldown echo: the server enforces the real cooldown, but the
+// catalog row already carries useEffects[0].cooldownSeconds, so the UI can
+// start the overlay without waiting for a round trip.
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemCooldown, int32, ItemId, int32, CooldownSeconds);
 // Authoritative use confirmation (server consumed exactly one): feeds the
 // combat log and quickbar refresh. Params are the template echo (kind info).
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnItemUsed, int32, ItemId, const FString&, ItemSlug, const FString&, ItemName);
@@ -108,6 +112,9 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Inventory Events")
 	FOnItemUsed OnItemUsed;
+
+	UPROPERTY(BlueprintAssignable, Category = "Inventory Events")
+	FOnItemCooldown OnItemCooldown;
 
 	UPROPERTY(BlueprintAssignable, Category = "Inventory Events")
 	FOnInventoryLoadComplete OnInventoryLoadComplete;

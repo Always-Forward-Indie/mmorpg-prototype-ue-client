@@ -78,10 +78,14 @@ public:
 protected:
     virtual void NativeConstruct() override;
     virtual void NativeDestruct() override;
+    virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
     virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
     virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
     virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
     void UpdateWindowDragPosition(const FVector2D& ScreenCursorPos);
+
+    /** Throttled proximity watch: warns once per excursion beyond trade range. */
+    void TickTradeDistance(double NowSeconds);
 
     UFUNCTION() void HandleTradeInviteReceived(const FTradeInviteData& Invite);
     UFUNCTION() void HandleTradeStateUpdated(const FTradeStateData& State);
@@ -133,6 +137,16 @@ private:
     // Accumulated offer on client side before sending
     TArray<FTradeOfferItem> PendingOffer;
     int32 PendingGold = 0;
+
+    // One-shot trade hint toasts (distance / offer-changed / cancel reason).
+    void ShowTradeHint(const FString& Title, const FString& Body);
+
+    // Set while WE edit the offer (DispatchAddItem): the next state echo that
+    // unconfirms us is ours, not the partner changing the deal.
+    bool bOwnOfferPending = false;
+    // Distance warning: one-shot per excursion beyond trade range.
+    bool bWarnedTooFar = false;
+    double LastDistCheckTime = 0.0;
 
     bool      bDragging = false;
     FVector2D DragOffset = FVector2D::ZeroVector;

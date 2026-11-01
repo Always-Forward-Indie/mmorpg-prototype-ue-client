@@ -552,6 +552,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UTradeWidget> TradeWidgetClass;
 
+	/** Blueprint subclass of the standalone trade-invite dialog. Unset = code-built fallback. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UTradeInviteWidget> TradeInviteWidgetClass;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UEquipmentWidget> EquipmentWidgetClass;
 

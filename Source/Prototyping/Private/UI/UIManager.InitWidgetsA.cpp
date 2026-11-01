@@ -252,9 +252,13 @@ void UUIManager::InitializeItemSystemWidgets(UEquipmentManager* InEquipmentManag
 	}
 
 	// Standalone invite dialog (primary invite UI; the window opens on accept).
+	// Blueprint subclass wins when assigned (binds its named slots),
+	// otherwise the code-built fallback is used (headless-safe).
 	if (!TradeInviteWidget && InTradeManager)
 	{
-		TradeInviteWidget = CreateWidget<UTradeInviteWidget>(GetWorld(), UTradeInviteWidget::StaticClass());
+		TSubclassOf<UTradeInviteWidget> InviteClass =
+			TradeInviteWidgetClass ? *TradeInviteWidgetClass : UTradeInviteWidget::StaticClass();
+		TradeInviteWidget = CreateWidget<UTradeInviteWidget>(GetWorld(), InviteClass);
 		if (TradeInviteWidget)
 		{
 			TradeInviteWidget->AddToViewport(96);

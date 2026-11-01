@@ -17,7 +17,26 @@
 void UTradeInviteWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	BuildLayout();
+	// Blueprint layout wins when bound; otherwise build the code fallback.
+	// Widget-level placement stays in code in both modes (viewport anchors
+	// are runtime-only, a BP layout cannot provide them).
+	if (!bWired)
+	{
+		bWired = true;
+		if (Invite_Name_Text || Invite_Countdown_Text || Invite_Accept_Btn || Invite_Decline_Btn)
+		{
+			TitleText = Invite_Name_Text;
+			CountdownText = Invite_Countdown_Text;
+			AcceptBtn = Invite_Accept_Btn;
+			DeclineBtn = Invite_Decline_Btn;
+			if (AcceptBtn) AcceptBtn->OnClicked.AddDynamic(this, &UTradeInviteWidget::HandleAcceptClicked);
+			if (DeclineBtn) DeclineBtn->OnClicked.AddDynamic(this, &UTradeInviteWidget::HandleDeclineClicked);
+		}
+		else
+		{
+			BuildLayout(); // wires its own buttons
+		}
+	}
 	SetAnchorsInViewport(FAnchors(0.5f, 0.f));
 	SetAlignmentInViewport(FVector2D(0.5f, 0.f));
 	SetPositionInViewport(FVector2D(0.f, 80.f), false);
@@ -154,15 +173,17 @@ void UTradeInviteWidget::HideInvite()
 void UTradeInviteWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
-	if (!bInviteOpen || !CountdownText || !GetWorld()) return;
+	if (!bInviteOpen || !GetWorld()) return;
 	const float Left = static_cast<float>(InviteExpiresAt - GetWorld()->GetTimeSeconds());
 	if (Left <= 0.f)
 	{
 		// Server TTL elapsed: decline so the session frees on both sides.
+		// Runs even when the BP layout has no countdown text.
 		HandleDeclineClicked();
 		return;
 	}
-	CountdownText->SetText(FText::Format(LOCTEXT("ExpiresIn", "Expires in {0}s"), FText::AsNumber(FMath::CeilToInt(Left))));
+	if (CountdownText)
+		CountdownText->SetText(FText::Format(LOCTEXT("ExpiresIn", "Expires in {0}s"), FText::AsNumber(FMath::CeilToInt(Left))));
 }
 
 void UTradeInviteWidget::HandleAcceptClicked()

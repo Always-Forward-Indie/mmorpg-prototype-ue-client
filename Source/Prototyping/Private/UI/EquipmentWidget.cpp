@@ -3,6 +3,8 @@
 #include "Audio/AudioManager.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "Gameplay/Items/InventoryManager.h"
+#include "UI/ItemTooltipWidget.h"
+#include "UI/ItemActionMenuWidget.h"
 #include "MyGameInstance.h"
 #include "Components/Button.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
@@ -51,6 +53,31 @@ void UEquipmentWidget::NativeConstruct()
 
     InitializeSlots();
 
+    // Dynamic fallbacks (same pattern as InventoryWidget): the BP may not
+    // bind EquipTooltipWidget / context menu — create them at runtime so
+    // hover hints and RMB menus always work.
+    if (!EquipTooltipWidget && EquipTooltipWidgetClass)
+    {
+        EquipTooltipWidget = CreateWidget<UItemTooltipWidget>(this, EquipTooltipWidgetClass);
+        if (EquipTooltipWidget)
+        {
+            EquipTooltipWidget->AddToViewport(1000);
+            EquipTooltipWidget->SetVisibility(ESlateVisibility::Hidden);
+            bEquipTooltipDynamic = true;
+        }
+    }
+    if (!EquipContextMenuWidget && EquipContextMenuWidgetClass)
+    {
+        EquipContextMenuWidget = CreateWidget<UItemActionMenuWidget>(this, EquipContextMenuWidgetClass);
+        if (EquipContextMenuWidget)
+        {
+            EquipContextMenuWidget->AddToViewport(1100);
+            EquipContextMenuWidget->SetVisibility(ESlateVisibility::Collapsed);
+            EquipContextMenuWidget->SetAllowDrop(false);
+            EquipContextMenuWidget->OnActionSelected.AddDynamic(this, &UEquipmentWidget::HandleEquipContextAction);
+        }
+    }
+
     if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
     {
         int32 W = 0, H = 0;
@@ -66,6 +93,44 @@ void UEquipmentWidget::NativeConstruct()
     }
 
     SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UEquipmentWidget::NativeDestruct()
+{
+    if (EquipContextMenuWidget)
+    {
+        EquipContextMenuWidget->RemoveFromParent();
+        EquipContextMenuWidget = nullptr;
+    }
+    if (EquipTooltipWidget && bEquipTooltipDynamic)
+    {
+        EquipTooltipWidget->RemoveFromParent();
+        EquipTooltipWidget = nullptr;
+        bEquipTooltipDynamic = false;
+    }
+    Super::NativeDestruct();
+}
+
+void UEquipmentWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+    Super::NativeTick(MyGeometry, InDeltaTime);
+
+    if (GetVisibility() != ESlateVisibility::Visible || !EquipTooltipWidget) return;
+    const ESlateVisibility Vis = EquipTooltipWidget->GetVisibility();
+    const bool bTooltipVisible = (Vis == ESlateVisibility::HitTestInvisible ||
+        Vis == ESlateVisibility::SelfHitTestInvisible) &&
+        EquipTooltipWidget->GetRenderOpacity() > 0.f;
+    if (!bTooltipVisible) return;
+
+    if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+    {
+        FVector2D Mouse;
+        if (PC->GetMousePosition(Mouse.X, Mouse.Y))
+        {
+            EquipTooltipWidget->ForceLayoutPrepass();
+            EquipTooltipWidget->UpdateTooltipPosition(Mouse);
+        }
+    }
 }
 
 void UEquipmentWidget::InitializeSlots()
@@ -171,6 +236,7 @@ void UEquipmentWidget::ToggleEquipment()
     const bool bVisible = GetVisibility() == ESlateVisibility::Visible;
     if (bVisible)
     {
+        CloseEquipContextMenu();
         if (EquipTooltipWidget) EquipTooltipWidget->HideTooltip();
         SetVisibility(ESlateVisibility::Collapsed);
         OnEquipmentVisibilityChanged.Broadcast(false);
@@ -186,6 +252,7 @@ void UEquipmentWidget::ToggleEquipment()
 void UEquipmentWidget::HandleEquipmentStateChanged(const FEquipmentStateData& State)
 {
     CachedState = State;
+    CloseEquipContextMenu();
     RefreshEquipmentDisplay();
 }
 
@@ -204,6 +271,7 @@ void UEquipmentWidget::HandleEquipResultReceived(const FEquipResultData& Result)
 
 void UEquipmentWidget::HandleCloseButtonClicked()
 {
+    CloseEquipContextMenu();
     if (EquipTooltipWidget) EquipTooltipWidget->HideTooltip();
     SetVisibility(ESlateVisibility::Collapsed);
     OnEquipmentVisibilityChanged.Broadcast(false);
@@ -211,14 +279,47 @@ void UEquipmentWidget::HandleCloseButtonClicked()
 
 void UEquipmentWidget::HandleSlotClicked(const FString& SlotSlug)
 {
+    CloseEquipContextMenu();
+    if (EquipTooltipWidget) EquipTooltipWidget->HideTooltip();
     OnEquipSlotLeftClicked.Broadcast(SlotSlug);
 }
 
 void UEquipmentWidget::HandleSlotRightClicked(const FString& SlotSlug)
 {
+    // AAA inventory parity: RMB opens the context menu (Unequip / Use),
+    // never unequips instantly. Position comes from the live cursor.
     const FEquipmentSlotData* SlotData = CachedState.slots.Find(SlotSlug);
-    if (SlotData && SlotData->bIsOccupied)
-        OnEquipSlotUnequipRequested.Broadcast(SlotSlug);
+    if (!SlotData || !SlotData->bIsOccupied) return;
+    if (EquipTooltipWidget) EquipTooltipWidget->HideTooltip();
+
+    const FInventoryItemStruct Item = BuildTooltipItem(SlotSlug, *SlotData);
+    FVector2D MousePos = FVector2D::ZeroVector;
+    if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+        PC->GetMousePosition(MousePos.X, MousePos.Y);
+    OpenEquipContextMenu(Item, MousePos);
+}
+
+void UEquipmentWidget::OpenEquipContextMenu(const FInventoryItemStruct& Item, FVector2D ScreenPosition)
+{
+    if (!EquipContextMenuWidget || Item.itemId <= 0) return;
+    EquipContextMenuWidget->SetManagers(InventoryManager, EquipmentManager);
+    EquipContextMenuWidget->SetAllowDrop(false);
+    EquipContextMenuWidget->ShowForItem(Item, ScreenPosition);
+}
+
+void UEquipmentWidget::CloseEquipContextMenu()
+{
+    if (EquipContextMenuWidget)
+        EquipContextMenuWidget->HideMenu();
+}
+
+void UEquipmentWidget::HandleEquipContextAction(EItemContextAction Action, const FInventoryItemStruct& Item)
+{
+    // Dispatch is owned by UItemActionMenuWidget::ExecuteAction (Use/Unequip
+    // via managers). Drop is suppressed for equipment (bAllowDrop=false);
+    // nothing extra to do here — this hook exists for BP-side reactions.
+    (void)Action; (void)Item;
+    if (EquipTooltipWidget) EquipTooltipWidget->HideTooltip();
 }
 
 void UEquipmentWidget::HandleUnequipRequested(const FString& SlotSlug)
@@ -249,18 +350,23 @@ void UEquipmentWidget::ShowTooltipForSlot(const FString& SlotSlug)
     if (!EquipTooltipWidget) return;
     const FEquipmentSlotData* SlotData = CachedState.slots.Find(SlotSlug);
     if (!SlotData || !SlotData->bIsOccupied) return;
-    FInventoryItemStruct Item = BuildTooltipItem(*SlotData);
+    FInventoryItemStruct Item = BuildTooltipItem(SlotSlug, *SlotData);
     EquipTooltipWidget->SetItemData(Item);
     EquipTooltipWidget->ShowTooltip();
     EquipTooltipWidget->UpdateTooltipPosition(FVector2D::ZeroVector);
 }
 
-FInventoryItemStruct UEquipmentWidget::BuildTooltipItem(const FEquipmentSlotData& SlotData) const
+FInventoryItemStruct UEquipmentWidget::BuildTooltipItem(const FString& SlotSlug, const FEquipmentSlotData& SlotData) const
 {
     if (InventoryManager)
     {
-        const FInventoryItemStruct Found = InventoryManager->GetItemByInstanceId(SlotData.inventoryItemId);
-        if (Found.id > 0) return Found;
+        FInventoryItemStruct Found = InventoryManager->GetItemByInstanceId(SlotData.inventoryItemId);
+        if (Found.id > 0)
+        {
+            Found.is_equipped = true;
+            Found.equipSlotSlug = SlotSlug;
+            return Found;
+        }
     }
     FInventoryItemStruct Stub;
     Stub.id               = SlotData.inventoryItemId;
@@ -271,6 +377,7 @@ FInventoryItemStruct UEquipmentWidget::BuildTooltipItem(const FEquipmentSlotData
     Stub.durabilityCurrent = SlotData.durabilityCurrent;
     Stub.isEquippable     = true;
     Stub.is_equipped      = true;
+    Stub.equipSlotSlug    = SlotSlug;
     return Stub;
 }
 

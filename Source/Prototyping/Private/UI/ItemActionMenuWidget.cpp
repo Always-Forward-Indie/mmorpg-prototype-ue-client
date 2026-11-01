@@ -1,6 +1,11 @@
 #include "UI/ItemActionMenuWidget.h"
 #include "Prototyping.h"
 #include "UI/ItemActionRowWidget.h"
+#include "UI/ItemQuickBarWidget.h"
+#include "MyGameInstance.h"
+#include "Gameplay/Players/BasicPlayer.h"
+#include "UI/UIManager.h"
+#include "Gameplay/UI/PlayerInterfaceWidget.h"
 
 // S5: action labels gathered via LOCTEXT.
 #define LOCTEXT_NAMESPACE "ItemActionMenu"
@@ -72,6 +77,21 @@ void UItemActionMenuWidget::SetManagers(UInventoryManager* InInventoryManager, U
 {
 	InventoryManager = InInventoryManager;
 	EquipmentManager = InEquipmentManager;
+
+	// Auto-resolve the quickbar so the Quickbar toggle works from both the
+	// inventory and the equipment menus without per-site wiring.
+	QuickBarWidget = nullptr;
+	if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+	{
+		if (ABasicPlayer* Pawn = GI->Player)
+		{
+			if (UUIManager* UIMgr = Pawn->GetUIManager())
+			{
+				if (UPlayerInterfaceWidget* PIW = UIMgr->GetPlayerInterfaceWidget())
+					QuickBarWidget = PIW->GetItemQuickBar();
+			}
+		}
+	}
 }
 
 void UItemActionMenuWidget::ShowForItem(const FInventoryItemStruct& InItem, FVector2D ScreenPosition)
@@ -113,7 +133,17 @@ void UItemActionMenuWidget::RebuildActions()
 	if (CurrentItem.isUsable)
 		AddActionRow(LOCTEXT("Use", "Use"), EItemContextAction::Use);
 
-	if (!CurrentItem.isQuestItem)
+	// Usable items can ride the quickbar. Label reflects state so the row
+	// doubles as removal (no slot-picker submenu for a 5-slot bar).
+	if (CurrentItem.isUsable && QuickBarWidget)
+	{
+		const bool bOnBar = QuickBarWidget->HasItem(CurrentItem.itemId);
+		AddActionRow(bOnBar ? LOCTEXT("QuickbarRemove", "Remove from quickbar")
+		                    : LOCTEXT("QuickbarAdd", "Add to quickbar"),
+		             EItemContextAction::Quickbar);
+	}
+
+	if (!CurrentItem.isQuestItem && bAllowDrop)
 		AddActionRow(LOCTEXT("Drop", "Drop"), EItemContextAction::Drop);
 }
 
@@ -221,6 +251,11 @@ void UItemActionMenuWidget::ExecuteAction(EItemContextAction Action)
 		case EItemContextAction::Unequip:
 			if (EquipmentManager && !CurrentItem.equipSlotSlug.IsEmpty())
 				EquipmentManager->RequestUnequipItem(CharacterId, CurrentItem.equipSlotSlug);
+			break;
+
+		case EItemContextAction::Quickbar:
+			if (QuickBarWidget)
+				QuickBarWidget->ToggleQuickbarItem(CurrentItem);
 			break;
 		}
 	}

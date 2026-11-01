@@ -11,6 +11,7 @@
 class UInventoryManager;
 class UEquipmentManager;
 class UItemActionRowWidget;
+class UItemQuickBarWidget;
 
 UENUM(BlueprintType)
 enum class EItemContextAction : uint8
@@ -19,6 +20,8 @@ enum class EItemContextAction : uint8
 	Unequip  UMETA(DisplayName = "Unequip"),
 	Use      UMETA(DisplayName = "Use"),
 	Drop     UMETA(DisplayName = "Drop"),
+	// Toggle presence on the item quickbar (usable items only).
+	Quickbar UMETA(DisplayName = "Quickbar"),
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemContextActionSelected, EItemContextAction, Action, const FInventoryItemStruct&, Item);
@@ -52,6 +55,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Item Context Menu")
 	void SetManagers(UInventoryManager* InInventoryManager, UEquipmentManager* InEquipmentManager);
 
+	// Quickbar target for the Quickbar toggle action (auto-resolved from the
+	// game instance when SetManagers runs; override for tests).
+	UFUNCTION(BlueprintCallable, Category = "Item Context Menu")
+	void SetQuickBar(UItemQuickBarWidget* InQuickBar) { QuickBarWidget = InQuickBar; }
+
+	// Equipment slots must never offer Drop (unequip first, drop from inventory).
+	UFUNCTION(BlueprintCallable, Category = "Item Context Menu")
+	void SetAllowDrop(bool bAllow) { bAllowDrop = bAllow; }
+
 	// Execute an action for the current item
 	void ExecuteAction(EItemContextAction Action);
 
@@ -84,6 +96,11 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Appearance")
 	TSubclassOf<UItemActionRowWidget> ActionRowWidgetClass;
 
+	/** When false, the Drop row is never offered (equipment slots: drop
+	 *  must go through the inventory, not straight off the body). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Context Menu")
+	bool bAllowDrop = true;
+
 	// Current item the menu was opened for
 	UPROPERTY(BlueprintReadOnly, Category = "Item Context Menu")
 	FInventoryItemStruct CurrentItem;
@@ -93,6 +110,9 @@ protected:
 
 	UPROPERTY()
 	UEquipmentManager* EquipmentManager = nullptr;
+
+	UPROPERTY()
+	UItemQuickBarWidget* QuickBarWidget = nullptr;
 
 private:
 	// Parallel array: action per child index in ActionList

@@ -10,11 +10,13 @@
 #include "Data/DataStructs.h"
 #include "UI/EquipmentSlotWidget.h"
 #include "UI/ItemTooltipWidget.h"
+#include "UI/ItemActionMenuWidget.h"
 #include "UI/FocusableWindowWidget.h"
 #include "EquipmentWidget.generated.h"
 
 class UEquipmentManager;
 class UInventoryManager;
+class UItemActionMenuWidget;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEquipmentVisibilityChanged, bool, bIsVisible);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEquipSlotUnequipRequested, const FString&, SlotSlug);
@@ -28,8 +30,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEquipSlotUnequipRequested, const 
  * Widget reuse without Blueprint changes: Slot_Necklace shows "neck",
  * Slot_Ring1 shows "ring", Slot_Cloak shows "two_hand", Slot_Waist shows "trinket".
  * Left-click a slot ? OnEquipSlotClicked (handled externally, e.g. opens unequip confirm).
- * Right-click a slot ? immediately requests unequip via OnEquipSlotUnequipRequested.
- * Hover ? shows ItemTooltipWidget.
+ * Right-click a slot ? opens the shared item context menu (Unequip / Use)
+ * at the cursor — same UX as the inventory (no more instant unequip).
+ * Hover ? shows ItemTooltipWidget (bound BP widget or dynamic fallback).
  *
  * Required Blueprint bindings (BindWidget):
  *   Slot_Head        UEquipmentSlotWidget
@@ -73,12 +76,31 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Equipment UI Events")
     FOnEquipSlotClicked OnEquipSlotLeftClicked;
 
-    /** Fired on right-click ? unequip without confirm */
+    /** Legacy: fired only by HandleUnequipRequested path (BP back-compat).
+     *  RMB no longer broadcasts this — it opens the context menu instead. */
     UPROPERTY(BlueprintAssignable, Category = "Equipment UI Events")
     FOnEquipSlotUnequipRequested OnEquipSlotUnequipRequested;
 
+    /** Dynamic fallback classes (same pattern as InventoryWidget).
+     *  Assign the BP subclasses in BP_MyGameInstance details; when the
+     *  bound EquipTooltipWidget is missing they are created at runtime. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment UI")
+    TSubclassOf<UItemTooltipWidget> EquipTooltipWidgetClass;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment UI")
+    TSubclassOf<UItemActionMenuWidget> EquipContextMenuWidgetClass;
+
+    /** Open the RMB context menu for an equipped slot item. */
+    UFUNCTION(BlueprintCallable, Category = "Equipment UI")
+    void OpenEquipContextMenu(const FInventoryItemStruct& Item, FVector2D ScreenPosition);
+
+    UFUNCTION(BlueprintCallable, Category = "Equipment UI")
+    void CloseEquipContextMenu();
+
 protected:
     virtual void NativeConstruct() override;
+    virtual void NativeDestruct() override;
+    virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
     virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
     virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
     virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
@@ -90,6 +112,7 @@ protected:
     UFUNCTION() void HandleSlotClicked(const FString& SlotSlug);
     UFUNCTION() void HandleSlotRightClicked(const FString& SlotSlug);
     UFUNCTION() void HandleSlotHovered(const FString& SlotSlug, bool bHovered);
+    UFUNCTION() void HandleEquipContextAction(EItemContextAction Action, const FInventoryItemStruct& Item);
     // Default C++ consumer of OnEquipSlotUnequipRequested: sends the unequip
     // request through the bound EquipmentManager (single owner of the request).
     // Blueprint may additionally bind OnEquipSlotUnequipRequested for visuals.
@@ -113,14 +136,23 @@ protected:
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UWidget*              DragHandle    = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UItemTooltipWidget*   EquipTooltipWidget = nullptr;
 
+    /** Runtime context menu instance (created from EquipContextMenuWidgetClass). */
+    UPROPERTY() UItemActionMenuWidget* EquipContextMenuWidget = nullptr;
+
+    /** True when EquipTooltipWidget was created dynamically (viewport-owned,
+     *  must be removed in NativeDestruct). False when BP-bound (owned by BP). */
+    bool bEquipTooltipDynamic = false;
+
 private:
     void InitializeSlots();
     void UpdateWindowDragPosition(const FVector2D& ScreenCursorPos);
     void BindSlotDelegates(UEquipmentSlotWidget* Slot);
     void ShowTooltipForSlot(const FString& SlotSlug);
 
-    /** Returns FInventoryItemStruct for a slot if InventoryManager has it, otherwise a minimal stub */
-    FInventoryItemStruct BuildTooltipItem(const FEquipmentSlotData& SlotData) const;
+    /** Returns FInventoryItemStruct for a slot if InventoryManager has it, otherwise a minimal stub.
+     *  The returned item is marked is_equipped with equipSlotSlug set so the
+     *  shared context menu offers Unequip (/ Use) and never Equip/Drop. */
+    FInventoryItemStruct BuildTooltipItem(const FString& SlotSlug, const FEquipmentSlotData& SlotData) const;
 
     static FString GetSlotDisplayName(const FString& Slug);
 

@@ -5,6 +5,7 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Components/ScrollBox.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
@@ -89,7 +90,16 @@ void UPlayerInspectWidget::ShowInspect(const FPlayerInspectData& Data)
 	if (!Data.RaceSlug.IsEmpty())
 		AddGearRow(TEXT("Race"), Data.RaceSlug);
 	for (const FPlayerInspectGearEntry& Gear : Data.Gear)
-		AddGearRow(Gear.SlotSlug, LocalizeItem(Gear.ItemSlug));
+	{
+		// Display preview for icons/tooltips (read-only snapshot — the
+		// server never sends inventory rows here).
+		FInventoryItemStruct Preview;
+		Preview.itemId = Gear.ItemId;
+		Preview.slug = Gear.ItemSlug;
+		Preview.name = LocalizeItem(Gear.ItemSlug);
+		Preview.quantity = 1;
+		AddGearSlotRow(Gear.SlotSlug, Preview);
+	}
 	if (Data.Attributes.Num() > 0)
 	{
 		AddGearRow(TEXT("Stats"), TEXT(""));
@@ -123,6 +133,80 @@ void UPlayerInspectWidget::ClearGear()
 {
 	if (GearBox)
 		GearBox->ClearChildren();
+	GearPreviews.Reset();
+	if (InspectTooltip)
+		InspectTooltip->HideTooltip();
+}
+
+void UPlayerInspectWidget::AddGearSlotRow(const FString& SlotName, const FInventoryItemStruct& PreviewItem)
+{
+	if (!GearBox || !WidgetTree) return;
+
+	// Icon slots need the vendor slot BP; without it fall back to text.
+	if (!InspectSlotClass)
+	{
+		AddGearRow(SlotName, PreviewItem.name);
+		return;
+	}
+
+	const int32 SlotIndex = GearPreviews.Num();
+	GearPreviews.Add(PreviewItem);
+
+	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+
+	UTextBlock* Label = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
+	Label->SetText(FText::FromString(SlotName + TEXT(":")));
+	Label->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+	Label->SetShadowColorAndOpacity(FLinearColor::Black);
+	Label->SetShadowOffset(FVector2D(1.f, 1.f));
+	Label->SetAutoWrapText(true);
+	if (UHorizontalBoxSlot* LabelSlot = Cast<UHorizontalBoxSlot>(Row->AddChildToHorizontalBox(Label)))
+	{
+		LabelSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		LabelSlot->SetVerticalAlignment(VAlign_Center);
+		LabelSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+	}
+
+	if (UVendorSlotWidget* GearSlot = CreateWidget<UVendorSlotWidget>(this, InspectSlotClass))
+	{
+		// Display only: never in cart, never disabled by trade rules here —
+		// equipped gear is shown as-is. Clicks are ignored (no subscription).
+		GearSlot->SetupAsInvSlot(SlotIndex, PreviewItem, false, false, 0);
+		GearSlot->OnVendorSlotHovered.AddDynamic(this, &UPlayerInspectWidget::HandleGearSlotHovered);
+		Row->AddChildToHorizontalBox(GearSlot);
+	}
+
+	GearBox->AddChild(Row);
+}
+
+void UPlayerInspectWidget::EnsureTooltip()
+{
+	if (InspectTooltip || !InspectTooltipWidgetClass || !GetWorld()) return;
+	InspectTooltip = CreateWidget<UItemTooltipWidget>(GetWorld(), InspectTooltipWidgetClass);
+	if (InspectTooltip)
+	{
+		InspectTooltip->AddToViewport(1200);
+		InspectTooltip->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+void UPlayerInspectWidget::HandleGearSlotHovered(int32 SlotIndex, bool bIsHovered)
+{
+	if (!bIsHovered || !GearPreviews.IsValidIndex(SlotIndex))
+	{
+		if (InspectTooltip)
+			InspectTooltip->HideTooltip();
+		return;
+	}
+	if (!InspectTooltipWidgetClass) return;
+	EnsureTooltip();
+	if (!InspectTooltip) return;
+	InspectTooltip->SetItemData(GearPreviews[SlotIndex]);
+	FVector2D Mouse = FVector2D::ZeroVector;
+	if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+		PC->GetMousePosition(Mouse.X, Mouse.Y);
+	InspectTooltip->UpdateTooltipPosition(Mouse);
+	InspectTooltip->ShowTooltip();
 }
 
 void UPlayerInspectWidget::AddGearRow(const FString& SlotName, const FString& ItemName)

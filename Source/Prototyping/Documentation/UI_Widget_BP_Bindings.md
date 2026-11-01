@@ -117,7 +117,7 @@ Unassigned `*WidgetClass` = code fallback (headless-safe, bots cover it).
 | `UKeybindWidget` (standalone fallback) | — (created from C++ class) | `Keybinds_List_Box` (ScrollBox), `Keybinds_Reset_Btn` (Button), `Keybinds_Close_Btn` (Button, standalone only) |
 | `UKeybindWidget` (settings tab) | place as slot 3 of `WBP_Settings.TabContentSwitcher` + `Tab_ControlsButton`; set `bManageViewportPlacement=false` on the instance | same three binds, Close unbound (settings has its own close) |
 | `UPlayerContextMenuWidget` | `UIManager.PlayerMenuWidgetClass` | `Menu_Title_Text` (Text, optional), `Menu_Action_List` (VerticalBox, optional), `MenuRowWidgetClass` (row design; row BP binds `MenuRow_Label`) |
-| `UPlayerInspectWidget` | `UIManager.PlayerInspectWidgetClass` | `Inspect_Title_Text` (Text), `Inspect_Gear_Box` (ScrollBox), `Inspect_Close_Btn` (Button) |
+| `UPlayerInspectWidget` | `UIManager.PlayerInspectWidgetClass` | `Inspect_Title_Text` (Text), `Inspect_Gear_Box` (ScrollBox), `Inspect_Close_Btn` (Button); gear icons reuse the vendor slot BP (`InspectSlotClass`), hover tooltip via `InspectTooltipWidgetClass` (optional) |
 
 Settings tab order is index-bound (`ESettingsTab`: Audio=0, Graphics=1,
 Language=2, Controls=3) — new tabs go last, never reorder.

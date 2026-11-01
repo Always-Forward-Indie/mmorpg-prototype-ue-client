@@ -6,6 +6,8 @@
 #include "Components/ScrollBox.h"
 #include "Components/Button.h"
 #include "Data/DataStructs.h"
+#include "UI/VendorSlotWidget.h"
+#include "UI/ItemTooltipWidget.h"
 #include "Gameplay/Social/PlayerInspectManager.h"
 #include "PlayerInspectWidget.generated.h"
 
@@ -13,15 +15,20 @@
  * UPlayerInspectWidget
  *
  * Read-only snapshot window for unit-menu inspect: identity header
- * (name / level / class / race) + equipped item rows with localized
- * names. Never sends packets; content comes only from UPlayerInspectManager.
+ * (name / level / class / race) + equipped gear as icon slots with
+ * tooltips + attribute totals as text rows. Never sends packets; content
+ * comes only from UPlayerInspectManager. Clicks on gear do nothing
+ * (display only).
  *
  * Blueprint layout (optional): create a BP subclass, bind these names,
  * assign it to UIManager.PlayerInspectWidgetClass. Bind all three or none —
- * rows are always built in code (uniform styling):
+ * gear rows are always built in code (uniform styling):
  *   Inspect_Title_Text  UTextBlock  "Name [Level] Class" header
- *   Inspect_Gear_Box    UScrollBox  gear/attribute rows go here
+ *   Inspect_Gear_Box    UScrollBox  gear slots + attribute rows go here
  *   Inspect_Close_Btn   UButton     hides the window
+ * Gear slots reuse the vendor slot BP (InspectSlotClass, same asset as the
+ * vendor shop uses); hover shows an item tooltip (InspectTooltipWidgetClass,
+ * optional — without it the localized slot name still shows as text).
  * With no subclass assigned the whole layout is built in C++ (headless-safe).
  */
 UCLASS(BlueprintType, Blueprintable)
@@ -54,15 +61,35 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional)) UScrollBox* Inspect_Gear_Box = nullptr;
 	UPROPERTY(meta = (BindWidgetOptional)) UButton* Inspect_Close_Btn = nullptr;
 
+	/**
+	 * Vendor slot BP reused for gear icons (same asset as the vendor shop).
+	 * Unset = gear falls back to text rows ("slot: item").
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inspect")
+	TSubclassOf<UVendorSlotWidget> InspectSlotClass;
+
+	/** Item tooltip BP for gear hover. Optional — names still show as text. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inspect")
+	TSubclassOf<UItemTooltipWidget> InspectTooltipWidgetClass;
+
+	UFUNCTION() void HandleGearSlotHovered(int32 SlotIndex, bool bIsHovered);
+
 private:
 	class UScrollBox* GearBox = nullptr;
 	class UTextBlock* HeaderText = nullptr;
 	class UVerticalBox* RootCol = nullptr;
 
+	// Parallel array: tooltip previews per gear slot widget index.
+	TArray<FInventoryItemStruct> GearPreviews;
+
+	UPROPERTY() UItemTooltipWidget* InspectTooltip = nullptr;
+
 	void BuildLayout();
 	void ClearGear();
 	void AddGearRow(const FString& SlotName, const FString& ItemName);
+	void AddGearSlotRow(const FString& SlotName, const FInventoryItemStruct& PreviewItem);
 	FString LocalizeItem(const FString& Slug) const;
+	void EnsureTooltip();
 
 	// Wiring happens once (NativeConstruct may re-run on re-add to viewport).
 	bool bWired = false;

@@ -29,7 +29,23 @@ void UBuybackRowBinding::HandleClicked()
 void UBuybackWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	BuildLayout();
+	// Blueprint layout wins when bound; otherwise build the code fallback.
+	// Widget-level placement stays in code (viewport anchors are runtime-only).
+	if (!bWired)
+	{
+		bWired = true;
+		if (Buyback_Title_Text || Buyback_List_Box || Buyback_Close_Btn)
+		{
+			HeaderText = Buyback_Title_Text;
+			ListBox = Buyback_List_Box;
+			if (Buyback_Close_Btn)
+				Buyback_Close_Btn->OnClicked.AddDynamic(this, &UBuybackWidget::HideBuyback);
+		}
+		else
+		{
+			BuildLayout(); // wires its own close button
+		}
+	}
 	SetAnchorsInViewport(FAnchors(0.f, 0.5f));
 	SetAlignmentInViewport(FVector2D(0.f, 0.5f));
 	SetPositionInViewport(WindowPosition, false);

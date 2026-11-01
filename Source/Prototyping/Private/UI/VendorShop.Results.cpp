@@ -119,7 +119,11 @@ void UVendorShopWidget::CloseBuyback()
 void UVendorShopWidget::EnsureBuybackWidget()
 {
     if (BuybackWidget || !GetWorld()) return;
-    BuybackWidget = CreateWidget<UBuybackWidget>(GetWorld(), UBuybackWidget::StaticClass());
+    // Blueprint subclass wins when assigned (binds its named slots),
+    // otherwise the code-built fallback is used (headless-safe).
+    TSubclassOf<UBuybackWidget> BuybackClass =
+        BuybackWidgetClass ? *BuybackWidgetClass : UBuybackWidget::StaticClass();
+    BuybackWidget = CreateWidget<UBuybackWidget>(GetWorld(), BuybackClass);
     if (BuybackWidget)
     {
         BuybackWidget->AddToViewport(96);

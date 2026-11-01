@@ -96,6 +96,14 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor UI")
     TSubclassOf<UVendorSlotWidget> VendorSlotClass;
 
+    /**
+     * Blueprint subclass of the buyback list. Unset = code-built fallback.
+     * Bind Buyback_Title_Text / Buyback_List_Box / Buyback_Close_Btn
+     * (all BindWidgetOptional, see UBuybackWidget class doc).
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor UI")
+    TSubclassOf<UBuybackWidget> BuybackWidgetClass;
+
     /** Sell all junk-marked rows in one batch (optional button, no BP edit needed otherwise). */
     UFUNCTION(BlueprintCallable, Category = "Vendor UI")
     void SellJunkItems();

@@ -86,6 +86,11 @@ void ABasicPlayer::OnRightMousePressed()
     RMBPressTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
     RMBPressTarget = nullptr;
     RMBPressType = EInteractableType::None;
+    if (CursorInteractionComponent)
+    {
+        RMBPressTarget = CursorInteractionComponent->GetHoveredActor();
+        RMBPressType = CursorInteractionComponent->GetHoveredType();
+    }
     if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
         PC->GetMousePosition(RMBPressPos.X, RMBPressPos.Y);
 

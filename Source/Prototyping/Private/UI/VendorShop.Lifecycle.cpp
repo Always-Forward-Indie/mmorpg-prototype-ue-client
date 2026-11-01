@@ -28,6 +28,8 @@ void UVendorShopWidget::NativeConstruct()
         Tab_Buy_Button->OnClicked.AddDynamic(this, &UVendorShopWidget::HandleTabBuyClicked);
     if (Tab_Sell_Button)
         Tab_Sell_Button->OnClicked.AddDynamic(this, &UVendorShopWidget::HandleTabSellClicked);
+    if (Tab_Buyback_Button)
+        Tab_Buyback_Button->OnClicked.AddDynamic(this, &UVendorShopWidget::HandleTabBuybackClicked);
     if (Buy_Confirm_Button)
         Buy_Confirm_Button->OnClicked.AddDynamic(this, &UVendorShopWidget::HandleConfirmBuyCart);
     else
@@ -42,8 +44,6 @@ void UVendorShopWidget::NativeConstruct()
         Sell_Clear_Button->OnClicked.AddDynamic(this, &UVendorShopWidget::HandleClearSellCart);
     if (Sell_Junk_Button)
         Sell_Junk_Button->OnClicked.AddDynamic(this, &UVendorShopWidget::SellJunkItems);
-    if (Buyback_Button)
-        Buyback_Button->OnClicked.AddDynamic(this, &UVendorShopWidget::OpenBuyback);
 
     if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
     {

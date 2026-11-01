@@ -1,6 +1,5 @@
 #include "UI/VendorShopWidget.h"
 #include "UI/VendorShopWidget.h"
-#include "UI/BuybackWidget.h"
 #include "Prototyping.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Gameplay/Items/InventoryManager.h"
@@ -103,48 +102,96 @@ void UVendorShopWidget::SellJunkItems()
         PendingSellExpected += FVendorSellRule::LineGold(E.pricePerUnit, E.quantity, CachedShop.sellTaxPct);
 }
 
-void UVendorShopWidget::OpenBuyback()
+void UVendorShopWidget::OpenBuybackTab()
 {
     if (!VendorManager || CachedShop.npcId <= 0) return;
-    EnsureBuybackWidget();
-    VendorManager->RequestBuybackList(GetCharacterId());
-}
-
-void UVendorShopWidget::CloseBuyback()
-{
-    if (BuybackWidget)
-        BuybackWidget->HideBuyback();
-}
-
-void UVendorShopWidget::EnsureBuybackWidget()
-{
-    if (BuybackWidget || !GetWorld()) return;
-    // Blueprint subclass wins when assigned (binds its named slots),
-    // otherwise the code-built fallback is used (headless-safe).
-    TSubclassOf<UBuybackWidget> BuybackClass =
-        BuybackWidgetClass ? *BuybackWidgetClass : UBuybackWidget::StaticClass();
-    BuybackWidget = CreateWidget<UBuybackWidget>(GetWorld(), BuybackClass);
-    if (BuybackWidget)
-    {
-        BuybackWidget->AddToViewport(96);
-        BuybackWidget->SetVisibility(ESlateVisibility::Collapsed);
-        BuybackWidget->OnBuybackRowClicked.AddDynamic(this, &UVendorShopWidget::HandleBuybackRowClicked);
-    }
+    SwitchToTab(EVendorTab::Buyback);
 }
 
 void UVendorShopWidget::HandleBuybackList(const FBuybackListData& List)
 {
-    // Show on arrival (the request was sent by OpenBuyback) — never
-    // re-request here, that would loop request → list → request.
-    EnsureBuybackWidget();
-    if (BuybackWidget)
-        BuybackWidget->ShowBuyback(List.entries);
+    // Store the snapshot and paint the tab (requested on tab enter).
+    // Never re-request here — that would loop request → list → request.
+    BuybackEntries = List.entries;
+    RefreshBuybackDisplay();
 }
 
-void UVendorShopWidget::HandleBuybackRowClicked(int32 BuybackSlot, int32 Quantity)
+void UVendorShopWidget::RefreshBuybackDisplay()
 {
-    if (!VendorManager || CachedShop.npcId <= 0 || Quantity <= 0) return;
-    VendorManager->RequestBuybackItem(GetCharacterId(), CachedShop.npcId, BuybackSlot, Quantity, GetPlayerPosition());
+    if (!Buyback_Items_Box || !VendorSlotClass) return;
+    Buyback_Items_Box->ClearChildren();
+    BuybackSlots.Reset();
+
+    if (BuybackEntries.Num() == 0)
+    {
+        ShowStatus(LOCTEXT("BuybackEmpty", "Nothing to buy back"), EShopStatusSeverity::Info);
+        return;
+    }
+
+    for (int32 i = 0; i < BuybackEntries.Num(); ++i)
+    {
+        const FBuybackEntry& Entry = BuybackEntries[i];
+        UVendorSlotWidget* NewSlot = CreateWidget<UVendorSlotWidget>(GetOwningPlayer(), VendorSlotClass);
+        if (!NewSlot) continue;
+        NewSlot->SetupAsCartSlot(i, BuybackEntryToCart(Entry, LocalizeBuybackName(Entry.slug)));
+        // Display-only cart: no [X] button, click = buy the whole stack.
+        NewSlot->SetAllowRemoveButton(false);
+        NewSlot->OnVendorSlotClicked.AddDynamic(this, &UVendorShopWidget::HandleBuybackSlotClicked);
+        NewSlot->OnVendorSlotHovered.AddDynamic(this, &UVendorShopWidget::HandleBuybackSlotHovered);
+        BuybackSlots.Add(NewSlot);
+        Buyback_Items_Box->AddChild(NewSlot);
+    }
+}
+
+FVendorCartEntry UVendorShopWidget::BuybackEntryToCart(const FBuybackEntry& Entry, const FString& DisplayName) const
+{
+    FVendorCartEntry E;
+    E.itemId = Entry.itemId;
+    E.inventoryItemId = 0; // sold stack: no live inventory row
+    E.itemSlug = Entry.slug;
+    E.itemName = DisplayName;
+    E.slug = Entry.slug;
+    E.quantity = Entry.quantity;
+    E.maxQuantity = Entry.quantity;
+    E.pricePerUnit = Entry.unitPrice;
+    return E;
+}
+
+FString UVendorShopWidget::LocalizeBuybackName(const FString& Slug) const
+{
+    if (Slug.IsEmpty()) return TEXT("—");
+    if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+        {
+            const FText LocName = Loc->GetItemDisplayName(Slug);
+            if (!LocName.IsEmpty())
+                return LocName.ToString();
+        }
+    }
+    return Slug;
+}
+
+void UVendorShopWidget::HandleBuybackSlotClicked(int32 SlotIndex)
+{
+    if (!VendorManager || CachedShop.npcId <= 0) return;
+    if (!BuybackEntries.IsValidIndex(SlotIndex)) return;
+    const FBuybackEntry& Entry = BuybackEntries[SlotIndex];
+    if (Entry.quantity <= 0) return;
+    // Full-stack repurchase (v1: no partial quantities).
+    VendorManager->RequestBuybackItem(GetCharacterId(), CachedShop.npcId, Entry.slot, Entry.quantity, GetPlayerPosition());
+}
+
+void UVendorShopWidget::HandleBuybackSlotHovered(int32 SlotIndex, bool bIsHovered)
+{
+    if (!VendorTooltipWidget) return;
+    if (bIsHovered && BuybackSlots.IsValidIndex(SlotIndex) && BuybackSlots[SlotIndex])
+    {
+        VendorTooltipWidget->SetDataFromCartEntry(BuybackSlots[SlotIndex]->GetCartEntryData());
+        VendorTooltipWidget->ShowTooltip();
+    }
+    else
+        VendorTooltipWidget->HideTooltip();
 }
 
 void UVendorShopWidget::HandleBuybackResult(const FBuybackResultData& Result)

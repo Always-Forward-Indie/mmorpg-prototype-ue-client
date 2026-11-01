@@ -113,7 +113,8 @@ Unassigned `*WidgetClass` = code fallback (headless-safe, bots cover it).
 |---|---|---|
 | `UTradeInviteWidget` | `UIManager.TradeInviteWidgetClass` | `Invite_Name_Text` (Text), `Invite_Countdown_Text` (Text), `Invite_Accept_Btn` (Button), `Invite_Decline_Btn` (Button) |
 | `UCombatLogWidget` | `UIManager.CombatLogWidgetClass` | `Log_Scroll_Box` (ScrollBox), `Log_Filter_Row` (any Panel, HorizontalBox recommended — channel checks are built into it) |
-| `UBuybackWidget` | `UVendorShopWidget.BuybackWidgetClass` | `Buyback_Title_Text` (Text), `Buyback_List_Box` (ScrollBox), `Buyback_Close_Btn` (Button) |
+| `UBuybackWidget` | — (удалён: выкуп — вкладка вендора, см. ниже) | — |
+| `UVendorShopWidget` buyback tab | binds on `WBP_VendorShop`: `Buyback_Panel` (Widget), `Buyback_Items_Box` (WrapBox), `Tab_Buyback_Button` (Button); slots reuse `VendorSlotClass`, hover tooltip via shop `VendorTooltipWidget` | click slot = full-stack buyback; no [X] on buyback rows |
 | `UKeybindWidget` (standalone fallback) | — (created from C++ class) | `Keybinds_List_Box` (ScrollBox), `Keybinds_Reset_Btn` (Button), `Keybinds_Close_Btn` (Button, standalone only) |
 | `UKeybindWidget` (settings tab) | place as slot 3 of `WBP_Settings.TabContentSwitcher` + `Tab_ControlsButton`; set `bManageViewportPlacement=false` on the instance | same three binds, Close unbound (settings has its own close) |
 | `UPlayerContextMenuWidget` | `UIManager.PlayerMenuWidgetClass` | `Menu_Title_Text` (Text, optional), `Menu_Action_List` (VerticalBox, optional), `MenuRowWidgetClass` (row design; row BP binds `MenuRow_Label`) |

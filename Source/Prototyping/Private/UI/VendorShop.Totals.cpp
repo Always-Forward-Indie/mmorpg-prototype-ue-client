@@ -112,7 +112,7 @@ void UVendorShopWidget::UpdatePlayerGoldText()
         for (const FVendorCartEntry& E : BuyCart)
             Delta -= E.pricePerUnit * E.quantity;
     }
-    else
+    else if (ActiveTab == EVendorTab::Sell)
     {
         for (const FVendorCartEntry& E : SellCart)
             Delta += FVendorSellRule::LineGold(E.pricePerUnit, E.quantity, CachedShop.sellTaxPct);

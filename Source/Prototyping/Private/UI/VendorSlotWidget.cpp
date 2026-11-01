@@ -89,6 +89,12 @@ void UVendorSlotWidget::SetInCart(bool bNewInCart)
         InCartImage->SetVisibility(bInCart ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 }
 
+void UVendorSlotWidget::SetAllowRemoveButton(bool bAllow)
+{
+    bAllowRemoveButton = bAllow;
+    RefreshVisuals();
+}
+
 void UVendorSlotWidget::SetAffordability(EVendorSlotAffordability InAffordability)
 {
     if (!AffordabilityBorder) return;
@@ -157,9 +163,10 @@ void UVendorSlotWidget::RefreshVisuals()
     if (InCartImage)
         InCartImage->SetVisibility(bInCart ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 
-    // Remove button — only visible in cart mode
+    // Remove button — only in cart mode, unless explicitly disallowed
+    // (display-only cart uses like the buyback tab).
     if (RemoveButton)
-        RemoveButton->SetVisibility(Mode == EVendorSlotMode::CartEntry ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+        RemoveButton->SetVisibility(Mode == EVendorSlotMode::CartEntry && bAllowRemoveButton ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 
     // Overlay badge text:
     //   ShopItem  -> stock count ("∞" for unlimited, "5" for finite)

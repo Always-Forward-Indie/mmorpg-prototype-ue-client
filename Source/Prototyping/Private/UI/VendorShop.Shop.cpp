@@ -60,8 +60,11 @@ void UVendorShopWidget::CloseShop()
 void UVendorShopWidget::SwitchToTab(EVendorTab Tab)
 {
     ActiveTab = Tab;
-    if (Buy_Panel)  Buy_Panel ->SetVisibility(Tab == EVendorTab::Buy  ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-    if (Sell_Panel) Sell_Panel->SetVisibility(Tab == EVendorTab::Sell ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    if (Buy_Panel)     Buy_Panel    ->SetVisibility(Tab == EVendorTab::Buy     ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    if (Sell_Panel)    Sell_Panel   ->SetVisibility(Tab == EVendorTab::Sell    ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    if (Buyback_Panel) Buyback_Panel->SetVisibility(Tab == EVendorTab::Buyback ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    if (Tab == EVendorTab::Buyback && VendorManager)
+        VendorManager->RequestBuybackList(GetCharacterId());
     UpdatePlayerGoldText();
 }
 
@@ -195,6 +198,7 @@ void UVendorShopWidget::RefreshSellCartDisplay()
     UpdatePlayerGoldText();
 }
 
-void UVendorShopWidget::HandleTabBuyClicked()  { SwitchToTab(EVendorTab::Buy);  }
-void UVendorShopWidget::HandleTabSellClicked() { SwitchToTab(EVendorTab::Sell); }
+void UVendorShopWidget::HandleTabBuyClicked()     { SwitchToTab(EVendorTab::Buy); }
+void UVendorShopWidget::HandleTabSellClicked()    { SwitchToTab(EVendorTab::Sell); }
+void UVendorShopWidget::HandleTabBuybackClicked() { SwitchToTab(EVendorTab::Buyback); }
 

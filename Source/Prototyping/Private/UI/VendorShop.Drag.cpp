@@ -93,5 +93,8 @@ void UVendorShopWidget::HandleLocaleChanged(const FString& NewLocale)
     if (GetVisibility() == ESlateVisibility::Visible && CachedShop.npcId > 0)
     {
         RefreshShopDisplay();
+        // Buyback names are localized client-side: rebuild from the cache.
+        if (ActiveTab == EVendorTab::Buyback)
+            RefreshBuybackDisplay();
     }
 }

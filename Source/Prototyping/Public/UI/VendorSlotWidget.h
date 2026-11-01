@@ -80,6 +80,13 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Vendor Slot")
     void SetInCart(bool bNewInCart);
 
+    /**
+     * Show or hide the [X] remove button (CartEntry mode shows it by
+     * default). Display-only cart uses (buyback tab) hide it.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Vendor Slot")
+    void SetAllowRemoveButton(bool bAllow);
+
     // Set affordability highlight (ShopItem / CartEntry only; ignored for InvItem)
     UFUNCTION(BlueprintCallable, Category = "Vendor Slot")
     void SetAffordability(EVendorSlotAffordability InAffordability);
@@ -190,6 +197,7 @@ private:
     int32 SlotIndex      = -1;
     bool  bInCart        = false;
     bool  bIsDisabled    = false;
+    bool  bAllowRemoveButton = true;
     int32 CartQuantity   = 0;
     bool  bRemoveButtonHovered = false;
 

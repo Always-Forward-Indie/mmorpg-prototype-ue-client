@@ -3,7 +3,6 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "UI/FocusableWindowWidget.h"
-#include "UI/BuybackWidget.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
@@ -23,8 +22,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnVendorShopVisibilityChanged, bool
 UENUM(BlueprintType)
 enum class EVendorTab : uint8
 {
-    Buy  UMETA(DisplayName = "Buy"),
-    Sell UMETA(DisplayName = "Sell")
+    Buy     UMETA(DisplayName = "Buy"),
+    Sell    UMETA(DisplayName = "Sell"),
+    Buyback UMETA(DisplayName = "Buyback")
 };
 
 /**
@@ -39,8 +39,11 @@ enum class EVendorTab : uint8
  *   Sell_Cart_Box        UWrapBox    sell cart slots
  *   Buy_Panel            UWidget     panel shown on Buy tab
  *   Sell_Panel           UWidget     panel shown on Sell tab
+ *   Buyback_Panel        UWidget     panel shown on Buyback tab
+ *   Buyback_Items_Box    UWrapBox    last-sold stacks (click = buy back)
  *   Tab_Buy_Button       UButton
  *   Tab_Sell_Button      UButton
+ *   Tab_Buyback_Button   UButton
  *   NPC_Name_Text        UTextBlock
  *   Buy_Total_Text       UTextBlock  buy cart total price   (BindWidgetOptional)
  *   Sell_Total_Text      UTextBlock  sell cart total gold   (BindWidgetOptional)
@@ -96,28 +99,18 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor UI")
     TSubclassOf<UVendorSlotWidget> VendorSlotClass;
 
-    /**
-     * Blueprint subclass of the buyback list. Unset = code-built fallback.
-     * Bind Buyback_Title_Text / Buyback_List_Box / Buyback_Close_Btn
-     * (all BindWidgetOptional, see UBuybackWidget class doc).
-     */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor UI")
-    TSubclassOf<UBuybackWidget> BuybackWidgetClass;
-
     /** Sell all junk-marked rows in one batch (optional button, no BP edit needed otherwise). */
     UFUNCTION(BlueprintCallable, Category = "Vendor UI")
     void SellJunkItems();
 
-    /** Open the buyback list (requests the per-character sold-items list). */
+    /** Open the buyback tab (requests the per-character sold-items list). */
     UFUNCTION(BlueprintCallable, Category = "Vendor UI")
-    void OpenBuyback();
-
-    UFUNCTION(BlueprintCallable, Category = "Vendor UI")
-    void CloseBuyback();
+    void OpenBuybackTab();
 
     UFUNCTION() void HandleBuybackList(const FBuybackListData& List);
     UFUNCTION() void HandleBuybackResult(const FBuybackResultData& Result);
-    UFUNCTION() void HandleBuybackRowClicked(int32 BuybackSlot, int32 Quantity);
+    UFUNCTION() void HandleBuybackSlotClicked(int32 SlotIndex);
+    UFUNCTION() void HandleBuybackSlotHovered(int32 SlotIndex, bool bIsHovered);
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor UI")
     TSubclassOf<UQuantityPopupWidget> QuantityPopupClass;
@@ -148,6 +141,7 @@ void UpdateWindowDragPosition(const FVector2D& ScreenCursorPos);
     UFUNCTION() void HandleCloseButtonClicked();
     UFUNCTION() void HandleTabBuyClicked();
     UFUNCTION() void HandleTabSellClicked();
+    UFUNCTION() void HandleTabBuybackClicked();
     UFUNCTION() void HandleConfirmBuyCart();
     UFUNCTION() void HandleConfirmSellCart();
     UFUNCTION() void HandleClearBuyCart();
@@ -186,8 +180,11 @@ void UpdateWindowDragPosition(const FVector2D& ScreenCursorPos);
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))         UWrapBox*   Sell_Cart_Box       = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))         UWidget*    Buy_Panel           = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))         UWidget*    Sell_Panel          = nullptr;
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))         UWidget*    Buyback_Panel       = nullptr;
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))         UWrapBox*   Buyback_Items_Box   = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))         UButton*    Tab_Buy_Button      = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))         UButton*    Tab_Sell_Button     = nullptr;
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))         UButton*    Tab_Buyback_Button  = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))         UTextBlock* NPC_Name_Text       = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UTextBlock* Buy_Total_Text      = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UTextBlock* Sell_Total_Text     = nullptr;
@@ -198,7 +195,6 @@ void UpdateWindowDragPosition(const FVector2D& ScreenCursorPos);
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UButton*    Buy_Clear_Button    = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UButton*    Sell_Clear_Button   = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UButton*    Sell_Junk_Button    = nullptr;
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UButton*    Buyback_Button      = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UWidget*    DragHandle          = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UTextBlock* Player_Gold_Text    = nullptr;
 
@@ -238,12 +234,15 @@ UPROPERTY() UVendorTooltipWidget* VendorTooltipWidget = nullptr;
     UPROPERTY() TArray<UVendorSlotWidget*> InvSlots;
     UPROPERTY() TArray<UVendorSlotWidget*> BuyCartSlots;
     UPROPERTY() TArray<UVendorSlotWidget*> SellCartSlots;
+    UPROPERTY() TArray<UVendorSlotWidget*> BuybackSlots;
 
-    // Buyback window (runtime-created, no BP setup).
-    UPROPERTY() UBuybackWidget* BuybackWidget = nullptr;
+    // Latest buyback snapshot (per-character sold stacks, oldest first).
+    TArray<FBuybackEntry> BuybackEntries;
 
-    // Buyback helpers
-    void EnsureBuybackWidget();
+    // Buyback slot helpers
+    void RefreshBuybackDisplay();
+    FVendorCartEntry BuybackEntryToCart(const FBuybackEntry& Entry, const FString& DisplayName) const;
+    FString LocalizeBuybackName(const FString& Slug) const;
 
     // Helpers
     void ShowStatus(const FText& Msg, EShopStatusSeverity Severity = EShopStatusSeverity::Info);

@@ -90,6 +90,7 @@ void UChatWidget::AddChatMessage(const FChatMessageStruct& Message)
         if (LineWidget)
         {
             LineWidget->SetMessageData(Message);
+            LineWidget->OnSenderClicked.AddDynamic(this, &UChatWidget::HandleSenderClicked);
             MessageScrollBox->AddChild(LineWidget);
             CurrentLineCount++;
 
@@ -147,6 +148,11 @@ bool UChatWidget::IsChatVisible() const
 void UChatWidget::OnSendButtonClicked()
 {
     SubmitCurrentInput();
+}
+
+void UChatWidget::HandleSenderClicked(int32 SenderId, const FString& SenderName)
+{
+    OnChatSenderClicked.Broadcast(SenderId, SenderName);
 }
 
 void UChatWidget::OnInputTextCommitted(const FText& Text, ETextCommit::Type CommitMethod)

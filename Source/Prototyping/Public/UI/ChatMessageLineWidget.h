@@ -8,12 +8,14 @@
 #include "Data/DataStructs.h"
 #include "ChatMessageLineWidget.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnChatSenderClicked, int32, SenderId, const FString&, SenderName);
+
 /**
  * UChatMessageLineWidget
  *
  * Represents a single line in the chat scroll box.
  * Create a Blueprint child (e.g. WBP_ChatMessageLine) and design it freely:
- * add TextBlocks, Borders, icons — anything you need.
+ * add TextBlocks, Borders, icons ï¿½ anything you need.
  *
  * The only required binding is MessageText (UTextBlock).
  * All other bindings are optional.
@@ -39,29 +41,33 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Chat Line")
     const FChatMessageStruct& GetMessageData() const { return CachedMessage; }
 
+    /** Fired on left-click on the line (sender menu). ChatWidget re-broadcasts. */
+    UPROPERTY(BlueprintAssignable, Category = "Chat Line")
+    FOnChatSenderClicked OnSenderClicked;
+
     // ---------------------------------------------------------------
-    // Optional Blueprint bindings — bind them in your WBP if you want
+    // Optional Blueprint bindings ï¿½ bind them in your WBP if you want
     // C++ to fill them automatically; leave unbound to handle in BP.
     // ---------------------------------------------------------------
 
-    /** Main text label — auto-filled with the formatted message string. */
+    /** Main text label ï¿½ auto-filled with the formatted message string. */
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Chat Line")
     UTextBlock* MessageText = nullptr;
 
-    /** Channel tag label — auto-filled with [Z] / [L] / [W]. */
+    /** Channel tag label ï¿½ auto-filled with [Z] / [L] / [W]. */
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Chat Line")
     UTextBlock* ChannelTagText = nullptr;
 
-    /** Sender name label — auto-filled with senderName. */
+    /** Sender name label ï¿½ auto-filled with senderName. */
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Chat Line")
     UTextBlock* SenderNameText = nullptr;
 
-    /** Background border — tinted with the channel colour. */
+    /** Background border ï¿½ tinted with the channel colour. */
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Chat Line")
     UBorder* BackgroundBorder = nullptr;
 
     // ---------------------------------------------------------------
-    // Style overrides — set defaults here, override in Blueprint.
+    // Style overrides ï¿½ set defaults here, override in Blueprint.
     // ---------------------------------------------------------------
 
     /** Font size for the message body. */
@@ -106,6 +112,9 @@ public:
 
 protected:
     virtual void NativePreConstruct() override;
+    virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+    virtual void NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+    virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
 
 private:
     FChatMessageStruct CachedMessage;

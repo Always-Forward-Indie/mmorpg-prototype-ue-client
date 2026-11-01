@@ -822,6 +822,9 @@ public:
 	/** Bound to UPlayerContextMenuWidget::OnActionSelected. */
 	UFUNCTION() void HandlePlayerSocialAction(EPlayerSocialAction Action, int32 TargetCharacterId);
 
+	/** Bound to UChatWidget::OnChatSenderClicked (click a sender name). */
+	UFUNCTION() void HandleChatSenderClicked(int32 SenderId, const FString& SenderName);
+
 	/** Bound to UPlayerInspectManager delegates. */
 	UFUNCTION() void HandlePlayerInspectReceived(const FPlayerInspectData& Data);
 	UFUNCTION() void HandlePlayerInspectError(const FString& Reason);

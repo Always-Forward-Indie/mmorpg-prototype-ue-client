@@ -138,3 +138,21 @@ void UUIManager::HandlePlayerInspectError(const FString& Reason)
 {
 	UE_LOG(LogGameplay, Warning, TEXT("UIManager: inspect failed (%s)"), *Reason);
 }
+
+void UUIManager::HandleChatSenderClicked(int32 SenderId, const FString& SenderName)
+{
+	UMyGameInstance* GI = GetWorld() ? Cast<UMyGameInstance>(GetWorld()->GetGameInstance()) : nullptr;
+	if (!GI || SenderId <= 0) return;
+	// Own lines are not clickable targets.
+	if (GI->Player && GI->Player->GetPlayerCharacterID() == SenderId) return;
+
+	// Online player in our world → unit menu; otherwise straight to whisper.
+	if (ABasicPlayer* Target = GI->GetPlayerByCharacterId(SenderId))
+	{
+		OpenPlayerContextMenu(Target);
+	}
+	else if (!SenderName.IsEmpty() && ChatWidget)
+	{
+		ChatWidget->StartWhisperTo(SenderName);
+	}
+}

@@ -17,10 +17,10 @@ void UCombatLogWidget::NativeConstruct()
 
 	BuildLayout();
 
-	// Left edge, vertically biased above the chat row. Size/pos are
+	// Left edge, vertically biased above the chat row. Size/pos/anchors are
 	// UPROPERTY-tunable without touching code or Blueprints.
-	SetAnchorsInViewport(FAnchors(0.f, 0.5f));
-	SetAlignmentInViewport(FVector2D(0.f, 0.5f));
+	SetAnchorsInViewport(LogAnchors);
+	SetAlignmentInViewport(LogAlignment);
 	SetPositionInViewport(LogPosition, false);
 	SetVisibility(ESlateVisibility::Visible);
 
@@ -147,8 +147,11 @@ void UCombatLogWidget::AppendEntry(const FCombatLogEntry& Entry)
 		return;
 
 	UTextBlock* Line = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-	Line->SetText(FText::FromString(Entry.Text));
-	Line->SetColorAndOpacity(FSlateColor(FCombatLogRule::ColorFor(Entry.Category)));
+	FString DisplayText = Entry.Text;
+	if (bShowTimestamps)
+		DisplayText = FString::Printf(TEXT("[%s] %s"), *Entry.Timestamp.ToString(TEXT("%H:%M:%S")), *Entry.Text);
+	Line->SetText(FText::FromString(DisplayText));
+	Line->SetColorAndOpacity(FSlateColor(ColorFor(Entry.Category)));
 	Line->SetShadowColorAndOpacity(FLinearColor::Black);
 	Line->SetShadowOffset(FVector2D(1.f, 1.f));
 	Line->SetAutoWrapText(true);

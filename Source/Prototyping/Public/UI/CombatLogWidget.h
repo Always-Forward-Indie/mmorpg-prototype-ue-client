@@ -73,8 +73,41 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Log")
 	FVector2D LogPosition = FVector2D(8.f, -140.f);
 
+	// UI-14: anchor/alignment override (default: left edge, vertically centered).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Log")
+	FAnchors LogAnchors = FAnchors(0.f, 0.5f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Log")
+	FVector2D LogAlignment = FVector2D(0.f, 0.5f);
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Log")
 	int32 MaxLines = FCombatLogRule::MaxWidgetLines;
+
+	/** Prefix lines with [HH:MM:SS]. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Log")
+	bool bShowTimestamps = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Log")
+	int32 LineFontSize = 12;
+
+	// T-02: BP-tunable channel colours (mirror FCombatLogRule::ColorFor).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Log")
+	bool bOverrideCategoryColors = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Log", meta = (EditCondition = "bOverrideCategoryColors"))
+	FLinearColor DamageColor = FLinearColor(1.0f, 0.35f, 0.30f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Log", meta = (EditCondition = "bOverrideCategoryColors"))
+	FLinearColor HealColor = FLinearColor(0.35f, 1.0f, 0.45f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Log", meta = (EditCondition = "bOverrideCategoryColors"))
+	FLinearColor LootColor = FLinearColor(1.0f, 0.85f, 0.30f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Log", meta = (EditCondition = "bOverrideCategoryColors"))
+	FLinearColor ExperienceColor = FLinearColor(0.45f, 0.80f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Log", meta = (EditCondition = "bOverrideCategoryColors"))
+	FLinearColor SystemColor = FLinearColor(0.75f, 0.75f, 0.75f);
 
 private:
 	UPROPERTY() UCombatLogManager* LogManager = nullptr;
@@ -86,4 +119,5 @@ private:
 	UCheckBox* AddFilterCheck(ECombatLogCategory Category, const FString& Label, class UHorizontalBox* Row);
 	void TrimLines();
 	bool IsAtBottom() const;
+	FLinearColor ColorFor(ECombatLogCategory Category) const;
 };

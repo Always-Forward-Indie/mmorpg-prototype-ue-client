@@ -38,7 +38,7 @@ void UChatMessageLineWidget::SetMessageData_Implementation(const FChatMessageStr
         ApplyFontSize(ChannelTagText, ChannelTagFontSize);
     }
 
-    // --- SenderNameText: только имя отправителя ---
+    // --- SenderNameText: пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ ---
     if (SenderNameText)
     {
         const FString SenderDisplay = bIsError ? TEXT("System") : InMessage.senderName;
@@ -48,20 +48,20 @@ void UChatMessageLineWidget::SetMessageData_Implementation(const FChatMessageStr
     }
 
     // --- MessageText ---
-    // Если SenderNameText забинден — MessageText содержит только текст сообщения.
-    // Если SenderNameText не забинден — MessageText содержит полную строку "Ник: текст".
+    // пїЅпїЅпїЅпїЅ SenderNameText пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ MessageText пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
+    // пїЅпїЅпїЅпїЅ SenderNameText пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ MessageText пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ "пїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅ".
     if (MessageText)
     {
         FString DisplayText;
 
         if (bIsError)
         {
-            // Ошибка: полная строка всегда в MessageText
+            // пїЅпїЅпїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ MessageText
             DisplayText = FString::Printf(TEXT("[!] %s"), *InMessage.errorMessage);
         }
         else if (SenderNameText)
         {
-            // SenderNameText уже показывает ник — в MessageText только тело сообщения
+            // SenderNameText пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅ пїЅ MessageText пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
             FString Timestamp;
             if (bShowTimestamp && InMessage.timestamp > 0)
             {
@@ -72,7 +72,7 @@ void UChatMessageLineWidget::SetMessageData_Implementation(const FChatMessageStr
         }
         else
         {
-            // SenderNameText не забинден — полная строка "Ник: текст"
+            // SenderNameText пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ "пїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅ"
             FString Timestamp;
             if (bShowTimestamp && InMessage.timestamp > 0)
             {
@@ -131,4 +131,29 @@ void UChatMessageLineWidget::ApplyFontSize(UTextBlock* TextBlock, int32 Size) co
     FSlateFontInfo FontInfo = TextBlock->GetFont();
     FontInfo.Size = Size;
     TextBlock->SetFont(FontInfo);
+}
+
+FReply UChatMessageLineWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+    // Left-click a line: open the sender's unit menu (whisper/trade/inspect).
+    // System lines carry no sender and are ignored.
+    if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && CachedMessage.senderId > 0)
+    {
+        OnSenderClicked.Broadcast(CachedMessage.senderId, CachedMessage.senderName);
+        return FReply::Handled();
+    }
+    return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+}
+
+void UChatMessageLineWidget::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+    Super::NativeOnMouseEnter(InGeometry, InMouseEvent);
+    if (CachedMessage.senderId > 0)
+        SetCursor(EMouseCursor::Hand);
+}
+
+void UChatMessageLineWidget::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
+{
+    Super::NativeOnMouseLeave(InMouseEvent);
+    SetCursor(EMouseCursor::Default);
 }

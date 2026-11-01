@@ -8,11 +8,11 @@
 #include "Components/ComboBoxString.h"
 #include "Components/Button.h"
 #include "Data/DataStructs.h"
+#include "UI/ChatMessageLineWidget.h"
 #include "ChatWidget.generated.h"
 
 // Forward declarations
 class UChatManager;
-class UChatMessageLineWidget;
 
 /**
  * UChatWidget
@@ -44,6 +44,10 @@ public:
     /** Append one message line. Called via delegate from ChatManager. */
     UFUNCTION(BlueprintCallable, Category = "Chat UI")
     void AddChatMessage(const FChatMessageStruct& Message);
+
+    /** Re-broadcast of a line's sender click (unit menu entry from chat). */
+    UPROPERTY(BlueprintAssignable, Category = "Chat UI")
+    FOnChatSenderClicked OnChatSenderClicked;
 
     UFUNCTION(BlueprintCallable, Category = "Chat UI")
     void SetChatVisible(bool bVisible);
@@ -112,6 +116,9 @@ protected:
 private:
     UFUNCTION()
     void OnSendButtonClicked();
+
+    UFUNCTION()
+    void HandleSenderClicked(int32 SenderId, const FString& SenderName);
 
     UFUNCTION()
     void OnInputTextCommitted(const FText& Text, ETextCommit::Type CommitMethod);

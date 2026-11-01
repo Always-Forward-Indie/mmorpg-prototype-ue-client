@@ -231,6 +231,7 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 				{
 					ChatWidget->AddToViewport(15); // Low Z-order, always visible as HUD overlay
 					ChatWidget->InitializeChatWidget(ChatMgr);
+					ChatWidget->OnChatSenderClicked.AddDynamic(this, &UUIManager::HandleChatSenderClicked);
 					UE_LOG(LogGameplay, Verbose, TEXT("UIManager: ChatWidget created and bound to ChatManager"));
 				}
 				else

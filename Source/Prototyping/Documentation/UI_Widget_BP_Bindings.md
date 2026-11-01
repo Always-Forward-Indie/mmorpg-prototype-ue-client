@@ -88,6 +88,18 @@ Inside `W_PlayerInterface` (not UIManager-directly): `USkillBarWidget` (`Skills/
 6. Unit menu: RMB-click (no drag) another player → Whisper / Trade / Inspect.
    Trade needs ≤500 cm (server `economy.trade_range` re-validates); Inspect
    opens the read-only snapshot window (`playerInspect` on chunk).
+7. Inventory sort/search panel (optional): `Sort_Button` (UButton) + `SearchBox` (UEditableTextBox)
+   in WBP_PlayerInventory; without them the `/sort [name|rarity|type|off]` chat command works.
+   The Sort button tooltip shows the active mode. Junk marks: context-menu row → dimmed slot;
+   bulk sell needs `Sell_Junk_Button` in the vendor window (no-op without it).
+8. Buyback: created in code when the shop opens (`Buyback_Button`, optional).
+   The server keeps the last 12 sold stacks per character; the `buyback` bot scenario covers it.
+9. Combat log: created in code; tunables on `UCombatLogWidget` (size/position/anchors,
+   timestamps, font size, channel colours, `/clearlog` in chat). RU templates are automatic.
+10. Keybinds: window created in code; open via `IA_Keybinds` (suggest F12) → `KeybindsAction`
+    in the player Blueprint + IMC_Player. Persisted to Game.ini, Reset all inside the window.
+11. Player target frame: reuses the mob frame (name/level/HP), auto-hides when the
+    target leaves the world, 0 HP on death — all in code, no BP needed.
 
 ## 4. Removed 2026-10-24 (do not recreate)
 

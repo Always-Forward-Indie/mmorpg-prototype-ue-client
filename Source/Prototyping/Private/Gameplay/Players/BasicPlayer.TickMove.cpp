@@ -208,6 +208,24 @@ void ABasicPlayer::Tick(float DeltaTime)
                 LockedTarget->CachedIcon);
         }
     }
+
+    // Player lock: same widget, same rules. A destroyed actor (logout) must
+    // never leave a stale frame — UPROPERTY nulls the pointer on GC, so an
+    // open frame with a null target means the target went away: hide it.
+    if (!playerData.isOtherClient && UIManager)
+    {
+        if (IsValid(LockedPlayerTarget))
+        {
+            const int32 PlayerHP = LockedPlayerTarget->GetIsDead()
+                ? 0 : LockedPlayerTarget->GetPlayerCurrentHPPoints();
+            UIManager->UpdateMobTargetFrameHP(PlayerHP, LockedPlayerTarget->GetMaxHealth_Implementation());
+        }
+        else if (bPlayerFrameShown)
+        {
+            bPlayerFrameShown = false;
+            UIManager->HideMobTargetFrame();
+        }
+    }
 }
 
 void ABasicPlayer::Move(const FInputActionValue& Value)

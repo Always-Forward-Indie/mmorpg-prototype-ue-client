@@ -88,6 +88,9 @@ void ABasicPlayer::SetLockedTarget(ABasicMOB* NewTarget)
     {
         LockedPlayerTarget = nullptr;
     }
+    // The mob frame reuses the widget — a stale player flag would hide it.
+    if (NewTarget)
+        bPlayerFrameShown = false;
     if (NewTarget) bIsSelfTargeted = false;
 
     // Hide head info of the old locked target before switching
@@ -151,6 +154,7 @@ void ABasicPlayer::ClearLockedTarget()
 
     LockedTarget = nullptr;
     LockedPlayerTarget = nullptr;
+    bPlayerFrameShown = false;
     bIsSelfTargeted = false;
     PrevSoftTarget = nullptr;
     bIsAutoAttacking = false;
@@ -210,10 +214,18 @@ void ABasicPlayer::SetLockedPlayerTarget(ABasicPlayer* NewTarget)
                 LockedPlayerTarget->GetMaxHealth_Implementation(),
                 false, // players are not aggressive
                 nullptr); // no icon
+            bPlayerFrameShown = true;
         }
 
         UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Locked player target -> Player %d (%s)"),
             PlayerId, *LockedPlayerTarget->playerData.characterData.characterName);
+    }
+    else if (bPlayerFrameShown)
+    {
+        // Explicit unlock with the frame up (mob path reuses the same widget).
+        bPlayerFrameShown = false;
+        if (UIManager)
+            UIManager->HideMobTargetFrame();
     }
 
     if (CursorInteractionComponent)

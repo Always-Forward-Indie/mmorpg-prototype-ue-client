@@ -167,6 +167,63 @@ void UVendorManager::RequestBuyItemBatch(int32 CharacterId, int32 NpcId,
     SendPacket(Payload);
 }
 
+void UVendorManager::RequestBuybackList(int32 CharacterId)
+{
+    if (!NetworkManager || !GameInstance) return;
+
+    TSharedPtr<FJsonObject> Root   = MakeShared<FJsonObject>();
+    TSharedPtr<FJsonObject> Header = MakeShared<FJsonObject>();
+    TSharedPtr<FJsonObject> Body   = MakeShared<FJsonObject>();
+
+    Header->SetStringField(TEXT("eventType"), TEXT("buybackList"));
+    Header->SetNumberField(TEXT("clientId"),  GameInstance->GetCurrentClientID());
+    Header->SetStringField(TEXT("hash"),      GameInstance->GetCurrentClientHash());
+
+    Body->SetNumberField(TEXT("characterId"), CharacterId);
+
+    Root->SetObjectField(TEXT("header"), Header);
+    Root->SetObjectField(TEXT("body"),   Body);
+
+    FString Payload;
+    TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer =
+        TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&Payload);
+    FJsonSerializer::Serialize(Root.ToSharedRef(), Writer);
+    SendPacket(Payload);
+}
+
+void UVendorManager::RequestBuybackItem(int32 CharacterId, int32 NpcId, int32 Slot, int32 Quantity, const FVector& PlayerPosition)
+{
+    if (!NetworkManager || !GameInstance) return;
+
+    TSharedPtr<FJsonObject> Root   = MakeShared<FJsonObject>();
+    TSharedPtr<FJsonObject> Header = MakeShared<FJsonObject>();
+    TSharedPtr<FJsonObject> Body   = MakeShared<FJsonObject>();
+    TSharedPtr<FJsonObject> Pos    = MakeShared<FJsonObject>();
+
+    Header->SetStringField(TEXT("eventType"), TEXT("buybackItem"));
+    Header->SetNumberField(TEXT("clientId"),  GameInstance->GetCurrentClientID());
+    Header->SetStringField(TEXT("hash"),      GameInstance->GetCurrentClientHash());
+
+    Pos->SetNumberField(TEXT("x"), PlayerPosition.X);
+    Pos->SetNumberField(TEXT("y"), PlayerPosition.Y);
+    Pos->SetNumberField(TEXT("z"), PlayerPosition.Z);
+
+    Body->SetNumberField(TEXT("characterId"),    CharacterId);
+    Body->SetNumberField(TEXT("npcId"),          NpcId);
+    Body->SetNumberField(TEXT("slot"),           Slot);
+    Body->SetNumberField(TEXT("quantity"),       Quantity);
+    Body->SetObjectField(TEXT("playerPosition"), Pos);
+
+    Root->SetObjectField(TEXT("header"), Header);
+    Root->SetObjectField(TEXT("body"),   Body);
+
+    FString Payload;
+    TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer =
+        TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&Payload);
+    FJsonSerializer::Serialize(Root.ToSharedRef(), Writer);
+    SendPacket(Payload);
+}
+
 void UVendorManager::RequestSellItemBatch(int32 CharacterId, int32 NpcId,
     const TArray<FVendorCartEntry>& Cart, const FVector& PlayerPosition)
 {
@@ -214,6 +271,16 @@ void UVendorManager::RequestSellItemBatch(int32 CharacterId, int32 NpcId,
 // ---------------------------------------------------------------------------
 // Incoming � called by VendorNetworkHandler
 // ---------------------------------------------------------------------------
+
+void UVendorManager::OnBuybackListReceived(const FBuybackListData& List)
+{
+    OnBuybackListDelegate.Broadcast(List);
+}
+
+void UVendorManager::OnBuybackResultReceived(const FBuybackResultData& Result)
+{
+    OnBuybackResultDelegate.Broadcast(Result);
+}
 
 void UVendorManager::OnVendorShopReceived(const FVendorShopData& ShopData)
 {

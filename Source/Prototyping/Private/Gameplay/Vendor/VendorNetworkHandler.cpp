@@ -102,6 +102,14 @@ void UVendorNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
     {
         VendorManager->OnSellItemBatchResultReceived(ParseSellItemBatchResult(Body, Message, RequestIdEcho));
     }
+    else if (EventType == TEXT("buybackList"))
+    {
+        VendorManager->OnBuybackListReceived(ParseBuybackList(Body));
+    }
+    else if (EventType == TEXT("buybackResult") || EventType == TEXT("buybackItem"))
+    {
+        VendorManager->OnBuybackResultReceived(ParseBuybackResult(Body, Message));
+    }
 }
 
 // EventTypes owned by this handler (single list drives dispatcher registration).
@@ -115,7 +123,9 @@ const TArray<FString>& UVendorNetworkHandler::HandledEvents()
         TEXT("buyItemResult"),  TEXT("sellItemResult"),
         TEXT("buyItemBatchResult"), TEXT("sellItemBatchResult"),
         TEXT("buyItem"), TEXT("sellItem"),
-        TEXT("buyItemBatch"), TEXT("sellItemBatch")
+        TEXT("buyItemBatch"), TEXT("sellItemBatch"),
+        TEXT("buybackList"),
+        TEXT("buybackResult"), TEXT("buybackItem")
     };
     return Events;
 }
@@ -330,5 +340,44 @@ FSellItemBatchResultData UVendorNetworkHandler::ParseSellItemBatchResult(const T
             Result.items.Add(Item);
         }
     }
+    return Result;
+}
+
+FBuybackListData UVendorNetworkHandler::ParseBuybackList(const TSharedPtr<FJsonObject>& Body) const
+{
+    FBuybackListData Result;
+    const TArray<TSharedPtr<FJsonValue>>* EntriesArray = nullptr;
+    if (Body->TryGetArrayField(TEXT("entries"), EntriesArray))
+    {
+        for (const TSharedPtr<FJsonValue>& Val : *EntriesArray)
+        {
+            TSharedPtr<FJsonObject> Obj = Val->AsObject();
+            if (!Obj.IsValid()) continue;
+            FBuybackEntry Entry;
+            Obj->TryGetNumberField(TEXT("slot"),       Entry.slot);
+            Obj->TryGetNumberField(TEXT("itemId"),     Entry.itemId);
+            Obj->TryGetStringField(TEXT("slug"),       Entry.slug);
+            Obj->TryGetNumberField(TEXT("quantity"),   Entry.quantity);
+            Obj->TryGetNumberField(TEXT("unitPrice"),  Entry.unitPrice);
+            Obj->TryGetNumberField(TEXT("totalPrice"), Entry.totalPrice);
+            Result.entries.Add(Entry);
+        }
+    }
+    return Result;
+}
+
+FBuybackResultData UVendorNetworkHandler::ParseBuybackResult(const TSharedPtr<FJsonObject>& Body, const FString& Message) const
+{
+    FBuybackResultData Result;
+    if (Message != TEXT("success"))
+    {
+        Result.errorCode = Message;
+        return Result;
+    }
+    Result.bSuccess = true;
+    Body->TryGetNumberField(TEXT("itemId"),         Result.itemId);
+    Body->TryGetNumberField(TEXT("quantity"),       Result.quantity);
+    Body->TryGetNumberField(TEXT("pricePaid"),      Result.pricePaid);
+    Body->TryGetNumberField(TEXT("newGoldBalance"), Result.newGoldBalance);
     return Result;
 }

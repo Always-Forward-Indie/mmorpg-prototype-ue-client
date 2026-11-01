@@ -72,6 +72,7 @@
 #include "Gameplay/Social/PlayerInspectManager.h"
 #include "Gameplay/Social/PlayerInspectNetworkHandler.h"
 #include "Gameplay/UI/TutorialHintManager.h"
+#include "Gameplay/Input/KeybindManager.h"
 #include "Gameplay/Chat/ChatNetworkHandler.h"
 #include "Gameplay/Player/PlayerStatsNetworkHandler.h"
 #include "Services/LocalizationSubsystem.h"
@@ -242,6 +243,13 @@ void UMyGameInstance::InitEconomy()
 	{
 		TutorialHintManager->Initialize(this);
 		UE_LOG(LogGameplay, Warning, TEXT("TutorialHintManager initialized"));
+	}
+
+	// Key remapping (input layer only).
+	if (KeybindManager)
+	{
+		KeybindManager->Initialize(this);
+		UE_LOG(LogGameplay, Warning, TEXT("KeybindManager initialized"));
 	}
 
 }

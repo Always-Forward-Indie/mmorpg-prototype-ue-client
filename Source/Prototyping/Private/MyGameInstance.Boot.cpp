@@ -65,6 +65,7 @@
 #include "Gameplay/Social/PlayerInspectManager.h"
 #include "Gameplay/Social/PlayerInspectNetworkHandler.h"
 #include "Gameplay/UI/TutorialHintManager.h"
+#include "Gameplay/Input/KeybindManager.h"
 #include "Gameplay/Trade/TradeNetworkHandler.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "Gameplay/Equipment/EquipmentNetworkHandler.h"
@@ -268,6 +269,9 @@ UE_LOG(LogGameplay, Warning, TEXT("GameInstance: DevMode level override '%s'"), 
 
 	// One-time tutorial hints (config-backed seen flags).
 	TutorialHintManager = NewObject<UTutorialHintManager>(this);
+
+	// Key remapping (IMC_Player overrides, persisted in Game.ini).
+	KeybindManager = NewObject<UKeybindManager>(this);
 
 	// Initialize time sync service
 	TimeSyncService = NewObject<UTimeSyncService>(this);

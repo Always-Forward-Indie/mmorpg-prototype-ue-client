@@ -1,5 +1,6 @@
 #include "UI/VendorShopWidget.h"
 #include "UI/VendorShopWidget.h"
+#include "UI/BuybackWidget.h"
 #include "Prototyping.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Gameplay/Items/InventoryManager.h"
@@ -100,6 +101,62 @@ void UVendorShopWidget::SellJunkItems()
     PendingSellExpected = 0;
     for (const FVendorCartEntry& E : JunkCart)
         PendingSellExpected += FVendorSellRule::LineGold(E.pricePerUnit, E.quantity, CachedShop.sellTaxPct);
+}
+
+void UVendorShopWidget::OpenBuyback()
+{
+    if (!VendorManager || CachedShop.npcId <= 0) return;
+    EnsureBuybackWidget();
+    VendorManager->RequestBuybackList(GetCharacterId());
+}
+
+void UVendorShopWidget::CloseBuyback()
+{
+    if (BuybackWidget)
+        BuybackWidget->HideBuyback();
+}
+
+void UVendorShopWidget::EnsureBuybackWidget()
+{
+    if (BuybackWidget || !GetWorld()) return;
+    BuybackWidget = CreateWidget<UBuybackWidget>(GetWorld(), UBuybackWidget::StaticClass());
+    if (BuybackWidget)
+    {
+        BuybackWidget->AddToViewport(96);
+        BuybackWidget->SetVisibility(ESlateVisibility::Collapsed);
+        BuybackWidget->OnBuybackRowClicked.AddDynamic(this, &UVendorShopWidget::HandleBuybackRowClicked);
+    }
+}
+
+void UVendorShopWidget::HandleBuybackList(const FBuybackListData& List)
+{
+    // Show on arrival (the request was sent by OpenBuyback) — never
+    // re-request here, that would loop request → list → request.
+    EnsureBuybackWidget();
+    if (BuybackWidget)
+        BuybackWidget->ShowBuyback(List.entries);
+}
+
+void UVendorShopWidget::HandleBuybackRowClicked(int32 BuybackSlot, int32 Quantity)
+{
+    if (!VendorManager || CachedShop.npcId <= 0 || Quantity <= 0) return;
+    VendorManager->RequestBuybackItem(GetCharacterId(), CachedShop.npcId, BuybackSlot, Quantity, GetPlayerPosition());
+}
+
+void UVendorShopWidget::HandleBuybackResult(const FBuybackResultData& Result)
+{
+    if (Result.bSuccess)
+    {
+        ShowStatus(FText::FromString(FString::Printf(TEXT("Bought back x%d for %d g"), Result.quantity, Result.pricePaid)), EShopStatusSeverity::Success);
+        // Refresh the list (entry shrank or vanished); gold/items refresh
+        // arrives through the regular inventory update broadcast.
+        if (VendorManager)
+            VendorManager->RequestBuybackList(GetCharacterId());
+    }
+    else if (!Result.errorCode.IsEmpty())
+    {
+        ShowStatus(FText::FromString(FString::Printf(TEXT("Buyback failed: %s"), *Result.errorCode)), EShopStatusSeverity::Error);
+    }
 }
 
 void UVendorShopWidget::SendShopToast(const FString& NotificationType, const TMap<FString, FString>& DataFields)

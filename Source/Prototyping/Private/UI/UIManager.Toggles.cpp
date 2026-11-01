@@ -14,6 +14,10 @@
 #include "UI/SkillShopWidget.h"
 #include "UI/TradeWidget.h"
 #include "UI/EquipmentWidget.h"
+#include "UI/KeybindWidget.h"
+#include "Gameplay/Input/KeybindManager.h"
+#include "Gameplay/Players/BasicPlayer.h"
+#include "MyGameInstance.h"
 #include "Gameplay/UI/PlayerExperienceWidget.h"
 #include "Gameplay/UI/PlayerInterfaceWidget.h"
 #include "Gameplay/UI/DamageCanvasWidget.h"
@@ -185,6 +189,40 @@ void UUIManager::ToggleEmoteList()
 	}
 	EmoteListWidget->ToggleEmoteList();
 	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::ToggleEmoteList - Toggled"));
+}
+
+void UUIManager::ToggleKeybindWindow()
+{	UMyGameInstance* GI = GetWorld() ? Cast<UMyGameInstance>(GetWorld()->GetGameInstance()) : nullptr;
+	ABasicPlayer* Local = GI ? GI->Player : nullptr;
+	UKeybindManager* Keybinds = GI ? GI->GetKeybindManager() : nullptr;
+	if (!Local || !Keybinds)
+	{
+		UE_LOG(LogGameplay, Warning, TEXT("UIManager::ToggleKeybindWindow - no local player or keybind manager"));
+		return;
+	}
+	if (!KeybindWidget)
+	{
+		KeybindWidget = CreateWidget<UKeybindWidget>(GetWorld(), UKeybindWidget::StaticClass());
+		if (KeybindWidget)
+		{
+			KeybindWidget->AddToViewport(100);
+			KeybindWidget->BindToPlayer(Local, Keybinds);
+		}
+	}
+	if (!KeybindWidget) return;
+	if (KeybindWidget->IsKeybindsOpen())
+		KeybindWidget->CloseKeybinds();
+	else
+	{
+		KeybindWidget->RefreshList();
+		KeybindWidget->SetVisibility(ESlateVisibility::Visible);
+	}
+	UpdateCursorAndInputMode();
+}
+
+bool UUIManager::IsKeybindWindowOpen() const
+{
+	return KeybindWidget && KeybindWidget->IsKeybindsOpen();
 }
 
 void UUIManager::ToggleQuestJournal()

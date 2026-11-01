@@ -3064,6 +3064,73 @@ struct PROTOTYPING_API FSellItemBatchResultData
 };
 
 // ============================================================
+// Buyback (repurchase of recently sold stacks)
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FBuybackEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buyback")
+    int32 slot = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buyback")
+    int32 itemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buyback")
+    FString slug = "";
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buyback")
+    int32 quantity = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buyback")
+    int32 unitPrice = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buyback")
+    int32 totalPrice = 0;
+
+    FBuybackEntry() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FBuybackListData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buyback")
+    TArray<FBuybackEntry> entries;
+
+    FBuybackListData() {}
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FBuybackResultData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buyback")
+    bool bSuccess = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buyback")
+    int32 itemId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buyback")
+    int32 quantity = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buyback")
+    int32 pricePaid = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buyback")
+    int32 newGoldBalance = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buyback")
+    FString errorCode = "";
+
+    FBuybackResultData() {}
+};
+
+// ============================================================
 // Repair Shop
 // ============================================================
 

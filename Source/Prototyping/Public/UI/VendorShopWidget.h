@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "UI/FocusableWindowWidget.h"
+#include "UI/BuybackWidget.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
@@ -99,6 +100,17 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Vendor UI")
     void SellJunkItems();
 
+    /** Open the buyback list (requests the per-character sold-items list). */
+    UFUNCTION(BlueprintCallable, Category = "Vendor UI")
+    void OpenBuyback();
+
+    UFUNCTION(BlueprintCallable, Category = "Vendor UI")
+    void CloseBuyback();
+
+    UFUNCTION() void HandleBuybackList(const FBuybackListData& List);
+    UFUNCTION() void HandleBuybackResult(const FBuybackResultData& Result);
+    UFUNCTION() void HandleBuybackRowClicked(int32 BuybackSlot, int32 Quantity);
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vendor UI")
     TSubclassOf<UQuantityPopupWidget> QuantityPopupClass;
 
@@ -178,6 +190,7 @@ void UpdateWindowDragPosition(const FVector2D& ScreenCursorPos);
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UButton*    Buy_Clear_Button    = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UButton*    Sell_Clear_Button   = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UButton*    Sell_Junk_Button    = nullptr;
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UButton*    Buyback_Button      = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UWidget*    DragHandle          = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UTextBlock* Player_Gold_Text    = nullptr;
 
@@ -217,6 +230,12 @@ UPROPERTY() UVendorTooltipWidget* VendorTooltipWidget = nullptr;
     UPROPERTY() TArray<UVendorSlotWidget*> InvSlots;
     UPROPERTY() TArray<UVendorSlotWidget*> BuyCartSlots;
     UPROPERTY() TArray<UVendorSlotWidget*> SellCartSlots;
+
+    // Buyback window (runtime-created, no BP setup).
+    UPROPERTY() UBuybackWidget* BuybackWidget = nullptr;
+
+    // Buyback helpers
+    void EnsureBuybackWidget();
 
     // Helpers
     void ShowStatus(const FText& Msg, EShopStatusSeverity Severity = EShopStatusSeverity::Info);

@@ -19,6 +19,7 @@ class ABasicPlayer;
 class UPlayerContextMenuWidget;
 class UPlayerInspectWidget;
 class UTradeInviteWidget;
+class UKeybindWidget;
 class UCombatScreenFlashWidget;
 class UInventoryManager;
 class UHarvestManager;
@@ -298,6 +299,12 @@ public:
 	UPlayerInspectWidget* GetPlayerInspectWidget() const { return PlayerInspectWidget; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UKeybindWidget* GetKeybindWidget() const { return KeybindWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	bool IsKeybindWindowOpen() const;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	bool IsPlayerMenuOpen() const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
@@ -392,6 +399,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void ToggleEmoteList();
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ToggleKeybindWindow();
 
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void ToggleQuestJournal();
@@ -701,6 +711,10 @@ protected:
 
 	UPROPERTY()
 	UPlayerInspectWidget* PlayerInspectWidget = nullptr;
+
+	// Keybind settings window (runtime-created, no BP setup).
+	UPROPERTY()
+	UKeybindWidget* KeybindWidget = nullptr;
 
 	// Last social-menu target (whisper prefill + trade dispatch).
 	int32 LastSocialTargetId = 0;

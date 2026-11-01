@@ -370,3 +370,50 @@ void ABasicPlayer::OnQuickSlot3Input() { UseQuickBarSlot(2); }
 void ABasicPlayer::OnQuickSlot4Input() { UseQuickBarSlot(3); }
 void ABasicPlayer::OnQuickSlot5Input() { UseQuickBarSlot(4); }
 
+void ABasicPlayer::OnKeybindsToggle()
+{
+    if (playerData.characterData.bIsDead) return;
+    if (UIManager)
+        UIManager->ToggleKeybindWindow();
+}
+
+void ABasicPlayer::GetRemappableActions(TArray<FKeybindActionEntry>& OutActions) const
+{
+    auto Add = [&OutActions](const FText& Label, UInputAction* Action)
+    {
+        if (!Action) return;
+        FKeybindActionEntry E;
+        E.Label = Label;
+        E.Action = Action;
+        OutActions.Add(E);
+    };
+
+    Add(NSLOCTEXT("Keybinds", "Move", "Move"), MoveAction);
+    Add(NSLOCTEXT("Keybinds", "Jump", "Jump"), JumpAction);
+    Add(NSLOCTEXT("Keybinds", "Attack", "Attack"), AttackAction);
+    Add(NSLOCTEXT("Keybinds", "Interact", "Interact"), InteractAction);
+    Add(NSLOCTEXT("Keybinds", "Inventory", "Inventory"), InventoryAction);
+    Add(NSLOCTEXT("Keybinds", "SkillsPanel", "Skills panel"), SkillsPanelAction);
+    Add(NSLOCTEXT("Keybinds", "Skill1", "Skill 1"), Skill1Action);
+    Add(NSLOCTEXT("Keybinds", "Skill2", "Skill 2"), Skill2Action);
+    Add(NSLOCTEXT("Keybinds", "Skill3", "Skill 3"), Skill3Action);
+    Add(NSLOCTEXT("Keybinds", "Skill4", "Skill 4"), Skill4Action);
+    Add(NSLOCTEXT("Keybinds", "Skill5", "Skill 5"), Skill5Action);
+    Add(NSLOCTEXT("Keybinds", "QuickSlot1", "Quick slot 1"), QuickSlot1Action);
+    Add(NSLOCTEXT("Keybinds", "QuickSlot2", "Quick slot 2"), QuickSlot2Action);
+    Add(NSLOCTEXT("Keybinds", "QuickSlot3", "Quick slot 3"), QuickSlot3Action);
+    Add(NSLOCTEXT("Keybinds", "QuickSlot4", "Quick slot 4"), QuickSlot4Action);
+    Add(NSLOCTEXT("Keybinds", "QuickSlot5", "Quick slot 5"), QuickSlot5Action);
+    Add(NSLOCTEXT("Keybinds", "TabTarget", "Tab target"), TabTargetAction);
+    Add(NSLOCTEXT("Keybinds", "TargetSelf", "Target self"), TargetSelfAction);
+    Add(NSLOCTEXT("Keybinds", "QuestJournal", "Quest journal"), QuestJournalAction);
+    Add(NSLOCTEXT("Keybinds", "Equipment", "Equipment"), EquipmentAction);
+    Add(NSLOCTEXT("Keybinds", "AltCursor", "Alt cursor"), AltCursorAction);
+    Add(NSLOCTEXT("Keybinds", "Stats", "Stats"), StatsAction);
+    Add(NSLOCTEXT("Keybinds", "Bestiary", "Bestiary"), BestiaryAction);
+    Add(NSLOCTEXT("Keybinds", "Titles", "Titles"), TitlesAction);
+    Add(NSLOCTEXT("Keybinds", "Reputation", "Reputation"), ReputationAction);
+    Add(NSLOCTEXT("Keybinds", "Emotes", "Emotes"), EmoteListAction);
+    Add(NSLOCTEXT("Keybinds", "GameMenu", "Game menu"), GameMenuAction);
+}
+

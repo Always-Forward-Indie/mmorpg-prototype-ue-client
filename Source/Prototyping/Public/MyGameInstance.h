@@ -625,6 +625,10 @@ public:
 	UPROPERTY()
 	class UTutorialHintManager* TutorialHintManager;
 
+	// Key remapping (IMC_Player overrides, persisted in Game.ini)
+	UPROPERTY()
+	class UKeybindManager* KeybindManager;
+
 	// Player inspect network handler
 	UPROPERTY()
 	class UPlayerInspectNetworkHandler* PlayerInspectNetworkHandler;
@@ -1355,6 +1359,10 @@ public:
 		// Tutorial hints (one-time toasts)
 		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
 		class UTutorialHintManager* GetTutorialHintManager() const { return TutorialHintManager; }
+
+		// Key remapping
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
+		class UKeybindManager* GetKeybindManager() const { return KeybindManager; }
 
 		// World Object manager
 		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")

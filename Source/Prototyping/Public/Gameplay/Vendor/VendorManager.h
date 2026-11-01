@@ -13,6 +13,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBuyItemResult,             const 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSellItemResult,            const FSellItemResultData&,      Result);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBuyItemBatchResult,        const FBuyItemBatchResultData&,  Result);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSellItemBatchResult,       const FSellItemBatchResultData&, Result);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBuybackList,               const FBuybackListData&,         List);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBuybackResult,             const FBuybackResultData&,       Result);
 
 /**
  * VendorManager
@@ -45,6 +47,12 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Vendor")
     void RequestSellItemBatch(int32 CharacterId, int32 NpcId, const TArray<FVendorCartEntry>& Cart, const FVector& PlayerPosition);
 
+    UFUNCTION(BlueprintCallable, Category = "Vendor")
+    void RequestBuybackList(int32 CharacterId);
+
+    UFUNCTION(BlueprintCallable, Category = "Vendor")
+    void RequestBuybackItem(int32 CharacterId, int32 NpcId, int32 Slot, int32 Quantity, const FVector& PlayerPosition);
+
     /** RequestId of the last batch request sent (matched against result echo). */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Vendor")
     FString GetLastBuyBatchRequestId() const { return LastBuyBatchRequestId; }
@@ -64,6 +72,8 @@ public:
     void OnSellItemResultReceived(const FSellItemResultData& Result);
     void OnBuyItemBatchResultReceived(const FBuyItemBatchResultData& Result);
     void OnSellItemBatchResultReceived(const FSellItemBatchResultData& Result);
+    void OnBuybackListReceived(const FBuybackListData& List);
+    void OnBuybackResultReceived(const FBuybackResultData& Result);
 
     // --- Events ---
 
@@ -81,6 +91,12 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category = "Vendor Events")
     FOnSellItemBatchResult OnSellItemBatchResultDelegate;
+
+    UPROPERTY(BlueprintAssignable, Category = "Vendor Events")
+    FOnBuybackList OnBuybackListDelegate;
+
+    UPROPERTY(BlueprintAssignable, Category = "Vendor Events")
+    FOnBuybackResult OnBuybackResultDelegate;
 
 private:
     FVendorShopData CurrentShop;

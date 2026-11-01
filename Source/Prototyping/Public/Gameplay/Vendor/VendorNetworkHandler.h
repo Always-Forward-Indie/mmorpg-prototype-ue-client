@@ -33,6 +33,8 @@ public:
     FSellItemResultData      ParseSellItemResult(const TSharedPtr<FJsonObject>& Body, const FString& Message, const FString& RequestIdEcho = FString()) const;
     FBuyItemBatchResultData  ParseBuyItemBatchResult(const TSharedPtr<FJsonObject>& Body, const FString& Message, const FString& RequestIdEcho = FString()) const;
     FSellItemBatchResultData ParseSellItemBatchResult(const TSharedPtr<FJsonObject>& Body, const FString& Message, const FString& RequestIdEcho = FString()) const;
+    FBuybackListData         ParseBuybackList(const TSharedPtr<FJsonObject>& Body) const;
+    FBuybackResultData       ParseBuybackResult(const TSharedPtr<FJsonObject>& Body, const FString& Message) const;
 
 private:
     // Packet entry (S05): single-parse path via the per-eventType dispatcher.

@@ -18,6 +18,7 @@
 #include "Gameplay/Combat/ICombatable.h"
 #include "Gameplay/Interaction/IWorldInteractable.h"
 #include "Animation/AnimNotify_PlayerCombatEvent.h"
+#include "Gameplay/Input/KeybindManager.h"
 #include "BasicPlayer.generated.h"
 
 class UMyGameInstance;
@@ -687,6 +688,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* QuickSlot5Action;
 
+	// Keybind settings window (assign e.g. F12 in IMC_Player; null-safe).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* KeybindsAction;
+
+	/** Read access for the keybind manager/widget (remap registry source). */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Input")
+	class UInputMappingContext* GetInputMappingContext() const { return InputMappingContext; }
+
 	// Reference to the login camera actor
 	UPROPERTY()
 	ACameraActor* LoginCameraActor;
@@ -851,6 +860,9 @@ public:
 	UFUNCTION()
 	void OnQuickSlot5Input();
 
+	UFUNCTION(BlueprintCallable, Category = "Input")
+	void OnKeybindsToggle();
+
 	/** Shared quickbar hotkey path (dead/locked guards live here). */
 	void UseQuickBarSlot(int32 SlotIndex);
 
@@ -862,6 +874,10 @@ public:
 	UPROPERTY()
 	ABasicMOB* LockedTarget = nullptr;
 
+	/** Remappable action registry for the keybind window (labels + actions). */
+	UFUNCTION(BlueprintCallable, Category = "Input")
+	void GetRemappableActions(TArray<FKeybindActionEntry>& OutActions) const;
+
 	// Player target lock (for heals/buffs on other players)
 	UPROPERTY()
 	ABasicPlayer* LockedPlayerTarget = nullptr;
@@ -871,6 +887,10 @@ public:
 
 	bool bIsAutoAttacking = false;
 	bool bLastKnownTargetAggro = false;
+
+	// True while the mob target frame currently shows a PLAYER (shared widget).
+	// Lets the tick detect a GC-nulled remote target and hide the stale frame.
+	bool bPlayerFrameShown = false;
 
 	/** Returns the nameplate component (valid for both local and remote players). */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI")

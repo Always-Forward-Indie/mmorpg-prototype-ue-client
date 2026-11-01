@@ -376,10 +376,10 @@ void ABasicPlayer::CheckForMOB()
             const int32 PlayerId = LockedPlayerTarget->playerData.characterData.characterId;
             UIManager->SetSkillTarget(PlayerId, ECasterType::Player);
 
-            // Update player target frame HP
-            UIManager->UpdateMobTargetFrameHP(
-                LockedPlayerTarget->playerData.characterData.characterCurrentHealth,
-                LockedPlayerTarget->GetMaxHealth_Implementation());
+            // Update player target frame HP (dead shows 0, like the mob frame).
+            const int32 PlayerHP = LockedPlayerTarget->GetIsDead()
+                ? 0 : LockedPlayerTarget->playerData.characterData.characterCurrentHealth;
+            UIManager->UpdateMobTargetFrameHP(PlayerHP, LockedPlayerTarget->GetMaxHealth_Implementation());
         }
         else
         {

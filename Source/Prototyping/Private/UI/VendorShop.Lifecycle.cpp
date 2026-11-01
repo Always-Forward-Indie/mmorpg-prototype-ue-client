@@ -42,6 +42,8 @@ void UVendorShopWidget::NativeConstruct()
         Sell_Clear_Button->OnClicked.AddDynamic(this, &UVendorShopWidget::HandleClearSellCart);
     if (Sell_Junk_Button)
         Sell_Junk_Button->OnClicked.AddDynamic(this, &UVendorShopWidget::SellJunkItems);
+    if (Buyback_Button)
+        Buyback_Button->OnClicked.AddDynamic(this, &UVendorShopWidget::OpenBuyback);
 
     if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
     {
@@ -127,6 +129,8 @@ void UVendorShopWidget::BindToManagers(UVendorManager* InVendorManager, UInvento
         VendorManager->OnSellItemResultDelegate     .RemoveDynamic(this, &UVendorShopWidget::HandleSellItemResult);
         VendorManager->OnBuyItemBatchResultDelegate .RemoveDynamic(this, &UVendorShopWidget::HandleBuyItemBatchResult);
         VendorManager->OnSellItemBatchResultDelegate.RemoveDynamic(this, &UVendorShopWidget::HandleSellItemBatchResult);
+        VendorManager->OnBuybackListDelegate         .RemoveDynamic(this, &UVendorShopWidget::HandleBuybackList);
+        VendorManager->OnBuybackResultDelegate      .RemoveDynamic(this, &UVendorShopWidget::HandleBuybackResult);
     }
     if (InventoryManager)
         InventoryManager->OnInventoryUpdated.RemoveDynamic(this, &UVendorShopWidget::HandleInventoryUpdated);
@@ -139,6 +143,8 @@ void UVendorShopWidget::BindToManagers(UVendorManager* InVendorManager, UInvento
     VendorManager->OnSellItemResultDelegate     .AddDynamic(this, &UVendorShopWidget::HandleSellItemResult);
     VendorManager->OnBuyItemBatchResultDelegate .AddDynamic(this, &UVendorShopWidget::HandleBuyItemBatchResult);
     VendorManager->OnSellItemBatchResultDelegate.AddDynamic(this, &UVendorShopWidget::HandleSellItemBatchResult);
+    VendorManager->OnBuybackListDelegate         .AddDynamic(this, &UVendorShopWidget::HandleBuybackList);
+    VendorManager->OnBuybackResultDelegate      .AddDynamic(this, &UVendorShopWidget::HandleBuybackResult);
 
     if (InventoryManager)
     {

@@ -5,6 +5,7 @@
 #include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Input/KeybindManager.h"
 #include "Gameplay/Players/PlayerManager.h"
 #include "UI/UIManager.h"
 #include "UI/NotificationToastWidget.h"
@@ -89,6 +90,13 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
         // Clear out existing mapping, and add our mapping
         Subsystem->ClearAllMappings();
         Subsystem->AddMappingContext(InputMappingContext, 1);
+
+        // Re-apply persisted key remaps on top of the asset defaults.
+        if (MyGameInstance)
+        {
+            if (UKeybindManager* Keybinds = MyGameInstance->GetKeybindManager())
+                Keybinds->ApplySavedBindings(InputMappingContext);
+        }
  
 		// Bind Enhanced Input actions
         EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ABasicPlayer::Move);
@@ -208,6 +216,12 @@ void ABasicPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
         if (QuickSlot5Action)
         {
             EnhancedInputComponent->BindAction(QuickSlot5Action, ETriggerEvent::Triggered, this, &ABasicPlayer::OnQuickSlot5Input);
+        }
+
+        // Keybind settings window (null-safe: assign IA_Keybinds in the player Blueprint)
+        if (KeybindsAction)
+        {
+            EnhancedInputComponent->BindAction(KeybindsAction, ETriggerEvent::Triggered, this, &ABasicPlayer::OnKeybindsToggle);
         }
 
         // Interact with NPC

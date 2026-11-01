@@ -617,6 +617,14 @@ public:
 	UPROPERTY()
 	class UCombatLogManager* CombatLogManager;
 
+	// Player inspect manager (read-only public snapshots)
+	UPROPERTY()
+	class UPlayerInspectManager* PlayerInspectManager;
+
+	// Player inspect network handler
+	UPROPERTY()
+	class UPlayerInspectNetworkHandler* PlayerInspectNetworkHandler;
+
 	// Emote manager
 	UPROPERTY()
 	class UEmoteManager* EmoteManager;
@@ -1335,6 +1343,10 @@ public:
 		// Combat log manager (read-only sink, no network handler)
 		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
 		class UCombatLogManager* GetCombatLogManager() const { return CombatLogManager; }
+
+		// Player inspect manager
+		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")
+		class UPlayerInspectManager* GetPlayerInspectManager() const { return PlayerInspectManager; }
 
 		// World Object manager
 		UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Game Instance|Managers")

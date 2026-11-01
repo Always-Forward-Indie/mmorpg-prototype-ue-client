@@ -7,6 +7,7 @@
 #include "MyGameInstance.h"
 #include "Gameplay/Players/PlayerManager.h"
 #include "UI/UIManager.h"
+#include "Utils/NetCore/PlayerSocialRule.h"
 #include "UI/NotificationToastWidget.h"
 #include "UI/ChatWidget.h"
 #include "UI/SkillBarWidget.h"
@@ -80,6 +81,14 @@ void ABasicPlayer::OnRightMousePressed()
     bIsRightMouseDown = true;
     ApplyMouseCaptureIfNoUIOpen();
 
+    // Snapshot the hover target BEFORE the trace is disabled below: a clean
+    // RMB release over a remote player opens the unit context menu.
+    RMBPressTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+    RMBPressTarget = nullptr;
+    RMBPressType = EInteractableType::None;
+    if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+        PC->GetMousePosition(RMBPressPos.X, RMBPressPos.Y);
+
     // Disable hover trace during RMB camera drag вЂ” no point doing it when cursor is invisible.
     if (CursorInteractionComponent)
     {
@@ -90,6 +99,29 @@ void ABasicPlayer::OnRightMousePressed()
 void ABasicPlayer::OnRightMouseReleased()
 {
     bIsRightMouseDown = false;
+
+    // RMB click (not camera drag) over a remote player → unit menu.
+    // Runs before cursor restore so the menu gets the release position.
+    if (!playerData.characterData.bIsDead && CursorInteractionComponent
+        && !IsUIBlockingInteraction() && !bIsCasting)
+    {
+        const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+        FVector2D ReleasePos = FVector2D::ZeroVector;
+        if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+            PC->GetMousePosition(ReleasePos.X, ReleasePos.Y);
+        const bool bClick = (Now - RMBPressTime) <= FPlayerSocialRule::MenuClickMaxSeconds
+            && FVector2D::Distance(RMBPressPos, ReleasePos) <= FPlayerSocialRule::MenuClickMaxPixels;
+        if (bClick && RMBPressType == EInteractableType::RemotePlayer)
+        {
+            if (ABasicPlayer* Target = Cast<ABasicPlayer>(RMBPressTarget.Get()))
+            {
+                if (UIManager)
+                    UIManager->OpenPlayerContextMenu(Target);
+            }
+        }
+    }
+    RMBPressTarget = nullptr;
+    RMBPressType = EInteractableType::None;
 
     if (!bIsLeftMouseDown)
     {

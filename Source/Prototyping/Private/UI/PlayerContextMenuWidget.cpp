@@ -52,11 +52,11 @@ FReply UPlayerContextMenuWidget::NativeOnMouseButtonUp(const FGeometry& InGeomet
 	return FReply::Handled();
 }
 
-void UPlayerContextMenuWidget::ShowForPlayer(int32 InCharacterId, const FString& DisplayName, FVector2D ScreenPosition)
+void UPlayerContextMenuWidget::ShowForPlayer(int32 InCharacterId, const FString& DisplayName, FVector2D ScreenPosition, bool bCanInspect)
 {
 	TargetCharacterId = InCharacterId;
 	PressedRowIndex = -1;
-	RebuildRows(DisplayName, InCharacterId > 0);
+	RebuildRows(DisplayName, InCharacterId > 0, bCanInspect);
 
 	const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
 	SetPositionInViewport(ScreenPosition / Scale, false);
@@ -74,7 +74,7 @@ bool UPlayerContextMenuWidget::IsMenuOpen() const
 	return GetVisibility() == ESlateVisibility::Visible;
 }
 
-void UPlayerContextMenuWidget::RebuildRows(const FString& DisplayName, bool bCanTrade)
+void UPlayerContextMenuWidget::RebuildRows(const FString& DisplayName, bool bCanTrade, bool bCanInspect)
 {
 	Rows.Reset();
 
@@ -98,7 +98,8 @@ void UPlayerContextMenuWidget::RebuildRows(const FString& DisplayName, bool bCan
 	AddRow(EPlayerSocialAction::Whisper, LOCTEXT("Whisper", "Whisper"));
 	if (bCanTrade)
 		AddRow(EPlayerSocialAction::Trade, LOCTEXT("Trade", "Trade"));
-	AddRow(EPlayerSocialAction::Inspect, LOCTEXT("Inspect", "Inspect"));
+	if (bCanInspect)
+		AddRow(EPlayerSocialAction::Inspect, LOCTEXT("Inspect", "Inspect"));
 
 	// Attach rows to the list (AddRow only records; widgets parent here).
 	for (const FMenuRow& Row : Rows)

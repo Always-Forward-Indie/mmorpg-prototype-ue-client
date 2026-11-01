@@ -78,8 +78,16 @@ Inside `W_PlayerInterface` (not UIManager-directly): `USkillBarWidget` (`Skills/
    - `W_PlayerInterface`: optional `BossTargetFrameWidget` (`UMobTargetFrameWidget`, same API as mob frame).
 3. Multi-client run (`LaunchClients.ps1 -n 3`): open/close every toggle window, log-scan for
    `BindWidget`, `Failed to find`, `Accessed None` — zero hits is the gate.
-4. Right-click an equipped slot → `RequestUnequipItem` fires (wired 2026-10-24,
-   `EquipmentWidget.HandleUnequipRequested`); context-menu Equip/Unequip path unchanged.
+4. Equipment window: hover a slot → item tooltip follows the cursor (bound
+   `EquipTooltipWidget` or `EquipTooltipWidgetClass` detail, else a Warning logs);
+   RMB an occupied slot → context menu (Unequip / Use), never instant unequip.
+   `EquipContextMenuWidgetClass` must be set (else a Warning logs and RMB is a no-op).
+5. Item quickbar: assign via inventory/equipment context menu → `Quickbar`
+   (usable items only); hotkeys `QuickSlot1..5Action` (suggest F6-F10 — F1 is
+   TargetSelf, 1-5 drive the skill bar); per-character persistence is automatic.
+6. Unit menu: RMB-click (no drag) another player → Whisper / Trade / Inspect.
+   Trade needs ≤500 cm (server `economy.trade_range` re-validates); Inspect
+   opens the read-only snapshot window (`playerInspect` on chunk).
 
 ## 4. Removed 2026-10-24 (do not recreate)
 

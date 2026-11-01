@@ -69,6 +69,8 @@
 #include "Gameplay/Bestiary/BestiaryNetworkHandler.h"
 #include "Gameplay/Chat/ChatManager.h"
 #include "Gameplay/Combat/CombatLogManager.h"
+#include "Gameplay/Social/PlayerInspectManager.h"
+#include "Gameplay/Social/PlayerInspectNetworkHandler.h"
 #include "Gameplay/Chat/ChatNetworkHandler.h"
 #include "Gameplay/Player/PlayerStatsNetworkHandler.h"
 #include "Services/LocalizationSubsystem.h"
@@ -218,6 +220,20 @@ void UMyGameInstance::InitEconomy()
 	{
 		CombatLogManager->Initialize(this);
 		UE_LOG(LogGameplay, Warning, TEXT("CombatLogManager initialized"));
+	}
+
+	// Player inspect (unit menu): manager + network handler pair.
+	if (PlayerInspectManager)
+	{
+		PlayerInspectManager->Initialize(GetNetworkManager(), this);
+		UE_LOG(LogGameplay, Warning, TEXT("PlayerInspectManager initialized"));
+	}
+
+	if (PlayerInspectNetworkHandler && PlayerInspectManager)
+	{
+		PlayerInspectNetworkHandler->Initialize(PlayerInspectManager, GetNetworkManager());
+		PlayerInspectNetworkHandler->SubscribeToNetworkEvents();
+		UE_LOG(LogGameplay, Warning, TEXT("PlayerInspectNetworkHandler initialized and subscribed"));
 	}
 
 }

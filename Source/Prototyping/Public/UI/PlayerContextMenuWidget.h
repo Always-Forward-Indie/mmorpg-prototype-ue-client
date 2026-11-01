@@ -27,7 +27,7 @@ public:
 	UPlayerContextMenuWidget(const FObjectInitializer& ObjectInitializer);
 
 	UFUNCTION(BlueprintCallable, Category = "Player Menu")
-	void ShowForPlayer(int32 TargetCharacterId, const FString& DisplayName, FVector2D ScreenPosition);
+	void ShowForPlayer(int32 TargetCharacterId, const FString& DisplayName, FVector2D ScreenPosition, bool bCanInspect = true);
 
 	UFUNCTION(BlueprintCallable, Category = "Player Menu")
 	void HideMenu();
@@ -55,7 +55,7 @@ private:
 	TArray<FMenuRow> Rows;
 	int32 PressedRowIndex = -1;
 
-	void RebuildRows(const FString& DisplayName, bool bCanTrade);
+	void RebuildRows(const FString& DisplayName, bool bCanTrade, bool bCanInspect);
 	void AddRow(EPlayerSocialAction Action, const FText& Label);
 	int32 HitTestRowIndex(const FVector2D& AbsoluteScreenPos) const;
 };

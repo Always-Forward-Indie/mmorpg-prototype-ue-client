@@ -224,3 +224,14 @@ void UChatWidget::SetInputFocus()
         InputTextBox->SetKeyboardFocus();
     }
 }
+
+void UChatWidget::StartWhisperTo(const FString& TargetName)
+{
+    if (TargetName.IsEmpty()) return;
+    SetChatVisible(true);
+    if (ChannelComboBox)
+        ChannelComboBox->SetSelectedOption(TEXT("whisper"));
+    if (WhisperTargetBox)
+        WhisperTargetBox->SetText(FText::FromString(TargetName));
+    SetInputFocus();
+}

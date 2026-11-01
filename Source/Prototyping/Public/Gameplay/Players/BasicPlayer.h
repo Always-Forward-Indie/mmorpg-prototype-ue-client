@@ -88,6 +88,12 @@ private:
 	bool bIsRightMouseDown = false;
 	bool bIsLeftMouseDown = false;
 
+	// RMB click-vs-drag snapshot (unit menu opens on a clean click only).
+	float RMBPressTime = 0.f;
+	FVector2D RMBPressPos = FVector2D::ZeroVector;
+	TWeakObjectPtr<AActor> RMBPressTarget;
+	EInteractableType RMBPressType = EInteractableType::None;
+
 	// Mesh rotation speed (degrees per second for keyboard turning)
 	float MeshRotationSpeed = 180.0f;
 

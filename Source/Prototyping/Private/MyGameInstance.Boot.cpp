@@ -62,6 +62,8 @@
 #include "Gameplay/Quest/QuestNetworkHandler.h"
 #include "Gameplay/Trade/TradeManager.h"
 #include "Gameplay/Combat/CombatLogManager.h"
+#include "Gameplay/Social/PlayerInspectManager.h"
+#include "Gameplay/Social/PlayerInspectNetworkHandler.h"
 #include "Gameplay/Trade/TradeNetworkHandler.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "Gameplay/Equipment/EquipmentNetworkHandler.h"
@@ -258,6 +260,10 @@ UE_LOG(LogGameplay, Warning, TEXT("GameInstance: DevMode level override '%s'"), 
 	// Combat log: read-only sink for server facts (no network handler —
 	// it subscribes to the managers above once they are initialized).
 	CombatLogManager = NewObject<UCombatLogManager>(this);
+
+	// Player inspect (unit menu): manager + network handler pair.
+	PlayerInspectManager = NewObject<UPlayerInspectManager>(this);
+	PlayerInspectNetworkHandler = NewObject<UPlayerInspectNetworkHandler>(this);
 
 	// Initialize time sync service
 	TimeSyncService = NewObject<UTimeSyncService>(this);

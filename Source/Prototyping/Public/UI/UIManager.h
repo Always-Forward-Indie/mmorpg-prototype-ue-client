@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Gameplay/Interaction/IWorldInteractable.h"
+#include "Utils/NetCore/PlayerSocialRule.h"
 #include "InputActionValue.h"
 #include "UIManager.generated.h"
 
@@ -14,6 +15,9 @@ class UWidget;
 
 // Forward declarations
 struct FKeyEvent;
+class ABasicPlayer;
+class UPlayerContextMenuWidget;
+class UPlayerInspectWidget;
 class UCombatScreenFlashWidget;
 class UInventoryManager;
 class UHarvestManager;
@@ -278,6 +282,19 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UCombatLogWidget* GetCombatLogWidget() const { return CombatLogWidget; }
+
+	/** Open the unit context menu for a remote player (WoW-style RMB menu). */
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void OpenPlayerContextMenu(ABasicPlayer* TargetPlayer);
+
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ClosePlayerMenu();
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	UPlayerInspectWidget* GetPlayerInspectWidget() const { return PlayerInspectWidget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
+	bool IsPlayerMenuOpen() const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	UGameMenuBarWidget* GetGameMenuBarWidget() const { return GameMenuBarWidget; }
@@ -671,6 +688,17 @@ protected:
 	UPROPERTY()
 	UCombatLogWidget* CombatLogWidget = nullptr;
 
+	// Unit context menu + inspect window (runtime-created, no BP setup).
+	UPROPERTY()
+	UPlayerContextMenuWidget* PlayerContextMenu = nullptr;
+
+	UPROPERTY()
+	UPlayerInspectWidget* PlayerInspectWidget = nullptr;
+
+	// Last social-menu target (whisper prefill + trade dispatch).
+	int32 LastSocialTargetId = 0;
+	FString LastSocialTargetName;
+
 	UPROPERTY()
 	UGameMenuBarWidget* GameMenuBarWidget;
 
@@ -783,6 +811,16 @@ public:
 	UFUNCTION() void OnMenuBarSkillsClicked();
 	UFUNCTION() void OnMenuBarStatsClicked();
 	UFUNCTION() void OnMenuBarMenuClicked();
+
+	/** Bound to UPlayerContextMenuWidget::OnActionSelected. */
+	UFUNCTION() void HandlePlayerSocialAction(EPlayerSocialAction Action, int32 TargetCharacterId);
+
+	/** Bound to UPlayerInspectManager delegates. */
+	UFUNCTION() void HandlePlayerInspectReceived(const FPlayerInspectData& Data);
+	UFUNCTION() void HandlePlayerInspectError(const FString& Reason);
+
+private:
+	void EnsureInspectWidget();
 
 protected:
 

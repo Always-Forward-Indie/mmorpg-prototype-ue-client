@@ -59,6 +59,11 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Chat UI")
     void SetInputFocus();
 
+    /** Open a whisper to a player: selects the whisper channel, fills the
+     *  target box and focuses the input (used by the player context menu). */
+    UFUNCTION(BlueprintCallable, Category = "Chat UI")
+    void StartWhisperTo(const FString& TargetName);
+
 protected:
     virtual void NativeConstruct() override;
     virtual void NativeDestruct() override;

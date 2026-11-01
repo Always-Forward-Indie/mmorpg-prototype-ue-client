@@ -78,6 +78,12 @@ void UEquipmentWidget::NativeConstruct()
         }
     }
 
+    // Editor checklist: these Warnings are the SmokeClients log-scan gate.
+    if (!EquipTooltipWidget)
+        UE_LOG(LogGameplay, Warning, TEXT("EquipmentWidget: no tooltip — bind EquipTooltipWidget in WBP or set EquipTooltipWidgetClass."));
+    if (!EquipContextMenuWidget)
+        UE_LOG(LogGameplay, Warning, TEXT("EquipmentWidget: no context menu — set EquipContextMenuWidgetClass in WBP details (RMB will be a no-op)."));
+
     if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
     {
         int32 W = 0, H = 0;

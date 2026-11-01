@@ -15,7 +15,10 @@ void UCombatLogWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// Blueprint layout wins when bound; otherwise build the code fallback.
+	// Blueprint layout wins when bound — including placement: the BP root
+	// carries its own anchors (full-screen root + arranged content is the
+	// standard setup), so code must not override them. The code fallback
+	// uses the LogSize/LogPosition/LogAnchors/LogAlignment tunables.
 	if (!bWired)
 	{
 		bWired = true;
@@ -35,14 +38,13 @@ void UCombatLogWidget::NativeConstruct()
 		else
 		{
 			BuildLayout();
+			// Left edge, vertically biased above the chat row. Size/pos/anchors
+			// are UPROPERTY-tunable without touching code or Blueprints.
+			SetAnchorsInViewport(LogAnchors);
+			SetAlignmentInViewport(LogAlignment);
+			SetPositionInViewport(LogPosition, false);
 		}
 	}
-
-	// Left edge, vertically biased above the chat row. Size/pos/anchors are
-	// UPROPERTY-tunable without touching code or Blueprints.
-	SetAnchorsInViewport(LogAnchors);
-	SetAlignmentInViewport(LogAlignment);
-	SetPositionInViewport(LogPosition, false);
 	SetVisibility(ESlateVisibility::Visible);
 
 	if (LogManager)

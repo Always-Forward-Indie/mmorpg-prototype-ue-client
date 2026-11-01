@@ -29,6 +29,8 @@
  * Gear slots reuse the vendor slot BP (InspectSlotClass, same asset as the
  * vendor shop uses); hover shows an item tooltip (InspectTooltipWidgetClass,
  * optional — without it the localized slot name still shows as text).
+ * Placement comes from the BP root's own anchors; WindowSize/WindowPosition
+ * apply to the code fallback only.
  * With no subclass assigned the whole layout is built in C++ (headless-safe).
  */
 UCLASS(BlueprintType, Blueprintable)

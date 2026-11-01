@@ -16,8 +16,9 @@ void UPlayerInspectWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// Blueprint layout wins when bound; otherwise build the code fallback.
-	// Widget-level placement stays in code (viewport anchors are runtime-only).
+	// Blueprint layout wins when bound — including placement: the BP root
+	// carries its own anchors, so code must not override them. The code
+	// fallback positions itself because it has no designer layout.
 	if (!bWired)
 	{
 		bWired = true;
@@ -31,12 +32,11 @@ void UPlayerInspectWidget::NativeConstruct()
 		else
 		{
 			BuildLayout(); // wires its own close button
+			SetAnchorsInViewport(FAnchors(0.f, 0.5f));
+			SetAlignmentInViewport(FVector2D(0.f, 0.5f));
+			SetPositionInViewport(WindowPosition, false);
 		}
 	}
-
-	SetAnchorsInViewport(FAnchors(0.f, 0.5f));
-	SetAlignmentInViewport(FVector2D(0.f, 0.5f));
-	SetPositionInViewport(WindowPosition, false);
 	SetVisibility(ESlateVisibility::Collapsed);
 }
 

@@ -20,9 +20,10 @@
 void UKeybindWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	// Blueprint layout wins when bound; otherwise build the code fallback.
-	// Standalone windows keep viewport placement; the embedded settings-tab
-	// instance disables it (bManageViewportPlacement=false in Details).
+	// Blueprint layout wins when bound — including placement: the BP root
+	// carries its own anchors, so code must not override them. Standalone
+	// code fallback centers itself; the embedded settings-tab instance
+	// disables viewport placement entirely (bManageViewportPlacement=false).
 	if (!bWired)
 	{
 		bWired = true;
@@ -37,14 +38,14 @@ void UKeybindWidget::NativeConstruct()
 		else
 		{
 			BuildLayout(); // wires its own reset/close buttons
+			if (bManageViewportPlacement)
+			{
+				SetAnchorsInViewport(FAnchors(0.5f, 0.5f));
+				SetAlignmentInViewport(FVector2D(0.5f, 0.5f));
+				SetPositionInViewport(WindowPosition, false);
+				SetVisibility(ESlateVisibility::Collapsed);
+			}
 		}
-	}
-	if (bManageViewportPlacement)
-	{
-		SetAnchorsInViewport(FAnchors(0.5f, 0.5f));
-		SetAlignmentInViewport(FVector2D(0.5f, 0.5f));
-		SetPositionInViewport(WindowPosition, false);
-		SetVisibility(ESlateVisibility::Collapsed);
 	}
 	// Embedded (settings tab): placement and visibility belong to the BP.
 }

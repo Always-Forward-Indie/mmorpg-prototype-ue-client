@@ -17,9 +17,10 @@
 void UTradeInviteWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	// Blueprint layout wins when bound; otherwise build the code fallback.
-	// Widget-level placement stays in code in both modes (viewport anchors
-	// are runtime-only, a BP layout cannot provide them).
+	// Blueprint layout wins when bound — including placement: a BP dialog
+	// root carries its own anchors (full-screen root + centered content is
+	// the standard setup), so code must not override them. The code fallback
+	// positions itself because it has no designer layout.
 	if (!bWired)
 	{
 		bWired = true;
@@ -35,11 +36,11 @@ void UTradeInviteWidget::NativeConstruct()
 		else
 		{
 			BuildLayout(); // wires its own buttons
+			SetAnchorsInViewport(FAnchors(0.5f, 0.f));
+			SetAlignmentInViewport(FVector2D(0.5f, 0.f));
+			SetPositionInViewport(FVector2D(0.f, 80.f), false);
 		}
 	}
-	SetAnchorsInViewport(FAnchors(0.5f, 0.f));
-	SetAlignmentInViewport(FVector2D(0.5f, 0.f));
-	SetPositionInViewport(FVector2D(0.f, 80.f), false);
 	SetVisibility(ESlateVisibility::Collapsed);
 }
 

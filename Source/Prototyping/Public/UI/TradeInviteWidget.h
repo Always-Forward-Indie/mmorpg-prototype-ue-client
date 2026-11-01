@@ -25,7 +25,9 @@ class UTradeManager;
  *                                     auto-decline works without it)
  *   Invite_Accept_Btn     UButton     accept the invite
  *   Invite_Decline_Btn    UButton     decline the invite
- * Assign the subclass to UIManager.TradeInviteWidgetClass. With no subclass
+ * Assign the subclass to UIManager.TradeInviteWidgetClass. Dialog placement
+ * comes from the BP root's own anchors (full-screen root + centered content
+ * is the standard setup); code positions only the fallback. With no subclass
  * assigned the code-built fallback is used (headless-safe).
  *
  * Replaces the in-trade-window invite banner as the primary invite UI

@@ -108,6 +108,11 @@ To restyle one: create a BP subclass, bind the listed names, assign the
 subclass to the `*WidgetClass` property. Bind all names of a window or
 none — rows inside lists are always built in code (uniform styling).
 Unassigned `*WidgetClass` = code fallback (headless-safe, bots cover it).
+Viewport-added dialogs (invite, combat log, inspect, standalone keybinds)
+take their placement from the BP root's own anchors — use a full-screen
+root with centered content. The size/position UPROPERTYs (LogSize,
+LogPosition, WindowSize, …) apply to the code fallback only. The unit menu
+is the exception: it auto-positions at the cursor, no designer placement.
 
 | Window (C++ class) | WidgetClass property (owner) | Bind names |
 |---|---|---|
@@ -117,7 +122,7 @@ Unassigned `*WidgetClass` = code fallback (headless-safe, bots cover it).
 | `UVendorShopWidget` buyback tab | binds on `WBP_VendorShop`: `Buyback_Panel` (Widget), `Buyback_Items_Box` (WrapBox), `Tab_Buyback_Button` (Button); slots reuse `VendorSlotClass`, hover tooltip via shop `VendorTooltipWidget` | click slot = full-stack buyback; no [X] on buyback rows |
 | `UKeybindWidget` (standalone fallback) | — (created from C++ class) | `Keybinds_List_Box` (ScrollBox), `Keybinds_Reset_Btn` (Button), `Keybinds_Close_Btn` (Button, standalone only) |
 | `UKeybindWidget` (settings tab) | place as slot 3 of `WBP_Settings.TabContentSwitcher` + `Tab_ControlsButton`; set `bManageViewportPlacement=false` on the instance | same three binds, Close unbound (settings has its own close) |
-| `UPlayerContextMenuWidget` | `UIManager.PlayerMenuWidgetClass` | `Menu_Title_Text` (Text, optional), `Menu_Action_List` (VerticalBox, optional), `MenuRowWidgetClass` (row design; row BP binds `MenuRow_Label`) |
+| `UPlayerContextMenuWidget` | `UIManager.PlayerMenuWidgetClass` | `Menu_Title_Text` (Text, optional), `Menu_Action_List` (VerticalBox, optional), `MenuRowWidgetClass` (row design; row BP binds `MenuRow_Label`) — menu auto-positions at the cursor, no designer placement needed |
 | `UPlayerInspectWidget` | `UIManager.PlayerInspectWidgetClass` | `Inspect_Title_Text` (Text), `Inspect_Gear_Box` (ScrollBox), `Inspect_Close_Btn` (Button); gear icons reuse the vendor slot BP (`InspectSlotClass`), hover tooltip via `InspectTooltipWidgetClass` (optional) |
 
 Settings tab order is index-bound (`ESettingsTab`: Audio=0, Graphics=1,

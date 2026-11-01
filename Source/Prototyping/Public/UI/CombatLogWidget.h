@@ -33,6 +33,8 @@ struct FCombatLogEntry;
  *   Log_Scroll_Box  UScrollBox    line list (AppendEntry targets it)
  *   Log_Filter_Row  any UPanelWidget (HorizontalBox recommended) —
  *                   the five channel checkboxes are built into it in code
+ * Placement comes from the BP root's own anchors; the LogSize/LogPosition/
+ * LogAnchors/LogAlignment tunables apply to the code fallback only.
  * With no subclass assigned the whole layout is built in C++ (headless-safe).
  *
  * Clicks: the scroll area is Visible (consistent with the chat window);

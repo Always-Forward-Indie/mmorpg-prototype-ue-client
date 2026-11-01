@@ -192,7 +192,8 @@ void UUIManager::ToggleEmoteList()
 }
 
 void UUIManager::ToggleKeybindWindow()
-{	UMyGameInstance* GI = GetWorld() ? Cast<UMyGameInstance>(GetWorld()->GetGameInstance()) : nullptr;
+{
+	UMyGameInstance* GI = GetWorld() ? Cast<UMyGameInstance>(GetWorld()->GetGameInstance()) : nullptr;
 	ABasicPlayer* Local = GI ? GI->Player : nullptr;
 	UKeybindManager* Keybinds = GI ? GI->GetKeybindManager() : nullptr;
 	if (!Local || !Keybinds)
@@ -200,6 +201,43 @@ void UUIManager::ToggleKeybindWindow()
 		UE_LOG(LogGameplay, Warning, TEXT("UIManager::ToggleKeybindWindow - no local player or keybind manager"));
 		return;
 	}
+
+	// Toggle off when the Controls tab is already up.
+	if (GameSettingsWidget && GameSettingsWidget->IsVisible()
+		&& GameSettingsWidget->GetActiveTab() == ESettingsTab::Controls)
+	{
+		GameSettingsWidget->CloseSettings();
+		UpdateCursorAndInputMode();
+		return;
+	}
+
+	// Preferred home: Controls tab of the settings window. The BP needs
+	// Tab_ControlsButton + ControlsPanel (slot 3); without them we fall
+	// back to the standalone window so old assets keep working.
+	if (GameSettingsWidgetClass)
+	{
+		if (!IsValid(GameSettingsWidget))
+		{
+			GameSettingsWidget = CreateWidget<UW_SettingsWidget>(GetWorld(), GameSettingsWidgetClass);
+			if (GameSettingsWidget)
+			{
+				GameSettingsWidget->AddToViewport(210);
+				GameSettingsWidget->OnSettingsWindowClosed.AddDynamic(this, &UUIManager::HandleSettingsClosed);
+			}
+		}
+		if (GameSettingsWidget)
+		{
+			if (UKeybindWidget* Panel = GameSettingsWidget->GetControlsPanel())
+			{
+				Panel->BindToPlayer(Local, Keybinds);
+				GameSettingsWidget->OpenSettings(ESettingsTab::Controls);
+				UpdateCursorAndInputMode();
+				return;
+			}
+		}
+	}
+
+	// Fallback: standalone window (no Controls tab in this BP asset).
 	if (!KeybindWidget)
 	{
 		KeybindWidget = CreateWidget<UKeybindWidget>(GetWorld(), UKeybindWidget::StaticClass());
@@ -222,6 +260,9 @@ void UUIManager::ToggleKeybindWindow()
 
 bool UUIManager::IsKeybindWindowOpen() const
 {
+	if (GameSettingsWidget && GameSettingsWidget->IsVisible()
+		&& GameSettingsWidget->GetActiveTab() == ESettingsTab::Controls)
+		return true;
 	return KeybindWidget && KeybindWidget->IsKeybindsOpen();
 }
 

@@ -9,10 +9,14 @@
 // Optional:
 //   Button_Close        — Button, hides the window
 //
-// To add a new tab later (e.g. Graphics):
-//   1. Add a new value to ESettingsTab.
-//   2. Add Tab_GraphicsButton (BindWidget) + GraphicsPanel (BindWidget, slot 1).
-//   3. Bind HandleTabGraphics() and add the SwitchToTab(Graphics) branch.
+// Tabs Graphics / Language / Controls follow the Audio pattern (button +
+// panel in the matching switcher slot); all three are BindWidgetOptional
+// so older BP assets keep working.
+//
+// To add a new tab later:
+//   1. Append a value to ESettingsTab (never reorder — slots are indexed).
+//   2. Add Tab_XButton (BindWidgetOptional) + XxxPanel (BindWidgetOptional).
+//   3. Bind HandleTabX() and add the SwitchToTab(X) branch.
 
 #pragma once
 
@@ -21,17 +25,20 @@
 #include "UI/AudioSettingsWidget.h"
 #include "UI/GraphicsSettingsWidget.h"
 #include "UI/LanguageSettingsWidget.h"
+#include "UI/KeybindWidget.h"
 #include "Components/WidgetSwitcher.h"
 #include "Components/Button.h"
 #include "W_SettingsWidget.generated.h"
 
-/** Identifies the active settings category tab. */
+/** Identifies the active settings category tab. Append-only: switcher slots
+ *  are indexed by this enum, so new tabs go LAST (existing slots 0-2 stay). */
 UENUM(BlueprintType)
 enum class ESettingsTab : uint8
 {
     Audio    UMETA(DisplayName = "Audio"),
     Graphics UMETA(DisplayName = "Graphics"),
     Language UMETA(DisplayName = "Language"),
+    Controls UMETA(DisplayName = "Controls"),
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSettingsWindowClosed);
@@ -160,11 +167,35 @@ protected:
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
     ULanguageSettingsWidget* LanguageSettingsPanel;
 
+    /**
+     * Tab button for the Controls (keybinds) panel.
+     * Place it in the tab-bar row; clicking it calls SwitchToTab(Controls).
+     * Optional: old WBP_Settings assets without this tab keep working
+     * (F12 falls back to the standalone keybind window).
+     */
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+    UButton* Tab_ControlsButton;
+
+    /**
+     * Keybind panel — a UKeybindWidget placed as the FOURTH child (slot 3)
+     * of TabContentSwitcher. Set its bManageViewportPlacement=false in
+     * Details (viewport placement is meaningless inside a switcher slot)
+     * and leave its Close button unbound (settings has Button_Close).
+     * UIManager binds the local player on open; SwitchToTab refreshes rows.
+     */
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+    UKeybindWidget* ControlsPanel;
+
     // ── Optional bound widgets ─────────────────────────────────────────────
 
     /** Closes the settings window. */
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
     UButton* Button_Close;
+
+public:
+    /** Embedded Controls panel (null when the BP has no Controls tab). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Settings")
+    UKeybindWidget* GetControlsPanel() const { return ControlsPanel; }
 
 private:
     ESettingsTab ActiveTab = ESettingsTab::Audio;
@@ -173,5 +204,6 @@ private:
     UFUNCTION() void HandleTabAudio();
     UFUNCTION() void HandleTabGraphics();
     UFUNCTION() void HandleTabLanguage();
+    UFUNCTION() void HandleTabControls();
     UFUNCTION() void HandleClose();
 };

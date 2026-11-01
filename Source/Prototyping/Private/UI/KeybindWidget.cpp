@@ -20,11 +20,33 @@
 void UKeybindWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	BuildLayout();
-	SetAnchorsInViewport(FAnchors(0.5f, 0.5f));
-	SetAlignmentInViewport(FVector2D(0.5f, 0.5f));
-	SetPositionInViewport(WindowPosition, false);
-	SetVisibility(ESlateVisibility::Collapsed);
+	// Blueprint layout wins when bound; otherwise build the code fallback.
+	// Standalone windows keep viewport placement; the embedded settings-tab
+	// instance disables it (bManageViewportPlacement=false in Details).
+	if (!bWired)
+	{
+		bWired = true;
+		if (Keybinds_List_Box || Keybinds_Reset_Btn || Keybinds_Close_Btn)
+		{
+			ListBox = Keybinds_List_Box;
+			if (Keybinds_Reset_Btn)
+				Keybinds_Reset_Btn->OnClicked.AddDynamic(this, &UKeybindWidget::HandleResetAllClicked);
+			if (Keybinds_Close_Btn)
+				Keybinds_Close_Btn->OnClicked.AddDynamic(this, &UKeybindWidget::HandleCloseClicked);
+		}
+		else
+		{
+			BuildLayout(); // wires its own reset/close buttons
+		}
+	}
+	if (bManageViewportPlacement)
+	{
+		SetAnchorsInViewport(FAnchors(0.5f, 0.5f));
+		SetAlignmentInViewport(FVector2D(0.5f, 0.5f));
+		SetPositionInViewport(WindowPosition, false);
+		SetVisibility(ESlateVisibility::Collapsed);
+	}
+	// Embedded (settings tab): placement and visibility belong to the BP.
 }
 
 void UKeybindWidget::NativeDestruct()
@@ -105,6 +127,11 @@ void UKeybindWidget::CloseKeybinds()
 {
 	StopCapture();
 	SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UKeybindWidget::CancelCapture()
+{
+	StopCapture();
 }
 
 bool UKeybindWidget::IsKeybindsOpen() const

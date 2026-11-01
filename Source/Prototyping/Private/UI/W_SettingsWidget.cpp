@@ -22,6 +22,11 @@ void UW_SettingsWidget::NativeConstruct()
 		Tab_LanguageButton->OnClicked.AddDynamic(this, &UW_SettingsWidget::HandleTabLanguage);
 	}
 
+	if (Tab_ControlsButton)
+	{
+		Tab_ControlsButton->OnClicked.AddDynamic(this, &UW_SettingsWidget::HandleTabControls);
+	}
+
 	if (Button_Close)
     {
         Button_Close->OnClicked.AddDynamic(this, &UW_SettingsWidget::HandleClose);
@@ -47,6 +52,13 @@ void UW_SettingsWidget::CloseSettings()
     if (GraphicsSettingsPanel)
     {
         GraphicsSettingsPanel->CloseWidget();
+    }
+
+    if (ControlsPanel)
+    {
+        // Abort a mid-capture key press; the panel itself stays visible
+        // (visibility belongs to the switcher slot, not the tab content).
+        ControlsPanel->CancelCapture();
     }
 
     SetVisibility(ESlateVisibility::Collapsed);
@@ -87,6 +99,14 @@ void UW_SettingsWidget::SwitchToTab(ESettingsTab Tab)
                 LanguageSettingsPanel->InitializeSettings();
             }
             break;
+
+        case ESettingsTab::Controls:
+            if (ControlsPanel)
+            {
+                ControlsPanel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+                ControlsPanel->RefreshList();
+            }
+            break;
     }
 
     OnTabChanged(Tab);
@@ -105,6 +125,11 @@ void UW_SettingsWidget::HandleTabGraphics()
 void UW_SettingsWidget::HandleTabLanguage()
 {
     SwitchToTab(ESettingsTab::Language);
+}
+
+void UW_SettingsWidget::HandleTabControls()
+{
+    SwitchToTab(ESettingsTab::Controls);
 }
 
 void UW_SettingsWidget::HandleClose()

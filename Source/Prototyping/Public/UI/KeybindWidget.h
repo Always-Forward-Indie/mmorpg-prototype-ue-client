@@ -35,10 +35,24 @@ private:
 /**
  * UKeybindWidget
  *
- * Runtime-built controls list: every remappable action with its primary key,
+ * Controls list: every remappable action with its primary key,
  * click-to-remap (next keydown wins, Esc cancels), Reset all button.
- * No Blueprint setup required. Overrides persist in Game.ini via
- * UKeybindManager and re-apply on every input init.
+ *
+ * Two homes: standalone window (created in code by UIManager) or embedded
+ * "Controls" panel inside WBP_Settings (slot 3 of TabContentSwitcher —
+ * see UW_SettingsWidget class doc). The embedded BP instance sets
+ * bManageViewportPlacement=false; its Close button is simply not bound
+ * (settings has its own Button_Close).
+ *
+ * Blueprint layout (optional): create a BP subclass, bind these names.
+ * Bind all three or none — rows are always built in code (uniform styling):
+ *   Keybinds_List_Box   UScrollBox  action rows go here
+ *   Keybinds_Reset_Btn  UButton     "Reset all" (restores asset defaults)
+ *   Keybinds_Close_Btn  UButton     hides the window (standalone only)
+ * With no subclass assigned the whole layout is built in C++ (headless-safe).
+ *
+ * Overrides persist in Game.ini via UKeybindManager and re-apply on every
+ * input init.
  */
 UCLASS(BlueprintType, Blueprintable)
 class PROTOTYPING_API UKeybindWidget : public UUserWidget
@@ -49,11 +63,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Keybinds")
 	void BindToPlayer(ABasicPlayer* InPlayer, UKeybindManager* InManager);
 
+	/** Rebuild the action list (call after BindToPlayer or tab switch). */
 	UFUNCTION(BlueprintCallable, Category = "Keybinds")
 	void RefreshList();
 
 	UFUNCTION(BlueprintCallable, Category = "Keybinds")
 	void CloseKeybinds();
+
+	/** Abort an in-progress key capture without hiding (settings tab close). */
+	UFUNCTION(BlueprintCallable, Category = "Keybinds")
+	void CancelCapture();
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Keybinds")
 	bool IsKeybindsOpen() const;
@@ -67,6 +86,19 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Keybinds")
 	FVector2D WindowPosition = FVector2D(0.f, 0.f);
+
+	/**
+	 * Standalone window vs embedded settings-tab panel. The settings BP
+	 * instance sets this false (viewport placement is meaningless inside
+	 * a WidgetSwitcher slot).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Keybinds")
+	bool bManageViewportPlacement = true;
+
+	// Blueprint layout slots (BindWidgetOptional — see class doc).
+	UPROPERTY(meta = (BindWidgetOptional)) UScrollBox* Keybinds_List_Box = nullptr;
+	UPROPERTY(meta = (BindWidgetOptional)) UButton* Keybinds_Reset_Btn = nullptr;
+	UPROPERTY(meta = (BindWidgetOptional)) UButton* Keybinds_Close_Btn = nullptr;
 
 private:
 	void BuildLayout();
@@ -93,4 +125,7 @@ private:
 
 	UInputAction* CapturingAction = nullptr;
 	FDelegateHandle CaptureHandle;
+
+	// Wiring happens once (NativeConstruct may re-run on re-add to viewport).
+	bool bWired = false;
 };

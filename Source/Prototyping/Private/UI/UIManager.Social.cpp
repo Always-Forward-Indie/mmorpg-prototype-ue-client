@@ -28,7 +28,11 @@ void UUIManager::OpenPlayerContextMenu(ABasicPlayer* TargetPlayer)
 
 	if (!PlayerContextMenu)
 	{
-		PlayerContextMenu = CreateWidget<UPlayerContextMenuWidget>(GetWorld(), UPlayerContextMenuWidget::StaticClass());
+		// Blueprint subclass wins when assigned (binds its named buttons),
+		// otherwise the code-built fallback is used (headless-safe).
+		TSubclassOf<UPlayerContextMenuWidget> MenuClass =
+			PlayerMenuWidgetClass ? *PlayerMenuWidgetClass : UPlayerContextMenuWidget::StaticClass();
+		PlayerContextMenu = CreateWidget<UPlayerContextMenuWidget>(GetWorld(), MenuClass);
 		if (PlayerContextMenu)
 		{
 			PlayerContextMenu->AddToViewport(1100);
@@ -119,7 +123,9 @@ void UUIManager::HandlePlayerSocialAction(EPlayerSocialAction Action, int32 Targ
 void UUIManager::EnsureInspectWidget()
 {
 	if (PlayerInspectWidget || !GetWorld()) return;
-	PlayerInspectWidget = CreateWidget<UPlayerInspectWidget>(GetWorld(), UPlayerInspectWidget::StaticClass());
+	TSubclassOf<UPlayerInspectWidget> InspectClass =
+		PlayerInspectWidgetClass ? *PlayerInspectWidgetClass : UPlayerInspectWidget::StaticClass();
+	PlayerInspectWidget = CreateWidget<UPlayerInspectWidget>(GetWorld(), InspectClass);
 	if (PlayerInspectWidget)
 	{
 		PlayerInspectWidget->AddToViewport(16);

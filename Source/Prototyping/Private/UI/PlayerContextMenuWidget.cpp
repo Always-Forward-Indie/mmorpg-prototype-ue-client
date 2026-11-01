@@ -17,11 +17,42 @@ UPlayerContextMenuWidget::UPlayerContextMenuWidget(const FObjectInitializer& Obj
 void UPlayerContextMenuWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	// Blueprint buttons win when bound; otherwise the code fallback with
+	// manual hit-testing is used (see RebuildRows).
+	if (!bWired)
+	{
+		bWired = true;
+		if (Menu_Whisper_Btn || Menu_Trade_Btn || Menu_Inspect_Btn || Menu_Title_Text)
+		{
+			bUsingBpLayout = true;
+			if (Menu_Whisper_Btn) Menu_Whisper_Btn->OnClicked.AddDynamic(this, &UPlayerContextMenuWidget::HandleWhisperClicked);
+			if (Menu_Trade_Btn)   Menu_Trade_Btn->OnClicked.AddDynamic(this, &UPlayerContextMenuWidget::HandleTradeClicked);
+			if (Menu_Inspect_Btn) Menu_Inspect_Btn->OnClicked.AddDynamic(this, &UPlayerContextMenuWidget::HandleInspectClicked);
+		}
+	}
 	SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UPlayerContextMenuWidget::HandleWhisperClicked() { FireAction(EPlayerSocialAction::Whisper); }
+void UPlayerContextMenuWidget::HandleTradeClicked()   { FireAction(EPlayerSocialAction::Trade); }
+void UPlayerContextMenuWidget::HandleInspectClicked() { FireAction(EPlayerSocialAction::Inspect); }
+
+void UPlayerContextMenuWidget::FireAction(EPlayerSocialAction Action)
+{
+	const int32 Target = TargetCharacterId;
+	HideMenu();
+	OnActionSelected.Broadcast(Action, Target);
 }
 
 FReply UPlayerContextMenuWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
+	if (bUsingBpLayout)
+	{
+		// Real buttons own LMB; only swallow RMB (the release that opened us).
+		if (InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
+			return FReply::Handled();
+		return FReply::Unhandled();
+	}
 	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
 		PressedRowIndex = HitTestRowIndex(InMouseEvent.GetScreenSpacePosition());
@@ -35,6 +66,12 @@ FReply UPlayerContextMenuWidget::NativeOnMouseButtonDown(const FGeometry& InGeom
 
 FReply UPlayerContextMenuWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
+	if (bUsingBpLayout)
+	{
+		if (InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
+			return FReply::Handled();
+		return FReply::Unhandled();
+	}
 	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
 		const int32 UpRow = HitTestRowIndex(InMouseEvent.GetScreenSpacePosition());
@@ -56,7 +93,19 @@ void UPlayerContextMenuWidget::ShowForPlayer(int32 InCharacterId, const FString&
 {
 	TargetCharacterId = InCharacterId;
 	PressedRowIndex = -1;
-	RebuildRows(DisplayName, InCharacterId > 0, bCanInspect);
+
+	if (bUsingBpLayout)
+	{
+		const bool bCanTrade = InCharacterId > 0;
+		if (Menu_Title_Text) Menu_Title_Text->SetText(FText::FromString(DisplayName));
+		if (Menu_Whisper_Btn) Menu_Whisper_Btn->SetVisibility(ESlateVisibility::Visible);
+		if (Menu_Trade_Btn)   Menu_Trade_Btn->SetVisibility(bCanTrade ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		if (Menu_Inspect_Btn) Menu_Inspect_Btn->SetVisibility(bCanInspect ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
+	else
+	{
+		RebuildRows(DisplayName, InCharacterId > 0, bCanInspect);
+	}
 
 	const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
 	SetPositionInViewport(ScreenPosition / Scale, false);

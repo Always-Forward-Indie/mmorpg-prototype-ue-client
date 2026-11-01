@@ -556,6 +556,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UTradeInviteWidget> TradeInviteWidgetClass;
 
+	/** Blueprint subclass of the player unit menu. Unset = code-built fallback. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UPlayerContextMenuWidget> PlayerMenuWidgetClass;
+
+	/** Blueprint subclass of the inspect window. Unset = code-built fallback. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
+	TSubclassOf<UPlayerInspectWidget> PlayerInspectWidgetClass;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI Manager - Widget Classes")
 	TSubclassOf<UEquipmentWidget> EquipmentWidgetClass;
 
@@ -709,7 +717,8 @@ protected:
 	UPROPERTY()
 	UTradeInviteWidget* TradeInviteWidget = nullptr;
 
-	// Unit context menu + inspect window (runtime-created, no BP setup).
+	// Unit context menu + inspect window (runtime-created; BP subclasses
+	// via PlayerMenuWidgetClass / PlayerInspectWidgetClass, else code fallback).
 	UPROPERTY()
 	UPlayerContextMenuWidget* PlayerContextMenu = nullptr;
 

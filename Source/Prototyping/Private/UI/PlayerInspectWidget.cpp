@@ -15,7 +15,23 @@ void UPlayerInspectWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	BuildLayout();
+	// Blueprint layout wins when bound; otherwise build the code fallback.
+	// Widget-level placement stays in code (viewport anchors are runtime-only).
+	if (!bWired)
+	{
+		bWired = true;
+		if (Inspect_Title_Text || Inspect_Gear_Box || Inspect_Close_Btn)
+		{
+			HeaderText = Inspect_Title_Text;
+			GearBox = Inspect_Gear_Box;
+			if (Inspect_Close_Btn)
+				Inspect_Close_Btn->OnClicked.AddDynamic(this, &UPlayerInspectWidget::HideInspect);
+		}
+		else
+		{
+			BuildLayout(); // wires its own close button
+		}
+	}
 
 	SetAnchorsInViewport(FAnchors(0.f, 0.5f));
 	SetAlignmentInViewport(FVector2D(0.f, 0.5f));

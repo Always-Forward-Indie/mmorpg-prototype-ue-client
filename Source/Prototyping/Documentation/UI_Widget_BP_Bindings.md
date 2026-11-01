@@ -101,6 +101,27 @@ Inside `W_PlayerInterface` (not UIManager-directly): `USkillBarWidget` (`Skills/
 11. Player target frame: reuses the mob frame (name/level/HP), auto-hides when the
     target leaves the world, 0 HP on death — all in code, no BP needed.
 
+## 6. Code-built windows: Blueprint bind names
+
+Windows below build their layout in C++ and work with zero BP setup.
+To restyle one: create a BP subclass, bind the listed names, assign the
+subclass to the `*WidgetClass` property. Bind all names of a window or
+none — rows inside lists are always built in code (uniform styling).
+Unassigned `*WidgetClass` = code fallback (headless-safe, bots cover it).
+
+| Window (C++ class) | WidgetClass property (owner) | Bind names |
+|---|---|---|
+| `UTradeInviteWidget` | `UIManager.TradeInviteWidgetClass` | `Invite_Name_Text` (Text), `Invite_Countdown_Text` (Text), `Invite_Accept_Btn` (Button), `Invite_Decline_Btn` (Button) |
+| `UCombatLogWidget` | `UIManager.CombatLogWidgetClass` | `Log_Scroll_Box` (ScrollBox), `Log_Filter_Row` (any Panel, HorizontalBox recommended — channel checks are built into it) |
+| `UBuybackWidget` | `UVendorShopWidget.BuybackWidgetClass` | `Buyback_Title_Text` (Text), `Buyback_List_Box` (ScrollBox), `Buyback_Close_Btn` (Button) |
+| `UKeybindWidget` (standalone fallback) | — (created from C++ class) | `Keybinds_List_Box` (ScrollBox), `Keybinds_Reset_Btn` (Button), `Keybinds_Close_Btn` (Button, standalone only) |
+| `UKeybindWidget` (settings tab) | place as slot 3 of `WBP_Settings.TabContentSwitcher` + `Tab_ControlsButton`; set `bManageViewportPlacement=false` on the instance | same three binds, Close unbound (settings has its own close) |
+| `UPlayerContextMenuWidget` | `UIManager.PlayerMenuWidgetClass` | `Menu_Title_Text` (Text), `Menu_Whisper_Btn`, `Menu_Trade_Btn`, `Menu_Inspect_Btn` (Buttons; unavailable actions auto-hide) |
+| `UPlayerInspectWidget` | `UIManager.PlayerInspectWidgetClass` | `Inspect_Title_Text` (Text), `Inspect_Gear_Box` (ScrollBox), `Inspect_Close_Btn` (Button) |
+
+Settings tab order is index-bound (`ESettingsTab`: Audio=0, Graphics=1,
+Language=2, Controls=3) — new tabs go last, never reorder.
+
 ## 4. Removed 2026-10-24 (do not recreate)
 
 - `Public/UI/ItemContextMenuWidget.h` + `Private/UI/ItemContextMenuWidget.cpp` (0 bytes, superseded by `ItemActionMenuWidget`).

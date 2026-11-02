@@ -6,6 +6,7 @@
 #include "UI/DropQuantityPopupWidget.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
+#include "Utils/NetCore/InventoryQuery.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "Components/GridPanel.h"
@@ -227,6 +228,8 @@ TArray<FInventoryItemStruct> UInventoryWidget::BuildDisplayList() const
 	for (const FInventoryItemStruct& Item : CurrentInventory.items)
 	{
 		if (Item.itemId <= 0) continue;
+		// Wallet (110): currency is the gold number, never a grid slot.
+		if (FInventoryQuery::IsCurrencyItem(Item)) continue;
 		if (!Needle.IsEmpty())
 		{
 			const FString Haystack = (Item.name + TEXT(" ") + Item.slug + TEXT(" ") + Item.itemTypeSlug).ToLower();

@@ -10,6 +10,7 @@
 #include "Gameplay/Items/HarvestManager.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Gameplay/Repair/RepairManager.h"
+#include "Utils/NetCore/InventoryQuery.h"
 #include "Gameplay/Chat/ChatManager.h"
 #include "Gameplay/Dialogue/DialogueManager.h"
 #include "Gameplay/Quest/QuestManager.h"
@@ -307,12 +308,11 @@ int32 UDevModeBotBrain::FindSellableInstanceId(int32& OutQty) const
     {
         // Junk = stackable, non-equipped, non-durable, non-quest, non-currency
         // row. The row survives the sale (qty - 1), so the assert reads qty
-        // exactly. Currency rows (gold_coin, qty == balance) must never be
-        // sold — the server eats the coin without credit (seen live).
+        // exactly. Wallet rows must never be sold (110: gold is not an item).
         for (const FInventoryItemStruct& Item : GameInstance->GetInventoryManager()->GetInventory().items)
         {
             if (Item.quantity > 1 && !Item.is_equipped && !Item.isDurable && !Item.isQuestItem
-                && !Item.itemTypeSlug.Equals(TEXT("currency"), ESearchCase::IgnoreCase))
+                && !FInventoryQuery::IsCurrencyItem(Item))
             {
                 OutQty = Item.quantity;
                 return Item.id;

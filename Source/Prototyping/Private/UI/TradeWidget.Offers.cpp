@@ -8,6 +8,7 @@
 #include "UI/NotificationStackWidget.h"
 #include "Audio/AudioManager.h"
 #include "Utils/NetCore/TradeStatusRule.h"
+#include "Utils/NetCore/InventoryQuery.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "MyGameInstance.h"
 #include "Services/LocalizationSubsystem.h"
@@ -209,6 +210,8 @@ void UTradeWidget::RebuildInventoryList()
     for (const FInventoryItemStruct& Item : CachedInventory.items)
     {
         if (Item.itemId <= 0) continue;
+        // Wallet (110): currency travels via the gold field, never as rows.
+        if (FInventoryQuery::IsCurrencyItem(Item)) continue;
         // Equipped gear can never be offered (server rejects it, like the
         // vendor sell list skips it) — hide it instead of showing dead rows.
         if (Item.is_equipped) continue;

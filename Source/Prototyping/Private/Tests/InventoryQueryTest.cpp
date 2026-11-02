@@ -40,5 +40,12 @@ bool FInventoryQueryTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("type miss"), Q::ByType(Items, TEXT("Armor")).Num(), 0);
     TestEqual(TEXT("rarity filter"), Q::ByRarity(Items, TEXT("RARE")).Num(), 1);
     TestEqual(TEXT("empty index"), Q::IndexOfTemplate(TArray<FInventoryItemStruct>(), 5), INDEX_NONE);
+    // Wallet predicate (110_currency_wallet): currency type id or slug.
+    FInventoryItemStruct Gold; Gold.itemId = 16; Gold.item_type_id = 8;
+    FInventoryItemStruct GoldSlug; GoldSlug.itemId = 16; GoldSlug.itemTypeSlug = TEXT("Currency");
+    TestTrue(TEXT("currency by type id"), Q::IsCurrencyItem(Gold));
+    TestTrue(TEXT("currency by slug"), Q::IsCurrencyItem(GoldSlug));
+    TestFalse(TEXT("sword not currency"), Q::IsCurrencyItem(Sword));
+    TestFalse(TEXT("potion not currency"), Q::IsCurrencyItem(Potion));
     return true;
 }

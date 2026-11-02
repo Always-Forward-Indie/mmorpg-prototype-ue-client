@@ -71,4 +71,16 @@ struct PROTOTYPING_API FInventoryQuery
 		}
 		return Out;
 	}
+
+	/**
+	 * Wallet predicate (110_currency_wallet): currency lives in
+	 * FCharacterInventoryStruct::gold, never as rows. Any currency-typed row
+	 * reaching the client is stale/foreign — grids must skip it.
+	 * Type id 8 = currency (item_types); slug compare is the backstop.
+	 */
+	static bool IsCurrencyItem(const FInventoryItemStruct& Item)
+	{
+		return Item.item_type_id == 8
+			|| Item.itemTypeSlug.Equals(TEXT("currency"), ESearchCase::IgnoreCase);
+	}
 };

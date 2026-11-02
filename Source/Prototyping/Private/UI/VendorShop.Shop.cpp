@@ -2,6 +2,7 @@
 #include "UI/VendorShopWidget.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Gameplay/Items/InventoryManager.h"
+#include "Utils/NetCore/InventoryQuery.h"
 #include "UI/VendorTooltipWidget.h"
 #include "MyGameInstance.h"
 #include "Services/LocalizationSubsystem.h"
@@ -117,10 +118,9 @@ void UVendorShopWidget::RefreshInventoryDisplay()
     int32 VisualIdx = 0;
     for (const FInventoryItemStruct& Item : CachedInventory.items)
     {
-        // Skip non-tradable, quest, currency, and equipped items
+        // Skip non-tradable, quest, currency (wallet ledger, 110), equipped.
         if (!Item.isTradable || Item.isQuestItem || Item.is_equipped) continue;
-        if (Item.itemTypeSlug.Equals(TEXT("currency"), ESearchCase::IgnoreCase)) continue;
-        if (Item.slug.Contains(TEXT("gold"), ESearchCase::IgnoreCase)) continue;
+        if (FInventoryQuery::IsCurrencyItem(Item)) continue;
 
         UVendorSlotWidget* NewSlot = CreateWidget<UVendorSlotWidget>(GetOwningPlayer(), VendorSlotClass);
         if (!NewSlot) continue;

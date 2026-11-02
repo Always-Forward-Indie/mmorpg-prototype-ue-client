@@ -109,6 +109,12 @@ void UVendorSlotWidget::SetShowPrice(bool bShow)
     RefreshVisuals();
 }
 
+void UVendorSlotWidget::SetFullItemData(const FInventoryItemStruct& Item)
+{
+    FullItemData = Item;
+    bHasFullItemData = Item.itemId > 0;
+}
+
 void UVendorSlotWidget::SetAffordability(EVendorSlotAffordability InAffordability)
 {
     if (!AffordabilityBorder) return;
@@ -141,6 +147,14 @@ FInventoryItemStruct UVendorSlotWidget::GetTooltipData() const
         case EVendorSlotMode::InvItem:   return InvItemData;
         case EVendorSlotMode::CartEntry:
         {
+            // Full source item (trade offers) carries rarity/stats/desc.
+            if (bHasFullItemData && FullItemData.itemId > 0)
+            {
+                FInventoryItemStruct Full = FullItemData;
+                Full.quantity = CartEntryData.quantity;
+                Full.id = CartEntryData.inventoryItemId;
+                return Full;
+            }
             // Build minimal preview from cart entry
             FInventoryItemStruct Preview;
             Preview.itemId           = CartEntryData.itemId;

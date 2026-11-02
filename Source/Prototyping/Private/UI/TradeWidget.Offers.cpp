@@ -114,6 +114,9 @@ void UTradeWidget::RebuildOfferList(UPanelWidget* Box, TArray<UVendorSlotWidget*
         Entry.maxQuantity = Item.quantity;
         Entry.pricePerUnit = 0; // trade has no prices; hidden via SetShowPrice
         OfferSlot->SetupAsCartSlot(SlotIndex, Entry);
+        // Full source item: cart tooltip/rarity match inventory (no
+        // minimal-preview lies about rarity/stats).
+        OfferSlot->SetFullItemData(Item);
         // My offer: [X] removes the stack back (resend without it).
         // Their offer: display only.
         OfferSlot->SetAllowRemoveButton(bIsMyOffer);
@@ -177,8 +180,7 @@ void UTradeWidget::HandleMyOfferClicked(int32 SlotIndex)
     // Remove; a stale binding would fire a foreign removal).
     TradeQuantityPopup->OnQuantityConfirmed.Clear();
     TradeQuantityPopup->OnQuantityRemove.Clear();
-    FText ItemName = FText::FromString(!Owned->name.IsEmpty() ? Owned->name : Owned->slug);
-    TradeQuantityPopup->OpenForUpdate(DropId, ItemName.ToString(), 0, Owned->quantity, OfferedQty);
+    TradeQuantityPopup->OpenForUpdate(DropId, GetTradeDisplayName(*Owned).ToString(), 0, Owned->quantity, OfferedQty);
     TradeQuantityPopup->OnQuantityConfirmed.AddDynamic(this, &UTradeWidget::HandleMyOfferQuantityConfirmed);
     TradeQuantityPopup->OnQuantityRemove.AddDynamic(this, &UTradeWidget::HandleMyOfferQuantityRemove);
 }
@@ -231,6 +233,24 @@ void UTradeWidget::HandleMyOfferQuantityRemove(int32 InventoryItemId)
     const int32 CharId = GetGameInstance()
         ? Cast<UMyGameInstance>(GetGameInstance())->GetCurrentCharacterID() : 0;
     TradeManager->UpdateTradeOffer(CharId, PendingGold, PendingOffer);
+}
+
+FText UTradeWidget::GetTradeDisplayName(const FInventoryItemStruct& Item) const
+{
+    FText Name = FText::FromString(!Item.name.IsEmpty() ? Item.name : Item.slug);
+    if (!Item.slug.IsEmpty())
+    {
+        if (const UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+        {
+            if (const ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+            {
+                const FText LocName = Loc->GetItemDisplayName(Item.slug);
+                if (!LocName.IsEmpty())
+                    Name = LocName;
+            }
+        }
+    }
+    return Name;
 }
 
 void UTradeWidget::ShowOfferTooltip(const TArray<UVendorSlotWidget*>& Slots, int32 SlotIndex, bool bIsHovered)
@@ -299,7 +319,10 @@ void UTradeWidget::RebuildInventoryList()
                 break;
             }
         }
-        InvSlot->SetupAsInvSlot(SlotIndex, Item, bInOffer, false, OfferedQty);
+        // Fully offered stacks go dark (no dead clicks): the popup max is
+        // the remainder, and DispatchAddItem caps at owned anyway.
+        const bool bFullyOffered = OfferedQty >= Item.quantity;
+        InvSlot->SetupAsInvSlot(SlotIndex, Item, bInOffer, bFullyOffered, OfferedQty);
         InvSlot->SetAllowRemoveButton(false);
         InvSlot->OnVendorSlotClicked.AddDynamic(this, &UTradeWidget::HandleTradeInvSlotClicked);
         InvSlot->OnVendorSlotHovered.AddDynamic(this, &UTradeWidget::HandleTradeInvSlotHovered);
@@ -314,6 +337,13 @@ void UTradeWidget::HandleTradeInvSlotClicked(int32 SlotIndex)
     if (!TradeInvSlots.IsValidIndex(SlotIndex) || !TradeInvSlots[SlotIndex]) return;
     const FInventoryItemStruct Item = TradeInvSlots[SlotIndex]->GetInvItemData();
     if (Item.id <= 0) return;
+    int32 OfferedQty = 0;
+    for (const FTradeOfferItem& Offered : PendingOffer)
+    {
+        if (Offered.inventoryItemId == Item.id) { OfferedQty += Offered.quantity; break; }
+    }
+    const int32 Remaining = Item.quantity - OfferedQty;
+    if (Remaining <= 0) return; // fully offered — row is dark, no dead clicks
     // Single pieces go straight in; stacks ask for a quantity first.
     if (Item.quantity <= 1 || !TradeQuantityPopupClass)
     {
@@ -322,10 +352,10 @@ void UTradeWidget::HandleTradeInvSlotClicked(int32 SlotIndex)
     }
     EnsureTradeQuantityPopup();
     if (!TradeQuantityPopup) { DispatchAddItem(Item.id, Item.itemId, 1); return; }
-    FText ItemName = FText::FromString(!Item.name.IsEmpty() ? Item.name : Item.slug);
+    FText ItemName = GetTradeDisplayName(Item);
     TradeQuantityPopup->OnQuantityConfirmed.Clear();
     TradeQuantityPopup->OnQuantityRemove.Clear();
-    TradeQuantityPopup->OpenForAdd(Item.id, ItemName.ToString(), 0, Item.quantity, 1);
+    TradeQuantityPopup->OpenForAdd(Item.id, ItemName.ToString(), 0, Remaining, 1);
     TradeQuantityPopup->OnQuantityConfirmed.AddDynamic(this, &UTradeWidget::HandleTradeQuantityConfirmed);
 }
 

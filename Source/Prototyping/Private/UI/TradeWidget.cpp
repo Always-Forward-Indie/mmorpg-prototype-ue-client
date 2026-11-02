@@ -138,6 +138,13 @@ void UTradeWidget::RefreshTradeState()
     RebuildOfferList(My_Items_Box, MyOfferSlots, CurrentState.myItems, true);
     RebuildOfferList(Their_Items_Box, TheirOfferSlots, CurrentState.theirItems, false);
 
+    // Pick-list badges show remaining (owned − offered): rebuild on every
+    // echo too, or the counts go stale until the next inventory push.
+    if (GetVisibility() == ESlateVisibility::Visible)
+    {
+        RebuildInventoryList();
+    }
+
     if (My_Gold_Text)    My_Gold_Text   ->SetText(FText::Format(LOCTEXT("GoldValue", "{0} g"), FText::AsNumber(CurrentState.myGold)));
     if (Their_Gold_Text) Their_Gold_Text->SetText(FText::Format(LOCTEXT("GoldValue", "{0} g"), FText::AsNumber(CurrentState.theirGold)));
 

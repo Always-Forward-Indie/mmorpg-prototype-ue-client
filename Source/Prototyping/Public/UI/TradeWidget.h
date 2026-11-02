@@ -159,6 +159,10 @@ private:
     UFUNCTION() void HandleMyOfferClicked(int32 SlotIndex);
     UFUNCTION() void HandleMyOfferQuantityConfirmed(int32 InventoryItemId, int32 Quantity);
     UFUNCTION() void HandleMyOfferQuantityRemove(int32 InventoryItemId);
+
+    // Display name with localization (Loc → name → slug); single owner so
+    // pick-list and offer-edit popups never disagree.
+    FText GetTradeDisplayName(const FInventoryItemStruct& Item) const;
     void ShowOfferTooltip(const TArray<UVendorSlotWidget*>& Slots, int32 SlotIndex, bool bIsHovered);
     void EnsureTradeTooltip();
 

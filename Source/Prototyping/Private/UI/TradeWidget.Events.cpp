@@ -147,6 +147,21 @@ void UTradeWidget::HandleTradeCompleted(const FTradeCompleteData& Data)
 void UTradeWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
     Super::NativeTick(MyGeometry, InDeltaTime);
+    // Hover tooltip follows the cursor while visible (all our tooltips
+    // position once at show; trade rows are dense, so a stuck tooltip hides
+    // the neighbours — follow instead).
+    if (TradeTooltip && TradeTooltip->IsVisible())
+    {
+        if (UWorld* World = GetWorld())
+        {
+            if (APlayerController* PC = World->GetFirstPlayerController())
+            {
+                FVector2D Mouse = FVector2D::ZeroVector;
+                PC->GetMousePosition(Mouse.X, Mouse.Y);
+                TradeTooltip->UpdateTooltipPosition(Mouse);
+            }
+        }
+    }
     if (GetVisibility() != ESlateVisibility::Visible || !TradeManager || !TradeManager->IsInTrade()) return;
     if (UWorld* World = GetWorld())
         TickTradeDistance(World->GetTimeSeconds());

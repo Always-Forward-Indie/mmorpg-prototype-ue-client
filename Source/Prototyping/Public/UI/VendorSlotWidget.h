@@ -112,6 +112,12 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Vendor Slot")
     FInventoryItemStruct GetTooltipData() const;
 
+    // Full source item for rich cart tooltips (trade offers): when set,
+    // GetTooltipData returns it (with the cart quantity) instead of the
+    // minimal cart preview.
+    UFUNCTION(BlueprintCallable, Category = "Vendor Slot")
+    void SetFullItemData(const FInventoryItemStruct& Item);
+
     // Raw data accessors � prefer these for typed tooltip population
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Vendor Slot")
     const FVendorShopItemData& GetShopItemData() const { return ShopItemData; }
@@ -213,6 +219,10 @@ private:
     FVendorShopItemData   ShopItemData;
     FInventoryItemStruct  InvItemData;
     FVendorCartEntry      CartEntryData;
+
+    // Full source item override for cart tooltips (trade offers).
+    FInventoryItemStruct  FullItemData;
+    bool bHasFullItemData = false;
 
     // Sell-side line tax (see SetSellLineTax). < 0 = buy/raw line, no tax.
     float SellLineTaxPct = -1.0f;

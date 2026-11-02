@@ -42,11 +42,6 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTradeWidgetVisibilityChanged, boo
  *   Cancel_Btn         UButton
  *   Close_Button       UButton      (BindWidgetOptional)
  *
- *   Invite_Banner      UWidget      (BindWidgetOptional) � shown on tradeInvite
- *   Invite_Name_Text   UTextBlock   (BindWidgetOptional)
- *   Invite_Accept_Btn  UButton      (BindWidgetOptional)
- *   Invite_Decline_Btn UButton      (BindWidgetOptional)
- *
  * Inventory pick list and both offer panels use UVendorSlotWidget rows
  * (TradeSlotClass — same BP asset as the vendor shop). Pick click adds to
  * the offer (stacks ask a quantity via TradeQuantityPopupWidgetClass);
@@ -117,8 +112,6 @@ protected:
     UFUNCTION() void HandleConfirmClicked();
     UFUNCTION() void HandleCancelClicked();
     UFUNCTION() void HandleCloseButtonClicked();
-    UFUNCTION() void HandleInviteAcceptClicked();
-    UFUNCTION() void HandleInviteDeclineClicked();
     UFUNCTION() void HandleGoldTextChanged(const FText& Text);
 
     // --- My offer ---
@@ -133,10 +126,6 @@ protected:
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget)) UButton*    Cancel_Btn         = nullptr;
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UEditableTextBox* Gold_Input         = nullptr;
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UWidget*          Invite_Banner      = nullptr;
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UTextBlock*       Invite_Name_Text   = nullptr;
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UButton*          Invite_Accept_Btn  = nullptr;
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UButton*          Invite_Decline_Btn = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UButton*          Close_Button       = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional)) UWidget*          DragHandle         = nullptr;
 
@@ -165,6 +154,7 @@ private:
     UFUNCTION() void HandleTradeInvSlotHovered(int32 SlotIndex, bool bIsHovered);
     UFUNCTION() void HandleMyOfferSlotHovered(int32 SlotIndex, bool bIsHovered);
     UFUNCTION() void HandleTheirOfferSlotHovered(int32 SlotIndex, bool bIsHovered);
+    UFUNCTION() void HandleMyOfferRemove(int32 SlotIndex);
     void ShowOfferTooltip(const TArray<UVendorSlotWidget*>& Slots, int32 SlotIndex, bool bIsHovered);
     void EnsureTradeTooltip();
 

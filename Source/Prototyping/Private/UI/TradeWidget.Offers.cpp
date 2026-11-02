@@ -113,12 +113,19 @@ void UTradeWidget::RebuildOfferList(UPanelWidget* Box, TArray<UVendorSlotWidget*
         Entry.maxQuantity = Item.quantity;
         Entry.pricePerUnit = 0; // trade has no prices; hidden via SetShowPrice
         OfferSlot->SetupAsCartSlot(SlotIndex, Entry);
-        OfferSlot->SetAllowRemoveButton(false);
+        // My offer: [X] removes the stack back (resend without it).
+        // Their offer: display only.
+        OfferSlot->SetAllowRemoveButton(bIsMyOffer);
         OfferSlot->SetShowPrice(false);
         if (bIsMyOffer)
+        {
+            OfferSlot->OnRemoveFromCart.AddDynamic(this, &UTradeWidget::HandleMyOfferRemove);
             OfferSlot->OnVendorSlotHovered.AddDynamic(this, &UTradeWidget::HandleMyOfferSlotHovered);
+        }
         else
+        {
             OfferSlot->OnVendorSlotHovered.AddDynamic(this, &UTradeWidget::HandleTheirOfferSlotHovered);
+        }
         OutSlots.Add(OfferSlot);
         Box->AddChild(OfferSlot);
         ++SlotIndex;
@@ -133,6 +140,29 @@ void UTradeWidget::HandleMyOfferSlotHovered(int32 SlotIndex, bool bIsHovered)
 void UTradeWidget::HandleTheirOfferSlotHovered(int32 SlotIndex, bool bIsHovered)
 {
     ShowOfferTooltip(TheirOfferSlots, SlotIndex, bIsHovered);
+}
+
+void UTradeWidget::HandleMyOfferRemove(int32 SlotIndex)
+{
+    if (!TradeManager || !TradeManager->IsInTrade()) return;
+    if (!MyOfferSlots.IsValidIndex(SlotIndex)) return;
+    // Drop the clicked stack from the pending offer (unacked adds survive:
+    // removal edits intent, errors roll back to accepted — see error path).
+    const int32 DropId = MyOfferSlots[SlotIndex]->GetCartEntryData().inventoryItemId;
+    TArray<FTradeOfferItem> Kept;
+    Kept.Reserve(PendingOffer.Num());
+    for (const FTradeOfferItem& Entry : PendingOffer)
+    {
+        if (Entry.inventoryItemId != DropId && Entry.inventoryItemId > 0)
+            Kept.Add(Entry);
+    }
+    PendingOffer = MoveTemp(Kept);
+    if (Gold_Input)
+        PendingGold = FCString::Atoi(*Gold_Input->GetText().ToString());
+    bOwnOfferPending = true;
+    const int32 CharId = GetGameInstance()
+        ? Cast<UMyGameInstance>(GetGameInstance())->GetCurrentCharacterID() : 0;
+    TradeManager->UpdateTradeOffer(CharId, PendingGold, PendingOffer);
 }
 
 void UTradeWidget::ShowOfferTooltip(const TArray<UVendorSlotWidget*>& Slots, int32 SlotIndex, bool bIsHovered)

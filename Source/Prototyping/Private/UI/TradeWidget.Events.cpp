@@ -27,16 +27,9 @@
 
 void UTradeWidget::HandleTradeInviteReceived(const FTradeInviteData& Invite)
 {
-    if (Invite_Banner)
-    {
-        Invite_Banner->SetVisibility(ESlateVisibility::Visible);
-    }
+    // Standalone UTradeInviteWidget dialog is the invite UI: toast + sound
+    // here, the window itself opens only on tradeState (accept).
     const FString FromName = !Invite.fromCharacterName.IsEmpty() ? Invite.fromCharacterName : Invite.initiatorName;
-    if (Invite_Name_Text)
-    {
-        Invite_Name_Text->SetText(FText::Format(LOCTEXT("WantsToTrade", "{0} wants to trade"),
-            FText::FromString(FromName)));
-    }
     // Toast + sound: the banner alone is easy to miss behind other windows.
     if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
     {
@@ -67,7 +60,6 @@ void UTradeWidget::HandleTradeStateUpdated(const FTradeStateData& State)
 {
     const bool bWasConfirmed = CurrentState.myConfirmed;
     CurrentState = State;
-    if (Invite_Banner) Invite_Banner->SetVisibility(ESlateVisibility::Collapsed);
     if (GetVisibility() != ESlateVisibility::Visible) OpenTrade();
     // Offer changed under us: our own edit consumes the flag silently,
     // a partner edit unconfirms us and deserves an explicit nudge.
@@ -236,23 +228,6 @@ void UTradeWidget::HandleCancelClicked()
 void UTradeWidget::HandleCloseButtonClicked()
 {
     HandleCancelClicked();
-}
-
-void UTradeWidget::HandleInviteAcceptClicked()
-{
-    if (!TradeManager) return;
-    // Echo the INITIATOR's id (the server matches the pending invite on
-    // it — our own id answers "no_pending_invite").
-    TradeManager->RespondToTradeInvite(TradeManager->GetPendingInvite().initiatorId, true);
-    if (Invite_Banner) Invite_Banner->SetVisibility(ESlateVisibility::Collapsed);
-}
-
-void UTradeWidget::HandleInviteDeclineClicked()
-{
-    if (!TradeManager) return;
-    // Same initiator-echo as accept (server matches the invite on it).
-    TradeManager->RespondToTradeInvite(TradeManager->GetPendingInvite().initiatorId, false);
-    CloseTrade();
 }
 
 #undef LOCTEXT_NAMESPACE

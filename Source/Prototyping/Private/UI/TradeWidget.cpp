@@ -31,10 +31,6 @@ void UTradeWidget::NativeConstruct()
     if (Confirm_Btn)        Confirm_Btn       ->OnClicked.AddDynamic(this, &UTradeWidget::HandleConfirmClicked);
     if (Cancel_Btn)         Cancel_Btn        ->OnClicked.AddDynamic(this, &UTradeWidget::HandleCancelClicked);
     if (Close_Button)       Close_Button      ->OnClicked.AddDynamic(this, &UTradeWidget::HandleCloseButtonClicked);
-    if (Invite_Accept_Btn)  Invite_Accept_Btn ->OnClicked.AddDynamic(this, &UTradeWidget::HandleInviteAcceptClicked);
-    if (Invite_Decline_Btn) Invite_Decline_Btn->OnClicked.AddDynamic(this, &UTradeWidget::HandleInviteDeclineClicked);
-
-    if (Invite_Banner) Invite_Banner->SetVisibility(ESlateVisibility::Collapsed);
 
     if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
     {
@@ -128,7 +124,6 @@ void UTradeWidget::CloseTrade()
 {
     SetVisibility(ESlateVisibility::Collapsed);
     OnTradeVisibilityChanged.Broadcast(false);
-    if (Invite_Banner) Invite_Banner->SetVisibility(ESlateVisibility::Collapsed);
 }
 
 void UTradeWidget::RefreshTradeState()

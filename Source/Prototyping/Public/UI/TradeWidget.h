@@ -15,6 +15,7 @@
 
 class UTradeManager;
 class UInventoryManager;
+class UPanelWidget;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTradeWidgetVisibilityChanged, bool, bIsVisible);
 
@@ -45,9 +46,10 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTradeWidgetVisibilityChanged, boo
  *   Invite_Accept_Btn  UButton      (BindWidgetOptional)
  *   Invite_Decline_Btn UButton      (BindWidgetOptional)
  *
- * Inventory pick list uses UVendorSlotWidget rows (TradeSlotClass — same
- * BP asset as the vendor shop; click = add to offer, hover = tooltip via
- * TradeTooltipWidgetClass, optional). Offer lists stay text rows.
+ * Inventory pick list and both offer panels use UVendorSlotWidget rows
+ * (TradeSlotClass — same BP asset as the vendor shop; click pick-list
+ * slot = add to offer; hover = tooltip via TradeTooltipWidgetClass).
+ * Offer slots hide price and remove-button (trade has neither).
  */
 UCLASS(Abstract, BlueprintType, Blueprintable)
 class PROTOTYPING_API UTradeWidget : public UFocusableWindowWidget
@@ -75,10 +77,7 @@ public:
     TSubclassOf<UVendorSlotWidget> TradeSlotClass;
 
     /** Row widget for the text offer lists ("name xN"). */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade UI")
-    TSubclassOf<UUserWidget> InvRowClass;
-
-    /** Item tooltip for pick-list hover. Optional — icons work without it. */
+    /** Item tooltip for pick-list and offer hover. Optional — icons work without it. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade UI")
     TSubclassOf<UItemTooltipWidget> TradeTooltipWidgetClass;
 
@@ -105,6 +104,7 @@ protected:
     UFUNCTION() void HandleTradeDeclined(const FTradeDeclinedData& Data);
     UFUNCTION() void HandleTradeCancelled(const FTradeCancelledData& Data);
     UFUNCTION() void HandleTradeCompleted(const FTradeCompleteData& Data);
+    UFUNCTION() void HandleTradeOfferError(const FString& Reason);
     UFUNCTION() void HandleInventoryUpdated(const FCharacterInventoryStruct& Inventory);
 
     UFUNCTION() void HandleConfirmClicked();
@@ -135,8 +135,7 @@ protected:
 
 private:
     // Rebuilds the offered-items display in a trade panel from full inventory item data
-    void RebuildItemsList(UScrollBox* Box, const TArray<FInventoryItemStruct>& Items);
-    void RebuildItemsList(UScrollBox* Box, const TArray<FTradeOfferItem>& Items);
+    void RebuildOfferList(UPanelWidget* Box, TArray<UVendorSlotWidget*>& OutSlots, const TArray<FInventoryItemStruct>& Items, bool bIsMyOffer);
     void RebuildInventoryList();
 
     UPROPERTY() UTradeManager*    TradeManager    = nullptr;
@@ -144,12 +143,17 @@ private:
 
     // Slot widget arrays (kept for index lookup)
     UPROPERTY() TArray<UVendorSlotWidget*> TradeInvSlots;
+    UPROPERTY() TArray<UVendorSlotWidget*> MyOfferSlots;
+    UPROPERTY() TArray<UVendorSlotWidget*> TheirOfferSlots;
 
     // Pick-list hover tooltip (created in NativeConstruct when assigned).
     UPROPERTY() UItemTooltipWidget* TradeTooltip = nullptr;
 
     UFUNCTION() void HandleTradeInvSlotClicked(int32 SlotIndex);
     UFUNCTION() void HandleTradeInvSlotHovered(int32 SlotIndex, bool bIsHovered);
+    UFUNCTION() void HandleMyOfferSlotHovered(int32 SlotIndex, bool bIsHovered);
+    UFUNCTION() void HandleTheirOfferSlotHovered(int32 SlotIndex, bool bIsHovered);
+    void ShowOfferTooltip(const TArray<UVendorSlotWidget*>& Slots, int32 SlotIndex, bool bIsHovered);
     void EnsureTradeTooltip();
 
     FTradeStateData CurrentState;

@@ -89,6 +89,7 @@ void UTradeWidget::BindToManagers(UTradeManager* InTradeManager, UInventoryManag
         TradeManager->OnTradeDeclinedDelegate      .RemoveDynamic(this, &UTradeWidget::HandleTradeDeclined);
         TradeManager->OnTradeCancelledDelegate     .RemoveDynamic(this, &UTradeWidget::HandleTradeCancelled);
         TradeManager->OnTradeCompletedDelegate     .RemoveDynamic(this, &UTradeWidget::HandleTradeCompleted);
+        TradeManager->OnTradeOfferErrorDelegate    .RemoveDynamic(this, &UTradeWidget::HandleTradeOfferError);
     }
     if (InventoryManager)
     {
@@ -103,6 +104,7 @@ void UTradeWidget::BindToManagers(UTradeManager* InTradeManager, UInventoryManag
     TradeManager->OnTradeDeclinedDelegate      .AddDynamic(this, &UTradeWidget::HandleTradeDeclined);
     TradeManager->OnTradeCancelledDelegate     .AddDynamic(this, &UTradeWidget::HandleTradeCancelled);
     TradeManager->OnTradeCompletedDelegate     .AddDynamic(this, &UTradeWidget::HandleTradeCompleted);
+    TradeManager->OnTradeOfferErrorDelegate    .AddDynamic(this, &UTradeWidget::HandleTradeOfferError);
 
     if (InventoryManager)
     {
@@ -134,8 +136,8 @@ void UTradeWidget::RefreshTradeState()
     if (!TradeManager) return;
     CurrentState = TradeManager->GetCurrentState();
 
-    RebuildItemsList(My_Items_Box,    CurrentState.myItems);
-    RebuildItemsList(Their_Items_Box, CurrentState.theirItems);
+    RebuildOfferList(My_Items_Box, MyOfferSlots, CurrentState.myItems, true);
+    RebuildOfferList(Their_Items_Box, TheirOfferSlots, CurrentState.theirItems, false);
 
     if (My_Gold_Text)    My_Gold_Text   ->SetText(FText::Format(LOCTEXT("GoldValue", "{0} g"), FText::AsNumber(CurrentState.myGold)));
     if (Their_Gold_Text) Their_Gold_Text->SetText(FText::Format(LOCTEXT("GoldValue", "{0} g"), FText::AsNumber(CurrentState.theirGold)));

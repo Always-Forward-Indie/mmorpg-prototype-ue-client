@@ -124,6 +124,7 @@ is the exception: it auto-positions at the cursor, no designer placement.
 | `UKeybindWidget` (settings tab) | place as slot 3 of `WBP_Settings.TabContentSwitcher` + `Tab_ControlsButton`; set `bManageViewportPlacement=false` on the instance | same three binds, Close unbound (settings has its own close) |
 | `UPlayerContextMenuWidget` | `UIManager.PlayerMenuWidgetClass` | `Menu_Title_Text` (Text, optional), `Menu_Action_List` (VerticalBox, optional), `MenuRowWidgetClass` (row design; row BP binds `MenuRow_Label`) — menu auto-positions at the cursor, no designer placement needed |
 | `UPlayerInspectWidget` | `UIManager.PlayerInspectWidgetClass` | `Inspect_Title_Text` (Text), `Inspect_Gear_Box` (ScrollBox), `Inspect_Close_Btn` (Button); gear icons reuse the vendor slot BP (`InspectSlotClass`), hover tooltip via `InspectTooltipWidgetClass` (optional) |
+| `UTradeWidget` pick + offer lists | classes on `WBP_PlayerTrade`: `TradeSlotClass` (vendor slot BP, required — pick list and both offer panels), `TradeTooltipWidgetClass` (optional hover tooltip); offer slots auto-hide price and [X] | click pick-list slot = add to offer; offer panels display-only; equipped items hidden (server rejects them) |
 
 Settings tab order is index-bound (`ESettingsTab`: Audio=0, Graphics=1,
 Language=2, Controls=3) — new tabs go last, never reorder.

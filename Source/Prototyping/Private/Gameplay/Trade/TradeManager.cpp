@@ -222,6 +222,12 @@ void UTradeManager::OnTradeCompleted(const FTradeCompleteData& Data)
     OnTradeCompletedDelegate.Broadcast(Data);
 }
 
+void UTradeManager::OnTradeOfferError(const FString& Reason)
+{
+    // Soft path only: the session is untouched (no ClearSession here).
+    OnTradeOfferErrorDelegate.Broadcast(Reason);
+}
+
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------

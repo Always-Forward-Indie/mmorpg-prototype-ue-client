@@ -97,6 +97,29 @@ void UTradeWidget::HandleTradeCancelled(const FTradeCancelledData& Data)
     CloseTrade();
 }
 
+void UTradeWidget::HandleTradeOfferError(const FString& Reason)
+{
+    // Soft rejection: the session is alive, only this update was refused.
+    // Roll the pending offer back to the last server-accepted state so the
+    // next send does not re-offer the same bad stack, and stay open.
+    UE_LOG(LogGameplay, Warning, TEXT("TradeWidget: offer rejected (%s), rolling back"), *Reason);
+    ShowTradeHint(TEXT("Offer rejected"), Reason.IsEmpty() ? TEXT("invalid item") : Reason);
+
+    PendingOffer.Reset();
+    for (const FInventoryItemStruct& Accepted : CurrentState.myItems)
+    {
+        if (Accepted.id <= 0 || Accepted.quantity <= 0) continue;
+        FTradeOfferItem Entry;
+        Entry.inventoryItemId = Accepted.id;
+        Entry.itemId = Accepted.itemId;
+        Entry.quantity = Accepted.quantity;
+        PendingOffer.Add(Entry);
+    }
+    PendingGold = CurrentState.myGold;
+    bOwnOfferPending = false;
+    RebuildInventoryList();
+}
+
 void UTradeWidget::HandleTradeCompleted(const FTradeCompleteData& Data)
 {
     UE_LOG(LogGameplay, Warning, TEXT("TradeWidget: Trade completed, session %s"), *Data.sessionId);

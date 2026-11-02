@@ -81,6 +81,13 @@ public:
     void SetInCart(bool bNewInCart);
 
     /**
+     * Show or hide the price label. CartEntry rows show the line total by
+     * default; display-only uses (trade offers) hide it — no prices there.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Vendor Slot")
+    void SetShowPrice(bool bShow);
+
+    /**
      * Show or hide the [X] remove button (CartEntry mode shows it by
      * default). Display-only cart uses (buyback tab) hide it.
      */
@@ -198,6 +205,7 @@ private:
     bool  bInCart        = false;
     bool  bIsDisabled    = false;
     bool  bAllowRemoveButton = true;
+    bool  bShowPrice         = true;
     int32 CartQuantity   = 0;
     bool  bRemoveButtonHovered = false;
 

@@ -52,74 +52,87 @@ void UTradeWidget::DispatchAddItem(int32 InventoryItemId, int32 ItemId)
 // Private helpers
 // ---------------------------------------------------------------------------
 
-void UTradeWidget::RebuildItemsList(UScrollBox* Box, const TArray<FInventoryItemStruct>& Items)
+void UTradeWidget::RebuildOfferList(UPanelWidget* Box, TArray<UVendorSlotWidget*>& OutSlots, const TArray<FInventoryItemStruct>& Items, bool bIsMyOffer)
 {
-    if (!Box) return;
+    OutSlots.Reset();
+    if (!Box || !TradeSlotClass)
+    {
+        if (!TradeSlotClass)
+            UE_LOG(LogGameplay, Warning, TEXT("TradeWidget: TradeSlotClass is not set - offer list is empty (assign the vendor slot BP)"));
+        return;
+    }
     Box->ClearChildren();
 
+    int32 SlotIndex = 0;
     for (const FInventoryItemStruct& Item : Items)
     {
-        if (!InvRowClass) continue;
-        UUserWidget* Row = CreateWidget<UUserWidget>(GetOwningPlayer(), InvRowClass);
-        if (!Row) continue;
+        if (Item.itemId <= 0 || Item.quantity <= 0) continue;
+        UVendorSlotWidget* OfferSlot = CreateWidget<UVendorSlotWidget>(GetOwningPlayer(), TradeSlotClass);
+        if (!OfferSlot) continue;
 
-        if (UTextBlock* Txt = Cast<UTextBlock>(Row->GetWidgetFromName(TEXT("Row_Name_Text"))))
+        FText ItemName = FText::FromString(Item.slug);
+        if (!Item.slug.IsEmpty())
         {
-            FText ItemName = FText::FromString(Item.slug);
-            if (!Item.slug.IsEmpty())
+            if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
             {
-                if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+                if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
                 {
-                    if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
-                    {
-                        const FText LocName = Loc->GetItemDisplayName(Item.slug);
-                        if (!LocName.IsEmpty()) ItemName = LocName;
-                    }
+                    const FText LocName = Loc->GetItemDisplayName(Item.slug);
+                    if (!LocName.IsEmpty()) ItemName = LocName;
                 }
             }
-            Txt->SetText(FText::Format(LOCTEXT("ItemQty", "{0} x{1}"), ItemName, FText::AsNumber(Item.quantity)));
         }
-        // Hide the add button for offer display rows
-        if (UButton* Btn = Cast<UButton>(Row->GetWidgetFromName(TEXT("Row_Add_Btn"))))
-        {
-            Btn->SetVisibility(ESlateVisibility::Collapsed);
-        }
-        Box->AddChild(Row);
+
+        FVendorCartEntry Entry;
+        Entry.itemId = Item.itemId;
+        Entry.inventoryItemId = Item.id;
+        Entry.itemSlug = Item.slug;
+        Entry.itemName = ItemName.ToString();
+        Entry.slug = Item.slug;
+        Entry.quantity = Item.quantity;
+        Entry.maxQuantity = Item.quantity;
+        Entry.pricePerUnit = 0; // trade has no prices; hidden via SetShowPrice
+        OfferSlot->SetupAsCartSlot(SlotIndex, Entry);
+        OfferSlot->SetAllowRemoveButton(false);
+        OfferSlot->SetShowPrice(false);
+        if (bIsMyOffer)
+            OfferSlot->OnVendorSlotHovered.AddDynamic(this, &UTradeWidget::HandleMyOfferSlotHovered);
+        else
+            OfferSlot->OnVendorSlotHovered.AddDynamic(this, &UTradeWidget::HandleTheirOfferSlotHovered);
+        OutSlots.Add(OfferSlot);
+        Box->AddChild(OfferSlot);
+        ++SlotIndex;
     }
 }
 
-void UTradeWidget::RebuildItemsList(UScrollBox* Box, const TArray<FTradeOfferItem>& Items)
+void UTradeWidget::HandleMyOfferSlotHovered(int32 SlotIndex, bool bIsHovered)
 {
-    if (!Box) return;
-    Box->ClearChildren();
+    ShowOfferTooltip(MyOfferSlots, SlotIndex, bIsHovered);
+}
 
-    for (const FTradeOfferItem& Offer : Items)
+void UTradeWidget::HandleTheirOfferSlotHovered(int32 SlotIndex, bool bIsHovered)
+{
+    ShowOfferTooltip(TheirOfferSlots, SlotIndex, bIsHovered);
+}
+
+void UTradeWidget::ShowOfferTooltip(const TArray<UVendorSlotWidget*>& Slots, int32 SlotIndex, bool bIsHovered)
+{
+    // Tooltips read the slot's own cart preview (slug + quantity are enough).
+    if (!TradeTooltipWidgetClass) return;
+    EnsureTradeTooltip();
+    if (!TradeTooltip) return;
+    if (bIsHovered && Slots.IsValidIndex(SlotIndex) && Slots[SlotIndex])
     {
-        if (!InvRowClass) continue;
-        UUserWidget* Row = CreateWidget<UUserWidget>(GetOwningPlayer(), InvRowClass);
-        if (!Row) continue;
-
-        if (UTextBlock* Txt = Cast<UTextBlock>(Row->GetWidgetFromName(TEXT("Row_Name_Text"))))
-        {
-            FText ItemName = FText::FromString(Offer.itemSlug);
-            if (!Offer.itemSlug.IsEmpty())
-            {
-                if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
-                {
-                    if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
-                    {
-                        const FText LocName = Loc->GetItemDisplayName(Offer.itemSlug);
-                        if (!LocName.IsEmpty()) ItemName = LocName;
-                    }
-                }
-            }
-            Txt->SetText(FText::Format(LOCTEXT("ItemQty", "{0} x{1}"), ItemName, FText::AsNumber(Offer.quantity)));
-        }
-        if (UButton* Btn = Cast<UButton>(Row->GetWidgetFromName(TEXT("Row_Add_Btn"))))
-        {
-            Btn->SetVisibility(ESlateVisibility::Collapsed);
-        }
-        Box->AddChild(Row);
+        TradeTooltip->SetItemData(Slots[SlotIndex]->GetTooltipData());
+        FVector2D Mouse = FVector2D::ZeroVector;
+        if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+            PC->GetMousePosition(Mouse.X, Mouse.Y);
+        TradeTooltip->UpdateTooltipPosition(Mouse);
+        TradeTooltip->ShowTooltip();
+    }
+    else
+    {
+        TradeTooltip->HideTooltip();
     }
 }
 
@@ -146,6 +159,9 @@ void UTradeWidget::RebuildInventoryList()
     for (const FInventoryItemStruct& Item : CachedInventory.items)
     {
         if (Item.itemId <= 0) continue;
+        // Equipped gear can never be offered (server rejects it, like the
+        // vendor sell list skips it) — hide it instead of showing dead rows.
+        if (Item.is_equipped) continue;
         UVendorSlotWidget* InvSlot = CreateWidget<UVendorSlotWidget>(GetOwningPlayer(), TradeSlotClass);
         if (!InvSlot) continue;
 

@@ -65,6 +65,17 @@ void UTradeNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
     else if (EventType == TEXT("tradeComplete"))  TradeManager->OnTradeCompleted(ParseTradeComplete(Body));
 else if (Packet.Status.Equals(TEXT("error"), ESearchCase::IgnoreCase))
 {
+    const FString Code = JSONParser::ResolveErrorCode(Packet.Root);
+// Per-offer rejections (e.g. invalid_offer_item on tradeOfferUpdate) are
+// soft: the session lives on, only the offending update is refused.
+// Everything else keeps the old cancel-with-reason path.
+if (Packet.EventType.Equals(TEXT("tradeOfferUpdate"), ESearchCase::IgnoreCase))
+{
+    FString Reason = Code;
+    if (Reason.IsEmpty()) Reason = Packet.Message;
+    TradeManager->OnTradeOfferError(Reason);
+    return;
+}
 // Request-echo errors (e.g. no_pending_invite on tradeAccept): surface as cancel with reason.
 FTradeCancelledData ReqError;
 Body->TryGetStringField(TEXT("sessionId"), ReqError.sessionId);

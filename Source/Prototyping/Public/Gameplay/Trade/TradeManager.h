@@ -14,6 +14,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTradeStateUpdated,     const FTra
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTradeDeclined,         const FTradeDeclinedData&, Data);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTradeCancelled,        const FTradeCancelledData&,Data);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTradeCompleted,        const FTradeCompleteData&, Data);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTradeOfferError,        const FString&, Reason);
 
 /**
  * TradeManager
@@ -76,6 +77,9 @@ public:
     void OnTradeDeclined(const FTradeDeclinedData& Data);
     void OnTradeCancelled(const FTradeCancelledData& Data);
     void OnTradeCompleted(const FTradeCompleteData& Data);
+    // Soft offer rejection (e.g. invalid_offer_item): session lives on,
+    // only the offending update is refused. Never closes the window.
+    void OnTradeOfferError(const FString& Reason);
 
     // --- Events ---
 
@@ -93,6 +97,9 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category = "Trade Events")
     FOnTradeCompleted OnTradeCompletedDelegate;
+
+    UPROPERTY(BlueprintAssignable, Category = "Trade Events")
+    FOnTradeOfferError OnTradeOfferErrorDelegate;
 
 private:
     FTradeStateData  CurrentState;

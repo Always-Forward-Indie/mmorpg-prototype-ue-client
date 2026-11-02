@@ -95,6 +95,12 @@ void UVendorSlotWidget::SetAllowRemoveButton(bool bAllow)
     RefreshVisuals();
 }
 
+void UVendorSlotWidget::SetShowPrice(bool bShow)
+{
+    bShowPrice = bShow;
+    RefreshVisuals();
+}
+
 void UVendorSlotWidget::SetAffordability(EVendorSlotAffordability InAffordability)
 {
     if (!AffordabilityBorder) return;
@@ -223,12 +229,17 @@ void UVendorSlotWidget::RefreshVisuals()
         }
     }
 
-    // Price text:
+    // Price text (hidden when bShowPrice is false — e.g. trade offers):
     //   ShopItem  -> buy price per unit  ("150 g")
     //   InvItem   -> sell price per unit ("50 g")
     //   CartEntry -> total line price    ("300 g", tax-adjusted on sell side)
     if (PriceText)
     {
+        if (!bShowPrice)
+        {
+            PriceText->SetVisibility(ESlateVisibility::Collapsed);
+            return;
+        }
         FString PriceStr;
         if (Mode == EVendorSlotMode::ShopItem)
             PriceStr = FString::Printf(TEXT("%d g"), ShopItemData.priceBuy);

@@ -1,4 +1,5 @@
 ﻿#include "UI/VendorSlotWidget.h"
+#include "Prototyping.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "Utils/NetCore/VendorSellRule.h"
@@ -92,6 +93,13 @@ void UVendorSlotWidget::SetInCart(bool bNewInCart)
 void UVendorSlotWidget::SetAllowRemoveButton(bool bAllow)
 {
     bAllowRemoveButton = bAllow;
+    if (bAllow && !RemoveButton)
+    {
+        // Loud: the slot BP class lacks the bound RemoveButton, so [X] rows
+        // silently lose their remove action (trade offer, vendor cart).
+        UE_LOG(LogGameplay, Warning, TEXT("VendorSlotWidget: %s has no RemoveButton bound — [X] hidden"),
+            *GetClass()->GetName());
+    }
     RefreshVisuals();
 }
 

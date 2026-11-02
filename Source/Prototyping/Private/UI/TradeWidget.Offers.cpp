@@ -121,6 +121,7 @@ void UTradeWidget::RebuildOfferList(UPanelWidget* Box, TArray<UVendorSlotWidget*
         if (bIsMyOffer)
         {
             OfferSlot->OnRemoveFromCart.AddDynamic(this, &UTradeWidget::HandleMyOfferRemove);
+            OfferSlot->OnVendorSlotClicked.AddDynamic(this, &UTradeWidget::HandleMyOfferClicked);
             OfferSlot->OnVendorSlotHovered.AddDynamic(this, &UTradeWidget::HandleMyOfferSlotHovered);
         }
         else
@@ -146,20 +147,86 @@ void UTradeWidget::HandleTheirOfferSlotHovered(int32 SlotIndex, bool bIsHovered)
 void UTradeWidget::HandleMyOfferRemove(int32 SlotIndex)
 {
     if (!TradeManager || !TradeManager->IsInTrade()) return;
-    if (!MyOfferSlots.IsValidIndex(SlotIndex)) return;
-    // Drop the clicked stack from the pending offer (unacked adds survive:
-    // removal edits intent, errors roll back to accepted — see error path).
+    if (!MyOfferSlots.IsValidIndex(SlotIndex) || !MyOfferSlots[SlotIndex]) return;
+    // Drop the [X]-clicked stack from the pending offer (unacked adds
+    // survive: removal edits intent, errors roll back to accepted).
+    HandleMyOfferQuantityRemove(MyOfferSlots[SlotIndex]->GetCartEntryData().inventoryItemId);
+}
+
+void UTradeWidget::HandleMyOfferClicked(int32 SlotIndex)
+{
+    if (!TradeManager || !TradeManager->IsInTrade()) return;
+    if (!MyOfferSlots.IsValidIndex(SlotIndex) || !MyOfferSlots[SlotIndex]) return;
+    if (!TradeQuantityPopupClass) return;
     const int32 DropId = MyOfferSlots[SlotIndex]->GetCartEntryData().inventoryItemId;
+    const FInventoryItemStruct* Owned = nullptr;
+    for (const FInventoryItemStruct& Item : CachedInventory.items)
+    {
+        if (Item.id == DropId) { Owned = &Item; break; }
+    }
+    if (!Owned || Owned->id <= 0) return;
+    int32 OfferedQty = 0;
+    for (const FTradeOfferItem& Entry : PendingOffer)
+    {
+        if (Entry.inventoryItemId == DropId) { OfferedQty = Entry.quantity; break; }
+    }
+    if (OfferedQty <= 0) OfferedQty = 1;
+    EnsureTradeQuantityPopup();
+    if (!TradeQuantityPopup) return;
+    // Shared popup instance: clear both delegates (add path never binds
+    // Remove; a stale binding would fire a foreign removal).
+    TradeQuantityPopup->OnQuantityConfirmed.Clear();
+    TradeQuantityPopup->OnQuantityRemove.Clear();
+    FText ItemName = FText::FromString(!Owned->name.IsEmpty() ? Owned->name : Owned->slug);
+    TradeQuantityPopup->OpenForUpdate(DropId, ItemName.ToString(), 0, Owned->quantity, OfferedQty);
+    TradeQuantityPopup->OnQuantityConfirmed.AddDynamic(this, &UTradeWidget::HandleMyOfferQuantityConfirmed);
+    TradeQuantityPopup->OnQuantityRemove.AddDynamic(this, &UTradeWidget::HandleMyOfferQuantityRemove);
+}
+
+void UTradeWidget::HandleMyOfferQuantityConfirmed(int32 InventoryItemId, int32 Quantity)
+{
+    if (!TradeManager || !TradeManager->IsInTrade()) return;
+    if (InventoryItemId <= 0) return;
+    int32 OwnedQty = 0;
+    for (const FInventoryItemStruct& Item : CachedInventory.items)
+    {
+        if (Item.id == InventoryItemId) { OwnedQty = Item.quantity; break; }
+    }
+    if (OwnedQty <= 0) return;
+    const int32 Clamped = FMath::Clamp(Quantity, 1, OwnedQty);
+    bool bFound = false;
+    for (FTradeOfferItem& Entry : PendingOffer)
+    {
+        if (Entry.inventoryItemId == InventoryItemId)
+        {
+            Entry.quantity = Clamped;
+            bFound = true;
+            break;
+        }
+    }
+    if (!bFound) return;
+    if (Gold_Input)
+        PendingGold = FMath::Max(0, FCString::Atoi(*Gold_Input->GetText().ToString()));
+    bOwnOfferPending = true;
+    const int32 CharId = GetGameInstance()
+        ? Cast<UMyGameInstance>(GetGameInstance())->GetCurrentCharacterID() : 0;
+    TradeManager->UpdateTradeOffer(CharId, PendingGold, PendingOffer);
+}
+
+void UTradeWidget::HandleMyOfferQuantityRemove(int32 InventoryItemId)
+{
+    if (!TradeManager || !TradeManager->IsInTrade()) return;
+    if (InventoryItemId <= 0) return;
     TArray<FTradeOfferItem> Kept;
     Kept.Reserve(PendingOffer.Num());
     for (const FTradeOfferItem& Entry : PendingOffer)
     {
-        if (Entry.inventoryItemId != DropId && Entry.inventoryItemId > 0)
+        if (Entry.inventoryItemId != InventoryItemId && Entry.inventoryItemId > 0)
             Kept.Add(Entry);
     }
     PendingOffer = MoveTemp(Kept);
     if (Gold_Input)
-        PendingGold = FCString::Atoi(*Gold_Input->GetText().ToString());
+        PendingGold = FMath::Max(0, FCString::Atoi(*Gold_Input->GetText().ToString()));
     bOwnOfferPending = true;
     const int32 CharId = GetGameInstance()
         ? Cast<UMyGameInstance>(GetGameInstance())->GetCurrentCharacterID() : 0;
@@ -257,6 +324,7 @@ void UTradeWidget::HandleTradeInvSlotClicked(int32 SlotIndex)
     if (!TradeQuantityPopup) { DispatchAddItem(Item.id, Item.itemId, 1); return; }
     FText ItemName = FText::FromString(!Item.name.IsEmpty() ? Item.name : Item.slug);
     TradeQuantityPopup->OnQuantityConfirmed.Clear();
+    TradeQuantityPopup->OnQuantityRemove.Clear();
     TradeQuantityPopup->OpenForAdd(Item.id, ItemName.ToString(), 0, Item.quantity, 1);
     TradeQuantityPopup->OnQuantityConfirmed.AddDynamic(this, &UTradeWidget::HandleTradeQuantityConfirmed);
 }

@@ -156,6 +156,9 @@ private:
     UFUNCTION() void HandleMyOfferSlotHovered(int32 SlotIndex, bool bIsHovered);
     UFUNCTION() void HandleTheirOfferSlotHovered(int32 SlotIndex, bool bIsHovered);
     UFUNCTION() void HandleMyOfferRemove(int32 SlotIndex);
+    UFUNCTION() void HandleMyOfferClicked(int32 SlotIndex);
+    UFUNCTION() void HandleMyOfferQuantityConfirmed(int32 InventoryItemId, int32 Quantity);
+    UFUNCTION() void HandleMyOfferQuantityRemove(int32 InventoryItemId);
     void ShowOfferTooltip(const TArray<UVendorSlotWidget*>& Slots, int32 SlotIndex, bool bIsHovered);
     void EnsureTradeTooltip();
 

@@ -142,11 +142,26 @@ void UTradeWidget::RefreshTradeState()
     if (My_Gold_Text)    My_Gold_Text   ->SetText(FText::Format(LOCTEXT("GoldValue", "{0} g"), FText::AsNumber(CurrentState.myGold)));
     if (Their_Gold_Text) Their_Gold_Text->SetText(FText::Format(LOCTEXT("GoldValue", "{0} g"), FText::AsNumber(CurrentState.theirGold)));
 
-    const FText MyConfirmStr    = CurrentState.myConfirmed    ? LOCTEXT("Confirmed", "? Confirmed") : LOCTEXT("Pending", "Pending");
-    const FText TheirConfirmStr = CurrentState.theirConfirmed ? LOCTEXT("Confirmed", "? Confirmed") : LOCTEXT("Pending", "Pending");
+    const FText ConfirmedStr = LOCTEXT("Confirmed", "Confirmed");
+    const FText PendingStr   = LOCTEXT("Pending", "Pending");
+    const FLinearColor ConfirmedCol(0.35f, 1.0f, 0.45f);
+    const FLinearColor PendingCol(0.65f, 0.65f, 0.65f);
 
-    if (My_Confirm_Text)    My_Confirm_Text   ->SetText(MyConfirmStr);
-    if (Their_Confirm_Text) Their_Confirm_Text->SetText(TheirConfirmStr);
+    if (My_Confirm_Text)
+    {
+        My_Confirm_Text->SetText(CurrentState.myConfirmed ? ConfirmedStr : PendingStr);
+        My_Confirm_Text->SetColorAndOpacity(FSlateColor(CurrentState.myConfirmed ? ConfirmedCol : PendingCol));
+    }
+    if (Their_Confirm_Text)
+    {
+        const FText TheirStatus = CurrentState.theirConfirmed ? ConfirmedStr : PendingStr;
+        if (!CurrentState.partnerName.IsEmpty())
+            Their_Confirm_Text->SetText(FText::Format(LOCTEXT("PartnerConfirmFmt", "{0}: {1}"),
+                FText::FromString(CurrentState.partnerName), TheirStatus));
+        else
+            Their_Confirm_Text->SetText(TheirStatus);
+        Their_Confirm_Text->SetColorAndOpacity(FSlateColor(CurrentState.theirConfirmed ? ConfirmedCol : PendingCol));
+    }
 
     // Disable confirm once we confirmed (waiting for server complete);
     // peer flag never gates us. Single owner: FTradeStatusRule.

@@ -1,4 +1,5 @@
 #include "UI/TradeWidget.h"
+#include "UI/QuantityPopupWidget.h"
 #include "Prototyping.h"
 #include "Gameplay/Trade/TradeManager.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -20,20 +21,39 @@
 // S5b: trade chrome gathered via LOCTEXT.
 #define LOCTEXT_NAMESPACE "Trade"
 
-void UTradeWidget::DispatchAddItem(int32 InventoryItemId, int32 ItemId)
+void UTradeWidget::DispatchAddItem(int32 InventoryItemId, int32 ItemId, int32 Quantity)
 {
     if (!TradeManager || !TradeManager->IsInTrade()) return;
 
-    // Check if already in offer
-    for (const FTradeOfferItem& Existing : PendingOffer)
+    // Owned total caps the entry: the server validates per entry, so two
+    // entries for one stack could pass validation but overdraw on execute.
+    int32 OwnedQty = 0;
+    for (const FInventoryItemStruct& Item : CachedInventory.items)
     {
-        if (Existing.inventoryItemId == InventoryItemId) return;
+        if (Item.id == InventoryItemId) { OwnedQty = Item.quantity; break; }
+    }
+    if (OwnedQty <= 0) return;
+    Quantity = FMath::Clamp(Quantity, 1, OwnedQty);
+
+    // Merge into the existing entry for this stack instead of duplicating it.
+    for (FTradeOfferItem& Existing : PendingOffer)
+    {
+        if (Existing.inventoryItemId == InventoryItemId)
+        {
+            Existing.quantity = FMath::Min(Existing.quantity + Quantity, OwnedQty);
+            PendingGold = Gold_Input ? FCString::Atoi(*Gold_Input->GetText().ToString()) : PendingGold;
+            const int32 MergeCharId = GetGameInstance()
+                ? Cast<UMyGameInstance>(GetGameInstance())->GetCurrentCharacterID() : 0;
+            bOwnOfferPending = true;
+            TradeManager->UpdateTradeOffer(MergeCharId, PendingGold, PendingOffer);
+            return;
+        }
     }
 
     FTradeOfferItem NewItem;
     NewItem.inventoryItemId = InventoryItemId;
     NewItem.itemId          = ItemId;
-    NewItem.quantity        = 1;
+    NewItem.quantity        = Quantity;
     PendingOffer.Add(NewItem);
 
     // Resolve gold from input field
@@ -193,8 +213,44 @@ void UTradeWidget::HandleTradeInvSlotClicked(int32 SlotIndex)
 {
     if (!TradeInvSlots.IsValidIndex(SlotIndex) || !TradeInvSlots[SlotIndex]) return;
     const FInventoryItemStruct Item = TradeInvSlots[SlotIndex]->GetInvItemData();
-    if (Item.id > 0)
-        DispatchAddItem(Item.id, Item.itemId);
+    if (Item.id <= 0) return;
+    // Single pieces go straight in; stacks ask for a quantity first.
+    if (Item.quantity <= 1 || !TradeQuantityPopupClass)
+    {
+        DispatchAddItem(Item.id, Item.itemId, 1);
+        return;
+    }
+    EnsureTradeQuantityPopup();
+    if (!TradeQuantityPopup) { DispatchAddItem(Item.id, Item.itemId, 1); return; }
+    FText ItemName = FText::FromString(!Item.name.IsEmpty() ? Item.name : Item.slug);
+    TradeQuantityPopup->OnQuantityConfirmed.Clear();
+    TradeQuantityPopup->OpenForAdd(Item.id, ItemName.ToString(), 0, Item.quantity, 1);
+    TradeQuantityPopup->OnQuantityConfirmed.AddDynamic(this, &UTradeWidget::HandleTradeQuantityConfirmed);
+}
+
+void UTradeWidget::HandleTradeQuantityConfirmed(int32 SlotIndex, int32 Quantity)
+{
+    // SlotIndex carries the inventoryItemId (see OpenForAdd above).
+    for (const FInventoryItemStruct& Item : CachedInventory.items)
+    {
+        if (Item.id == SlotIndex)
+        {
+            DispatchAddItem(Item.id, Item.itemId, Quantity);
+            return;
+        }
+    }
+}
+
+void UTradeWidget::EnsureTradeQuantityPopup()
+{
+    if (TradeQuantityPopup || !TradeQuantityPopupClass || !GetWorld()) return;
+    TradeQuantityPopup = CreateWidget<UQuantityPopupWidget>(GetOwningPlayer(), TradeQuantityPopupClass);
+    if (TradeQuantityPopup)
+    {
+        TradeQuantityPopup->SetShowPricing(false);
+        TradeQuantityPopup->AddToViewport(999);
+        TradeQuantityPopup->SetVisibility(ESlateVisibility::Collapsed);
+    }
 }
 
 void UTradeWidget::HandleTradeInvSlotHovered(int32 SlotIndex, bool bIsHovered)

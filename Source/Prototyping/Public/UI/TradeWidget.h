@@ -6,8 +6,8 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
-#include "Components/ScrollBox.h"
 #include "Components/EditableTextBox.h"
+#include "Components/WrapBox.h"
 #include "Data/DataStructs.h"
 #include "UI/VendorSlotWidget.h"
 #include "UI/ItemTooltipWidget.h"
@@ -16,6 +16,7 @@
 class UTradeManager;
 class UInventoryManager;
 class UPanelWidget;
+class UQuantityPopupWidget;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTradeWidgetVisibilityChanged, bool, bIsVisible);
 
@@ -47,9 +48,11 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTradeWidgetVisibilityChanged, boo
  *   Invite_Decline_Btn UButton      (BindWidgetOptional)
  *
  * Inventory pick list and both offer panels use UVendorSlotWidget rows
- * (TradeSlotClass — same BP asset as the vendor shop; click pick-list
- * slot = add to offer; hover = tooltip via TradeTooltipWidgetClass).
- * Offer slots hide price and remove-button (trade has neither).
+ * (TradeSlotClass — same BP asset as the vendor shop). Pick click adds to
+ * the offer (stacks ask a quantity via TradeQuantityPopupWidgetClass);
+ * hover shows a tooltip (TradeTooltipWidgetClass). Offer rows hide price
+ * and remove-button (trade has neither) and are display-only.
+ * My_Items_Box / Their_Items_Box / Inv_Items_Box are WrapBoxes (grid flow).
  */
 UCLASS(Abstract, BlueprintType, Blueprintable)
 class PROTOTYPING_API UTradeWidget : public UFocusableWindowWidget
@@ -70,13 +73,17 @@ public:
     void CloseTrade();
 
     /**
-     * Slot widget for the inventory pick list (icons + hover tooltip).
-     * Reuse the vendor slot BP (same asset as the shop uses).
+     * Slot widget for the inventory pick list and both offer panels
+     * (icons + hover tooltips). Reuse the vendor slot BP (same asset
+     * as the shop uses).
      */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade UI")
     TSubclassOf<UVendorSlotWidget> TradeSlotClass;
 
-    /** Row widget for the text offer lists ("name xN"). */
+    /** Quantity popup for multi-stacks (same BP asset as the vendor). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade UI")
+    TSubclassOf<UQuantityPopupWidget> TradeQuantityPopupClass;
+
     /** Item tooltip for pick-list and offer hover. Optional — icons work without it. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trade UI")
     TSubclassOf<UItemTooltipWidget> TradeTooltipWidgetClass;
@@ -84,8 +91,8 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Trade UI Events")
     FOnTradeWidgetVisibilityChanged OnTradeVisibilityChanged;
 
-    // Called by pick-list slots
-    void DispatchAddItem(int32 InventoryItemId, int32 ItemId);
+    // Called by pick-list slots (quantity merges into one entry, capped at owned).
+    void DispatchAddItem(int32 InventoryItemId, int32 ItemId, int32 Quantity = 1);
 
 protected:
     virtual void NativeConstruct() override;
@@ -115,9 +122,9 @@ protected:
     UFUNCTION() void HandleGoldTextChanged(const FText& Text);
 
     // --- My offer ---
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidget)) UScrollBox* My_Items_Box       = nullptr;
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidget)) UScrollBox* Their_Items_Box    = nullptr;
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidget)) UScrollBox* Inv_Items_Box      = nullptr;
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget)) UWrapBox* My_Items_Box       = nullptr;
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget)) UWrapBox* Their_Items_Box    = nullptr;
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget)) UWrapBox* Inv_Items_Box      = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget)) UTextBlock* My_Gold_Text       = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget)) UTextBlock* Their_Gold_Text    = nullptr;
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget)) UTextBlock* My_Confirm_Text    = nullptr;
@@ -145,6 +152,11 @@ private:
     UPROPERTY() TArray<UVendorSlotWidget*> TradeInvSlots;
     UPROPERTY() TArray<UVendorSlotWidget*> MyOfferSlots;
     UPROPERTY() TArray<UVendorSlotWidget*> TheirOfferSlots;
+
+    // Shared quantity popup (one instance, rebound per use like the vendor).
+    UPROPERTY() UQuantityPopupWidget* TradeQuantityPopup = nullptr;
+    void EnsureTradeQuantityPopup();
+    UFUNCTION() void HandleTradeQuantityConfirmed(int32 SlotIndex, int32 Quantity);
 
     // Pick-list hover tooltip (created in NativeConstruct when assigned).
     UPROPERTY() UItemTooltipWidget* TradeTooltip = nullptr;

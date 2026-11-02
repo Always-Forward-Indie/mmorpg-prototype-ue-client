@@ -37,6 +37,7 @@ void UQuantityPopupWidget::OpenForAdd(int32 InSlotIndex, const FString& InName,
     if (PricePerUnitText)
         PricePerUnitText->SetText(FText::Format(LOCTEXT("PricePerPc", "{0} g / pc"),
             FText::AsNumber(InPricePerUnit)));
+    ApplyPricingVisibility();
 
     if (RemoveButton)
         RemoveButton->SetVisibility(ESlateVisibility::Collapsed);
@@ -60,6 +61,7 @@ void UQuantityPopupWidget::OpenForUpdate(int32 InSlotIndex, const FString& InNam
     if (PricePerUnitText)
         PricePerUnitText->SetText(FText::Format(LOCTEXT("PricePerPc", "{0} g / pc"),
             FText::AsNumber(InPricePerUnit)));
+    ApplyPricingVisibility();
 
     if (RemoveButton)
         RemoveButton->SetVisibility(ESlateVisibility::Visible);
@@ -72,6 +74,20 @@ void UQuantityPopupWidget::OpenForUpdate(int32 InSlotIndex, const FString& InNam
 void UQuantityPopupWidget::ClosePopup()
 {
     SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UQuantityPopupWidget::SetShowPricing(bool bShow)
+{
+    bShowPricing = bShow;
+    ApplyPricingVisibility();
+    UpdateTotalPrice();
+}
+
+void UQuantityPopupWidget::ApplyPricingVisibility()
+{
+    if (PricePerUnitText)
+        PricePerUnitText->SetVisibility(bShowPricing ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+    // Total line visibility is refreshed by UpdateTotalPrice (hidden when priceless).
 }
 
 // ---------------------------------------------------------------------------
@@ -95,9 +111,15 @@ void UQuantityPopupWidget::SetQuantity(int32 NewQty)
 
 void UQuantityPopupWidget::UpdateTotalPrice()
 {
-    if (TotalPriceText)
-        TotalPriceText->SetText(FText::Format(LOCTEXT("TotalPrice", "Total: {0} g"),
-            FText::AsNumber(PricePerUnit * CurrentQty)));
+    if (!TotalPriceText) return;
+    if (!bShowPricing)
+    {
+        TotalPriceText->SetVisibility(ESlateVisibility::Collapsed);
+        return;
+    }
+    TotalPriceText->SetVisibility(ESlateVisibility::HitTestInvisible);
+    TotalPriceText->SetText(FText::Format(LOCTEXT("TotalPrice", "Total: {0} g"),
+        FText::AsNumber(PricePerUnit * CurrentQty)));
 }
 
 // ---------------------------------------------------------------------------

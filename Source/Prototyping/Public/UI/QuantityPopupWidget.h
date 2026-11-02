@@ -102,15 +102,23 @@ protected:
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
     UWidget* PopupContent = nullptr;
 
+public:
+    // Priceless mode (e.g. P2P trade has no per-unit prices): hides the
+    // "g / pc" and total lines. Defaults on (vendor behavior unchanged).
+    UFUNCTION(BlueprintCallable, Category = "Quantity Popup")
+    void SetShowPricing(bool bShow);
+
 private:
     int32 SlotIndex     = -1;
     int32 PricePerUnit  = 0;
     int32 MaxQuantity   = 1;
     int32 CurrentQty    = 1;
     bool  bUpdateMode   = false;
+    bool  bShowPricing  = true;
 
     void SetQuantity(int32 NewQty);
     void UpdateTotalPrice();
+    void ApplyPricingVisibility();
 
     UFUNCTION() void HandleDecrease();
     UFUNCTION() void HandleIncrease();

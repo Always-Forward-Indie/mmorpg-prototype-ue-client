@@ -47,4 +47,17 @@ struct PROTOTYPING_API FTradeStatusRule
 	{
 		return InitiatorId > 0 ? FString::FromInt(InitiatorId) : FString();
 	}
+
+	/** Gold offer affordability (client predicate — server re-checks at
+	 * confirm and refuses overdraft; the widget clamps + hints first). */
+	static bool CanAffordGold(int32 Balance, int32 Amount)
+	{
+		return Amount >= 0 && Amount <= Balance;
+	}
+
+	/** Clamp a typed gold offer into [0, Balance] (single owner). */
+	static int32 ClampGoldOffer(int32 Balance, int32 Want)
+	{
+		return FMath::Clamp(Want, 0, FMath::Max(0, Balance));
+	}
 };

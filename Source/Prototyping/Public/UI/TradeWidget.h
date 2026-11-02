@@ -113,6 +113,7 @@ protected:
     UFUNCTION() void HandleCancelClicked();
     UFUNCTION() void HandleCloseButtonClicked();
     UFUNCTION() void HandleGoldTextChanged(const FText& Text);
+    UFUNCTION() void HandleGoldTextCommitted(const FText& Text, ETextCommit::Type CommitType);
 
     // --- My offer ---
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget)) UWrapBox* My_Items_Box       = nullptr;

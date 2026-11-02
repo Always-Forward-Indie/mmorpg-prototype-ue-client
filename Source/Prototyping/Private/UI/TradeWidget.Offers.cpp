@@ -340,4 +340,30 @@ void UTradeWidget::HandleGoldTextChanged(const FText& Text)
     }
 }
 
+void UTradeWidget::HandleGoldTextCommitted(const FText& Text, ETextCommit::Type CommitType)
+{
+    // Typing alone never sends: only an explicit commit (Enter / unfocus)
+    // proposes the gold offer — the peer sees it, both locks drop.
+    if (CommitType != ETextCommit::OnEnter && CommitType != ETextCommit::OnUserMovedFocus) return;
+    if (!TradeManager || !TradeManager->IsInTrade() || !Gold_Input) return;
+
+    const int32 Want = FMath::Max(0, FCString::Atoi(*Text.ToString()));
+    const int32 Balance = CachedInventory.gold;
+    const int32 Clamped = FTradeStatusRule::ClampGoldOffer(Balance, Want);
+    if (!FTradeStatusRule::CanAffordGold(Balance, Want))
+    {
+        ShowTradeHint(
+            TEXT("Not enough gold"),
+            FString::Printf(TEXT("You have %d g — offer clamped to your balance."), Balance));
+        Gold_Input->SetText(FText::FromString(FString::FromInt(Clamped)));
+    }
+    PendingGold = Clamped;
+    // No-op when nothing changed since the accepted state (avoids empty spam).
+    if (!bOwnOfferPending && Clamped == CurrentState.myGold) return;
+    bOwnOfferPending = true;
+    const int32 CharId = GetGameInstance()
+        ? Cast<UMyGameInstance>(GetGameInstance())->GetCurrentCharacterID() : 0;
+    TradeManager->UpdateTradeOffer(CharId, PendingGold, PendingOffer);
+}
+
 #undef LOCTEXT_NAMESPACE

@@ -40,5 +40,14 @@ bool FTradeStatusRuleTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("accept echoes initiator"), R::AcceptEchoField(614), TEXT("614"));
     TestEqual(TEXT("accept echo empty without invite"), R::AcceptEchoField(0), TEXT(""));
     TestEqual(TEXT("accept echo empty for negative"), R::AcceptEchoField(-3), TEXT(""));
+
+    // Gold offer affordability + clamp (client predicate, server re-checks).
+    TestTrue(TEXT("exact balance affordable"), R::CanAffordGold(100, 100));
+    TestTrue(TEXT("zero offer affordable"), R::CanAffordGold(100, 0));
+    TestFalse(TEXT("overdraft refused"), R::CanAffordGold(100, 101));
+    TestFalse(TEXT("negative refused"), R::CanAffordGold(100, -1));
+    TestEqual(TEXT("clamp overdraft"), R::ClampGoldOffer(100, 250), 100);
+    TestEqual(TEXT("clamp negative"), R::ClampGoldOffer(100, -5), 0);
+    TestEqual(TEXT("clamp keeps valid"), R::ClampGoldOffer(100, 40), 40);
     return true;
 }

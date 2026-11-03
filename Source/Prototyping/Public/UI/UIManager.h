@@ -832,6 +832,10 @@ protected:
 	bool bGameMenuVisible;
 	bool bDeathScreenVisible;
 
+	// Hover-block diagnostics (dev): last registry blocker + throttle.
+	mutable FString LastHoverBlockerKey;
+	mutable double LastHoverBlockerTime = 0.0;
+
 public:
 	// Internal delegate handlers (must be public for AddDynamic)
 	UFUNCTION() void OnMenuBarBestiaryClicked();
@@ -908,6 +912,12 @@ private:
 
 	/** Recursively checks if any child of Widget is under MousePos and Visible. */
 	static bool DoesWidgetTreeHaveHoveredChild(UWidget* Widget, const FVector2f& MousePos);
+
+	/** First registry widget under the cursor (nullptr = world). Drives HasCursorOverWindowContent. */
+	const UWidget* FindBlockingWidget() const;
+
+	/** Dev diagnostic: logs WHO the registry sees (+ Slate's own hover chain). Throttled. */
+	void LogHoverBlocker(const UWidget* Blocker) const;
 
 	/** Builds the FWindowVisibilityRule mask from the b*Visible flags. */
 	uint32 BuildVisibilityMask() const;

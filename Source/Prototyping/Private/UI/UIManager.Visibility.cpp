@@ -350,46 +350,127 @@ bool UUIManager::HasModalWindowOpen() const
 
 bool UUIManager::HasCursorOverWindowContent() const
 {
-	if (!FSlateApplication::IsInitialized()) return false;
+	return FindBlockingWidget() != nullptr;
+}
+
+const UWidget* UUIManager::FindBlockingWidget() const
+{
+	if (!FSlateApplication::IsInitialized()) return nullptr;
 	const FVector2f MousePos = FSlateApplication::Get().GetCursorPos();
 
-	// Panel flags are checked per-window below (a hidden panel never has
-	// hovered Visible content); always-on roots are gated by the widgets
-	// themselves inside DoesWidgetTreeHaveHoveredChild.
+	auto Hit = [&MousePos](const UWidget* W) -> const UWidget*
+	{
+		UWidget* Mutable = const_cast<UWidget*>(W);
+		return DoesWidgetTreeHaveHoveredChild(Mutable, MousePos) ? W : nullptr;
+	};
+	auto Flagged = [&Hit](bool bFlag, const UWidget* W) -> const UWidget*
+	{
+		return (bFlag && W) ? Hit(W) : nullptr;
+	};
 
-	if (bInventoryVisible    && DoesWidgetTreeHaveHoveredChild(InventoryWidget,    MousePos)) return true;
-	if (bSkillsPanelVisible  && DoesWidgetTreeHaveHoveredChild(AvailableSkillsWidget, MousePos)) return true;
-	if (bHarvestLootVisible  && DoesWidgetTreeHaveHoveredChild(HarvestLootWidget,  MousePos)) return true;
-	if (bDialogueVisible     && DoesWidgetTreeHaveHoveredChild(DialogueWidget,     MousePos)) return true;
-	if (bQuestJournalVisible && DoesWidgetTreeHaveHoveredChild(QuestJournalWidget, MousePos)) return true;
-	if (bVendorShopVisible   && DoesWidgetTreeHaveHoveredChild(VendorShopWidget,   MousePos)) return true;
-	if (bRepairShopVisible   && DoesWidgetTreeHaveHoveredChild(RepairShopWidget,   MousePos)) return true;
-	if (bSkillShopVisible    && DoesWidgetTreeHaveHoveredChild(SkillShopWidget,    MousePos)) return true;
-	if (bTradeVisible        && DoesWidgetTreeHaveHoveredChild(TradeWidget,        MousePos)) return true;
-	if (bEquipmentVisible    && DoesWidgetTreeHaveHoveredChild(EquipmentWidget,    MousePos)) return true;
-	if (bPlayerStatsVisible  && DoesWidgetTreeHaveHoveredChild(PlayerStatsWidget,  MousePos)) return true;
-	if (bBestiaryVisible     && DoesWidgetTreeHaveHoveredChild(BestiaryWidget,     MousePos)) return true;
-	if (bTitlesVisible       && DoesWidgetTreeHaveHoveredChild(TitlesWidget,       MousePos)) return true;
-	if (bReputationVisible   && DoesWidgetTreeHaveHoveredChild(ReputationWidget,   MousePos)) return true;
-	if (bEmoteListVisible    && DoesWidgetTreeHaveHoveredChild(EmoteListWidget,    MousePos)) return true;
+	// Panel windows (flag-gated).
+	const UWidget* Roots[] = {
+		Flagged(bInventoryVisible, InventoryWidget),
+		Flagged(bSkillsPanelVisible, AvailableSkillsWidget),
+		Flagged(bHarvestLootVisible, HarvestLootWidget),
+		Flagged(bDialogueVisible, DialogueWidget),
+		Flagged(bQuestJournalVisible, QuestJournalWidget),
+		Flagged(bVendorShopVisible, VendorShopWidget),
+		Flagged(bRepairShopVisible, RepairShopWidget),
+		Flagged(bSkillShopVisible, SkillShopWidget),
+		Flagged(bTradeVisible, TradeWidget),
+		Flagged(bEquipmentVisible, EquipmentWidget),
+		Flagged(bPlayerStatsVisible, PlayerStatsWidget),
+		Flagged(bBestiaryVisible, BestiaryWidget),
+		Flagged(bTitlesVisible, TitlesWidget),
+		Flagged(bReputationVisible, ReputationWidget),
+		Flagged(bEmoteListVisible, EmoteListWidget),
+		// Always-on HUD roots + dialogs (widget-visibility gated).
+		Hit(ChatWidget),
+		Hit(CombatLogWidget),
+		Hit(PlayerInterfaceWidget),
+		Hit(QuestTrackerWidget),
+		Hit(TradeInviteWidget),
+		Hit(PlayerContextMenu),
+		Hit(PlayerInspectWidget),
+		Hit(GameMenuWidget),
+		Hit(GameMenuBarWidget),
+		Hit(GameSettingsWidget),
+		Hit(KeybindWidget),
+		Hit(DeathScreenWidget),
+	};
+	for (const UWidget* W : Roots)
+	{
+		if (W)
+		{
+			LogHoverBlocker(W);
+			return W;
+		}
+	}
+	LogHoverBlocker(nullptr);
+	return nullptr;
+}
 
-	// Always-on HUD roots + dialogs (widget-visibility gated — no panel
-	// flags for these). Same rule as panels: cursor over Visible content
-	// blocks camera drag and wheel zoom. Requires precise (non-fullscreen)
-	// roots — see SelfHitTestInvisible mandate in UI_Widget_BP_Bindings.
-	if (DoesWidgetTreeHaveHoveredChild(ChatWidget,            MousePos)) return true;
-	if (DoesWidgetTreeHaveHoveredChild(CombatLogWidget,       MousePos)) return true;
-	if (DoesWidgetTreeHaveHoveredChild(PlayerInterfaceWidget, MousePos)) return true;
-	if (DoesWidgetTreeHaveHoveredChild(QuestTrackerWidget,    MousePos)) return true;
-	if (DoesWidgetTreeHaveHoveredChild(TradeInviteWidget,      MousePos)) return true;
-	if (DoesWidgetTreeHaveHoveredChild(PlayerContextMenu,      MousePos)) return true;
-	if (DoesWidgetTreeHaveHoveredChild(PlayerInspectWidget,    MousePos)) return true;
-	if (DoesWidgetTreeHaveHoveredChild(GameMenuWidget,         MousePos)) return true;
-	if (DoesWidgetTreeHaveHoveredChild(GameMenuBarWidget,      MousePos)) return true;
-	if (DoesWidgetTreeHaveHoveredChild(GameSettingsWidget,     MousePos)) return true;
-	if (DoesWidgetTreeHaveHoveredChild(KeybindWidget,          MousePos)) return true;
-	if (DoesWidgetTreeHaveHoveredChild(DeathScreenWidget,      MousePos)) return true;
-	return false;
+void UUIManager::LogHoverBlocker(const UWidget* Blocker) const
+{
+	// Dev diagnostic for the "camera stuck / clicks eaten" class: logs WHAT
+	// the registry sees under the cursor (registry hit + Slate's own hover).
+	// Throttled: on identity change, otherwise at most once per 5 s.
+	const double Now = FPlatformTime::Seconds();
+	FString Key = Blocker ? Blocker->GetPathName() : TEXT("<none>");
+	const bool bChanged = !Key.Equals(LastHoverBlockerKey);
+	if (!bChanged && Now - LastHoverBlockerTime < 5.0)
+		return;
+	LastHoverBlockerKey = Key;
+	LastHoverBlockerTime = Now;
+
+	// Slate truth: which cached widgets report IsHovered (real hit-testing,
+	// not the manual geometry walk). Bounded to 12 entries.
+	FString SlateHits;
+	int32 SlateCount = 0;
+	auto Accumulate = [&](const UWidget* Root)
+	{
+		TArray<const UWidget*> Stack;
+		if (Root) Stack.Add(Root);
+		while (Stack.Num() > 0 && SlateCount < 12)
+		{
+			const UWidget* W = Stack.Pop();
+			if (!W) continue;
+			if (TSharedPtr<SWidget> S = W->GetCachedWidget())
+			{
+				if (S->IsHovered())
+				{
+					const FVector2D Sz = S->GetCachedGeometry().GetAbsoluteSize();
+					SlateHits += FString::Printf(TEXT("[%s %s hovered vis=%d %.0fx%.0f] "),
+						*W->GetName(), *W->GetClass()->GetName(), W->IsVisible() ? 1 : 0, Sz.X, Sz.Y);
+					++SlateCount;
+				}
+			}
+			if (const UUserWidget* UW = Cast<const UUserWidget>(W))
+			{
+				if (UW->WidgetTree && UW->WidgetTree->RootWidget)
+					Stack.Add(UW->WidgetTree->RootWidget);
+			}
+			if (const UPanelWidget* Panel = Cast<const UPanelWidget>(W))
+			{
+				for (int32 i = 0; i < Panel->GetChildrenCount(); ++i)
+					Stack.Add(Panel->GetChildAt(i));
+			}
+		}
+	};
+	Accumulate(ChatWidget);
+	Accumulate(CombatLogWidget);
+	Accumulate(PlayerInterfaceWidget);
+	Accumulate(QuestTrackerWidget);
+	Accumulate(TradeInviteWidget);
+	Accumulate(PlayerContextMenu);
+	Accumulate(PlayerInspectWidget);
+	Accumulate(GameMenuWidget);
+	Accumulate(GameMenuBarWidget);
+	Accumulate(GameSettingsWidget);
+	Accumulate(KeybindWidget);
+	Accumulate(DeathScreenWidget);
+	UE_LOG(LogGameplay, Warning, TEXT("UIHover: registry=%s slate=[%s]"), *Key, *SlateHits);
 }
 
 bool UUIManager::DoesWidgetTreeHaveHoveredChild(UWidget* Widget, const FVector2f& MousePos)

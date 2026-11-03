@@ -95,7 +95,8 @@ Inside `W_PlayerInterface` (not UIManager-directly): `USkillBarWidget` (`Skills/
 8. Buyback: created in code when the shop opens (`Buyback_Button`, optional).
    The server keeps the last 12 sold stacks per character; the `buyback` bot scenario covers it.
 9. Combat log: created in code; tunables on `UCombatLogWidget` (size/position/anchors,
-   timestamps, font size, channel colours, `/clearlog` in chat). RU templates are automatic.
+   timestamps, font size, channel colours, custom row/filter widgets
+   (`LogRowWidgetClass` / `LogFilterWidgetClass`), `/clearlog` in chat). RU templates are automatic.
 10. Keybinds: window created in code; open via `IA_Keybinds` (suggest F12) → `KeybindsAction`
     in the player Blueprint + IMC_Player. Persisted to Game.ini, Reset all inside the window.
 11. Player target frame: reuses the mob frame (name/level/HP), auto-hides when the
@@ -117,7 +118,7 @@ is the exception: it auto-positions at the cursor, no designer placement.
 | Window (C++ class) | WidgetClass property (owner) | Bind names |
 |---|---|---|
 | `UTradeInviteWidget` | `UIManager.TradeInviteWidgetClass` | `Invite_Name_Text` (Text), `Invite_Countdown_Text` (Text), `Invite_Accept_Btn` (Button), `Invite_Decline_Btn` (Button) |
-| `UCombatLogWidget` | `UIManager.CombatLogWidgetClass` | `Log_Scroll_Box` (ScrollBox), `Log_Filter_Row` (any Panel, HorizontalBox recommended — channel checks are built into it) |
+| `UCombatLogWidget` (+ row/filter classes) | `UIManager.CombatLogWidgetClass`, `LogRowWidgetClass` (BP subclass of `UCombatLogRowWidget`), `LogFilterWidgetClass` (BP subclass of `UCombatLogFilterWidget`) | window: `Log_Scroll_Box` (ScrollBox), `Log_Filter_Row` (any Panel, HorizontalBox recommended); row: `Row_Icon` (Image, optional), `Row_Time_Text` / `Row_Body_Text` (Text, optional); filter: `FilterCheckBox` (CheckBox, optional), `FilterLabel_Text` (Text, optional), `FilterIcon` (Image, optional) |
 | `UBuybackWidget` | — (удалён: выкуп — вкладка вендора, см. ниже) | — |
 | `UVendorShopWidget` buyback tab | binds on `WBP_VendorShop`: `Buyback_Panel` (Widget), `Buyback_Items_Box` (WrapBox), `Tab_Buyback_Button` (Button); slots reuse `VendorSlotClass`, hover tooltip via shop `VendorTooltipWidget` | click slot = full-stack buyback; no [X] on buyback rows |
 | `UKeybindWidget` (standalone fallback) | — (created from C++ class) | `Keybinds_List_Box` (ScrollBox), `Keybinds_Reset_Btn` (Button), `Keybinds_Close_Btn` (Button, standalone only) |

@@ -95,14 +95,30 @@ void UCombatLogWidget::BuildLayout()
 UCheckBox* UCombatLogWidget::AddFilterCheck(ECombatLogCategory Category, const FString& Label, UPanelWidget* Row)
 {
 	if (!WidgetTree || !Row) return nullptr;
+
+	const FLinearColor ChannelColor = ColorFor(Category);
+	const FText LabelText = FText::FromString(Label);
+	const bool bChecked = FCombatLogRule::IsShown(FilterMask, Category);
+
+	if (LogFilterWidgetClass)
+	{
+		UCombatLogFilterWidget* Cell = CreateWidget<UCombatLogFilterWidget>(this, LogFilterWidgetClass);
+		if (!Cell) return nullptr;
+		Cell->Setup(Category, LabelText, ChannelColor, bChecked);
+		Cell->OnFilterToggled.AddDynamic(this, &UCombatLogWidget::HandleCustomFilterToggled);
+		Row->AddChild(Cell);
+		CustomFilters.Add(Category, Cell);
+		return Cell->GetFilterCheckBox();
+	}
+
 	UCheckBox* Box = WidgetTree->ConstructWidget<UCheckBox>(UCheckBox::StaticClass());
-	Box->SetIsChecked(true);
-	Box->SetCheckedState(ECheckBoxState::Checked);
+	Box->SetIsChecked(bChecked);
+	Box->SetCheckedState(bChecked ? ECheckBoxState::Checked : ECheckBoxState::Unchecked);
 	Box->OnCheckStateChanged.AddDynamic(this, &UCombatLogWidget::HandleFilterChanged);
 
 	UTextBlock* Txt = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-	Txt->SetText(FText::FromString(Label));
-	Txt->SetColorAndOpacity(FSlateColor(ColorFor(Category)));
+	Txt->SetText(LabelText);
+	Txt->SetColorAndOpacity(FSlateColor(ChannelColor));
 
 	UHorizontalBox* Cell = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 	Cell->AddChildToHorizontalBox(Box);
@@ -154,6 +170,11 @@ void UCombatLogWidget::SetCategoryVisible(ECombatLogCategory Category, bool bVis
 		if (*Found)
 			(*Found)->SetIsChecked(bVisible);
 	}
+	if (UCombatLogFilterWidget** Custom = CustomFilters.Find(Category))
+	{
+		if (*Custom)
+			(*Custom)->SetChannelChecked(bVisible);
+	}
 	RebuildVisible();
 }
 
@@ -172,20 +193,37 @@ void UCombatLogWidget::AppendEntry(const FCombatLogEntry& Entry)
 	if (!LogScroll || !FCombatLogRule::IsShown(FilterMask, Entry.Category))
 		return;
 
-	UTextBlock* Line = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-	FString DisplayText = Entry.Text;
+	const FLinearColor LineColor = ColorFor(Entry.Category);
+	FText TimeText = FText::GetEmpty();
 	if (bShowTimestamps)
-		DisplayText = FString::Printf(TEXT("[%s] %s"), *Entry.Timestamp.ToString(TEXT("%H:%M:%S")), *Entry.Text);
-	Line->SetText(FText::FromString(DisplayText));
-	Line->SetColorAndOpacity(FSlateColor(ColorFor(Entry.Category)));
-	FSlateFontInfo LineFont = Line->GetFont();
-	LineFont.Size = LineFontSize;
-	Line->SetFont(LineFont);
-	Line->SetShadowColorAndOpacity(FLinearColor::Black);
-	Line->SetShadowOffset(FVector2D(1.f, 1.f));
-	Line->SetAutoWrapText(true);
-	LogScroll->AddChild(Line);
-	LineWidgets.Add(Line);
+		TimeText = FText::FromString(FString::Printf(TEXT("[%s]"),
+			*Entry.Timestamp.ToString(TEXT("%H:%M:%S"))));
+
+	if (LogRowWidgetClass)
+	{
+		UCombatLogRowWidget* Row = CreateWidget<UCombatLogRowWidget>(this, LogRowWidgetClass);
+		if (!Row) return;
+		Row->SetRowData(Entry.Category, TimeText, FText::FromString(Entry.Text), LineColor);
+		LogScroll->AddChild(Row);
+		LineWidgets.Add(Row);
+	}
+	else
+	{
+		UTextBlock* Line = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
+		FString DisplayText = Entry.Text;
+		if (bShowTimestamps)
+			DisplayText = FString::Printf(TEXT("[%s] %s"), *Entry.Timestamp.ToString(TEXT("%H:%M:%S")), *Entry.Text);
+		Line->SetText(FText::FromString(DisplayText));
+		Line->SetColorAndOpacity(FSlateColor(LineColor));
+		FSlateFontInfo LineFont = Line->GetFont();
+		LineFont.Size = LineFontSize;
+		Line->SetFont(LineFont);
+		Line->SetShadowColorAndOpacity(FLinearColor::Black);
+		Line->SetShadowOffset(FVector2D(1.f, 1.f));
+		Line->SetAutoWrapText(true);
+		LogScroll->AddChild(Line);
+		LineWidgets.Add(Line);
+	}
 
 	TrimLines();
 	if (bFollowTail)
@@ -207,7 +245,7 @@ void UCombatLogWidget::TrimLines()
 {
 	while (LineWidgets.Num() > MaxLines && LineWidgets.Num() > 0)
 	{
-		if (UTextBlock* Old = LineWidgets[0])
+		if (UWidget* Old = LineWidgets[0])
 			Old->RemoveFromParent();
 		LineWidgets.RemoveAt(0);
 	}
@@ -249,6 +287,16 @@ void UCombatLogWidget::HandleFilterChanged(bool /*bIsChecked*/)
 		if (Pair.Value && Pair.Value->IsChecked())
 			NewMask |= FCombatLogRule::MaskFor(Pair.Key);
 	}
+	for (const auto& Pair : CustomFilters)
+	{
+		if (Pair.Value && Pair.Value->IsChannelChecked())
+			NewMask |= FCombatLogRule::MaskFor(Pair.Key);
+	}
 	FilterMask = NewMask;
 	RebuildVisible();
+}
+
+void UCombatLogWidget::HandleCustomFilterToggled()
+{
+	HandleFilterChanged(true);
 }

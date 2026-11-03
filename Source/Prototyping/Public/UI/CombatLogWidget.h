@@ -11,6 +11,8 @@
 #include "Components/PanelWidget.h"
 #include "Data/DataStructs.h"
 #include "Utils/NetCore/CombatLogRule.h"
+#include "UI/CombatLogRowWidget.h"
+#include "UI/CombatLogFilterWidget.h"
 #include "CombatLogWidget.generated.h"
 
 class UCombatLogManager;
@@ -32,7 +34,10 @@ struct FCombatLogEntry;
  * scroll box without a filter row simply shows unfiltered lines:
  *   Log_Scroll_Box  UScrollBox    line list (AppendEntry targets it)
  *   Log_Filter_Row  any UPanelWidget (HorizontalBox recommended) —
- *                   the five channel checkboxes are built into it in code
+ *                   the five channel filters are built into it in code
+ *                   (UCombatLogFilterWidget subclasses when
+ *                   LogFilterWidgetClass is assigned, legacy checkbox+label
+ *                   cells otherwise)
  * Placement comes from the BP root's own anchors; the LogSize/LogPosition/
  * LogAnchors/LogAlignment tunables apply to the code fallback only.
  * With no subclass assigned the whole layout is built in C++ (headless-safe).
@@ -71,6 +76,7 @@ protected:
 
 	UFUNCTION() void HandleLogEntryAdded(const FCombatLogEntry& Entry);
 	UFUNCTION() void HandleFilterChanged(bool bIsChecked);
+	UFUNCTION() void HandleCustomFilterToggled();
 	UFUNCTION() void HandleUserScrolled(float CurrentOffset);
 
 	// --- Blueprint layout slots (BindWidgetOptional — see class doc) ---
@@ -79,8 +85,9 @@ protected:
 
 	// --- C++-built layout (no BP bindings required) ---
 	UPROPERTY() UScrollBox* LogScroll = nullptr;
-	UPROPERTY() TArray<UTextBlock*> LineWidgets;
+	UPROPERTY() TArray<UWidget*> LineWidgets;
 	UPROPERTY() TMap<ECombatLogCategory, UCheckBox*> FilterBoxes;
+	UPROPERTY() TMap<ECombatLogCategory, UCombatLogFilterWidget*> CustomFilters;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Log")
 	FVector2D LogSize = FVector2D(400.f, 280.f);
@@ -104,6 +111,17 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Log")
 	int32 LineFontSize = 12;
+
+	/** Row widget (BP subclass of UCombatLogRowWidget) for custom line
+	 *  styling — icons, per-type layout, backgrounds. Unassigned = legacy
+	 *  single-UTextBlock line (headless/bot-safe fallback). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Log")
+	TSubclassOf<UCombatLogRowWidget> LogRowWidgetClass;
+
+	/** Filter widget (BP subclass of UCombatLogFilterWidget) for custom
+	 *  channel toggles. Unassigned = legacy checkbox+label cells. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Log")
+	TSubclassOf<UCombatLogFilterWidget> LogFilterWidgetClass;
 
 	// T-02: BP-tunable channel colours (mirror FCombatLogRule::ColorFor).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Log")

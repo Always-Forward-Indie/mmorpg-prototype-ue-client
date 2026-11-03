@@ -130,8 +130,13 @@ void UExperienceManager::UpdateCharacterProgression(int32 CharacterId, const FPl
     }
 
     FPlayerProgressionStruct* CurrentProgression = CharacterProgressions.Find(CharacterId);
-    int32 OldLevel = CurrentProgression ? CurrentProgression->currentLevel : 1;
-    bool bLeveledUp = NewProgression.currentLevel > OldLevel;
+    // Baseline adopt: the first sighting per character per session is a sync,
+    // not an achievement. Login pushes partial snapshots (level first, XP
+    // after) — toasting here would congratulate a stale default. Only
+    // transitions from an adopted baseline may level up.
+    const bool bFirstSight = (CurrentProgression == nullptr);
+    int32 OldLevel = CurrentProgression ? CurrentProgression->currentLevel : NewProgression.currentLevel;
+    bool bLeveledUp = !bFirstSight && NewProgression.currentLevel > OldLevel;
 
     // Update or add the progression
     CharacterProgressions.Add(CharacterId, NewProgression);

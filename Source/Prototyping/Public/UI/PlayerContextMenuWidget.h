@@ -38,7 +38,7 @@ public:
 	UPlayerContextMenuWidget(const FObjectInitializer& ObjectInitializer);
 
 	UFUNCTION(BlueprintCallable, Category = "Player Menu")
-	void ShowForPlayer(int32 TargetCharacterId, const FString& DisplayName, FVector2D ScreenPosition, bool bCanInspect = true);
+	void ShowForPlayer(int32 TargetCharacterId, const FString& DisplayName, FVector2D ScreenPosition, bool bCanInspect = true, bool bCanTrade = true);
 
 	UFUNCTION(BlueprintCallable, Category = "Player Menu")
 	void HideMenu();

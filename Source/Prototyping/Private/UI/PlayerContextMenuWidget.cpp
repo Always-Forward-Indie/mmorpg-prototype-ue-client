@@ -60,7 +60,7 @@ FReply UPlayerContextMenuWidget::NativeOnMouseButtonUp(const FGeometry& InGeomet
 	return FReply::Handled();
 }
 
-void UPlayerContextMenuWidget::ShowForPlayer(int32 InCharacterId, const FString& DisplayName, FVector2D ScreenPosition, bool bCanInspect)
+void UPlayerContextMenuWidget::ShowForPlayer(int32 InCharacterId, const FString& DisplayName, FVector2D ScreenPosition, bool bCanInspect, bool bCanTrade)
 {
 	TargetCharacterId = InCharacterId;
 	PressedRowIndex = -1;
@@ -68,7 +68,7 @@ void UPlayerContextMenuWidget::ShowForPlayer(int32 InCharacterId, const FString&
 	if (Menu_Title_Text)
 		Menu_Title_Text->SetText(FText::FromString(DisplayName));
 
-	RebuildRows(DisplayName, InCharacterId > 0, bCanInspect);
+	RebuildRows(DisplayName, bCanTrade && InCharacterId > 0, bCanInspect);
 	UE_LOG(LogGameplay, Verbose, TEXT("PlayerMenu: ShowForPlayer target=%d rows=%d pos=(%.0f, %.0f) bpList=%d"),
 		InCharacterId, Rows.Num(), ScreenPosition.X, ScreenPosition.Y, Menu_Action_List ? 1 : 0);
 
@@ -102,6 +102,8 @@ void UPlayerContextMenuWidget::RebuildRows(const FString& DisplayName, bool bCan
 		UBorder* Root = Tree->ConstructWidget<UBorder>(UBorder::StaticClass());
 		Root->SetBrushColor(FLinearColor(0.04f, 0.04f, 0.04f, 0.95f));
 		Root->SetPadding(FMargin(8.f, 6.f));
+		// Transparent corners must not eat world clicks (menu sits above HUD).
+		Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 		Tree->RootWidget = Root;
 
 		List = Tree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());

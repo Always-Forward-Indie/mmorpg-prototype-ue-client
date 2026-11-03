@@ -69,6 +69,9 @@ void UCombatLogWidget::BuildLayout()
 	USizeBox* Root = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 	Root->SetWidthOverride(LogSize.X);
 	Root->SetHeightOverride(LogSize.Y);
+	// Transparent areas must not eat world clicks (the log sits above the
+	// HUD): children stay interactive, the box itself never hit-tests.
+	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	Tree->RootWidget = Root;
 
 	UVerticalBox* Col = Tree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());

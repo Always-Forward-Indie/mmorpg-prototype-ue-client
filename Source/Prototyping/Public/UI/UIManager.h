@@ -292,6 +292,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void OpenPlayerContextMenu(ABasicPlayer* TargetPlayer);
 
+	/** Same menu without a world actor (e.g. chat nickname click for an
+	 *  out-of-range player): actions resolve by character id. */
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void OpenPlayerContextMenuById(int32 TargetCharacterId, const FString& TargetName);
+
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void ClosePlayerMenu();
 
@@ -858,6 +863,10 @@ public:
 
 private:
 	void EnsureInspectWidget();
+
+	// Shared menu construction/presentation for the actor and id paths.
+	// Callers own gating (CanOpenMenu) and LastSocialTarget* bookkeeping.
+	void OpenPlayerContextMenuCore(int32 TargetId, const FString& Display, bool bCanTrade);
 
 protected:
 

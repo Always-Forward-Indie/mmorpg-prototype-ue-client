@@ -135,13 +135,22 @@ void UChatMessageLineWidget::ApplyFontSize(UTextBlock* TextBlock, int32 Size) co
 
 FReply UChatMessageLineWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
-    // Left-click a line: open the sender's unit menu (whisper/trade/inspect).
-    // System lines carry no sender and are ignored.
-    if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && CachedMessage.senderId > 0)
+    // RMB on the sender nickname opens the unit menu (any channel,
+    // including whispers). LMB is swallowed so clicks never leak to the
+    // world behind. Without a bound SenderNameText the whole row counts.
+    if (InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton && CachedMessage.senderId > 0)
     {
-        OnSenderClicked.Broadcast(CachedMessage.senderId, CachedMessage.senderName);
-        return FReply::Handled();
+        const bool bOnNickname = !SenderNameText ||
+            SenderNameText->GetCachedGeometry().IsUnderLocation(InMouseEvent.GetScreenSpacePosition());
+        if (bOnNickname)
+        {
+            OnSenderClicked.Broadcast(CachedMessage.senderId, CachedMessage.senderName);
+            return FReply::Handled();
+        }
+        return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
     }
+    if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+        return FReply::Handled();
     return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 }
 

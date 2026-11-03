@@ -66,6 +66,8 @@ void UTradeInviteWidget::BuildLayout()
 	USizeBox* Root = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 	Root->SetWidthOverride(320.f);
 	Root->SetHeightOverride(140.f);
+	// Transparent areas must not eat world clicks (invite sits above HUD).
+	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	Tree->RootWidget = Root;
 
 	UBorder* Frame = Tree->ConstructWidget<UBorder>(UBorder::StaticClass());

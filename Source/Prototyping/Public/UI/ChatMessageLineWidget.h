@@ -41,7 +41,7 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Chat Line")
     const FChatMessageStruct& GetMessageData() const { return CachedMessage; }
 
-    /** Fired on left-click on the line (sender menu). ChatWidget re-broadcasts. */
+    /** Fired on right-click on the sender nickname (sender menu). ChatWidget re-broadcasts. */
     UPROPERTY(BlueprintAssignable, Category = "Chat Line")
     FOnChatSenderClicked OnSenderClicked;
 

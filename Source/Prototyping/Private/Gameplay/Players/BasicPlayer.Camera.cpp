@@ -189,7 +189,7 @@ void ABasicPlayer::OnScroll(const FInputActionValue& Value)
     if (!CameraBoom) return;
 
     // Don't zoom if any UI window is open вЂ” let the scroll reach the widget
-    if (UIManager && UIManager->HasUIWindowOpen()) return;
+    if (UIManager && (UIManager->HasUIWindowOpen() || UIManager->HasCursorOverWindowContent())) return;
 
     // Value is a float: positive = scroll up (zoom in), negative = scroll down (zoom out)
     const float ScrollDelta = Value.Get<float>();

@@ -86,7 +86,9 @@ Inside `W_PlayerInterface` (not UIManager-directly): `USkillBarWidget` (`Skills/
    (usable items only); hotkeys `QuickSlot1..5Action` (suggest F6-F10 — F1 is
    TargetSelf, 1-5 drive the skill bar); per-character persistence is automatic.
 6. Unit menu: RMB-click (no drag) another player → Whisper / Trade / Inspect.
-   Trade needs ≤500 cm (server `economy.trade_range` re-validates); Inspect
+   RMB on a chat nickname opens the same menu for any channel (own lines
+   ignored; remote senders get whisper/inspect, trade row hidden without a
+   world actor). Trade needs ≤500 cm (server `economy.trade_range` re-validates); Inspect
    opens the read-only snapshot window (`playerInspect` on chunk).
 7. Inventory sort/search panel (optional): `Sort_Button` (UButton) + `SearchBox` (UEditableTextBox)
    in WBP_PlayerInventory; without them the `/sort [name|rarity|type|off]` chat command works.
@@ -111,7 +113,10 @@ none — rows inside lists are always built in code (uniform styling).
 Unassigned `*WidgetClass` = code fallback (headless-safe, bots cover it).
 Viewport-added dialogs (invite, combat log, inspect, standalone keybinds)
 take their placement from the BP root's own anchors — use a full-screen
-root with centered content. The size/position UPROPERTYs (LogSize,
+root with centered content AND set the root visibility to
+SelfHitTestInvisible (children stay clickable, transparent areas pass
+clicks to the world/HUD beneath — otherwise the overlay silently eats the
+skillbar and blocks the camera registry). The size/position UPROPERTYs (LogSize,
 LogPosition, WindowSize, …) apply to the code fallback only. The unit menu
 is the exception: it auto-positions at the cursor, no designer placement.
 

@@ -54,6 +54,8 @@ void UPlayerInspectWidget::BuildLayout()
 	USizeBox* Root = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 	Root->SetWidthOverride(WindowSize.X);
 	Root->SetHeightOverride(WindowSize.Y);
+	// Transparent areas must not eat world clicks (window sits above HUD).
+	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	Tree->RootWidget = Root;
 
 	RootCol = Tree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());

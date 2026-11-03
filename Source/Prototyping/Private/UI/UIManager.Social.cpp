@@ -36,6 +36,37 @@ void UUIManager::OpenPlayerContextMenu(ABasicPlayer* TargetPlayer)
 		return;
 	}
 
+	const FString Name = TargetData.characterData.characterName;
+	const int32 Level = TargetData.characterData.characterLevel;
+	const FString Display = Level > 0
+		? FString::Printf(TEXT("%s  [%d]"), *Name, Level)
+		: Name;
+
+	LastSocialTargetName = Name;
+	LastSocialTargetId = TargetId;
+	OpenPlayerContextMenuCore(TargetId, Display, true);
+}
+
+void UUIManager::OpenPlayerContextMenuById(int32 TargetCharacterId, const FString& TargetName)
+{
+	if (TargetCharacterId <= 0 || !GetWorld() || !GetWorld()->GetFirstPlayerController()) return;
+	UMyGameInstance* GI = Cast<UMyGameInstance>(GetWorld()->GetGameInstance());
+	ABasicPlayer* Local = GI ? GI->Player : nullptr;
+	const bool bIsSelf = Local && Local->GetPlayerCharacterID() == TargetCharacterId;
+	const bool bLocalDead = Local && Local->GetIsDead();
+	UE_LOG(LogGameplay, Verbose, TEXT("UIManager: OpenPlayerContextMenuById target=%d self=%d name='%s'"),
+		TargetCharacterId, bIsSelf ? 1 : 0, *TargetName);
+	// No world actor: whisper/inspect resolve by id; trade row is hidden
+	// (needs a position for the range check — server would refuse anyway).
+	if (!FPlayerSocialRule::CanOpenMenu(bLocalDead, true, bIsSelf, false)) return;
+	LastSocialTargetName = TargetName;
+	OpenPlayerContextMenuCore(TargetCharacterId, TargetName, false);
+}
+
+void UUIManager::OpenPlayerContextMenuCore(int32 TargetId, const FString& Display, bool bCanTrade)
+{
+	if (TargetId <= 0 || !GetWorld() || !GetWorld()->GetFirstPlayerController()) return;
+
 	if (!PlayerContextMenu)
 	{
 		// Blueprint subclass wins when assigned (binds its named rows),
@@ -52,18 +83,11 @@ void UUIManager::OpenPlayerContextMenu(ABasicPlayer* TargetPlayer)
 	}
 	if (!PlayerContextMenu) return;
 
-	const FString Name = TargetData.characterData.characterName;
-	const int32 Level = TargetData.characterData.characterLevel;
-	const FString Display = Level > 0
-		? FString::Printf(TEXT("%s  [%d]"), *Name, Level)
-		: Name;
-
 	LastSocialTargetId = TargetId;
-	LastSocialTargetName = Name;
 
 	FVector2D Mouse = FVector2D::ZeroVector;
 	GetWorld()->GetFirstPlayerController()->GetMousePosition(Mouse.X, Mouse.Y);
-	PlayerContextMenu->ShowForPlayer(TargetId, Display, Mouse);
+	PlayerContextMenu->ShowForPlayer(TargetId, Display, Mouse, true, bCanTrade);
 	UpdateCursorAndInputMode();
 }
 
@@ -162,13 +186,14 @@ void UUIManager::HandleChatSenderClicked(int32 SenderId, const FString& SenderNa
 	// Own lines are not clickable targets.
 	if (GI->Player && GI->Player->GetPlayerCharacterID() == SenderId) return;
 
-	// Online player in our world → unit menu; otherwise straight to whisper.
+	// Online player in our world → unit menu; otherwise the same menu by id
+	// (whisper/inspect resolve remotely, trade row is hidden without an actor).
 	if (ABasicPlayer* Target = GI->GetPlayerByCharacterId(SenderId))
 	{
 		OpenPlayerContextMenu(Target);
 	}
-	else if (!SenderName.IsEmpty() && ChatWidget)
+	else if (!SenderName.IsEmpty())
 	{
-		ChatWidget->StartWhisperTo(SenderName);
+		OpenPlayerContextMenuById(SenderId, SenderName);
 	}
 }

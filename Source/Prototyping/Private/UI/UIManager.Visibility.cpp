@@ -3,6 +3,16 @@
 #include "Utils/NetCore/WindowVisibilityRule.h"
 #include "Blueprint/WidgetTree.h"
 #include "UI/InventoryWidget.h"
+#include "UI/ChatWidget.h"
+#include "UI/CombatLogWidget.h"
+#include "UI/PlayerInspectWidget.h"
+#include "UI/TradeInviteWidget.h"
+#include "UI/PlayerContextMenuWidget.h"
+#include "UI/GameMenuWidget.h"
+#include "UI/GameMenuBarWidget.h"
+#include "UI/W_SettingsWidget.h"
+#include "UI/KeybindWidget.h"
+#include "Gameplay/UI/DeathScreenWidget.h"
 #include "UI/HarvestProgressWidget.h"
 #include "UI/HarvestLootWidget.h"
 #include "UI/InteractionHintWidget.h"
@@ -340,16 +350,12 @@ bool UUIManager::HasModalWindowOpen() const
 
 bool UUIManager::HasCursorOverWindowContent() const
 {
-	if (!bInventoryVisible    && !bSkillsPanelVisible && !bHarvestLootVisible &&
-		!bDialogueVisible     && !bQuestJournalVisible && !bVendorShopVisible  &&
-		!bRepairShopVisible   && !bSkillShopVisible    && !bTradeVisible       &&
-		!bEquipmentVisible    && !bPlayerStatsVisible  && !bBestiaryVisible    &&
-		!bTitlesVisible       && !bReputationVisible   && !bEmoteListVisible)
-		return false;
-
 	if (!FSlateApplication::IsInitialized()) return false;
-
 	const FVector2f MousePos = FSlateApplication::Get().GetCursorPos();
+
+	// Panel flags are checked per-window below (a hidden panel never has
+	// hovered Visible content); always-on roots are gated by the widgets
+	// themselves inside DoesWidgetTreeHaveHoveredChild.
 
 	if (bInventoryVisible    && DoesWidgetTreeHaveHoveredChild(InventoryWidget,    MousePos)) return true;
 	if (bSkillsPanelVisible  && DoesWidgetTreeHaveHoveredChild(AvailableSkillsWidget, MousePos)) return true;
@@ -366,6 +372,23 @@ bool UUIManager::HasCursorOverWindowContent() const
 	if (bTitlesVisible       && DoesWidgetTreeHaveHoveredChild(TitlesWidget,       MousePos)) return true;
 	if (bReputationVisible   && DoesWidgetTreeHaveHoveredChild(ReputationWidget,   MousePos)) return true;
 	if (bEmoteListVisible    && DoesWidgetTreeHaveHoveredChild(EmoteListWidget,    MousePos)) return true;
+
+	// Always-on HUD roots + dialogs (widget-visibility gated — no panel
+	// flags for these). Same rule as panels: cursor over Visible content
+	// blocks camera drag and wheel zoom. Requires precise (non-fullscreen)
+	// roots — see SelfHitTestInvisible mandate in UI_Widget_BP_Bindings.
+	if (DoesWidgetTreeHaveHoveredChild(ChatWidget,            MousePos)) return true;
+	if (DoesWidgetTreeHaveHoveredChild(CombatLogWidget,       MousePos)) return true;
+	if (DoesWidgetTreeHaveHoveredChild(PlayerInterfaceWidget, MousePos)) return true;
+	if (DoesWidgetTreeHaveHoveredChild(QuestTrackerWidget,    MousePos)) return true;
+	if (DoesWidgetTreeHaveHoveredChild(TradeInviteWidget,      MousePos)) return true;
+	if (DoesWidgetTreeHaveHoveredChild(PlayerContextMenu,      MousePos)) return true;
+	if (DoesWidgetTreeHaveHoveredChild(PlayerInspectWidget,    MousePos)) return true;
+	if (DoesWidgetTreeHaveHoveredChild(GameMenuWidget,         MousePos)) return true;
+	if (DoesWidgetTreeHaveHoveredChild(GameMenuBarWidget,      MousePos)) return true;
+	if (DoesWidgetTreeHaveHoveredChild(GameSettingsWidget,     MousePos)) return true;
+	if (DoesWidgetTreeHaveHoveredChild(KeybindWidget,          MousePos)) return true;
+	if (DoesWidgetTreeHaveHoveredChild(DeathScreenWidget,      MousePos)) return true;
 	return false;
 }
 

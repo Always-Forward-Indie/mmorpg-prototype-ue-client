@@ -353,18 +353,64 @@ bool UUIManager::HasCursorOverWindowContent() const
 	return FindBlockingWidget() != nullptr;
 }
 
+// Geometry walk (see FindBlockingWidget): any Visible widget under the cursor
+// blocks, including passive Border/Image/backgrounds. SelfHitTestInvisible
+// containers (incl. HUD instance wrappers) are transparent to this walk.
+bool UUIManager::DoesWidgetTreeHaveHoveredChild(UWidget* Widget, const FVector2f& MousePos)
+{
+	if (!Widget || !Widget->IsVisible()) return false;
+
+	// Only EVisibility::Visible widgets can block — SelfHitTestInvisible pass through
+	if (Widget->GetVisibility() == ESlateVisibility::Visible &&
+		Widget->GetCachedGeometry().IsUnderLocation(FVector2D(MousePos)))
+		return true;
+
+	// Traverse into UUserWidget's widget tree (InventoryWidget, DialogueWidget, etc.)
+	if (UUserWidget* UserW = Cast<UUserWidget>(Widget))
+	{
+		if (UserW->WidgetTree && UserW->WidgetTree->RootWidget)
+		{
+			if (DoesWidgetTreeHaveHoveredChild(UserW->WidgetTree->RootWidget, MousePos))
+				return true;
+		}
+	}
+
+	// Traverse panel children (CanvasPanel, VerticalBox, etc.)
+	if (UPanelWidget* Panel = Cast<UPanelWidget>(Widget))
+	{
+		for (int32 i = 0; i < Panel->GetChildrenCount(); ++i)
+		{
+			if (DoesWidgetTreeHaveHoveredChild(Panel->GetChildAt(i), MousePos))
+				return true;
+		}
+	}
+
+	// Traverse single-child content (Border, SizeBox, Button, etc.)
+	if (UContentWidget* Content = Cast<UContentWidget>(Widget))
+	{
+		if (DoesWidgetTreeHaveHoveredChild(Content->GetContent(), MousePos))
+			return true;
+	}
+	return false;
+}
+
 const UWidget* UUIManager::FindBlockingWidget() const
 {
-	// Slate truth: UWidget::IsHovered reflects the real hit test (visibility,
-	// hit-testability, clipping, z-order). No parallel geometry walk — the old
-	// DoesWidgetTreeHaveHoveredChild could disagree with Slate.
-	auto Hovered = [](const UWidget* W) -> const UWidget*
+	if (!FSlateApplication::IsInitialized()) return nullptr;
+	const FVector2f MousePos = FSlateApplication::Get().GetCursorPos();
+
+	// Geometry walk (not Slate IsHovered): passive visuals (Border, Image,
+	// backgrounds) never get a hover flag but DO eat clicks — and the camera
+	// must stop everywhere a click would be consumed. Instance wrappers are
+	// SelfHitTestInvisible, so fullscreen roots pass through here.
+	auto Hit = [&MousePos = MousePos](const UWidget* W) -> const UWidget*
 	{
-		return (W && W->IsHovered()) ? W : nullptr;
+		UWidget* Mutable = const_cast<UWidget*>(W);
+		return DoesWidgetTreeHaveHoveredChild(Mutable, MousePos) ? W : nullptr;
 	};
-	auto Flagged = [&Hovered](bool bFlag, const UWidget* W) -> const UWidget*
+	auto Flagged = [&Hit](bool bFlag, const UWidget* W) -> const UWidget*
 	{
-		return bFlag ? Hovered(W) : nullptr;
+		return (bFlag && W) ? Hit(W) : nullptr;
 	};
 
 	// Panel windows (flag-gated).
@@ -385,19 +431,19 @@ const UWidget* UUIManager::FindBlockingWidget() const
 		Flagged(bReputationVisible, ReputationWidget),
 		Flagged(bEmoteListVisible, EmoteListWidget),
 		// Always-on HUD roots + dialogs (their instances are
-		// SelfHitTestInvisible: only genuinely interactive content hovers).
-		Hovered(ChatWidget),
-		Hovered(CombatLogWidget),
-		Hovered(PlayerInterfaceWidget),
-		Hovered(QuestTrackerWidget),
-		Hovered(TradeInviteWidget),
-		Hovered(PlayerContextMenu),
-		Hovered(PlayerInspectWidget),
-		Hovered(GameMenuWidget),
-		Hovered(GameMenuBarWidget),
-		Hovered(GameSettingsWidget),
-		Hovered(KeybindWidget),
-		Hovered(DeathScreenWidget),
+		// SelfHitTestInvisible: only genuinely Visible content matches).
+		Hit(ChatWidget),
+		Hit(CombatLogWidget),
+		Hit(PlayerInterfaceWidget),
+		Hit(QuestTrackerWidget),
+		Hit(TradeInviteWidget),
+		Hit(PlayerContextMenu),
+		Hit(PlayerInspectWidget),
+		Hit(GameMenuWidget),
+		Hit(GameMenuBarWidget),
+		Hit(GameSettingsWidget),
+		Hit(KeybindWidget),
+		Hit(DeathScreenWidget),
 	};
 	for (const UWidget* W : Roots)
 	{

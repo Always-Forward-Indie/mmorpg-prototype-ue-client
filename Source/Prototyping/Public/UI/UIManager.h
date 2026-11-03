@@ -911,8 +911,11 @@ private:
 	UCombatScreenFlashWidget* CombatScreenFlashWidget = nullptr;
 
 
-	/** First registry widget under the cursor (nullptr = world). Drives HasCursorOverWindowContent. */
+	/** First blocking widget under the cursor (nullptr = world). Drives HasCursorOverWindowContent. */
 	const UWidget* FindBlockingWidget() const;
+
+	/** Recursively checks if any child of Widget is under MousePos and Visible. */
+	static bool DoesWidgetTreeHaveHoveredChild(UWidget* Widget, const FVector2f& MousePos);
 
 	/** Dev diagnostic: logs WHO the registry sees (+ Slate's own hover chain). Throttled. */
 	void LogHoverBlocker(const UWidget* Blocker) const;

@@ -118,7 +118,8 @@ void UPlayerInspectWidget::ShowInspect(const FPlayerInspectData& Data)
 		Empty->SetColorAndOpacity(FSlateColor(FLinearColor(0.6f, 0.6f, 0.6f)));
 		GearBox->AddChild(Empty);
 	}
-	SetVisibility(ESlateVisibility::Visible);
+	// Instance wrapper must never eat hits (window sits above HUD).
+	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 }
 
 void UPlayerInspectWidget::HideInspect()
@@ -128,7 +129,7 @@ void UPlayerInspectWidget::HideInspect()
 
 bool UPlayerInspectWidget::IsInspectOpen() const
 {
-	return GetVisibility() == ESlateVisibility::Visible;
+	return IsVisible();
 }
 
 void UPlayerInspectWidget::ClearGear()

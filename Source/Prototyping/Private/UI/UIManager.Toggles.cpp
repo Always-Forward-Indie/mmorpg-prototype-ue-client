@@ -244,6 +244,8 @@ void UUIManager::ToggleKeybindWindow()
 		if (KeybindWidget)
 		{
 			KeybindWidget->AddToViewport(100);
+			// Instance wrapper must never eat hits (standalone window above HUD).
+			KeybindWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 			KeybindWidget->BindToPlayer(Local, Keybinds);
 		}
 	}
@@ -253,7 +255,8 @@ void UUIManager::ToggleKeybindWindow()
 	else
 	{
 		KeybindWidget->RefreshList();
-		KeybindWidget->SetVisibility(ESlateVisibility::Visible);
+		// Instance wrapper stays non-hit-testable (see creation above).
+		KeybindWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	}
 	UpdateCursorAndInputMode();
 }

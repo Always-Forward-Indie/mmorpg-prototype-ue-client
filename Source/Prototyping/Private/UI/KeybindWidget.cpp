@@ -137,7 +137,7 @@ void UKeybindWidget::CancelCapture()
 
 bool UKeybindWidget::IsKeybindsOpen() const
 {
-	return GetVisibility() == ESlateVisibility::Visible;
+	return IsVisible();
 }
 
 void UKeybindWidget::ClearRows()

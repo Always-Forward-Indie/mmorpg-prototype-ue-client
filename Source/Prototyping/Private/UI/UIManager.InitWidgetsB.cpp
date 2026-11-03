@@ -230,6 +230,8 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 				if (ChatWidget)
 				{
 					ChatWidget->AddToViewport(15); // Low Z-order, always visible as HUD overlay
+					// Instance wrapper must never eat hits: only its Visible children do.
+					ChatWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 					ChatWidget->InitializeChatWidget(ChatMgr);
 					ChatWidget->OnChatSenderClicked.AddDynamic(this, &UUIManager::HandleChatSenderClicked);
 					UE_LOG(LogGameplay, Verbose, TEXT("UIManager: ChatWidget created and bound to ChatManager"));
@@ -260,6 +262,8 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 				if (CombatLogWidget)
 				{
 					CombatLogWidget->AddToViewport(14); // Just under chat (15)
+					// Instance wrapper must never eat hits: only its Visible children do.
+					CombatLogWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 					CombatLogWidget->BindToManager(LogMgr);
 					// Class source, replayed history size, final visibility.
 					UE_LOG(LogGameplay, Verbose, TEXT("UIManager: CombatLogWidget created (%s), bound, history=%d, vis=%d"),

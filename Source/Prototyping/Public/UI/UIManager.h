@@ -910,8 +910,6 @@ private:
 	UPROPERTY()
 	UCombatScreenFlashWidget* CombatScreenFlashWidget = nullptr;
 
-	/** Deepest Visible widget under the cursor (geometry walk). */
-	static const UWidget* FindDeepestHoveredChild(UWidget* Widget, const FVector2f& MousePos);
 
 	/** First registry widget under the cursor (nullptr = world). Drives HasCursorOverWindowContent. */
 	const UWidget* FindBlockingWidget() const;

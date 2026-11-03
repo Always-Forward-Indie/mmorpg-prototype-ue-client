@@ -164,7 +164,8 @@ void UTradeInviteWidget::ShowInvite(const FString& FromName)
 			FText::FromString(FromName.IsEmpty() ? TEXT("?") : FromName)));
 	InviteExpiresAt = GetWorld() ? GetWorld()->GetTimeSeconds() + InviteTimeoutSec : 0.0;
 	bInviteOpen = true;
-	SetVisibility(ESlateVisibility::Visible);
+	// Instance wrapper must never eat hits (dialog sits above HUD).
+	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 }
 
 void UTradeInviteWidget::HideInvite()

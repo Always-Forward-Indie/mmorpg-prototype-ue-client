@@ -74,7 +74,8 @@ void UPlayerContextMenuWidget::ShowForPlayer(int32 InCharacterId, const FString&
 
 	const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
 	SetPositionInViewport(ScreenPosition / Scale, false);
-	SetVisibility(ESlateVisibility::Visible);
+	// Instance wrapper must never eat hits (menu sits above HUD, at cursor).
+	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 }
 
 void UPlayerContextMenuWidget::HideMenu()
@@ -85,7 +86,7 @@ void UPlayerContextMenuWidget::HideMenu()
 
 bool UPlayerContextMenuWidget::IsMenuOpen() const
 {
-	return GetVisibility() == ESlateVisibility::Visible;
+	return IsVisible();
 }
 
 void UPlayerContextMenuWidget::RebuildRows(const FString& DisplayName, bool bCanTrade, bool bCanInspect)

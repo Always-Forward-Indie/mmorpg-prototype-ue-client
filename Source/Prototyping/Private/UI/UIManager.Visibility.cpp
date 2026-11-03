@@ -355,17 +355,16 @@ bool UUIManager::HasCursorOverWindowContent() const
 
 const UWidget* UUIManager::FindBlockingWidget() const
 {
-	if (!FSlateApplication::IsInitialized()) return nullptr;
-	const FVector2f MousePos = FSlateApplication::Get().GetCursorPos();
-
-	auto Hit = [&MousePos](const UWidget* W) -> const UWidget*
+	// Slate truth: UWidget::IsHovered reflects the real hit test (visibility,
+	// hit-testability, clipping, z-order). No parallel geometry walk — the old
+	// DoesWidgetTreeHaveHoveredChild could disagree with Slate.
+	auto Hovered = [](const UWidget* W) -> const UWidget*
 	{
-		UWidget* Mutable = const_cast<UWidget*>(W);
-		return FindDeepestHoveredChild(Mutable, MousePos);
+		return (W && W->IsHovered()) ? W : nullptr;
 	};
-	auto Flagged = [&Hit](bool bFlag, const UWidget* W) -> const UWidget*
+	auto Flagged = [&Hovered](bool bFlag, const UWidget* W) -> const UWidget*
 	{
-		return (bFlag && W) ? Hit(W) : nullptr;
+		return bFlag ? Hovered(W) : nullptr;
 	};
 
 	// Panel windows (flag-gated).
@@ -385,19 +384,20 @@ const UWidget* UUIManager::FindBlockingWidget() const
 		Flagged(bTitlesVisible, TitlesWidget),
 		Flagged(bReputationVisible, ReputationWidget),
 		Flagged(bEmoteListVisible, EmoteListWidget),
-		// Always-on HUD roots + dialogs (widget-visibility gated).
-		Hit(ChatWidget),
-		Hit(CombatLogWidget),
-		Hit(PlayerInterfaceWidget),
-		Hit(QuestTrackerWidget),
-		Hit(TradeInviteWidget),
-		Hit(PlayerContextMenu),
-		Hit(PlayerInspectWidget),
-		Hit(GameMenuWidget),
-		Hit(GameMenuBarWidget),
-		Hit(GameSettingsWidget),
-		Hit(KeybindWidget),
-		Hit(DeathScreenWidget),
+		// Always-on HUD roots + dialogs (their instances are
+		// SelfHitTestInvisible: only genuinely interactive content hovers).
+		Hovered(ChatWidget),
+		Hovered(CombatLogWidget),
+		Hovered(PlayerInterfaceWidget),
+		Hovered(QuestTrackerWidget),
+		Hovered(TradeInviteWidget),
+		Hovered(PlayerContextMenu),
+		Hovered(PlayerInspectWidget),
+		Hovered(GameMenuWidget),
+		Hovered(GameMenuBarWidget),
+		Hovered(GameSettingsWidget),
+		Hovered(KeybindWidget),
+		Hovered(DeathScreenWidget),
 	};
 	for (const UWidget* W : Roots)
 	{
@@ -482,46 +482,6 @@ void UUIManager::LogHoverBlocker(const UWidget* Blocker) const
 	Accumulate(KeybindWidget);
 	Accumulate(DeathScreenWidget);
 	UE_LOG(LogGameplay, Warning, TEXT("UIHover: registry=%s slate=[%s]"), *Key, *SlateHits);
-}
-
-// Deepest Visible widget under the cursor (geometry walk). Returns the most
-// specific match so the hover log names the actual blocker, not the root.
-const UWidget* UUIManager::FindDeepestHoveredChild(UWidget* Widget, const FVector2f& MousePos)
-{
-	if (!Widget || !Widget->IsVisible()) return nullptr;
-
-	const UWidget* Found = nullptr;
-	if (Widget->GetVisibility() == ESlateVisibility::Visible &&
-		Widget->GetCachedGeometry().IsUnderLocation(FVector2D(MousePos)))
-		Found = Widget;
-
-	// Traverse into UUserWidget's widget tree (InventoryWidget, DialogueWidget, etc.)
-	if (UUserWidget* UserW = Cast<UUserWidget>(Widget))
-	{
-		if (UserW->WidgetTree && UserW->WidgetTree->RootWidget)
-		{
-			if (const UWidget* Hit = FindDeepestHoveredChild(UserW->WidgetTree->RootWidget, MousePos))
-				Found = Hit;
-		}
-	}
-
-	// Traverse panel children (CanvasPanel, VerticalBox, etc.)
-	if (UPanelWidget* Panel = Cast<UPanelWidget>(Widget))
-	{
-		for (int32 i = 0; i < Panel->GetChildrenCount(); ++i)
-		{
-			if (const UWidget* Hit = FindDeepestHoveredChild(Panel->GetChildAt(i), MousePos))
-				Found = Hit;
-		}
-	}
-
-	// Traverse single-child content (Border, SizeBox, Button, etc.)
-	if (UContentWidget* Content = Cast<UContentWidget>(Widget))
-	{
-		if (const UWidget* Hit = FindDeepestHoveredChild(Content->GetContent(), MousePos))
-			Found = Hit;
-	}
-	return Found;
 }
 
 int32 UUIManager::GetActiveInteractionNpcId() const

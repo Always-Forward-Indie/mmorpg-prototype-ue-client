@@ -151,6 +151,9 @@ void UUIManager::CreatePlayerInterfaceWidget()
 
 	// Add to viewport with appropriate Z-Order
 	PlayerInterfaceWidget->AddToViewport(10);
+	// Instance wrapper must never eat hits (HUD sits under everything
+	// interactive); only its Visible children do.
+	PlayerInterfaceWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 	// Subscribe to the widget's own ready signal.
 	// PlayerInterfaceWidget::NativeTick fires OnPlayerInterfaceReady on the first

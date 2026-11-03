@@ -141,6 +141,8 @@ void UUIManager::InitializeDialogueAndQuestWidgets(UDialogueManager* InDialogueM
 		if (QuestTrackerWidget)
 		{
 			QuestTrackerWidget->AddToViewport(50); // Medium Z-order for HUD element
+			// Instance wrapper must never eat hits: only its Visible children do.
+			QuestTrackerWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 			QuestTrackerWidget->BindToQuestManager(InQuestManager);
 			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: QuestTrackerWidget created and bound"));
 		}
@@ -262,6 +264,8 @@ void UUIManager::InitializeItemSystemWidgets(UEquipmentManager* InEquipmentManag
 		if (TradeInviteWidget)
 		{
 			TradeInviteWidget->AddToViewport(96);
+			// Instance wrapper must never eat hits: only its Visible children do.
+			TradeInviteWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 			TradeInviteWidget->BindToTradeManager(InTradeManager);
 			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: TradeInviteWidget created and bound"));
 		}

@@ -81,7 +81,22 @@ void UTradeWidget::HandleTradeDeclined(const FTradeDeclinedData& Data)
 
 void UTradeWidget::HandleTradeCancelled(const FTradeCancelledData& Data)
 {
-    UE_LOG(LogGameplay, Warning, TEXT("TradeWidget: Trade cancelled � %s"), *Data.reason);
+    // Foreign echoes (e.g. already_in_trade on a second tradeRequest while
+    // busy) carry no/foreign session id -- toast only, the live session and
+    // its window stay untouched.
+    if (Data.sessionId != CurrentState.sessionId)
+    {
+        FString Body = Data.reason;
+        if (Body.Equals(TEXT("already_in_trade"), ESearchCase::IgnoreCase))
+            Body = TEXT("You are already in a trade.");
+        else if (Body.Equals(TEXT("target_busy"), ESearchCase::IgnoreCase))
+            Body = TEXT("That player is already trading.");
+        UE_LOG(LogGameplay, Warning, TEXT("TradeWidget: foreign cancel echo ignored (%s)"), *Data.reason);
+        if (!Body.IsEmpty())
+            ShowTradeHint(TEXT("Trade busy"), Body);
+        return;
+    }
+    UE_LOG(LogGameplay, Warning, TEXT("TradeWidget: Trade cancelled"));
     if (!Data.reason.IsEmpty())
         ShowTradeHint(TEXT("Trade cancelled"), Data.reason);
     bOwnOfferPending = false;

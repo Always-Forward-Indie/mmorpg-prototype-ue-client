@@ -264,8 +264,8 @@ void UUIManager::InitializeItemSystemWidgets(UEquipmentManager* InEquipmentManag
 		if (TradeInviteWidget)
 		{
 			TradeInviteWidget->AddToViewport(96);
-			// Instance wrapper must never eat hits: only its Visible children do.
-			TradeInviteWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+			// Stays Collapsed (see NativeConstruct) until a real invite arrives —
+			// ShowInvite sets SelfHitTestInvisible then so only children hit-test.
 			TradeInviteWidget->BindToTradeManager(InTradeManager);
 			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: TradeInviteWidget created and bound"));
 		}

@@ -1,5 +1,6 @@
 #include "UI/PlayerInspectWidget.h"
 #include "Prototyping.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/SizeBox.h"
 #include "Components/VerticalBox.h"
@@ -130,6 +131,64 @@ void UPlayerInspectWidget::HideInspect()
 bool UPlayerInspectWidget::IsInspectOpen() const
 {
 	return IsVisible();
+}
+
+FReply UPlayerInspectWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	if (InMouseEvent.GetEffectingButton() != EKeys::LeftMouseButton || !DragHandle)
+		return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+	// Drag only from the handle; everywhere else behaves as before.
+	const FVector2D Local = DragHandle->GetCachedGeometry().AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());
+	const FVector2D Size = DragHandle->GetCachedGeometry().GetLocalSize();
+	const bool bOnHandle = Local.X >= 0.f && Local.Y >= 0.f && Local.X <= Size.X && Local.Y <= Size.Y;
+	if (!bOnHandle)
+		return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+	if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+	{
+		// Seed from the live geometry so BP-anchored placement is preserved.
+		const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
+		const FVector2D AbsPos = GetCachedGeometry().GetAbsolutePosition();
+		DragOffset = InMouseEvent.GetScreenSpacePosition() / Scale
+			- FVector2D(AbsPos.X / Scale, AbsPos.Y / Scale);
+		bDragging = true;
+		if (TSharedPtr<SWidget> Slate = GetCachedWidget())
+			return FReply::Handled().CaptureMouse(Slate.ToSharedRef());
+		return FReply::Handled();
+	}
+	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+}
+
+FReply UPlayerInspectWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	if (bDragging && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+	{
+		bDragging = false;
+		if (TSharedPtr<SWidget> Slate = GetCachedWidget())
+			return FReply::Handled().ReleaseMouseCapture();
+		return FReply::Handled();
+	}
+	return Super::NativeOnMouseButtonUp(InGeometry, InMouseEvent);
+}
+
+FReply UPlayerInspectWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	if (bDragging) { UpdateWindowDragPosition(InMouseEvent.GetScreenSpacePosition()); return FReply::Handled(); }
+	return Super::NativeOnMouseMove(InGeometry, InMouseEvent);
+}
+
+void UPlayerInspectWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPos)
+{
+	if (!GetWorld() || !GetWorld()->GetFirstPlayerController()) return;
+	int32 W = 0, H = 0;
+	GetWorld()->GetFirstPlayerController()->GetViewportSize(W, H);
+	const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
+	const FVector2D VP = FVector2D(W, H) / Scale;
+	FVector2D Size = GetDesiredSize();
+	if (Size.IsZero()) Size = FVector2D(340.f, 420.f);
+	const FVector2D Raw = ScreenCursorPos / Scale - DragOffset;
+	FVector2D Pos(FMath::Clamp(Raw.X, 0.f, FMath::Max(0.f, VP.X - Size.X)),
+		FMath::Clamp(Raw.Y, 0.f, FMath::Max(0.f, VP.Y - Size.Y)));
+	SetPositionInViewport(Pos, false);
 }
 
 void UPlayerInspectWidget::ClearGear()

@@ -26,6 +26,7 @@
  *   Inspect_Title_Text  UTextBlock  "Name [Level] Class" header
  *   Inspect_Gear_Box    UScrollBox  gear slots + attribute rows go here
  *   Inspect_Close_Btn   UButton     hides the window
+ *   DragHandle          UWidget     drag handle (optional — unbound = not draggable)
  * Gear slots reuse the vendor slot BP (InspectSlotClass, same asset as the
  * vendor shop uses); hover shows an item tooltip (InspectTooltipWidgetClass,
  * optional — without it the localized slot name still shows as text).
@@ -74,7 +75,20 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inspect")
 	TSubclassOf<UItemTooltipWidget> InspectTooltipWidgetClass;
 
+	/** Drag handle (any UWidget, typically the header). Unbound = not draggable. */
+	UPROPERTY(meta = (BindWidgetOptional)) UWidget* DragHandle = nullptr;
+
 	UFUNCTION() void HandleGearSlotHovered(int32 SlotIndex, bool bIsHovered);
+
+protected:
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	void UpdateWindowDragPosition(const FVector2D& ScreenCursorPos);
+
+private:
+	bool bDragging = false;
+	FVector2D DragOffset = FVector2D::ZeroVector;
 
 private:
 	class UScrollBox* GearBox = nullptr;

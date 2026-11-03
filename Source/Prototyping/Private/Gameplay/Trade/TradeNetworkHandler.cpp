@@ -68,8 +68,11 @@ else if (Packet.Status.Equals(TEXT("error"), ESearchCase::IgnoreCase))
     const FString Code = JSONParser::ResolveErrorCode(Packet.Root);
 // Per-offer rejections (e.g. invalid_offer_item on tradeOfferUpdate) are
 // soft: the session lives on, only the offending update is refused.
-// Everything else keeps the old cancel-with-reason path.
-if (Packet.EventType.Equals(TEXT("tradeOfferUpdate"), ESearchCase::IgnoreCase))
+// Request-echo errors (e.g. already_in_trade on tradeRequest) are soft too:
+// the live session (if any) is untouched, the requester just gets a toast.
+// Only tradeAccept echoes (e.g. no_pending_invite) keep the cancel path.
+if (Packet.EventType.Equals(TEXT("tradeOfferUpdate"), ESearchCase::IgnoreCase) ||
+    Packet.EventType.Equals(TEXT("tradeRequest"), ESearchCase::IgnoreCase))
 {
     FString Reason = Code;
     if (Reason.IsEmpty()) Reason = Packet.Message;

@@ -84,13 +84,17 @@ protected:
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 	void UpdateWindowDragPosition(const FVector2D& ScreenCursorPos);
 
 private:
 	bool bDragging = false;
 	FVector2D DragOffset = FVector2D::ZeroVector;
-
-private:
+	// Mirror of UTradeWidget: drag math runs on this tracked value, never on
+	// live geometry (cached geometry is a frame stale right after content
+	// rebuilds — that staleness is what made the window jump on grab).
+	FVector2D CurrentViewportPosition = FVector2D::ZeroVector;
+	bool bNeedPositionSync = false;
 	class UScrollBox* GearBox = nullptr;
 	class UTextBlock* HeaderText = nullptr;
 	class UVerticalBox* RootCol = nullptr;

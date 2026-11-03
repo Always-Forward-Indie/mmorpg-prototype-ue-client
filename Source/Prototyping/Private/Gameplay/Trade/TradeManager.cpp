@@ -206,9 +206,14 @@ void UTradeManager::OnTradeDeclined(const FTradeDeclinedData& Data)
 void UTradeManager::OnTradeCancelled(const FTradeCancelledData& Data)
 {
     LastCancelData = Data;
-    if (FTradeStatusRule::ShouldClearSession(TEXT("tradeCancelled")))
+    // Foreign echoes (cancel for a session that is not ours) must not wipe
+    // the live session — the widget decides visibility by the same rule.
+    if (Data.sessionId.IsEmpty() || Data.sessionId == CurrentSessionId)
     {
-        ClearSession();
+        if (FTradeStatusRule::ShouldClearSession(TEXT("tradeCancelled")))
+        {
+            ClearSession();
+        }
     }
     OnTradeCancelledDelegate.Broadcast(Data);
 }

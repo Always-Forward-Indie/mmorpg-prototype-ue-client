@@ -121,6 +121,7 @@ void UPlayerInspectWidget::ShowInspect(const FPlayerInspectData& Data)
 	}
 	// Instance wrapper must never eat hits (window sits above HUD).
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	bNeedPositionSync = true;
 }
 
 void UPlayerInspectWidget::HideInspect()
@@ -143,13 +144,12 @@ FReply UPlayerInspectWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry
 	const bool bOnHandle = Local.X >= 0.f && Local.Y >= 0.f && Local.X <= Size.X && Local.Y <= Size.Y;
 	if (!bOnHandle)
 		return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
-	if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+	if (GetWorld() && GetWorld()->GetFirstPlayerController())
 	{
-		// Seed from the live geometry so BP-anchored placement is preserved.
+		// Tracked position only (synced in NativeTick) -- never live
+		// geometry, which is a frame stale right after content rebuilds.
 		const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
-		const FVector2D AbsPos = GetCachedGeometry().GetAbsolutePosition();
-		DragOffset = InMouseEvent.GetScreenSpacePosition() / Scale
-			- FVector2D(AbsPos.X / Scale, AbsPos.Y / Scale);
+		DragOffset = InMouseEvent.GetScreenSpacePosition() / Scale - CurrentViewportPosition;
 		bDragging = true;
 		if (TSharedPtr<SWidget> Slate = GetCachedWidget())
 			return FReply::Handled().CaptureMouse(Slate.ToSharedRef());
@@ -174,6 +174,24 @@ FReply UPlayerInspectWidget::NativeOnMouseMove(const FGeometry& InGeometry, cons
 {
 	if (bDragging) { UpdateWindowDragPosition(InMouseEvent.GetScreenSpacePosition()); return FReply::Handled(); }
 	return Super::NativeOnMouseMove(InGeometry, InMouseEvent);
+}
+
+void UPlayerInspectWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+	// One-shot sync after show/content rebuild: take over positioning from
+	// here on (same contract as UTradeWidget -- BP anchors apply until the
+	// first drag, then the tracked position rules).
+	if (bNeedPositionSync && IsVisible())
+	{
+		const FVector2D Sz = GetCachedGeometry().GetAbsoluteSize();
+		if (Sz.X <= 0.f || Sz.Y <= 0.f)
+			return;
+		const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
+		const FVector2D AbsPos = GetCachedGeometry().GetAbsolutePosition();
+		CurrentViewportPosition = FVector2D(AbsPos.X / Scale, AbsPos.Y / Scale);
+		bNeedPositionSync = false;
+	}
 }
 
 void UPlayerInspectWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPos)

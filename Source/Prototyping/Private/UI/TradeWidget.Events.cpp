@@ -81,11 +81,12 @@ void UTradeWidget::HandleTradeDeclined(const FTradeDeclinedData& Data)
 
 void UTradeWidget::HandleTradeCancelled(const FTradeCancelledData& Data)
 {
-    // Foreign echoes (e.g. already_in_trade on a second tradeRequest while
-    // busy) carry no/foreign session id -- toast only, the live session and
-    // its window stay untouched.
-    if (Data.sessionId != CurrentState.sessionId)
+    const bool bHasSession = !CurrentState.sessionId.IsEmpty();
+    const bool bOurs = !Data.sessionId.IsEmpty() && Data.sessionId == CurrentState.sessionId;
+    if (bHasSession && !bOurs)
     {
+        // Foreign echo (already_in_trade / target_busy on a second request
+        // while busy): toast only, the live session and window stay open.
         FString Body = Data.reason;
         if (Body.Equals(TEXT("already_in_trade"), ESearchCase::IgnoreCase))
             Body = TEXT("You are already in a trade.");
@@ -94,6 +95,12 @@ void UTradeWidget::HandleTradeCancelled(const FTradeCancelledData& Data)
         UE_LOG(LogGameplay, Warning, TEXT("TradeWidget: foreign cancel echo ignored (%s)"), *Data.reason);
         if (!Body.IsEmpty())
             ShowTradeHint(TEXT("Trade busy"), Body);
+        return;
+    }
+    if (!bHasSession)
+    {
+        // Stray cancel with nothing open — log only, no toast spam.
+        UE_LOG(LogGameplay, Verbose, TEXT("TradeWidget: stray cancel ignored (%s)"), *Data.reason);
         return;
     }
     UE_LOG(LogGameplay, Warning, TEXT("TradeWidget: Trade cancelled"));
@@ -110,7 +117,12 @@ void UTradeWidget::HandleTradeOfferError(const FString& Reason)
     // Roll the pending offer back to the last server-accepted state so the
     // next send does not re-offer the same bad stack, and stay open.
     UE_LOG(LogGameplay, Warning, TEXT("TradeWidget: offer rejected (%s), rolling back"), *Reason);
-    ShowTradeHint(TEXT("Offer rejected"), Reason.IsEmpty() ? TEXT("invalid item") : Reason);
+    FString Body = Reason.IsEmpty() ? TEXT("invalid item") : Reason;
+    if (Body.Equals(TEXT("already_in_trade"), ESearchCase::IgnoreCase))
+        Body = TEXT("You are already in a trade.");
+    else if (Body.Equals(TEXT("target_busy"), ESearchCase::IgnoreCase))
+        Body = TEXT("That player is already trading.");
+    ShowTradeHint(TEXT("Offer rejected"), Body);
 
     PendingOffer.Reset();
     for (const FInventoryItemStruct& Accepted : CurrentState.myItems)

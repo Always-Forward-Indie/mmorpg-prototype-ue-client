@@ -361,7 +361,7 @@ const UWidget* UUIManager::FindBlockingWidget() const
 	auto Hit = [&MousePos](const UWidget* W) -> const UWidget*
 	{
 		UWidget* Mutable = const_cast<UWidget*>(W);
-		return DoesWidgetTreeHaveHoveredChild(Mutable, MousePos) ? W : nullptr;
+		return FindDeepestHoveredChild(Mutable, MousePos);
 	};
 	auto Flagged = [&Hit](bool bFlag, const UWidget* W) -> const UWidget*
 	{
@@ -417,7 +417,18 @@ void UUIManager::LogHoverBlocker(const UWidget* Blocker) const
 	// the registry sees under the cursor (registry hit + Slate's own hover).
 	// Throttled: on identity change, otherwise at most once per 5 s.
 	const double Now = FPlatformTime::Seconds();
-	FString Key = Blocker ? Blocker->GetPathName() : TEXT("<none>");
+	FString Key;
+	if (Blocker)
+	{
+		const FVector2D Sz = Blocker->GetCachedGeometry().GetAbsoluteSize();
+		Key = FString::Printf(TEXT("%s [%s] vis=%d %.0fx%.0f"),
+			*Blocker->GetPathName(), *Blocker->GetClass()->GetName(),
+			(int32)Blocker->GetVisibility(), Sz.X, Sz.Y);
+	}
+	else
+	{
+		Key = TEXT("<none>");
+	}
 	const bool bChanged = !Key.Equals(LastHoverBlockerKey);
 	if (!bChanged && Now - LastHoverBlockerTime < 5.0)
 		return;
@@ -473,22 +484,24 @@ void UUIManager::LogHoverBlocker(const UWidget* Blocker) const
 	UE_LOG(LogGameplay, Warning, TEXT("UIHover: registry=%s slate=[%s]"), *Key, *SlateHits);
 }
 
-bool UUIManager::DoesWidgetTreeHaveHoveredChild(UWidget* Widget, const FVector2f& MousePos)
+// Deepest Visible widget under the cursor (geometry walk). Returns the most
+// specific match so the hover log names the actual blocker, not the root.
+const UWidget* UUIManager::FindDeepestHoveredChild(UWidget* Widget, const FVector2f& MousePos)
 {
-	if (!Widget || !Widget->IsVisible()) return false;
+	if (!Widget || !Widget->IsVisible()) return nullptr;
 
-	// Only EVisibility::Visible widgets can block — SelfHitTestInvisible pass through
+	const UWidget* Found = nullptr;
 	if (Widget->GetVisibility() == ESlateVisibility::Visible &&
 		Widget->GetCachedGeometry().IsUnderLocation(FVector2D(MousePos)))
-		return true;
+		Found = Widget;
 
 	// Traverse into UUserWidget's widget tree (InventoryWidget, DialogueWidget, etc.)
 	if (UUserWidget* UserW = Cast<UUserWidget>(Widget))
 	{
 		if (UserW->WidgetTree && UserW->WidgetTree->RootWidget)
 		{
-			if (DoesWidgetTreeHaveHoveredChild(UserW->WidgetTree->RootWidget, MousePos))
-				return true;
+			if (const UWidget* Hit = FindDeepestHoveredChild(UserW->WidgetTree->RootWidget, MousePos))
+				Found = Hit;
 		}
 	}
 
@@ -497,11 +510,18 @@ bool UUIManager::DoesWidgetTreeHaveHoveredChild(UWidget* Widget, const FVector2f
 	{
 		for (int32 i = 0; i < Panel->GetChildrenCount(); ++i)
 		{
-			if (DoesWidgetTreeHaveHoveredChild(Panel->GetChildAt(i), MousePos))
-				return true;
+			if (const UWidget* Hit = FindDeepestHoveredChild(Panel->GetChildAt(i), MousePos))
+				Found = Hit;
 		}
 	}
-	return false;
+
+	// Traverse single-child content (Border, SizeBox, Button, etc.)
+	if (UContentWidget* Content = Cast<UContentWidget>(Widget))
+	{
+		if (const UWidget* Hit = FindDeepestHoveredChild(Content->GetContent(), MousePos))
+			Found = Hit;
+	}
+	return Found;
 }
 
 int32 UUIManager::GetActiveInteractionNpcId() const

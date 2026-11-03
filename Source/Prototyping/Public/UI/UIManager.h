@@ -910,8 +910,8 @@ private:
 	UPROPERTY()
 	UCombatScreenFlashWidget* CombatScreenFlashWidget = nullptr;
 
-	/** Recursively checks if any child of Widget is under MousePos and Visible. */
-	static bool DoesWidgetTreeHaveHoveredChild(UWidget* Widget, const FVector2f& MousePos);
+	/** Deepest Visible widget under the cursor (geometry walk). */
+	static const UWidget* FindDeepestHoveredChild(UWidget* Widget, const FVector2f& MousePos);
 
 	/** First registry widget under the cursor (nullptr = world). Drives HasCursorOverWindowContent. */
 	const UWidget* FindBlockingWidget() const;

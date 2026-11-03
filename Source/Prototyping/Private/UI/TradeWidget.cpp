@@ -155,20 +155,17 @@ void UTradeWidget::RefreshTradeState()
 
     if (My_Confirm_Text)
     {
-        const FText MyStatus = CurrentState.myConfirmed ? ConfirmedStr : PendingStr;
-        My_Confirm_Text->SetText(FText::Format(LOCTEXT("MyConfirmGoldFmt", "{0} · {1} g"),
-            MyStatus, FText::AsNumber(CurrentState.myGold)));
+        My_Confirm_Text->SetText(CurrentState.myConfirmed ? ConfirmedStr : PendingStr);
         My_Confirm_Text->SetColorAndOpacity(FSlateColor(CurrentState.myConfirmed ? ConfirmedCol : PendingCol));
     }
     if (Their_Confirm_Text)
     {
         const FText TheirStatus = CurrentState.theirConfirmed ? ConfirmedStr : PendingStr;
         if (!CurrentState.partnerName.IsEmpty())
-            Their_Confirm_Text->SetText(FText::Format(LOCTEXT("PartnerConfirmGoldFmt", "{0}: {1} · {2} g"),
-                FText::FromString(CurrentState.partnerName), TheirStatus, FText::AsNumber(CurrentState.theirGold)));
+            Their_Confirm_Text->SetText(FText::Format(LOCTEXT("PartnerConfirmFmt", "{0}: {1}"),
+                FText::FromString(CurrentState.partnerName), TheirStatus));
         else
-            Their_Confirm_Text->SetText(FText::Format(LOCTEXT("TheirConfirmGoldFmt", "{0} · {1} g"),
-                TheirStatus, FText::AsNumber(CurrentState.theirGold)));
+            Their_Confirm_Text->SetText(TheirStatus);
         Their_Confirm_Text->SetColorAndOpacity(FSlateColor(CurrentState.theirConfirmed ? ConfirmedCol : PendingCol));
     }
 

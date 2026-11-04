@@ -198,6 +198,13 @@ public:
     }
 
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "World Interaction")
+    bool GetDrawTargetTraceDebug() const
+    {
+        const UWorldInteractionConfig* Cfg = GetEffectiveConfig();
+        return Cfg ? Cfg->bDrawTargetTraceDebug : false;
+    }
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "World Interaction")
     float GetShoulderLerpSpeed() const
     {
         const UWorldInteractionConfig* Cfg = GetEffectiveConfig();

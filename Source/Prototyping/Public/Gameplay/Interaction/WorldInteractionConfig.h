@@ -255,6 +255,11 @@ public:
         meta = (ClampMin = "0.5", ClampMax = "20.0", EditCondition = "bApplyShoulderOffset"))
     float ShoulderLerpSpeed = 6.0f;
 
+    // ---- Targeting debug (verifying crosshair <-> trace alignment) ----
+    /** Draw the camera crosshair trace + hit marker every tick (red = no hit, green = mob/NPC). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|TargetingDebug")
+    bool bDrawTargetTraceDebug = false;
+
     // ─────────────────────────────────────────────────────────────────────────
     // PERFORMANCE
     // ─────────────────────────────────────────────────────────────────────────

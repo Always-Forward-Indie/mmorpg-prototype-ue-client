@@ -42,6 +42,7 @@
 #include "Gameplay/Interaction/CursorInteractionComponent.h"
 #include "Utils/NetCore/TargetingRule.h"
 #include "Utils/NetCore/InteractionModeRule.h"
+#include "DrawDebugHelpers.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Interaction/WorldInteractionConfig.h"
 #include "Gameplay/Bestiary/BestiaryNetworkHandler.h"
@@ -147,6 +148,13 @@ void ABasicPlayer::CheckForNPC()
     if (HitNPC && !HitNPC->IsNPCInteractable())
     {
         UE_LOG(LogGameplay, Warning, TEXT("BasicPlayer: CheckForNPC hit NPC '%s' but IsNPCInteractable() is false"), *HitNPC->GetNPCName());
+    }
+
+    if (CursorInteractionComponent && CursorInteractionComponent->GetDrawTargetTraceDebug())
+    {
+        ABasicNPC* DbgNPC = (HitNPC && IsValid(HitNPC)) ? HitNPC : nullptr;
+        DrawDebugLine(GetWorld(), CameraLocation, DbgNPC ? DbgNPC->GetActorLocation() : TraceEnd,
+            DbgNPC ? FColor::Green : FColor::Red, false, 0.0f, 0, 2.0f);
     }
 
     // Talk range == click range (GetInteractionRange). The crosshair trace
@@ -333,6 +341,16 @@ void ABasicPlayer::CheckForMOB()
         }
     }
 
+    // Debug: crosshair<->trace alignment (DA flag, off by default — zero cost when off).
+    if (CursorInteractionComponent && CursorInteractionComponent->GetDrawTargetTraceDebug())
+    {
+        ABasicMOB* DbgMob = (SoftTarget && IsValid(SoftTarget)) ? SoftTarget : nullptr;
+        DrawDebugLine(GetWorld(), CameraLocation, DbgMob ? DbgMob->GetActorLocation() : TraceEnd,
+            DbgMob ? FColor::Green : FColor::Red, false, 0.0f, 0, 2.0f);
+        if (DbgMob)
+            DrawDebugSphere(GetWorld(), DbgMob->GetActorLocation(), 30.0f, 12, FColor::Green, false, 0.0f, 0, 2.0f);
+    }
+
     // Stop attacking dead mob but keep the lock for harvesting.
     // Do NOT clear the target — other paths (DoAutoAttack, UpdateApproach,
     // TryCastSkillWithApproach) also preserve it for this purpose.
@@ -444,6 +462,14 @@ void ABasicPlayer::CheckForMOB()
         if (EffectiveTarget && IsValid(EffectiveTarget))
         {
             EffectiveTarget->MobHeadInfo->ShowWidget(ShouldShowPlate(EffectiveTarget));
+        }
+
+        if (CursorInteractionComponent && CursorInteractionComponent->GetDrawTargetTraceDebug())
+        {
+            const float D = EffectiveTarget && IsValid(EffectiveTarget)
+                ? FVector::Dist(CameraLocation, EffectiveTarget->GetActorLocation()) : -1.0f;
+            UE_LOG(LogGameplay, Warning, TEXT("[TargetTrace] soft-target -> %s (dist %.0f)"),
+                EffectiveTarget && IsValid(EffectiveTarget) ? *EffectiveTarget->GetMOBUId() : TEXT("<none>"), D);
         }
 
         PrevSoftTarget = EffectiveTarget;

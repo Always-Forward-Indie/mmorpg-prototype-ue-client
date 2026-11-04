@@ -39,6 +39,7 @@
 #include "Gameplay/Player/PlayerStatsNetworkHandler.h"
 #include "UI/PlayerStatsWidget.h"
 #include "Gameplay/Interaction/CursorInteractionComponent.h"
+#include "Utils/NetCore/InteractionModeRule.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Interaction/WorldInteractionConfig.h"
 #include "Gameplay/Bestiary/BestiaryNetworkHandler.h"
@@ -140,6 +141,17 @@ void ABasicPlayer::Tick(float DeltaTime)
         {
             CameraBoom->TargetArmLength = FMath::FInterpTo(
                 CameraBoom->TargetArmLength, DesiredZoom, DeltaTime, ZoomInterpSpeed);
+            // Shoulder offset (BDO-style): constant DA-driven offset, no mode pops.
+            // DA is the source of truth so it stays tunable live in PIE; BP stays zero.
+            if (CursorInteractionComponent)
+            {
+                const FVector ShoulderTarget = FInteractionModeRule::ResolveShoulderOffset(
+                    CursorInteractionComponent->GetApplyShoulderOffset(),
+                    CursorInteractionComponent->GetShoulderOffset());
+                CameraBoom->SocketOffset = FMath::VInterpTo(
+                    CameraBoom->SocketOffset, ShoulderTarget, DeltaTime,
+                    CursorInteractionComponent->GetShoulderLerpSpeed());
+            }
         }
 
         // Throttled check: close NPC windows if player has walked too far from the NPC.

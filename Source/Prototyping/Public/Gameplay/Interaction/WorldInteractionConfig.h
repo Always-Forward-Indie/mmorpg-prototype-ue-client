@@ -240,6 +240,21 @@ public:
         meta = (ClampMin = "0.9", ClampMax = "0.999"))
     float SoftTargetConeDot = 0.97f;
 
+    // ---- Shoulder camera (BDO-style: character off-center, crosshair over head) ----
+    /** When true the boom lerps toward ShoulderOffset every tick (DA is source of truth). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Camera")
+    bool bApplyShoulderOffset = true;
+
+    /** Boom socket offset: Y shifts the character sideways, Z lifts the aim point. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Camera",
+        meta = (EditCondition = "bApplyShoulderOffset"))
+    FVector ShoulderOffset = FVector(0.f, 90.f, 30.f);
+
+    /** Smoothing for the shoulder lerp (higher = snappier). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Camera",
+        meta = (ClampMin = "0.5", ClampMax = "20.0", EditCondition = "bApplyShoulderOffset"))
+    float ShoulderLerpSpeed = 6.0f;
+
     // ─────────────────────────────────────────────────────────────────────────
     // PERFORMANCE
     // ─────────────────────────────────────────────────────────────────────────

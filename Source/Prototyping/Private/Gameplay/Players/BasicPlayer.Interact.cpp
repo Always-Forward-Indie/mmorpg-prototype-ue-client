@@ -41,6 +41,7 @@
 #include "UI/PlayerStatsWidget.h"
 #include "Gameplay/Interaction/CursorInteractionComponent.h"
 #include "Utils/NetCore/TargetingRule.h"
+#include "Utils/NetCore/InteractionModeRule.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Interaction/WorldInteractionConfig.h"
 #include "Gameplay/Bestiary/BestiaryNetworkHandler.h"
@@ -401,15 +402,21 @@ void ABasicPlayer::CheckForMOB()
         }
     }
 
-    // Center-screen reticle: trace origin is the camera (TPS crosshair), range/cone
-    // come from DA_WorldInteractionConfig. Lock wins over soft-target.
+    // Center-screen reticle (BDO rule: cursor xor crosshair). The mouse cursor is
+    // the single source of truth: cursor visible = UI/cursor mode, reticle stays
+    // hidden; cursor hidden (RMB drag / no UI / no Alt) = combat mode, reticle shows
+    // the camera-crosshair trace state. Lock wins over soft-target.
     if (UIManager)
     {
+        const bool bCursorVisible = PC && PC->bShowMouseCursor;
+        const bool bDead = playerData.characterData.bIsDead;
         ECrosshairState Reticle = ECrosshairState::Neutral;
         if (LockedTarget && IsValid(LockedTarget))
             Reticle = LockedTarget->GetMOBIsDead() ? ECrosshairState::Dead : ECrosshairState::Locked;
         else if (SoftTarget && IsValid(SoftTarget))
             Reticle = SoftTarget->GetMOBIsDead() ? ECrosshairState::Dead : ECrosshairState::HoverMob;
+        if (!FInteractionModeRule::ShouldShowCrosshair(bCursorVisible, bDead))
+            Reticle = ECrosshairState::None;
         UIManager->SetTargetReticle(Reticle);
     }
 

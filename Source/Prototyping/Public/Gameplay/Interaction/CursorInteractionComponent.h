@@ -183,6 +183,27 @@ public:
         return Cfg ? Cfg->SoftTargetConeDot : 0.97f;
     }
 
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "World Interaction")
+    bool GetApplyShoulderOffset() const
+    {
+        const UWorldInteractionConfig* Cfg = GetEffectiveConfig();
+        return Cfg ? Cfg->bApplyShoulderOffset : false;
+    }
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "World Interaction")
+    FVector GetShoulderOffset() const
+    {
+        const UWorldInteractionConfig* Cfg = GetEffectiveConfig();
+        return Cfg ? Cfg->ShoulderOffset : FVector::ZeroVector;
+    }
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "World Interaction")
+    float GetShoulderLerpSpeed() const
+    {
+        const UWorldInteractionConfig* Cfg = GetEffectiveConfig();
+        return Cfg ? Cfg->ShoulderLerpSpeed : 6.0f;
+    }
+
     /** Returns the config asset (may be null if not assigned in BP defaults). */
     UWorldInteractionConfig* GetConfig() const { return Config; }
 

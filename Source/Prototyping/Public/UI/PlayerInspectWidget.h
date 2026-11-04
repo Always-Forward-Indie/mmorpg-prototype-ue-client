@@ -30,7 +30,8 @@
  * Gear slots reuse the vendor slot BP (InspectSlotClass, same asset as the
  * vendor shop uses); hover shows an item tooltip (InspectTooltipWidgetClass,
  * optional — without it the localized slot name still shows as text).
- * Placement comes from the BP root's own anchors; WindowSize/WindowPosition
+ * Placement: the window centers itself on show and tracks its position
+ * after that (same contract as UTradeWidget); WindowSize/WindowPosition
  * apply to the code fallback only.
  * With no subclass assigned the whole layout is built in C++ (headless-safe).
  */
@@ -84,7 +85,6 @@ protected:
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
-	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 	void UpdateWindowDragPosition(const FVector2D& ScreenCursorPos);
 
 private:
@@ -94,7 +94,7 @@ private:
 	// live geometry (cached geometry is a frame stale right after content
 	// rebuilds — that staleness is what made the window jump on grab).
 	FVector2D CurrentViewportPosition = FVector2D::ZeroVector;
-	bool bNeedPositionSync = false;
+	bool bPositionInitialized = false;
 	class UScrollBox* GearBox = nullptr;
 	class UTextBlock* HeaderText = nullptr;
 	class UVerticalBox* RootCol = nullptr;

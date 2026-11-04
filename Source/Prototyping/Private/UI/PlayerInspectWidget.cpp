@@ -119,9 +119,28 @@ void UPlayerInspectWidget::ShowInspect(const FPlayerInspectData& Data)
 		Empty->SetColorAndOpacity(FSlateColor(FLinearColor(0.6f, 0.6f, 0.6f)));
 		GearBox->AddChild(Empty);
 	}
+	// Take over positioning like UTradeWidget (anchors top-left, tracked
+	// position) — BP placement applies only until the first drag.
+	SetAnchorsInViewport(FAnchors(0.f, 0.f, 0.f, 0.f));
+	SetAlignmentInViewport(FVector2D::ZeroVector);
+	if (!bPositionInitialized)
+	{
+		if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+		{
+			int32 W = 0, H = 0;
+			PC->GetViewportSize(W, H);
+			const float InitScale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
+			ForceLayoutPrepass();
+			const FVector2D Size = GetDesiredSize();
+			CurrentViewportPosition = FVector2D(
+				FMath::Max(0.f, (FVector2D(W, H) / InitScale - Size).X * 0.5f),
+				FMath::Max(0.f, (FVector2D(W, H) / InitScale - Size).Y * 0.5f));
+			SetPositionInViewport(CurrentViewportPosition, false);
+		}
+		bPositionInitialized = true;
+	}
 	// Instance wrapper must never eat hits (window sits above HUD).
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	bNeedPositionSync = true;
 }
 
 void UPlayerInspectWidget::HideInspect()
@@ -146,8 +165,8 @@ FReply UPlayerInspectWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry
 		return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 	if (GetWorld() && GetWorld()->GetFirstPlayerController())
 	{
-		// Tracked position only (synced in NativeTick) -- never live
-		// geometry, which is a frame stale right after content rebuilds.
+		// Tracked position only — never live geometry (stale right after
+		// content rebuilds, which is what made the window jump on grab).
 		const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
 		DragOffset = InMouseEvent.GetScreenSpacePosition() / Scale - CurrentViewportPosition;
 		bDragging = true;
@@ -174,24 +193,6 @@ FReply UPlayerInspectWidget::NativeOnMouseMove(const FGeometry& InGeometry, cons
 {
 	if (bDragging) { UpdateWindowDragPosition(InMouseEvent.GetScreenSpacePosition()); return FReply::Handled(); }
 	return Super::NativeOnMouseMove(InGeometry, InMouseEvent);
-}
-
-void UPlayerInspectWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
-{
-	Super::NativeTick(MyGeometry, InDeltaTime);
-	// One-shot sync after show/content rebuild: take over positioning from
-	// here on (same contract as UTradeWidget -- BP anchors apply until the
-	// first drag, then the tracked position rules).
-	if (bNeedPositionSync && IsVisible())
-	{
-		const FVector2D Sz = GetCachedGeometry().GetAbsoluteSize();
-		if (Sz.X <= 0.f || Sz.Y <= 0.f)
-			return;
-		const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
-		const FVector2D AbsPos = GetCachedGeometry().GetAbsolutePosition();
-		CurrentViewportPosition = FVector2D(AbsPos.X / Scale, AbsPos.Y / Scale);
-		bNeedPositionSync = false;
-	}
 }
 
 void UPlayerInspectWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPos)

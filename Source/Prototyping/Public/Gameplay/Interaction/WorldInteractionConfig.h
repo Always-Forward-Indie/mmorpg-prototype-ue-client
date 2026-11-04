@@ -220,10 +220,19 @@ public:
     float ItemPickupRange = 180.f;
 
     // ---- Soft-target / nameplate trace (crosshair) ----
-    /** Camera trace length for the crosshair soft-target (mobs + NPCs). */
+    /** Gameplay capture range for the crosshair soft-target (mobs + NPCs),
+     *  measured FROM THE PLAYER. The ray itself is range + camera distance,
+     *  so zoom never shrinks the capture zone. */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction|Targeting",
         meta = (ClampMin = "100", Units = "cm"))
     float CrosshairTraceRange = 1500.f;
+
+    /** Beam thickness: sphere-sweep radius for the primary crosshair trace.
+     *  A thin ray misses small mobs at range; the sphere fixes that without
+     *  the wide-cone stickiness. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Targeting",
+        meta = (ClampMin = "0", ClampMax = "150", Units = "cm"))
+    float CrosshairTraceRadius = 30.f;
 
     /** Player-distance range for Tab cycling (no cone filter). */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction|Targeting",
@@ -235,10 +244,11 @@ public:
         meta = (ClampMin = "500", Units = "cm"))
     float MobHeadCullDistance = 2500.f;
 
-    /** Min dot(cameraForward, toTarget) to accept a soft-target (~0.97 = 14deg). */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction|Targeting",
+    /** Min dot(cameraForward, toTarget) for the cone assist (~0.985 = 10deg).
+     *  The primary sphere sweep does the precise work; the cone only assists. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Targeting",
         meta = (ClampMin = "0.9", ClampMax = "0.999"))
-    float SoftTargetConeDot = 0.97f;
+    float SoftTargetConeDot = 0.985f;
 
     // ---- Shoulder camera (BDO-style: character off-center, crosshair over head) ----
     /** When true the boom lerps toward ShoulderOffset every tick (DA is source of truth). */

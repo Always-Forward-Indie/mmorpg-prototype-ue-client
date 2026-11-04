@@ -180,7 +180,7 @@ public:
     float GetSoftTargetConeDot() const
     {
         const UWorldInteractionConfig* Cfg = GetEffectiveConfig();
-        return Cfg ? Cfg->SoftTargetConeDot : 0.97f;
+        return Cfg ? Cfg->SoftTargetConeDot : 0.985f;
     }
 
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "World Interaction")
@@ -202,6 +202,13 @@ public:
     {
         const UWorldInteractionConfig* Cfg = GetEffectiveConfig();
         return Cfg ? Cfg->bDrawTargetTraceDebug : false;
+    }
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "World Interaction")
+    float GetCrosshairTraceRadius() const
+    {
+        const UWorldInteractionConfig* Cfg = GetEffectiveConfig();
+        return Cfg ? Cfg->CrosshairTraceRadius : 30.f;
     }
 
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "World Interaction")

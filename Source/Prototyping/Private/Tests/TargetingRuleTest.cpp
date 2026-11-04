@@ -18,5 +18,10 @@ bool FTargetingRuleTest::RunTest(const FString& Parameters)
     TestFalse(TEXT("reject cone"), R::AcceptSoftTarget(1400.f, 1500.f, 0.90f));
     TestTrue(TEXT("cull"), R::ShouldCullHeadPlate(2600.f, 2500.f));
     TestFalse(TEXT("no cull"), R::ShouldCullHeadPlate(2400.f, 2500.f));
+    // Zoom-independent trace: gameplay range from the player + camera distance.
+    TestEqual(TEXT("far zoom keeps range"), R::EffectiveTraceLength(1200.f, 1500.f), 2700.f);
+    TestEqual(TEXT("close zoom keeps range"), R::EffectiveTraceLength(200.f, 1500.f), 1700.f);
+    TestEqual(TEXT("zero cam dist"), R::EffectiveTraceLength(0.f, 1500.f), 1500.f);
+    TestEqual(TEXT("clamped negative"), R::EffectiveTraceLength(-50.f, 1500.f), 1500.f);
     return true;
 }

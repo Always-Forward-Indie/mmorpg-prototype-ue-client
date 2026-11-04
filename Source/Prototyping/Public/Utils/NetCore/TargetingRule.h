@@ -29,8 +29,16 @@ struct PROTOTYPING_API FTargetingRule
 {
 	static bool IsInRange(float DistanceCm, float RangeCm) { return DistanceCm <= RangeCm; }
 
-	static bool IsInCone(float Dot) { return Dot > 0.97f; }
+	static bool IsInCone(float Dot) { return Dot > 0.985f; }
 	static bool IsInCone(float Dot, float MinDot) { return Dot > MinDot; }
+
+	/** Zoom-independent trace length: gameplay range is measured from the
+	 *  player, the ray itself travels camera->player plus that range, so
+	 *  scrolling the spring arm never shrinks the capture zone. */
+	static float EffectiveTraceLength(float CameraToPlayerCm, float GameplayRangeCm)
+	{
+		return FMath::Max(0.0f, CameraToPlayerCm) + FMath::Max(0.0f, GameplayRangeCm);
+	}
 
 	static bool AcceptSoftTarget(float DistanceCm, float RangeCm, float Dot, float MinDot = 0.97f)
 	{

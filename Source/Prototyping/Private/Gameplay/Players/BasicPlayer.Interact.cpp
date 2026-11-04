@@ -95,16 +95,23 @@ void ABasicPlayer::CheckForNPC()
     PC->GetPlayerViewPoint(CameraLocation, CameraRotation);
     const FVector CameraForward = CameraRotation.Vector();
 
-    // First try a line trace with ECC_Pawn to hit NPC capsules directly
-    const float TraceDistance = CursorInteractionComponent ? CursorInteractionComponent->GetCrosshairTraceRange() : 1500.0f;
-    const float ConeDot = CursorInteractionComponent ? CursorInteractionComponent->GetSoftTargetConeDot() : 0.97f;
-    FVector TraceEnd = CameraLocation + CameraForward * TraceDistance;
+    // Zoom-independent capture: gameplay range from the player, ray travels
+    // camera->player plus that range. Primary is a sphere sweep (beam thickness).
+    const float GameplayRange = CursorInteractionComponent ? CursorInteractionComponent->GetCrosshairTraceRange() : 1500.0f;
+    const float ConeDot = CursorInteractionComponent ? CursorInteractionComponent->GetSoftTargetConeDot() : 0.985f;
+    const float TraceRadius = CursorInteractionComponent ? CursorInteractionComponent->GetCrosshairTraceRadius() : 30.0f;
+    const float CameraToPlayer = FVector::Dist(CameraLocation, GetActorLocation());
+    const float TraceLen = FTargetingRule::EffectiveTraceLength(CameraToPlayer, GameplayRange);
+    FVector TraceEnd = CameraLocation + CameraForward * TraceLen;
 
     FCollisionQueryParams Params;
     Params.AddIgnoredActor(this);
 
     FHitResult Hit;
-    bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, CameraLocation, TraceEnd, ECC_Pawn, Params);
+    const bool bHit = TraceRadius > 0.0f
+        ? GetWorld()->SweepSingleByChannel(Hit, CameraLocation, TraceEnd, FQuat::Identity,
+            ECC_Pawn, FCollisionShape::MakeSphere(TraceRadius), Params)
+        : GetWorld()->LineTraceSingleByChannel(Hit, CameraLocation, TraceEnd, ECC_Pawn, Params);
     ABasicNPC* HitNPC = bHit ? Cast<ABasicNPC>(Hit.GetActor()) : nullptr;
 
     // Fallback: find the NPC closest to the camera crosshair within range
@@ -120,8 +127,8 @@ void ABasicPlayer::CheckForNPC()
             {
                 if (!IsValid(NPC)) continue;
 
-                const float Dist = FVector::Dist(CameraLocation, NPC->GetActorLocation());
-                if (!FTargetingRule::IsInRange(Dist, TraceDistance)) continue;
+                const float Dist = FVector::Dist(GetActorLocation(), NPC->GetActorLocation());
+                if (!FTargetingRule::IsInRange(Dist, GameplayRange)) continue;
 
                 const FVector ToNPC = (NPC->GetActorLocation() - CameraLocation).GetSafeNormal();
                 const float Dot = FVector::DotProduct(CameraForward, ToNPC);
@@ -286,18 +293,29 @@ void ABasicPlayer::CheckForMOB()
     PC->GetPlayerViewPoint(CameraLocation, CameraRotation);
     const FVector CameraForward = CameraRotation.Vector();
 
-    const float TraceDistance = CursorInteractionComponent ? CursorInteractionComponent->GetCrosshairTraceRange() : 1500.0f;
-    const float ConeDot = CursorInteractionComponent ? CursorInteractionComponent->GetSoftTargetConeDot() : 0.97f;
-    const FVector TraceEnd = CameraLocation + CameraForward * TraceDistance;
+    // Gameplay range is measured FROM THE PLAYER so zoom never shrinks capture;
+    // the ray itself travels camera->player plus that range (zoom-compensated).
+    const float GameplayRange = CursorInteractionComponent ? CursorInteractionComponent->GetCrosshairTraceRange() : 1500.0f;
+    const float ConeDot = CursorInteractionComponent ? CursorInteractionComponent->GetSoftTargetConeDot() : 0.985f;
+    const float TraceRadius = CursorInteractionComponent ? CursorInteractionComponent->GetCrosshairTraceRadius() : 30.0f;
+    const float CameraToPlayer = FVector::Dist(CameraLocation, GetActorLocation());
+    const float TraceLen = FTargetingRule::EffectiveTraceLength(CameraToPlayer, GameplayRange);
+    const FVector TraceEnd = CameraLocation + CameraForward * TraceLen;
 
     FCollisionQueryParams Params;
     Params.AddIgnoredActor(this);
 
     ABasicMOB* SoftTarget = nullptr;
 
-    // Primary: direct line trace against pawn capsules
+    // Primary: sphere sweep against pawn capsules (beam thickness from DA).
+    // A thin ray misses small mobs at range; the sphere fixes that without
+    // the wide-cone stickiness. Radius 0 falls back to a plain line trace.
     FHitResult Hit;
-    if (GetWorld()->LineTraceSingleByChannel(Hit, CameraLocation, TraceEnd, ECC_Pawn, Params))
+    const bool bPrimaryHit = TraceRadius > 0.0f
+        ? GetWorld()->SweepSingleByChannel(Hit, CameraLocation, TraceEnd, FQuat::Identity,
+            ECC_Pawn, FCollisionShape::MakeSphere(TraceRadius), Params)
+        : GetWorld()->LineTraceSingleByChannel(Hit, CameraLocation, TraceEnd, ECC_Pawn, Params);
+    if (bPrimaryHit)
     {
         ABasicMOB* Mob = Cast<ABasicMOB>(Hit.GetActor());
         if (Mob && !Mob->GetMOBIsDead())
@@ -306,19 +324,21 @@ void ABasicPlayer::CheckForMOB()
         }
     }
 
-    // Fallback: dot-product cone search (handles meshes that block ECC_Pawn poorly).
-    // Registry iteration, O(registered mobs) — no world scan.
+    // Fallback: dot-product cone assist (handles meshes that block ECC_Pawn poorly).
+    // Registry iteration, O(registered mobs) — no world scan. Distance and cone
+    // from DA; distance measured from the player (zoom-independent).
     if (!SoftTarget)
     {
         if (UMOBManager* MobMgr = MyGameInstance ? MyGameInstance->GetMOBManager() : nullptr)
         {
+            const FVector PlayerLoc = GetActorLocation();
             float BestDot = ConeDot; // crosshair cone from DA_WorldInteractionConfig
             MobMgr->ForEachMob([&](ABasicMOB* Mob)
             {
                 if (!Mob || Mob->GetMOBIsDead()) return;
 
-                const float Dist = FVector::Dist(CameraLocation, Mob->GetActorLocation());
-                if (!FTargetingRule::IsInRange(Dist, TraceDistance)) return;
+                const float Dist = FVector::Dist(PlayerLoc, Mob->GetActorLocation());
+                if (!FTargetingRule::IsInRange(Dist, GameplayRange)) return;
 
                 const FVector ToMob = (Mob->GetActorLocation() - CameraLocation).GetSafeNormal();
                 const float Dot = FVector::DotProduct(CameraForward, ToMob);

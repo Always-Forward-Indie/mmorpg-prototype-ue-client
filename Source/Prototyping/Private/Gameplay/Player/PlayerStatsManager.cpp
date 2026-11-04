@@ -64,8 +64,10 @@ void UPlayerStatsManager::ApplyStatsUpdate(const FPlayerStatsUpdateStruct& InSta
     // correctly removes effects that were stripped on the server (e.g. unequipping
     // a title, expiring a buff).
     //
-    // Partial packets (bHasEffects only, no attributes): merge by slug so a later
-    // partial update doesn't wipe effects from an earlier, more-complete snapshot.
+    // Partial packets (bHasEffects only, no attributes): merge by composite key
+    // (slug + attributeSlug + sourceType) so a later partial update doesn't wipe
+    // effects from an earlier, more-complete snapshot — and so that several
+    // per-attribute entries sharing one slug survive the merge.
     if (bHasAttributes)
     {
         CachedStats.activeEffects = InStats.activeEffects;
@@ -73,10 +75,14 @@ void UPlayerStatsManager::ApplyStatsUpdate(const FPlayerStatsUpdateStruct& InSta
     else if (bHasEffects)
     {
         TMap<FString, FActiveEffectEntry> Merged;
+        auto EffectKey = [](const FActiveEffectEntry& E) -> FString
+        {
+            return E.slug + TEXT("|") + E.attributeSlug + TEXT("|") + E.sourceType;
+        };
         for (const FActiveEffectEntry& E : CachedStats.activeEffects)
-            Merged.FindOrAdd(E.slug, E);
+            Merged.FindOrAdd(EffectKey(E), E);
         for (const FActiveEffectEntry& E : InStats.activeEffects)
-            Merged.FindOrAdd(E.slug) = E;
+            Merged.FindOrAdd(EffectKey(E)) = E;
         Merged.GenerateValueArray(CachedStats.activeEffects);
     }
 
@@ -102,9 +108,13 @@ void UPlayerStatsManager::ApplyStatsUpdate(const FPlayerStatsUpdateStruct& InSta
 
 void UPlayerStatsManager::ApplyActiveEffects(const TArray<FActiveEffectEntry>& InEffects)
 {
-    // Replace only the activeEffects slice; vitals/attributes come from stats_update
+    // Replace only the activeEffects slice; vitals/attributes come from stats_update.
+    // Broadcast both events: the dedicated one for effect-specific listeners and
+    // the full snapshot one so every HUD widget (which listens on OnStatsUpdated)
+    // converges even when effects arrive outside a stats_update packet.
     CachedStats.activeEffects = InEffects;
     OnActiveEffectsReceived.Broadcast(CachedStats.activeEffects);
+    OnStatsUpdated.Broadcast(CachedStats);
 
     UE_LOG(LogGameplay, Verbose, TEXT("PlayerStatsManager: ActiveEffects applied � %d effects"), InEffects.Num());
 }

@@ -23,7 +23,9 @@ bool FStatsUpdateContractTest::RunTest(const FString& Parameters)
         "\"health\":{\"current\":80,\"max\":100},\"mana\":{\"current\":10,\"max\":50},"
         "\"experience\":{\"current\":100,\"levelStart\":0,\"nextLevel\":1500,\"debt\":0},"
         "\"attributes\":[{\"slug\":\"str\",\"name\":\"Strength\",\"base\":10,\"effective\":12},\"oops\"],"
-        "\"activeEffects\":[{\"slug\":\"well_fed\",\"value\":5}],"
+        "\"activeEffects\":[{\"slug\":\"well_fed\",\"value\":5},"
+        "{\"slug\":\"title_first_hunter_physical_attack\",\"effectTypeSlug\":\"title_bonus\","
+        "\"attributeSlug\":\"physical_attack\",\"sourceType\":\"title\",\"value\":1,\"expiresAt\":0}],"
         "\"weight\":{\"current\":12.5,\"max\":100}}}"));
     TestEqual(TEXT("valid char"), Valid.characterId, 9001);
     TestEqual(TEXT("valid level"), Valid.level, 5);
@@ -39,8 +41,15 @@ bool FStatsUpdateContractTest::RunTest(const FString& Parameters)
         TestEqual(TEXT("attr base"), Valid.attributes[0].base, 10.0f);
         TestEqual(TEXT("attr eff"), Valid.attributes[0].effective, 12.0f);
     }
-    TestEqual(TEXT("one effect"), Valid.activeEffects.Num(), 1);
+    TestEqual(TEXT("one effect"), Valid.activeEffects.Num(), 2);
     TestEqual(TEXT("weight max"), Valid.weightMax, 100.0f);
+    if (Valid.activeEffects.Num() == 2)
+    {
+        TestEqual(TEXT("title slug"), Valid.activeEffects[1].slug, FString(TEXT("title_first_hunter_physical_attack")));
+        TestEqual(TEXT("title type"), Valid.activeEffects[1].effectTypeSlug, FString(TEXT("title_bonus")));
+        TestEqual(TEXT("title attr"), Valid.activeEffects[1].attributeSlug, FString(TEXT("physical_attack")));
+        TestEqual(TEXT("title source"), Valid.activeEffects[1].sourceType, FString(TEXT("title")));
+    }
 
     // Garbage: default + the parser's own error log.
     AddExpectedErrorPlain(TEXT("PlayerAttributeParser: Failed to parse JSON string"));

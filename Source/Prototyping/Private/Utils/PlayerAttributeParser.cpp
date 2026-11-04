@@ -117,11 +117,15 @@ FPlayerStatsUpdateStruct PlayerAttributeParser::DeserializePlayerStatsUpdate(con
                 FActiveEffectEntry Effect;
                     EffObj->TryGetStringField(TEXT("slug"), Effect.slug);
                     EffObj->TryGetStringField(TEXT("effectTypeSlug"), Effect.effectTypeSlug);
+                    EffObj->TryGetStringField(TEXT("effectType"), Effect.effectType);
                     EffObj->TryGetStringField(TEXT("attributeSlug"), Effect.attributeSlug);
+                    EffObj->TryGetStringField(TEXT("sourceType"), Effect.sourceType);
                 if (double TmpValue = 0.0; EffObj->TryGetNumberField(TEXT("value"), TmpValue))
                     Effect.value = static_cast<float>(TmpValue);
                 if (double TmpExpiresAt = 0.0; EffObj->TryGetNumberField(TEXT("expiresAt"), TmpExpiresAt))
                     Effect.expiresAt = static_cast<int64>(TmpExpiresAt);
+                EffObj->TryGetBoolField(TEXT("isPercentage"), Effect.bIsPercentage);
+                EffObj->TryGetBoolField(TEXT("isPermanent"), Effect.bIsPermanent);
                 StatsUpdate.activeEffects.Add(Effect);
             }
         }

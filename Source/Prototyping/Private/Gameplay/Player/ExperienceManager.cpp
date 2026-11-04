@@ -1,6 +1,7 @@
 #include "Gameplay/Player/ExperienceManager.h"
 #include "Prototyping.h"
 #include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "Networking/NetworkManager.h"
 #include "Services/TimeSyncService.h"
 #include "Engine/World.h"
@@ -286,6 +287,16 @@ void UExperienceManager::ProcessLevelUp(int32 CharacterId, int32 OldLevel, int32
 
     // Broadcast level up event
     OnLevelUp.Broadcast(OldLevel, NewLevel, NewTotalExperience);
+
+    // Level-up earcon for the local character only (remote level-ups are
+    // someone else's fanfare; the 3D entity voice still plays on their actor).
+    if (GameInstance && CharacterId > 0 && CharacterId == GameInstance->GetCurrentCharacterID())
+    {
+        if (GameInstance->AudioManager)
+        {
+            GameInstance->AudioManager->PlayUISound(EUISoundEvent::LevelUp);
+        }
+    }
 }
 
 void UExperienceManager::NotifyProgressionListeners(const FPlayerProgressionStruct& Progression, bool bLeveledUp, int32 OldLevel)

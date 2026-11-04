@@ -1,5 +1,6 @@
 #include "UI/ItemQuickBarWidget.h"
 #include "UI/ItemQuickSlotWidget.h"
+#include "Audio/AudioManager.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Items/ItemManager.h"
 #include "Data/ItemStruct.h"
@@ -48,6 +49,15 @@ void UItemQuickBarWidget::InitQuickBar(UInventoryManager* InInventoryManager, in
 
 	if (InventoryManager)
 		InventoryManager->OnItemCooldown.AddDynamic(this, &UItemQuickBarWidget::HandleItemCooldown);
+
+	// Global button sounds on freshly built slots (idempotent, null-safe).
+	if (UMyGameInstance* AudioGI = Cast<UMyGameInstance>(GetGameInstance()))
+	{
+		if (AudioGI->AudioManager && SlotsBox)
+		{
+			AudioGI->AudioManager->ApplyButtonSoundsToSubtree(SlotsBox);
+		}
+	}
 }
 
 void UItemQuickBarWidget::AssignItemToSlot(int32 SlotIndex, int32 ItemId, const FString& ItemSlug, int32 Quantity, const FString& IconPath)

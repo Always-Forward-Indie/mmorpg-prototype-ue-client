@@ -61,10 +61,25 @@
 4. Если поля пустые — используются глобальные звуки из `AudioManager` (UISound events).
 
 ### Настройка глобальных fallback-звуков
-В Blueprint `BP_AudioManager` (или DataAsset):
+В `DA_AudioConfig` → UI Sounds (единственное место маппинга, `BP_AudioManager` не используется):
 - `EUISoundEvent::SkillCooldownStart` → глобальный "скилл на кулдауне".
 - `EUISoundEvent::SkillReady` → глобальный "скилл готов".
 - `EUISoundEvent::SkillNotEnoughMana` → глобальный "не хватает маны".
+
+### Кнопки, окна и остальные UI-события (покрытие всех EUISoundEvent)
+Каждое значение `EUISoundEvent` обязано иметь эмиттер в коде — проверяет CI-гейт
+(`check_client_gates.py`, пункт 8c). Где что играет:
+- Кнопки (Click/Hover): `AudioManager::ApplyButtonSoundsToSubtree` — заполняет пустые
+  звуки в стилях всех `UButton` под корнем (дизайнерские звуки не трогает).
+  Вызывается из `UIManager::ApplyButtonSoundsToAllUI` (после инициализации UI и на
+  каждое открытие окна) + в динамических билдерах (инвентарь, скиллы, вендор,
+  трейд, диалоги, лут, меню). Новые списки с кнопками: добавить один вызов на
+  контейнер после построения строк.
+- Окна (Open/Close): `UIManager::UpdateCursorAndInputMode` по диффу маски видимости.
+- `ItemPickup` — `UItemManager::ProcessItemPickup`; `QuestAccepted/Completed` —
+  `UQuestManager` (accepted только при переходе в active, первый вход молчит);
+  `LevelUp` — `ExperienceManager::ProcessLevelUp` (только свой персонаж);
+  `ChatMessage` — `ChatManager::OnMessageReceived` (только чужие, без ошибок).
 
 ---
 

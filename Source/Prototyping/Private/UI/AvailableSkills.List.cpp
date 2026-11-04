@@ -2,6 +2,7 @@
 #include "UI/AvailableSkillsWidget.h"
 #include "Prototyping.h"
 #include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Components/ScrollBox.h"
@@ -77,6 +78,15 @@ void UAvailableSkillsWidget::PopulateSkillList(const TArray<FPlayerSkillData>& S
     UpdateSkillCountDisplay();
     UE_LOG(LogGameplay, Verbose, TEXT("AvailableSkillsWidget: Populated %d skills using %s layout"), 
         DisplayedSkillCount, bUseGridLayout ? TEXT("Grid") : TEXT("List"));
+
+    // Global button sounds on freshly built rows (idempotent, null-safe).
+    if (UMyGameInstance* AudioGI = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (AudioGI->AudioManager)
+        {
+            AudioGI->AudioManager->ApplyButtonSoundsToSubtree(Container);
+        }
+    }
 }
 
 void UAvailableSkillsWidget::ClearSkillList()

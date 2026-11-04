@@ -1,4 +1,6 @@
 #include "UI/EmoteListWidget.h"
+#include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "Gameplay/Emotes/EmoteManager.h"
 #include "Gameplay/Emotes/EmoteNetworkHandler.h"
 #include "Data/EmoteDefinitionTable.h"
@@ -189,6 +191,15 @@ void UEmoteListWidget::RebuildGrid(const FString& CategoryFilter)
         if (WrapSlot)
         {
             WrapSlot->SetPadding(FMargin(2.f));
+        }
+    }
+
+    // Global button sounds on freshly built rows (idempotent, null-safe).
+    if (UMyGameInstance* AudioGI = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (AudioGI->AudioManager)
+        {
+            AudioGI->AudioManager->ApplyButtonSoundsToSubtree(Emotes_WrapBox);
         }
     }
 }

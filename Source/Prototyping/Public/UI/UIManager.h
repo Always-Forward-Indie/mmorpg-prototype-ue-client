@@ -347,6 +347,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void UpdateCursorAndInputMode();
 
+	// Fill empty button click/hover sounds on every owned UI root (idempotent).
+	// Called after UI init and on every window-open transition so dynamically
+	// created rows (vendor/trade/dialogue/loot) sound right without BP edits.
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ApplyButtonSoundsToAllUI();
+
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "UI Manager")
 	bool ShouldShowCursor() const;
 
@@ -873,6 +879,11 @@ public:
 
 private:
 	void EnsureInspectWidget();
+
+	// Last window-visibility mask seen by UpdateCursorAndInputMode. A diff means
+	// a window opened/closed → WindowOpen/Close earcon + button-sound sweep.
+	// Alt-only toggles leave the mask unchanged (silent, by design).
+	uint32 LastWindowMaskForSound = 0;
 
 	// Shared menu construction/presentation for the actor and id paths.
 	// Callers own gating (CanOpenMenu) and LastSocialTarget* bookkeeping.

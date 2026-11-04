@@ -3,6 +3,7 @@
 #include "Gameplay/Quest/QuestManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "Gameplay/NPCs/NPCManager.h"
 #include "Gameplay/NPCs/BasicNPC.h"
 
@@ -47,6 +48,16 @@ void UQuestManager::OnQuestUpdated(const FQuestProgressData& Data)
 
     OnQuestUpdatedDelegate.Broadcast(Merged);
 
+    // Quest-accepted earcon: entering active from any other tracked state.
+    // First sightings (login/zone-in with an already-active quest) stay silent.
+    if (Existing && Existing->state != TEXT("active") && Merged.state == TEXT("active"))
+    {
+        if (GameInstance && GameInstance->AudioManager)
+        {
+            GameInstance->AudioManager->PlayUISound(EUISoundEvent::QuestAccepted);
+        }
+    }
+
     // Update NPC quest icons based on the new quest state
     if (!Data.questSlug.IsEmpty())
     {
@@ -75,6 +86,11 @@ void UQuestManager::OnQuestTurnedIn(const FQuestTurnedInData& Data)
 {
     UE_LOG(LogGameplay, Verbose, TEXT("QuestManager: Quest turned in � id=%d"), Data.questId);
     OnQuestTurnedInDelegate.Broadcast(Data);
+
+    if (GameInstance && GameInstance->AudioManager)
+    {
+        GameInstance->AudioManager->PlayUISound(EUISoundEvent::QuestCompleted);
+    }
 }
 
 void UQuestManager::OnExpReceived(const FExpReceivedData& Data)

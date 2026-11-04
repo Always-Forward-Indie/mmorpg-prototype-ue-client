@@ -10,6 +10,8 @@
 #include "AudioManager.generated.h"
 
 class UAudioConfigDataAsset;
+class UWidget;
+class UButton;
 
 // ---------------------------------------------------------------------------
 // How tracks inside a playlist are cycled
@@ -326,6 +328,25 @@ public:
 	 *  bypasses the mix. No-op on null. */
 	UFUNCTION(BlueprintCallable, Category = "Audio|UI Sounds")
 	void PlayUISoundAsset(USoundBase* Sound);
+
+	/** First mapped asset for an event, or null. Used by the global button-
+	 *  sound injection (instance styles) and CoreStyle default fill. */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Audio|UI Sounds")
+	USoundBase* FindUISound(EUISoundEvent Event) const;
+
+	/** Fill the shared CoreStyle "Button" default with the DA-mapped click/
+	 *  hover sounds (designer sounds in instance styles are never overridden).
+	 *  Covers code-created default buttons; BP-inline styles are handled by
+	 *  ApplyButtonSoundsToSubtree. Safe to call repeatedly. */
+	UFUNCTION(BlueprintCallable, Category = "Audio|UI Sounds")
+	void ApplyDefaultButtonSounds();
+
+	/** Fill empty click/hover sounds on every UButton under Root (recursive,
+	 *  crosses nested UserWidget trees). Idempotent: buttons with designer
+	 *  sounds are left alone. Call after UI init, on window-open transitions,
+	 *  and in dynamic row builders. */
+	UFUNCTION(BlueprintCallable, Category = "Audio|UI Sounds")
+	void ApplyButtonSoundsToSubtree(UWidget* Root);
 
 	// -----------------------------------------------------------------------
 	// Settings persistence

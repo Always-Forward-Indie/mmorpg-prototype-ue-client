@@ -243,6 +243,31 @@ def main() -> int:
             "audio gate: PlayUISound must warn on unmapped events "
             "(silence-by-default is banned)"
         )
+    # (c) every EUISoundEvent value must have at least one emitter
+    #     (a real EUISoundEvent::<Value> code reference outside the enum
+    #     declaration). A DA-mapped event with no emitter is silent by design —
+    #     exactly the dead ButtonClick/ButtonHover hole this gate closes.
+    if enum_block and values:
+        code_files = [p for p in list(src.rglob("*.cpp")) + list(src.rglob("*.h"))
+                      if p.resolve() != audio_mgr_h.resolve()]
+        emitter_hits: dict[str, int] = {v: 0 for v in values}
+        ref_re = re.compile(r"EUISoundEvent::(\w+)\b")
+        for path in code_files:
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+            text = "\n".join(line.split("//", 1)[0] for line in text.splitlines())
+            for hit in ref_re.findall(text):
+                if hit in emitter_hits:
+                    emitter_hits[hit] += 1
+        for value, count in sorted(emitter_hits.items()):
+            if count == 0:
+                failures.append(
+                    f"audio gate: EUISoundEvent::{value} has no emitter — "
+                    "map it in DA_AudioConfig AND play it in code, or delete the event"
+                )
 
     if failures:
         print("CLIENT GATES: FAIL")

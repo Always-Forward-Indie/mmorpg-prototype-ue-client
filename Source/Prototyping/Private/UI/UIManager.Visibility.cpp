@@ -154,6 +154,10 @@ void UUIManager::HandlePlayerInterfaceReady()
 		}
 	}
 
+	// Fill empty button click/hover sounds across the whole static UI tree.
+	// Dynamic rows created later are swept on window-open transitions.
+	ApplyButtonSoundsToAllUI();
+
 	UE_LOG(LogGameplay, Warning, TEXT("[LOADSEQ] HandlePlayerInterfaceReady: OnUIManagerInitialized broadcast"));
 }
 
@@ -299,6 +303,27 @@ void UUIManager::UpdateCursorAndInputMode()
 			PlayerController->SetInputMode(InputMode);
 
 			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: Cursor hidden - Game only mode"));
+		}
+	}
+
+	// Window open/close earcons: every visibility mutation funnels through here,
+	// so a mask diff catches all windows in one spot (Alt-only toggles: no diff,
+	// no sound). Opening a window also sweeps button sounds over the fresh rows.
+	const uint32 WindowMask = BuildVisibilityMask();
+	if (WindowMask != LastWindowMaskForSound)
+	{
+		const bool bOpened = (WindowMask & ~LastWindowMaskForSound) != 0;
+		LastWindowMaskForSound = WindowMask;
+		if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetWorld()->GetGameInstance()))
+		{
+			if (GI->AudioManager)
+			{
+				GI->AudioManager->PlayUISound(bOpened ? EUISoundEvent::WindowOpen : EUISoundEvent::WindowClose);
+			}
+		}
+		if (bOpened)
+		{
+			ApplyButtonSoundsToAllUI();
 		}
 	}
 

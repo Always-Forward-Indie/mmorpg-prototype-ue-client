@@ -1,5 +1,7 @@
 #include "UI/HarvestLootWidget.h"
 #include "Prototyping.h"
+#include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "Components/ScrollBox.h"
 #include "Components/WrapBox.h"
 #include "Components/WrapBoxSlot.h"
@@ -71,6 +73,15 @@ void UHarvestLootWidget::CreateLootItemWidgets()
 
 	UE_LOG(LogGameplay, Verbose, TEXT("HarvestLootWidget: Created %d loot item widgets using %s layout"), 
 		LootItemWidgets.Num(), bUseGridLayout ? TEXT("Grid") : TEXT("List"));
+
+	// Global button sounds on freshly built rows (idempotent, null-safe).
+	if (UMyGameInstance* AudioGI = Cast<UMyGameInstance>(GetGameInstance()))
+	{
+		if (AudioGI->AudioManager)
+		{
+			AudioGI->AudioManager->ApplyButtonSoundsToSubtree(Container);
+		}
+	}
 }
 
 void UHarvestLootWidget::UpdateItemCountDisplay()

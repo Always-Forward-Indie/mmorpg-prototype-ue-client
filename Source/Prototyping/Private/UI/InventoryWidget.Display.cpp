@@ -1,5 +1,6 @@
 #include "UI/InventoryWidget.h"
 #include "Prototyping.h"
+#include "Audio/AudioManager.h"
 #include "UI/InventorySlotWidget.h"
 #include "UI/ItemTooltipWidget.h"
 #include "UI/ItemActionMenuWidget.h"
@@ -166,6 +167,15 @@ void UInventoryWidget::CreateInventoryGrid()
 	}
 
 	UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Created %d inventory slots (WrapBox)"), InventorySlots.Num());
+
+	// Global button sounds on freshly built slots (idempotent, null-safe).
+	if (UMyGameInstance* AudioGI = Cast<UMyGameInstance>(GetGameInstance()))
+	{
+		if (AudioGI->AudioManager && InventoryWrap)
+		{
+			AudioGI->AudioManager->ApplyButtonSoundsToSubtree(InventoryWrap);
+		}
+	}
 
 	// Update stats after creating grid
 	UpdateInventoryStats();

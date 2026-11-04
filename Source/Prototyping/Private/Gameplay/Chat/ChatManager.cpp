@@ -1,6 +1,7 @@
 #include "Gameplay/Chat/ChatManager.h"
 #include "Prototyping.h"
 #include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
@@ -94,4 +95,15 @@ void UChatManager::OnMessageReceived(const FChatMessageStruct& Message)
     }
 
     OnChatMessageReceived.Broadcast(Message);
+
+    // Incoming-message earcon: others only (own lines echo locally, errors
+    // already surface through the error/toast path).
+    const int32 LocalId = GameInstance ? GameInstance->GetCurrentCharacterID() : 0;
+    if (!Message.bIsError && Message.senderId > 0 && Message.senderId != LocalId)
+    {
+        if (GameInstance && GameInstance->AudioManager)
+        {
+            GameInstance->AudioManager->PlayUISound(EUISoundEvent::ChatMessage);
+        }
+    }
 }

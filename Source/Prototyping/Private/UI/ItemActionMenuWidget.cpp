@@ -3,6 +3,7 @@
 #include "UI/ItemActionRowWidget.h"
 #include "UI/ItemQuickBarWidget.h"
 #include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "UI/UIManager.h"
 #include "Gameplay/UI/PlayerInterfaceWidget.h"
@@ -154,6 +155,15 @@ void UItemActionMenuWidget::RebuildActions()
 		AddActionRow(bIsJunk ? LOCTEXT("UnmarkJunk", "Unmark as junk")
 		                     : LOCTEXT("MarkJunk", "Mark as junk"),
 		             EItemContextAction::Junk);
+	}
+
+	// Global button sounds on freshly built rows (idempotent, null-safe).
+	if (UMyGameInstance* AudioGI = Cast<UMyGameInstance>(GetGameInstance()))
+	{
+		if (AudioGI->AudioManager && ActionList)
+		{
+			AudioGI->AudioManager->ApplyButtonSoundsToSubtree(ActionList);
+		}
 	}
 }
 

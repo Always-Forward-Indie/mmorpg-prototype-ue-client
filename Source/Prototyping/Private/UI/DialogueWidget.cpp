@@ -3,6 +3,7 @@
 #include "Gameplay/Dialogue/DialogueManager.h"
 #include "Gameplay/NPCs/BasicNPC.h"
 #include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "Gameplay/NPCs/NPCManager.h"
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
@@ -295,6 +296,15 @@ void UDialogueWidget::PopulateChoices(const TArray<FDialogueChoice>& Choices)
             PendingChoiceEdgeIds.Add(Choice.edgeId);
             // We can't create UDialogueChoiceButton without a valid class pointer here,
             // so we fall back to storing the edge id and using the first-click heuristic
+        }
+    }
+
+    // Global button sounds on freshly built choice buttons (idempotent, null-safe).
+    if (UMyGameInstance* AudioGI = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (AudioGI->AudioManager)
+        {
+            AudioGI->AudioManager->ApplyButtonSoundsToSubtree(Choices_Box);
         }
     }
 }

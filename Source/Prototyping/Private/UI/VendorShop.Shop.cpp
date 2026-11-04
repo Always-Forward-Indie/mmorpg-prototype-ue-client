@@ -2,6 +2,7 @@
 #include "UI/VendorShopWidget.h"
 #include "Gameplay/Vendor/VendorManager.h"
 #include "Gameplay/Items/InventoryManager.h"
+#include "Audio/AudioManager.h"
 #include "Utils/NetCore/InventoryQuery.h"
 #include "UI/VendorTooltipWidget.h"
 #include "MyGameInstance.h"
@@ -106,6 +107,15 @@ void UVendorShopWidget::RefreshShopDisplay()
         NewSlot->SetAffordability(GetShopItemAffordability(Item, TotalCartCost));
         ShopSlots.Add(NewSlot);
     }
+
+    // Global button sounds on freshly built rows (idempotent, null-safe).
+    if (UMyGameInstance* AudioGI = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (AudioGI->AudioManager)
+        {
+            AudioGI->AudioManager->ApplyButtonSoundsToSubtree(this);
+        }
+    }
 }
 
 void UVendorShopWidget::RefreshInventoryDisplay()
@@ -136,6 +146,15 @@ void UVendorShopWidget::RefreshInventoryDisplay()
         NewSlot->SetupAsInvSlot(VisualIdx, Item, bIsInCart, bIsFullyInCart, CartQty);
         InvSlots.Add(NewSlot);
         ++VisualIdx;
+    }
+
+    // Global button sounds on freshly built rows (idempotent, null-safe).
+    if (UMyGameInstance* AudioGI = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (AudioGI->AudioManager)
+        {
+            AudioGI->AudioManager->ApplyButtonSoundsToSubtree(this);
+        }
     }
 }
 
@@ -168,6 +187,15 @@ void UVendorShopWidget::RefreshBuyCartDisplay()
 
     UpdateBuyTotalText();
     UpdatePlayerGoldText();
+
+    // Global button sounds on freshly built rows (idempotent, null-safe).
+    if (UMyGameInstance* AudioGI = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (AudioGI->AudioManager)
+        {
+            AudioGI->AudioManager->ApplyButtonSoundsToSubtree(this);
+        }
+    }
 }
 
 void UVendorShopWidget::RefreshSellCartDisplay()
@@ -196,6 +224,15 @@ void UVendorShopWidget::RefreshSellCartDisplay()
 
     UpdateSellTotalText();
     UpdatePlayerGoldText();
+
+    // Global button sounds on freshly built rows (idempotent, null-safe).
+    if (UMyGameInstance* AudioGI = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (AudioGI->AudioManager)
+        {
+            AudioGI->AudioManager->ApplyButtonSoundsToSubtree(this);
+        }
+    }
 }
 
 void UVendorShopWidget::HandleTabBuyClicked()     { SwitchToTab(EVendorTab::Buy); }

@@ -46,6 +46,11 @@ void UAudioManager::Init(UObject* InWorldContext, UAudioConfigDataAsset* InConfi
 
 	InstallSlateSoundBridge();
 
+	// Global button click/hover come from the same UI Sound Map — fill the
+	// shared CoreStyle default so code-created buttons sound right from birth
+	// (BP-inline styles are patched per-subtree by UIManager/builders).
+	ApplyDefaultButtonSounds();
+
 	if (!MasterSoundMix)
 	{
 		UE_LOG(LogGameAudio, Warning, TEXT("UAudioManager::Init: MasterSoundMix is not assigned in DA_AudioConfig."));

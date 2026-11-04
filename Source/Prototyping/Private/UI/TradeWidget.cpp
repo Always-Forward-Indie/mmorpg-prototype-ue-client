@@ -182,6 +182,15 @@ void UTradeWidget::RefreshTradeState()
     // peer flag never gates us. Single owner: FTradeStatusRule.
     if (Confirm_Btn)
         Confirm_Btn->SetIsEnabled(FTradeStatusRule::CanConfirm(CurrentState.sessionId, CurrentState.myConfirmed));
+
+    // Global button sounds on freshly rebuilt rows (idempotent, null-safe).
+    if (UMyGameInstance* AudioGI = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (AudioGI->AudioManager)
+        {
+            AudioGI->AudioManager->ApplyButtonSoundsToSubtree(this);
+        }
+    }
 }
 
 #undef LOCTEXT_NAMESPACE

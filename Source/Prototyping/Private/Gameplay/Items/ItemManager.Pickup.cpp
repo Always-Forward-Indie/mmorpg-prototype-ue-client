@@ -4,6 +4,7 @@
 #include "Gameplay/Items/ItemManager.h"
 #include "Prototyping.h"
 #include "Gameplay/Items/InventoryManager.h"
+#include "Audio/AudioManager.h"
 #include "Gameplay/Items/DroppedItemActor.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Players/PlayerAnimInstance.h"
@@ -23,6 +24,12 @@ void UItemManager::ProcessItemPickup(const FItemBaseStruct& Item, int32 Quantity
 {
 	// Broadcast the item pickup event
 	OnItemPickedUp.Broadcast(Item);
+
+	// UI earcon for the world pickup (catalog pickup VFX/SFX stay separate).
+	if (gameInstance && gameInstance->AudioManager)
+	{
+		gameInstance->AudioManager->PlayUISound(EUISoundEvent::ItemPickup);
+	}
 
 	UE_LOG(LogGameplay, Warning, TEXT("Picked up item: %s x%d"), *Item.name, Quantity);
 

@@ -1,6 +1,7 @@
 ﻿#include "UI/SkillBarWidget.h"
 #include "MyGameInstance.h"
 #include "Audio/AudioManager.h"
+#include "Audio/AudioManager.h"
 #include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/Skills/PlayerSkillNetworkHandler.h"
@@ -107,6 +108,16 @@ void USkillBarWidget::CreateSkillSlots(int32 NumSlots)
     SetupDefaultHotkeys();
     bSlotsCreated = true;
     UE_LOG(LogGameplay, Verbose, TEXT("SkillBarWidget: Created %d skill slots"), NumSlots);
+
+    // Global button sounds on freshly built slots (idempotent, null-safe).
+    if (UMyGameInstance* AudioGI = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (AudioGI->AudioManager)
+        {
+            if (SkillSlotsContainer) AudioGI->AudioManager->ApplyButtonSoundsToSubtree(SkillSlotsContainer);
+            if (SkillGridContainer) AudioGI->AudioManager->ApplyButtonSoundsToSubtree(SkillGridContainer);
+        }
+    }
 }
 
 void USkillBarWidget::RefreshAllSlots()

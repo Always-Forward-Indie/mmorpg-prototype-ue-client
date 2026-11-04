@@ -1,6 +1,8 @@
 #include "UI/PlayerContextMenuWidget.h"
 #include "UI/PlayerMenuRowWidget.h"
 #include "Prototyping.h"
+#include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/VerticalBox.h"
@@ -134,6 +136,15 @@ void UPlayerContextMenuWidget::RebuildRows(const FString& DisplayName, bool bCan
 		AddRow(EPlayerSocialAction::Trade, LOCTEXT("Trade", "Trade"), List);
 	if (bCanInspect)
 		AddRow(EPlayerSocialAction::Inspect, LOCTEXT("Inspect", "Inspect"), List);
+
+	// Global button sounds on freshly built rows (idempotent, null-safe).
+	if (UMyGameInstance* AudioGI = Cast<UMyGameInstance>(GetGameInstance()))
+	{
+		if (AudioGI->AudioManager && List)
+		{
+			AudioGI->AudioManager->ApplyButtonSoundsToSubtree(List);
+		}
+	}
 }
 
 void UPlayerContextMenuWidget::AddRow(EPlayerSocialAction Action, const FText& Label, UVerticalBox* List)

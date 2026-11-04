@@ -1,5 +1,7 @@
 #include "UI/BestiaryWidget.h"
 #include "Prototyping.h"
+#include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "UI/BestiaryWidget.h"
 #include "UI/BestiaryEntryWidget.h"
 #include "UI/BestiaryMobRowWidget.h"
@@ -255,6 +257,15 @@ void UBestiaryWidget::RebuildMobList()
         Row->OnMobRowSelected.AddDynamic(this, &UBestiaryWidget::HandleMobRowSelected);
 
         Mob_List_Box->AddChild(Row);
+    }
+
+    // Global button sounds on freshly built rows (idempotent, null-safe).
+    if (UMyGameInstance* AudioGI = Cast<UMyGameInstance>(GetGameInstance()))
+    {
+        if (AudioGI->AudioManager)
+        {
+            AudioGI->AudioManager->ApplyButtonSoundsToSubtree(Mob_List_Box);
+        }
     }
 }
 

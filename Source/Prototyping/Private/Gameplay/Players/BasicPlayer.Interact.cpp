@@ -40,6 +40,7 @@
 #include "Gameplay/Player/PlayerStatsNetworkHandler.h"
 #include "UI/PlayerStatsWidget.h"
 #include "Gameplay/Interaction/CursorInteractionComponent.h"
+#include "Utils/NetCore/TargetingRule.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Interaction/WorldInteractionConfig.h"
 #include "Gameplay/Bestiary/BestiaryNetworkHandler.h"
@@ -93,7 +94,8 @@ void ABasicPlayer::CheckForNPC()
     const FVector CameraForward = CameraRotation.Vector();
 
     // First try a line trace with ECC_Pawn to hit NPC capsules directly
-    const float TraceDistance = 1500.0f;
+    const float TraceDistance = CursorInteractionComponent ? CursorInteractionComponent->GetCrosshairTraceRange() : 1500.0f;
+    const float ConeDot = CursorInteractionComponent ? CursorInteractionComponent->GetSoftTargetConeDot() : 0.97f;
     FVector TraceEnd = CameraLocation + CameraForward * TraceDistance;
 
     FCollisionQueryParams Params;
@@ -110,18 +112,18 @@ void ABasicPlayer::CheckForNPC()
         if (UNPCManager* NpcMgr = MyGameInstance ? MyGameInstance->GetNPCManager() : nullptr)
         {
             ABasicNPC* BestNPC = nullptr;
-            float BestDot = 0.97f; // ~14 degree cone around crosshair
+            float BestDot = ConeDot; // crosshair cone from DA_WorldInteractionConfig
 
             for (ABasicNPC* NPC : NpcMgr->GetInteractableNPCs())
             {
                 if (!IsValid(NPC)) continue;
 
                 const float Dist = FVector::Dist(CameraLocation, NPC->GetActorLocation());
-                if (Dist > TraceDistance) continue;
+                if (!FTargetingRule::IsInRange(Dist, TraceDistance)) continue;
 
                 const FVector ToNPC = (NPC->GetActorLocation() - CameraLocation).GetSafeNormal();
                 const float Dot = FVector::DotProduct(CameraForward, ToNPC);
-                if (Dot > BestDot)
+                if (FTargetingRule::IsInCone(Dot, BestDot))
                 {
                     // LOS check: is the NPC actually visible through world geometry?
                     FHitResult LOSHit;
@@ -275,7 +277,8 @@ void ABasicPlayer::CheckForMOB()
     PC->GetPlayerViewPoint(CameraLocation, CameraRotation);
     const FVector CameraForward = CameraRotation.Vector();
 
-    const float TraceDistance = 1500.0f;
+    const float TraceDistance = CursorInteractionComponent ? CursorInteractionComponent->GetCrosshairTraceRange() : 1500.0f;
+    const float ConeDot = CursorInteractionComponent ? CursorInteractionComponent->GetSoftTargetConeDot() : 0.97f;
     const FVector TraceEnd = CameraLocation + CameraForward * TraceDistance;
 
     FCollisionQueryParams Params;
@@ -300,17 +303,17 @@ void ABasicPlayer::CheckForMOB()
     {
         if (UMOBManager* MobMgr = MyGameInstance ? MyGameInstance->GetMOBManager() : nullptr)
         {
-            float BestDot = 0.97f; // ~14 degree cone around crosshair
+            float BestDot = ConeDot; // crosshair cone from DA_WorldInteractionConfig
             MobMgr->ForEachMob([&](ABasicMOB* Mob)
             {
                 if (!Mob || Mob->GetMOBIsDead()) return;
 
                 const float Dist = FVector::Dist(CameraLocation, Mob->GetActorLocation());
-                if (Dist > TraceDistance) return;
+                if (!FTargetingRule::IsInRange(Dist, TraceDistance)) return;
 
                 const FVector ToMob = (Mob->GetActorLocation() - CameraLocation).GetSafeNormal();
                 const float Dot = FVector::DotProduct(CameraForward, ToMob);
-                if (Dot > BestDot)
+                if (FTargetingRule::IsInCone(Dot, BestDot))
                 {
                     // LOS check: is the mob actually visible through world geometry?
                     FHitResult LOSHit;
@@ -398,6 +401,28 @@ void ABasicPlayer::CheckForMOB()
         }
     }
 
+    // Center-screen reticle: trace origin is the camera (TPS crosshair), range/cone
+    // come from DA_WorldInteractionConfig. Lock wins over soft-target.
+    if (UIManager)
+    {
+        ECrosshairState Reticle = ECrosshairState::Neutral;
+        if (LockedTarget && IsValid(LockedTarget))
+            Reticle = LockedTarget->GetMOBIsDead() ? ECrosshairState::Dead : ECrosshairState::Locked;
+        else if (SoftTarget && IsValid(SoftTarget))
+            Reticle = SoftTarget->GetMOBIsDead() ? ECrosshairState::Dead : ECrosshairState::HoverMob;
+        UIManager->SetTargetReticle(Reticle);
+    }
+
+    // Cull world head plates beyond the configured distance (the hard lock +
+    // target frame survive — only the in-world plate hides, like AAA MMOs).
+    const float CullDist = CursorInteractionComponent ? CursorInteractionComponent->GetMobHeadCullDistance() : 2500.f;
+    auto ShouldShowPlate = [&](ABasicMOB* Mob) -> bool
+    {
+        if (!Mob || !IsValid(Mob)) return false;
+        const float D = FVector::Dist(GetActorLocation(), Mob->GetActorLocation());
+        return !FTargetingRule::ShouldCullHeadPlate(D, CullDist);
+    };
+
     // Show/hide head widget using a cached pointer пїЅ no TActorIterator every Tick
     if (PrevSoftTarget != EffectiveTarget)
     {
@@ -408,10 +433,10 @@ void ABasicPlayer::CheckForMOB()
             PrevSoftTarget->MobHeadInfo->ShowWidget(false);
         }
 
-        // Show the widget on the new effective target
+        // Show the widget on the new effective target (culled beyond range)
         if (EffectiveTarget && IsValid(EffectiveTarget))
         {
-            EffectiveTarget->MobHeadInfo->ShowWidget(true);
+            EffectiveTarget->MobHeadInfo->ShowWidget(ShouldShowPlate(EffectiveTarget));
         }
 
         PrevSoftTarget = EffectiveTarget;

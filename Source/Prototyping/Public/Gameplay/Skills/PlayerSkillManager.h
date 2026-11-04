@@ -110,6 +110,12 @@ public:
     // Called when the attack animation finishes to release the cast lock
     void NotifyAnimationEnded();
 
+    // Called by the UI poll (SkillSlot tick) when a per-skill cooldown is observed
+    // to have expired. Clears the runtime flag once and broadcasts OnSkillReady
+    // exactly once per cooldown cycle (poll-based because the manager has no Tick).
+    // Returns true when a broadcast was emitted.
+    bool NotifyCooldownExpired(const FString& SkillSlug);
+
     double GetWorldSeconds() const;
 
     // Travel support: world clocks reset on OpenLevel, so active cooldowns

@@ -155,6 +155,34 @@ public:
         return Cfg ? Cfg->ItemPickupRange : 180.f;
     }
 
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "World Interaction")
+    float GetCrosshairTraceRange() const
+    {
+        const UWorldInteractionConfig* Cfg = GetEffectiveConfig();
+        return Cfg ? Cfg->CrosshairTraceRange : 1500.f;
+    }
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "World Interaction")
+    float GetTabTargetRange() const
+    {
+        const UWorldInteractionConfig* Cfg = GetEffectiveConfig();
+        return Cfg ? Cfg->TabTargetRange : 1500.f;
+    }
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "World Interaction")
+    float GetMobHeadCullDistance() const
+    {
+        const UWorldInteractionConfig* Cfg = GetEffectiveConfig();
+        return Cfg ? Cfg->MobHeadCullDistance : 2500.f;
+    }
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "World Interaction")
+    float GetSoftTargetConeDot() const
+    {
+        const UWorldInteractionConfig* Cfg = GetEffectiveConfig();
+        return Cfg ? Cfg->SoftTargetConeDot : 0.97f;
+    }
+
     /** Returns the config asset (may be null if not assigned in BP defaults). */
     UWorldInteractionConfig* GetConfig() const { return Config; }
 

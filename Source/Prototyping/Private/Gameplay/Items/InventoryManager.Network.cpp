@@ -315,8 +315,7 @@ void UInventoryManager::ProcessInventoryUpdate(const FString& JsonData)
 
 		// Parse simplified items array (only itemId and quantity)
 		const TArray<TSharedPtr<FJsonValue>>* ItemsArray = nullptr;
-		if (DataObject->TryGetArrayField(TEXT("items"), ItemsArray))
-		{
+		if (DataObject->TryGetArrayField(TEXT("items"), ItemsArray))		{
 			for (const TSharedPtr<FJsonValue>& ItemValue : *ItemsArray)
 			{
 				// TryGetObject (not AsObject): wrong-typed entries skip quietly.
@@ -370,6 +369,12 @@ void UInventoryManager::ProcessInventoryUpdate(const FString& JsonData)
 					}
 			}
 		}
+
+		// Preserve authoritative slot cap across slim data-object updates.
+		NewInventory.maxSlots = CurrentInventory.maxSlots;
+		int32 DataMaxSlots = 0;
+		if (DataObject->TryGetNumberField(TEXT("maxSlots"), DataMaxSlots) && DataMaxSlots > 0)
+			NewInventory.maxSlots = DataMaxSlots;
 
 		UpdateLocalInventory(NewInventory);
 	}

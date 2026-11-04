@@ -135,9 +135,16 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	UImage* ImgBase;
 
-	// Optional overlay shown when the item is currently equipped
 	UPROPERTY(meta = (BindWidgetOptional))
 	UImage* ImgEquipped;
+
+	// Predictive cooldown overlay (optional in BP: add CooldownOverlay image +
+	// CooldownText textblock to WBP to enable; absent = silently disabled).
+	UPROPERTY(meta = (BindWidgetOptional))
+	UImage* CooldownOverlay;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	UTextBlock* CooldownText;
 
 	// Slot data
 	UPROPERTY(BlueprintReadOnly, Category = "Inventory Slot")
@@ -145,6 +152,23 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly, Category = "Inventory Slot")
 	int32 SlotIndex = -1;
+
+	// Predictive cooldown display (world time; server authoritative).
+	double CooldownEndTime = 0.0;
+	double CooldownTotalTime = 0.0;
+	bool bCoolingDown = false;
+
+public:
+	/** Predictive cooldown overlay (seconds). Display only; server enforces the real CD. */
+	UFUNCTION(BlueprintCallable, Category = "Inventory Slot")
+	void StartCooldown(float CooldownSeconds);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory Slot")
+	bool IsOnCooldown() const;
+
+protected:
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+	void UpdateCooldownDisplay();
 
 	// Visual states
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Slot")

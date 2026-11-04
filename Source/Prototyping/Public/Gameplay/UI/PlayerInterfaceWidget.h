@@ -9,6 +9,7 @@
 #include "Gameplay/UI/PlayerExperienceWidget.h"
 #include "Gameplay/UI/ActiveEffectsWidget.h"
 #include "Gameplay/UI/MobTargetFrameWidget.h"
+#include "Utils/NetCore/TargetingRule.h"
 #include "Gameplay/UI/NameplateCanvasWidget.h"
 #include "Gameplay/UI/CastBarWidget.h"
 #include "Gameplay/UI/CastBarWidget.h"
@@ -95,6 +96,13 @@ protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Player Interface")
     UItemQuickBarWidget* ItemQuickBar = nullptr;
 
+    // Center-screen crosshair reticle (optional in WBP_PlayerInterface).
+    // Absent = silently disabled (no BP break). Driven by CheckForMOB soft-target state.
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "Player Interface")
+    class UImage* CrosshairImage = nullptr;
+
+    ECrosshairState CrosshairState = ECrosshairState::None;
+
     // Widget classes for dynamic creation
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Interface")
     TSubclassOf<USkillBarWidget> SkillBarWidgetClass;
@@ -156,6 +164,12 @@ public:
     /** Returns the mob target frame widget, if available (may be nullptr). */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Interface")
     UMobTargetFrameWidget* GetMobTargetFrameWidget() const { return MobTargetFrameWidget; }
+
+    UFUNCTION(BlueprintCallable, Category = "Player Interface")
+    void SetCrosshairState(ECrosshairState State);
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Interface")
+    ECrosshairState GetCrosshairState() const { return CrosshairState; }
 
     /** Returns the boss target frame widget, if available (may be nullptr). */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Player Interface")

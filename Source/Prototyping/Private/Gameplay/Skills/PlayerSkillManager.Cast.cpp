@@ -94,3 +94,22 @@ void UPlayerSkillManager::StartSkillCooldown(const FString& SkillSlug)
     }
 }
 
+bool UPlayerSkillManager::NotifyCooldownExpired(const FString& SkillSlug)
+{
+    FPlayerSkillData* S = PlayerSkills.Find(SkillSlug);
+    if (!S || !S->bIsOnCooldown)
+    {
+        return false;
+    }
+    // Time-based check: still cooling down -> no broadcast (poll race guard).
+    if (IsSkillOnCooldown(SkillSlug))
+    {
+        return false;
+    }
+    S->bIsOnCooldown = false;
+    S->bIsReady = true;
+    S->cooldownEndTime = GetWorldSeconds();
+    OnSkillReady.Broadcast(SkillSlug);
+    return true;
+}
+

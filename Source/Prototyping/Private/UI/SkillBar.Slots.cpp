@@ -4,6 +4,7 @@
 #include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/Skills/PlayerSkillNetworkHandler.h"
+#include "Utils/NetCore/SkillFeedbackRule.h"
 #include "Components/HorizontalBox.h"
 #include "Components/UniformGridPanel.h"
 #include "Components/HorizontalBoxSlot.h"
@@ -191,18 +192,28 @@ void USkillBarWidget::CastSkillFromSlot(int32 SlotIndex)
     FString SkillSlug = SlotWidget->GetAssignedSkillSlug();
 
     // Check cooldown first so we can play the right feedback sound.
+    // Deny cue is throttled: per-skill override, else the dedicated deny event.
+    // (Legacy projects that only mapped SkillCooldownStart get a warn-once
+    // guiding them to map SkillOnCooldownDenied — no double-play.)
     if (SkillManager->IsSkillOnCooldown(SkillSlug))
     {
-        // Per-skill override, or fall back to global AudioManager event.
-        FPlayerSkillData SkillData = SkillManager->GetSkillData(SkillSlug);
-        if (!SkillData.definitionData.skillOnCooldownSound.IsNull())
+        // Throttled deny cue: per-skill override, else dedicated deny event,
+        // else legacy cooldown-start fallback (keeps old DA_AudioConfig working).
+        UWorld* World = GetWorld();
+        const float NowSec = World ? static_cast<float>(World->GetTimeSeconds()) : 0.0f;
+        if (FSkillFeedbackRule::CanPlayDeny(NowSec, static_cast<float>(LastCooldownDenySoundTime)))
         {
-            if (GameInstance && GameInstance->AudioManager)
-                GameInstance->AudioManager->PlayUISoundAsset(SkillData.definitionData.skillOnCooldownSound.LoadSynchronous());
-        }
-        else if (GameInstance && GameInstance->AudioManager)
-        {
-            GameInstance->AudioManager->PlayUISound(EUISoundEvent::SkillCooldownStart);
+            LastCooldownDenySoundTime = NowSec;
+            FPlayerSkillData SkillData = SkillManager->GetSkillData(SkillSlug);
+            if (!SkillData.definitionData.skillOnCooldownSound.IsNull())
+            {
+                if (GameInstance && GameInstance->AudioManager)
+                    GameInstance->AudioManager->PlayUISoundAsset(SkillData.definitionData.skillOnCooldownSound.LoadSynchronous());
+            }
+            else if (GameInstance && GameInstance->AudioManager)
+            {
+                GameInstance->AudioManager->PlayUISound(EUISoundEvent::SkillOnCooldownDenied);
+            }
         }
         return;
     }
@@ -210,15 +221,22 @@ void USkillBarWidget::CastSkillFromSlot(int32 SlotIndex)
     if (!SkillManager->CanCastSkill(SkillSlug))
     {
         // CanCastSkill failed for a reason other than cooldown (most likely not enough mana).
-        FPlayerSkillData SkillData = SkillManager->GetSkillData(SkillSlug);
-        if (!SkillData.definitionData.notEnoughManaSound.IsNull())
+        // Throttled so holding the key doesn't machine-gun the error sound.
+        UWorld* World = GetWorld();
+        const float NowSec = World ? static_cast<float>(World->GetTimeSeconds()) : 0.0f;
+        if (FSkillFeedbackRule::CanPlayDeny(NowSec, static_cast<float>(LastManaDenySoundTime)))
         {
-            if (GameInstance && GameInstance->AudioManager)
-                GameInstance->AudioManager->PlayUISoundAsset(SkillData.definitionData.notEnoughManaSound.LoadSynchronous());
-        }
-        else if (GameInstance && GameInstance->AudioManager)
-        {
-            GameInstance->AudioManager->PlayUISound(EUISoundEvent::SkillNotEnoughMana);
+            LastManaDenySoundTime = NowSec;
+            FPlayerSkillData SkillData = SkillManager->GetSkillData(SkillSlug);
+            if (!SkillData.definitionData.notEnoughManaSound.IsNull())
+            {
+                if (GameInstance && GameInstance->AudioManager)
+                    GameInstance->AudioManager->PlayUISoundAsset(SkillData.definitionData.notEnoughManaSound.LoadSynchronous());
+            }
+            else if (GameInstance && GameInstance->AudioManager)
+            {
+                GameInstance->AudioManager->PlayUISound(EUISoundEvent::SkillNotEnoughMana);
+            }
         }
         return;
     }

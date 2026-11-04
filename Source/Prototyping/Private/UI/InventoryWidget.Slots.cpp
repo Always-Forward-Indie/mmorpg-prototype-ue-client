@@ -104,3 +104,15 @@ void UInventoryWidget::OnItemRemoved(const FInventoryItemStruct& Item, int32 Qua
 	UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Item removed - %s x%d"), *Item.name, Quantity);
 }
 
+void UInventoryWidget::HandleItemCooldown(int32 ItemId, int32 CooldownSeconds)
+{
+	if (ItemId <= 0 || CooldownSeconds <= 0) return;
+	for (UInventorySlotWidget* SlotWidget : InventorySlots)
+	{
+		if (SlotWidget && SlotWidget->HasItem() && SlotWidget->GetItemData().itemId == ItemId)
+		{
+			SlotWidget->StartCooldown(static_cast<float>(CooldownSeconds));
+		}
+	}
+}
+

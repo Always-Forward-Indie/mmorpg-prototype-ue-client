@@ -71,6 +71,9 @@ protected:
 	class UImage* CooldownOverlay;
 
 	UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "QuickSlot")
+	class UTextBlock* CooldownText;
+
+	UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional), Category = "QuickSlot")
 	class UImage* EmptySlotIcon;
 
 private:
@@ -79,6 +82,7 @@ private:
 
 	void LoadIconBySlug(const FString& Slug, int32 ExpectedItemId);
 	void SetIconTexture(UTexture2D* Texture);
+	void UpdateCooldownDisplay();
 
 	UInventoryManager* InventoryManager = nullptr;
 	FItemQuickSlotData SlotData;
@@ -86,5 +90,6 @@ private:
 
 	// Predictive cooldown display (world time; server authoritative).
 	double CooldownEndTime = 0.0;
+	double CooldownTotalTime = 0.0;
 	bool bCoolingDown = false;
 };

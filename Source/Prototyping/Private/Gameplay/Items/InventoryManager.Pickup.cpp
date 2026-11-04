@@ -63,6 +63,18 @@ void UInventoryManager::PickupNearbyItem()
 	// Attempt to pickup the closest item
 	if (ClosestItem)
 	{
+		// Predictive capacity gate: stacking always lands, a new template needs
+		// a free slot. Chunk is authoritative (inventory_full, no partial grant);
+		// this only avoids the wasted round trip + pickup lock with instant UX.
+		const int32 TemplateId = ClosestItem->GetItemData().itemId;
+		if (IsInventoryFullFor(TemplateId))
+		{
+			NotifyInventoryFull(TEXT("inventory_full"),
+				FString::Printf(TEXT("Inventory is full — cannot pick up %s."), *ClosestItem->GetItemName()));
+			if (gameInstance && gameInstance->AudioManager)
+				gameInstance->AudioManager->PlayUISound(EUISoundEvent::ErrorSound);
+			return;
+		}
 		UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: Attempting to pickup item %s at distance %.2f"),
 			*ClosestItem->GetItemName(), ClosestDistance);
 
@@ -133,6 +145,17 @@ void UInventoryManager::PickupSpecificItem(ADroppedItemActor* TargetItem)
     if (gameInstance && gameInstance->GetHarvestManager() && gameInstance->GetHarvestManager()->IsHarvesting())
     {
         UE_LOG(LogGameplay, Warning, TEXT("InventoryManager: PickupSpecificItem blocked - player is harvesting"));
+        return;
+    }
+
+    // Predictive capacity gate (same rule as PickupNearbyItem).
+    const int32 TemplateId = TargetItem->GetItemData().itemId;
+    if (IsInventoryFullFor(TemplateId))
+    {
+        NotifyInventoryFull(TEXT("inventory_full"),
+            FString::Printf(TEXT("Inventory is full — cannot pick up %s."), *TargetItem->GetItemName()));
+        if (gameInstance && gameInstance->AudioManager)
+            gameInstance->AudioManager->PlayUISound(EUISoundEvent::ErrorSound);
         return;
     }
 

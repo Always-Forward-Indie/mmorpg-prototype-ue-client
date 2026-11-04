@@ -1142,12 +1142,18 @@ struct FCharacterInventoryStruct
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Inventory")
 	int64 inventoryVersion = 0;
 
+	// Authoritative slot cap from the chunk server (0 = legacy/unlimited:
+	// client falls back to its own grid capacity for predictive UX only).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character Inventory")
+	int32 maxSlots = 0;
+
 	FCharacterInventoryStruct()
 	{
 		characterId = 0;
 		gold = 0;
 		items.Empty();
 		inventoryVersion = 0;
+		maxSlots = 0;
 	}
 };
 
@@ -2012,7 +2018,8 @@ struct FSkillDefinitionData : public FTableRowBase
 
     /**
      * Played when the local player tries to use this skill while it is still on cooldown.
-     * Leave empty to fall back to the global AudioManager UISound (EUISoundEvent::SkillOnCooldown).
+     * Leave empty to fall back to the global AudioManager UISound (EUISoundEvent::SkillOnCooldownDenied,
+     * legacy fallback SkillCooldownStart when unmapped).
      */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill Definition|UI Feedback")
     TSoftObjectPtr<USoundBase> skillOnCooldownSound;

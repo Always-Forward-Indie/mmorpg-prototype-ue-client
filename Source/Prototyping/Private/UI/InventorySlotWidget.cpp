@@ -1,5 +1,6 @@
 #include "UI/InventorySlotWidget.h"
 #include "Prototyping.h"
+#include "Utils/NetCore/CooldownFormat.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
@@ -41,8 +42,76 @@ void UInventorySlotWidget::NativeConstruct()
 		SlotButton->OnUnhovered.AddDynamic(this, &UInventorySlotWidget::OnSlotButtonUnhovered);
 	}
 
+	if (CooldownOverlay)
+		CooldownOverlay->SetVisibility(ESlateVisibility::Collapsed);
+	if (CooldownText)
+		CooldownText->SetVisibility(ESlateVisibility::Collapsed);
+
 	// Initialize visual appearance
 	UpdateSlotAppearance();
+}
+
+void UInventorySlotWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+	if (!bCoolingDown) return;
+	UWorld* World = GetWorld();
+	const double Now = World ? World->GetTimeSeconds() : 0.0;
+	if (Now >= CooldownEndTime)
+	{
+		bCoolingDown = false;
+		CooldownTotalTime = 0.0;
+		if (CooldownOverlay)
+			CooldownOverlay->SetVisibility(ESlateVisibility::Collapsed);
+		if (CooldownText)
+			CooldownText->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	else
+	{
+		UpdateCooldownDisplay();
+	}
+}
+
+void UInventorySlotWidget::StartCooldown(float CooldownSeconds)
+{
+	if (CooldownSeconds <= 0.f || !HasItem()) return;
+	if (UWorld* World = GetWorld())
+	{
+		const double Now = World->GetTimeSeconds();
+		CooldownEndTime = Now + static_cast<double>(CooldownSeconds);
+		CooldownTotalTime = CooldownSeconds;
+		bCoolingDown = true;
+		UpdateCooldownDisplay();
+	}
+}
+
+bool UInventorySlotWidget::IsOnCooldown() const
+{
+	return bCoolingDown;
+}
+
+void UInventorySlotWidget::UpdateCooldownDisplay()
+{
+	if (!CooldownOverlay && !CooldownText) return;
+	UWorld* World = GetWorld();
+	const double Now = World ? World->GetTimeSeconds() : 0.0;
+	const float Remaining = static_cast<float>(FMath::Max(0.0, CooldownEndTime - Now));
+	if (CooldownOverlay)
+	{
+		CooldownOverlay->SetVisibility(Remaining > 0.0f ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	}
+	if (CooldownText)
+	{
+		if (Remaining > 0.0f)
+		{
+			CooldownText->SetText(FText::FromString(FCooldownFormat::Format(Remaining)));
+			CooldownText->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		else
+		{
+			CooldownText->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
 }
 
 void UInventorySlotWidget::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
@@ -104,6 +173,13 @@ void UInventorySlotWidget::ClearSlot()
 	bIsOccupied = false;
 	bIsSelected = false;
 	bIsJunked = false;
+	bCoolingDown = false;
+	CooldownEndTime = 0.0;
+	CooldownTotalTime = 0.0;
+	if (CooldownOverlay)
+		CooldownOverlay->SetVisibility(ESlateVisibility::Collapsed);
+	if (CooldownText)
+		CooldownText->SetVisibility(ESlateVisibility::Collapsed);
 
 	// Clear visual components
 	if (ItemIcon)

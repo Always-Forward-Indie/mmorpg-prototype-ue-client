@@ -51,6 +51,7 @@ enum class EUISoundEvent : uint8
 	Notification     UMETA(DisplayName = "Notification"),
 	SkillReady       UMETA(DisplayName = "Skill Ready"),
 	SkillCooldownStart UMETA(DisplayName = "Skill Cooldown Start"),
+	SkillOnCooldownDenied UMETA(DisplayName = "Skill On Cooldown Denied"),
 	SkillNotEnoughMana UMETA(DisplayName = "Skill Not Enough Mana"),
 };
 

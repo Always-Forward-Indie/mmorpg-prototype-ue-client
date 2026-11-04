@@ -3,6 +3,7 @@
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "Engine/Texture2D.h"
+#include "Utils/NetCore/CooldownFormat.h"
 #include "Engine/AssetManager.h"
 #include "Engine/StreamableManager.h"
 #include "Gameplay/Items/InventoryManager.h"
@@ -19,6 +20,9 @@ void UItemQuickSlotWidget::NativeConstruct()
 
 	if (CooldownOverlay)
 		CooldownOverlay->SetVisibility(ESlateVisibility::Collapsed);
+
+	if (CooldownText)
+		CooldownText->SetVisibility(ESlateVisibility::Collapsed);
 
 	if (QuantityText)
 		QuantityText->SetVisibility(ESlateVisibility::Collapsed);
@@ -120,15 +124,36 @@ void UItemQuickSlotWidget::StartCooldown(float CooldownSeconds)
 	if (UWorld* World = GetWorld())
 	{
 		CooldownEndTime = World->GetTimeSeconds() + static_cast<double>(CooldownSeconds);
+		CooldownTotalTime = CooldownSeconds;
 		bCoolingDown = true;
-		if (CooldownOverlay)
-			CooldownOverlay->SetVisibility(ESlateVisibility::HitTestInvisible);
+		UpdateCooldownDisplay();
 	}
 }
 
 bool UItemQuickSlotWidget::IsOnCooldown() const
 {
 	return bCoolingDown;
+}
+
+void UItemQuickSlotWidget::UpdateCooldownDisplay()
+{
+	UWorld* World = GetWorld();
+	const double Now = World ? World->GetTimeSeconds() : 0.0;
+	const float Remaining = static_cast<float>(FMath::Max(0.0, CooldownEndTime - Now));
+	if (CooldownOverlay)
+		CooldownOverlay->SetVisibility(Remaining > 0.0f ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	if (CooldownText)
+	{
+		if (Remaining > 0.0f)
+		{
+			CooldownText->SetText(FText::FromString(FCooldownFormat::Format(Remaining)));
+			CooldownText->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		else
+		{
+			CooldownText->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
 }
 
 void UItemQuickSlotWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -139,8 +164,15 @@ void UItemQuickSlotWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 	if (Now >= CooldownEndTime)
 	{
 		bCoolingDown = false;
+		CooldownTotalTime = 0.0;
 		if (CooldownOverlay)
 			CooldownOverlay->SetVisibility(ESlateVisibility::Collapsed);
+		if (CooldownText)
+			CooldownText->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	else
+	{
+		UpdateCooldownDisplay();
 	}
 }
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Utils/NetCore/TargetingRule.h"
+
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Gameplay/Interaction/IWorldInteractable.h"
@@ -195,6 +197,10 @@ public:
 	// Set current skill target for skill casting
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void SetSkillTarget(int32 TargetId, ECasterType TargetType);
+
+	// Center-screen crosshair reticle (no-op when WBP has no CrosshairImage).
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void SetTargetReticle(ECrosshairState State);
 
 	// Set player controller reference
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")

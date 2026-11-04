@@ -81,10 +81,16 @@ void USkillSlotWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
         }
         else if (bWasOnCooldown)
         {
-            // Cooldown just finished
+            // Cooldown just finished (per-skill CD or GCD).
             CooldownRemainingTime = 0.0f;
             UpdateCooldownDisplay();
             UpdateVisualState();
+            // Emit the authoritative ready event exactly once per per-skill cycle.
+            // GCD-only expiry is ignored inside NotifyCooldownExpired (still on CD -> no-op).
+            if (SkillManager && !AssignedSkillSlug.IsEmpty())
+            {
+                SkillManager->NotifyCooldownExpired(AssignedSkillSlug);
+            }
         }
     }
 }

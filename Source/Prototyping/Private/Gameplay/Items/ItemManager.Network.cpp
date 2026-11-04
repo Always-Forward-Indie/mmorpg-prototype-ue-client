@@ -4,7 +4,9 @@
 #include "Gameplay/Items/ItemManager.h"
 #include "Prototyping.h"
 #include "Gameplay/Items/DroppedItemActor.h"
+#include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Players/BasicPlayer.h"
+#include "Audio/AudioManager.h"
 #include "Gameplay/Players/PlayerAnimInstance.h"
 #include "Gameplay/Mobs/BasicMOB.h"
 #include "Utils/JSONParser.h"
@@ -185,11 +187,25 @@ void UItemManager::HandleChunkPacket(const FParsedPacket& Packet)
 		int32 FailedUID = -1;
 		Body->TryGetNumberField(TEXT("droppedItemUID"), FailedUID);
 
-		// Check if the server rejection message indicates the item no longer exists.
-		// If so, clean up the stale client-side actor instead of re-enabling it.
+		// Central error-code resolution: body.errorCode wins, header.message fallback.
+		const FString ErrorCode = JSONParser::ResolveErrorCode(Packet.Root);
 		FString ErrorMessage;
 		Body->TryGetStringField(TEXT("message"), ErrorMessage);
+		if (ErrorMessage.IsEmpty()) ErrorMessage = ErrorCode;
 		const bool bItemNonExistent = ErrorMessage.Contains(TEXT("non-existent"));
+		const bool bInventoryFull = ErrorCode.Equals(TEXT("inventory_full"), ESearchCase::IgnoreCase)
+			|| ErrorMessage.Contains(TEXT("inventory_full"))
+			|| ErrorMessage.Contains(TEXT("Inventory is full"))
+			|| ErrorMessage.Contains(TEXT("No space"));
+
+		// Surface capacity refusal through the single full-path (error-level, no partial grant).
+		if (bInventoryFull && gameInstance && gameInstance->GetInventoryManager())
+		{
+			gameInstance->GetInventoryManager()->NotifyInventoryFull(
+				TEXT("inventory_full"), TEXT("Inventory is full — free a slot first."));
+			if (gameInstance->AudioManager)
+				gameInstance->AudioManager->PlayUISound(EUISoundEvent::ErrorSound);
+		}
 
 		if (FailedUID > 0 && DroppedItemsMap.Contains(FailedUID))
 		{

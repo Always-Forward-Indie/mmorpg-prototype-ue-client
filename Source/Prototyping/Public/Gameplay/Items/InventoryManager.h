@@ -17,6 +17,9 @@ class UMyGameInstance;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnInventoryUpdated, const FCharacterInventoryStruct&, Inventory);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemAdded, const FInventoryItemStruct&, Item, int32, NewQuantity);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemRemoved, const FInventoryItemStruct&, Item, int32, RemainingQuantity);
+// Authoritative capacity refusal (chunk decided, no partial grant): predictive
+// gate hit locally or server replied errorCode inventory_full. UI shows one toast.
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInventoryFull, const FString&, ErrorCode, const FString&, DisplayMessage);
 // Predictive cooldown echo: the server enforces the real cooldown, but the
 // catalog row already carries useEffects[0].cooldownSeconds, so the UI can
 // start the overlay without waiting for a round trip.
@@ -76,6 +79,24 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	int32 GetItemQuantity(int32 TemplateId) const;
 
+	// Predictive capacity gate (client UX only; chunk server is authoritative).
+	// maxSlots comes from the server snapshot (0 = legacy/unlimited -> grid fallback).
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	bool CanAcceptItem(int32 TemplateId) const;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	bool IsInventoryFullFor(int32 TemplateId) const;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	int32 GetFreeSlotCount() const;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	int32 GetMaxInventorySlots() const;
+
+	// Surface an authoritative capacity refusal (server errorCode inventory_full
+	// or equivalent) through the single full-path: log error-level + broadcast.
+	void NotifyInventoryFull(const FString& ErrorCode, const FString& DisplayMessage);
+
 	// Get all items of specific type
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	TArray<FInventoryItemStruct> GetItemsByType(const FString& ItemType) const;
@@ -126,6 +147,9 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Inventory Events")
 	FOnItemCooldown OnItemCooldown;
+
+	UPROPERTY(BlueprintAssignable, Category = "Inventory Events")
+	FOnInventoryFull OnInventoryFull;
 
 	UPROPERTY(BlueprintAssignable, Category = "Inventory Events")
 	FOnInventoryLoadComplete OnInventoryLoadComplete;

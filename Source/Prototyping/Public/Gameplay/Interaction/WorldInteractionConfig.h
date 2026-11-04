@@ -219,6 +219,27 @@ public:
         meta = (ClampMin = "10", Units = "cm"))
     float ItemPickupRange = 180.f;
 
+    // ---- Soft-target / nameplate trace (crosshair) ----
+    /** Camera trace length for the crosshair soft-target (mobs + NPCs). */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction|Targeting",
+        meta = (ClampMin = "100", Units = "cm"))
+    float CrosshairTraceRange = 1500.f;
+
+    /** Player-distance range for Tab cycling (no cone filter). */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction|Targeting",
+        meta = (ClampMin = "100", Units = "cm"))
+    float TabTargetRange = 1500.f;
+
+    /** World head plates hide beyond this (target-frame lock survives). */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction|Targeting",
+        meta = (ClampMin = "500", Units = "cm"))
+    float MobHeadCullDistance = 2500.f;
+
+    /** Min dot(cameraForward, toTarget) to accept a soft-target (~0.97 = 14deg). */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction|Targeting",
+        meta = (ClampMin = "0.9", ClampMax = "0.999"))
+    float SoftTargetConeDot = 0.97f;
+
     // ─────────────────────────────────────────────────────────────────────────
     // PERFORMANCE
     // ─────────────────────────────────────────────────────────────────────────

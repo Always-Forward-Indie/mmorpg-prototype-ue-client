@@ -5,6 +5,7 @@
 #include "Prototyping.h"
 #include "EngineUtils.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Mobs/MOBManager.h"
 #include "Gameplay/Players/PlayerManager.h"
 #include "UI/UIManager.h"
 #include "UI/NotificationToastWidget.h"
@@ -39,6 +40,7 @@
 #include "Gameplay/Player/PlayerStatsNetworkHandler.h"
 #include "UI/PlayerStatsWidget.h"
 #include "Gameplay/Interaction/CursorInteractionComponent.h"
+#include "Utils/NetCore/TargetingRule.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Interaction/WorldInteractionConfig.h"
 #include "Gameplay/Bestiary/BestiaryNetworkHandler.h"
@@ -85,20 +87,21 @@ void ABasicPlayer::OnTabTargetInput()
     PC->GetPlayerViewPoint(CameraLocation, CameraRotation);
     const FVector CameraForward = CameraRotation.Vector();
 
-    const float MaxTabRange = 1500.0f;
+    const float MaxTabRange = CursorInteractionComponent ? CursorInteractionComponent->GetTabTargetRange() : 1500.0f;
     const FVector PlayerLoc = GetActorLocation();
 
     // Collect all living mobs within range пїЅ no cone filter so Tab cycles
     // through everything nearby regardless of which way the mesh faces
     TArray<ABasicMOB*> Candidates;
-    for (TActorIterator<ABasicMOB> It(GetWorld()); It; ++It)
+    // Registry iteration (O(registered mobs), no world scan) — consistent with CheckForMOB.
+    if (UMOBManager* MobMgr = MyGameInstance ? MyGameInstance->GetMOBManager() : nullptr)
     {
-        ABasicMOB* Mob = *It;
-        if (!Mob || Mob->GetMOBIsDead()) continue;
-
-        if (FVector::Dist(PlayerLoc, Mob->GetActorLocation()) > MaxTabRange) continue;
-
-        Candidates.Add(Mob);
+        MobMgr->ForEachMob([&](ABasicMOB* Mob)
+        {
+            if (!Mob || Mob->GetMOBIsDead()) return;
+            if (!FTargetingRule::IsInRange(FVector::Dist(PlayerLoc, Mob->GetActorLocation()), MaxTabRange)) return;
+            Candidates.Add(Mob);
+        });
     }
 
     if (Candidates.Num() == 0)

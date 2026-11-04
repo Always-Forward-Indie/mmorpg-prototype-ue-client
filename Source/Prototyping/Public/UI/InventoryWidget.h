@@ -143,6 +143,9 @@ protected:
 	UFUNCTION()
 	void OnItemRemoved(const FInventoryItemStruct& Item, int32 Quantity);
 
+	UFUNCTION()
+	void HandleItemCooldown(int32 ItemId, int32 CooldownSeconds);
+
 	// Show/hide tooltip
 	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
 	void ShowTooltip(const FInventoryItemStruct& Item, FVector2D Position);

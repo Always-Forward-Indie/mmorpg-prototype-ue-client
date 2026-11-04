@@ -4,7 +4,9 @@
 #include "MyGameInstance.h"
 #include "Utils/JSONParser.h"
 #include "Engine/World.h"
+#include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Mobs/BasicMOB.h"
+#include "Audio/AudioManager.h"
 #include "Gameplay/Players/BasicPlayer.h"
 #include "Gameplay/Players/PlayerAnimInstance.h"
 #include "Gameplay/Mobs/MOBManager.h"
@@ -118,9 +120,21 @@ void UHarvestManager::HandleChunkPacket(const FParsedPacket& Packet)
 	// Handle loot pickup error
 	else if (EventType == "corpseLootPickup" && Status == "error")
 	{
-		UE_LOG(LogGameplay, Warning, TEXT("HarvestManager: Received loot pickup error"));
+		UE_LOG(LogGameplay, Error, TEXT("HarvestManager: loot pickup failed (error)"));
 		FCorpseLootPickupErrorStruct ErrorData = JSONParser::DeserializeCorpseLootPickupError(Body);
-		
+		if (ErrorData.errorCode.IsEmpty())
+			ErrorData.errorCode = JSONParser::ResolveErrorCode(Packet.Root);
+
+		// Single owner: chunk refused the grant (e.g. inventory_full) — no partial loot.
+		// Surface through the unified full-path so the player gets one toast, not silence.
+		if (ErrorData.errorCode.Equals(TEXT("inventory_full"), ESearchCase::IgnoreCase) && gameInstance)
+		{
+			if (UInventoryManager* InvMgr = gameInstance->GetInventoryManager())
+				InvMgr->NotifyInventoryFull(TEXT("inventory_full"), TEXT("Inventory is full — loot left on the corpse."));
+			if (gameInstance->AudioManager)
+				gameInstance->AudioManager->PlayUISound(EUISoundEvent::ErrorSound);
+		}
+
 		// Show error message
 		if (GEngine)
 		{

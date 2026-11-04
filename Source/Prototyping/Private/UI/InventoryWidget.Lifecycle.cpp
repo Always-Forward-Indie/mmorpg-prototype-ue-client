@@ -154,6 +154,7 @@ void UInventoryWidget::NativeDestruct()
 		InventoryManager->OnInventoryUpdated.RemoveDynamic(this, &UInventoryWidget::OnInventoryUpdated);
 		InventoryManager->OnItemAdded.RemoveDynamic(this, &UInventoryWidget::OnItemAdded);
 		InventoryManager->OnItemRemoved.RemoveDynamic(this, &UInventoryWidget::OnItemRemoved);
+		InventoryManager->OnItemCooldown.RemoveDynamic(this, &UInventoryWidget::HandleItemCooldown);
 	}
 
 	Super::NativeDestruct();
@@ -200,6 +201,7 @@ void UInventoryWidget::InitializeInventory(UInventoryManager* InInventoryManager
 		InventoryManager->OnInventoryUpdated.RemoveDynamic(this, &UInventoryWidget::OnInventoryUpdated);
 		InventoryManager->OnItemAdded.RemoveDynamic(this, &UInventoryWidget::OnItemAdded);
 		InventoryManager->OnItemRemoved.RemoveDynamic(this, &UInventoryWidget::OnItemRemoved);
+		InventoryManager->OnItemCooldown.RemoveDynamic(this, &UInventoryWidget::HandleItemCooldown);
 	}
 
 	InventoryManager = InInventoryManager;
@@ -208,6 +210,7 @@ void UInventoryWidget::InitializeInventory(UInventoryManager* InInventoryManager
 	InventoryManager->OnInventoryUpdated.AddDynamic(this, &UInventoryWidget::OnInventoryUpdated);
 	InventoryManager->OnItemAdded.AddDynamic(this, &UInventoryWidget::OnItemAdded);
 	InventoryManager->OnItemRemoved.AddDynamic(this, &UInventoryWidget::OnItemRemoved);
+	InventoryManager->OnItemCooldown.AddDynamic(this, &UInventoryWidget::HandleItemCooldown);
 
 	// Update display with current inventory
 	if (InventoryManager->IsInventoryLoaded())

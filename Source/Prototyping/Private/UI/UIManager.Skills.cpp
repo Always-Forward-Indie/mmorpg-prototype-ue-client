@@ -264,6 +264,14 @@ void UUIManager::SetSkillTarget(int32 TargetId, ECasterType TargetType)
 	}
 }
 
+void UUIManager::SetTargetReticle(ECrosshairState State)
+{
+	if (PlayerInterfaceWidget)
+	{
+		PlayerInterfaceWidget->SetCrosshairState(State);
+	}
+}
+
 void UUIManager::SetPlayerController(APlayerController* InPlayerController)
 {
 	PlayerController = InPlayerController;

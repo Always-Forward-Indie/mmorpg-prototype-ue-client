@@ -4,6 +4,7 @@
 #include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
 #include "Gameplay/Skills/PlayerSkillNetworkHandler.h"
+#include "Utils/NetCore/SkillFeedbackRule.h"
 #include "Components/HorizontalBox.h"
 #include "Components/UniformGridPanel.h"
 #include "Components/HorizontalBoxSlot.h"
@@ -98,43 +99,57 @@ void USkillBarWidget::OnPlayerSkillsInitialized(const TArray<FPlayerSkillData>& 
 
 void USkillBarWidget::OnSkillCooldownStarted(const FString& SkillSlug)
 {
-    UE_LOG(LogGameplay, Warning,
-        TEXT("SkillBarWidget: OnSkillCooldownStarted '%s' — slots=%d"),
-        *SkillSlug, SkillSlots.Num());
+    bool bAssigned = false;
     for (int32 i = 0; i < SkillSlots.Num(); ++i)
     {
         USkillSlotWidget* SlotWidget = SkillSlots[i];
-        UE_LOG(LogGameplay, Warning,
-            TEXT("SkillBarWidget:   slot[%d] assigned='%s' match=%d"),
-            i,
-            SlotWidget ? *SlotWidget->GetAssignedSkillSlug() : TEXT("NULL"),
-            (SlotWidget && SlotWidget->GetAssignedSkillSlug() == SkillSlug) ? 1 : 0);
         if (SlotWidget && SlotWidget->GetAssignedSkillSlug() == SkillSlug)
         {
             RefreshSlot(i);
+            bAssigned = true;
         }
     }
-    if (GameInstance && GameInstance->AudioManager)
+    // Start blip: assigned-only, real cooldowns only (no GCD chirps, no login-restore burst).
+    // Restore path (ApplyServerCooldowns) broadcasts the same event for visuals, but the
+    // remaining is partial — we can't distinguish it here by event alone, so gate on duration:
+    // short totals stay silent, which also kills restore-burst noise for short CDs.
+    if (bAssigned && SkillManager && GameInstance && GameInstance->AudioManager)
     {
-        GameInstance->AudioManager->PlayUISound(EUISoundEvent::SkillCooldownStart);
+        const FPlayerSkillData SD = SkillManager->GetSkillData(SkillSlug);
+        const float TotalSec = SD.networkData.cooldownMs > 0 ? SD.networkData.cooldownMs / 1000.0f : 0.0f;
+        if (FSkillFeedbackRule::ShouldPlayStart(TotalSec, true, false))
+        {
+            GameInstance->AudioManager->PlayUISound(EUISoundEvent::SkillCooldownStart);
+        }
     }
 }
 
 void USkillBarWidget::OnSkillReady(const FString& SkillSlug)
 {
+    bool bAssigned = false;
     for (int32 i = 0; i < SkillSlots.Num(); ++i)
     {
         USkillSlotWidget* SlotWidget = SkillSlots[i];
         if (SlotWidget && SlotWidget->GetAssignedSkillSlug() == SkillSlug)
         {
             RefreshSlot(i);
+            bAssigned = true;
         }
     }
+    if (!bAssigned)
+    {
+        return;
+    }
 
-    // Per-skill ready sound, or fall back to global.
+    // Per-skill ready sound, or fall back to global. Short CDs stay silent.
     if (SkillManager)
     {
-        FPlayerSkillData SkillData = SkillManager->GetSkillData(SkillSlug);
+        const FPlayerSkillData SkillData = SkillManager->GetSkillData(SkillSlug);
+        const float TotalSec = SkillData.networkData.cooldownMs > 0 ? SkillData.networkData.cooldownMs / 1000.0f : 0.0f;
+        if (!FSkillFeedbackRule::ShouldPlayReady(TotalSec, true))
+        {
+            return;
+        }
         if (!SkillData.definitionData.skillReadySound.IsNull())
         {
             if (GameInstance && GameInstance->AudioManager)

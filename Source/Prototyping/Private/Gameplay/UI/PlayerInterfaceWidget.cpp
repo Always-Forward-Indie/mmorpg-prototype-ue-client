@@ -1,5 +1,6 @@
 #include "Gameplay/UI/PlayerInterfaceWidget.h"
 #include "Prototyping.h"
+#include "Components/Image.h"
 #include "MyGameInstance.h"
 #include "Components/OverlaySlot.h"
 #include "Gameplay/Player/ExperienceManager.h"
@@ -25,6 +26,26 @@ void UPlayerInterfaceWidget::NativeConstruct()
     }
     
     UE_LOG(LogGameplay, Warning, TEXT("PlayerInterfaceWidget: Constructed successfully"));
+}
+
+void UPlayerInterfaceWidget::SetCrosshairState(ECrosshairState State)
+{
+    CrosshairState = State;
+    if (!CrosshairImage) return;
+    FLinearColor Tint = FLinearColor::White;
+    ESlateVisibility Vis = ESlateVisibility::HitTestInvisible;
+    switch (State)
+    {
+    case ECrosshairState::None:    Vis = ESlateVisibility::Collapsed; break;
+    case ECrosshairState::Neutral:    Tint = FLinearColor(1.f, 1.f, 1.f, 0.65f); break;
+    case ECrosshairState::HoverMob:   Tint = FLinearColor(1.f, 1.f, 0.f, 0.9f); break;
+    case ECrosshairState::Locked:      Tint = FLinearColor(1.f, 0.2f, 0.2f, 0.95f); break;
+    case ECrosshairState::OutOfRange: Tint = FLinearColor(1.f, 0.55f, 0.15f, 0.8f); break;
+    case ECrosshairState::Dead:        Tint = FLinearColor(0.6f, 0.6f, 0.6f, 0.8f); break;
+    }
+    CrosshairImage->SetVisibility(Vis);
+    if (Vis != ESlateVisibility::Collapsed)
+        CrosshairImage->SetColorAndOpacity(Tint);
 }
 
 void UPlayerInterfaceWidget::NativeDestruct()

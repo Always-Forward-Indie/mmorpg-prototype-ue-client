@@ -27,6 +27,25 @@
 void UVendorShopWidget::HandleConfirmBuyCart()
 {
     if (!VendorManager || BuyCart.IsEmpty()) return;
+    // Predictive capacity gate: new templates need free slots, stacking always lands.
+    // Chunk is authoritative (inventory_full, no partial grant); this only avoids
+    // a wasted round trip with instant UX. Cart is kept so nothing is lost.
+    if (InventoryManager)
+    {
+        int32 NeededNewRows = 0;
+        for (const FVendorCartEntry& Entry : BuyCart)
+        {
+            if (Entry.itemId > 0 && !InventoryManager->HasItem(Entry.itemId))
+                ++NeededNewRows;
+        }
+        if (NeededNewRows > InventoryManager->GetFreeSlotCount() && InventoryManager->GetMaxInventorySlots() > 0)
+        {
+            InventoryManager->NotifyInventoryFull(TEXT("inventory_full"),
+                TEXT("Not enough free slots for this purchase."));
+            ShowStatus(FText::FromString(TEXT("Buy failed: inventory full")), EShopStatusSeverity::Error);
+            return;
+        }
+    }
     if (Buy_Confirm_Button) Buy_Confirm_Button->SetIsEnabled(false);
     VendorManager->RequestBuyItemBatch(GetCharacterId(), CachedShop.npcId, BuyCart, GetPlayerPosition());
     PendingBuyBatchRequestId = VendorManager->GetLastBuyBatchRequestId();
@@ -291,6 +310,8 @@ void UVendorShopWidget::HandleBuyItemResult(const FBuyItemResultData& Result)
 	{
 		const FText Friendly = GetVendorErrorText(Result.errorCode);
 		ShowStatus(FText::Format(LOCTEXT("BuyFailed", "Buy failed: {0}"), Friendly), EShopStatusSeverity::Error);
+		if (Result.errorCode.Equals(TEXT("inventory_full"), ESearchCase::IgnoreCase) && InventoryManager)
+			InventoryManager->NotifyInventoryFull(TEXT("inventory_full"), TEXT("Buy failed — inventory is full."));
 	}
 	else
 	{
@@ -342,6 +363,8 @@ void UVendorShopWidget::HandleBuyItemBatchResult(const FBuyItemBatchResultData& 
 	{
 		const FText Friendly = GetVendorErrorText(Result.errorCode);
 		ShowStatus(FText::Format(LOCTEXT("BuyFailed", "Buy failed: {0}"), Friendly), EShopStatusSeverity::Error);
+		if (Result.errorCode.Equals(TEXT("inventory_full"), ESearchCase::IgnoreCase) && InventoryManager)
+			InventoryManager->NotifyInventoryFull(TEXT("inventory_full"), TEXT("Buy failed — inventory is full."));
 		return;
 	}
 	// Echo-bound: stale/duplicate answers never touch the cart.

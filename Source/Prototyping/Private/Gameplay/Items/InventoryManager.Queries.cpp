@@ -4,6 +4,7 @@
 #include "Gameplay/Items/HarvestManager.h"
 #include "Utils/JSONParser.h"
 #include "Utils/NetCore/InventoryQuery.h"
+#include "Utils/NetCore/InventoryCapacityRule.h"
 #include "Engine/World.h"
 #include "UI/InventoryWidget.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
@@ -12,6 +13,7 @@
 #include "Gameplay/Items/ItemManager.h"
 #include "Utils/AudioSpawnHelpers.h"
 #include "CrashDiagnostics.h"
+#include "Prototyping.h"
 
 bool UInventoryManager::HasItem(int32 ItemId) const
 {
@@ -97,5 +99,41 @@ int32 UInventoryManager::GetJunkRowCount() const
 		if (Slugs.Contains(ItemSlug)) ++Count;
 	}
 	return Count;
+}
+
+int32 UInventoryManager::GetMaxInventorySlots() const
+{
+	// Server cap wins when present; 0 = legacy/unlimited -> UI grid fallback (48).
+	if (CurrentInventory.maxSlots > 0) return CurrentInventory.maxSlots;
+	return 48;
+}
+
+bool UInventoryManager::CanAcceptItem(int32 TemplateId) const
+{
+	const bool bOwns = TemplateId > 0 && HasItem(TemplateId);
+	return FInventoryCapacityRule::CanAcceptNewTemplate(
+		CurrentInventory.items.Num(), GetMaxInventorySlots(), bOwns);
+}
+
+bool UInventoryManager::IsInventoryFullFor(int32 TemplateId) const
+{
+	return !CanAcceptItem(TemplateId);
+}
+
+int32 UInventoryManager::GetFreeSlotCount() const
+{
+	return FInventoryCapacityRule::FreeSlots(CurrentInventory.items.Num(), GetMaxInventorySlots());
+}
+
+void UInventoryManager::NotifyInventoryFull(const FString& ErrorCode, const FString& DisplayMessage)
+{
+	const FString Code = ErrorCode.IsEmpty() ? TEXT("inventory_full") : ErrorCode;
+	FString Msg = DisplayMessage;
+	if (Msg.IsEmpty())
+	{
+		Msg = TEXT("Inventory is full — free a slot first.");
+	}
+	UE_LOG(LogGameplay, Error, TEXT("InventoryManager: capacity refused (%s): %s"), *Code, *Msg);
+	OnInventoryFull.Broadcast(Code, Msg);
 }
 

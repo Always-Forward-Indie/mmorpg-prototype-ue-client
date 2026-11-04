@@ -196,6 +196,15 @@ FCharacterInventoryStruct JSONParser::DeserializeCharacterInventory(const TShare
 		Inventory.inventoryVersion = static_cast<int64>(FMath::RoundToDouble(VersionNumber));
 	}
 
+	// Authoritative slot cap (absent = 0 = legacy/unlimited).
+	int32 MaxSlots = 0;
+	if (Body->TryGetNumberField(TEXT("maxSlots"), MaxSlots)
+		|| Body->TryGetNumberField(TEXT("max_slots"), MaxSlots)
+		|| Body->TryGetNumberField(TEXT("inventoryMaxSlots"), MaxSlots))
+	{
+		Inventory.maxSlots = MaxSlots;
+	}
+
 	// Items
 	const TArray<TSharedPtr<FJsonValue>>* ItemsArray = nullptr;
 	if (Body->TryGetArrayField(TEXT("items"), ItemsArray))

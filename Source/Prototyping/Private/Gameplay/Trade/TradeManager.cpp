@@ -2,6 +2,7 @@
 #include "Prototyping.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
+#include "Gameplay/Items/InventoryManager.h"
 #include "Utils/NetCore/TradeStatusRule.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -206,6 +207,13 @@ void UTradeManager::OnTradeDeclined(const FTradeDeclinedData& Data)
 void UTradeManager::OnTradeCancelled(const FTradeCancelledData& Data)
 {
     LastCancelData = Data;
+    // Capacity refusal is authoritative (no partial grant): mirror it through
+    // the unified full-path so every entry point shows the same toast.
+    if (Data.reason.Equals(TEXT("inventory_full"), ESearchCase::IgnoreCase) && GameInstance)
+    {
+        if (UInventoryManager* InvMgr = GameInstance->GetInventoryManager())
+            InvMgr->NotifyInventoryFull(TEXT("inventory_full"), TEXT("Trade failed — inventory is full."));
+    }
     // Foreign echoes (cancel for a session that is not ours) must not wipe
     // the live session — the widget decides visibility by the same rule.
     if (Data.sessionId.IsEmpty() || Data.sessionId == CurrentSessionId)

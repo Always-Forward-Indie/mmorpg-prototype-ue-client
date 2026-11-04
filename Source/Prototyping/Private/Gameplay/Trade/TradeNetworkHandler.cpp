@@ -62,7 +62,12 @@ void UTradeNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
     else if (EventType == TEXT("tradeState"))     TradeManager->OnTradeStateReceived(ParseTradeState(Body));
     else if (EventType == TEXT("tradeDeclined"))  TradeManager->OnTradeDeclined(ParseTradeDeclined(Body));
     else if (EventType == TEXT("tradeCancelled")) TradeManager->OnTradeCancelled(ParseTradeCancelled(Body));
-    else if (EventType == TEXT("tradeComplete"))  TradeManager->OnTradeCompleted(ParseTradeComplete(Body));
+    else if (EventType == TEXT("tradeComplete") && !Packet.Status.Equals(TEXT("error"), ESearchCase::IgnoreCase))
+    {
+        FTradeCompleteData Done = ParseTradeComplete(Body);
+        Done.bSuccess = true;
+        TradeManager->OnTradeCompleted(Done);
+    }
 else if (Packet.Status.Equals(TEXT("error"), ESearchCase::IgnoreCase))
 {
     const FString Code = JSONParser::ResolveErrorCode(Packet.Root);

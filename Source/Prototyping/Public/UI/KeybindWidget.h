@@ -112,7 +112,11 @@ public:
 private:
 	void StopCapture();
 	void OnCaptureKeyDown(const FKeyEvent& InKeyEvent);
+
+	UFUNCTION()
 	void HandleResetAllClicked();
+
+	UFUNCTION()
 	void HandleCloseClicked();
 
 	UPROPERTY() ABasicPlayer* Player = nullptr;

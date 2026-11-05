@@ -49,7 +49,7 @@ void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, 
 			{
 				if (USoundBase* Sound = Def.castSound.LoadSynchronous())
 				{
-					SpawnSFXAttached(this, Sound, GetActorLocation(), 1.0f, DefaultAttenuation);
+					SpawnSFXAttached(this, Sound, GetActorLocation(), EWorldSoundClass::Mob, 1.0f, DefaultAttenuation);
 					bCastSoundPlayed = true;
 				}
 			}
@@ -68,7 +68,7 @@ void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, 
 				}
 				if (VoiceToPlay)
 				{
-					SpawnSFXAttached(this, VoiceToPlay, GetActorLocation(), 1.0f, DefaultAttenuation);
+					SpawnSFXAttached(this, VoiceToPlay, GetActorLocation(), EWorldSoundClass::Mob, 1.0f, DefaultAttenuation);
 				}
 			}
 
@@ -103,7 +103,7 @@ void ABasicMOB::PlaySkillAnimation_Implementation(const FString& AnimationName, 
 			}
 			if (SwingToPlay)
 			{
-				SpawnSFXAttached(this, SwingToPlay, GetActorLocation(), 1.0f, DefaultAttenuation);
+				SpawnSFXAttached(this, SwingToPlay, GetActorLocation(), EWorldSoundClass::Mob, 1.0f, DefaultAttenuation);
 			}
         }
     }

@@ -15,7 +15,72 @@ class UAudioConfigDataAsset;
 class UWidget;
 class UButton;
 class USoundConcurrency;
+class USoundAttenuation;
 class UQuartzClockHandle;
+class AActor;
+
+// ---------------------------------------------------------------------------
+// World (positional) sound classes — one policy per class, data-driven.
+// ---------------------------------------------------------------------------
+UENUM(BlueprintType)
+enum class EWorldSoundClass : uint8
+{
+	Mob      UMETA(DisplayName = "Mob"),
+	Player   UMETA(DisplayName = "Player"),
+	Skill    UMETA(DisplayName = "Skill"),
+	Loot     UMETA(DisplayName = "Loot"),
+	Footstep UMETA(DisplayName = "Footstep"),
+	Ambient  UMETA(DisplayName = "Ambient"),
+	Emote    UMETA(DisplayName = "Emote"),
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FWorldSoundPreset
+{
+	GENERATED_BODY()
+
+	/** Distance gate from the listener (cm). 0 = no gate. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Sound", meta = (ClampMin = "0", Units = "cm"))
+	float MaxAudibleDistance = 3000.0f;
+
+	/** Base multiplier (stacks with the call-site VolumeScale). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Sound")
+	float VolumeMultiplier = 1.0f;
+
+	/** Attenuation asset (distance curve, reverb send). Null = caller's own. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Sound")
+	USoundAttenuation* Attenuation = nullptr;
+
+	/** Line-of-sight occlusion (throttled per owner, see OcclusionRefreshSec). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Sound|Occlusion")
+	bool bOcclusionEnabled = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Sound|Occlusion", meta = (ClampMin = "0.05", Units = "s"))
+	float OcclusionRefreshSec = 0.25f;
+
+	/** Volume multiplier while occluded. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Sound|Occlusion", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float OccludedVolumeMultiplier = 0.25f;
+
+	/** Low-pass the occluded tail (muffled-through-wall). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Sound|Occlusion")
+	bool bOcclusionLowPass = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Sound|Occlusion", meta = (ClampMin = "10", ClampMax = "20000"))
+	float OccludedLowPassFreq = 800.0f;
+};
+
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FWorldSoundClassEntry
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Sound")
+	EWorldSoundClass Class = EWorldSoundClass::Mob;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Sound")
+	FWorldSoundPreset Preset;
+};
 
 // ---------------------------------------------------------------------------
 // One class-volume override inside a mix snapshot (see UAudioManager snapshots).
@@ -213,6 +278,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Setup")
 	USoundConcurrency* UIConcurrency = nullptr;
 
+	/** Voice cap for positional world sounds (same semantics, separate budget). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Setup")
+	USoundConcurrency* WorldConcurrency = nullptr;
+
 	/** Musical clock tempo for quantized music starts (4/4). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Music Clock", meta = (ClampMin = "40", ClampMax = "220"))
 	float MusicClockBPM = 100.0f;
@@ -237,6 +306,24 @@ public:
 	/** Zone snapshots: first substring match on the server zone name wins. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Snapshots")
 	TArray<FZoneVolumeProfile> ZoneVolumeProfiles;
+
+	// -----------------------------------------------------------------------
+	// World (positional) sounds — one policy per class, data-driven.
+	// -----------------------------------------------------------------------
+
+	/** Per-class presets. Unlisted classes use built-in defaults (see
+	 *  DefaultWorldPreset): 3000cm gate, occlusion on, ducked+lowpassed tail. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|World")
+	TArray<FWorldSoundClassEntry> WorldSoundPresets;
+
+	/** Play a one-shot positional sound under the world policy: distance gate,
+	 *  throttled LOS occlusion (volume duck + low-pass), class attenuation,
+	 *  SFX routing, voice cap. Returns the voice (bAutoDestroy) or null when
+	 *  culled. No-op on null Sound/Owner/world. */
+	UFUNCTION(BlueprintCallable, Category = "Audio|World")
+	UAudioComponent* PlayWorldSound(EWorldSoundClass SoundClass, USoundBase* Sound,
+		AActor* Owner, FVector Location, float VolumeScale = 1.0f,
+		USoundAttenuation* AttenuationOverride = nullptr);
 
 	// -----------------------------------------------------------------------
 	// Playlists � fill in the GameInstance Blueprint defaults.
@@ -515,6 +602,24 @@ private:
 	bool bCombatActive = false;
 	bool bLowHPActive = false;
 	int32 ActiveZoneProfileIdx = INDEX_NONE;
+
+	// Occlusion cache: owner -> last LOS verdict (throttled per preset).
+	struct FOcclusionState
+	{
+		double LastCheckSec = -10000.0;
+		bool bOccluded = false;
+	};
+	TMap<TWeakObjectPtr<AActor>, FOcclusionState> OcclusionCache;
+
+	/** Preset for the class: DA entry wins, else built-in defaults. */
+	const FWorldSoundPreset& ResolveWorldPreset(EWorldSoundClass SoundClass) const;
+
+	/** Built-in defaults for unlisted classes. */
+	static const FWorldSoundPreset& DefaultWorldPreset(EWorldSoundClass SoundClass);
+
+	/** Throttled line-of-sight check with per-owner result cache. */
+	bool CheckOccluded(AActor* Owner, const FVector& ListenerLoc, const FVector& Location,
+		const FWorldSoundPreset& Preset);
 
 	const FMusicPlaylist* FindPlaylist(const FString& InPlaylistId) const;
 	int32 PickNextTrackIndex(const FMusicPlaylist& Playlist) const;

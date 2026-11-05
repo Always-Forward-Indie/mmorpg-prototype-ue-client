@@ -81,6 +81,11 @@
 - Снапшоты миксов (`DA_AudioConfig → Mix Snapshots`): `CombatVolumes` (бой),
   `LowHPVolumes` (HP ниже `LowHPThreshold`), `ZoneVolumeProfiles` (первое совпадение
   подстроки в имени зоны). Выход из состояния возвращает громкости слайдеров.
+- Мир (`DA_AudioConfig → World Sounds` + `WorldConcurrency`): пресеты по классам
+  (`Mob/Player/Skill/Loot/Footstep/Ambient/Emote`) — дальность, громкость, аттенюация,
+  окклюзия (дакинг + low-pass, троттлинг на владельца). Все 3D-одноразки идут через
+  `AudioManager::PlayWorldSound`; прямой `SpawnSoundAttached` — только фолбэк без менеджера.
+  Реверб — через send аттенюации в размещенные `AudioVolume`.
 
 ### Кнопки, окна и остальные UI-события (покрытие всех EUISoundEvent)
 Каждое значение `EUISoundEvent` обязано иметь эмиттер в коде — проверяет CI-гейт

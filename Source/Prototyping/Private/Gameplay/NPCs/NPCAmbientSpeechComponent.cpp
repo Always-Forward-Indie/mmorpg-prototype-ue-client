@@ -6,6 +6,7 @@
 #include "Services/LocalizationSubsystem.h"
 #include "Data/DataStructs.h"
 #include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "GameFramework/Character.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
@@ -287,9 +288,26 @@ void UNPCAmbientSpeechComponent::ShowSpeechLine(const FAmbientSpeechLineData& Li
         USoundBase* Sound = Def.SpeechSound.LoadSynchronous();
         if (Sound && GetOwner())
         {
-            UGameplayStatics::SpawnSoundAttached(Sound, GetOwner()->GetRootComponent(), NAME_None,
-                GetOwner()->GetActorLocation(), FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition,
-                true, 1.0f, 1.0f, 0.0f, nullptr, nullptr, true);
+            if (UMyGameInstance* SpeechGI = Cast<UMyGameInstance>(GetWorld() ? GetWorld()->GetGameInstance() : nullptr))
+            {
+                if (SpeechGI->AudioManager)
+                {
+                    SpeechGI->AudioManager->PlayWorldSound(EWorldSoundClass::Ambient, Sound,
+                        GetOwner(), GetOwner()->GetActorLocation());
+                }
+                else
+                {
+                    UGameplayStatics::SpawnSoundAttached(Sound, GetOwner()->GetRootComponent(), NAME_None,
+                        GetOwner()->GetActorLocation(), FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition,
+                        true, 1.0f, 1.0f, 0.0f, nullptr, nullptr, true);
+                }
+            }
+            else
+            {
+                UGameplayStatics::SpawnSoundAttached(Sound, GetOwner()->GetRootComponent(), NAME_None,
+                    GetOwner()->GetActorLocation(), FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition,
+                    true, 1.0f, 1.0f, 0.0f, nullptr, nullptr, true);
+            }
         }
     }
 }

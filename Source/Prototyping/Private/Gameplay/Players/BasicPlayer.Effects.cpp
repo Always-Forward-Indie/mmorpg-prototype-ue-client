@@ -172,7 +172,7 @@ void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritica
                                     if (!Prof->DefaultAttenuation.IsNull())
                                         Atn = Prof->DefaultAttenuation.LoadSynchronous();
                                 }
-                                SpawnSFXAttached(this, ImpactSound, GetActorLocation(), 1.0f, Atn);
+                                SpawnSFXAttached(this, ImpactSound, GetActorLocation(), EWorldSoundClass::Player, 1.0f, Atn);
                                 bHitSoundPlayed = true;
                             }
                         }
@@ -205,7 +205,7 @@ void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritica
                         if (!Prof->DefaultAttenuation.IsNull())
                             Atn = Prof->DefaultAttenuation.LoadSynchronous();
                     }
-                    SpawnSFXAttached(this, Sound, GetActorLocation(), 1.0f, Atn);
+                    SpawnSFXAttached(this, Sound, GetActorLocation(), EWorldSoundClass::Player, 1.0f, Atn);
                 }
             }
 
@@ -237,7 +237,7 @@ void ABasicPlayer::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritica
                         if (!Prof->DefaultAttenuation.IsNull())
                             Atn = Prof->DefaultAttenuation.LoadSynchronous();
                     }
-                    SpawnSFXAttached(this, CritSnd, GetActorLocation(), 1.0f, Atn);
+                    SpawnSFXAttached(this, CritSnd, GetActorLocation(), EWorldSoundClass::Player, 1.0f, Atn);
                 }
             }
         }
@@ -389,7 +389,7 @@ void ABasicPlayer::ShowBuffEffect_Implementation(const FAppliedEffectData& Effec
                 if (!Prof->DefaultAttenuation.IsNull())
                     Atn = Prof->DefaultAttenuation.LoadSynchronous();
             }
-            SpawnSFXAttached(this, Snd, GetActorLocation(), 1.0f, Atn);
+            SpawnSFXAttached(this, Snd, GetActorLocation(), EWorldSoundClass::Player, 1.0f, Atn);
         }
     }
 

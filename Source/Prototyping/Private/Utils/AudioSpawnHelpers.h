@@ -15,30 +15,23 @@
  * Shared between BasicPlayer.cpp and BasicMOB.cpp.
  * Declared inline to avoid ODR violations when both TUs end up in the same unity file.
  *
- * @param MaxAudibleDistance  Sounds beyond this distance from the local player (cm)
- *                            are silently skipped. 0 = no distance check.
+ * Routes through UAudioManager::PlayWorldSound (distance gate, throttled LOS
+ * occlusion, class attenuation, SFX routing, voice cap).
  */
 inline UAudioComponent* SpawnSFXAttached(AActor* Owner, USoundBase* Sound,
-    const FVector& WorldLocation, float VolumeMultiplier = 1.0f,
-    USoundAttenuation* AttenuationSettings = nullptr,
-    float MaxAudibleDistance = 3000.0f)
+    const FVector& WorldLocation, EWorldSoundClass SoundClass,
+    float VolumeMultiplier = 1.0f,
+    USoundAttenuation* AttenuationSettings = nullptr)
 {
     if (!Owner || !Sound) { return nullptr; }
 
-    // Distance gate: skip sounds from actors too far from the local player.
-    // This prevents hearing mob combat audio from across the entire map.
-    if (MaxAudibleDistance > 0.0f && Owner->GetWorld())
+    // World policy owns distance/occlusion/attenuation (single owner).
+    if (UMyGameInstance* PolicyGI = Cast<UMyGameInstance>(Owner->GetGameInstance()))
     {
-        if (APlayerController* PC = Owner->GetWorld()->GetFirstPlayerController())
+        if (PolicyGI->AudioManager)
         {
-            if (APawn* Pawn = PC->GetPawn())
-            {
-                const float Dist = FVector::Dist(Pawn->GetActorLocation(), WorldLocation);
-                if (Dist > MaxAudibleDistance)
-                {
-                    return nullptr;
-                }
-            }
+            return PolicyGI->AudioManager->PlayWorldSound(
+                SoundClass, Sound, Owner, WorldLocation, VolumeMultiplier, AttenuationSettings);
         }
     }
 

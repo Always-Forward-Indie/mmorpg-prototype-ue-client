@@ -247,6 +247,8 @@ def main() -> int:
     #     (a real EUISoundEvent::<Value> code reference outside the enum
     #     declaration). A DA-mapped event with no emitter is silent by design —
     #     exactly the dead ButtonClick/ButtonHover hole this gate closes.
+    # (d) same for EWorldSoundClass: every positional class must have at
+    #     least one PlayWorldSound call site.
     if enum_block and values:
         code_files = [p for p in list(src.rglob("*.cpp")) + list(src.rglob("*.h"))
                       if p.resolve() != audio_mgr_h.resolve()]
@@ -268,6 +270,27 @@ def main() -> int:
                     f"audio gate: EUISoundEvent::{value} has no emitter — "
                     "map it in DA_AudioConfig AND play it in code, or delete the event"
                 )
+        world_block = re.search(r"enum class EWorldSoundClass[^{]*\{(.*?)\};", mgr_text, re.S)
+        if world_block:
+            world_values = re.findall(r"^\s*(\w+)\s+UMETA", world_block.group(1), re.M)
+            world_re = re.compile(r"EWorldSoundClass::(\w+)\b")
+            world_hits: dict[str, int] = {v: 0 for v in world_values}
+            for path in code_files:
+                try:
+                    text = path.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    continue
+                text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+                text = "\n".join(line.split("//", 1)[0] for line in text.splitlines())
+                for hit in world_re.findall(text):
+                    if hit in world_hits:
+                        world_hits[hit] += 1
+            for value, count in sorted(world_hits.items()):
+                if count == 0:
+                    failures.append(
+                        f"audio gate: EWorldSoundClass::{value} has no PlayWorldSound call site — "
+                        "route it through UAudioManager::PlayWorldSound or delete the class"
+                    )
 
     if failures:
         print("CLIENT GATES: FAIL")

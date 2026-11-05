@@ -133,9 +133,6 @@ void ABasicPlayer::PlayEventSound(const TSoftObjectPtr<USoundBase>& SoundRef)
     USoundBase* Sound = SoundRef.LoadSynchronous();
     if (!Sound) return;
 
-    USoundClass* SFXClass = (MyGameInstance && MyGameInstance->AudioManager)
-        ? MyGameInstance->AudioManager->SFXClass : nullptr;
-
     USoundAttenuation* Attenuation = nullptr;
     if (const FEntityAudioProfile* Profile = GetAudioProfile())
     {
@@ -144,6 +141,17 @@ void ABasicPlayer::PlayEventSound(const TSoftObjectPtr<USoundBase>& SoundRef)
             Attenuation = Profile->DefaultAttenuation.LoadSynchronous();
         }
     }
+
+    // Player policy: distance gate, occlusion, class attenuation, voice cap.
+    if (MyGameInstance && MyGameInstance->AudioManager)
+    {
+        MyGameInstance->AudioManager->PlayWorldSound(EWorldSoundClass::Player, Sound,
+            this, GetActorLocation(), 1.0f, Attenuation);
+        return;
+    }
+
+    USoundClass* SFXClass = (MyGameInstance && MyGameInstance->AudioManager)
+        ? MyGameInstance->AudioManager->SFXClass : nullptr;
 
     if (SFXClass)
     {

@@ -83,6 +83,18 @@ public:
 	TArray<FZoneVolumeProfile> ZoneVolumeProfiles;
 
 	// -----------------------------------------------------------------------
+	// World (positional) sounds — one policy per class, read by PlayWorldSound.
+	// -----------------------------------------------------------------------
+
+	/** Per-class presets. Unlisted classes use built-in defaults. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Sounds")
+	TArray<FWorldSoundClassEntry> WorldSoundPresets;
+
+	/** Voice cap for positional world sounds (separate budget from UI). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Sounds")
+	USoundConcurrency* WorldConcurrency = nullptr;
+
+	// -----------------------------------------------------------------------
 	// Music playlists � define one entry per music context
 	// -----------------------------------------------------------------------
 

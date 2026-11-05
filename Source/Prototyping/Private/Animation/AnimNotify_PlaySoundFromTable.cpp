@@ -76,34 +76,12 @@ void UAnimNotify_PlaySoundFromTable::Notify(USkeletalMeshComponent* MeshComp,
 
 	if (SoundToPlay)
 	{
-		USoundClass* SFXClass = nullptr;
-		if (UMyGameInstance* GI = Cast<UMyGameInstance>(Mob->GetGameInstance()))
+		// Mob policy: distance gate, occlusion, class attenuation, voice cap.
+		UMyGameInstance* GI = Cast<UMyGameInstance>(Mob->GetGameInstance());
+		if (GI && GI->AudioManager)
 		{
-			if (GI->AudioManager) { SFXClass = GI->AudioManager->SFXClass; }
-		}
-
-		if (SFXClass)
-		{
-			UAudioComponent* AC = UGameplayStatics::SpawnSoundAttached(
-				SoundToPlay,
-				Mob->GetRootComponent(),
-				NAME_None,
-				Mob->GetActorLocation(),
-				FRotator::ZeroRotator,
-				EAttachLocation::KeepWorldPosition,
-				/*bStopWhenAttachedToDestroyed=*/true,
-				FinalVolume,
-				/*PitchMultiplier=*/1.0f,
-				/*StartTime=*/0.0f,
-				/*AttenuationSettings=*/Mob->DefaultAttenuation,
-				/*ConcurrencySettings=*/nullptr,
-				/*bAutoActivate=*/false);
-			if (AC)
-			{
-				AC->SoundClassOverride = SFXClass;
-				AC->bAutoDestroy = true;
-				AC->Play();
-			}
+			GI->AudioManager->PlayWorldSound(EWorldSoundClass::Mob, SoundToPlay,
+				Mob, Mob->GetActorLocation(), FinalVolume, Mob->DefaultAttenuation);
 		}
 		else
 		{

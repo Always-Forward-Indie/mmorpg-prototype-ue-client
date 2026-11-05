@@ -12,6 +12,7 @@
 #include "Engine/World.h"
 
 #include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "Gameplay/Combat/CombatSystemManager.h"
 #include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Gameplay/Players/BasicPlayer.h"
@@ -289,9 +290,17 @@ void ABaseMMOProjectile::OnProjectileImpact(const FVector& ImpactLocation)
                                 Atn = Prof->DefaultAttenuation.LoadSynchronous();
                         }
                     }
-                    UGameplayStatics::SpawnSoundAttached(ImpactSnd, GetRootComponent(), NAME_None,
-                        ImpactLocation, FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition,
-                        true, 1.0f, 1.0f, 0.0f, Atn, nullptr, true);
+                    if (GI && GI->AudioManager)
+                    {
+                        GI->AudioManager->PlayWorldSound(EWorldSoundClass::Skill, ImpactSnd,
+                            this, ImpactLocation, 1.0f, Atn);
+                    }
+                    else
+                    {
+                        UGameplayStatics::SpawnSoundAttached(ImpactSnd, GetRootComponent(), NAME_None,
+                            ImpactLocation, FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition,
+                            true, 1.0f, 1.0f, 0.0f, Atn, nullptr, true);
+                    }
                 }
             }
         }

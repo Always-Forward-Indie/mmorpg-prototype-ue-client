@@ -1,5 +1,7 @@
 #include "Gameplay/Emotes/EmoteComponent.h"
 #include "Prototyping.h"
+#include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "Data/EmoteDefinitionTable.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimInstance.h"
@@ -229,6 +231,16 @@ void UEmoteComponent::ExecutePlaySound(const FEmoteTableRow& Row) const
     AActor* Owner = GetOwner();
     if (!Owner) return;
 
+    // Emote policy: distance gate, occlusion, class attenuation, voice cap.
+    if (UMyGameInstance* EmoteGI = Cast<UMyGameInstance>(Owner->GetGameInstance()))
+    {
+        if (EmoteGI->AudioManager)
+        {
+            EmoteGI->AudioManager->PlayWorldSound(EWorldSoundClass::Emote, Sound,
+                Owner, Owner->GetActorLocation());
+            return;
+        }
+    }
     UGameplayStatics::SpawnSoundAttached(Sound, Owner->GetRootComponent(),
         NAME_None, FVector::ZeroVector, EAttachLocation::KeepRelativeOffset,
         false, 1.f, 1.f, 0.f, nullptr, nullptr, true);

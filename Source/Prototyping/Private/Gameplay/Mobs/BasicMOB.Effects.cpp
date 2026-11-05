@@ -111,7 +111,7 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
 								UE_LOG(LogGameplay, Warning, TEXT("[MOB HitSFX] ImpactSound[%d]=%s"), Idx, ImpactSound ? TEXT("OK") : TEXT("NULL"));
 								if (ImpactSound)
 									{
-										SpawnSFXAttached(this, ImpactSound, GetActorLocation(), 1.0f, DefaultAttenuation);
+										SpawnSFXAttached(this, ImpactSound, GetActorLocation(), EWorldSoundClass::Mob, 1.0f, DefaultAttenuation);
 										bHitSoundPlayed = true;
 									}
 							}
@@ -141,7 +141,7 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
 				UE_LOG(LogGameplay, Warning, TEXT("[MOB HitSFX] Fallback hitSound=%s"), Sound ? TEXT("OK") : TEXT("NULL (asset not loaded)"));
 				if (Sound)
 				{
-					SpawnSFXAttached(this, Sound, GetActorLocation(), 1.0f, DefaultAttenuation);
+					SpawnSFXAttached(this, Sound, GetActorLocation(), EWorldSoundClass::Mob, 1.0f, DefaultAttenuation);
 					bHitSoundPlayed = true;
 				}
 			}
@@ -168,7 +168,7 @@ void ABasicMOB::ShowDamageEffect_Implementation(int32 Damage, bool bIsCritical, 
             {
                 if (USoundBase* CritSnd = Def.critSound.LoadSynchronous())
                 {
-                    SpawnSFXAttached(this, CritSnd, GetActorLocation(), 1.0f, DefaultAttenuation);
+                    SpawnSFXAttached(this, CritSnd, GetActorLocation(), EWorldSoundClass::Mob, 1.0f, DefaultAttenuation);
                 }
             }
         }
@@ -218,7 +218,7 @@ void ABasicMOB::ShowHealingEffect_Implementation(int32 Healing, const FString& S
         {
             if (USoundBase* Snd = Def.healSound.LoadSynchronous())
             {
-                SpawnSFXAttached(this, Snd, GetActorLocation(), 1.0f, DefaultAttenuation);
+                SpawnSFXAttached(this, Snd, GetActorLocation(), EWorldSoundClass::Mob, 1.0f, DefaultAttenuation);
             }
         }
 
@@ -259,7 +259,7 @@ void ABasicMOB::ShowBuffEffect_Implementation(const FAppliedEffectData& Effect)
     {
         if (USoundBase* Snd = Row->ApplySound.LoadSynchronous())
         {
-            SpawnSFXAttached(this, Snd, GetActorLocation(), 1.0f, DefaultAttenuation);
+            SpawnSFXAttached(this, Snd, GetActorLocation(), EWorldSoundClass::Mob, 1.0f, DefaultAttenuation);
         }
     }
 

@@ -70,7 +70,7 @@ void UInventoryManager::HandleChunkPacket(const FParsedPacket& Packet)
 					USoundAttenuation* Atn = Vis.DefaultAttenuation.LoadSynchronous();
 					ABasicPlayer* Player = gameInstance->GetPlayerByCharacterId(gameInstance->GetCurrentCharacterID());
 					if (Player)
-						SpawnSFXAttached(Player, Snd, Player->GetActorLocation(), 1.0f, Atn);
+						SpawnSFXAttached(Player, Snd, Player->GetActorLocation(), EWorldSoundClass::Player, 1.0f, Atn);
 				}
 				else if (gameInstance->AudioManager)
 				{

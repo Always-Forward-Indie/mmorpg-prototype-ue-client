@@ -224,11 +224,9 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 
 	if (SoundToPlay)
 	{
-		USoundClass* SFXClass = nullptr;
-		if (UMyGameInstance* GI = Cast<UMyGameInstance>(Owner->GetGameInstance()))
-		{
-			if (GI->AudioManager) { SFXClass = GI->AudioManager->SFXClass; }
-		}
+		// Footstep policy: distance gate, occlusion, class attenuation, voice cap.
+		UMyGameInstance* GI = Cast<UMyGameInstance>(Owner->GetGameInstance());
+		USoundClass* SFXClass = (GI && GI->AudioManager) ? GI->AudioManager->SFXClass : nullptr;
 
 		if (!Attenuation)
 		{
@@ -252,7 +250,12 @@ void UAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenc
 			}
 		}
 
-		if (SFXClass)
+		if (GI && GI->AudioManager)
+		{
+			GI->AudioManager->PlayWorldSound(EWorldSoundClass::Footstep, SoundToPlay,
+				Owner, TraceStart, FinalVolume, Attenuation);
+		}
+		else if (SFXClass)
 		{
 			UAudioComponent* AC = UGameplayStatics::SpawnSoundAttached(
 				SoundToPlay, Owner->GetRootComponent(), NAME_None,

@@ -34,6 +34,8 @@ void UAudioManager::Init(UObject* InWorldContext, UAudioConfigDataAsset* InConfi
 		CombatVolumes   = InConfig->CombatVolumes;
 		LowHPVolumes    = InConfig->LowHPVolumes;
 		ZoneVolumeProfiles = InConfig->ZoneVolumeProfiles;
+		WorldSoundPresets  = InConfig->WorldSoundPresets;
+		WorldConcurrency   = InConfig->WorldConcurrency;
 		Playlists       = InConfig->Playlists;
 		UISounds        = InConfig->UISounds;
 		StingerLevelUp    = InConfig->StingerLevelUp;

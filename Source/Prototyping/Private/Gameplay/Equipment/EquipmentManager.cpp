@@ -177,7 +177,7 @@ void UEquipmentManager::OnEquipResultReceived(const FEquipResultData& Result)
         {
             ABasicPlayer* Player = GameInstance->GetPlayerByCharacterId(Result.characterId);
             if (Player)
-                SpawnSFXAttached(Player, Snd, Player->GetActorLocation(), 1.0f, Atn);
+                SpawnSFXAttached(Player, Snd, Player->GetActorLocation(), EWorldSoundClass::Player, 1.0f, Atn);
         }
         else if (GameInstance && GameInstance->AudioManager)
         {

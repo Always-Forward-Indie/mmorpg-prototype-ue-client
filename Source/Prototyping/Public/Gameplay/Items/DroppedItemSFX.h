@@ -20,6 +20,17 @@ inline void PlayItemSFX(AActor* Owner, USoundBase* Sound, USoundAttenuation* Att
 {
 	if (!Owner || !Sound) { return; }
 
+	// Loot policy (distance gate, occlusion, attenuation, voice cap).
+	if (UMyGameInstance* PolicyGI = Cast<UMyGameInstance>(Owner->GetGameInstance()))
+	{
+		if (PolicyGI->AudioManager)
+		{
+			PolicyGI->AudioManager->PlayWorldSound(
+				EWorldSoundClass::Loot, Sound, Owner, Owner->GetActorLocation(), 1.0f, Attenuation);
+			return;
+		}
+	}
+
 	USoundClass* SFXClass = nullptr;
 	if (UMyGameInstance* GI = Cast<UMyGameInstance>(Owner->GetGameInstance()))
 	{

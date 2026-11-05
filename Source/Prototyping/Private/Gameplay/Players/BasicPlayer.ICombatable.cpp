@@ -366,7 +366,7 @@ void ABasicPlayer::PlaySkillAnimation_Implementation(const FString& AnimationNam
                             if (!Prof->DefaultAttenuation.IsNull())
                                 Atn = Prof->DefaultAttenuation.LoadSynchronous();
                         }
-                        SpawnSFXAttached(this, Sound, GetActorLocation(), 1.0f, Atn);
+                        SpawnSFXAttached(this, Sound, GetActorLocation(), EWorldSoundClass::Player, 1.0f, Atn);
                     }
                 }
 

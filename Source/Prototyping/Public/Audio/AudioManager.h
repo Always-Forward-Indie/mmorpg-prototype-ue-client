@@ -7,11 +7,13 @@
 #include "Sound/SoundMix.h"
 #include "Sound/SoundClass.h"
 #include "Components/AudioComponent.h"
+#include "Engine/StreamableManager.h"
 #include "AudioManager.generated.h"
 
 class UAudioConfigDataAsset;
 class UWidget;
 class UButton;
+class USoundConcurrency;
 
 // ---------------------------------------------------------------------------
 // How tracks inside a playlist are cycled
@@ -167,6 +169,11 @@ public:
 	 *  Falls back to SFXClass if not assigned. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Setup")
 	USoundClass* UIClass = nullptr;
+
+	/** Voice cap for UI/deny/ready feedback (anti-machine-gun). Null = uncapped
+	 *  (legacy). Assign a SoundConcurrency asset (e.g. MaxCount 6, StopQuietest). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Setup")
+	USoundConcurrency* UIConcurrency = nullptr;
 
 	// -----------------------------------------------------------------------
 	// Playlists � fill in the GameInstance Blueprint defaults.
@@ -329,6 +336,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Audio|UI Sounds")
 	void PlayUISoundAsset(USoundBase* Sound);
 
+	/** Throttled deny cue (spam-click guard, single owner: FSkillFeedbackRule).
+	 *  Plays OverrideSound when loaded, else the FallbackEvent mapping.
+	 *  One sound per deny, at most every MinDenyIntervalSec per event. */
+	UFUNCTION(BlueprintCallable, Category = "Audio|UI Sounds")
+	void PlayDenySound(EUISoundEvent DenyEvent, USoundBase* OverrideSound);
+
+	/** Async-preload soft sound refs (per-skill UI feedback). Fire-and-forget:
+	 *  the click path never blocks — unloaded overrides fall back to the
+	 *  global event mapping. Call after skill init and on runtime learn. */
+	UFUNCTION(BlueprintCallable, Category = "Audio|UI Sounds")
+	void PreloadSoftSounds(const TArray<FSoftObjectPath>& AssetPaths);
+
 	/** First mapped asset for an event, or null. Used by the global button-
 	 *  sound injection (instance styles) and CoreStyle default fill. */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Audio|UI Sounds")
@@ -394,8 +413,18 @@ private:
 	float CachedAmbientVolume = 1.0f;
 	float CachedUIVolume      = 1.0f;
 
+	// Deny-sound anti-spam: last world-time play per deny event.
+	// Missing key = never played (sentinel handled by FSkillFeedbackRule).
+	TMap<EUISoundEvent, double> LastDenyPlayTime;
+
+	// Outstanding async preload requests (kept alive until completion).
+	TArray<TSharedPtr<struct FStreamableHandle>> PreloadHandles;
+
 	const FMusicPlaylist* FindPlaylist(const FString& InPlaylistId) const;
 	int32 PickNextTrackIndex(const FMusicPlaylist& Playlist) const;
+
+	UFUNCTION()
+	void OnPreloadFinished();
 
 	/** Start InTrack on the inactive component, fade it in, fade out the old one. */
 	void  CrossfadeToTrack(USoundBase* Track, float FadeInTime, float FadeOutTime);

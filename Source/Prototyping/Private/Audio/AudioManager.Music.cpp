@@ -6,7 +6,9 @@
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "Engine/World.h"
+#include "Engine/AssetManager.h"
 #include "Audio/AudioHelpers.h"
+#include "Utils/NetCore/SkillFeedbackRule.h"
 
 void UAudioManager::PlayPlaylist(const FString& InPlaylistId, bool bForceRestart)
 {
@@ -117,7 +119,7 @@ void UAudioManager::PlayStinger(USoundBase* StingerSound)
 			NAME_None, FVector::ZeroVector, FRotator::ZeroRotator,
 			EAttachLocation::KeepWorldPosition,
 			/*bStopWhenAttachedToDestroyed=*/false,
-			1.0f, 1.0f, 0.0f, nullptr, nullptr,
+			1.0f, 1.0f, 0.0f, nullptr, UIConcurrency,
 			/*bAutoActivate=*/false);
 		if (!StingerComponent)
 		{
@@ -176,10 +178,10 @@ void UAudioManager::PlayUISoundAsset(USoundBase* Sound)
 	{
 		// SpawnSound2D with bAutoActivate=false so we can set the class
 		// override BEFORE Play() — post-play overrides are ignored by the
-		// audio engine.
+		// audio engine. UIConcurrency caps spam-click pileup (null = uncapped).
 		UAudioComponent* AC = UGameplayStatics::SpawnSound2D(
 			WorldContextObject, Sound,
-			1.0f, 1.0f, 0.0f, nullptr,
+			1.0f, 1.0f, 0.0f, UIConcurrency,
 			/*bAutoDestroy=*/true, /*bAutoActivate=*/false);
 		if (AC)
 		{
@@ -189,8 +191,63 @@ void UAudioManager::PlayUISoundAsset(USoundBase* Sound)
 	}
 	else
 	{
-		UGameplayStatics::PlaySound2D(WorldContextObject, Sound);
+		UGameplayStatics::PlaySound2D(WorldContextObject, Sound, 1.0f, 1.0f, 0.0f, UIConcurrency);
 	}
+}
+
+void UAudioManager::PlayDenySound(EUISoundEvent DenyEvent, USoundBase* OverrideSound)
+{
+	const UWorld* World = GetWorldSafe(WorldContextObject);
+	const float NowSec = World ? static_cast<float>(World->GetTimeSeconds()) : 0.0f;
+	const double LastSec = LastDenyPlayTime.Contains(DenyEvent)
+		? LastDenyPlayTime[DenyEvent] : -10000.0;
+	if (!FSkillFeedbackRule::CanPlayDeny(NowSec, static_cast<float>(LastSec)))
+	{
+		return;
+	}
+	LastDenyPlayTime.Add(DenyEvent, static_cast<double>(NowSec));
+	if (OverrideSound)
+	{
+		PlayUISoundAsset(OverrideSound);
+	}
+	else
+	{
+		PlayUISound(DenyEvent);
+	}
+}
+
+void UAudioManager::PreloadSoftSounds(const TArray<FSoftObjectPath>& AssetPaths)
+{
+	if (AssetPaths.Num() == 0) return;
+	if (UAssetManager* AM = UAssetManager::GetIfInitialized())
+	{
+		TSharedPtr<FStreamableHandle> Handle = AM->GetStreamableManager().RequestAsyncLoad(
+			AssetPaths,
+			FStreamableDelegate::CreateUObject(this, &UAudioManager::OnPreloadFinished));
+		if (Handle.IsValid())
+		{
+			PreloadHandles.Add(Handle);
+		}
+	}
+	else if (UAssetManager* AM2 = &UAssetManager::Get())
+	{
+		// Standalone fallback (should not happen in game): synchronous per path.
+		for (const FSoftObjectPath& P : AssetPaths)
+		{
+			AM2->GetStreamableManager().LoadSynchronous(P);
+		}
+	}
+}
+
+void UAudioManager::OnPreloadFinished()
+{
+	// Drop completed handles; keep the array bounded.
+	PreloadHandles.RemoveAll([](const TSharedPtr<FStreamableHandle>& H)
+	{
+		return !H.IsValid() || H->HasLoadCompleted();
+	});
+	UE_LOG(LogGameAudio, Verbose, TEXT("AudioManager: async UI-sound preload finished (%d handles live)"),
+		PreloadHandles.Num());
 }
 
 // ---------------------------------------------------------------------------

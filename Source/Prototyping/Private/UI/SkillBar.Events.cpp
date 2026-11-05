@@ -150,10 +150,10 @@ void USkillBarWidget::OnSkillReady(const FString& SkillSlug)
         {
             return;
         }
-        if (!SkillData.definitionData.skillReadySound.IsNull())
+        if (USoundBase* ReadyOverride = SkillData.definitionData.skillReadySound.Get())
         {
             if (GameInstance && GameInstance->AudioManager)
-                GameInstance->AudioManager->PlayUISoundAsset(SkillData.definitionData.skillReadySound.LoadSynchronous());
+                GameInstance->AudioManager->PlayUISoundAsset(ReadyOverride);
             return;
         }
     }

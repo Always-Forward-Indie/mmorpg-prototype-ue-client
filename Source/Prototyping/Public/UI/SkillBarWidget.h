@@ -174,8 +174,4 @@ private:
     // Guard against double slot creation
     bool bSlotsCreated = false;
 
-    // Anti-spam timestamps (world seconds) for deny feedback sounds.
-    // Sentinel -10000 = never played (first deny always audible).
-    double LastCooldownDenySoundTime = -10000.0;
-    double LastManaDenySoundTime = -10000.0;
 };

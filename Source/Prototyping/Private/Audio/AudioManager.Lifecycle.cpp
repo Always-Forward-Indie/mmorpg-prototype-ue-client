@@ -27,6 +27,7 @@ void UAudioManager::Init(UObject* InWorldContext, UAudioConfigDataAsset* InConfi
 		SFXClass        = InConfig->SFXClass;
 		AmbientClass    = InConfig->AmbientClass;
 		UIClass         = InConfig->UIClass;
+		UIConcurrency   = InConfig->UIConcurrency;
 		Playlists       = InConfig->Playlists;
 		UISounds        = InConfig->UISounds;
 		StingerLevelUp    = InConfig->StingerLevelUp;

@@ -66,6 +66,17 @@
 - `EUISoundEvent::SkillReady` → глобальный "скилл готов".
 - `EUISoundEvent::SkillNotEnoughMana` → глобальный "не хватает маны".
 
+### Полировка голосов (предзагрузка, кап, троттлинг)
+- Предзагрузка: все per-skill звуки грузятся асинхронно при инициализации скиллов
+  (`PlayerSkillNetworkHandler`) и при изучении нового (`SkillShopManager`). Клик никогда
+  не блокируется: незагруженный оверрайд молча падает на глобальный ивент.
+- Кап голосов: `DA_AudioConfig → Sound Routing → UIConcurrency` (SoundConcurrency,
+  напр. MaxCount 6, StopQuietest). Null = без капа (легаси). Применяется к UI,
+  deny/ready и стингерам.
+- Троттлинг deny (`SkillOnCooldownDenied`, `SkillNotEnoughMana`) — централизован
+  в `AudioManager::PlayDenySound` (порог `FSkillFeedbackRule::MinDenyIntervalSec`).
+  Вызывай его вместо `PlayUISound` для deny-путей; виджеты состояния не держат.
+
 ### Кнопки, окна и остальные UI-события (покрытие всех EUISoundEvent)
 Каждое значение `EUISoundEvent` обязано иметь эмиттер в коде — проверяет CI-гейт
 (`check_client_gates.py`, пункт 8c). Где что играет:

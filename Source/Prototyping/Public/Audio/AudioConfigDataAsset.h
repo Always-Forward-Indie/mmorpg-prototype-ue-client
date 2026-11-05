@@ -15,7 +15,7 @@
  * Assign the asset to BP_GameInstance ? Class Defaults ?
  *   Audio Config ? Audio Config.
  *
- * UAudioManager reads from this asset during Init() — the asset itself
+ * UAudioManager reads from this asset during Init() ï¿½ the asset itself
  * is never modified at runtime, only read.
  */
 UCLASS(BlueprintType)
@@ -26,14 +26,14 @@ class PROTOTYPING_API UAudioConfigDataAsset : public UPrimaryDataAsset
 public:
 
 	// -----------------------------------------------------------------------
-	// Sound routing — create these assets once per project
+	// Sound routing ï¿½ create these assets once per project
 	// -----------------------------------------------------------------------
 
 	/** Master SoundMix used to route all volume changes. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Sound Routing")
 	USoundMix* MasterSoundMix = nullptr;
 
-	/** Root SoundClass — SC_Music / SC_SFX / SC_Ambient / SC_UI are children of this. */
+	/** Root SoundClass ï¿½ SC_Music / SC_SFX / SC_Ambient / SC_UI are children of this. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Sound Routing")
 	USoundClass* MasterClass = nullptr;
 
@@ -50,22 +50,26 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Sound Routing")
 	USoundClass* UIClass = nullptr;
 
+	/** Voice cap for UI/deny/ready feedback (anti-machine-gun). Null = uncapped. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Sound Routing")
+	USoundConcurrency* UIConcurrency = nullptr;
+
 	// -----------------------------------------------------------------------
-	// Music playlists — define one entry per music context
+	// Music playlists ï¿½ define one entry per music context
 	// -----------------------------------------------------------------------
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Music Playlists")
 	TArray<FMusicPlaylist> Playlists;
 
 	// -----------------------------------------------------------------------
-	// UI Sounds — one entry per EUISoundEvent value you want to cover
+	// UI Sounds ï¿½ one entry per EUISoundEvent value you want to cover
 	// -----------------------------------------------------------------------
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI Sounds")
 	TArray<FUISoundEntry> UISounds;
 
 	// -----------------------------------------------------------------------
-	// Stingers — short one-shot sounds for in-game events
+	// Stingers ï¿½ short one-shot sounds for in-game events
 	// -----------------------------------------------------------------------
 
 	/** Played when the player gains a level. */

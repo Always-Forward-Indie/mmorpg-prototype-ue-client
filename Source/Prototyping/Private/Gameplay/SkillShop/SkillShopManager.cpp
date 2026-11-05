@@ -1,6 +1,7 @@
 #include "Gameplay/SkillShop/SkillShopManager.h"
 #include "Prototyping.h"
 #include "Gameplay/Skills/PlayerSkillManager.h"
+#include "Audio/AudioManager.h"
 #include "Networking/NetworkManager.h"
 #include "MyGameInstance.h"
 #include "Dom/JsonObject.h"
@@ -145,6 +146,25 @@ void USkillShopManager::OnSkillLearnedReceived(const FLearnSkillResultData& Resu
     }
 
     OnSkillLearnedDelegate.Broadcast(Result);
+
+    // Preload the freshly learned skill's UI feedback sounds so the first
+    // deny/ready cue never hitches on a sync load (async, fire-and-forget).
+    if (GameInstance && GameInstance->AudioManager)
+    {
+        if (UPlayerSkillManager* SkillMgr = GameInstance->GetPlayerSkillManager())
+        {
+            const FPlayerSkillData SD = SkillMgr->GetSkillData(Result.skillSlug);
+            TArray<FSoftObjectPath> Paths;
+            if (!SD.definitionData.skillOnCooldownSound.IsNull())
+                Paths.Add(SD.definitionData.skillOnCooldownSound.ToSoftObjectPath());
+            if (!SD.definitionData.skillReadySound.IsNull())
+                Paths.Add(SD.definitionData.skillReadySound.ToSoftObjectPath());
+            if (!SD.definitionData.notEnoughManaSound.IsNull())
+                Paths.Add(SD.definitionData.notEnoughManaSound.ToSoftObjectPath());
+            if (Paths.Num() > 0)
+                GameInstance->AudioManager->PreloadSoftSounds(Paths);
+        }
+    }
 }
 
 void USkillShopManager::OnSkillLearnFailedReceived(const FString& SkillSlug, const FString& Reason)

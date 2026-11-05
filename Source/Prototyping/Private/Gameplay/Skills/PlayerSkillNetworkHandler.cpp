@@ -4,6 +4,7 @@
 #include "Networking/NetworkManager.h"
 #include "Utils/JSONParser.h"
 #include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "Services/TimeSyncService.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
@@ -152,7 +153,26 @@ void UPlayerSkillNetworkHandler::HandleInitializePlayerSkills(const FParsedPacke
     // Initialize skills in the manager
     SkillManager->InitializePlayerSkills(SkillsData);
 
-    UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillNetworkHandler: Initialized %d skills for character %d"), 
+    // Async-preload every known skill's UI feedback sounds so the first
+    // deny/ready cue never hitches on a sync load (fire-and-forget; the
+    // click path falls back to the global event mapping until loaded).
+    if (GameInstance && GameInstance->AudioManager)
+    {
+        TArray<FSoftObjectPath> SoundPaths;
+        for (const FPlayerSkillData& SD : SkillManager->GetAllPlayerSkills())
+        {
+            if (!SD.definitionData.skillOnCooldownSound.IsNull())
+                SoundPaths.Add(SD.definitionData.skillOnCooldownSound.ToSoftObjectPath());
+            if (!SD.definitionData.skillReadySound.IsNull())
+                SoundPaths.Add(SD.definitionData.skillReadySound.ToSoftObjectPath());
+            if (!SD.definitionData.notEnoughManaSound.IsNull())
+                SoundPaths.Add(SD.definitionData.notEnoughManaSound.ToSoftObjectPath());
+        }
+        if (SoundPaths.Num() > 0)
+            GameInstance->AudioManager->PreloadSoftSounds(SoundPaths);
+    }
+
+    UE_LOG(LogGameplay, Warning, TEXT("PlayerSkillNetworkHandler: Initialized %d skills for character %d"),
         SkillsData.skills.Num(), SkillsData.characterId);
 }
 

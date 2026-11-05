@@ -34,8 +34,12 @@ void UTutorialHintManager::ResetSeenHints()
 void UTutorialHintManager::MaybeShowHint(ETutorialHintKind Kind)
 {
 	if (!GameInstance || HasSeenHint(Kind)) return;
-	ShowHintToast(Kind);
-	MarkSeen(Kind);
+	// Persist the flag only when the toast actually showed: a dropped toast
+	// (UI not ready yet) is retried on the next trigger instead of being lost.
+	if (ShowHintToast(Kind))
+	{
+		MarkSeen(Kind);
+	}
 }
 
 void UTutorialHintManager::MarkSeen(ETutorialHintKind Kind)
@@ -49,9 +53,9 @@ void UTutorialHintManager::MarkSeen(ETutorialHintKind Kind)
 	SaveConfig();
 }
 
-void UTutorialHintManager::ShowHintToast(ETutorialHintKind Kind)
+bool UTutorialHintManager::ShowHintToast(ETutorialHintKind Kind)
 {
-	if (!GameInstance) return;
+	if (!GameInstance) return false;
 	ABasicPlayer* Pawn = GameInstance->Player;
 	UUIManager* UIMgr = Pawn ? Pawn->GetUIManager() : nullptr;
 	UWorldNotificationManager* NotifMgr = UIMgr ? UIMgr->GetWorldNotificationManager() : nullptr;
@@ -61,7 +65,13 @@ void UTutorialHintManager::ShowHintToast(ETutorialHintKind Kind)
 		Fields.Add(TEXT("title"), FTutorialHintRule::TitleFor(Kind));
 		Fields.Add(TEXT("body"), FTutorialHintRule::BodyFor(Kind));
 		Stack->EnqueueActionToast(TEXT("hint"), Fields);
+
+		// Earcon only for a toast the player can actually see — never sound-only.
+		if (GameInstance->AudioManager)
+			GameInstance->AudioManager->PlayUISound(EUISoundEvent::Notification);
+		return true;
 	}
-	if (GameInstance->AudioManager)
-		GameInstance->AudioManager->PlayUISound(EUISoundEvent::Notification);
+	UE_LOG(LogGameplay, Verbose, TEXT("TutorialHintManager: toast stack not ready, hint %d deferred"),
+		static_cast<int32>(Kind));
+	return false;
 }

@@ -22,7 +22,8 @@ class PROTOTYPING_API UTutorialHintManager : public UObject
 public:
 	void Initialize(UMyGameInstance* InGameInstance);
 
-	/** Show the hint unless already seen (persists the flag). */
+	/** Show the hint unless already seen (persists the flag only when shown —
+	 *  a dropped toast (UI not ready) is retried on the next trigger, not lost). */
 	UFUNCTION(BlueprintCallable, Category = "Tutorial")
 	void MaybeShowHint(ETutorialHintKind Kind);
 
@@ -34,7 +35,9 @@ public:
 	void ResetSeenHints();
 
 private:
-	void ShowHintToast(ETutorialHintKind Kind);
+	/** Enqueues the toast + plays the earcon. Returns true only when the toast
+	 *  actually reached the stack (no visual → no sound, never silent). */
+	bool ShowHintToast(ETutorialHintKind Kind);
 	void MarkSeen(ETutorialHintKind Kind);
 
 	UPROPERTY()

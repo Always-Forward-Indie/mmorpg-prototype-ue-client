@@ -270,9 +270,6 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 						CombatLogWidgetClass ? *CombatLogWidgetClass->GetName() : TEXT("code-fallback"),
 						LogMgr->GetEntries().Num(),
 						(int32)CombatLogWidget->GetVisibility());
-					// The log exists now: teach it once (one-time hint).
-					if (UTutorialHintManager* Hints = GameInstance->GetTutorialHintManager())
-						Hints->MaybeShowHint(ETutorialHintKind::CombatLog);
 				}
 				else
 				{
@@ -301,6 +298,15 @@ void UUIManager::InitializeNotificationSystem(UBestiaryNetworkHandler* InBestiar
 			NotificationToastStack->AddToViewport(50);
 			NotificationToastStack->AnchorTopRight();
 			UE_LOG(LogGameplay, Verbose, TEXT("UIManager: NotificationToastStack created"));
+
+			// The toast pipeline exists now: teach the combat log once (one-time hint).
+			// Fires here (not at CombatLogWidget creation above) because the stack
+			// did not exist yet — sound-without-toast otherwise.
+			if (UMyGameInstance* HintGI = Cast<UMyGameInstance>(GetWorld()->GetGameInstance()))
+			{
+				if (UTutorialHintManager* Hints = HintGI->GetTutorialHintManager())
+					Hints->MaybeShowHint(ETutorialHintKind::CombatLog);
+			}
 		}
 		else
 		{

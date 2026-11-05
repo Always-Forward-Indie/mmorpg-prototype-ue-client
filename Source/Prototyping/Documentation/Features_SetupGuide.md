@@ -76,6 +76,11 @@
 - Троттлинг deny (`SkillOnCooldownDenied`, `SkillNotEnoughMana`) — централизован
   в `AudioManager::PlayDenySound` (порог `FSkillFeedbackRule::MinDenyIntervalSec`).
   Вызывай его вместо `PlayUISound` для deny-путей; виджеты состояния не держат.
+- Музыка: `MusicClockBPM` + `bQuantizeMusicStarts` (`DA_AudioConfig → Music Clock`) —
+  старт плейлиста из тишины ждет ближайшей доли такта (кроссфейды идут сразу).
+- Снапшоты миксов (`DA_AudioConfig → Mix Snapshots`): `CombatVolumes` (бой),
+  `LowHPVolumes` (HP ниже `LowHPThreshold`), `ZoneVolumeProfiles` (первое совпадение
+  подстроки в имени зоны). Выход из состояния возвращает громкости слайдеров.
 
 ### Кнопки, окна и остальные UI-события (покрытие всех EUISoundEvent)
 Каждое значение `EUISoundEvent` обязано иметь эмиттер в коде — проверяет CI-гейт

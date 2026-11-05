@@ -7,6 +7,8 @@
 #include "TimerManager.h"
 #include "Engine/World.h"
 #include "Audio/AudioHelpers.h"
+#include "Quartz/QuartzSubsystem.h"
+#include "Quartz/AudioMixerClockHandle.h"
 
 const FMusicPlaylist* UAudioManager::FindPlaylist(const FString& InPlaylistId) const
 {
@@ -151,6 +153,134 @@ void UAudioManager::OnTrackNearEnd()
 
 	CrossfadeToTrack(Track, Playlist->FadeInTime, Playlist->FadeOutTime);
 	ScheduleNextTrack(*Playlist, Track);
+}
+
+// ---------------------------------------------------------------------------
+// Musical clock (Quartz) + mix snapshots
+// ---------------------------------------------------------------------------
+
+bool UAudioManager::EnsureMusicClock()
+{
+	UWorld* World = GetWorldSafe(WorldContextObject);
+	if (!World)
+	{
+		return false;
+	}
+	if (IsValid(MusicClock))
+	{
+		return true;
+	}
+	UQuartzSubsystem* QS = World->GetSubsystem<UQuartzSubsystem>();
+	if (!QS)
+	{
+		UE_LOG(LogGameAudio, Verbose, TEXT("AudioManager: no Quartz subsystem — quantized starts disabled"));
+		return false;
+	}
+	FQuartzClockSettings Settings;
+	MusicClock = QS->CreateNewClock(WorldContextObject, TEXT("MusicClock"), Settings);
+	if (!IsValid(MusicClock))
+	{
+		return false;
+	}
+	// Tempo first, then start the transport.
+	const FQuartzQuantizationBoundary Immediate;
+	const FOnQuartzCommandEventBP NoOp;
+	const float BPM = FMath::Clamp(MusicClockBPM, 40.0f, 220.0f);
+	MusicClock->SetBeatsPerMinute(WorldContextObject, Immediate, NoOp, MusicClock, BPM);
+	MusicClock->StartClock(WorldContextObject, MusicClock);
+	UE_LOG(LogGameAudio, Log, TEXT("AudioManager: musical clock started at %.0f BPM"), BPM);
+	return true;
+}
+
+void UAudioManager::OnMusicQuantBoundary(FName ClockName, EQuartzCommandQuantization QuantizationType,
+	int32 NumBars, int32 Beat, float BeatFraction)
+{
+	// One-shot: unstick the bar subscription first so a stray extra tick can
+	// never double-start the track.
+	if (IsValid(MusicClock))
+	{
+		MusicClock->UnsubscribeFromTimeDivision(
+			WorldContextObject, EQuartzCommandQuantization::Bar, MusicClock);
+	}
+	bQuantBarSubscribed = false;
+
+	const FString Pending = PendingQuantizedPlaylistId;
+	PendingQuantizedPlaylistId.Empty();
+	if (Pending.IsEmpty() || !Pending.Equals(ActivePlaylistId, ESearchCase::IgnoreCase))
+	{
+		// Superseded (StopMusic/another playlist won the race) — stay silent.
+		return;
+	}
+	const FMusicPlaylist* Playlist = FindPlaylist(ActivePlaylistId);
+	USoundBase* Track = (Playlist && Playlist->Tracks.IsValidIndex(CurrentTrackIndex))
+		? Playlist->Tracks[CurrentTrackIndex] : nullptr;
+	if (!Track || !Playlist)
+	{
+		return;
+	}
+	UE_LOG(LogGameAudio, Log, TEXT("AudioManager: quantized downbeat start '%s' (bar %d)"),
+		*ActivePlaylistId, NumBars);
+	CrossfadeToTrack(Track, Playlist->FadeInTime, Playlist->FadeOutTime);
+	ScheduleNextTrack(*Playlist, Track);
+}
+
+void UAudioManager::PushCachedVolumes()
+{
+	ApplyClassVolume(MasterClass,  CachedMasterVolume);
+	ApplyClassVolume(MusicClass,   CachedMusicVolume);
+	ApplyClassVolume(SFXClass,     CachedSFXVolume);
+	ApplyClassVolume(AmbientClass, CachedAmbientVolume);
+	ApplyClassVolume(UIClass ? UIClass : SFXClass, CachedUIVolume);
+}
+
+void UAudioManager::ApplySnapshotVolumes(const TArray<FSnapshotClassVolume>& Volumes)
+{
+	if (!MasterSoundMix) { return; }
+	for (const FSnapshotClassVolume& V : Volumes)
+	{
+		if (!V.SoundClass) { continue; }
+		const float Clamped = FMath::Clamp(V.Volume, 0.0f, 1.0f);
+		UGameplayStatics::SetSoundMixClassOverride(
+			WorldContextObject, MasterSoundMix, V.SoundClass,
+			Clamped, /*Pitch=*/1.0f, FMath::Max(0.0f, V.BlendSec), /*bApplyToChildren=*/true);
+	}
+}
+
+void UAudioManager::RefreshSnapshotVolumes()
+{
+	// Base first (sliders always win on exit), then active snapshots so the
+	// strongest context (low-HP last) owns any shared class.
+	PushCachedVolumes();
+	if (bCombatActive)
+	{
+		ApplySnapshotVolumes(CombatVolumes);
+	}
+	if (ActiveZoneProfileIdx != INDEX_NONE && ZoneVolumeProfiles.IsValidIndex(ActiveZoneProfileIdx))
+	{
+		ApplySnapshotVolumes(ZoneVolumeProfiles[ActiveZoneProfileIdx].Volumes);
+	}
+	if (bLowHPActive)
+	{
+		ApplySnapshotVolumes(LowHPVolumes);
+	}
+}
+
+void UAudioManager::SetCombatActive(bool bActive)
+{
+	if (bCombatActive == bActive) { return; }
+	bCombatActive = bActive;
+	UE_LOG(LogGameplay, Verbose, TEXT("AudioManager: combat snapshot %s"),
+		bActive ? TEXT("ON") : TEXT("OFF"));
+	RefreshSnapshotVolumes();
+}
+
+void UAudioManager::SetLowHPActive(bool bActive)
+{
+	if (bLowHPActive == bActive) { return; }
+	bLowHPActive = bActive;
+	UE_LOG(LogGameplay, Verbose, TEXT("AudioManager: low-HP snapshot %s"),
+		bActive ? TEXT("ON") : TEXT("OFF"));
+	RefreshSnapshotVolumes();
 }
 
 // ---------------------------------------------------------------------------

@@ -15,7 +15,7 @@ public class Prototyping : ModuleRules
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "Networking", "Sockets", "Json", "JsonUtilities", "UMG", "Slate", "SlateCore", "Niagara", "NavigationSystem" });
 
 		// S09: everything below is used only by .cpps, never by public headers.
-		PrivateDependencyModuleNames.AddRange(new string[] { "ApplicationCore", "AIModule", "PCG", "MoviePlayer", "RenderCore", "Landscape" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "ApplicationCore", "AIModule", "PCG", "MoviePlayer", "RenderCore", "Landscape", "AudioMixer" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "NiagaraCore", "NiagaraShader" });
 

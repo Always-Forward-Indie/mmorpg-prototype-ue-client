@@ -39,6 +39,7 @@
 #include "Gameplay/Player/PlayerStatsNetworkHandler.h"
 #include "UI/PlayerStatsWidget.h"
 #include "Gameplay/Interaction/CursorInteractionComponent.h"
+#include "Audio/AudioManager.h"
 #include "Utils/NetCore/InteractionModeRule.h"
 #include "Gameplay/Interaction/TargetDecalComponent.h"
 #include "Gameplay/Interaction/WorldInteractionConfig.h"
@@ -136,6 +137,23 @@ void ABasicPlayer::Tick(float DeltaTime)
         // Drive approach movement every frame so CharacterMovementComponent gets
         // AddMovementInput on the same frame it is consumed пїЅ no more 1mm jitter.
         UpdateApproach(DeltaTime);
+        // Drive mix snapshots from local combat/vitals state (cheap: two bools,
+        // setters early-out on no-change). Other clients never touch audio.
+        if (MyGameInstance && MyGameInstance->AudioManager)
+        {
+            const bool bInCombat = bIsAutoAttacking
+                || (IsValid(LockedTarget) && !LockedTarget->GetMOBIsDead());
+            MyGameInstance->AudioManager->SetCombatActive(bInCombat);
+
+            const int32 MaxHP = GetMaxHealth_Implementation();
+            const float HPPct = MaxHP > 0
+                ? static_cast<float>(playerData.characterData.characterCurrentHealth) / static_cast<float>(MaxHP)
+                : 1.0f;
+            MyGameInstance->AudioManager->SetLowHPActive(
+                !playerData.characterData.bIsDead && HPPct < MyGameInstance->AudioManager->LowHPThreshold
+                && MyGameInstance->AudioManager->LowHPThreshold > 0.0f);
+        }
+
         // Smoothly interpolate camera zoom
         if (CameraBoom)
         {

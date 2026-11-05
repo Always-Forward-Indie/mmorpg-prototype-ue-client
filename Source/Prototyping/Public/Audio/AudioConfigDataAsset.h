@@ -55,6 +55,34 @@ public:
 	USoundConcurrency* UIConcurrency = nullptr;
 
 	// -----------------------------------------------------------------------
+	// Musical clock + mix snapshots (see UAudioManager).
+	// -----------------------------------------------------------------------
+
+	/** Musical clock tempo for quantized playlist starts (4/4). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Music Clock", meta = (ClampMin = "40", ClampMax = "220"))
+	float MusicClockBPM = 100.0f;
+
+	/** Start playlists from silence on the next bar boundary (downbeat start). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Music Clock")
+	bool bQuantizeMusicStarts = true;
+
+	/** Health fraction below which the LowHP snapshot engages (0 = disabled). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mix Snapshots", meta = (ClampMin = "0.0", ClampMax = "0.9"))
+	float LowHPThreshold = 0.3f;
+
+	/** Combat snapshot: class volumes while the local player is in combat. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mix Snapshots")
+	TArray<FSnapshotClassVolume> CombatVolumes;
+
+	/** Low-HP snapshot: class volumes while the local player is near death. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mix Snapshots")
+	TArray<FSnapshotClassVolume> LowHPVolumes;
+
+	/** Zone snapshots: first case-insensitive substring match on zone name wins. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mix Snapshots")
+	TArray<FZoneVolumeProfile> ZoneVolumeProfiles;
+
+	// -----------------------------------------------------------------------
 	// Music playlists � define one entry per music context
 	// -----------------------------------------------------------------------
 

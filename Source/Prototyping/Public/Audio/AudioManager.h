@@ -8,12 +8,50 @@
 #include "Sound/SoundClass.h"
 #include "Components/AudioComponent.h"
 #include "Engine/StreamableManager.h"
+#include "Sound/QuartzQuantizationUtilities.h"
 #include "AudioManager.generated.h"
 
 class UAudioConfigDataAsset;
 class UWidget;
 class UButton;
 class USoundConcurrency;
+class UQuartzClockHandle;
+
+// ---------------------------------------------------------------------------
+// One class-volume override inside a mix snapshot (see UAudioManager snapshots).
+// ---------------------------------------------------------------------------
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FSnapshotClassVolume
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mix Snapshot")
+	USoundClass* SoundClass = nullptr;
+
+	/** Absolute class volume while the snapshot is active (sliders restored on exit). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mix Snapshot", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float Volume = 1.0f;
+
+	/** Blend time for entering/exiting (SetSoundMixClassOverride fade). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mix Snapshot", meta = (ClampMin = "0.0"))
+	float BlendSec = 1.0f;
+};
+
+// ---------------------------------------------------------------------------
+// Zone-conditional mix snapshot: substring match on the server zone name.
+// ---------------------------------------------------------------------------
+USTRUCT(BlueprintType)
+struct PROTOTYPING_API FZoneVolumeProfile
+{
+	GENERATED_BODY()
+
+	/** Case-insensitive substring of the zone name (e.g. "dungeon"). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mix Snapshot")
+	FString ZoneSubstring;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mix Snapshot")
+	TArray<FSnapshotClassVolume> Volumes;
+};
 
 // ---------------------------------------------------------------------------
 // How tracks inside a playlist are cycled
@@ -175,6 +213,31 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Setup")
 	USoundConcurrency* UIConcurrency = nullptr;
 
+	/** Musical clock tempo for quantized music starts (4/4). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Music Clock", meta = (ClampMin = "40", ClampMax = "220"))
+	float MusicClockBPM = 100.0f;
+
+	/** Start playlists from silence on the next bar boundary (downbeat start).
+	 *  Crossfades while music plays stay immediate. Uncheck for instant starts. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Music Clock")
+	bool bQuantizeMusicStarts = true;
+
+	/** Health fraction below which the LowHP snapshot engages (0 = disabled). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Snapshots", meta = (ClampMin = "0.0", ClampMax = "0.9"))
+	float LowHPThreshold = 0.3f;
+
+	/** Combat snapshot: class volumes while the local player is in combat. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Snapshots")
+	TArray<FSnapshotClassVolume> CombatVolumes;
+
+	/** Low-HP snapshot: class volumes while the local player is near death. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Snapshots")
+	TArray<FSnapshotClassVolume> LowHPVolumes;
+
+	/** Zone snapshots: first substring match on the server zone name wins. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Snapshots")
+	TArray<FZoneVolumeProfile> ZoneVolumeProfiles;
+
 	// -----------------------------------------------------------------------
 	// Playlists � fill in the GameInstance Blueprint defaults.
 	// -----------------------------------------------------------------------
@@ -301,6 +364,24 @@ public:
 	FString GetActivePlaylistId() const { return ActivePlaylistId; }
 
 	// -----------------------------------------------------------------------
+	// Mix snapshots (combat / low-HP / zone) + musical clock
+	// -----------------------------------------------------------------------
+
+	/** Combat state for the local player. Pushes CombatVolumes while true,
+	 *  restores slider volumes on exit. No-op on repeat calls. */
+	UFUNCTION(BlueprintCallable, Category = "Audio|Snapshots")
+	void SetCombatActive(bool bActive);
+
+	/** Low-HP state for the local player. Pushes LowHPVolumes while true. */
+	UFUNCTION(BlueprintCallable, Category = "Audio|Snapshots")
+	void SetLowHPActive(bool bActive);
+
+	/** Metronome callback: fires the pending quantized playlist start. */
+	UFUNCTION()
+	void OnMusicQuantBoundary(FName ClockName, EQuartzCommandQuantization QuantizationType,
+		int32 NumBars, int32 Beat, float BeatFraction);
+
+	// -----------------------------------------------------------------------
 	// Stingers
 	// -----------------------------------------------------------------------
 
@@ -420,11 +501,38 @@ private:
 	// Outstanding async preload requests (kept alive until completion).
 	TArray<TSharedPtr<struct FStreamableHandle>> PreloadHandles;
 
+	// Musical clock (Quartz) for quantized playlist starts. World-bound:
+	// recreated in ReapplySoundMix after every travel, nulled on teardown.
+	UPROPERTY()
+	UQuartzClockHandle* MusicClock = nullptr;
+
+	// Pending quantized start: playlist waiting for the next bar boundary.
+	// Cleared by StopMusic/PlayPlaylist-with-new-target and on travel.
+	FString PendingQuantizedPlaylistId;
+	bool bQuantBarSubscribed = false;
+
+	// Mix snapshot state (recomputed into class overrides on every change).
+	bool bCombatActive = false;
+	bool bLowHPActive = false;
+	int32 ActiveZoneProfileIdx = INDEX_NONE;
+
 	const FMusicPlaylist* FindPlaylist(const FString& InPlaylistId) const;
 	int32 PickNextTrackIndex(const FMusicPlaylist& Playlist) const;
 
 	UFUNCTION()
 	void OnPreloadFinished();
+
+	/** Create + start the musical clock for the current world (lazy, safe to repeat). */
+	bool EnsureMusicClock();
+
+	/** Recompute class overrides: base slider volumes, then active snapshots. */
+	void RefreshSnapshotVolumes();
+
+	/** Push cached slider volumes (snapshot exit path). */
+	void PushCachedVolumes();
+
+	/** Apply one snapshot's class volumes with per-class blend times. */
+	void ApplySnapshotVolumes(const TArray<FSnapshotClassVolume>& Volumes);
 
 	/** Start InTrack on the inactive component, fade it in, fade out the old one. */
 	void  CrossfadeToTrack(USoundBase* Track, float FadeInTime, float FadeOutTime);

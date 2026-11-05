@@ -28,6 +28,12 @@ void UAudioManager::Init(UObject* InWorldContext, UAudioConfigDataAsset* InConfi
 		AmbientClass    = InConfig->AmbientClass;
 		UIClass         = InConfig->UIClass;
 		UIConcurrency   = InConfig->UIConcurrency;
+		MusicClockBPM   = InConfig->MusicClockBPM;
+		bQuantizeMusicStarts = InConfig->bQuantizeMusicStarts;
+		LowHPThreshold  = InConfig->LowHPThreshold;
+		CombatVolumes   = InConfig->CombatVolumes;
+		LowHPVolumes    = InConfig->LowHPVolumes;
+		ZoneVolumeProfiles = InConfig->ZoneVolumeProfiles;
 		Playlists       = InConfig->Playlists;
 		UISounds        = InConfig->UISounds;
 		StingerLevelUp    = InConfig->StingerLevelUp;
@@ -92,6 +98,9 @@ void UAudioManager::ReapplySoundMix()
 	// device never dangles across manager recreations.
 	InstallSlateSoundBridge();
 
+	// Recreate the world-bound musical clock in the new world.
+	EnsureMusicClock();
+
 	// If audio components were invalidated by a world transition and a playlist
 	// was active, restart it now in the new world so music resumes automatically.
 	if (!bComponentsValid && !ActivePlaylistId.IsEmpty())
@@ -121,6 +130,16 @@ void UAudioManager::InvalidateAudioComponents()
 	ActiveMusicComponent = nullptr;
 	bUseComponentB       = false;
 	bComponentsValid     = false;
+
+	// World-bound state dies with the world: clock handle, pending quantized
+	// start, snapshot flags. Fresh pushes happen in the new world on demand.
+	// (The old audio device is gone — no pops to unpush, the stack is reset.)
+	MusicClock = nullptr;
+	bQuantBarSubscribed = false;
+	PendingQuantizedPlaylistId.Empty();
+	bCombatActive = false;
+	bLowHPActive = false;
+	ActiveZoneProfileIdx = INDEX_NONE;
 	ActivePlaylistId.Empty();
 
 	// Clear the track-end timer so it cannot fire on a destroyed world.

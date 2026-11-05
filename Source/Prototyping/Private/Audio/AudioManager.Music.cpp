@@ -9,6 +9,8 @@
 #include "Engine/AssetManager.h"
 #include "Audio/AudioHelpers.h"
 #include "Utils/NetCore/SkillFeedbackRule.h"
+#include "Quartz/QuartzSubsystem.h"
+#include "Quartz/AudioMixerClockHandle.h"
 
 void UAudioManager::PlayPlaylist(const FString& InPlaylistId, bool bForceRestart)
 {
@@ -45,6 +47,26 @@ void UAudioManager::PlayPlaylist(const FString& InPlaylistId, bool bForceRestart
 	USoundBase* Track = Playlist->Tracks[CurrentTrackIndex];
 	if (!Track) { return; }
 
+	// Downbeat start from silence: wait for the next bar boundary instead of
+	// firing mid-beat. Crossfades (music already playing) stay immediate —
+	// the outgoing track owns the musical continuity there.
+	const bool bFromSilence = !(bComponentsValid && IsValid(ActiveMusicComponent) && ActiveMusicComponent->IsPlaying());
+	if (bFromSilence && bQuantizeMusicStarts && EnsureMusicClock())
+	{
+		PendingQuantizedPlaylistId = InPlaylistId;
+		if (!bQuantBarSubscribed)
+		{
+			FOnQuartzMetronomeEventBP BarDelegate;
+			BarDelegate.BindUFunction(this, FName("OnMusicQuantBoundary"));
+			MusicClock->SubscribeToQuantizationEvent(WorldContextObject,
+				EQuartzCommandQuantization::Bar, BarDelegate, MusicClock);
+			bQuantBarSubscribed = true;
+		}
+		UE_LOG(LogGameAudio, Log, TEXT("AudioManager: playlist '%s' queued for next bar"), *InPlaylistId);
+		return;
+	}
+	PendingQuantizedPlaylistId.Empty();
+
 	CrossfadeToTrack(Track, Playlist->FadeInTime, Playlist->FadeOutTime);
 	ScheduleNextTrack(*Playlist, Track);
 
@@ -54,16 +76,39 @@ void UAudioManager::PlayPlaylist(const FString& InPlaylistId, bool bForceRestart
 
 void UAudioManager::PlayMusicForZone(const FString& ZoneName)
 {
+	bool bFoundPlaylist = false;
 	for (const FZoneMusicEntry& Entry : ZoneMusicMap)
 	{
 		if (Entry.ZoneName.Equals(ZoneName, ESearchCase::IgnoreCase))
 		{
 			PlayPlaylist(Entry.PlaylistId);
-			return;
+			bFoundPlaylist = true;
+			break;
 		}
 	}
-	UE_LOG(LogGameAudio, Log,
-		TEXT("UAudioManager::PlayMusicForZone: no music mapping for zone '%s'."), *ZoneName);
+	if (!bFoundPlaylist)
+	{
+		UE_LOG(LogGameAudio, Log,
+			TEXT("AudioManager::PlayMusicForZone: no music mapping for zone '%s'."), *ZoneName);
+	}
+
+	// Zone mix snapshot: first case-insensitive substring match wins,
+	// otherwise back to slider volumes.
+	int32 MatchIdx = INDEX_NONE;
+	for (int32 k = 0; k < ZoneVolumeProfiles.Num(); ++k)
+	{
+		if (!ZoneVolumeProfiles[k].ZoneSubstring.IsEmpty()
+			&& ZoneName.Contains(ZoneVolumeProfiles[k].ZoneSubstring, ESearchCase::IgnoreCase))
+		{
+			MatchIdx = k;
+			break;
+		}
+	}
+	if (MatchIdx != ActiveZoneProfileIdx)
+	{
+		ActiveZoneProfileIdx = MatchIdx;
+		RefreshSnapshotVolumes();
+	}
 }
 
 void UAudioManager::StopMusic(float FadeOutTimeOverride)
@@ -79,6 +124,10 @@ void UAudioManager::StopMusic(float FadeOutTimeOverride)
 	{
 		ActiveMusicComponent->FadeOut(FadeTime, 0.0f);
 	}
+
+	// A quantized start that never fired belongs to a playlist that never
+	// began — drop it so the bar tick can't resurrect music after stop.
+	PendingQuantizedPlaylistId.Empty();
 
 	// Preserve the playlist so SetMusicVolume can resume it when volume
 	// is raised back above 0 after being silenced.

@@ -292,6 +292,25 @@ def main() -> int:
                         "route it through UAudioManager::PlayWorldSound or delete the class"
                     )
 
+    # 9. No blocking loads on the audio path: Private/Audio/*.cpp must never
+    #    call LoadSynchronous — the click path must not hitch. Preload async
+    #    via UAudioManager::PreloadSoftSounds; unloaded assets fall back to
+    #    the global event mapping.
+    sync_re = re.compile(r"LoadSynchronous\s*\(")
+    for path in sorted((src / "Private" / "Audio").rglob("*.cpp")):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            failures.append(f"cannot read {path}: {exc}")
+            continue
+        text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+        text = "\n".join(line.split("//", 1)[0] for line in text.splitlines())
+        if sync_re.search(text):
+            failures.append(
+                f"blocking load banned: {path.relative_to(root).as_posix()} calls "
+                "LoadSynchronous — preload async instead (UAudioManager::PreloadSoftSounds)"
+            )
+
     if failures:
         print("CLIENT GATES: FAIL")
         for failure in failures:

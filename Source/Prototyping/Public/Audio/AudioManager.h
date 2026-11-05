@@ -510,6 +510,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Audio|UI Sounds")
 	void PlayDenySound(EUISoundEvent DenyEvent, USoundBase* OverrideSound);
 
+	/** Voice telemetry tombstone: peak/active/total manager-spawned voices.
+	 *  Grepped by VerifyClient (audio perf gate). Also via `audio.perf`. */
+	UFUNCTION(BlueprintCallable, Category = "Audio|Perf")
+	void LogAudioPerf();
+
 	/** Async-preload soft sound refs (per-skill UI feedback). Fire-and-forget:
 	 *  the click path never blocks — unloaded overrides fall back to the
 	 *  global event mapping. Call after skill init and on runtime learn. */
@@ -588,6 +593,13 @@ private:
 	// Outstanding async preload requests (kept alive until completion).
 	TArray<TSharedPtr<struct FStreamableHandle>> PreloadHandles;
 
+	// Voice telemetry: every component spawned by the manager is tracked;
+	// CountActiveVoices prunes dead/stopped entries, peak feeds AUDIO_PERF.
+	TArray<TWeakObjectPtr<UAudioComponent>> LiveVoices;
+	int32 VoiceSpawnedTotal = 0;
+	int32 VoiceRequestedTotal = 0;
+	int32 VoicePeakActive = 0;
+
 	// Musical clock (Quartz) for quantized playlist starts. World-bound:
 	// recreated in ReapplySoundMix after every travel, nulled on teardown.
 	UPROPERTY()
@@ -652,4 +664,12 @@ private:
 	/** Route Slate UI sounds (button style sounds in every WBP) through the
 	 *  UI sound class so volume sliders apply. Safe to call repeatedly. */
 	void  InstallSlateSoundBridge();
+
+	/** Register a spawned voice for the AUDIO_PERF telemetry. */
+	void TrackVoice(UAudioComponent* AC);
+
+	/** Current playing count (prunes dead/stopped entries, updates peak). */
+	int32 CountActiveVoices();
+
+	static void AudioPerfConsole();
 };

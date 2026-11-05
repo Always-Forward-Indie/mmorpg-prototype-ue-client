@@ -132,6 +132,7 @@ UAudioComponent* UAudioManager::PlayWorldSound(EWorldSoundClass SoundClass, USou
 		Volume, /*PitchMultiplier=*/1.0f, /*StartTime=*/0.0f,
 		Attenuation, WorldConcurrency,
 		/*bAutoDestroy=*/true);
+	TrackVoice(AC);
 	if (!AC)
 	{
 		return nullptr;
@@ -145,6 +146,7 @@ UAudioComponent* UAudioManager::PlayWorldSound(EWorldSoundClass SoundClass, USou
 		AC->bEnableLowPassFilter = true;
 		AC->LowPassFilterFrequency = FMath::Clamp(Preset.OccludedLowPassFreq, 10.0f, 20000.0f);
 	}
+	TrackVoice(AC);
 	AC->Play();
 	return AC;
 }

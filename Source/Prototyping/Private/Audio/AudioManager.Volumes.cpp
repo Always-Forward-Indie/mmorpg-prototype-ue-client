@@ -1,11 +1,15 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Audio/AudioManager.h"
+#include "Prototyping.h"
 #include "Audio/AudioConfigDataAsset.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "Engine/World.h"
 #include "Audio/AudioHelpers.h"
+#include "MyGameInstance.h"
+#include "Engine/Engine.h"
+#include "HAL/IConsoleManager.h"
 
 void UAudioManager::SetMasterVolume(float Volume)
 {
@@ -80,3 +84,83 @@ void UAudioManager::SetUIVolume(float Volume)
 // Playlist helpers
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Voice telemetry (slice C): every component the manager spawns is tracked,
+// peak concurrent voices land in the AUDIO_PERF tombstone (VerifyClient gate).
+// ---------------------------------------------------------------------------
+
+void UAudioManager::TrackVoice(UAudioComponent* AC)
+{
+	// Requests are counted even when the device returns null (headless CI):
+	// requested>0 + active==0 means 'calls happened, no device', requested==0
+	// means 'nothing asked for sound'.
+	++VoiceRequestedTotal;
+	if (!IsValid(AC))
+	{
+		return;
+	}
+	// No duplicates: persistent components (music pair, stinger) report every
+	// use, one-shots report once. Lookup is linear but the array stays tiny
+	// (voices are pruned on every count).
+	for (const TWeakObjectPtr<UAudioComponent>& Known : LiveVoices)
+	{
+		if (Known.Get() == AC)
+		{
+			return;
+		}
+	}
+	++VoiceSpawnedTotal;
+	LiveVoices.Add(AC);
+	const int32 Active = CountActiveVoices();
+	if (Active > VoicePeakActive)
+	{
+		VoicePeakActive = Active;
+	}
+}
+
+int32 UAudioManager::CountActiveVoices()
+{
+	int32 Active = 0;
+	for (int32 i = LiveVoices.Num() - 1; i >= 0; --i)
+	{
+		UAudioComponent* AC = LiveVoices[i].Get();
+		if (!IsValid(AC) || !AC->IsPlaying())
+		{
+			LiveVoices.RemoveAtSwap(i);
+			continue;
+		}
+		++Active;
+	}
+	if (Active > VoicePeakActive)
+	{
+		VoicePeakActive = Active;
+	}
+	return Active;
+}
+
+void UAudioManager::LogAudioPerf()
+{
+	const int32 Active = CountActiveVoices();
+	UE_LOG(LogGameAudio, Warning, TEXT("AUDIO_PERF peak=%d active=%d total=%d requested=%d"),
+		VoicePeakActive, Active, VoiceSpawnedTotal, VoiceRequestedTotal);
+}
+
+void UAudioManager::AudioPerfConsole()
+{
+	if (!GEngine || !GEngine->GameViewport)
+	{
+		return;
+	}
+	if (UMyGameInstance* GI = Cast<UMyGameInstance>(GEngine->GameViewport->GetGameInstance()))
+	{
+		if (GI->AudioManager)
+		{
+			GI->AudioManager->LogAudioPerf();
+		}
+	}
+}
+
+static FAutoConsoleCommand AudioPerfCmd(
+	TEXT("audio.perf"),
+	TEXT("Log audio voice stats (AUDIO_PERF tombstone: peak/active/total manager-spawned voices)"),
+	FConsoleCommandDelegate::CreateStatic(&UAudioManager::AudioPerfConsole));

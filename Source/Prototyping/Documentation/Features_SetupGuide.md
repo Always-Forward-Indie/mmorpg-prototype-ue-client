@@ -81,6 +81,9 @@
 - Снапшоты миксов (`DA_AudioConfig → Mix Snapshots`): `CombatVolumes` (бой),
   `LowHPVolumes` (HP ниже `LowHPThreshold`), `ZoneVolumeProfiles` (первое совпадение
   подстроки в имени зоны). Выход из состояния возвращает громкости слайдеров.
+- Телеметрия: `audio.perf` в консоли + `AUDIO_PERF peak/active/total` в конце DevMode
+  sweep; `VerifyClient -Sweep` падает при пике выше `AudioVoiceCeil` (дефолт 96).
+  Гейт запрещает `LoadSynchronous` в `Private/Audio` — только асинхронный предзагруз.
 - Мир (`DA_AudioConfig → World Sounds` + `WorldConcurrency`): пресеты по классам
   (`Mob/Player/Skill/Loot/Footstep/Ambient/Emote`) — дальность, громкость, аттенюация,
   окклюзия (дакинг + low-pass, троттлинг на владельца). Все 3D-одноразки идут через

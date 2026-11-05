@@ -186,6 +186,7 @@ void UAudioManager::PlayStinger(USoundBase* StingerSound)
 
 	if (IsValid(StingerComponent))
 	{
+		TrackVoice(StingerComponent);
 		StingerComponent->SetSound(StingerSound);
 		if (SFXClass) { StingerComponent->SoundClassOverride = SFXClass; }
 		StingerComponent->Play();
@@ -232,6 +233,7 @@ void UAudioManager::PlayUISoundAsset(USoundBase* Sound)
 			WorldContextObject, Sound,
 			1.0f, 1.0f, 0.0f, UIConcurrency,
 			/*bAutoDestroy=*/true, /*bAutoActivate=*/false);
+		TrackVoice(AC);
 		if (AC)
 		{
 			AC->SoundClassOverride = TargetClass;
@@ -268,23 +270,18 @@ void UAudioManager::PlayDenySound(EUISoundEvent DenyEvent, USoundBase* OverrideS
 void UAudioManager::PreloadSoftSounds(const TArray<FSoftObjectPath>& AssetPaths)
 {
 	if (AssetPaths.Num() == 0) return;
-	if (UAssetManager* AM = UAssetManager::GetIfInitialized())
+	UAssetManager* AM = UAssetManager::GetIfInitialized();
+	if (!AM)
 	{
-		TSharedPtr<FStreamableHandle> Handle = AM->GetStreamableManager().RequestAsyncLoad(
-			AssetPaths,
-			FStreamableDelegate::CreateUObject(this, &UAudioManager::OnPreloadFinished));
-		if (Handle.IsValid())
-		{
-			PreloadHandles.Add(Handle);
-		}
+		UE_LOG(LogGameAudio, Warning, TEXT("AudioManager: AssetManager not ready, skipping UI-sound preload"));
+		return;
 	}
-	else if (UAssetManager* AM2 = &UAssetManager::Get())
+	TSharedPtr<FStreamableHandle> Handle = AM->GetStreamableManager().RequestAsyncLoad(
+		AssetPaths,
+		FStreamableDelegate::CreateUObject(this, &UAudioManager::OnPreloadFinished));
+	if (Handle.IsValid())
 	{
-		// Standalone fallback (should not happen in game): synchronous per path.
-		for (const FSoftObjectPath& P : AssetPaths)
-		{
-			AM2->GetStreamableManager().LoadSynchronous(P);
-		}
+		PreloadHandles.Add(Handle);
 	}
 }
 

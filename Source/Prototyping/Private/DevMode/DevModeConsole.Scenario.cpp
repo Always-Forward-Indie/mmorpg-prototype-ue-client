@@ -2,6 +2,7 @@
 #include "Prototyping.h"
 #include "DevMode/DevModeBotBrain.h"
 #include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "Gameplay/Mobs/MOBManager.h"
 #include "Gameplay/Mobs/BasicMOB.h"
 #include "Gameplay/Mobs/MOBMovementComponent.h"
@@ -347,6 +348,11 @@ void UDevModeConsoleCommands::RunSweepPhase3() const
     PerfStop();
     UE_LOG(LogGameplay, Warning, TEXT("DEVMODE_SWEEP_RESULT %s failures=%d"),
         SweepFailures == 0 ? TEXT("PASS") : TEXT("FAIL"), SweepFailures);
+    // Audio telemetry tombstone for the VerifyClient audio gate.
+    if (GameInstance && GameInstance->AudioManager)
+    {
+        GameInstance->AudioManager->LogAudioPerf();
+    }
 }
 
 void UDevModeConsoleCommands::StartSoakLoop() const

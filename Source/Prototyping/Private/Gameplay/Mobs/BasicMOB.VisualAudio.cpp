@@ -10,6 +10,7 @@
 #include "Gameplay/Items/ItemManager.h"
 #include "Gameplay/Items/HarvestManager.h"
 #include "MyGameInstance.h"
+#include "Audio/AudioManager.h"
 #include "Services/LocalizationSubsystem.h"
 #include "Gameplay/UI/FloatingCombatTextManager.h"
 #include "Gameplay/UI/DamageTextWidget.h"
@@ -305,6 +306,16 @@ void ABasicMOB::PlayRandomIdleSound()
 	if (IdleSounds.Num() > 0 && !MOBData.bIsDead)
 	{
 		int32 Index = FMath::RandRange(0, IdleSounds.Num() - 1);
+		// Mob policy: distance gate, occlusion, class attenuation, voice cap.
+		if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+		{
+			if (GI->AudioManager)
+			{
+				GI->AudioManager->PlayWorldSound(EWorldSoundClass::Mob, IdleSounds[Index],
+					this, GetActorLocation(), 1.0f, DefaultAttenuation);
+				return;
+			}
+		}
 		AudioComponentMain->AttenuationSettings = DefaultAttenuation;
 		AudioComponentMain->SetSound(IdleSounds[Index]);
 		AudioComponentMain->Play();
@@ -319,6 +330,18 @@ void ABasicMOB::PlaySoundByName(FName SoundName)
 	{
 		if (*Sound)
 		{
+			// Mob policy: distance gate, occlusion, class attenuation, voice cap.
+			// (Replaces shared-component playback so overlapping hits no longer
+			// cut each other — the concurrency cap owns pile-up instead.)
+			if (UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance()))
+			{
+				if (GI->AudioManager)
+				{
+					GI->AudioManager->PlayWorldSound(EWorldSoundClass::Mob, *Sound,
+						this, GetActorLocation(), 1.0f, DefaultAttenuation);
+					return;
+				}
+			}
 			AudioComponentMain->AttenuationSettings = DefaultAttenuation;
 			AudioComponentMain->SetSound(*Sound);
 			AudioComponentMain->Play();

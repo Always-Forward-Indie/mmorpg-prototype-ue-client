@@ -23,7 +23,11 @@ param(
     # Baseline 2026-10-15 (RTX 4090, 960x540, black viewport): ~240-300fps,
     # p95 ~4ms per sweep phase. Tighten after more runs / lit map.
     [double]$PerfFpsFloor = 100.0,
-    [double]$PerfP95CeilMs = 10.0
+    [double]$PerfP95CeilMs = 10.0,
+    # Audio voice ceiling: AUDIO_PERF peak above this fails the sweep.
+    # Sweep is quiet by nature (short one-shots); triple digits mean a voice
+    # leak (components never released) or missing concurrency caps.
+    [int]$AudioVoiceCeil = 96
 )
 
 $ErrorActionPreference = "Continue"
@@ -138,6 +142,21 @@ if ($Sweep) {
         }
     }
     if ($PerfBad) { $PerfBad | ForEach-Object { Write-Host "PERF: $_" -ForegroundColor Red }; Fail "perf tripwire: fps<$PerfFpsFloor or p95>$PerfP95CeilMs ms" }
+    # Audio voice gate: peak manager-spawned voices above ceiling = leak.
+    # requested>0 + active==0 in headless means "calls happened, no device".
+    $AudioMarks = @()
+    foreach ($L in $SweepLogs) {
+        $AudioMarks += Select-String -LiteralPath $L.FullName -Pattern "AUDIO_PERF peak=([0-9]+) active=([0-9]+) total=([0-9]+) requested=([0-9]+)" -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty Line
+    }
+    $AudioMarks | ForEach-Object { Write-Host $_ }
+    if (-not $AudioMarks) { Fail "no AUDIO_PERF tombstone in sweep log" }
+    foreach ($M in $AudioMarks) {
+        if ($M -match "AUDIO_PERF peak=([0-9]+)") {
+            $Peak = [int]$Matches[1]
+            if ($Peak -gt $AudioVoiceCeil) { Fail "audio voice tripwire: peak $Peak > $AudioVoiceCeil (leak or missing concurrency caps)" }
+        }
+    }
     # Cold-cache shader-compile hitches surface here as LogShaderCompilers
     # activity inside the sweep window (info only — no gate yet).
     foreach ($L in $SweepLogs) {

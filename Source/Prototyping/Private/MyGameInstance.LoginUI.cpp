@@ -220,6 +220,17 @@ void UMyGameInstance::AddLoginWidgetToViewport()
 			LoginScreenOverlayWidget->AddToViewport(20);
 		}
 	}
+
+	// Global button sounds: login trees are owned by the GameInstance (outside
+	// UIManager's sweep), so fill empty click/hover sounds here (idempotent).
+	if (AudioManager)
+	{
+		AudioManager->ApplyButtonSoundsToSubtree(LoginLogoWidget);
+		AudioManager->ApplyButtonSoundsToSubtree(SocialLinksWidget);
+		AudioManager->ApplyButtonSoundsToSubtree(LoginFlowWidget);
+		AudioManager->ApplyButtonSoundsToSubtree(LoginScreenWidget);
+		AudioManager->ApplyButtonSoundsToSubtree(LoginScreenOverlayWidget);
+	}
 }
 
 void UMyGameInstance::RemoveLoginWidgetFromViewport()
@@ -268,6 +279,12 @@ void UMyGameInstance::ShowLoginSettings(ESettingsTab Tab)
 		{
 			// Z-order 30: above overlay (20) and login flow (10).
 			LoginSettingsWidget->AddToViewport(30);
+
+			// Global button sounds (same reason as AddLoginWidgetToViewport).
+			if (AudioManager)
+			{
+				AudioManager->ApplyButtonSoundsToSubtree(LoginSettingsWidget);
+			}
 		}
 	}
 

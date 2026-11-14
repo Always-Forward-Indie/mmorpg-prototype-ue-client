@@ -148,7 +148,11 @@ void ABasicMOB::SetIsAggressiveState_Implementation(int32 TargetId, ECasterType 
 									MOBData.mobCurrentHealth,
 									MaxHP,
 									bIsAggressive,
-									CachedIcon);
+									CachedIcon,
+									GetActorId_Implementation(), ECasterType::Mob,
+									Player->GetPlayerData().characterData.characterLevel,
+									MOBData.mobRankCode, MOBData.bIsChampion, MOBData.championKind,
+									GetMOBIsDead());
 							}
 						}
 					}

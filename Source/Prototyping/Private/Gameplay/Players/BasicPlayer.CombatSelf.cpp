@@ -99,7 +99,11 @@ void ABasicPlayer::TargetSelf()
             playerData.characterData.characterCurrentHealth,
             GetMaxHealth_Implementation(),
             false,
-            nullptr);
+            nullptr,
+            playerData.characterData.characterId, ECasterType::Self,
+            playerData.characterData.characterLevel,
+            TEXT(""), false, TEXT(""),
+            playerData.characterData.bIsDead);
     }
 
     if (CursorInteractionComponent)

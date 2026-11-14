@@ -142,18 +142,6 @@ void UUIManager::HideDeathScreen()
 	}
 }
 
-void UUIManager::UpdateMobTargetFrameHP(int32 CurrentHP, int32 MaxHP)
-{
-	if (PlayerInterfaceWidget)
-	{
-		UMobTargetFrameWidget* TargetFrame = PlayerInterfaceWidget->GetMobTargetFrameWidget();
-		if (TargetFrame)
-		{
-			TargetFrame->UpdateHP(CurrentHP, MaxHP);
-		}
-	}
-}
-
 void UUIManager::ShowHealScreenFlash()
 {
 	UE_LOG(LogGameplay, Verbose, TEXT("UIManager::ShowHealScreenFlash"));

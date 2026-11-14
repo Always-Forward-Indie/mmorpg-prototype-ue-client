@@ -627,29 +627,7 @@ void UUIManager::PlayCombatCameraShake(float Intensity)
 	PC->PlayerCameraManager->StartCameraShake(ShakeClass, Intensity);
 }
 
-void UUIManager::ShowMobTargetFrame(const FString& MobSlug, const FString& MobName, int32 MobLevel, int32 CurrentHP, int32 MaxHP, bool bIsAggro, UTexture2D* MobIcon)
-{
-	if (PlayerInterfaceWidget)
-	{
-		UMobTargetFrameWidget* TargetFrame = PlayerInterfaceWidget->GetMobTargetFrameWidget();
-		if (TargetFrame)
-		{
-			TargetFrame->SetMobInfo(MobSlug, MobName, MobLevel, CurrentHP, MaxHP, bIsAggro, MobIcon);
-		}
-	}
-}
-
-void UUIManager::HideMobTargetFrame()
-{
-	if (PlayerInterfaceWidget)
-	{
-		UMobTargetFrameWidget* TargetFrame = PlayerInterfaceWidget->GetMobTargetFrameWidget();
-		if (TargetFrame)
-		{
-			TargetFrame->ClearTarget();
-		}
-	}
-}
+// Target-frame methods live in UIManager.TargetFrame.cpp (budget split).
 
 void UUIManager::ToggleGameMenu()
 {

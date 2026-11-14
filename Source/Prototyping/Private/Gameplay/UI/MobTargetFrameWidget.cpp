@@ -1,14 +1,15 @@
 #include "Gameplay/UI/MobTargetFrameWidget.h"
-#include "Gameplay/UI/MobTargetFrameWidget.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "Components/ProgressBar.h"
+#include "Components/Border.h"
 #include "Engine/Texture2D.h"
 #include "Engine/AssetManager.h"
 #include "Engine/StreamableManager.h"
 #include "MyGameInstance.h"
 #include "Services/LocalizationSubsystem.h"
 #include "Data/DataStructs.h"
+#include "Utils/NetCore/MobTargetFrameRule.h"
 
 // S5b: target-frame level chrome gathered via LOCTEXT.
 #define LOCTEXT_NAMESPACE "MobTargetFrame"
@@ -24,6 +25,7 @@ void UMobTargetFrameWidget::NativeConstruct()
             LocSys->OnLocaleChanged.AddDynamic(this, &UMobTargetFrameWidget::HandleLocaleChanged);
         }
     }
+    ApplyDeadChrome();
 }
 
 void UMobTargetFrameWidget::NativeDestruct()
@@ -53,6 +55,14 @@ void UMobTargetFrameWidget::SetMobInfo(const FString& MobSlug,
     CachedMaxHP    = MaxHP;
     bCachedAggro   = bIsAggro;
     bHasTarget     = true;
+    // A new lock is a fresh target: rank/dead state is re-supplied by the
+    // SetRank/SetDead calls that follow (or stays hidden for players).
+    CachedRankCode.Empty();
+    CachedChampionKind.Empty();
+    bCachedChampion = false;
+    CachedViewerLevel = 0;
+    bCachedDead = false;
+
     // --- Portrait icon ---
     // Priority: 1) caller-supplied Icon (CachedIcon from BasicMOB, already in memory)
     //           2) DataTable lookup by MobSlug (async-safe, same pattern as BestiaryMobRowWidget)
@@ -74,46 +84,13 @@ void UMobTargetFrameWidget::SetMobInfo(const FString& MobSlug,
         else
         {
             // Player, NPC, or self target - no portrait available, hide the image
+            CachedPortrait = nullptr;
+            PortraitImage->SetBrushFromTexture(nullptr);
             PortraitImage->SetVisibility(ESlateVisibility::Collapsed);
         }
     }
 
-    // Localized name � fall back to raw MobName if slug lookup fails
-    if (MobNameText)
-    {
-        FText DisplayName;
-        if (!MobSlug.IsEmpty())
-        {
-            if (UWorld* W = GetWorld())
-            {
-                if (UMyGameInstance* GI = Cast<UMyGameInstance>(W->GetGameInstance()))
-                {
-                    if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
-                    {
-                        DisplayName = Loc->GetMobDisplayName(MobSlug);
-                    }
-                }
-            }
-        }
-        if (DisplayName.IsEmpty())
-        {
-            DisplayName = FText::FromString(MobName);
-        }
-
-        MobNameText->SetText(DisplayName);
-
-        // Red for aggressive mobs, yellow for passive
-        const FLinearColor NameColor = bIsAggro
-            ? FLinearColor(1.f, 0.2f, 0.2f, 1.f)
-            : FLinearColor(1.f, 0.85f, 0.f, 1.f);
-        MobNameText->SetColorAndOpacity(FSlateColor(NameColor));
-    }
-
-    // Level
-    if (MobLevelText)
-    {
-        MobLevelText->SetText(FText::Format(LOCTEXT("LevelValue", "LVL: {0}"), FText::AsNumber(MobLevel)));
-    }
+    RefreshLocalizedTexts();
 
     // Aggro icon
     if (AggroIcon)
@@ -121,33 +98,80 @@ void UMobTargetFrameWidget::SetMobInfo(const FString& MobSlug,
         AggroIcon->SetVisibility(bIsAggro ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
     }
 
+    ApplyRankChrome();
+    ApplyDeadChrome();
     UpdateHP(CurrentHP, MaxHP);
 
     SetVisibility(ESlateVisibility::HitTestInvisible);
 }
 
+void UMobTargetFrameWidget::SetRank(const FString& RankCode, bool bIsChampion, const FString& ChampionKind, int32 ViewerLevel)
+{
+    CachedRankCode = FMobTargetRankRule::NormalizeRankCode(RankCode, bIsChampion);
+    bCachedChampion = bIsChampion;
+    CachedChampionKind = ChampionKind;
+    CachedViewerLevel = ViewerLevel;
+    ApplyRankChrome();
+}
+
+void UMobTargetFrameWidget::SetDead(bool bIsDead)
+{
+    if (bCachedDead == bIsDead && bHasTarget)
+    {
+        return;
+    }
+    bCachedDead = bIsDead;
+    ApplyDeadChrome();
+    if (bIsDead)
+    {
+        UpdateHP(0, CachedMaxHP);
+    }
+}
+
 void UMobTargetFrameWidget::UpdateHP(int32 CurrentHP, int32 MaxHP)
 {
+    CachedCurrentHP = CurrentHP;
+    CachedMaxHP = MaxHP;
+    const int32 ShownHP = bCachedDead ? 0 : FMath::Max(CurrentHP, 0);
+
     if (MobHealthBar && MaxHP > 0)
     {
-        MobHealthBar->SetPercent(static_cast<float>(CurrentHP) / static_cast<float>(MaxHP));
+        MobHealthBar->SetPercent(static_cast<float>(ShownHP) / static_cast<float>(MaxHP));
+        if (bCachedDead)
+        {
+            MobHealthBar->SetFillColorAndOpacity(FLinearColor(0.35f, 0.35f, 0.38f, 1.0f));
+        }
+        else
+        {
+            MobHealthBar->SetFillColorAndOpacity(FLinearColor::White);
+        }
     }
 
     if (MobHealthText)
     {
         MobHealthText->SetText(FText::FromString(
-            FString::Printf(TEXT("%d / %d"), FMath::Max(CurrentHP, 0), MaxHP)));
+            FString::Printf(TEXT("%d / %d"), ShownHP, MaxHP)));
     }
 }
 
 void UMobTargetFrameWidget::ClearTarget()
 {
     bHasTarget = false;
+    bCachedDead = false;
+    CachedRankCode.Empty();
+    CachedPortrait = nullptr;
     SetVisibility(ESlateVisibility::Collapsed);
 
     if (MobNameText)   MobNameText->SetText(FText::GetEmpty());
     if (MobLevelText)  MobLevelText->SetText(FText::GetEmpty());
-    if (MobHealthBar)  MobHealthBar->SetPercent(0.f);
+    if (RankLabelText) RankLabelText->SetVisibility(ESlateVisibility::Collapsed);
+    if (DeadOverlay)   DeadOverlay->SetVisibility(ESlateVisibility::Collapsed);
+    if (DeadText)      DeadText->SetVisibility(ESlateVisibility::Collapsed);
+    if (MobHealthBar)
+    {
+        MobHealthBar->SetPercent(0.f);
+        MobHealthBar->SetFillColorAndOpacity(FLinearColor::White);
+    }
     if (MobHealthText) MobHealthText->SetText(FText::GetEmpty());
     if (AggroIcon)     AggroIcon->SetVisibility(ESlateVisibility::Collapsed);
 
@@ -168,6 +192,7 @@ void UMobTargetFrameWidget::ClearTarget()
 void UMobTargetFrameWidget::ApplyPortraitTexture(UTexture2D* Texture)
 {
     if (!PortraitImage || !Texture) return;
+    CachedPortrait = Texture;
     PortraitImage->SetBrushFromTexture(Texture);
     PortraitImage->SetVisibility(ESlateVisibility::HitTestInvisible);
 }
@@ -186,7 +211,7 @@ void UMobTargetFrameWidget::LoadPortraitFromTable(const FString& MobSlug)
     const FMobDefinition* Row = DT->FindRow<FMobDefinition>(FName(*MobSlug), TEXT(""));
     if (!Row)
     {
-        // Slug not found � show default portrait if available
+        // Slug not found — show default portrait if available
         if (DefaultIcon) { ApplyPortraitTexture(DefaultIcon); }
         return;
     }
@@ -208,11 +233,14 @@ void UMobTargetFrameWidget::LoadPortraitFromTable(const FString& MobSlug)
     // Async path: stream the texture without blocking the game thread
     TWeakObjectPtr<UMobTargetFrameWidget> WeakThis(this);
     TSoftObjectPtr<UTexture2D> IconSoft = IconPtr;
+    FString WantedSlug = MobSlug;
     UAssetManager::GetStreamableManager().RequestAsyncLoad(
         IconSoft.ToSoftObjectPath(),
-        FStreamableDelegate::CreateLambda([WeakThis, IconSoft]()
+        FStreamableDelegate::CreateLambda([WeakThis, IconSoft, WantedSlug]()
         {
             if (!WeakThis.IsValid()) return;
+            // Stale load guard: the lock may have moved on while streaming.
+            if (WeakThis->CachedMobSlug != WantedSlug) return;
             if (UTexture2D* Loaded = IconSoft.Get())
             {
                 WeakThis->ApplyPortraitTexture(Loaded);
@@ -221,10 +249,150 @@ void UMobTargetFrameWidget::LoadPortraitFromTable(const FString& MobSlug)
     );
 }
 
+void UMobTargetFrameWidget::RefreshLocalizedTexts()
+{
+    // Localized name — fall back to raw MobName if slug lookup fails
+    if (MobNameText)
+    {
+        FText DisplayName;
+        if (!CachedMobSlug.IsEmpty())
+        {
+            if (UWorld* W = GetWorld())
+            {
+                if (UMyGameInstance* GI = Cast<UMyGameInstance>(W->GetGameInstance()))
+                {
+                    if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+                    {
+                        DisplayName = Loc->GetMobDisplayName(CachedMobSlug);
+                    }
+                }
+            }
+        }
+        if (DisplayName.IsEmpty())
+        {
+            DisplayName = FText::FromString(CachedMobName);
+        }
+
+        MobNameText->SetText(DisplayName);
+
+        // Red for aggressive mobs, yellow for passive
+        const FLinearColor NameColor = bCachedAggro
+            ? FLinearColor(1.f, 0.2f, 0.2f, 1.f)
+            : FLinearColor(1.f, 0.85f, 0.f, 1.f);
+        MobNameText->SetColorAndOpacity(bCachedDead ? FSlateColor(FLinearColor(0.6f, 0.6f, 0.62f, 1.f)) : FSlateColor(NameColor));
+    }
+
+    ApplyRankChrome();
+    ApplyDeadChrome();
+}
+
+void UMobTargetFrameWidget::ApplyRankChrome()
+{
+    const bool bShow = FMobTargetRankRule::ShouldShowRankLabel(CachedRankCode);
+
+    if (RankLabelText)
+    {
+        if (!bShow)
+        {
+            RankLabelText->SetVisibility(ESlateVisibility::Collapsed);
+        }
+        else
+        {
+            FText RankText;
+            if (CachedRankCode.Equals(TEXT("boss"), ESearchCase::IgnoreCase))
+            {
+                RankText = LOCTEXT("RankBoss", "Босс");
+            }
+            else if (CachedRankCode.Equals(TEXT("elite"), ESearchCase::IgnoreCase))
+            {
+                RankText = LOCTEXT("RankElite", "Элита");
+            }
+            else if (CachedRankCode.Equals(TEXT("champion"), ESearchCase::IgnoreCase))
+            {
+                if (!CachedChampionKind.IsEmpty())
+                {
+                    RankText = FText::Format(LOCTEXT("RankChampionKind", "Чемпион • {0}"),
+                        FText::FromString(CachedChampionKind));
+                }
+                else
+                {
+                    RankText = LOCTEXT("RankChampion", "Чемпион");
+                }
+            }
+            else
+            {
+                RankText = LOCTEXT("RankNormal", "Обычный");
+            }
+            RankLabelText->SetText(RankText);
+            RankLabelText->SetVisibility(ESlateVisibility::HitTestInvisible);
+        }
+    }
+
+    const FLinearColor BorderColor = FMobTargetRankRule::BorderColorForRank(CachedRankCode);
+    if (RankBorder)
+    {
+        RankBorder->SetBrushColor(BorderColor);
+    }
+    else if (RankLabelText && bShow)
+    {
+        // Graceful degradation for BPs predating the frame border: tint the label.
+        RankLabelText->SetColorAndOpacity(FSlateColor(BorderColor));
+    }
+
+    // Level colour follows the viewer diff; lethal targets also carry a marker.
+    if (MobLevelText && bHasTarget)
+    {
+        const FMobTargetLevelRule::FLevelStyle Style =
+            FMobTargetLevelRule::StyleForDiff(CachedViewerLevel, CachedMobLevel);
+        FText LevelText = FText::Format(LOCTEXT("LevelValue", "LVL: {0}"), FText::AsNumber(CachedMobLevel));
+        if (Style.bLethalMarker)
+        {
+            LevelText = FText::FromString(LevelText.ToString() + FMobTargetLevelRule::LethalMarker());
+        }
+        MobLevelText->SetText(LevelText);
+        MobLevelText->SetColorAndOpacity(FSlateColor(Style.Color));
+    }
+}
+
+void UMobTargetFrameWidget::ApplyDeadChrome()
+{
+    if (DeadOverlay)
+    {
+        DeadOverlay->SetVisibility(bCachedDead ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+    }
+    if (DeadText)
+    {
+        if (bCachedDead)
+        {
+            DeadText->SetText(LOCTEXT("DeadLabel", "МЕРТВ"));
+            DeadText->SetVisibility(ESlateVisibility::HitTestInvisible);
+        }
+        else
+        {
+            DeadText->SetVisibility(ESlateVisibility::Collapsed);
+        }
+    }
+    if (MobHealthBar && bCachedDead)
+    {
+        MobHealthBar->SetFillColorAndOpacity(FLinearColor(0.35f, 0.35f, 0.38f, 1.0f));
+    }
+}
+
 void UMobTargetFrameWidget::HandleLocaleChanged(const FString& NewLocale)
 {
     if (!bHasTarget) return;
-    SetMobInfo(CachedMobSlug, CachedMobName, CachedMobLevel, CachedCurrentHP, CachedMaxHP, bCachedAggro, nullptr);
+    // Re-apply the cached portrait (never wipe to nullptr) and refresh texts.
+    if (CachedPortrait && PortraitImage)
+    {
+        PortraitImage->SetBrushFromTexture(CachedPortrait);
+        PortraitImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+    }
+    RefreshLocalizedTexts();
+    if (MobLevelText && bHasTarget)
+    {
+        ApplyRankChrome();
+    }
+    UpdateHP(CachedCurrentHP, CachedMaxHP);
 }
 
 #undef LOCTEXT_NAMESPACE

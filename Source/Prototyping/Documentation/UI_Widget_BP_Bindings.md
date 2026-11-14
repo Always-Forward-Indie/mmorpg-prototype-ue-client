@@ -76,6 +76,17 @@ Inside `W_PlayerInterface` (not UIManager-directly): `USkillBarWidget` (`Skills/
    - `W_HarverstProgress`: optional `Cancel_Button` (auto-wired to `CancelHarvest` when present; ESC always works).
    - `W_PlayerHUD`: optional `Portrait_Image` (set via `UPlayerHUD::SetPortrait`).
    - `W_PlayerInterface`: optional `BossTargetFrameWidget` (`UMobTargetFrameWidget`, same API as mob frame).
+   - `Mob/WBP_MobTarget` (`UMobTargetFrameWidget`): all new binds are `BindWidgetOptional`
+     and degrade gracefully, but the full design needs them in-editor —
+     rank: `RankLabelText` (TextBlock), `RankBorder` (Border, frame outline);
+     dead: `DeadOverlay` (Image, 50% over the portrait only), `DeadText` (TextBlock);
+     cast: `CastBar` (ProgressBar), `CastNameText` + `CastTimeText` (TextBlocks),
+     `InterruptIcon` (Image — keep, forced Collapsed until the server ships the
+     interruptible flag, tracker mirenhold #134);
+     effects: `StatusEffectsBox` (HorizontalBox) + set `EffectSlotClass`
+     (`WBP_EffectSlot`) and `EffectDefinitionTable` on the frame instance.
+     Fixed layout: no per-rank resizing, distance is not shown, no widget-wide
+     desaturation by design.
 3. Multi-client run (`LaunchClients.ps1 -n 3`): open/close every toggle window, log-scan for
    `BindWidget`, `Failed to find`, `Accessed None` — zero hits is the gate.
 4. Equipment window: hover a slot → item tooltip follows the cursor (bound

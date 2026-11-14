@@ -3,6 +3,7 @@
 #include "Utils/NetCore/TargetingRule.h"
 
 #include "CoreMinimal.h"
+#include "Data/DataStructs.h"
 #include "Components/ActorComponent.h"
 #include "Gameplay/Interaction/IWorldInteractable.h"
 #include "Utils/NetCore/PlayerSocialRule.h"
@@ -904,9 +905,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void PlayCombatCameraShake(float Intensity = 1.0f);
 
-	/** Show/update the mob target frame (health bar, name, level, icon). */
+	/** Show/update the mob target frame (health bar, name, level, icon).
+	 * Trailing params are optional: mob call sites pass the lock identity
+	 * (TargetUID/Type), the viewer level for the level-diff colour and the
+	 * rank/dead facts; player/self call sites leave the rank empty so the
+	 * rank row stays hidden (no fake "normal"). */
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
-	void ShowMobTargetFrame(const FString& MobSlug, const FString& MobName, int32 MobLevel, int32 CurrentHP, int32 MaxHP, bool bIsAggro, UTexture2D* MobIcon = nullptr);
+	void ShowMobTargetFrame(const FString& MobSlug, const FString& MobName, int32 MobLevel, int32 CurrentHP, int32 MaxHP, bool bIsAggro, UTexture2D* MobIcon = nullptr,
+		int32 TargetUID = 0, ECasterType TargetType = ECasterType::None, int32 ViewerLevel = 0,
+		const FString& RankCode = TEXT(""), bool bIsChampion = false, const FString& ChampionKind = TEXT(""), bool bIsDead = false);
+
+	/** Rank chrome for the currently displayed target (mob locks only). */
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void SetMobTargetRank(const FString& RankCode, bool bIsChampion, const FString& ChampionKind, int32 ViewerLevel);
+
+	/** Dead chrome for the currently displayed target. */
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void SetMobTargetDead(bool bIsDead);
 
 	/** Hide the mob target frame. */
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
@@ -920,6 +935,10 @@ public:
 	void HandleWIOChannelCancelled(int32 ObjectId);
 
 private:
+	/** Lock identity behind the currently displayed target frame (slice 2/3 routing). */
+	int32 DisplayedTargetUID = 0;
+	ECasterType DisplayedTargetType = ECasterType::None;
+
 	/** Ensures the flash widget is created and in the viewport. */
 	void EnsureFlashWidget();
 

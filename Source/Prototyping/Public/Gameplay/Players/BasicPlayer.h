@@ -888,6 +888,12 @@ public:
 	bool bIsAutoAttacking = false;
 	bool bLastKnownTargetAggro = false;
 
+	// Dead-transition edge detectors for the shared target frame (mob + player).
+	// The frame itself is sticky; only flips are pushed (death can land in any
+	// packet order, or off-screen without a result packet at all).
+	bool bLastKnownTargetDead = false;
+	bool bLastKnownPlayerTargetDead = false;
+
 	// True while the mob target frame currently shows a PLAYER (shared widget).
 	// Lets the tick detect a GC-nulled remote target and hide the stale frame.
 	bool bPlayerFrameShown = false;

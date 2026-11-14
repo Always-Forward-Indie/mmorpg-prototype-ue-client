@@ -109,9 +109,10 @@ void ABasicPlayer::SetLockedTarget(ABasicMOB* NewTarget)
             UIManager->SetSkillTarget(MobId, ECasterType::Mob);
 
             bool bIsAggro = LockedTarget->GetMOBIsAggressive();
+            const FMOBStruct& MobData = LockedTarget->GetMOBData();
 
             UIManager->ShowMobTargetFrame(
-                LockedTarget->GetMOBData().mobSlug,
+                MobData.mobSlug,
                 LockedTarget->GetMobName(),
                 LockedTarget->GetMOBLevel(),
                 LockedTarget->GetMOBCurrentHealth(),
@@ -119,8 +120,13 @@ void ABasicPlayer::SetLockedTarget(ABasicMOB* NewTarget)
                     ? LockedTarget->GetMOBAttributes().attributesData[TEXT("max_health")].attributeValue
                     : 100,
                 bIsAggro,
-                LockedTarget->CachedIcon);
+                LockedTarget->CachedIcon,
+                MobId, ECasterType::Mob,
+                playerData.characterData.characterLevel,
+                MobData.mobRankCode, MobData.bIsChampion, MobData.championKind,
+                LockedTarget->GetMOBIsDead());
             bLastKnownTargetAggro = bIsAggro;
+            bLastKnownTargetDead = LockedTarget->GetMOBIsDead();
         }
 
         if (LockedTarget->MobHeadInfo)
@@ -155,6 +161,8 @@ void ABasicPlayer::ClearLockedTarget()
     LockedTarget = nullptr;
     LockedPlayerTarget = nullptr;
     bPlayerFrameShown = false;
+    bLastKnownPlayerTargetDead = false;
+    bLastKnownTargetDead = false;
     bIsSelfTargeted = false;
     PrevSoftTarget = nullptr;
     bIsAutoAttacking = false;
@@ -191,6 +199,7 @@ void ABasicPlayer::SetLockedPlayerTarget(ABasicPlayer* NewTarget)
         LockedTarget = nullptr;
         bIsAutoAttacking = false;
         bIsApproachingTarget = false;
+        bLastKnownTargetDead = false;
         PendingSkillSlug.Empty();
         GetWorld()->GetTimerManager().ClearTimer(AutoAttackRetryTimerHandle);
     }
@@ -213,8 +222,13 @@ void ABasicPlayer::SetLockedPlayerTarget(ABasicPlayer* NewTarget)
                 LockedPlayerTarget->playerData.characterData.characterCurrentHealth,
                 LockedPlayerTarget->GetMaxHealth_Implementation(),
                 false, // players are not aggressive
-                nullptr); // no icon
+                nullptr, // no icon
+                PlayerId, ECasterType::Player,
+                playerData.characterData.characterLevel,
+                TEXT(""), false, TEXT(""),
+                LockedPlayerTarget->GetIsDead());
             bPlayerFrameShown = true;
+            bLastKnownPlayerTargetDead = LockedPlayerTarget->GetIsDead();
         }
 
         UE_LOG(LogGameplay, Verbose, TEXT("BasicPlayer: Locked player target -> Player %d (%s)"),

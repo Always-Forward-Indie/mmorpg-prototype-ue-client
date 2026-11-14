@@ -223,19 +223,32 @@ void ABasicPlayer::Tick(float DeltaTime)
             : 100;
         UIManager->UpdateMobTargetFrameHP(CurrentHP, MaxHP);
 
+        // Dead-transition edge: push once (death packets can arrive in any order).
+        const bool bTargetDead = LockedTarget->GetMOBIsDead();
+        if (bTargetDead != bLastKnownTargetDead)
+        {
+            bLastKnownTargetDead = bTargetDead;
+            UIManager->SetMobTargetDead(bTargetDead);
+        }
+
         // Re-call SetMobInfo only when the aggro state has actually flipped
         const bool bCurrentAggro = LockedTarget->GetMOBIsAggressive();
         if (bCurrentAggro != bLastKnownTargetAggro)
         {
             bLastKnownTargetAggro = bCurrentAggro;
+            const FMOBStruct& MobData = LockedTarget->GetMOBData();
 
             UIManager->ShowMobTargetFrame(
-                LockedTarget->GetMOBData().mobSlug,
+                MobData.mobSlug,
                 LockedTarget->GetMobName(),
                 LockedTarget->GetMOBLevel(),
                 CurrentHP, MaxHP,
                 bCurrentAggro,
-                LockedTarget->CachedIcon);
+                LockedTarget->CachedIcon,
+                FCString::Atoi(*LockedTarget->GetMOBUId()), ECasterType::Mob,
+                playerData.characterData.characterLevel,
+                MobData.mobRankCode, MobData.bIsChampion, MobData.championKind,
+                bTargetDead);
         }
     }
 
@@ -249,6 +262,12 @@ void ABasicPlayer::Tick(float DeltaTime)
             const int32 PlayerHP = LockedPlayerTarget->GetIsDead()
                 ? 0 : LockedPlayerTarget->GetPlayerCurrentHPPoints();
             UIManager->UpdateMobTargetFrameHP(PlayerHP, LockedPlayerTarget->GetMaxHealth_Implementation());
+            const bool bPlayerDead = LockedPlayerTarget->GetIsDead();
+            if (bPlayerDead != bLastKnownPlayerTargetDead)
+            {
+                bLastKnownPlayerTargetDead = bPlayerDead;
+                UIManager->SetMobTargetDead(bPlayerDead);
+            }
         }
         else if (bPlayerFrameShown)
         {

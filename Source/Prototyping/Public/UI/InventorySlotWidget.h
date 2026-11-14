@@ -209,6 +209,9 @@ private:
 	/** Preset for the rule-computed frame key, or nullptr when unset. */
 	const FButtonStyle* StyleForKey(const FString& Key) const;
 
+	/** True when at least one style preset carries a Normal brush. */
+	bool HasAnyPresetStyle() const;
+
 	/** Handle for async texture loading */
 	TSharedPtr<FStreamableHandle> StreamableHandle;
 

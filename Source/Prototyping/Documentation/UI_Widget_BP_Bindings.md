@@ -97,6 +97,8 @@ Inside `W_PlayerInterface` (not UIManager-directly): `USkillBarWidget` (`Skills/
      Selected > Hover > base, full `Normal/Hovered/Pressed` each);
      `RarityBorder` tints automatically, `ImgEquipped` stays the single badge.
      Unset presets keep the authored button style (never force invisible).
+     `SlotButton` must fill the slot with `Visibility=Visible` and `Is Enabled`
+     — otherwise the slot is dead to the cursor (this is logged as an Error).
 3. Multi-client run (`LaunchClients.ps1 -n 3`): open/close every toggle window, log-scan for
    `BindWidget`, `Failed to find`, `Accessed None` — zero hits is the gate.
 4. Equipment window: hover a slot → item tooltip follows the cursor (bound

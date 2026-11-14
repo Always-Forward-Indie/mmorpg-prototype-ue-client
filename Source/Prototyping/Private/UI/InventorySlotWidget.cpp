@@ -35,6 +35,21 @@ void UInventorySlotWidget::NativeConstruct()
 		SlotButton->OnUnhovered.AddDynamic(this, &UInventorySlotWidget::OnSlotButtonUnhovered);
 	}
 
+	// Load-bearing binds: fail loud, never silent (UI_Widget_BP_Bindings §3.2).
+	// A missing SlotButton kills all input; a missing icon kills the item visual.
+	if (!SlotButton)
+	{
+		UE_LOG(LogGameplay, Error, TEXT("InventorySlotWidget: SlotButton bind missing in %s (slot %d) — slot input is dead. Add a UButton named 'SlotButton' filling the slot."), *GetName(), SlotIndex);
+	}
+	if (!ItemIcon)
+	{
+		UE_LOG(LogGameplay, Error, TEXT("InventorySlotWidget: ItemIcon bind missing in %s (slot %d) — items have no icon. Add a UImage named 'ItemIcon'."), *GetName(), SlotIndex);
+	}
+	if (SlotButton && SlotButton->GetStyle().Normal.GetResourceObject() == nullptr && !HasAnyPresetStyle())
+	{
+		UE_LOG(LogGameplay, Warning, TEXT("InventorySlotWidget: %s (slot %d) has no button visuals — set the button Style brushes or the Empty/Filled/Hovered/Selected/Highlighted presets, or empty slots are invisible."), *GetName(), SlotIndex);
+	}
+
 	if (CooldownOverlay)
 		CooldownOverlay->SetVisibility(ESlateVisibility::Collapsed);
 	if (CooldownText)
@@ -243,6 +258,16 @@ const FButtonStyle* UInventorySlotWidget::StyleForKey(const FString& Key) const
 	// Empty Normal brush = preset never assigned in BP: keep authored style.
 	if (Candidate && Candidate->Normal.GetResourceObject() != nullptr) return Candidate;
 	return nullptr;
+}
+
+bool UInventorySlotWidget::HasAnyPresetStyle() const
+{
+	const FButtonStyle* Presets[] = { &EmptyStyle, &FilledStyle, &HoveredStyle, &SelectedStyle, &HighlightedStyle };
+	for (const FButtonStyle* P : Presets)
+	{
+		if (P && P->Normal.GetResourceObject() != nullptr) return true;
+	}
+	return false;
 }
 
 void UInventorySlotWidget::LoadItemIcon()

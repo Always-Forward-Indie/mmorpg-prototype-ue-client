@@ -18,7 +18,14 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSlotRightClicked, int32, SlotInde
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSlotHovered, int32, SlotIndex, bool, bIsHovered);
 
 /**
- * Individual inventory slot widget that represents a single item slot
+ * Individual inventory slot widget that represents a single item slot.
+ *
+ * Chrome model (single input path): one UButton owns every frame state via
+ * BP-assigned FButtonStyle presets (Empty/Filled/Hovered/Selected/Highlighted,
+ * priority Highlight > Selected > Hover > base — see FInventorySlotStyleRule).
+ * No per-state Image overlays: rarity rides the RarityBorder tint, equipped is
+ * a single badge, cooldown/quantity/junk logic is untouched.
+ * All binds are optional — a BP predating a widget degrades, never crashes.
  */
 UCLASS()
 class PROTOTYPING_API UInventorySlotWidget : public UUserWidget
@@ -74,7 +81,7 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Inventory Slot Events")
 	FOnSlotHovered OnSlotHovered;
 
-	UPROPERTY(meta = (BindWidget)) USizeBox* SlotSizeBox;
+	UPROPERTY(meta = (BindWidgetOptional)) USizeBox* SlotSizeBox = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ExposeOnSpawn = "true", ClampMin = "8"))
 	float SlotSide = 64.f;
@@ -84,8 +91,6 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
-	virtual void NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
-	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 
 	virtual void NativePreConstruct() override;
@@ -102,49 +107,52 @@ protected:
 	UFUNCTION(BlueprintCallable, Category = "Inventory Slot")
 	void UpdateQuantityText();
 
-	// Get rarity color
+	// Rarity tint (single source: FInventorySlotStyleRule).
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory Slot")
 	FLinearColor GetRarityColor(const FString& Rarity) const;
 
 protected:
-	// UI Components (bind these in Blueprint)
-	UPROPERTY(meta = (BindWidget))
-	UButton* SlotButton;
-
-	UPROPERTY(meta = (BindWidget))
-	UImage* ItemIcon;
-
-	UPROPERTY(meta = (BindWidget))
-	UTextBlock* QuantityText;
-
-	UPROPERTY(meta = (BindWidget))
-	UBorder* SlotBorder;
-
-	UPROPERTY(meta = (BindWidget))
-	UBorder* RarityBorder;
-
-	UPROPERTY(meta = (BindWidget))
-	UImage* ImgStroke;
-
-	UPROPERTY(meta = (BindWidget))
-	UImage* ImgSelected;
-
-	UPROPERTY(meta = (BindWidget))
-	UImage* ImgOccupied;
-
-	UPROPERTY(meta = (BindWidget))
-	UImage* ImgBase;
+	// UI Components (all optional — absence degrades, never crashes)
+	UPROPERTY(meta = (BindWidgetOptional))
+	UButton* SlotButton = nullptr;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	UImage* ImgEquipped;
+	UImage* ItemIcon = nullptr;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	UTextBlock* QuantityText = nullptr;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	UBorder* RarityBorder = nullptr;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	UImage* ImgEquipped = nullptr;
 
 	// Predictive cooldown overlay (optional in BP: add CooldownOverlay image +
 	// CooldownText textblock to WBP to enable; absent = silently disabled).
 	UPROPERTY(meta = (BindWidgetOptional))
-	UImage* CooldownOverlay;
+	UImage* CooldownOverlay = nullptr;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	UTextBlock* CooldownText;
+	UTextBlock* CooldownText = nullptr;
+
+	// Button-style presets per frame state (assigned in BP defaults).
+	// An unset preset (empty Normal brush) is skipped: the BP-authored
+	// button style stays as-is instead of going invisible.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Slot|Style")
+	FButtonStyle EmptyStyle;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Slot|Style")
+	FButtonStyle FilledStyle;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Slot|Style")
+	FButtonStyle HoveredStyle;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Slot|Style")
+	FButtonStyle SelectedStyle;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Slot|Style")
+	FButtonStyle HighlightedStyle;
 
 	// Slot data
 	UPROPERTY(BlueprintReadOnly, Category = "Inventory Slot")
@@ -180,34 +188,15 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Slot")
 	bool bIsHovered = false;
 
+	// Kept for BP compatibility (read in older Blueprint graphs).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Slot")
 	bool bIsOccupied = false;
 
 	// Junk-mark visual (sell-junk helper). Applied in SetJunked/SetIconTexture.
 	bool bIsJunked = false;
 
-	// Visual settings
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Slot")
-	FLinearColor DefaultBorderColor = FLinearColor(0.1f, 0.1f, 0.1f, 1.0f);
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Slot")
-	FLinearColor HighlightBorderColor = FLinearColor(1.0f, 1.0f, 0.0f, 1.0f);
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Slot")
-	FLinearColor SelectedBorderColor = FLinearColor(0.0f, 1.0f, 0.0f, 1.0f);
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Slot")
-	FLinearColor HoveredBorderColor = FLinearColor(0.5f, 0.5f, 1.0f, 1.0f);
-
-	// Rarity colors
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory Slot")
-	TMap<FString, FLinearColor> RarityColors;
-
 private:
-	// Initialize rarity colors
-	void InitializeRarityColors();
-
-	// Handle button events
+	// Handle button events (single input path; right-click stays native below)
 	UFUNCTION()
 	void OnSlotButtonClicked();
 
@@ -217,6 +206,8 @@ private:
 	UFUNCTION()
 	void OnSlotButtonUnhovered();
 
+	/** Preset for the rule-computed frame key, or nullptr when unset. */
+	const FButtonStyle* StyleForKey(const FString& Key) const;
 
 	/** Handle for async texture loading */
 	TSharedPtr<FStreamableHandle> StreamableHandle;

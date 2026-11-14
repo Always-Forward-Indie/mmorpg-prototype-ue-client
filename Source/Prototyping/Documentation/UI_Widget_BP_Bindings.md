@@ -90,6 +90,13 @@ Inside `W_PlayerInterface` (not UIManager-directly): `USkillBarWidget` (`Skills/
      (`WBP_EffectSlot`) and `EffectDefinitionTable` on the frame instance.
      Fixed layout: no per-rank resizing, distance is not shown, no widget-wide
      desaturation by design.
+   - `Inventory/W_PlayerInventorySlot` (`UInventorySlotWidget`, button-state model):
+     delete the `ImgBase/ImgOccupied/ImgSelected/ImgStroke` images; `SlotButton`
+     must fill the slot; set the 5 `FButtonStyle` presets
+     (`Empty/Filled/Hovered/Selected/Highlighted`, priority Highlight >
+     Selected > Hover > base, full `Normal/Hovered/Pressed` each);
+     `RarityBorder` tints automatically, `ImgEquipped` stays the single badge.
+     Unset presets keep the authored button style (never force invisible).
 3. Multi-client run (`LaunchClients.ps1 -n 3`): open/close every toggle window, log-scan for
    `BindWidget`, `Failed to find`, `Accessed None` — zero hits is the gate.
 4. Equipment window: hover a slot → item tooltip follows the cursor (bound

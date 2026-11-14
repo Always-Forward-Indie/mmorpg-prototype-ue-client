@@ -1,6 +1,7 @@
 #include "UI/InventorySlotWidget.h"
 #include "Prototyping.h"
 #include "Utils/NetCore/CooldownFormat.h"
+#include "Utils/NetCore/InventorySlotStyleRule.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
@@ -19,22 +20,14 @@ UInventorySlotWidget::UInventorySlotWidget(const FObjectInitializer& ObjectIniti
 	bIsHovered = false;
 	bIsOccupied = false;
 	CurrentItem = FInventoryItemStruct();
-
-	// Initialize default colors
-	DefaultBorderColor = FLinearColor(0.1f, 0.1f, 0.1f, 1.0f);
-	HighlightBorderColor = FLinearColor(1.0f, 1.0f, 0.0f, 1.0f);
-	SelectedBorderColor = FLinearColor(0.0f, 1.0f, 0.0f, 1.0f);
-	HoveredBorderColor = FLinearColor(0.5f, 0.5f, 1.0f, 1.0f);
 }
 
 void UInventorySlotWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// Initialize rarity colors
-	InitializeRarityColors();
-
-	// Bind button events
+	// Single input path: everything rides the button. Right-click stays in
+	// NativeOnMouseButtonDown below (UButton only fires left-click).
 	if (SlotButton)
 	{
 		SlotButton->OnClicked.AddDynamic(this, &UInventorySlotWidget::OnSlotButtonClicked);
@@ -114,29 +107,11 @@ void UInventorySlotWidget::UpdateCooldownDisplay()
 	}
 }
 
-void UInventorySlotWidget::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
-{
-	Super::NativeOnMouseEnter(InGeometry, InMouseEvent);
-	
-	bIsHovered = true;
-	UpdateSlotAppearance();
-	OnSlotHovered.Broadcast(SlotIndex, true);
-}
-
-void UInventorySlotWidget::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
-{
-	Super::NativeOnMouseLeave(InMouseEvent);
-	
-	bIsHovered = false;
-	UpdateSlotAppearance();
-	OnSlotHovered.Broadcast(SlotIndex, false);
-}
-
 FReply UInventorySlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
 	// Hide tooltip on any mouse button click
 	OnSlotHovered.Broadcast(SlotIndex, false);
-	
+
 	if (InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
 	{
 		OnSlotRightClicked.Broadcast(SlotIndex);
@@ -150,7 +125,7 @@ void UInventorySlotWidget::InitializeSlot(int32 InSlotIndex)
 {
 	SlotIndex = InSlotIndex;
 	ClearSlot();
-	
+
 	UE_LOG(LogGameplay, Verbose, TEXT("InventorySlotWidget: Initialized slot %d"), SlotIndex);
 }
 
@@ -218,81 +193,56 @@ void UInventorySlotWidget::SetSlotSelected(bool bSelected)
 
 void UInventorySlotWidget::UpdateSlotAppearance()
 {
-	if (!SlotBorder && !RarityBorder)
+	const bool bHasItem = HasItem();
+	const FString FrameKey = FInventorySlotStyleRule::FrameKey(bHasItem, bIsSelected, bIsHighlighted, bIsHovered);
+
+	// Frame chrome: one button style per state. Unset presets are skipped so a
+	// BP predating them keeps its authored style instead of going invisible.
+	if (SlotButton)
 	{
-		return;
+		if (const FButtonStyle* Style = StyleForKey(FrameKey))
+		{
+			SlotButton->SetStyle(*Style);
+		}
 	}
 
-	// Determine border color based on state
-	FLinearColor BorderColor = DefaultBorderColor;
-
-	if (bIsOccupied)
+	// Rarity edge: tinted only on occupied slots, hidden otherwise.
+	if (RarityBorder)
 	{
-		ImgOccupied->SetVisibility(ESlateVisibility::Visible);
-		ImgBase->SetVisibility(ESlateVisibility::Hidden);
-	}
-	else
-	{
-		ImgOccupied->SetVisibility(ESlateVisibility::Hidden);
-		ImgBase->SetVisibility(ESlateVisibility::Visible);
+		if (bHasItem)
+		{
+			const FString& RarityKey = CurrentItem.raritySlug.IsEmpty() ? CurrentItem.rarity : CurrentItem.raritySlug;
+			RarityBorder->SetBrushColor(FInventorySlotStyleRule::RarityColor(RarityKey));
+			RarityBorder->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		else
+		{
+			RarityBorder->SetVisibility(ESlateVisibility::Collapsed);
+		}
 	}
 
-	// Show equipped overlay when the item is currently worn
+	// Equipped badge survives as the single overlay image.
 	if (ImgEquipped)
 	{
 		ImgEquipped->SetVisibility(
-			(bIsOccupied && CurrentItem.is_equipped)
+			(bHasItem && CurrentItem.is_equipped)
 				? ESlateVisibility::HitTestInvisible
 				: ESlateVisibility::Collapsed);
 	}
-	
-	if (bIsSelected && bIsOccupied)
-	{
-		BorderColor = SelectedBorderColor;
-		ImgSelected->SetVisibility(ESlateVisibility::Visible);
-		//ImgBase->SetColorAndOpacity(HasItem()
-		//	? FLinearColor(1.06f, 1.06f, 1.06f, 1.f)   // +6% �������
-		//	: FLinearColor(1.f, 1.f, 1.f, 1.f));
-	}
-	else if (!bIsSelected)
-	{
-		ImgSelected->SetVisibility(ESlateVisibility::Hidden);
-	}
+}
 
+const FButtonStyle* UInventorySlotWidget::StyleForKey(const FString& Key) const
+{
+	const FButtonStyle* Candidate = nullptr;
+	if (Key == TEXT("highlighted"))      Candidate = &HighlightedStyle;
+	else if (Key == TEXT("selected"))   Candidate = &SelectedStyle;
+	else if (Key == TEXT("hovered"))    Candidate = &HoveredStyle;
+	else if (Key == TEXT("filled"))     Candidate = &FilledStyle;
+	else                                Candidate = &EmptyStyle;
 
-	if (bIsHighlighted && bIsOccupied)
-	{
-		BorderColor = HighlightBorderColor;
-	}
-
-
-	if (bIsHovered && bIsOccupied)
-	{
-		BorderColor = HoveredBorderColor;
-		ImgStroke->SetVisibility(ESlateVisibility::Visible);
-	}
-	else if (!bIsHovered)
-	{
-		ImgStroke->SetVisibility(ESlateVisibility::Hidden);
-	}
-
-	// Apply border color
-	//if (SlotBorder)
-	//{
-	//	SlotBorder->SetBrushColor(BorderColor);
-	//}
-
-	// Set rarity border color if item exists
-	//if (RarityBorder && HasItem())
-	//{
-	//	FLinearColor RarityColor = GetRarityColor(CurrentItem.rarity);
-	//	RarityBorder->SetBrushColor(RarityColor);
-	//	RarityBorder->SetVisibility(ESlateVisibility::Visible);
-	//}
-	//else if (RarityBorder)
-	//{
-	//	RarityBorder->SetVisibility(ESlateVisibility::Hidden);
-	//}
+	// Empty Normal brush = preset never assigned in BP: keep authored style.
+	if (Candidate && Candidate->Normal.GetResourceObject() != nullptr) return Candidate;
+	return nullptr;
 }
 
 void UInventorySlotWidget::LoadItemIcon()
@@ -375,7 +325,6 @@ void UInventorySlotWidget::SetIconTexture(UTexture2D* Texture)
 	{
 		ItemIcon->SetBrushFromTexture(Texture);
 		ItemIcon->SetColorAndOpacity(bIsJunked ? FLinearColor(0.45f, 0.45f, 0.45f, 1.f) : FLinearColor(1.0f, 1.0f, 1.0f, 1.0f));
-		//ItemIcon->SetColorAndOpacity(FLinearColor::White);
 		ItemIcon->SetRenderOpacity(1.0f);
 
 		UE_LOG(LogGameplay, Verbose, TEXT("Set icon texture %s. Has alpha: %s"), *Texture->GetName(), Texture->HasAlphaChannel() ? TEXT("Yes") : TEXT("No"));
@@ -431,31 +380,8 @@ void UInventorySlotWidget::UpdateQuantityText()
 
 FLinearColor UInventorySlotWidget::GetRarityColor(const FString& Rarity) const
 {
-	if (const FLinearColor* Color = RarityColors.Find(Rarity))
-	{
-		return *Color;
-	}
-	
-	// Default color for unknown rarity
-	return FLinearColor::White;
-}
-
-void UInventorySlotWidget::InitializeRarityColors()
-{
-	RarityColors.Empty();
-	
-	// Standard rarity colors
-	RarityColors.Add(TEXT("common"), FLinearColor::White);
-	RarityColors.Add(TEXT("uncommon"), FLinearColor::Green);
-	RarityColors.Add(TEXT("rare"), FLinearColor::Blue);
-	RarityColors.Add(TEXT("epic"), FLinearColor(0.5f, 0.0f, 1.0f, 1.0f)); // Purple
-	RarityColors.Add(TEXT("legendary"), FLinearColor(1.0f, 0.5f, 0.0f, 1.0f)); // Orange
-	RarityColors.Add(TEXT("mythic"), FLinearColor::Red);
-	
-	// Additional rarities (case-insensitive alternatives)
-	RarityColors.Add(TEXT("normal"), FLinearColor::White);
-	RarityColors.Add(TEXT("magic"), FLinearColor::Blue);
-	RarityColors.Add(TEXT("unique"), FLinearColor(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow
+	// Single source: the NetCore style rule (no forked tables).
+	return FInventorySlotStyleRule::RarityColor(Rarity);
 }
 
 void UInventorySlotWidget::OnSlotButtonClicked()
@@ -465,12 +391,16 @@ void UInventorySlotWidget::OnSlotButtonClicked()
 
 void UInventorySlotWidget::OnSlotButtonHovered()
 {
-
+	bIsHovered = true;
+	UpdateSlotAppearance();
+	OnSlotHovered.Broadcast(SlotIndex, true);
 }
 
 void UInventorySlotWidget::OnSlotButtonUnhovered()
 {
-
+	bIsHovered = false;
+	UpdateSlotAppearance();
+	OnSlotHovered.Broadcast(SlotIndex, false);
 }
 
 void UInventorySlotWidget::SetSlotSide(float InSide)

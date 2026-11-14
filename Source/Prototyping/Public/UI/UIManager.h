@@ -923,6 +923,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void SetMobTargetDead(bool bIsDead);
 
+	/** Target castbar: show the locked target's in-flight cast (server-time driven).
+	 * Stale/foreign caster IDs are ignored (matched against the displayed lock). */
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void ShowMobTargetCast(int32 CasterUID, const FString& SkillName, const FString& SkillSlug, float CastTimeSec, int64 CastStartedAtMs, bool bInterruptible = false);
+
+	/** Hide the target castbar for this caster (result arrived / cast ended). */
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void HideMobTargetCast(int32 CasterUID);
+
 	/** Hide the mob target frame. */
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void HideMobTargetFrame();

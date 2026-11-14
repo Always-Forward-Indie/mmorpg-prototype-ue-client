@@ -31,6 +31,21 @@
 #include "Data/EffectDefinitionTable.h"
 #include "Utils/AudioSpawnHelpers.h"
 
+// File-local: the UIManager of the local player that currently hard-locks Self.
+// Null when nobody (or a remote client) holds the lock — callers stay silent.
+static UUIManager* GetLockingLocalPlayerUI(ABasicMOB* Self)
+{
+    if (!Self) return nullptr;
+    UWorld* W = Self->GetWorld();
+    if (!W) return nullptr;
+    APlayerController* PC = W->GetFirstPlayerController();
+    if (!PC) return nullptr;
+    ABasicPlayer* Player = Cast<ABasicPlayer>(PC->GetPawn());
+    if (!Player || Player->GetPlayerData().isOtherClient) return nullptr;
+    if (Player->GetLockedTarget() != Self) return nullptr;
+    return Player->GetUIManager();
+}
+
 void ABasicMOB::BeginPlay()
 {
 	Super::BeginPlay();
@@ -150,10 +165,34 @@ void ABasicMOB::OnReceiveSkillInitiation(const FSkillInitiationData& SkillData)
 
 		AnimInst->StartAttack(SkillData);
 	}
+
+	// Target-frame castbar: this mob is the caster; forward the server-timed
+	// cast to the frame only when the local player hard-locks this mob.
+	// Instant casts and basic_attack stay hidden inside ShowCast (visibility gate).
+	if (UUIManager* LockUI = GetLockingLocalPlayerUI(this))
+	{
+		UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
+		ULocalizationSubsystem* Loc = GI ? GI->GetSubsystem<ULocalizationSubsystem>() : nullptr;
+		USkillDefinitionRepository* Repo = GI ? GI->GetSkillDefinitionRepository() : nullptr;
+		const FString ResolvedName = UCombatSystemManager::ResolveSkillDisplayNameForUI(
+			SkillData.skillSlug, SkillData.skillName, Loc, Repo);
+		LockUI->ShowMobTargetCast(GetActorId_Implementation(), ResolvedName,
+			SkillData.skillSlug, SkillData.castTime, SkillData.castStartedAt, false);
+	}
 }
 
 void ABasicMOB::OnReceiveSkillResult(const FSkillResultData& SkillResult)
 {
+	// Own cast finished: drop the target-frame castbar (server-time expiry
+	// in the widget covers any result that never arrives).
+	if (SkillResult.casterId == GetActorId_Implementation())
+	{
+		if (UUIManager* LockUI = GetLockingLocalPlayerUI(this))
+		{
+			LockUI->HideMobTargetCast(GetActorId_Implementation());
+		}
+	}
+
 	// Update health/mana with authoritative server values
 	if (SkillResult.targetId == GetActorId_Implementation())
 	{

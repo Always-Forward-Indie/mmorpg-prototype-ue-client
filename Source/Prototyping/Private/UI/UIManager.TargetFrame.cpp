@@ -42,6 +42,30 @@ void UUIManager::SetMobTargetDead(bool bIsDead)
 	}
 }
 
+void UUIManager::ShowMobTargetCast(int32 CasterUID, const FString& SkillName, const FString& SkillSlug, float CastTimeSec, int64 CastStartedAtMs, bool bInterruptible)
+{
+    if (CasterUID == 0 || CasterUID != DisplayedTargetUID) return;
+    if (PlayerInterfaceWidget)
+    {
+        if (UMobTargetFrameWidget* TargetFrame = PlayerInterfaceWidget->GetMobTargetFrameWidget())
+        {
+            TargetFrame->ShowCast(SkillName, SkillSlug, CastTimeSec, CastStartedAtMs, bInterruptible);
+        }
+    }
+}
+
+void UUIManager::HideMobTargetCast(int32 CasterUID)
+{
+    if (CasterUID == 0 || CasterUID != DisplayedTargetUID) return;
+    if (PlayerInterfaceWidget)
+    {
+        if (UMobTargetFrameWidget* TargetFrame = PlayerInterfaceWidget->GetMobTargetFrameWidget())
+        {
+            TargetFrame->HideCast();
+        }
+    }
+}
+
 void UUIManager::UpdateMobTargetFrameHP(int32 CurrentHP, int32 MaxHP)
 {
 	if (PlayerInterfaceWidget)

@@ -8,6 +8,9 @@
 #include "Engine/StreamableManager.h"
 #include "MyGameInstance.h"
 #include "Services/LocalizationSubsystem.h"
+#include "Services/TimeSyncService.h"
+#include "Gameplay/Combat/CombatSystemManager.h"
+#include "Gameplay/Skills/SkillDefinitionRepository.h"
 #include "Data/DataStructs.h"
 #include "Utils/NetCore/MobTargetFrameRule.h"
 
@@ -40,6 +43,12 @@ void UMobTargetFrameWidget::NativeDestruct()
     Super::NativeDestruct();
 }
 
+void UMobTargetFrameWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+    Super::NativeTick(MyGeometry, InDeltaTime);
+    TickCast();
+}
+
 void UMobTargetFrameWidget::SetMobInfo(const FString& MobSlug,
                                         const FString& MobName,
                                         int32 MobLevel,
@@ -62,6 +71,8 @@ void UMobTargetFrameWidget::SetMobInfo(const FString& MobSlug,
     bCachedChampion = false;
     CachedViewerLevel = 0;
     bCachedDead = false;
+    // A new lock cancels any in-flight cast display from the previous target.
+    HideCast();
 
     // --- Portrait icon ---
     // Priority: 1) caller-supplied Icon (CachedIcon from BasicMOB, already in memory)
@@ -124,6 +135,8 @@ void UMobTargetFrameWidget::SetDead(bool bIsDead)
     ApplyDeadChrome();
     if (bIsDead)
     {
+        // A corpse never keeps casting: stop the bar, freeze effect ticks.
+        HideCast();
         UpdateHP(0, CachedMaxHP);
     }
 }
@@ -160,6 +173,7 @@ void UMobTargetFrameWidget::ClearTarget()
     bCachedDead = false;
     CachedRankCode.Empty();
     CachedPortrait = nullptr;
+    HideCast();
     SetVisibility(ESlateVisibility::Collapsed);
 
     if (MobNameText)   MobNameText->SetText(FText::GetEmpty());
@@ -186,6 +200,109 @@ void UMobTargetFrameWidget::ClearTarget()
         {
             PortraitImage->SetBrushFromTexture(nullptr);
         }
+    }
+}
+
+void UMobTargetFrameWidget::ShowCast(const FString& SkillName, const FString& SkillSlug, float CastTimeSec, int64 CastStartedAtMs, bool bInterruptible)
+{
+    // Instant casts and the basic attack never show a bar (row stays collapsed).
+    if (!FMobTargetCastRule::ShouldShowCastbar(CastTimeSec, SkillSlug))
+    {
+        HideCast();
+        return;
+    }
+
+    CachedCastSkillName = SkillName;
+    CachedCastSkillSlug = SkillSlug;
+    CachedCastTotalSec = CastTimeSec;
+    CachedCastStartedAtMs = CastStartedAtMs;
+    if (UWorld* W = GetWorld())
+    {
+        FallbackCastStartWorldSec = static_cast<double>(W->GetTimeSeconds());
+    }
+    bIsCasting = true;
+
+    if (CastNameText)
+    {
+        CastNameText->SetText(FText::FromString(SkillName));
+    }
+    // No interruptible casts exist server-side (all casts complete once
+    // started); the icon stays hidden until the server ships the per-skill
+    // flag (tracker mirenhold #134). Accepted for API parity with the plan.
+    if (InterruptIcon)
+    {
+        InterruptIcon->SetVisibility(ESlateVisibility::Collapsed);
+    }
+    TickCast();
+    SetCastRowVisibility(ESlateVisibility::HitTestInvisible);
+}
+
+void UMobTargetFrameWidget::TickCast()
+{
+    if (!bIsCasting || CachedCastTotalSec <= 0.0f) return;
+
+    float Progress = 1.0f;
+    float Remaining = 0.0f;
+    const int64 ServerNowMs = ResolveServerNowMs();
+    if (ServerNowMs >= 0 && CachedCastStartedAtMs > 0)
+    {
+        Progress = FMobTargetCastRule::ProgressAt(ServerNowMs, CachedCastStartedAtMs, CachedCastTotalSec);
+        Remaining = FMobTargetCastRule::RemainingSecAt(ServerNowMs, CachedCastStartedAtMs, CachedCastTotalSec);
+    }
+    else if (UWorld* W = GetWorld())
+    {
+        // Degraded clock only: time-sync unavailable (offline/early init).
+        const double Elapsed = static_cast<double>(W->GetTimeSeconds()) - FallbackCastStartWorldSec;
+        Progress = static_cast<float>(FMath::Clamp(Elapsed / static_cast<double>(CachedCastTotalSec), 0.0, 1.0));
+        Remaining = static_cast<float>(FMath::Max(0.0, static_cast<double>(CachedCastTotalSec) - Elapsed));
+    }
+
+    if (CastBar)
+    {
+        CastBar->SetPercent(Progress);
+    }
+    if (CastTimeText)
+    {
+        CastTimeText->SetText(FText::FromString(FString::Printf(TEXT("%.1f"), Remaining)));
+    }
+
+    if (Progress >= 1.0f)
+    {
+        HideCast();
+    }
+}
+
+void UMobTargetFrameWidget::HideCast()
+{
+    bIsCasting = false;
+    CachedCastTotalSec = 0.0f;
+    SetCastRowVisibility(ESlateVisibility::Collapsed);
+}
+
+int64 UMobTargetFrameWidget::ResolveServerNowMs() const
+{
+    if (const UWorld* W = GetWorld())
+    {
+        if (UMyGameInstance* GI = Cast<UMyGameInstance>(W->GetGameInstance()))
+        {
+            if (const UTimeSyncService* TS = GI->GetTimeSyncService())
+            {
+                return TS->GetEstimatedServerTimeMs(EServerType::ChunkServer);
+            }
+        }
+    }
+    return -1;
+}
+
+void UMobTargetFrameWidget::SetCastRowVisibility(ESlateVisibility Vis)
+{
+    // The frame itself stays visible (health/name remain); only the row collapses.
+    if (CastBar)      { CastBar->SetVisibility(Vis); }
+    if (CastNameText) { CastNameText->SetVisibility(Vis); }
+    if (CastTimeText) { CastTimeText->SetVisibility(Vis); }
+    if (InterruptIcon)
+    {
+        InterruptIcon->SetVisibility(ESlateVisibility::Collapsed);
     }
 }
 
@@ -391,6 +508,26 @@ void UMobTargetFrameWidget::HandleLocaleChanged(const FString& NewLocale)
     if (MobLevelText && bHasTarget)
     {
         ApplyRankChrome();
+    }
+    // In-flight cast name follows the locale like everything else.
+    if (bIsCasting && CastNameText && !CachedCastSkillSlug.IsEmpty())
+    {
+        if (UWorld* W = GetWorld())
+        {
+            if (UMyGameInstance* GI = Cast<UMyGameInstance>(W->GetGameInstance()))
+            {
+                if (ULocalizationSubsystem* Loc = GI->GetSubsystem<ULocalizationSubsystem>())
+                {
+                    const FString Resolved = UCombatSystemManager::ResolveSkillDisplayNameForUI(
+                        CachedCastSkillSlug, TEXT(""), Loc, GI->GetSkillDefinitionRepository());
+                    if (!Resolved.IsEmpty())
+                    {
+                        CachedCastSkillName = Resolved;
+                        CastNameText->SetText(FText::FromString(Resolved));
+                    }
+                }
+            }
+        }
     }
     UpdateHP(CachedCurrentHP, CachedMaxHP);
 }

@@ -48,27 +48,15 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
     // S1a+S3c: server no longer sends display strings (skillName/animationName).
     // Resolve them locally: codebook table first, skill catalog second.
     // Keep packet values as override.
-    FString SkillNameForUI = SkillData.skillName;
-    FString AnimNameForUI = SkillData.animationName;
     ULocalizationSubsystem* Loc = GameInstance ? GameInstance->GetSubsystem<ULocalizationSubsystem>() : nullptr;
-    if (SkillNameForUI.IsEmpty() && Loc)
+    USkillDefinitionRepository* SkillRepo = GameInstance ? GameInstance->GetSkillDefinitionRepository() : nullptr;
+    FString SkillNameForUI = ResolveSkillDisplayNameForUI(SkillData.skillSlug, SkillData.skillName, Loc, SkillRepo);
+    FString AnimNameForUI = SkillData.animationName;
+    if (AnimNameForUI.IsEmpty() && SkillRepo)
     {
-        // Table row wins when filled (differs from humanised fallback);
-        // otherwise the repo lookup below keeps the curated single-language name.
-        const FText LocSkill = Loc->GetSkillDisplayName(SkillData.skillSlug);
-        if (!LocSkill.IsEmpty() && LocSkill.ToString() != JSONParser::HumanizeSlugForDisplay(SkillData.skillSlug))
-            SkillNameForUI = LocSkill.ToString();
-    }
-    if ((SkillNameForUI.IsEmpty() || AnimNameForUI.IsEmpty()) && GameInstance)
-    {
-        if (USkillDefinitionRepository* SkillRepo = GameInstance->GetSkillDefinitionRepository())
-        {
-            const FSkillDefinitionData& Def = SkillRepo->GetDefinition(SkillData.skillSlug);
-            if (SkillNameForUI.IsEmpty() && !Def.displayName.IsEmpty())
-                SkillNameForUI = Def.displayName.ToString();
-            if (AnimNameForUI.IsEmpty() && !Def.animationName.IsEmpty())
-                AnimNameForUI = Def.animationName;
-        }
+        const FSkillDefinitionData& Def = SkillRepo->GetDefinition(SkillData.skillSlug);
+        if (!Def.animationName.IsEmpty())
+            AnimNameForUI = Def.animationName;
     }
 
     // Find caster
@@ -109,6 +97,32 @@ void UCombatSystemManager::ProcessSkillInitiation(const FSkillInitiationData& Sk
 
     // Broadcast event
     OnSkillInitiated.Broadcast(SkillData);
+}
+
+FString UCombatSystemManager::ResolveSkillDisplayNameForUI(const FString& SkillSlug, const FString& PacketName,
+    ULocalizationSubsystem* Loc, USkillDefinitionRepository* SkillRepo)
+{
+    FString Out = PacketName;
+    if (Out.IsEmpty() && Loc)
+    {
+        // Table row wins when filled (differs from humanised fallback);
+        // otherwise the repo lookup below keeps the curated single-language name.
+        const FText LocSkill = Loc->GetSkillDisplayName(SkillSlug);
+        if (!LocSkill.IsEmpty() && LocSkill.ToString() != JSONParser::HumanizeSlugForDisplay(SkillSlug))
+            Out = LocSkill.ToString();
+    }
+    if (Out.IsEmpty() && SkillRepo)
+    {
+        const FSkillDefinitionData& Def = SkillRepo->GetDefinition(SkillSlug);
+        if (!Def.displayName.IsEmpty())
+            Out = Def.displayName.ToString();
+    }
+    if (Out.IsEmpty() && !SkillSlug.IsEmpty())
+    {
+        // Last resort: never show an empty cast label.
+        Out = JSONParser::HumanizeSlugForDisplay(SkillSlug);
+    }
+    return Out;
 }
 
 ECasterType UCombatSystemManager::MapNetCasterType(int32 Net, const FString& Str)

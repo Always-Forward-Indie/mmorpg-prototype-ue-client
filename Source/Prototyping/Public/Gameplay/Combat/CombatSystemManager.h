@@ -68,6 +68,14 @@ public:
 
     static ECasterType MapNetCasterType(int32 Net, const FString& Str);
 
+    /**
+     * Shared skill display-name resolution (single source for the player
+     * castbar and the mob target frame): packet value wins, then the
+     * localization codebook, then the skill catalog, then the humanised slug.
+     */
+    static FString ResolveSkillDisplayNameForUI(const FString& SkillSlug, const FString& PacketName,
+        class ULocalizationSubsystem* Loc, class USkillDefinitionRepository* SkillRepo);
+
     UFUNCTION(BlueprintCallable, Category = "Combat System")
     void ProcessSkillResult(const FSkillResultData& SkillResult);
 

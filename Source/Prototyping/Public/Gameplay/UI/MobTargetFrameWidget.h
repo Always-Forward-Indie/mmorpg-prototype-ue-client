@@ -64,6 +64,24 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Target Frame")
     void SetDead(bool bIsDead);
 
+    /**
+     * Target castbar: server-driven progress, never local DeltaTime.
+     * Hidden (Collapsed) for instant casts and the basic attack (see
+     * FMobTargetCastRule). The interrupt icon stays Collapsed: casts are
+     * non-interruptible server-side by design (tracker mirenhold #134 tracks
+     * the per-skill flag; styling branches here once the server ships it).
+     */
+    UFUNCTION(BlueprintCallable, Category = "Target Frame")
+    void ShowCast(const FString& SkillName, const FString& SkillSlug, float CastTimeSec, int64 CastStartedAtMs, bool bInterruptible = false);
+
+    /** Single server-time progress step (called every NativeTick while casting). */
+    UFUNCTION(BlueprintCallable, Category = "Target Frame")
+    void TickCast();
+
+    /** Hide the castbar immediately (result, interrupt, death, unlock). */
+    UFUNCTION(BlueprintCallable, Category = "Target Frame")
+    void HideCast();
+
     /** Update only the HP bar and text (called every Tick while target is locked). */
     UFUNCTION(BlueprintCallable, Category = "Target Frame")
     void UpdateHP(int32 CurrentHP, int32 MaxHP);
@@ -75,6 +93,7 @@ public:
 protected:
     virtual void NativeConstruct() override;
     virtual void NativeDestruct() override;
+    virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
     // --- Bound widgets (must exist in the Blueprint with matching names) ---
 
@@ -113,6 +132,20 @@ protected:
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UTextBlock* DeadText = nullptr;
+
+    // Target castbar (slice 2): bar + skill name + remaining seconds + interrupt
+    // icon. All optional — the frame works when the BP predates them.
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UProgressBar* CastBar = nullptr;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* CastNameText = nullptr;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* CastTimeText = nullptr;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UImage* InterruptIcon = nullptr;
 
     // Default icon shown when no texture is assigned in the data table
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Target Frame")
@@ -159,4 +192,18 @@ private:
     FString CachedChampionKind;
     int32   CachedViewerLevel = 0;
     bool    bCachedDead = false;
+
+    bool    bIsCasting = false;
+    FString CachedCastSkillName;
+    FString CachedCastSkillSlug;
+    float   CachedCastTotalSec = 0.0f;
+    int64   CachedCastStartedAtMs = 0;
+    // Game-thread fallback anchor when the time-sync service is unavailable.
+    double  FallbackCastStartWorldSec = 0.0;
+
+    /** Server clock (chunk) in ms, or -1 when the time-sync service is missing. */
+    int64 ResolveServerNowMs() const;
+
+    /** Show/hide the castbar row widgets (never the frame itself). */
+    void SetCastRowVisibility(ESlateVisibility Vis);
 };

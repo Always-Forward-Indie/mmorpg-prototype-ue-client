@@ -280,19 +280,11 @@ void ABasicPlayer::OnInteractInput()
 	TryInteractWithWIO();
 }
 
-void ABasicPlayer::CheckForMOB()
+ABasicMOB* ABasicPlayer::ResolveCrosshairSoftTarget(const FVector& CameraLocation, const FVector& CameraForward)
 {
-    if (playerData.isOtherClient) return;
+    if (playerData.isOtherClient) return nullptr;
 
-    APlayerController* PC = Cast<APlayerController>(GetController());
-    if (!PC) return;
-
-    // Trace from the camera viewpoint пїЅ consistent with CheckForNPC
-    FVector CameraLocation;
-    FRotator CameraRotation;
-    PC->GetPlayerViewPoint(CameraLocation, CameraRotation);
-    const FVector CameraForward = CameraRotation.Vector();
-
+    // Camera viewpoint arrives via parameters so tick and click paths share one seam.
     // Gameplay range is measured FROM THE PLAYER so zoom never shrinks capture;
     // the ray itself travels camera->player plus that range (zoom-compensated).
     const float GameplayRange = CursorInteractionComponent ? CursorInteractionComponent->GetCrosshairTraceRange() : 1500.0f;
@@ -361,10 +353,32 @@ void ABasicPlayer::CheckForMOB()
         }
     }
 
+    return SoftTarget;
+}
+
+void ABasicPlayer::CheckForMOB()
+{
+    if (playerData.isOtherClient) return;
+
+    APlayerController* PC = Cast<APlayerController>(GetController());
+    if (!PC) return;
+
+    // Trace from the camera viewpoint — consistent with CheckForNPC
+    FVector CameraLocation;
+    FRotator CameraRotation;
+    PC->GetPlayerViewPoint(CameraLocation, CameraRotation);
+    const FVector CameraForward = CameraRotation.Vector();
+
+    // Shared acquisition seam (sphere sweep + cone assist + LOS).
+    ABasicMOB* SoftTarget = ResolveCrosshairSoftTarget(CameraLocation, CameraForward);
+
     // Debug: crosshair<->trace alignment (DA flag, off by default — zero cost when off).
     if (CursorInteractionComponent && CursorInteractionComponent->GetDrawTargetTraceDebug())
     {
         ABasicMOB* DbgMob = (SoftTarget && IsValid(SoftTarget)) ? SoftTarget : nullptr;
+        const float DbgRange = CursorInteractionComponent ? CursorInteractionComponent->GetCrosshairTraceRange() : 1500.0f;
+        const float DbgCamDist = FVector::Dist(CameraLocation, GetActorLocation());
+        const FVector TraceEnd = CameraLocation + CameraForward * FTargetingRule::EffectiveTraceLength(DbgCamDist, DbgRange);
         DrawDebugLine(GetWorld(), CameraLocation, DbgMob ? DbgMob->GetActorLocation() : TraceEnd,
             DbgMob ? FColor::Green : FColor::Red, false, 0.0f, 0, 2.0f);
         if (DbgMob)

@@ -19,6 +19,30 @@
 
 void UCursorInteractionComponent::HandleConfirmedClick()
 {
+    // Combat mode (cursor hidden, e.g. RMB free-look or no-UI play): the cursor
+    // hover trace is disabled by design, so a confirmed LMB resolves the
+    // camera-crosshair soft target instead of the (null) hovered actor.
+    // Single click selects (locks); an empty crosshair is a deliberate no-op
+    // that preserves the hard lock.
+    if (APlayerController* PC = GetPC())
+    {
+        if (!PC->bShowMouseCursor)
+        {
+            if (ABasicPlayer* Player = Cast<ABasicPlayer>(GetOwner()))
+            {
+                FVector CameraLocation;
+                FRotator CameraRotation;
+                PC->GetPlayerViewPoint(CameraLocation, CameraRotation);
+                if (ABasicMOB* CrosshairMob = Player->ResolveCrosshairSoftTarget(
+                    CameraLocation, CameraRotation.Vector()))
+                {
+                    OnSingleClicked.Broadcast(CrosshairMob, GetTypeFromActor(CrosshairMob));
+                }
+            }
+            return;
+        }
+    }
+
     AActor* Target = HoveredActor.Get();
 
     UE_LOG(LogGameplay, Verbose, TEXT("CursorInteraction: HandleConfirmedClick — HoveredActor=%s, ListenersSingle=%d, ListenersDouble=%d"),

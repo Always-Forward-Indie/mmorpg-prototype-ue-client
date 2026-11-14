@@ -90,55 +90,64 @@ void ABasicPlayer::OnTabTargetInput()
     const float MaxTabRange = CursorInteractionComponent ? CursorInteractionComponent->GetTabTargetRange() : 1500.0f;
     const FVector PlayerLoc = GetActorLocation();
 
-    // Collect all living mobs within range пїЅ no cone filter so Tab cycles
-    // through everything nearby regardless of which way the mesh faces
-    TArray<ABasicMOB*> Candidates;
+    // AAA Tab: only mobs in the direction the camera looks (front hemisphere),
+    // ordered by angle to the crosshair (nearest first), distance as tiebreak.
+    // A stale/off-screen lock never seeds the cycle: turning away restarts
+    // from the best target in the current view (FTargetingRule::TabStartIndex).
+    struct FTabEntry
+    {
+        ABasicMOB* Mob = nullptr;
+        float Dot = 0.0f;
+        float DistSq = 0.0f;
+    };
+    TArray<FTabEntry> Visible;
     // Registry iteration (O(registered mobs), no world scan) — consistent with CheckForMOB.
     if (UMOBManager* MobMgr = MyGameInstance ? MyGameInstance->GetMOBManager() : nullptr)
     {
         MobMgr->ForEachMob([&](ABasicMOB* Mob)
         {
             if (!Mob || Mob->GetMOBIsDead()) return;
-            if (!FTargetingRule::IsInRange(FVector::Dist(PlayerLoc, Mob->GetActorLocation()), MaxTabRange)) return;
-            Candidates.Add(Mob);
+            const float Dist = FVector::Dist(PlayerLoc, Mob->GetActorLocation());
+            if (!FTargetingRule::IsInRange(Dist, MaxTabRange)) return;
+            const FVector ToMob = (Mob->GetActorLocation() - CameraLocation).GetSafeNormal();
+            const float Dot = FVector::DotProduct(CameraForward, ToMob);
+            if (!FTargetingRule::IsInFront(Dot)) return;
+            // No targeting through walls (discrete key press — traces are cheap here).
+            FHitResult LOSHit;
+            FCollisionQueryParams LOSParams;
+            LOSParams.AddIgnoredActor(this);
+            LOSParams.AddIgnoredActor(Mob);
+            if (GetWorld()->LineTraceSingleByChannel(LOSHit, CameraLocation,
+                Mob->GetActorLocation(), ECC_Visibility, LOSParams)) return;
+            Visible.Add({ Mob, Dot, Dist * Dist });
         });
     }
 
-    if (Candidates.Num() == 0)
+    if (Visible.Num() == 0)
     {
         ClearLockedTarget();
         return;
     }
 
-    // Sort by dot product to camera forward пїЅ mobs closest to crosshair come first,
-    // then by distance as a tiebreaker
-    Candidates.Sort([&CameraLocation, &CameraForward](const ABasicMOB& A, const ABasicMOB& B)
+    Visible.Sort([](const FTabEntry& A, const FTabEntry& B)
     {
-        const FVector ToA = (A.GetActorLocation() - CameraLocation).GetSafeNormal();
-        const FVector ToB = (B.GetActorLocation() - CameraLocation).GetSafeNormal();
-        const float DotA = FVector::DotProduct(CameraForward, ToA);
-        const float DotB = FVector::DotProduct(CameraForward, ToB);
-        if (FMath::Abs(DotA - DotB) > 0.01f)
-            return DotA > DotB;
-        return FVector::DistSquared(CameraLocation, A.GetActorLocation())
-             < FVector::DistSquared(CameraLocation, B.GetActorLocation());
+        return FTargetingRule::TabCandidateLess(A.Dot, A.DistSq, B.Dot, B.DistSq);
     });
 
-    // Cycle: advance past the current lock to the next candidate
-    int32 NextIndex = 0;
-    if (LockedTarget)
+    int32 LockedIdx = INDEX_NONE;
+    if (IsValid(LockedTarget))
     {
-        for (int32 i = 0; i < Candidates.Num(); ++i)
+        for (int32 i = 0; i < Visible.Num(); ++i)
         {
-            if (Candidates[i] == LockedTarget)
+            if (Visible[i].Mob == LockedTarget)
             {
-                NextIndex = (i + 1) % Candidates.Num();
+                LockedIdx = i;
                 break;
             }
         }
     }
 
-    SetLockedTarget(Candidates[NextIndex]);
+    SetLockedTarget(Visible[FTargetingRule::TabStartIndex(LockedIdx, Visible.Num())].Mob);
 }
 
 void ABasicPlayer::LockMovementForPickup()

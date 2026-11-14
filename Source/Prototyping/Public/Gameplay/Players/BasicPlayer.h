@@ -962,6 +962,14 @@ public:
 	// Tab target cycling
 	void OnTabTargetInput();
 
+	/**
+	 * Shared camera-crosshair acquisition (primary sphere sweep + cone-assist
+	 * fallback + LOS). Used every tick by CheckForMOB and on confirmed LMB
+	 * in combat (cursor-hidden) mode. Returns the soft target or nullptr.
+	 * Viewpoint is an explicit input so tick and click paths share one seam.
+	 */
+	ABasicMOB* ResolveCrosshairSoftTarget(const FVector& CameraLocation, const FVector& CameraForward);
+
 	// Pickup lock/unlock movement
 	void LockMovementForPickup();
 	void UnlockMovementAfterPickup();

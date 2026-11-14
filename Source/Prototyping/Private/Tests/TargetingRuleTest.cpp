@@ -23,5 +23,21 @@ bool FTargetingRuleTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("close zoom keeps range"), R::EffectiveTraceLength(200.f, 1500.f), 1700.f);
     TestEqual(TEXT("zero cam dist"), R::EffectiveTraceLength(0.f, 1500.f), 1500.f);
     TestEqual(TEXT("clamped negative"), R::EffectiveTraceLength(-50.f, 1500.f), 1500.f);
+    // Tab cycle: front hemisphere only, reset-vs-cycle from the visible set.
+    TestTrue(TEXT("front"), R::IsInFront(0.5f));
+    TestFalse(TEXT("side plane"), R::IsInFront(0.0f));
+    TestFalse(TEXT("behind"), R::IsInFront(-0.3f));
+    TestTrue(TEXT("tab accept"), R::AcceptTabTarget(0.9f, 0.0f, true));
+    TestFalse(TEXT("tab reject behind"), R::AcceptTabTarget(-0.5f, 0.0f, true));
+    TestFalse(TEXT("tab reject blocked"), R::AcceptTabTarget(0.9f, 0.0f, false));
+    TestTrue(TEXT("tab order angle"), R::TabCandidateLess(0.99f, 1e6f, 0.90f, 1.0f));
+    TestFalse(TEXT("tab order angle reverse"), R::TabCandidateLess(0.90f, 1.0f, 0.99f, 1e6f));
+    TestTrue(TEXT("tab order dist tiebreak"), R::TabCandidateLess(0.99f, 50.f, 0.995f, 100.f));
+    TestFalse(TEXT("tab order dist tiebreak reverse"), R::TabCandidateLess(0.995f, 100.f, 0.99f, 50.f));
+    TestEqual(TEXT("tab reset when lock invisible"), R::TabStartIndex(INDEX_NONE, 3), 0);
+    TestEqual(TEXT("tab reset when lock stale"), R::TabStartIndex(7, 3), 0);
+    TestEqual(TEXT("tab advance"), R::TabStartIndex(1, 3), 2);
+    TestEqual(TEXT("tab wrap"), R::TabStartIndex(2, 3), 0);
+    TestEqual(TEXT("tab empty"), R::TabStartIndex(INDEX_NONE, 0), INDEX_NONE);
     return true;
 }

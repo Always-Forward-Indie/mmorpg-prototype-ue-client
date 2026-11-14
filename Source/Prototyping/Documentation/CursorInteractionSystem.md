@@ -13,6 +13,7 @@ The Cursor Interaction System provides WoW-style point-and-click targeting with:
 | **Single click** | Visual select — shows target frame / nameplate, no action |
 | **Double click** | Contextual action — attack / harvest / talk / pick up |
 | **LMB drag** | Camera orbit without triggering a click; drag threshold configurable |
+| **Combat-mode LMB** | Cursor hidden → confirmed LMB selects the camera-crosshair soft target (lock only, no action); empty crosshair = no-op, hard lock preserved |
 | **Cursor icon** | Changes per interactable type (native or hardware cursor) |
 | **Auto-approach** | When double-click target is out of range, player walks → acts on arrival |
 | **No Blueprint wiring** | All bindings set up in C++ via `HandleUIManagerInitialized` |
@@ -93,7 +94,7 @@ ABasicPlayer    ─ UTargetDecalComponent (TargetDecal)  ← for remote player s
 | `NPC` | `ABasicNPC` | Chat bubble | Visual lock | Approach + open dialogue |
 | `DroppedItem` | `ADroppedItemActor` | Hand / loot | Visual lock | Approach + pick up |
 | `RemotePlayer` | Other `ABasicPlayer` | Info cursor | Visual lock | Inspect (placeholder) |
-| `None` | Empty ground | Default cursor | Clear all locks | — |
+| `None` | Empty ground | Default cursor | No-op (lock preserved) | — |
 
 ---
 

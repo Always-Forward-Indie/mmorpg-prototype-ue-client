@@ -212,6 +212,12 @@ private:
 	/** True when at least one style preset carries a Normal brush. */
 	bool HasAnyPresetStyle() const;
 
+	/** Deferred button sanity (runs once the slot is actually laid out). */
+	bool bButtonSanityDone = false;
+	double SanityAccum = 0.0;
+	void RunButtonSanityCheck();
+	bool IsAncestorChainHidden() const;
+
 	/** Handle for async texture loading */
 	TSharedPtr<FStreamableHandle> StreamableHandle;
 

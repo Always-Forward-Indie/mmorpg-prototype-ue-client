@@ -62,6 +62,23 @@ void UInventorySlotWidget::NativeConstruct()
 void UInventorySlotWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
+
+	// One-shot button sanity once the slot is laid out in an open window.
+	// Skipped silently while any ancestor is collapsed/hidden (window closed).
+	if (!bButtonSanityDone)
+	{
+		SanityAccum += InDeltaTime;
+		if (SanityAccum >= 1.0f)
+		{
+			SanityAccum = 0.0;
+			if (!IsAncestorChainHidden())
+			{
+				bButtonSanityDone = true;
+				RunButtonSanityCheck();
+			}
+		}
+	}
+
 	if (!bCoolingDown) return;
 	UWorld* World = GetWorld();
 	const double Now = World ? World->GetTimeSeconds() : 0.0;
@@ -268,6 +285,37 @@ bool UInventorySlotWidget::HasAnyPresetStyle() const
 		if (P && P->Normal.GetResourceObject() != nullptr) return true;
 	}
 	return false;
+}
+
+bool UInventorySlotWidget::IsAncestorChainHidden() const
+{
+	for (const UWidget* P = GetParent(); P != nullptr; P = P->GetParent())
+	{
+		const ESlateVisibility V = P->GetVisibility();
+		if (V == ESlateVisibility::Collapsed || V == ESlateVisibility::Hidden) return true;
+	}
+	return false;
+}
+
+void UInventorySlotWidget::RunButtonSanityCheck()
+{
+	// Missing bind is already an Error from NativeConstruct.
+	if (!SlotButton) return;
+	if (!SlotButton->GetIsEnabled())
+	{
+		UE_LOG(LogGameplay, Error, TEXT("InventorySlotWidget: %s (slot %d) button is disabled — slot input is dead. Check IsEnabled on SlotButton (and parents)."), *GetName(), SlotIndex);
+		return;
+	}
+	if (SlotButton->GetVisibility() != ESlateVisibility::Visible)
+	{
+		UE_LOG(LogGameplay, Error, TEXT("InventorySlotWidget: %s (slot %d) button visibility is not Visible — slot input is dead. SlotButton must be Visible (never Hidden/Collapsed/HitTestInvisible)."), *GetName(), SlotIndex);
+		return;
+	}
+	const FVector2D Size = SlotButton->GetCachedGeometry().GetLocalSize();
+	if (Size.X <= 0.0f || Size.Y <= 0.0f)
+	{
+		UE_LOG(LogGameplay, Error, TEXT("InventorySlotWidget: %s (slot %d) button has zero size (%.0fx%.0f) — slot input is dead. SlotButton must fill the slot."), *GetName(), SlotIndex, Size.X, Size.Y);
+	}
 }
 
 void UInventorySlotWidget::LoadItemIcon()

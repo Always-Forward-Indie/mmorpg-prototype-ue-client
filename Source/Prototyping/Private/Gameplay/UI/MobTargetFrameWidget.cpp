@@ -28,6 +28,8 @@ void UMobTargetFrameWidget::NativeConstruct()
             LocSys->OnLocaleChanged.AddDynamic(this, &UMobTargetFrameWidget::HandleLocaleChanged);
         }
     }
+    // The whole cast row (bar, texts, skill icon, interrupt icon) starts hidden.
+    HideCast();
     ApplyDeadChrome();
 }
 
@@ -157,21 +159,25 @@ void UMobTargetFrameWidget::UpdateHP(int32 CurrentHP, int32 MaxHP)
     if (MobHealthBar && MaxHP > 0)
     {
         MobHealthBar->SetPercent(static_cast<float>(ShownHP) / static_cast<float>(MaxHP));
-        if (bCachedDead)
-        {
-            MobHealthBar->SetFillColorAndOpacity(FLinearColor(0.35f, 0.35f, 0.38f, 1.0f));
-        }
-        else
-        {
-            MobHealthBar->SetFillColorAndOpacity(FLinearColor::White);
-        }
+        // NOTE: no fill tint here by design (bar style is BP-owned).
     }
 
-    if (MobHealthText)
+    // Split layout when the BP provides it, combined fallback otherwise.
+    const int32 Pct = (MaxHP > 0) ? FMath::Clamp(FMath::RoundToInt(100.0f * static_cast<float>(ShownHP) / static_cast<float>(MaxHP)), 0, 100) : 0;
+    if (MobHealthPctText || MobHealthValueText)
     {
-        // Percent first (large in the BP layout), absolute second.
-        // A split large/small layout needs a second bind — BP follow-up.
-        const int32 Pct = (MaxHP > 0) ? FMath::Clamp(FMath::RoundToInt(100.0f * static_cast<float>(ShownHP) / static_cast<float>(MaxHP)), 0, 100) : 0;
+        if (MobHealthPctText)
+        {
+            MobHealthPctText->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), Pct)));
+        }
+        if (MobHealthValueText)
+        {
+            MobHealthValueText->SetText(FText::FromString(
+                FString::Printf(TEXT("%d / %d"), ShownHP, MaxHP)));
+        }
+    }
+    else if (MobHealthText)
+    {
         MobHealthText->SetText(FText::FromString(
             FString::Printf(TEXT("%d%%  %d / %d"), Pct, ShownHP, MaxHP)));
     }
@@ -195,9 +201,10 @@ void UMobTargetFrameWidget::ClearTarget()
     if (MobHealthBar)
     {
         MobHealthBar->SetPercent(0.f);
-        MobHealthBar->SetFillColorAndOpacity(FLinearColor::White);
     }
     if (MobHealthText) MobHealthText->SetText(FText::GetEmpty());
+    if (MobHealthPctText) MobHealthPctText->SetText(FText::GetEmpty());
+    if (MobHealthValueText) MobHealthValueText->SetText(FText::GetEmpty());
     if (AggroIcon)     AggroIcon->SetVisibility(ESlateVisibility::Collapsed);
 
     // Reset portrait to default (or blank) so the stale icon is never shown for the next target
@@ -214,108 +221,7 @@ void UMobTargetFrameWidget::ClearTarget()
     }
 }
 
-void UMobTargetFrameWidget::ShowCast(const FString& SkillName, const FString& SkillSlug, float CastTimeSec, int64 CastStartedAtMs, bool bInterruptible)
-{
-    // Instant casts and the basic attack never show a bar (row stays collapsed).
-    if (!FMobTargetCastRule::ShouldShowCastbar(CastTimeSec, SkillSlug))
-    {
-        HideCast();
-        return;
-    }
-
-    CachedCastSkillName = SkillName;
-    CachedCastSkillSlug = SkillSlug;
-    CachedCastTotalSec = CastTimeSec;
-    CachedCastStartedAtMs = CastStartedAtMs;
-    if (UWorld* W = GetWorld())
-    {
-        FallbackCastStartWorldSec = static_cast<double>(W->GetTimeSeconds());
-    }
-    bIsCasting = true;
-
-    if (CastNameText)
-    {
-        CastNameText->SetText(FText::FromString(SkillName));
-    }
-    // No interruptible casts exist server-side (all casts complete once
-    // started); the icon stays hidden until the server ships the per-skill
-    // flag (tracker mirenhold #134). Accepted for API parity with the plan.
-    if (InterruptIcon)
-    {
-        InterruptIcon->SetVisibility(ESlateVisibility::Collapsed);
-    }
-    TickCast();
-    SetCastRowVisibility(ESlateVisibility::HitTestInvisible);
-}
-
-void UMobTargetFrameWidget::TickCast()
-{
-    if (!bIsCasting || CachedCastTotalSec <= 0.0f) return;
-
-    float Progress = 1.0f;
-    float Remaining = 0.0f;
-    const int64 ServerNowMs = ResolveServerNowMs();
-    if (ServerNowMs >= 0 && CachedCastStartedAtMs > 0)
-    {
-        Progress = FMobTargetCastRule::ProgressAt(ServerNowMs, CachedCastStartedAtMs, CachedCastTotalSec);
-        Remaining = FMobTargetCastRule::RemainingSecAt(ServerNowMs, CachedCastStartedAtMs, CachedCastTotalSec);
-    }
-    else if (UWorld* W = GetWorld())
-    {
-        // Degraded clock only: time-sync unavailable (offline/early init).
-        const double Elapsed = static_cast<double>(W->GetTimeSeconds()) - FallbackCastStartWorldSec;
-        Progress = static_cast<float>(FMath::Clamp(Elapsed / static_cast<double>(CachedCastTotalSec), 0.0, 1.0));
-        Remaining = static_cast<float>(FMath::Max(0.0, static_cast<double>(CachedCastTotalSec) - Elapsed));
-    }
-
-    if (CastBar)
-    {
-        CastBar->SetPercent(Progress);
-    }
-    if (CastTimeText)
-    {
-        CastTimeText->SetText(FText::FromString(FString::Printf(TEXT("%.1f"), Remaining)));
-    }
-
-    if (Progress >= 1.0f)
-    {
-        HideCast();
-    }
-}
-
-void UMobTargetFrameWidget::HideCast()
-{
-    bIsCasting = false;
-    CachedCastTotalSec = 0.0f;
-    SetCastRowVisibility(ESlateVisibility::Collapsed);
-}
-
-int64 UMobTargetFrameWidget::ResolveServerNowMs() const
-{
-    if (const UWorld* W = GetWorld())
-    {
-        if (UMyGameInstance* GI = Cast<UMyGameInstance>(W->GetGameInstance()))
-        {
-            if (const UTimeSyncService* TS = GI->GetTimeSyncService())
-            {
-                return TS->GetEstimatedServerTimeMs(EServerType::ChunkServer);
-            }
-        }
-    }
-    return -1;
-}
-
-void UMobTargetFrameWidget::SetCastRowVisibility(ESlateVisibility Vis)
-{
-    // The frame itself stays visible (health/name remain); only the row collapses.
-    if (CastBar)      { CastBar->SetVisibility(Vis); }
-    if (CastNameText) { CastNameText->SetVisibility(Vis); }
-    if (CastTimeText) { CastTimeText->SetVisibility(Vis); }
-    if (InterruptIcon)
-    {
-        InterruptIcon->SetVisibility(ESlateVisibility::Collapsed);
-    }
-}
+// Target castbar lives in MobTargetFrameWidget.Cast.cpp (same class, file-budget split).
 
 void UMobTargetFrameWidget::ApplyPortraitTexture(UTexture2D* Texture)
 {
@@ -500,10 +406,7 @@ void UMobTargetFrameWidget::ApplyDeadChrome()
             DeadText->SetVisibility(ESlateVisibility::Collapsed);
         }
     }
-    if (MobHealthBar && bCachedDead)
-    {
-        MobHealthBar->SetFillColorAndOpacity(FLinearColor(0.35f, 0.35f, 0.38f, 1.0f));
-    }
+    // NOTE: HP bar tint intentionally untouched (BP-owned style).
 }
 
 void UMobTargetFrameWidget::HandleLocaleChanged(const FString& NewLocale)

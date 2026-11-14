@@ -79,8 +79,11 @@ Inside `W_PlayerInterface` (not UIManager-directly): `USkillBarWidget` (`Skills/
    - `Mob/WBP_MobTarget` (`UMobTargetFrameWidget`): all new binds are `BindWidgetOptional`
      and degrade gracefully, but the full design needs them in-editor —
      rank: `RankLabelText` (TextBlock), `RankBorder` (Border, frame outline);
+     hp: split `MobHealthPctText` + `MobHealthValueText` (legacy combined
+     `MobHealthText` still works as fallback);
      dead: `DeadOverlay` (Image, 50% over the portrait only), `DeadText` (TextBlock);
      cast: `CastBar` (ProgressBar), `CastNameText` + `CastTimeText` (TextBlocks),
+     `CastSkillIcon` (Image, same DT icon as the player skill list),
      `InterruptIcon` (Image — keep, forced Collapsed until the server ships the
      interruptible flag, tracker mirenhold #134);
      effects: `StatusEffectsBox` (HorizontalBox) + set `EffectSlotClass`

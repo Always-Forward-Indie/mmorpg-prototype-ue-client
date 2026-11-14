@@ -122,9 +122,16 @@ protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UProgressBar* MobHealthBar;
 
-    // Optional HP value label "156 / 300"
+    // Optional HP value labels (split layout: "75%" large + "156 / 300" small).
+    // When absent, UpdateHP falls back to the combined string in MobHealthText.
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UTextBlock* MobHealthText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* MobHealthPctText = nullptr;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* MobHealthValueText = nullptr;
 
     // Optional aggro indicator icon (e.g. a red skull)
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
@@ -159,6 +166,11 @@ protected:
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UImage* InterruptIcon = nullptr;
+
+    // Cast skill icon (same DT icon as the player skill list, via the skill repository).
+    // Optional: hidden gracefully when the BP predates it.
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UImage* CastSkillIcon = nullptr;
 
     // Target status-effects row (slice 3): icon + remaining seconds per effect.
     // Optional: hidden gracefully when the BP predates it.
@@ -232,6 +244,9 @@ private:
 
     /** Show/hide the castbar row widgets (never the frame itself). */
     void SetCastRowVisibility(ESlateVisibility Vis);
+
+    /** Resolve the cast skill icon from the shared skill repository (async-safe). */
+    void LoadCastIconFromRepo(const FString& SkillSlug);
 
     /** One cached target effect (grouped by slug, longest duration wins). */
     struct FCachedTargetEffect

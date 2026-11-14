@@ -192,6 +192,59 @@ FPlayerStatsUpdateStruct JSONParser::DeserializePlayerStatsUpdate(const TSharedP
     return PlayerAttributeParser::DeserializePlayerStatsUpdate(Body);
 }
 
+// Quest reward notifications: multi-key fallback (server sends snake_case).
+static bool TryGetIntField(const TSharedPtr<FJsonObject>& Obj, int32& Out, std::initializer_list<const TCHAR*> Keys)
+{
+	if (!Obj.IsValid()) return false;
+	for (const TCHAR* Key : Keys)
+	{
+		if (Obj->TryGetNumberField(Key, Out)) return true;
+	}
+	return false;
+}
+
+static bool TryGetStringField(const TSharedPtr<FJsonObject>& Obj, FString& Out, std::initializer_list<const TCHAR*> Keys)
+{
+	if (!Obj.IsValid()) return false;
+	for (const TCHAR* Key : Keys)
+	{
+		FString Val;
+		if (Obj->TryGetStringField(Key, Val) && !Val.IsEmpty()) { Out = Val; return true; }
+	}
+	return false;
+}
+
+FExpReceivedData JSONParser::DeserializeQuestExpReceived(const TSharedPtr<FJsonObject>& Body)
+{
+	FExpReceivedData Data;
+	if (!Body.IsValid()) return Data;
+	TryGetIntField(Body, Data.amount, {TEXT("amount"), TEXT("experience"), TEXT("xp"), TEXT("value")});
+	TryGetStringField(Body, Data.source, {TEXT("source"), TEXT("reason"), TEXT("questSlug"), TEXT("questKey"), TEXT("from")});
+	return Data;
+}
+
+FItemReceivedData JSONParser::DeserializeQuestItemReceived(const TSharedPtr<FJsonObject>& Body)
+{
+	FItemReceivedData Data;
+	if (!Body.IsValid()) return Data;
+	TryGetIntField(Body, Data.itemId, {TEXT("itemId"), TEXT("item_id"), TEXT("id")});
+	TryGetStringField(Body, Data.itemSlug, {TEXT("item_slug"), TEXT("itemSlug"), TEXT("slug")});
+	TryGetStringField(Body, Data.itemName, {TEXT("itemName"), TEXT("item_name"), TEXT("name")});
+	int32 Qty = 0;
+	if (TryGetIntField(Body, Qty, {TEXT("quantity"), TEXT("qty"), TEXT("count"), TEXT("amount")}))
+		Data.quantity = Qty;
+	return Data;
+}
+
+FGoldReceivedData JSONParser::DeserializeQuestGoldReceived(const TSharedPtr<FJsonObject>& Body)
+{
+	FGoldReceivedData Data;
+	if (!Body.IsValid()) return Data;
+	TryGetIntField(Body, Data.amount, {TEXT("amount"), TEXT("gold"), TEXT("value")});
+	TryGetStringField(Body, Data.source, {TEXT("source"), TEXT("reason"), TEXT("questSlug"), TEXT("questKey"), TEXT("from")});
+	return Data;
+}
+
 FPlayerStatsUpdateStruct JSONParser::DeserializePlayerStatsUpdate(const FString& JsonString)
 {
 	// Single owner: PlayerAttributeParser does the parsing and logging.

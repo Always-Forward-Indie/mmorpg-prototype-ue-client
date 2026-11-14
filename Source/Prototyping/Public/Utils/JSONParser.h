@@ -40,6 +40,9 @@ struct FCorpseLootInspectErrorStruct;
 struct FExperienceUpdateStruct;
 struct FPlayerProgressionStruct;
 struct FExperienceGainEventStruct;
+struct FExpReceivedData;
+struct FItemReceivedData;
+struct FGoldReceivedData;
 struct FPlayerStatsUpdateStruct;
 struct FPlayerSkillNetworkData;
 struct FPlayerSkillsInitializationData;
@@ -199,6 +202,14 @@ public:
     static FPlayerProgressionStruct DeserializePlayerProgression(const FString& JsonString);
     static FExperienceGainEventStruct DeserializeExperienceGainEvent(const TSharedPtr<FJsonObject>& EventObj);
     static FExperienceGainEventStruct DeserializeExperienceGainEvent(const FString& JsonString);
+
+    // Quest reward notifications (chunk sendFacts: exp_received / item_received /
+    // gold_received). The server keys are snake_case (item_slug); camelCase and
+    // legacy aliases are accepted so old/new servers and quest/dialogue/vendor
+    // paths converge here instead of in every handler.
+    static FExpReceivedData DeserializeQuestExpReceived(const TSharedPtr<FJsonObject>& Body);
+    static FItemReceivedData DeserializeQuestItemReceived(const TSharedPtr<FJsonObject>& Body);
+    static FGoldReceivedData DeserializeQuestGoldReceived(const TSharedPtr<FJsonObject>& Body);
 
     // Player stats system parsers
     static FPlayerStatsUpdateStruct DeserializePlayerStatsUpdate(const TSharedPtr<FJsonObject>& Body);

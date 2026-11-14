@@ -40,6 +40,27 @@ bool FCombatLogRuleTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("loot has name"), Loot.Contains(TEXT("Wolf Fang")));
     TestTrue(TEXT("loot has qty"), Loot.Contains(TEXT("3")));
 
+    // Loot guards: empty names (dropped slug fields) and non-positive gains
+    // never reach the log as bare "+".
+    TestFalse(TEXT("empty loot skipped"), R::ShouldLogLoot(TEXT(""), 3));
+    TestFalse(TEXT("zero qty skipped"), R::ShouldLogLoot(TEXT("Wolf Fang"), 0));
+    TestTrue(TEXT("valid loot kept"), R::ShouldLogLoot(TEXT("Wolf Fang"), 3));
+    TestTrue(TEXT("empty loot formats empty"), R::FormatLoot(TEXT(""), 3).IsEmpty());
+    TestTrue(TEXT("zero qty formats empty"), R::FormatLoot(TEXT("Wolf Fang"), 0).IsEmpty());
+
+    // Incoming lines name the attacker, not a bare "Foe".
+    const FString InDmg = R::FormatDamage(TEXT("Bite"), TEXT(""), 50, false, false, false, false, false, TEXT("Forest Wolf"));
+    TestTrue(TEXT("incoming names foe"), InDmg.Contains(TEXT("Forest Wolf")));
+    TestTrue(TEXT("incoming has amount"), InDmg.Contains(TEXT("50")));
+    const FString InHeal = R::FormatHeal(TEXT("Mend"), TEXT(""), 30, false, false, TEXT("Forest Wolf"));
+    TestTrue(TEXT("incoming heal names caster"), InHeal.Contains(TEXT("Forest Wolf")));
+    const FString Miss = R::FormatDamage(TEXT("Fireball"), TEXT("Mob #7"), 0, false, false, false, true, true);
+    TestTrue(TEXT("miss keeps you"), Miss.Contains(TEXT("You")));
+
+    // Resolved names win; id/type tags are the last resort only.
+    TestEqual(TEXT("resolved combatant kept"), R::CombatantFallback(TEXT("Forest Wolf"), 7, TEXT("MOB")), FString(TEXT("Forest Wolf")));
+    TestTrue(TEXT("unresolved combatant keeps id"), R::CombatantFallback(TEXT(""), 7, TEXT("MOB")).Contains(TEXT("7")));
+
     const FString Xp = R::FormatExp(150, TEXT("Mob Kill"));
     TestTrue(TEXT("xp has amount"), Xp.Contains(TEXT("150")));
     TestTrue(TEXT("xp has reason"), Xp.Contains(TEXT("Mob Kill")));

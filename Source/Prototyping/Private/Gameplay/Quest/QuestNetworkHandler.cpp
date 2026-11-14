@@ -98,21 +98,17 @@ void UQuestNetworkHandler::HandleChunkPacket(const FParsedPacket& Packet)
     }
     else if (EventType == TEXT("exp_received"))
     {
-        FExpReceivedData Data;
-        Body->TryGetNumberField(TEXT("amount"), Data.amount);
+        FExpReceivedData Data = JSONParser::DeserializeQuestExpReceived(Body);
         QuestManager->OnExpReceived(Data);
     }
     else if (EventType == TEXT("item_received"))
     {
-        FItemReceivedData Data;
-        Body->TryGetNumberField(TEXT("itemId"),   Data.itemId);
-        Body->TryGetNumberField(TEXT("quantity"), Data.quantity);
+        FItemReceivedData Data = JSONParser::DeserializeQuestItemReceived(Body);
         QuestManager->OnItemReceived(Data);
     }
     else if (EventType == TEXT("gold_received"))
     {
-        FGoldReceivedData Data;
-        Body->TryGetNumberField(TEXT("amount"), Data.amount);
+        FGoldReceivedData Data = JSONParser::DeserializeQuestGoldReceived(Body);
         QuestManager->OnGoldReceived(Data);
     }
     else if (EventType == TEXT("quest_failed"))

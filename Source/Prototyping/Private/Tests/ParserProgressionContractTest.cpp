@@ -98,3 +98,52 @@ bool FSkillsInitContractTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("nobody skills empty"), JSONParser::DeserializePlayerSkillsInitialization(TEXT("{\"header\":{}}")).skills.Num(), 0);
     return true;
 }
+
+// Quest reward notifications (chunk sendFacts): the server keys are snake_case
+// (item_slug); the parsers accept camelCase/legacy aliases so old servers and
+// quest/dialogue/vendor paths converge in one place.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FQuestRewardNotifContractTest, "MMO.Protocol.QuestRewardNotifContract",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+
+bool FQuestRewardNotifContractTest::RunTest(const FString& Parameters)
+{
+    // Server wire shape: item_slug (underscore), no display name.
+    TSharedPtr<FJsonObject> ItemBody = MakeShareable(new FJsonObject());
+    ItemBody->SetNumberField(TEXT("itemId"), 46);
+    ItemBody->SetStringField(TEXT("item_slug"), TEXT("wolf_fang"));
+    ItemBody->SetNumberField(TEXT("quantity"), 2);
+    FItemReceivedData Item = JSONParser::DeserializeQuestItemReceived(ItemBody);
+    TestEqual(TEXT("item id"), Item.itemId, 46);
+    TestEqual(TEXT("item slug"), Item.itemSlug, FString(TEXT("wolf_fang")));
+    TestEqual(TEXT("item qty"), Item.quantity, 2);
+    TestTrue(TEXT("item name empty ok"), Item.itemName.IsEmpty());
+
+    // Legacy camelCase keys still parse (old servers / other paths).
+    TSharedPtr<FJsonObject> LegacyBody = MakeShareable(new FJsonObject());
+    LegacyBody->SetNumberField(TEXT("itemId"), 7);
+    LegacyBody->SetStringField(TEXT("itemSlug"), TEXT("iron_sword"));
+    LegacyBody->SetStringField(TEXT("itemName"), TEXT("Iron Sword"));
+    LegacyBody->SetNumberField(TEXT("quantity"), 1);
+    FItemReceivedData Legacy = JSONParser::DeserializeQuestItemReceived(LegacyBody);
+    TestEqual(TEXT("legacy slug"), Legacy.itemSlug, FString(TEXT("iron_sword")));
+    TestEqual(TEXT("legacy name"), Legacy.itemName, FString(TEXT("Iron Sword")));
+
+    // Empty body: quiet defaults, no crash.
+    FItemReceivedData Empty = JSONParser::DeserializeQuestItemReceived(MakeShareable(new FJsonObject()));
+    TestEqual(TEXT("empty item id"), Empty.itemId, 0);
+    TestTrue(TEXT("empty item slug"), Empty.itemSlug.IsEmpty());
+
+    TSharedPtr<FJsonObject> ExpBody = MakeShareable(new FJsonObject());
+    ExpBody->SetNumberField(TEXT("amount"), 150);
+    FExpReceivedData Exp = JSONParser::DeserializeQuestExpReceived(ExpBody);
+    TestEqual(TEXT("exp amount"), Exp.amount, 150);
+    TestTrue(TEXT("exp source empty ok"), Exp.source.IsEmpty());
+
+    TSharedPtr<FJsonObject> GoldBody = MakeShareable(new FJsonObject());
+    GoldBody->SetNumberField(TEXT("amount"), 25);
+    GoldBody->SetStringField(TEXT("questSlug"), TEXT("wolf_hunt"));
+    FGoldReceivedData Gold = JSONParser::DeserializeQuestGoldReceived(GoldBody);
+    TestEqual(TEXT("gold amount"), Gold.amount, 25);
+    TestEqual(TEXT("gold source"), Gold.source, FString(TEXT("wolf_hunt")));
+    return true;
+}

@@ -52,6 +52,12 @@ struct PROTOTYPING_API FCombatLogRule
 			: FString::Printf(TEXT("%s #%d"), *TargetType, TargetId);
 	}
 
+	/** Prefer a resolved display name; fall back to the raw id/type tag. */
+	static FString CombatantFallback(const FString& ResolvedName, int32 ActorId, const FString& TargetType)
+	{
+		return !ResolvedName.IsEmpty() ? ResolvedName : TargetDesc(ActorId, TargetType);
+	}
+
 	/** Zero-effect results (clean miss, no death) stay on the FCT layer only. */
 	static bool ShouldLogResult(int32 Damage, int32 Healing, int32 ManaHealing, bool bTargetDied)
 	{
@@ -59,11 +65,12 @@ struct PROTOTYPING_API FCombatLogRule
 	}
 
 	static FString FormatDamage(const FString& Skill, const FString& Target, int32 Damage,
-		bool bCrit, bool bBlocked, bool bDied, bool bOutgoing, bool bMissed)
+		bool bCrit, bool bBlocked, bool bDied, bool bOutgoing, bool bMissed,
+		const FString& FoeName = TEXT("Foe"))
 	{
 		if (bMissed && Damage <= 0)
-			return FString::Printf(TEXT("%s %s — missed"), bOutgoing ? TEXT("You") : TEXT("Foe"), *Skill);
-		const FString Who = bOutgoing ? TEXT("You") : TEXT("Foe");
+			return FString::Printf(TEXT("%s %s — missed"), bOutgoing ? TEXT("You") : *FoeName, *Skill);
+		const FString Who = bOutgoing ? TEXT("You") : FoeName;
 		const FString Action = bOutgoing
 			? FString::Printf(TEXT("%s hit %s with %s"), *Who, *Target, *Skill)
 			: FString::Printf(TEXT("%s hit you with %s"), *Who, *Skill);
@@ -74,24 +81,39 @@ struct PROTOTYPING_API FCombatLogRule
 		return Line;
 	}
 
-	static FString FormatHeal(const FString& Skill, const FString& Target, int32 Healing, bool bOutgoing, bool bCrit)
+	static FString FormatHeal(const FString& Skill, const FString& Target, int32 Healing, bool bOutgoing, bool bCrit,
+		const FString& CasterName = TEXT(""))
 	{
 		FString Line = bOutgoing
 			? FString::Printf(TEXT("Your %s healed %s for %d"), *Skill, *Target, Healing)
-			: FString::Printf(TEXT("%s healed you for %d"), *Skill, Healing);
+			: CasterName.IsEmpty()
+			? FString::Printf(TEXT("%s healed you for %d"), *Skill, Healing)
+			: FString::Printf(TEXT("%s healed you with %s for %d"), *CasterName, *Skill, Healing);
 		if (bCrit) Line += TEXT(" (crit!)");
 		return Line;
 	}
 
-	static FString FormatManaRestore(const FString& Skill, int32 Mana, bool bOutgoing)
+	static FString FormatManaRestore(const FString& Skill, int32 Mana, bool bOutgoing,
+		const FString& CasterName = TEXT(""))
 	{
-		return bOutgoing
-			? FString::Printf(TEXT("Your %s restored %d mana"), *Skill, Mana)
-			: FString::Printf(TEXT("%s restored %d mana to you"), *Skill, Mana);
+		if (bOutgoing)
+			return FString::Printf(TEXT("Your %s restored %d mana"), *Skill, Mana);
+		return CasterName.IsEmpty()
+			? FString::Printf(TEXT("%s restored %d mana to you"), *Skill, Mana)
+			: FString::Printf(TEXT("%s restored %d mana to you with %s"), *CasterName, Mana, *Skill);
+	}
+
+	/** Loot preconditions: resolved name present and a positive gain.
+	 * Guards the harvest/quest double path where the server omits display
+	 * strings (S1a) or the parser drops slug fields. */
+	static bool ShouldLogLoot(const FString& DisplayName, int32 Quantity)
+	{
+		return !DisplayName.IsEmpty() && Quantity > 0;
 	}
 
 	static FString FormatLoot(const FString& Name, int32 Quantity)
 	{
+		if (!ShouldLogLoot(Name, Quantity)) return FString();
 		return Quantity > 1
 			? FString::Printf(TEXT("+%d x %s"), Quantity, *Name)
 			: FString::Printf(TEXT("+ %s"), *Name);

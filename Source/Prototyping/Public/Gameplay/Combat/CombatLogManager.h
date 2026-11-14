@@ -7,6 +7,7 @@
 #include "CombatLogManager.generated.h"
 
 class UMyGameInstance;
+class ULocalizationSubsystem;
 
 /** One retained combat-log line (data only; color comes from FCombatLogRule). */
 USTRUCT(BlueprintType)
@@ -82,11 +83,30 @@ private:
 	/** "You" phrasing when the local character is the caster/recipient. */
 	bool IsOwnCharacter(int32 CharacterId) const;
 
-	static FString DisplayName(const FInventoryItemStruct& Item);
-	static FString DisplayName(const FHarvestItemStruct& Item);
+	ULocalizationSubsystem* Loc() const;
+
+	/** Server text -> locale table -> humanized slug -> "item #id". Never raw slug, never empty unless nothing is known. */
+	FString ResolveItemName(const FString& Slug, const FString& ServerName, int32 ItemId) const;
+
+	/** Skill slug -> skill locale (item locale first: consumable heals carry the item slug). */
+	FString ResolveSkillName(const FString& Slug, const FString& ServerName) const;
+
+	/** Mob/player display name for a combat actor id. Empty for the local character (caller uses You-phrasing). */
+	FString ResolveCombatantName(int32 ActorId, int32 NetType, const FString& TypeString) const;
+
+	/** Quest display name by client key, humanized key, then id fallback. */
+	FString ResolveQuestName(const FString& ClientKey, int32 QuestId) const;
+
+	/** Bidirectional harvest/inventory-delta dedup: both receipts describe the same server fact. */
+	bool ShouldSuppressLootLine(int32 ItemId, int32 Quantity);
+	void RecordLootLine(int32 ItemId, int32 Quantity);
 
 	UPROPERTY()
 	UMyGameInstance* GameInstance = nullptr;
+
+	/** Recent loot lines by item template id (qty + timestamp): harvest receipts
+	 * and inventory deltas arrive in either order for the same server fact. */
+	TMap<int32, TPair<int32, FDateTime>> RecentLootLines;
 
 	UPROPERTY()
 	TArray<FCombatLogEntry> Entries;

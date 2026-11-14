@@ -71,6 +71,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory Slot")
 	void SetSlotSelected(bool bSelected);
 
+	// Selection state (LMB single-select lives in the parent grid).
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory Slot")
+	bool IsSlotSelected() const { return bIsSelected; }
+
 	// Events
 	UPROPERTY(BlueprintAssignable, Category = "Inventory Slot Events")
 	FOnSlotClicked OnSlotClicked;

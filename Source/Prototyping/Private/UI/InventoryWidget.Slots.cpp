@@ -7,6 +7,7 @@
 #include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "MyGameInstance.h"
+#include "Utils/NetCore/InventorySelectionRule.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "Components/GridPanel.h"
 #include "Components/TextBlock.h"
@@ -23,14 +24,53 @@ void UInventoryWidget::OnSlotClicked(int32 SlotIndex)
 
 	// Hide tooltip when slot is clicked
 	HideTooltip();
-	
+
 	UInventorySlotWidget* SlotWidget = GetSlotWidget(SlotIndex);
-	if (SlotWidget && SlotWidget->HasItem())
+	if (!SlotWidget)
+	{
+		return;
+	}
+
+	// Empty cell click clears a stale highlight (never selects emptiness).
+	const bool bHasItem = SlotWidget->HasItem();
+	const int32 NextSelected = FInventorySelectionRule::Resolve(SelectedSlotIndex, SlotIndex, bHasItem);
+
+	for (int32 i = 0; i < InventorySlots.Num(); ++i)
+	{
+		if (UInventorySlotWidget* Other = InventorySlots[i])
+		{
+			Other->SetSlotSelected(i == NextSelected);
+		}
+	}
+
+	SelectedSlotIndex = NextSelected;
+	SelectedInstanceId = (NextSelected != INDEX_NONE && GetSlotWidget(NextSelected))
+		? GetSlotWidget(NextSelected)->GetItemData().id
+		: 0;
+
+	if (NextSelected != INDEX_NONE && SlotWidget->HasItem())
 	{
 		FInventoryItemStruct Item = SlotWidget->GetItemData();
 		OnInventorySlotClicked.Broadcast(SlotIndex, Item);
 
-		UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Slot %d clicked - Item: %s"), SlotIndex, *Item.name);
+		UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Slot %d selected - Item: %s"), SlotIndex, *Item.name);
+	}
+	else
+	{
+		UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Selection cleared (clicked %d)"), SlotIndex);
+	}
+}
+
+void UInventoryWidget::ClearSelection()
+{
+	SelectedSlotIndex = INDEX_NONE;
+	SelectedInstanceId = 0;
+	for (UInventorySlotWidget* SlotWidget : InventorySlots)
+	{
+		if (SlotWidget)
+		{
+			SlotWidget->SetSlotSelected(false);
+		}
 	}
 }
 

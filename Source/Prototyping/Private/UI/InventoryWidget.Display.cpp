@@ -8,6 +8,8 @@
 #include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
 #include "Utils/NetCore/InventoryQuery.h"
+#include "Utils/NetCore/InventoryGridRule.h"
+#include "Utils/NetCore/InventorySelectionRule.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "Components/GridPanel.h"
@@ -31,6 +33,9 @@ void UInventoryWidget::UpdateInventoryDisplay(const FCharacterInventoryStruct& I
 
 	CurrentInventory = Inventory;
 
+	// Server cap drives how many empty cells exist (0 = keep local size).
+	SyncGridToCapacity();
+
 	// Clear all slots first so dropped items don't leave stale visuals
 	for (int32 i = 0; i < InventorySlots.Num(); i++)
 	{
@@ -47,6 +52,41 @@ void UInventoryWidget::UpdateInventoryDisplay(const FCharacterInventoryStruct& I
 			UpdateSlot(i, DisplayItems[i]);
 		}
 		// else: slot already cleared above
+	}
+
+	// Re-resolve LMB selection by instance id (rows may reorder/resize
+	// between snapshots; a gone row clears the highlight instead of lying).
+	if (SelectedInstanceId > 0)
+	{
+		int32 FoundIndex = INDEX_NONE;
+		for (int32 i = 0; i < InventorySlots.Num(); ++i)
+		{
+			UInventorySlotWidget* SlotWidget = InventorySlots[i];
+			if (SlotWidget && SlotWidget->HasItem() && SlotWidget->GetItemData().id == SelectedInstanceId)
+			{
+				FoundIndex = i;
+				break;
+			}
+		}
+		SelectedSlotIndex = FoundIndex;
+		if (FoundIndex == INDEX_NONE)
+		{
+			SelectedInstanceId = 0;
+		}
+		else
+		{
+			for (int32 i = 0; i < InventorySlots.Num(); ++i)
+			{
+				if (UInventorySlotWidget* SlotWidget = InventorySlots[i])
+				{
+					SlotWidget->SetSlotSelected(i == FoundIndex);
+				}
+			}
+		}
+	}
+	else
+	{
+		SelectedSlotIndex = INDEX_NONE;
 	}
 
 	// Update inventory statistics
@@ -86,10 +126,37 @@ void UInventoryWidget::SetInventorySize(int32 Rows, int32 Columns)
 	InventoryRows = FMath::Max(1, Rows);
 	InventoryColumns = FMath::Max(1, Columns);
 
+	// Explicit resize drops view-local selection (widgets are rebuilt).
+	SelectedSlotIndex = INDEX_NONE;
+	SelectedInstanceId = 0;
+
 	// Recreate grid with new size
 	CreateInventoryGrid();
 
 	UE_LOG(LogGameplay, Log, TEXT("InventoryWidget: Set inventory size to %dx%d"), InventoryRows, InventoryColumns);
+}
+
+void UInventoryWidget::SyncGridToCapacity()
+{
+	const int32 Columns = FMath::Max(1, InventoryColumns);
+	InventoryColumns = Columns;
+
+	const int32 FallbackTotal = FMath::Max(1, InventoryRows * Columns);
+	const int32 Desired = FInventoryGridRule::DesiredTotal(CurrentInventory.maxSlots, FallbackTotal);
+	const int32 DesiredRows = FInventoryGridRule::RowsForTotal(Desired, Columns);
+
+	// Converged when rows match and widgets already exist (total may exceed
+	// Desired by a partial row — those are plain empty cells, not a resize).
+	if (InventoryRows == DesiredRows && InventorySlots.Num() == InventoryRows * Columns)
+	{
+		return;
+	}
+
+	InventoryRows = DesiredRows;
+	CreateInventoryGrid();
+
+	UE_LOG(LogGameplay, Log, TEXT("InventoryWidget: Synced grid to capacity maxSlots=%d -> %dx%d (%d cells)"),
+		CurrentInventory.maxSlots, InventoryRows, InventoryColumns, InventorySlots.Num());
 }
 
 void UInventoryWidget::SetInventoryVisible(bool bVisible)

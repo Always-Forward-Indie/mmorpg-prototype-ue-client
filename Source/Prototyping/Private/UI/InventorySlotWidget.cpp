@@ -386,8 +386,8 @@ void UInventorySlotWidget::LoadItemIcon()
 		SetDefaultIcon();
 	}
 
-	// Show icon
-	ItemIcon->SetVisibility(ESlateVisibility::Visible);
+	// Show icon (HitTestInvisible: decorations must never steal the SlotButton hit).
+	ItemIcon->SetVisibility(ESlateVisibility::HitTestInvisible);
 
 	UE_LOG(LogGameplay, Verbose, TEXT("InventorySlotWidget: Loading icon for item %s (ID: %d)"), *CurrentItem.name, CurrentItem.itemId);
 }
@@ -442,7 +442,7 @@ void UInventorySlotWidget::UpdateQuantityText()
 	if (HasItem() && CurrentItem.quantity > 1)
 	{
 		QuantityText->SetText(FText::AsNumber(CurrentItem.quantity));
-		QuantityText->SetVisibility(ESlateVisibility::Visible);
+		QuantityText->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 	else
 	{

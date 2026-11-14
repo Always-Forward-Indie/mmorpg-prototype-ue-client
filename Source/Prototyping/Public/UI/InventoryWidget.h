@@ -289,6 +289,11 @@ protected:
 	bool bIsInventoryVisible = false;
 	int32 HoveredSlotIndex = -1;
 
+	// LMB single-select (view-local grid index + instance guard so a refresh
+	// that moves/removes the row clears a stale highlight instead of lying).
+	int32 SelectedSlotIndex = -1;
+	int32 SelectedInstanceId = 0;
+
 	UPROPERTY(meta = (BindWidgetOptional))
 	UHorizontalBox* DragHandle = nullptr; // ������� ������/����� ���� (����� ����� ������)
 
@@ -310,6 +315,17 @@ private:
 	/** View copy of the server snapshot with search filter + sort applied. */
 	TArray<FInventoryItemStruct> BuildDisplayList() const;
 	void UpdateSortLabel();
+
+	// LMB selection: single-select + toggle, empty click clears.
+	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
+	void ClearSelection();
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory UI")
+	int32 GetSelectedSlotIndex() const { return SelectedSlotIndex; }
+
+	// Resize the grid to the server maxSlots cap (0 = keep local size).
+	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
+	void SyncGridToCapacity();
 
 	// Handle close button click
 	UFUNCTION()

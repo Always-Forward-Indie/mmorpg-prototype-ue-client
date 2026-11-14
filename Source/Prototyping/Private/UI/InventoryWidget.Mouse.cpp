@@ -18,71 +18,71 @@
 
 FReply UInventoryWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
-	if (bIsInventoryVisible && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+	if (!bIsInventoryVisible)
+	{
+		return FReply::Unhandled();
+	}
+
+	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
 		// Close context menu when clicking outside its action rows
 		CloseContextMenu();
 
 		// Hide tooltip when clicking anywhere in the inventory window
 		HideTooltip();
-		
-		bool bShouldStartDrag = false;
 
-		if (DragHandle)
+		// Window drag starts ONLY from the DragHandle (title bar). Clicks
+		// anywhere else must reach the slots/buttons below — never capture.
+		if (!DragHandle)
 		{
-			// ����������������� DragHandle
-			const FGeometry DragHandleGeometry = DragHandle->GetCachedGeometry();
-			const FVector2D LocalMousePos = DragHandleGeometry.AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());
-
-			// ���������, ����� �� ���� � ������� DragHandle
-			const FVector2D DragHandleSize = DragHandleGeometry.GetLocalSize();
-			bShouldStartDrag = (LocalMousePos.X >= 0 && LocalMousePos.X <= DragHandleSize.X &&
-				LocalMousePos.Y >= 0 && LocalMousePos.Y <= DragHandleSize.Y);
-
-			UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: DragHandle click test - LocalPos: %s, Size: %s, ShouldDrag: %s"),
-				*LocalMousePos.ToString(), *DragHandleSize.ToString(), bShouldStartDrag ? TEXT("True") : TEXT("False"));
-		}
-		else
-		{
-			// ���� ��� DragHandle, ��������� �������������� �����
-			bShouldStartDrag = true;
-			UE_LOG(LogGameplay, Warning, TEXT("InventoryWidget: No DragHandle, allowing drag from anywhere"));
+			return FReply::Unhandled();
 		}
 
-		if (bShouldStartDrag)
-		{
-			const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
+		// Hit-test the DragHandle
+		const FGeometry DragHandleGeometry = DragHandle->GetCachedGeometry();
+		const FVector2D LocalMousePos = DragHandleGeometry.AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());
 
-			const FVector2D Screen = InMouseEvent.GetScreenSpacePosition();
-			const FVector2D MouseVP = Screen / Scale;
+		// Check whether the click is inside the DragHandle bounds
+		const FVector2D DragHandleSize = DragHandleGeometry.GetLocalSize();
+		const bool bShouldStartDrag = (LocalMousePos.X >= 0 && LocalMousePos.X <= DragHandleSize.X &&
+			LocalMousePos.Y >= 0 && LocalMousePos.Y <= DragHandleSize.Y);
 
-			// �����! ���������� ������� ������� �������, � �� ��������� �� �������
-			const FVector2D CurrentPos = CurrentViewportPosition; // ���������� ������������� �������
+		UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: DragHandle click test - LocalPos: %s, Size: %s, ShouldDrag: %s"),
+			*LocalMousePos.ToString(), *DragHandleSize.ToString(), bShouldStartDrag ? TEXT("True") : TEXT("False"));
 
-			DragOffset = MouseVP - CurrentPos;
-			bDragging = true;
-
-			UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Drag calculation - Mouse: %s, Current: %s, Offset: %s"),
-				*MouseVP.ToString(), *CurrentPos.ToString(), *DragOffset.ToString());
-
-			if (TSharedPtr<SWidget> Slate = GetCachedWidget())
-			{
-				return FReply::Handled().CaptureMouse(Slate.ToSharedRef());
-			}
-			return FReply::Handled();
-		}
-		else
+		if (!bShouldStartDrag)
 		{
 			UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Click outside DragHandle area - drag not started"));
+			return FReply::Unhandled();
 		}
+
+		const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
+
+		const FVector2D Screen = InMouseEvent.GetScreenSpacePosition();
+		const FVector2D MouseVP = Screen / Scale;
+
+		// Use the tracked viewport position, not the cached geometry
+		const FVector2D CurrentPos = CurrentViewportPosition;
+
+		DragOffset = MouseVP - CurrentPos;
+		bDragging = true;
+
+		UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Drag calculation - Mouse: %s, Current: %s, Offset: %s"),
+			*MouseVP.ToString(), *CurrentPos.ToString(), *DragOffset.ToString());
+
+		if (TSharedPtr<SWidget> Slate = GetCachedWidget())
+		{
+			return FReply::Handled().CaptureMouse(Slate.ToSharedRef());
+		}
+		return FReply::Handled();
 	}
-	
+
 	// Hide tooltip on right mouse button click as well
-	if (bIsInventoryVisible && InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
+	if (InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
 	{
 		HideTooltip();
 	}
-	
+
 	return FReply::Unhandled();
 }
 

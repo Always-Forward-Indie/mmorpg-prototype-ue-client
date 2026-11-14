@@ -66,6 +66,17 @@ void UUIManager::HideMobTargetCast(int32 CasterUID)
     }
 }
 
+void UUIManager::UpdateMobTargetEffects(const TArray<FAppliedEffectData>& Effects)
+{
+    if (PlayerInterfaceWidget)
+    {
+        if (UMobTargetFrameWidget* TargetFrame = PlayerInterfaceWidget->GetMobTargetFrameWidget())
+        {
+            TargetFrame->UpdateStatusEffects(Effects);
+        }
+    }
+}
+
 void UUIManager::UpdateMobTargetFrameHP(int32 CurrentHP, int32 MaxHP)
 {
 	if (PlayerInterfaceWidget)

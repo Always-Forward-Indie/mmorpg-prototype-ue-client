@@ -6,8 +6,12 @@
 #include "Components/ProgressBar.h"
 #include "Components/Image.h"
 #include "Components/Border.h"
+#include "Components/HorizontalBox.h"
 #include "Engine/Texture2D.h"
+#include "Data/DataStructs.h"
 #include "MobTargetFrameWidget.generated.h"
+
+class UEffectSlotWidget;
 
 /**
  * HUD widget that shows the hard-locked combat target's info:
@@ -82,6 +86,15 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Target Frame")
     void HideCast();
 
+    /**
+     * Target status-effects row: one icon + remaining seconds per effect on
+     * the target itself (source is not distinguished). Sorted by importance
+     * (shield / invulnerability / enrage first, then by time), capped at 6
+     * visible slots + "+N" overflow; the row collapses when empty.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Target Frame")
+    void UpdateStatusEffects(const TArray<FAppliedEffectData>& Effects);
+
     /** Update only the HP bar and text (called every Tick while target is locked). */
     UFUNCTION(BlueprintCallable, Category = "Target Frame")
     void UpdateHP(int32 CurrentHP, int32 MaxHP);
@@ -147,6 +160,19 @@ protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UImage* InterruptIcon = nullptr;
 
+    // Target status-effects row (slice 3): icon + remaining seconds per effect.
+    // Optional: hidden gracefully when the BP predates it.
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UHorizontalBox* StatusEffectsBox = nullptr;
+
+    /** Slot class for one effect icon (same WBP_EffectSlot as the player bar). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Target Frame|Effects")
+    TSubclassOf<UEffectSlotWidget> EffectSlotClass;
+
+    /** Effect definition table (icons / tints / tooltips), same asset as the player bar. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Target Frame|Effects")
+    TObjectPtr<UDataTable> EffectDefinitionTable = nullptr;
+
     // Default icon shown when no texture is assigned in the data table
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Target Frame")
     UTexture2D* DefaultIcon = nullptr;
@@ -206,4 +232,32 @@ private:
 
     /** Show/hide the castbar row widgets (never the frame itself). */
     void SetCastRowVisibility(ESlateVisibility Vis);
+
+    /** One cached target effect (grouped by slug, longest duration wins). */
+    struct FCachedTargetEffect
+    {
+        FString Slug;
+        FString EffectType;
+        int32 Value = 0;
+        double DurationSec = 0.0;
+        // Server-clock expiry; <= 0 duration = permanent (never expires).
+        int64 ExpiresAtServerMs = 0;
+    };
+
+    TArray<FCachedTargetEffect> CachedTargetEffects;
+    double EffectsTickAccum = 0.0;
+    // World-time arrival anchor for the no-timesync fallback path.
+    double EffectsArrivedWorldSec = 0.0;
+
+    /** Rebuild slot widgets from CachedTargetEffects (sorted, capped, +N). */
+    void RebuildEffectSlots();
+
+    /** Drop expired entries and refresh countdowns (once per second, frozen when dead). */
+    void RefreshEffectTimers();
+
+    /** Clear the row (new lock / unlock). */
+    void ClearTargetEffects();
+
+    /** Remaining seconds for a cached effect (server clock, world-time fallback). */
+    double RemainingSecFor(const FCachedTargetEffect& E) const;
 };

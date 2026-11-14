@@ -47,6 +47,12 @@ void UMobTargetFrameWidget::NativeTick(const FGeometry& MyGeometry, float InDelt
 {
     Super::NativeTick(MyGeometry, InDeltaTime);
     TickCast();
+    EffectsTickAccum += InDeltaTime;
+    if (EffectsTickAccum >= 1.0f)
+    {
+        EffectsTickAccum = 0.0;
+        RefreshEffectTimers();
+    }
 }
 
 void UMobTargetFrameWidget::SetMobInfo(const FString& MobSlug,
@@ -73,6 +79,7 @@ void UMobTargetFrameWidget::SetMobInfo(const FString& MobSlug,
     bCachedDead = false;
     // A new lock cancels any in-flight cast display from the previous target.
     HideCast();
+    ClearTargetEffects();
 
     // --- Portrait icon ---
     // Priority: 1) caller-supplied Icon (CachedIcon from BasicMOB, already in memory)
@@ -162,8 +169,11 @@ void UMobTargetFrameWidget::UpdateHP(int32 CurrentHP, int32 MaxHP)
 
     if (MobHealthText)
     {
+        // Percent first (large in the BP layout), absolute second.
+        // A split large/small layout needs a second bind — BP follow-up.
+        const int32 Pct = (MaxHP > 0) ? FMath::Clamp(FMath::RoundToInt(100.0f * static_cast<float>(ShownHP) / static_cast<float>(MaxHP)), 0, 100) : 0;
         MobHealthText->SetText(FText::FromString(
-            FString::Printf(TEXT("%d / %d"), ShownHP, MaxHP)));
+            FString::Printf(TEXT("%d%%  %d / %d"), Pct, ShownHP, MaxHP)));
     }
 }
 
@@ -174,6 +184,7 @@ void UMobTargetFrameWidget::ClearTarget()
     CachedRankCode.Empty();
     CachedPortrait = nullptr;
     HideCast();
+    ClearTargetEffects();
     SetVisibility(ESlateVisibility::Collapsed);
 
     if (MobNameText)   MobNameText->SetText(FText::GetEmpty());
@@ -528,6 +539,11 @@ void UMobTargetFrameWidget::HandleLocaleChanged(const FString& NewLocale)
                 }
             }
         }
+    }
+    // Effect names/tooltips follow the locale (slots rebuild from the cache).
+    if (!CachedTargetEffects.IsEmpty())
+    {
+        RebuildEffectSlots();
     }
     UpdateHP(CachedCurrentHP, CachedMaxHP);
 }

@@ -201,6 +201,15 @@ void ABasicMOB::OnReceiveSkillResult(const FSkillResultData& SkillResult)
 		{
 			SetMOBCurrentMana(SkillResult.finalTargetMana);
 		}
+
+		// The locked target's own status-effects row follows combatResult facts.
+		if (SkillResult.appliedEffects.Num() > 0)
+		{
+			if (UUIManager* LockUI = GetLockingLocalPlayerUI(this))
+			{
+				LockUI->UpdateMobTargetEffects(SkillResult.appliedEffects);
+			}
+		}
 	ForceUpdateUI();
 
 		if (!SkillResult.isMissed)
@@ -227,6 +236,11 @@ void ABasicMOB::OnReceiveSkillResult(const FSkillResultData& SkillResult)
 			SetMOBIsDead(true);
 			Die();
 			OnMOBDied.Broadcast();
+			// Immediate frame sync (the tick edge detector covers late paths).
+			if (UUIManager* FrameUI = GetLockingLocalPlayerUI(this))
+			{
+				FrameUI->SetMobTargetDead(true);
+			}
 		}
 
 		ForceUpdateUI();
@@ -287,6 +301,10 @@ void ABasicMOB::OnReceiveEffectTick(const FEffectTickData& EffectData)
 		SetMOBIsDead(true);
 		Die();
 		OnMOBDied.Broadcast();
+		if (UUIManager* FrameUI = GetLockingLocalPlayerUI(this))
+		{
+			FrameUI->SetMobTargetDead(true);
+		}
 	}
 
 	ForceUpdateUI();

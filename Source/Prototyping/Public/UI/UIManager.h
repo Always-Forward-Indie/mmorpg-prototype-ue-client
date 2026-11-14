@@ -932,6 +932,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void HideMobTargetCast(int32 CasterUID);
 
+	/** Target status-effects row for the displayed lock (from combatResult). */
+	UFUNCTION(BlueprintCallable, Category = "UI Manager")
+	void UpdateMobTargetEffects(const TArray<FAppliedEffectData>& Effects);
+
 	/** Hide the mob target frame. */
 	UFUNCTION(BlueprintCallable, Category = "UI Manager")
 	void HideMobTargetFrame();

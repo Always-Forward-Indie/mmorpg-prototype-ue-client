@@ -99,6 +99,11 @@ Inside `W_PlayerInterface` (not UIManager-directly): `USkillBarWidget` (`Skills/
      Unset presets keep the authored button style (never force invisible).
      `SlotButton` must fill the slot with `Visibility=Visible` and `Is Enabled`
      — otherwise the slot is dead to the cursor (this is logged as an Error).
+      \SlotSizeBox\ (USizeBox slot root, 64px overrides) is required, not
+      optional: without it an empty button collapses to 0x0 (also an Error).
+      Fill alignment is re-asserted in code (\EnforceButtonFill\), so a
+      compliant BP is untouched and a broken one fails loud instead of
+      silently eating clicks.
 3. Multi-client run (`LaunchClients.ps1 -n 3`): open/close every toggle window, log-scan for
    `BindWidget`, `Failed to find`, `Accessed None` — zero hits is the gate.
 4. Equipment window: hover a slot → item tooltip follows the cursor (bound

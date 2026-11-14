@@ -213,6 +213,11 @@ private:
 	/** Preset for the rule-computed frame key, or nullptr when unset. */
 	const FButtonStyle* StyleForKey(const FString& Key) const;
 
+	/** Structural input guarantee (UI_Widget_BP_Bindings §3.2): SlotButton
+	 * must fill the slot. Enforced here so a BP edit can never silently
+	 * zero-size the only input path; idempotent on a compliant BP. */
+	void EnforceButtonFill();
+
 	/** True when at least one style preset carries a Normal brush. */
 	bool HasAnyPresetStyle() const;
 

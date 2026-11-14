@@ -6,6 +6,8 @@
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "Components/Border.h"
+#include "Components/OverlaySlot.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Engine/Engine.h"
 #include "MyGameInstance.h"
@@ -49,6 +51,10 @@ void UInventorySlotWidget::NativeConstruct()
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("InventorySlotWidget: %s (slot %d) has no button visuals — set the button Style brushes or the Empty/Filled/Hovered/Selected/Highlighted presets, or empty slots are invisible."), *GetName(), SlotIndex);
 	}
+
+	// Structural size: a content-less button collapses to 0x0 (dead input),
+	// so the cell size must never depend on content. Enforce both halves.
+	EnforceButtonFill();
 
 	if (CooldownOverlay)
 		CooldownOverlay->SetVisibility(ESlateVisibility::Collapsed);
@@ -295,6 +301,38 @@ bool UInventorySlotWidget::IsAncestorChainHidden() const
 		if (V == ESlateVisibility::Collapsed || V == ESlateVisibility::Hidden) return true;
 	}
 	return false;
+}
+
+void UInventorySlotWidget::EnforceButtonFill()
+{
+	// Half 1: the cell size override. Silent when missing before — now loud:
+	// without the SizeBox nothing enforces the 64px cell and SetSlotSide is
+	// a no-op, so an empty button collapses to 0x0 (see sanity check below).
+	if (SlotSizeBox)
+	{
+		SetSlotSide(SlotSide);
+	}
+	else
+	{
+		UE_LOG(LogGameplay, Error, TEXT("InventorySlotWidget: SlotSizeBox bind missing in %s (slot %d) — cell size is unenforced and an empty button collapses to 0x0 (dead input). Add a USizeBox named 'SlotSizeBox' as the slot root with Width/Height override."), *GetName(), SlotIndex);
+	}
+
+	// Half 2: the button must fill whatever cell it sits in (contract, not
+	// styling — a smaller button shrinks the only input path). Idempotent:
+	// re-asserting Fill on a compliant BP changes nothing.
+	if (!SlotButton || !SlotButton->Slot) return;
+	if (UOverlaySlot* OverlaySlot = Cast<UOverlaySlot>(SlotButton->Slot))
+	{
+		OverlaySlot->SetHorizontalAlignment(HAlign_Fill);
+		OverlaySlot->SetVerticalAlignment(VAlign_Fill);
+		OverlaySlot->SetPadding(FMargin(0.f));
+	}
+	else if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(SlotButton->Slot))
+	{
+		CanvasSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+		CanvasSlot->SetOffsets(FMargin(0.f));
+		CanvasSlot->SetAlignment(FVector2D::ZeroVector);
+	}
 }
 
 void UInventorySlotWidget::RunButtonSanityCheck()

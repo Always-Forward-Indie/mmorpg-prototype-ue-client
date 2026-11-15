@@ -17,6 +17,8 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/CanvasPanelSlot.h"
 
+#define LOCTEXT_NAMESPACE "InventoryWidget"
+
 float UInventoryWidget::GetCurrentInventoryWeight() const
 {
 	// Summation lives in FInventoryWeight (pinned by MMO.Inventory.Weight).
@@ -36,7 +38,7 @@ int32 UInventoryWidget::GetFreeSlots() const
 void UInventoryWidget::UpdateInventoryStats()
 {
 	// Update weight display
-	if (WeightText)
+	if (WeightText || WeightBar || OverweightIcon)
 	{
 		float CurrentWeight = GetCurrentInventoryWeight();
 
@@ -55,22 +57,58 @@ void UInventoryWidget::UpdateInventoryStats()
 			}
 		}
 
-		FString WeightString = FString::Printf(TEXT("Weight: %.1f/%.1f"), CurrentWeight, MaxWeight);
-		WeightText->SetText(FText::FromString(WeightString));
-		
+		// Numbers only ("45.2/100"): captions/units are static BP texts,
+		// so no hardcoded English and no locale-hostile concatenation.
+		const FString MaxStr = FMath::IsNearlyEqual(MaxWeight, FMath::RoundToFloat(MaxWeight))
+			? FString::Printf(TEXT("%.0f"), MaxWeight)
+			: FString::Printf(TEXT("%.1f"), MaxWeight);
+		const FString WeightString = FString::Printf(TEXT("%.1f/%s"), CurrentWeight, *MaxStr);
+
 		// Encumbrance bucket lives in FInventoryWeight
 		// (pinned by MMO.Inventory.Weight); colors stay here with the widget.
-		switch (FInventoryWeight::StatusFor(CurrentWeight, MaxWeight))
+		const EWeightStatus WeightStatus = FInventoryWeight::StatusFor(CurrentWeight, MaxWeight);
+		FLinearColor BucketColor = FLinearColor::White;
+		switch (WeightStatus)
 		{
 		case EWeightStatus::Overweight:
-			WeightText->SetColorAndOpacity(FLinearColor::Red);
+			BucketColor = FLinearColor::Red;
 			break;
 		case EWeightStatus::Heavy:
-			WeightText->SetColorAndOpacity(FLinearColor::Yellow);
+			BucketColor = FLinearColor::Yellow;
 			break;
 		default:
-			WeightText->SetColorAndOpacity(FLinearColor::White);
 			break;
+		}
+
+		if (WeightText)
+		{
+			WeightText->SetText(FText::FromString(WeightString));
+			WeightText->SetColorAndOpacity(BucketColor);
+		}
+
+		// Progress bar mirrors the text bucket (same single source).
+		if (WeightBar)
+		{
+			WeightBar->SetPercent(FInventoryWeight::Ratio(CurrentWeight, MaxWeight));
+			WeightBar->SetFillColorAndOpacity(BucketColor);
+		}
+
+		// Badge is the second channel next to color (accessibility):
+		// visible only at >=100%, decorative (never steals slot input).
+		if (OverweightIcon)
+		{
+			const bool bOver = (WeightStatus == EWeightStatus::Overweight);
+			if (bOver)
+			{
+				// Factual only: speed is server-authoritative, the client
+				// applies no penalty itself (see BasicPlayer weight status).
+				OverweightIcon->SetToolTipText(LOCTEXT("OverweightTip", "Overweight: carried weight exceeds the limit"));
+				OverweightIcon->SetVisibility(ESlateVisibility::HitTestInvisible);
+			}
+			else
+			{
+				OverweightIcon->SetVisibility(ESlateVisibility::Collapsed);
+			}
 		}
 	}
 
@@ -79,7 +117,8 @@ void UInventoryWidget::UpdateInventoryStats()
 	{
 		int32 UsedSlots = GetUsedSlots();
 		int32 TotalSlots = GetTotalSlots();
-		FString SlotsString = FString::Printf(TEXT("Slots: %d/%d"), UsedSlots, TotalSlots);
+		// Numbers only ("12/48"): the caption is a static BP text.
+		FString SlotsString = FString::Printf(TEXT("%d/%d"), UsedSlots, TotalSlots);
 		SlotsText->SetText(FText::FromString(SlotsString));
 		
 		// Optional: Change color based on slots percentage
@@ -115,3 +154,5 @@ void UInventoryWidget::SetMaxInventoryWeight(float NewMaxWeight)
 	
 	UE_LOG(LogGameplay, Log, TEXT("InventoryWidget: Max weight set to %.1f"), MaxInventoryWeight);
 }
+
+#undef LOCTEXT_NAMESPACE

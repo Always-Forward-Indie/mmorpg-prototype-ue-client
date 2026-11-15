@@ -100,12 +100,24 @@ void UInventoryWidget::NativeConstruct()
 	}
 
 	// Optional view controls (sort button + search box live in the BP layout).
+	// Fail loud when absent: an unbound SortButton/SearchBox silently kills
+	// in-window sort/search (chat /sort keeps working as fallback).
 	if (SortButton)
+	{
 		SortButton->OnClicked.AddDynamic(this, &UInventoryWidget::CycleSortMode);
+		UpdateSortLabel();
+	}
+	else
+	{
+		UE_LOG(LogGameplay, Warning, TEXT("InventoryWidget: SortButton bind missing — in-window sort is dead (use /sort chat command). Add a UButton named exactly 'SortButton' (BindWidget matches by name)."));
+	}
 	if (SearchBox)
 	{
 		SearchBox->OnTextChanged.AddDynamic(this, &UInventoryWidget::HandleSearchTextChanged);
-		UpdateSortLabel();
+	}
+	else
+	{
+		UE_LOG(LogGameplay, Warning, TEXT("InventoryWidget: SearchBox bind missing — text search is dead. Add a UEditableTextBox named exactly 'SearchBox'."));
 	}
 
 	// Create drop quantity popup widget

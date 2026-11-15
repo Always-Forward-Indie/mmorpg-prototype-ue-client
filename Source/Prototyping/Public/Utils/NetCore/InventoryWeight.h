@@ -38,4 +38,11 @@ struct PROTOTYPING_API FInventoryWeight
 		if (Ratio >= 0.8f) { return EWeightStatus::Heavy; }
 		return EWeightStatus::Ok;
 	}
+
+	/** Bar fill 0..1 (clamped; unknown max reads empty, never full). */
+	static float Ratio(float Current, float Max)
+	{
+		if (Max <= 0.0f) return 0.0f;
+		return FMath::Clamp(Current / Max, 0.0f, 1.0f);
+	}
 };

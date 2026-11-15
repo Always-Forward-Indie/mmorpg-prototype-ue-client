@@ -6,6 +6,8 @@
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
 #include "Components/EditableTextBox.h"
+#include "Components/ProgressBar.h"
+#include "Components/Image.h"
 #include "Data/DataStructs.h"
 #include "UI/InventorySlotWidget.h"
 #include "UI/ItemTooltipWidget.h"
@@ -208,12 +210,23 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	UButton* CloseButton;
 
-	// Weight and slots display
+	// Weight and slots display (numbers only: "45.2/100", "12/48".
+	// Captions/units are static BP texts so no English is hardcoded here).
 	UPROPERTY(meta = (BindWidgetOptional))
 	UTextBlock* WeightText;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	UTextBlock* SlotsText;
+
+	// Optional weight progress bar (fill + color mirror the text bucket).
+	// Absent = text + color only, no behavior change.
+	UPROPERTY(meta = (BindWidgetOptional))
+	UProgressBar* WeightBar = nullptr;
+
+	// Optional overweight badge (visible only at >=100%, decorative).
+	// Absent = text turns red alone (color-only channel, see §accessibility).
+	UPROPERTY(meta = (BindWidgetOptional))
+	UImage* OverweightIcon = nullptr;
 
 	// Gold display
 	UPROPERTY(meta = (BindWidgetOptional))

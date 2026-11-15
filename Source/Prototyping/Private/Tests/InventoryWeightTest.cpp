@@ -24,5 +24,8 @@ bool FInventoryWeightTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("over boundary"), W::StatusFor(100.0f, 100.0f), S::Overweight);
     TestEqual(TEXT("over max"), W::StatusFor(150.0f, 100.0f), S::Overweight);
     TestEqual(TEXT("unknown max never alarms"), W::StatusFor(999.0f, 0.0f), S::Ok);
+    TestEqual(TEXT("ratio half"), W::Ratio(50.0f, 100.0f), 0.5f);
+    TestEqual(TEXT("ratio clamps over"), W::Ratio(150.0f, 100.0f), 1.0f);
+    TestEqual(TEXT("ratio empty on unknown max"), W::Ratio(999.0f, 0.0f), 0.0f);
     return true;
 }

@@ -51,6 +51,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory Slot")
 	void SetJunked(bool bJunked);
 
+	// "New loot" badge (cleared on hover, see parent grid).
+	UFUNCTION(BlueprintCallable, Category = "Inventory Slot")
+	void SetNewBadge(bool bNew);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory Slot")
+	bool HasNewBadge() const { return bIsNew; }
+
 	// Get current item data
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory Slot")
 	FInventoryItemStruct GetItemData() const { return CurrentItem; }
@@ -132,6 +139,11 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	UImage* ImgEquipped = nullptr;
 
+	// "New loot" badge (optional in BP: add a UImage named 'ImgNew',
+	// corner dot/glow; absent = silently disabled).
+	UPROPERTY(meta = (BindWidgetOptional))
+	UImage* ImgNew = nullptr;
+
 	// Predictive cooldown overlay (optional in BP: add CooldownOverlay image +
 	// CooldownText textblock to WBP to enable; absent = silently disabled).
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -198,6 +210,9 @@ protected:
 
 	// Junk-mark visual (sell-junk helper). Applied in SetJunked/SetIconTexture.
 	bool bIsJunked = false;
+
+	// New-loot badge (session state, cleared on hover by the parent grid).
+	bool bIsNew = false;
 
 private:
 	// Handle button events (single input path; right-click stays native below)

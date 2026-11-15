@@ -55,6 +55,42 @@ void UInventoryWidget::UpdateInventoryDisplay(const FCharacterInventoryStruct& I
 		// else: slot already cleared above
 	}
 
+	// "New loot" diff over ALL rows (not the filtered view: typing in
+	// search must not re-badge everything on clear). Gone rows are
+	// forgotten; re-looted rows mint fresh instance ids, so they badge
+	// again — exactly once per genuine arrival.
+	TSet<int32> PresentIds;
+	PresentIds.Reserve(CurrentInventory.items.Num());
+	for (const FInventoryItemStruct& Item : CurrentInventory.items)
+	{
+		if (Item.id > 0) PresentIds.Add(Item.id);
+	}
+	if (!bNewTrackingSeeded)
+	{
+		bNewTrackingSeeded = true;
+	}
+	else
+	{
+		for (int32 Id : PresentIds)
+		{
+			if (!KnownInstanceIds.Contains(Id)) NewInstanceIds.Add(Id);
+		}
+		for (int32 Known : KnownInstanceIds)
+		{
+			if (!PresentIds.Contains(Known)) NewInstanceIds.Remove(Known);
+		}
+	}
+	KnownInstanceIds = MoveTemp(PresentIds);
+
+	for (int32 i = 0; i < InventorySlots.Num(); i++)
+	{
+		UInventorySlotWidget* SlotWidget = GetSlotWidget(i);
+		if (SlotWidget && SlotWidget->HasItem())
+		{
+			SlotWidget->SetNewBadge(NewInstanceIds.Contains(SlotWidget->GetItemData().id));
+		}
+	}
+
 	// Re-resolve LMB selection by instance id (rows may reorder/resize
 	// between snapshots; a gone row clears the highlight instead of lying).
 	if (SelectedInstanceId > 0)

@@ -60,6 +60,8 @@ void UInventorySlotWidget::NativeConstruct()
 		CooldownOverlay->SetVisibility(ESlateVisibility::Collapsed);
 	if (CooldownText)
 		CooldownText->SetVisibility(ESlateVisibility::Collapsed);
+	if (ImgNew)
+		ImgNew->SetVisibility(ESlateVisibility::Collapsed);
 
 	// Initialize visual appearance
 	UpdateSlotAppearance();
@@ -186,6 +188,9 @@ void UInventorySlotWidget::ClearSlot()
 	bIsOccupied = false;
 	bIsSelected = false;
 	bIsJunked = false;
+	bIsNew = false;
+	if (ImgNew)
+		ImgNew->SetVisibility(ESlateVisibility::Collapsed);
 	bCoolingDown = false;
 	CooldownEndTime = 0.0;
 	CooldownTotalTime = 0.0;
@@ -221,6 +226,17 @@ void UInventorySlotWidget::SetJunked(bool bJunked)
 	bIsJunked = bJunked;
 	if (ItemIcon && HasItem())
 		ItemIcon->SetColorAndOpacity(bIsJunked ? FLinearColor(0.45f, 0.45f, 0.45f, 1.f) : FLinearColor::White);
+}
+
+void UInventorySlotWidget::SetNewBadge(bool bNew)
+{
+	bIsNew = bNew;
+	if (ImgNew)
+	{
+		ImgNew->SetVisibility((bNew && HasItem())
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
 }
 
 void UInventorySlotWidget::SetSlotSelected(bool bSelected)

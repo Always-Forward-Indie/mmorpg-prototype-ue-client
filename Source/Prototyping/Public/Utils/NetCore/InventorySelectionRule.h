@@ -26,4 +26,18 @@ struct PROTOTYPING_API FInventorySelectionRule
 	{
 		return Selected >= 0 && Selected < TotalSlots;
 	}
+
+	/**
+	 * Double-click: second LMB on the already-selected slot inside the
+	 * window. Pure time math (seconds, same clock both sides) so specs pin
+	 * it with fake timestamps — no input dependency.
+	 */
+	static bool IsDoubleClick(int32 SelectedSlot, int32 LastSlot, double LastTime, double Now, double Window = 0.5)
+	{
+		if (SelectedSlot == INDEX_NONE || LastSlot == INDEX_NONE) return false;
+		if (SelectedSlot != LastSlot) return false;
+		if (Window <= 0.0) return false;
+		const double Delta = Now - LastTime;
+		return Delta >= 0.0 && Delta <= Window;
+	}
 };

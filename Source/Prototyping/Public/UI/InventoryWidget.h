@@ -325,6 +325,17 @@ protected:
 	int32 SelectedSlotIndex = -1;
 	int32 SelectedInstanceId = 0;
 
+	// Session "new loot" tracking (instance ids, never persisted).
+	TSet<int32> NewInstanceIds;
+	TSet<int32> KnownInstanceIds;
+	// First snapshot seeds Known without badging (login must not glow).
+	bool bNewTrackingSeeded = false;
+
+	// Double-click state (second LMB on the selected slot within the window).
+	double LastClickTime = 0.0;
+	int32 LastClickSlot = INDEX_NONE;
+	static constexpr double DoubleClickWindow = 0.5;
+
 	UPROPERTY(meta = (BindWidgetOptional))
 	UHorizontalBox* DragHandle = nullptr; // ������� ������/����� ���� (����� ����� ������)
 
@@ -370,6 +381,10 @@ private:
 	void HandleCategoryChanged();
 
 	void UpdateCategoryLabel();
+
+	// Double-click on the selected slot: Use > Equip > Unequip (mirrors the
+	// context menu rows, same manager dispatch, never a new code path).
+	void HandleDoubleClick(const FInventoryItemStruct& Item);
 
 	// Handle close button click
 	UFUNCTION()

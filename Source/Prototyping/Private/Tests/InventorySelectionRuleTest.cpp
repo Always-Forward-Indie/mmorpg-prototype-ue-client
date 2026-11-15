@@ -19,5 +19,12 @@ bool FInventorySelectionRuleTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("valid"), R::IsValid(0, 48));
     TestFalse(TEXT("invalid negative"), R::IsValid(INDEX_NONE, 48));
     TestFalse(TEXT("invalid overflow"), R::IsValid(48, 48));
+    // Double-click: same selected slot twice inside the window.
+    TestTrue(TEXT("double"), R::IsDoubleClick(3, 3, 10.0, 10.3));
+    TestTrue(TEXT("double boundary"), R::IsDoubleClick(3, 3, 10.0, 10.5));
+    TestFalse(TEXT("too slow"), R::IsDoubleClick(3, 3, 10.0, 10.6));
+    TestFalse(TEXT("different slot"), R::IsDoubleClick(3, 5, 10.0, 10.1));
+    TestFalse(TEXT("no previous"), R::IsDoubleClick(3, INDEX_NONE, 10.0, 10.1));
+    TestFalse(TEXT("clock skew"), R::IsDoubleClick(3, 3, 10.5, 10.0));
     return true;
 }

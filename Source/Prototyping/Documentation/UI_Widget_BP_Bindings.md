@@ -120,7 +120,7 @@ Inside `W_PlayerInterface` (not UIManager-directly): `USkillBarWidget` (`Skills/
    opens the read-only snapshot window (`playerInspect` on chunk).
 7. Inventory sort/search panel (optional): `SortButton` (UButton, exact name — BindWidget matches by name) + `SearchBox` (UEditableTextBox)
    in WBP_PlayerInventory; without them the `/sort [name|rarity|type|off]` chat command works. Missing binds log a Warning at construct time.
-   The Sort button tooltip shows the active mode. Weight row (optional): `WeightBar` (ProgressBar, fill+color mirror the text bucket) + `OverweightIcon` (Image, visible only at >=100%, decorative HitTestInvisible); without them text+color carry the state alone. Weight/Slots texts are numbers-only ("45.2/100", "12/48") — captions are static BP texts. Junk marks: context-menu row → dimmed slot;
+   The Sort button tooltip shows the active mode. Category filter (optional): `CategoryButton` (UButton, exact name) + `CategoryLabel` (TextBlock, summary: All / X + Y / Custom (n)); the checkbox popup itself is code-built (no BP setup). Weight row (optional): `WeightBar` (ProgressBar, fill+color mirror the text bucket) + `OverweightIcon` (Image, visible only at >=100%, decorative HitTestInvisible); without them text+color carry the state alone. Weight/Slots texts are numbers-only ("45.2/100", "12/48") — captions are static BP texts. Junk marks: context-menu row → dimmed slot;
    bulk sell needs `Sell_Junk_Button` in the vendor window (no-op without it).
 8. Buyback: created in code when the shop opens (`Buyback_Button`, optional).
    The server keeps the last 12 sold stacks per character; the `buyback` bot scenario covers it.

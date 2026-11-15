@@ -1,6 +1,7 @@
 #include "UI/InventoryWidget.h"
 #include "Prototyping.h"
 #include "UI/InventorySlotWidget.h"
+#include "UI/InventoryCategoryWidget.h"
 #include "UI/ItemTooltipWidget.h"
 #include "UI/ItemActionMenuWidget.h"
 #include "UI/DropQuantityPopupWidget.h"
@@ -25,6 +26,7 @@ UInventoryWidget::UInventoryWidget(const FObjectInitializer& ObjectInitializer)
 	ItemTooltipWidget = nullptr;
 	ItemContextMenuWidget = nullptr;
 	DropQuantityPopupWidget = nullptr;
+	CategoryFilterWidget = nullptr;
 	bIsInventoryVisible = false;
 	HoveredSlotIndex = -1;
 	CurrentInventory = FCharacterInventoryStruct();
@@ -120,6 +122,24 @@ void UInventoryWidget::NativeConstruct()
 		UE_LOG(LogGameplay, Warning, TEXT("InventoryWidget: SearchBox bind missing — text search is dead. Add a UEditableTextBox named exactly 'SearchBox'."));
 	}
 
+	// Category filter popup is code-built (no BP class needed).
+	CategoryFilterWidget = CreateWidget<UInventoryCategoryWidget>(this, UInventoryCategoryWidget::StaticClass());
+	if (CategoryFilterWidget)
+	{
+		CategoryFilterWidget->AddToViewport(1050); // below the context menu (1100)
+		CategoryFilterWidget->SetVisibility(ESlateVisibility::Collapsed);
+		CategoryFilterWidget->OnSelectionChanged.AddDynamic(this, &UInventoryWidget::HandleCategoryChanged);
+	}
+	if (CategoryButton)
+	{
+		CategoryButton->OnClicked.AddDynamic(this, &UInventoryWidget::ToggleCategoryFilter);
+	}
+	else
+	{
+		UE_LOG(LogGameplay, Warning, TEXT("InventoryWidget: CategoryButton bind missing — category filter is dead. Add a UButton named exactly 'CategoryButton'."));
+	}
+	UpdateCategoryLabel();
+
 	// Create drop quantity popup widget
 	if (DropQuantityPopupWidgetClass)
 	{
@@ -158,6 +178,13 @@ void UInventoryWidget::NativeDestruct()
 	{
 		DropQuantityPopupWidget->RemoveFromParent();
 		DropQuantityPopupWidget = nullptr;
+	}
+
+	// Clean up category filter
+	if (CategoryFilterWidget)
+	{
+		CategoryFilterWidget->RemoveFromParent();
+		CategoryFilterWidget = nullptr;
 	}
 
 	// Unbind from inventory manager

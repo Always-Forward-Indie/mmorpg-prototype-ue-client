@@ -240,6 +240,20 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	UEditableTextBox* SearchBox = nullptr;
 
+	// Optional category dropdown (button + summary label live in the BP;
+	// the popup itself is code-built, no BP setup needed).
+	UPROPERTY(meta = (BindWidgetOptional))
+	UButton* CategoryButton = nullptr;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	UTextBlock* CategoryLabel = nullptr;
+
+	// Checked buckets (session state; all-true == All).
+	bool bCatEquipment = true;
+	bool bCatUsable = true;
+	bool bCatQuest = true;
+	bool bCatOther = true;
+
 	// Tooltip widget
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory UI")
 	TSubclassOf<UItemTooltipWidget> ItemTooltipWidgetClass;
@@ -260,6 +274,10 @@ protected:
 
 	UPROPERTY()
 	UDropQuantityPopupWidget* DropQuantityPopupWidget;
+
+	// Category filter popup (code-built, viewport Z 1050).
+	UPROPERTY()
+	class UInventoryCategoryWidget* CategoryFilterWidget;
 
 	// Inventory slot widget class
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory UI")
@@ -339,6 +357,19 @@ private:
 	// Resize the grid to the server maxSlots cap (0 = keep local size).
 	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
 	void SyncGridToCapacity();
+
+	// Category dropdown: toggle the code-built popup under the button.
+	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
+	void ToggleCategoryFilter();
+
+	// Close the category popup if open.
+	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
+	void CloseCategoryFilter();
+
+	UFUNCTION()
+	void HandleCategoryChanged();
+
+	void UpdateCategoryLabel();
 
 	// Handle close button click
 	UFUNCTION()

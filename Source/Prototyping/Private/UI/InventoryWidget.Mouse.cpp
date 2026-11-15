@@ -1,6 +1,7 @@
 #include "UI/InventoryWidget.h"
 #include "Prototyping.h"
 #include "UI/InventorySlotWidget.h"
+#include "UI/InventoryCategoryWidget.h"
 #include "UI/ItemTooltipWidget.h"
 #include "UI/ItemActionMenuWidget.h"
 #include "UI/DropQuantityPopupWidget.h"
@@ -30,6 +31,34 @@ FReply UInventoryWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 
 		// Hide tooltip when clicking anywhere in the inventory window
 		HideTooltip();
+
+		// Category popup: outside click closes it, but clicks on the popup
+		// itself never reach this widget (separate viewport tree) and clicks
+		// on the toggle button are handled by ToggleCategoryFilter.
+		if (CategoryFilterWidget && CategoryFilterWidget->IsFilterOpen())
+		{
+			bool bInsidePopup = false;
+			bool bInsideButton = false;
+			const FVector2D Screen = InMouseEvent.GetScreenSpacePosition();
+			const FGeometry PopupG = CategoryFilterWidget->GetCachedGeometry();
+			const FVector2D LocalPopup = PopupG.AbsoluteToLocal(Screen);
+			const FVector2D PopupSize = PopupG.GetLocalSize();
+			bInsidePopup = (LocalPopup.X >= 0 && LocalPopup.Y >= 0 &&
+				LocalPopup.X <= PopupSize.X && LocalPopup.Y <= PopupSize.Y);
+			if (CategoryButton)
+			{
+				const FGeometry ButtonG = CategoryButton->GetCachedGeometry();
+				const FVector2D LocalButton = ButtonG.AbsoluteToLocal(Screen);
+				const FVector2D ButtonSize = ButtonG.GetLocalSize();
+				bInsideButton = (LocalButton.X >= 0 && LocalButton.Y >= 0 &&
+					LocalButton.X <= ButtonSize.X && LocalButton.Y <= ButtonSize.Y);
+			}
+			if (!bInsidePopup && !bInsideButton)
+			{
+				UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Outside click - closing category filter"));
+				CategoryFilterWidget->HideFilter();
+			}
+		}
 
 		// Window drag starts ONLY from the DragHandle (title bar). Clicks
 		// anywhere else must reach the slots/buttons below — never capture.
@@ -115,6 +144,9 @@ FReply UInventoryWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FP
 
 void UInventoryWidget::UpdateWindowDragPosition(const FVector2D& ScreenCursorPosAbs)
 {
+	// The category popup is screen-anchored: dragging the window orphans it.
+	CloseCategoryFilter();
+
 	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 	if (!PC)
 	{

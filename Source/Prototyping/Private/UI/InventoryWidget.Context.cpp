@@ -4,6 +4,7 @@
 #include "Utils/NetCore/SlotMath.h"
 #include "UI/ItemTooltipWidget.h"
 #include "UI/ItemActionMenuWidget.h"
+#include "UI/InventoryCategoryWidget.h"
 #include "UI/DropQuantityPopupWidget.h"
 #include "Gameplay/Items/InventoryManager.h"
 #include "Gameplay/Equipment/EquipmentManager.h"
@@ -38,6 +39,55 @@ void UInventoryWidget::CloseContextMenu()
 {
 	if (ItemContextMenuWidget)
 		ItemContextMenuWidget->HideMenu();
+}
+
+void UInventoryWidget::ToggleCategoryFilter()
+{
+	if (!CategoryFilterWidget) return;
+	if (CategoryFilterWidget->IsFilterOpen())
+	{
+		CategoryFilterWidget->HideFilter();
+		return;
+	}
+
+	// Drop under the button (viewport coords, DPI-divided like the drag math).
+	FVector2D Pos = FVector2D::ZeroVector;
+	if (CategoryButton)
+	{
+		const FGeometry G = CategoryButton->GetCachedGeometry();
+		const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
+		Pos = (G.GetAbsolutePosition() + FVector2D(0.f, G.GetAbsoluteSize().Y)) / Scale;
+	}
+	CategoryFilterWidget->ShowAt(Pos);
+
+	UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Category filter opened"));
+}
+
+void UInventoryWidget::CloseCategoryFilter()
+{
+	if (CategoryFilterWidget)
+		CategoryFilterWidget->HideFilter();
+}
+
+void UInventoryWidget::HandleCategoryChanged()
+{
+	if (CategoryFilterWidget)
+	{
+		CategoryFilterWidget->GetActive(bCatEquipment, bCatUsable, bCatQuest, bCatOther);
+	}
+	UpdateCategoryLabel();
+	UpdateInventoryDisplay(CurrentInventory);
+
+	UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Category filter changed (equip=%d usable=%d quest=%d other=%d)"),
+		bCatEquipment, bCatUsable, bCatQuest, bCatOther);
+}
+
+void UInventoryWidget::UpdateCategoryLabel()
+{
+	if (CategoryLabel && CategoryFilterWidget)
+	{
+		CategoryLabel->SetText(CategoryFilterWidget->GetSummaryText());
+	}
 }
 
 void UInventoryWidget::HandleContextAction(EItemContextAction Action, const FInventoryItemStruct& Item)

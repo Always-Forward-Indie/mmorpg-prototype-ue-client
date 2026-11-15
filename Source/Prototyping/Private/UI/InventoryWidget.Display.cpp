@@ -10,6 +10,7 @@
 #include "Utils/NetCore/InventoryQuery.h"
 #include "Utils/NetCore/InventoryGridRule.h"
 #include "Utils/NetCore/InventorySelectionRule.h"
+#include "Utils/NetCore/InventoryCategoryRule.h"
 #include "MyGameInstance.h"
 #include "Gameplay/Player/PlayerStatsManager.h"
 #include "Components/GridPanel.h"
@@ -169,6 +170,7 @@ void UInventoryWidget::SetInventoryVisible(bool bVisible)
 		bDragging = false;
 		HideTooltip();
 		CloseContextMenu();
+		CloseCategoryFilter();
 	}
 
 	// �� ��������� �������� ����� - ��� ������ UIManager
@@ -307,6 +309,8 @@ TArray<FInventoryItemStruct> UInventoryWidget::BuildDisplayList() const
 		if (Item.itemId <= 0) continue;
 		// Wallet (110): currency is the gold number, never a grid slot.
 		if (FInventoryQuery::IsCurrencyItem(Item)) continue;
+		// Category buckets (OR over the checked boxes, AND with the text filter).
+		if (!FInventoryCategoryRule::PassesFilter(Item, bCatEquipment, bCatUsable, bCatQuest, bCatOther)) continue;
 		if (!Needle.IsEmpty())
 		{
 			const FString Haystack = (Item.name + TEXT(" ") + Item.slug + TEXT(" ") + Item.itemTypeSlug).ToLower();

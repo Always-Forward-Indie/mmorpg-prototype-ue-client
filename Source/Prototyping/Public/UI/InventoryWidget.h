@@ -284,6 +284,13 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory UI")
 	TSubclassOf<class UInventoryCategoryWidget> CategoryFilterWidgetClass;
 
+	// Category row widget class (BP subclass of UCategoryRowWidget with
+	// 'RowCheckBox' + 'RowLabel' binds; unset = code-built checkbox row).
+	// Mirrored here (rather than only on the popup) so it is pickable in
+	// the inventory details even when the popup itself is code-built.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory UI")
+	TSubclassOf<class UCategoryRowWidget> CategoryRowWidgetClass;
+
 	// Category filter popup (viewport Z 1050).
 	UPROPERTY()
 	class UInventoryCategoryWidget* CategoryFilterWidget;

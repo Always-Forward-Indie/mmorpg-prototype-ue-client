@@ -135,6 +135,12 @@ void UInventoryWidget::NativeConstruct()
 	}
 	else
 	{
+		// Row design pickable from the inventory details even when the popup
+		// itself is code-built (the popup alone has no editor instance).
+		// A row class preset on a BP popup subclass wins when unset here.
+		if (CategoryRowWidgetClass)
+			CategoryFilterWidget->CategoryRowWidgetClass = CategoryRowWidgetClass;
+		CategoryFilterWidget->RebuildRows();
 		CategoryFilterWidget->AddToViewport(1050); // below the context menu (1100)
 		CategoryFilterWidget->SetVisibility(ESlateVisibility::Collapsed);
 		CategoryFilterWidget->OnSelectionChanged.AddDynamic(this, &UInventoryWidget::HandleCategoryChanged);

@@ -50,13 +50,29 @@ void UInventoryWidget::ToggleCategoryFilter()
 		return;
 	}
 
-	// Drop under the button (viewport coords, DPI-divided like the drag math).
+	// Anchor to the cursor (like the context menu), never to the button
+	// rect: a tall/stretched button would otherwise drop the popup far below
+	// the click. Clamped into the viewport so odd DPI can never push it
+	// off-screen (tooltip convention: prepass, then clamp).
 	FVector2D Pos = FVector2D::ZeroVector;
-	if (CategoryButton)
+	if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
 	{
-		const FGeometry G = CategoryButton->GetCachedGeometry();
-		const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
-		Pos = (G.GetAbsolutePosition() + FVector2D(0.f, G.GetAbsoluteSize().Y)) / Scale;
+		FVector2D Mouse;
+		if (PC->GetMousePosition(Mouse.X, Mouse.Y))
+		{
+			const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
+			Pos = Mouse / Scale;
+			CategoryFilterWidget->ForceLayoutPrepass();
+			const FVector2D Size = CategoryFilterWidget->GetDesiredSize();
+			int32 W = 0, H = 0;
+			PC->GetViewportSize(W, H);
+			const FVector2D VP = FVector2D(W, H) / Scale;
+			if (!Size.IsZero() && !VP.IsZero())
+			{
+				Pos.X = FMath::Clamp(Pos.X, 0.f, FMath::Max(0.f, VP.X - Size.X));
+				Pos.Y = FMath::Clamp(Pos.Y, 0.f, FMath::Max(0.f, VP.Y - Size.Y));
+			}
+		}
 	}
 	CategoryFilterWidget->ShowAt(Pos);
 

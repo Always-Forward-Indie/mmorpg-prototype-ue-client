@@ -360,6 +360,19 @@ TArray<FInventoryItemStruct> UInventoryWidget::BuildDisplayList() const
 		if (!Needle.IsEmpty())
 		{
 			FString Haystack = Item.name + TEXT(" ") + Item.slug + TEXT(" ") + Item.itemTypeSlug;
+			if (LocSys && !LocSys->HasItemLocaleTable())
+			{
+				// Loud once: without the table there is no RU source at all
+				// (tooltips fall back to the slug too) — this is a DATA gap
+				// (DT_ItemLocale via DA_Localization), not a search bug.
+				static bool bWarnedMissingItemLocale = false;
+				if (!bWarnedMissingItemLocale)
+				{
+					bWarnedMissingItemLocale = true;
+					UE_LOG(LogGameplay, Warning, TEXT("InventoryWidget: ItemLocale table missing — localized search/tooltips fall back to slug. Create DT_ItemLocale and assign it in DA_Localization."));
+				}
+				LocSys = nullptr;
+			}
 			if (LocSys)
 			{
 				const FString Key = !Item.itemSlug.IsEmpty() ? Item.itemSlug : Item.slug;

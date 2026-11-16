@@ -37,8 +37,9 @@ protected:
  * Category dropdown popup. Two setups, same behavior:
  * - Code-built (default): zero BP setup, dark panel + check rows in code.
  * - BP subclass: provide a UVerticalBox named 'CategoryList' (rows land
- *   there) + optional UBorder 'CategoryFrame' (tinted dark by code) +
- *   optional CategoryRowWidgetClass for custom rows.
+ *   there) + optional UBorder 'CategoryFrame' (never restyled by code) +
+ *   optional CategoryRowWidgetClass for custom rows (also pickable on the
+ *   inventory itself via CategoryRowWidgetClass).
  * Assign the subclass via UInventoryWidget::CategoryFilterWidgetClass.
  *
  * Multi-select with OR semantics: All / Equipment / Usable / Quest / Other.
@@ -69,11 +70,19 @@ public:
 	// Checked buckets (session state; all-true == All).
 	void GetActive(bool& bOutEquipment, bool& bOutUsable, bool& bOutQuest, bool& bOutOther) const;
 
-	// "All" / "Equipment" / "Equipment + Usable" / "Custom (3)".
+	// "All" / lone bucket name / "Custom (n)" from two buckets up.
 	FText GetSummaryText() const;
 
 	UPROPERTY(BlueprintAssignable, Category = "Category Filter Events")
 	FOnCategorySelectionChanged OnSelectionChanged;
+
+	/** Clear + rebuild rows (row-class swap, preserves live selection). */
+	void RebuildRows();
+
+	// BP row design (optional): UCategoryRowWidget subclass. Code-built
+	// checkbox row when unset (zero BP setup keeps working).
+	UPROPERTY(EditAnywhere, Category = "Category Filter")
+	TSubclassOf<UCategoryRowWidget> CategoryRowWidgetClass;
 
 protected:
 	virtual void NativeConstruct() override;
@@ -99,11 +108,6 @@ private:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	class UBorder* CategoryFrame = nullptr;
-
-	// BP row design (optional): UCategoryRowWidget subclass. Code-built
-	// checkbox row when unset (zero BP setup keeps working).
-	UPROPERTY(EditAnywhere, Category = "Category Filter")
-	TSubclassOf<UCategoryRowWidget> CategoryRowWidgetClass;
 
 	// Code-built list (only when no BP 'CategoryList' is bound).
 	class UVerticalBox* DefaultList = nullptr;

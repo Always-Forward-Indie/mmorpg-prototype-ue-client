@@ -72,16 +72,7 @@ void UInventoryCategoryWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	if (CategoryList)
-	{
-		// BP panel: rows land in the bound list; tint the bound frame.
-		if (CategoryFrame)
-		{
-			CategoryFrame->SetBrushColor(FLinearColor(0.04f, 0.05f, 0.07f, 0.96f));
-			CategoryFrame->SetPadding(FMargin(4.f));
-		}
-	}
-	else
+	if (!CategoryList)
 	{
 		// Code-built default: dark panel + list (zero BP setup).
 		UBorder* Root = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
@@ -91,12 +82,27 @@ void UInventoryCategoryWidget::NativeConstruct()
 		Root->SetContent(DefaultList);
 		WidgetTree->RootWidget = Root;
 	}
+	// NOTE: a BP-bound CategoryFrame is never restyled here — designer
+	// visuals are authoritative, code only fills rows.
+	RebuildRows();
 
-	AddRow(LOCTEXT("CatAll", "All"), true, AllBox);
-	AddRow(LOCTEXT("CatEquipment", "Equipment"), true, EquipmentBox);
-	AddRow(LOCTEXT("CatUsable", "Usable"), true, UsableBox);
-	AddRow(LOCTEXT("CatQuest", "Quest"), true, QuestBox);
-	AddRow(LOCTEXT("CatOther", "Other"), true, OtherBox);
+	SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UInventoryCategoryWidget::RebuildRows()
+{
+	UVerticalBox* List = CategoryList ? CategoryList : DefaultList;
+	if (!List) return;
+	List->ClearChildren();
+	AllBox = EquipmentBox = UsableBox = QuestBox = OtherBox = nullptr;
+	// Rebuild preserves the live selection (a row-class swap must not reset
+	// the filter the player just picked).
+	const bool bAll = bEquip && bUsable && bQuest && bOther;
+	AddRow(LOCTEXT("CatAll", "All"), bAll, AllBox);
+	AddRow(LOCTEXT("CatEquipment", "Equipment"), bEquip, EquipmentBox);
+	AddRow(LOCTEXT("CatUsable", "Usable"), bUsable, UsableBox);
+	AddRow(LOCTEXT("CatQuest", "Quest"), bQuest, QuestBox);
+	AddRow(LOCTEXT("CatOther", "Other"), bOther, OtherBox);
 
 	// A BP row class without its checkbox bind is fatal for that row —
 	// AddRow already Errored; never bind a null box.
@@ -105,8 +111,7 @@ void UInventoryCategoryWidget::NativeConstruct()
 	if (UsableBox) UsableBox->OnCheckStateChanged.AddDynamic(this, &UInventoryCategoryWidget::OnUsableChecked);
 	if (QuestBox) QuestBox->OnCheckStateChanged.AddDynamic(this, &UInventoryCategoryWidget::OnQuestChecked);
 	if (OtherBox) OtherBox->OnCheckStateChanged.AddDynamic(this, &UInventoryCategoryWidget::OnOtherChecked);
-
-	SetVisibility(ESlateVisibility::Collapsed);
+	ApplyAndBroadcast();
 }
 
 void UInventoryCategoryWidget::ShowAt(const FVector2D& ScreenViewportPos)
@@ -150,16 +155,12 @@ FText UInventoryCategoryWidget::GetSummaryText() const
 	int32 Count = 0;
 	for (bool b : Flags) if (b) ++Count;
 	if (Count == 4 || Count == 0) return LOCTEXT("CatAll", "All");
-	if (Count <= 2)
+	if (Count == 1)
 	{
-		FString Joined;
 		for (int32 i = 0; i < 4; ++i)
 		{
-			if (!Flags[i]) continue;
-			if (!Joined.IsEmpty()) Joined += TEXT(" + ");
-			Joined += DisplayName(i).ToString();
+			if (Flags[i]) return DisplayName(i);
 		}
-		return FText::FromString(Joined);
 	}
 	return FText::Format(LOCTEXT("CatCustom", "Custom ({0})"), FText::AsNumber(Count));
 }

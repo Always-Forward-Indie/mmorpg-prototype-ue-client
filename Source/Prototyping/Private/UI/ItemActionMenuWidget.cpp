@@ -15,7 +15,6 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Components/TextBlock.h"
-#include "Components/Border.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 
 // ---------------------------------------------------------------------------
@@ -171,42 +170,31 @@ void UItemActionMenuWidget::AddActionRow(const FText& Label, EItemContextAction 
 {
 	if (!ActionList) return;
 
-	if (ActionRowWidgetClass)
+	// Every row is a UItemActionRowWidget: BP subclass when assigned,
+	// code-built Button+Text otherwise (same pixels as the old Border rows,
+	// now with native press/focus/click sounds via ApplyButtonSoundsToSubtree).
+	UClass* RowClass = UItemActionRowWidget::StaticClass();
+	if (ActionRowWidgetClass) RowClass = ActionRowWidgetClass;
+	UItemActionRowWidget* Row = CreateWidget<UItemActionRowWidget>(this, RowClass);
+	if (!Row)
 	{
-		// Custom row widget from Blueprint
-		UItemActionRowWidget* Row = CreateWidget<UItemActionRowWidget>(this, ActionRowWidgetClass);
-		if (Row)
-		{
-			Row->SetActionLabel(Label);
-			Row->SetBoundAction(Action);
-			RowActions.Add(Action);
-
-			if (UVerticalBoxSlot* RowSlot = ActionList->AddChildToVerticalBox(Row))
-			{
-				RowSlot->SetPadding(FMargin(0.f, 1.f));
-				RowSlot->SetHorizontalAlignment(HAlign_Fill);
-			}
-		}
+		UE_LOG(LogGameplay, Error, TEXT("ItemActionMenuWidget: failed to create action row - menu item missing"));
 		return;
 	}
-
-	// Fallback: programmatic Border > TextBlock
-	UBorder* Bg = NewObject<UBorder>(this);
-	Bg->SetBrushColor(FLinearColor(0.05f, 0.05f, 0.05f, 0.9f));
-	Bg->SetPadding(FMargin(12.f, 6.f));
-	Bg->SetHorizontalAlignment(HAlign_Fill);
-
-	UTextBlock* Txt = NewObject<UTextBlock>(this);
-	Txt->SetText(Label);
-	Txt->SetColorAndOpacity(FSlateColor(FLinearColor::White));
-	Bg->AddChild(Txt);
-
+	Row->SetBoundAction(Action);
+	if (ActionRowWidgetClass)
+		Row->SetActionLabel(Label);
+	else
+		Row->BuildCodeRow(Label);
+	// Native button path (no-op for visual-only rows: no RowButton bound,
+	// the menu capture path below keeps handling them).
+	Row->OnRowClicked.AddDynamic(this, &UItemActionMenuWidget::ExecuteAction);
 	RowActions.Add(Action);
 
-	if (UVerticalBoxSlot* BoxSlot = ActionList->AddChildToVerticalBox(Bg))
+	if (UVerticalBoxSlot* RowSlot = ActionList->AddChildToVerticalBox(Row))
 	{
-		BoxSlot->SetPadding(FMargin(0.f, 1.f));
-		BoxSlot->SetHorizontalAlignment(HAlign_Fill);
+		RowSlot->SetPadding(FMargin(0.f, 1.f));
+		RowSlot->SetHorizontalAlignment(HAlign_Fill);
 	}
 }
 
@@ -219,22 +207,11 @@ int32 UItemActionMenuWidget::HitTestRowIndex(const FVector2D& AbsoluteScreenPos)
 		UWidget* Child = ActionList->GetChildAt(i);
 		if (!Child) continue;
 
-		// Custom row widgets expose a dedicated hit-test
+		// Every child is a UItemActionRowWidget (BP or code-built row).
 		if (UItemActionRowWidget* Row = Cast<UItemActionRowWidget>(Child))
 		{
 			if (Row->IsPointInside(AbsoluteScreenPos))
 				return i;
-			continue;
-		}
-
-		// Fallback: manual Border > TextBlock rows
-		const FGeometry Geo = Child->GetCachedGeometry();
-		const FVector2D Local = Geo.AbsoluteToLocal(AbsoluteScreenPos);
-		const FVector2D Size  = Geo.GetLocalSize();
-
-		if (Local.X >= 0.f && Local.X <= Size.X && Local.Y >= 0.f && Local.Y <= Size.Y)
-		{
-			return i;
 		}
 	}
 	return -1;

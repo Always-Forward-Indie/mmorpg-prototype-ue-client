@@ -66,7 +66,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Item Context Menu")
 	void SetAllowDrop(bool bAllow) { bAllowDrop = bAllow; }
 
-	// Execute an action for the current item
+	// Execute an action for the current item (also the row-button target).
+	UFUNCTION(BlueprintCallable, Category = "Item Context Menu")
 	void ExecuteAction(EItemContextAction Action);
 
 	// Fired when the player picks an action; InventoryWidget listens to this

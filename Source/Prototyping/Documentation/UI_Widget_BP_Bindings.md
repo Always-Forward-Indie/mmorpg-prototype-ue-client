@@ -65,7 +65,7 @@ Inside `W_PlayerInterface` (not UIManager-directly): `USkillBarWidget` (`Skills/
 (`Quests/WBP_RewardItem`), `UEmoteItemWidget` (`Emotes/WBP_EmoteItem`),
 `UHarvestLootItemWidget` (`Harvest/W_HarvestLootItem`), `UChatMessageLineWidget`
 (`Player_HUD/WBP_PlayerChatLine`), `UItemActionMenuWidget` (`Inventory/WBP_Item_Actions`),
-`UItemActionRowWidget` (`Inventory/WBP_ItemActionRow`), `UDialogueChoiceButton`
+`UItemActionRowWidget` (`Inventory/WBP_ItemActionRow`, binds `RowButton` (UButton, fill, optional — native click path when present) + `RowBackground`/`ActionLabel`/`ActionIcon`), `UDialogueChoiceButton`
 (`Dialogue/WBP_DialogueChoiceButton`), `UPlayerStatsWidget` mastery rows, `UReputationWidget` rows.
 
 ## 3. Editor verification checklist (must be done in-editor, not headless)

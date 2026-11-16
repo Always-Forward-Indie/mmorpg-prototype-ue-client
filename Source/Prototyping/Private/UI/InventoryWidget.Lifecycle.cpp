@@ -107,12 +107,13 @@ void UInventoryWidget::NativeConstruct()
 	if (SortButton)
 	{
 		SortButton->OnClicked.AddDynamic(this, &UInventoryWidget::CycleSortMode);
-		UpdateSortLabel();
 	}
 	else
 	{
 		UE_LOG(LogGameplay, Warning, TEXT("InventoryWidget: SortButton bind missing — in-window sort is dead (use /sort chat command). Add a UButton named exactly 'SortButton' (BindWidget matches by name)."));
 	}
+	// Label reflects the mode even without the button (chat /sort path).
+	UpdateSortLabel();
 	if (SearchBox)
 	{
 		SearchBox->OnTextChanged.AddDynamic(this, &UInventoryWidget::HandleSearchTextChanged);
@@ -122,9 +123,17 @@ void UInventoryWidget::NativeConstruct()
 		UE_LOG(LogGameplay, Warning, TEXT("InventoryWidget: SearchBox bind missing — text search is dead. Add a UEditableTextBox named exactly 'SearchBox'."));
 	}
 
-	// Category filter popup is code-built (no BP class needed).
-	CategoryFilterWidget = CreateWidget<UInventoryCategoryWidget>(this, UInventoryCategoryWidget::StaticClass());
-	if (CategoryFilterWidget)
+	// Category filter popup: BP subclass wins when assigned, otherwise the
+	// code-built default (zero BP setup). A null result is fatal-loud —
+	// without it the CategoryButton toggles nothing.
+	UClass* PopupClass = UInventoryCategoryWidget::StaticClass();
+	if (CategoryFilterWidgetClass) PopupClass = CategoryFilterWidgetClass;
+	CategoryFilterWidget = CreateWidget<UInventoryCategoryWidget>(this, PopupClass);
+	if (!CategoryFilterWidget)
+	{
+		UE_LOG(LogGameplay, Error, TEXT("InventoryWidget: Failed to create category filter popup — CategoryButton is dead."));
+	}
+	else
 	{
 		CategoryFilterWidget->AddToViewport(1050); // below the context menu (1100)
 		CategoryFilterWidget->SetVisibility(ESlateVisibility::Collapsed);

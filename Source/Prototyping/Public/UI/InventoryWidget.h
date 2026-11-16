@@ -232,7 +232,11 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	UTextBlock* GoldText;
 
-	// Optional sort button (cycles CycleSortMode). Label child "Sort_Label" updated when present.
+	// Optional sort mode label (visible state, no hover popover).
+	UPROPERTY(meta = (BindWidgetOptional))
+	UTextBlock* SortLabel = nullptr;
+
+	// Optional sort button (cycles CycleSortMode).
 	UPROPERTY(meta = (BindWidgetOptional))
 	UButton* SortButton = nullptr;
 
@@ -275,7 +279,12 @@ protected:
 	UPROPERTY()
 	UDropQuantityPopupWidget* DropQuantityPopupWidget;
 
-	// Category filter popup (code-built, viewport Z 1050).
+	// Category filter popup class (BP subclass for custom visuals;
+	// unset = code-built default panel, zero BP setup).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory UI")
+	TSubclassOf<class UInventoryCategoryWidget> CategoryFilterWidgetClass;
+
+	// Category filter popup (viewport Z 1050).
 	UPROPERTY()
 	class UInventoryCategoryWidget* CategoryFilterWidget;
 

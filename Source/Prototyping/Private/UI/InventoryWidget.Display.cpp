@@ -2,6 +2,7 @@
 #include "Prototyping.h"
 #include "Audio/AudioManager.h"
 #include "UI/InventorySlotWidget.h"
+#include "Services/LocalizationSubsystem.h"
 #include "UI/ItemTooltipWidget.h"
 #include "UI/ItemActionMenuWidget.h"
 #include "UI/DropQuantityPopupWidget.h"
@@ -340,6 +341,15 @@ TArray<FInventoryItemStruct> UInventoryWidget::BuildDisplayList() const
 	Out.Reserve(CurrentInventory.items.Num());
 
 	const FString Needle = SearchFilter.TrimStartAndEnd().ToLower();
+	// Localized names live in the subsystem (the tooltip shows them, so the
+	// eye and the filter must agree). Resolved once per refresh, only when
+	// there is text to match — no filter, no lookup cost.
+	ULocalizationSubsystem* LocSys = nullptr;
+	if (!Needle.IsEmpty())
+	{
+		if (UGameInstance* GI = GetGameInstance())
+			LocSys = GI->GetSubsystem<ULocalizationSubsystem>();
+	}
 	for (const FInventoryItemStruct& Item : CurrentInventory.items)
 	{
 		if (Item.itemId <= 0) continue;
@@ -349,8 +359,15 @@ TArray<FInventoryItemStruct> UInventoryWidget::BuildDisplayList() const
 		if (!FInventoryCategoryRule::PassesFilter(Item, bCatEquipment, bCatUsable, bCatQuest, bCatOther)) continue;
 		if (!Needle.IsEmpty())
 		{
-			const FString Haystack = (Item.name + TEXT(" ") + Item.slug + TEXT(" ") + Item.itemTypeSlug).ToLower();
-			if (!Haystack.Contains(Needle)) continue;
+			FString Haystack = Item.name + TEXT(" ") + Item.slug + TEXT(" ") + Item.itemTypeSlug;
+			if (LocSys)
+			{
+				const FString Key = !Item.itemSlug.IsEmpty() ? Item.itemSlug : Item.slug;
+				const FString LocName = LocSys->GetItemDisplayName(Key).ToString();
+				if (!LocName.IsEmpty() && !Item.name.Equals(LocName, ESearchCase::IgnoreCase))
+					Haystack += TEXT(" ") + LocName;
+			}
+			if (!Haystack.ToLower().Contains(Needle)) continue;
 		}
 		Out.Add(Item);
 	}
@@ -387,7 +404,6 @@ TArray<FInventoryItemStruct> UInventoryWidget::BuildDisplayList() const
 
 void UInventoryWidget::UpdateSortLabel()
 {
-	if (!SortButton) return;
 	FString ModeName;
 	switch (SortMode)
 	{
@@ -395,10 +411,12 @@ void UInventoryWidget::UpdateSortLabel()
 	case EInventorySortMode::ByRarity: ModeName = TEXT("Rarity"); break;
 	case EInventorySortMode::ByType:   ModeName = TEXT("Type"); break;
 	case EInventorySortMode::Off:
-	default:                          ModeName = TEXT("Unsorted"); break;
+	default:                          ModeName = TEXT("Off"); break;
 	}
-	// Tooltip needs no knowledge of the BP's inner layout (a Sort_Label
-	// child would be nicer but cannot be required headless).
-	SortButton->SetToolTipText(FText::FromString(FString::Printf(TEXT("Sort: %s"), *ModeName)));
+	// Visible label, no hover popover: the active mode is state, not a hint.
+	if (SortLabel)
+	{
+		SortLabel->SetText(FText::FromString(ModeName));
+	}
 }
 

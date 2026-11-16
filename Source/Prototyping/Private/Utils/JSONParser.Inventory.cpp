@@ -25,6 +25,7 @@ static void ParseItemFields(const TSharedPtr<FJsonObject>& Src, FInventoryItemSt
 	if (Src->HasField(TEXT("itemTypeName")))  { Out.type = Src->GetStringField(TEXT("itemTypeName")); Out.itemTypeName = Out.type; }
 	if (Src->HasField(TEXT("raritySlug")))    Out.raritySlug    = Src->GetStringField(TEXT("raritySlug"));
 	if (Src->HasField(TEXT("rarityName")))    Out.rarity        = Src->GetStringField(TEXT("rarityName"));
+	if (Src->HasField(TEXT("rarityId")))      Out.rarityId      = Src->GetIntegerField(TEXT("rarityId"));
 	if (Src->HasField(TEXT("equipSlotSlug"))) Out.equipSlotSlug = Src->GetStringField(TEXT("equipSlotSlug"));
 	if (Src->HasField(TEXT("masterySlug")))   Out.masterySlug   = Src->GetStringField(TEXT("masterySlug"));
 	if (Src->HasField(TEXT("setSlug")))       Out.setSlug       = Src->GetStringField(TEXT("setSlug"));

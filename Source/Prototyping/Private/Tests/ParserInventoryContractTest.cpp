@@ -21,6 +21,7 @@ bool FCharacterInventoryContractTest::RunTest(const FString& Parameters)
         TEXT("{\"header\":{},\"body\":{\"characterId\":9001,\"gold\":150,"
         "\"items\":["
         "{\"id\":101,\"itemId\":5,\"quantity\":1,\"durabilityCurrent\":80,\"durabilityMax\":100,\"isDurable\":true,"
+        "\"rarityId\":3,\"raritySlug\":\"rare\","
         "\"item\":{\"slug\":\"sword_iron\",\"name\":\"Iron Sword\"}},"
         "\"oops\","
         "{\"id\":102,\"itemId\":6,\"quantity\":3}"
@@ -34,6 +35,9 @@ bool FCharacterInventoryContractTest::RunTest(const FString& Parameters)
         TestEqual(TEXT("first record"), Valid.items[0].id, 101);
         TestEqual(TEXT("first slug"), Valid.items[0].slug, FString(TEXT("sword_iron")));
         TestEqual(TEXT("first dura"), Valid.items[0].durabilityCurrent, 80);
+        // Server rarityId survives the shared item parser (drives ByRarity sort).
+        TestEqual(TEXT("first rarity id"), Valid.items[0].rarityId, 3);
+        TestEqual(TEXT("first rarity slug"), Valid.items[0].raritySlug, FString(TEXT("rare")));
         TestEqual(TEXT("second template"), Valid.items[1].itemId, 6);
         TestEqual(TEXT("second qty"), Valid.items[1].quantity, 3);
     }

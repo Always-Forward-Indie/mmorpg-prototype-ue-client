@@ -4,11 +4,42 @@
 #include "Blueprint/UserWidget.h"
 #include "InventoryCategoryWidget.generated.h"
 
+class UBorder;
+class UVerticalBox;
+class UCheckBox;
+class UTextBlock;
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnCategorySelectionChanged);
 
 /**
- * Code-built category dropdown popup (no BP setup: rows are UCheckBox
- * created in NativeConstruct, like the skill-bar drag visuals).
+ * One filter row (optional BP replacement for the code-built checkbox row).
+ * Subclass, bind a UCheckBox named 'RowCheckBox' + a UTextBlock named
+ * 'RowLabel', assign via CategoryRowWidgetClass. Absent = code-built row.
+ */
+UCLASS()
+class PROTOTYPING_API UCategoryRowWidget : public UUserWidget
+{
+	GENERATED_BODY()
+
+public:
+	void SetupRow(const FText& Label, bool bChecked);
+	UCheckBox* GetCheckBox() const { return RowCheckBox; }
+
+protected:
+	UPROPERTY(meta = (BindWidget))
+	class UCheckBox* RowCheckBox = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	class UTextBlock* RowLabel = nullptr;
+};
+
+/**
+ * Category dropdown popup. Two setups, same behavior:
+ * - Code-built (default): zero BP setup, dark panel + check rows in code.
+ * - BP subclass: provide a UVerticalBox named 'CategoryList' (rows land
+ *   there) + optional UBorder 'CategoryFrame' (tinted dark by code) +
+ *   optional CategoryRowWidgetClass for custom rows.
+ * Assign the subclass via UInventoryWidget::CategoryFilterWidgetClass.
  *
  * Multi-select with OR semantics: All / Equipment / Usable / Quest / Other.
  * Invariants (mirrored by FInventoryCategoryRule::PassesFilter, so the grid
@@ -57,7 +88,25 @@ private:
 	/** Programmatic check (never rebroadcasts: SetIsChecked is silent). */
 	void ApplyAndBroadcast();
 
+	/** One row into the BP list (or the code-built default list). */
+	void AddRow(const FText& Label, bool bInitial, class UCheckBox*& OutBox);
+
 	static FText DisplayName(int32 BucketIndex);
+
+	// BP panel (optional): rows land here when bound, else code-built panel.
+	UPROPERTY(meta = (BindWidgetOptional))
+	class UVerticalBox* CategoryList = nullptr;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	class UBorder* CategoryFrame = nullptr;
+
+	// BP row design (optional): UCategoryRowWidget subclass. Code-built
+	// checkbox row when unset (zero BP setup keeps working).
+	UPROPERTY(EditAnywhere, Category = "Category Filter")
+	TSubclassOf<UCategoryRowWidget> CategoryRowWidgetClass;
+
+	// Code-built list (only when no BP 'CategoryList' is bound).
+	class UVerticalBox* DefaultList = nullptr;
 
 	class UCheckBox* AllBox = nullptr;
 	class UCheckBox* EquipmentBox = nullptr;

@@ -60,7 +60,7 @@ void UInventoryWidget::ToggleCategoryFilter()
 	}
 	CategoryFilterWidget->ShowAt(Pos);
 
-	UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Category filter opened"));
+	UE_LOG(LogGameplay, Verbose, TEXT("InventoryWidget: Category filter opened at %s"), *Pos.ToString());
 }
 
 void UInventoryWidget::CloseCategoryFilter()

@@ -16,7 +16,13 @@ UInventoryCategoryWidget::UInventoryCategoryWidget(const FObjectInitializer& Obj
 {
 }
 
-static UHorizontalBox* MakeCheckRow(UWidgetTree* Tree, UVerticalBox* List,
+void UCategoryRowWidget::SetupRow(const FText& Label, bool bChecked)
+{
+	if (RowLabel) RowLabel->SetText(Label);
+	if (RowCheckBox) RowCheckBox->SetIsChecked(bChecked);
+}
+
+static void MakeCodeRow(UWidgetTree* Tree, UVerticalBox* List,
 	UCheckBox*& OutBox, const FText& Label, bool bInitial)
 {
 	UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
@@ -39,32 +45,66 @@ static UHorizontalBox* MakeCheckRow(UWidgetTree* Tree, UVerticalBox* List,
 		S->SetHorizontalAlignment(HAlign_Left);
 	}
 	OutBox = Box;
-	return Row;
+}
+
+void UInventoryCategoryWidget::AddRow(const FText& Label, bool bInitial, UCheckBox*& OutBox)
+{
+	// BP row design wins when the class is assigned and the list exists.
+	if (CategoryRowWidgetClass && CategoryList)
+	{
+		if (UCategoryRowWidget* Row = CreateWidget<UCategoryRowWidget>(this, CategoryRowWidgetClass))
+		{
+			Row->SetupRow(Label, bInitial);
+			CategoryList->AddChild(Row);
+			OutBox = Row->GetCheckBox();
+			if (!OutBox)
+			{
+				UE_LOG(LogGameplay, Error, TEXT("InventoryCategoryWidget: CategoryRowWidgetClass row has no 'RowCheckBox' bind — row is dead."));
+			}
+			return;
+		}
+		UE_LOG(LogGameplay, Error, TEXT("InventoryCategoryWidget: failed to create category row — falling back to code-built row."));
+	}
+	MakeCodeRow(WidgetTree, CategoryList ? CategoryList : DefaultList, OutBox, Label, bInitial);
 }
 
 void UInventoryCategoryWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// Code-built panel: dark border + check rows (zero BP setup).
-	UBorder* Root = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
-	Root->SetBrushColor(FLinearColor(0.04f, 0.05f, 0.07f, 0.96f));
-	Root->SetPadding(FMargin(4.f));
-	UVerticalBox* List = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-	Root->SetContent(List);
-	WidgetTree->RootWidget = Root;
+	if (CategoryList)
+	{
+		// BP panel: rows land in the bound list; tint the bound frame.
+		if (CategoryFrame)
+		{
+			CategoryFrame->SetBrushColor(FLinearColor(0.04f, 0.05f, 0.07f, 0.96f));
+			CategoryFrame->SetPadding(FMargin(4.f));
+		}
+	}
+	else
+	{
+		// Code-built default: dark panel + list (zero BP setup).
+		UBorder* Root = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		Root->SetBrushColor(FLinearColor(0.04f, 0.05f, 0.07f, 0.96f));
+		Root->SetPadding(FMargin(4.f));
+		DefaultList = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
+		Root->SetContent(DefaultList);
+		WidgetTree->RootWidget = Root;
+	}
 
-	MakeCheckRow(WidgetTree, List, AllBox, LOCTEXT("CatAll", "All"), true);
-	MakeCheckRow(WidgetTree, List, EquipmentBox, LOCTEXT("CatEquipment", "Equipment"), true);
-	MakeCheckRow(WidgetTree, List, UsableBox, LOCTEXT("CatUsable", "Usable"), true);
-	MakeCheckRow(WidgetTree, List, QuestBox, LOCTEXT("CatQuest", "Quest"), true);
-	MakeCheckRow(WidgetTree, List, OtherBox, LOCTEXT("CatOther", "Other"), true);
+	AddRow(LOCTEXT("CatAll", "All"), true, AllBox);
+	AddRow(LOCTEXT("CatEquipment", "Equipment"), true, EquipmentBox);
+	AddRow(LOCTEXT("CatUsable", "Usable"), true, UsableBox);
+	AddRow(LOCTEXT("CatQuest", "Quest"), true, QuestBox);
+	AddRow(LOCTEXT("CatOther", "Other"), true, OtherBox);
 
-	AllBox->OnCheckStateChanged.AddDynamic(this, &UInventoryCategoryWidget::OnAllChecked);
-	EquipmentBox->OnCheckStateChanged.AddDynamic(this, &UInventoryCategoryWidget::OnEquipmentChecked);
-	UsableBox->OnCheckStateChanged.AddDynamic(this, &UInventoryCategoryWidget::OnUsableChecked);
-	QuestBox->OnCheckStateChanged.AddDynamic(this, &UInventoryCategoryWidget::OnQuestChecked);
-	OtherBox->OnCheckStateChanged.AddDynamic(this, &UInventoryCategoryWidget::OnOtherChecked);
+	// A BP row class without its checkbox bind is fatal for that row —
+	// AddRow already Errored; never bind a null box.
+	if (AllBox) AllBox->OnCheckStateChanged.AddDynamic(this, &UInventoryCategoryWidget::OnAllChecked);
+	if (EquipmentBox) EquipmentBox->OnCheckStateChanged.AddDynamic(this, &UInventoryCategoryWidget::OnEquipmentChecked);
+	if (UsableBox) UsableBox->OnCheckStateChanged.AddDynamic(this, &UInventoryCategoryWidget::OnUsableChecked);
+	if (QuestBox) QuestBox->OnCheckStateChanged.AddDynamic(this, &UInventoryCategoryWidget::OnQuestChecked);
+	if (OtherBox) OtherBox->OnCheckStateChanged.AddDynamic(this, &UInventoryCategoryWidget::OnOtherChecked);
 
 	SetVisibility(ESlateVisibility::Collapsed);
 }
@@ -127,11 +167,11 @@ FText UInventoryCategoryWidget::GetSummaryText() const
 void UInventoryCategoryWidget::ApplyAndBroadcast()
 {
 	// SetIsChecked never rebroadcasts: no feedback loop by construction.
-	AllBox->SetIsChecked(bEquip && bUsable && bQuest && bOther);
-	EquipmentBox->SetIsChecked(bEquip);
-	UsableBox->SetIsChecked(bUsable);
-	QuestBox->SetIsChecked(bQuest);
-	OtherBox->SetIsChecked(bOther);
+	if (AllBox) AllBox->SetIsChecked(bEquip && bUsable && bQuest && bOther);
+	if (EquipmentBox) EquipmentBox->SetIsChecked(bEquip);
+	if (UsableBox) UsableBox->SetIsChecked(bUsable);
+	if (QuestBox) QuestBox->SetIsChecked(bQuest);
+	if (OtherBox) OtherBox->SetIsChecked(bOther);
 	OnSelectionChanged.Broadcast();
 }
 

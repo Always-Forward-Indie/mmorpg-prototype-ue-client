@@ -8,8 +8,8 @@ then a fresh material is created and wired. Safe to re-run. Result: /Game/UI/Mat
 
 Shape (mirrors FPointedProgressCore 1:1, material adds only SmoothStep AA):
   Bar space is height-normalized: Y in 0..1, X scaled by Aspect = W/H so one
-  unit is square. Tips are parabolic (h = 0.5*t*(2-t): smooth nose with a
-  finite slope plus a smooth junction, never needle-sharp).
+  unit is square. Tips use h = 0.5*t*(1.4-0.4t): a defined (crisp but
+  kink-free) corner at the tip junction plus a smooth nose, never needle-sharp.
   Border ring is a uniform px inset: same hull with (edgeH - b) and (h - b).
 
 API notes (UE 5.8, verified by probe): connect_material_expressions takes the
@@ -164,17 +164,22 @@ def build():
     t_sat = make_expr(mat, unreal.MaterialExpressionSaturate, 360, -80)
     conn(t_param, t_sat, "", "t->tsat")
 
-    # h = 0.5 * t * (2 - t)  (parabolic tip: smooth nose + smooth junction,
-    # no SquareRoot node needed).
-    const_two = make_expr(mat, unreal.MaterialExpressionConstant, 360, 140)
-    const_two.set_editor_property("R", 2.0)
-    two_minus_t = make_expr(mat, unreal.MaterialExpressionSubtract, 520, 140)
-    conn(const_two, two_minus_t, "A", "2->tmt.A")
-    conn(t_sat, two_minus_t, "B", "t->tmt.B")
-    tt = make_expr(mat, unreal.MaterialExpressionMultiply, 680, 140)
+    # h = 0.5 * t * (1.4 - 0.4*t): defined (crisp but kink-free) corner at the
+    # tip junction, smooth nose. Uses only Subtract/Multiply.
+    const_one4 = make_expr(mat, unreal.MaterialExpressionConstant, 360, 140)
+    const_one4.set_editor_property("R", 1.4)
+    const_zero4 = make_expr(mat, unreal.MaterialExpressionConstant, 360, 200)
+    const_zero4.set_editor_property("R", 0.4)
+    mt04 = make_expr(mat, unreal.MaterialExpressionMultiply, 520, 200)
+    conn(const_zero4, mt04, "A", "0.4->mt04.A")
+    conn(t_sat, mt04, "B", "t->mt04.B")
+    two_minus_t = make_expr(mat, unreal.MaterialExpressionSubtract, 680, 140)
+    conn(const_one4, two_minus_t, "A", "1.4->tmt.A")
+    conn(mt04, two_minus_t, "B", "mt04->tmt.B")
+    tt = make_expr(mat, unreal.MaterialExpressionMultiply, 840, 140)
     conn(t_sat, tt, "A", "t->tt.A")
     conn(two_minus_t, tt, "B", "tmt->tt.B")
-    half_h = make_expr(mat, unreal.MaterialExpressionMultiply, 840, 140)
+    half_h = make_expr(mat, unreal.MaterialExpressionMultiply, 1000, 140)
     conn(tt, half_h, "A", "tt->half.A")
     conn(const_half, half_h, "B", "0.5->half.B")
     step("hull ok")
@@ -221,17 +226,22 @@ def build():
     eps = make_expr(mat, unreal.MaterialExpressionConstant, 520, 380)
     eps.set_editor_property("R", 0.001)
     conn(eps, tip_i, "B", "eps->ti.B")
-    # Parabolic inner tip, then inset by b, clamped >= 0.
+    # Inner tip with the same corner profile, then inset by b.
     t_i = make_expr(mat, unreal.MaterialExpressionDivide, 840, 240)
     conn(edge_i, t_i, "A", "ei->ti2.A")
     conn(tip_i, t_i, "B", "tipI->ti2.B")
     t_i_sat = make_expr(mat, unreal.MaterialExpressionSaturate, 1000, 240)
     conn(t_i, t_i_sat, "", "ti2->tisat")
-    two_i = make_expr(mat, unreal.MaterialExpressionConstant, 1160, 180)
-    two_i.set_editor_property("R", 2.0)
-    tmt_i = make_expr(mat, unreal.MaterialExpressionSubtract, 1160, 240)
-    conn(two_i, tmt_i, "A", "2->tmti.A")
-    conn(t_i_sat, tmt_i, "B", "tisat->tmti.B")
+    one4_i = make_expr(mat, unreal.MaterialExpressionConstant, 1160, 180)
+    one4_i.set_editor_property("R", 1.4)
+    zero4_i = make_expr(mat, unreal.MaterialExpressionConstant, 1160, 300)
+    zero4_i.set_editor_property("R", 0.4)
+    mtm_i = make_expr(mat, unreal.MaterialExpressionMultiply, 1320, 300)
+    conn(zero4_i, mtm_i, "A", "0.4->mtmi.A")
+    conn(t_i_sat, mtm_i, "B", "tisat->mtmi.B")
+    tmt_i = make_expr(mat, unreal.MaterialExpressionSubtract, 1480, 240)
+    conn(one4_i, tmt_i, "A", "1.4->tmti.A")
+    conn(mtm_i, tmt_i, "B", "mtmi->tmti.B")
     tt_i = make_expr(mat, unreal.MaterialExpressionMultiply, 1320, 240)
     conn(t_i_sat, tt_i, "A", "tisat->tti.A")
     conn(tmt_i, tt_i, "B", "tmti->tti.B")

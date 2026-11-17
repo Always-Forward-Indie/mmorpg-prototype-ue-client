@@ -74,9 +74,8 @@ void UPlayerHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	{
 		HPHealFlashTimer -= InDeltaTime;
 		const float T = FMath::Clamp(HPHealFlashTimer / HealFlashDuration, 0.0f, 1.0f);
-		if (HealthBar) HealthBar->SetFillGradient(
-			LerpColor(HPNormalColor, HPHealFlashColor, T),
-			LerpColor(HPBottomNormalColor, HPHealFlashColor, T));
+		// Glow only the restored chunk; the rest of the fill keeps its gradient.
+		if (HealthBar) HealthBar->SetHealFlash(HPFlashFrom, HPFlashTo, HPHealFlashColor, T);
 	}
 	else
 	{
@@ -96,9 +95,7 @@ void UPlayerHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	{
 		MPHealFlashTimer -= InDeltaTime;
 		const float T = FMath::Clamp(MPHealFlashTimer / HealFlashDuration, 0.0f, 1.0f);
-		if (ManaBar) ManaBar->SetFillGradient(
-			LerpColor(MPNormalColor, MPHealFlashColor, T),
-			LerpColor(MPBottomNormalColor, MPHealFlashColor, T));
+		if (ManaBar) ManaBar->SetHealFlash(MPFlashFrom, MPFlashTo, MPHealFlashColor, T);
 	}
 	else
 	{
@@ -123,11 +120,14 @@ void UPlayerHUD::SetHP(float NewHP, float MaxHP)
 		{
 			HPDamageFlashTimer = DamageFlashDuration;
 			HPHealFlashTimer   = 0.0f;
+			if (HealthBar) HealthBar->SetHealFlash(0.0f, 0.0f, HPHealFlashColor, 0.0f);
 		}
 		else
 		{
 			HPHealFlashTimer   = HealFlashDuration;
 			HPDamageFlashTimer = 0.0f;
+			HPFlashFrom = TargetHPPercent;
+			HPFlashTo   = NewPct;
 		}
 		TargetHPPercent = NewPct;
 	}
@@ -150,11 +150,14 @@ void UPlayerHUD::SetMana(float NewMana, float MaxMana)
 		{
 			MPDamageFlashTimer = DamageFlashDuration;
 			MPHealFlashTimer   = 0.0f;
+			if (ManaBar) ManaBar->SetHealFlash(0.0f, 0.0f, MPHealFlashColor, 0.0f);
 		}
 		else
 		{
 			MPHealFlashTimer   = HealFlashDuration;
 			MPDamageFlashTimer = 0.0f;
+			MPFlashFrom = TargetMPPercent;
+			MPFlashTo   = NewPct;
 		}
 		TargetMPPercent = NewPct;
 	}
@@ -164,8 +167,8 @@ void UPlayerHUD::SnapBarsToTarget()
 {
 	DisplayedHPPercent = TargetHPPercent;
 	DisplayedMPPercent = TargetMPPercent;
-	if (HealthBar) { HealthBar->SetProgress(DisplayedHPPercent); HealthBar->SnapGhost(); }
-	if (ManaBar)   { ManaBar->SetProgress(DisplayedMPPercent);   ManaBar->SnapGhost(); }
+	if (HealthBar) { HealthBar->SetProgress(DisplayedHPPercent); HealthBar->SnapGhost(); HealthBar->SetHealFlash(0.0f, 0.0f, HPHealFlashColor, 0.0f); }
+	if (ManaBar)   { ManaBar->SetProgress(DisplayedMPPercent);   ManaBar->SnapGhost();   ManaBar->SetHealFlash(0.0f, 0.0f, MPHealFlashColor, 0.0f); }
 }
 
 bool UPlayerHUD::IsHUDReady() const

@@ -51,6 +51,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Pointed Progress")
 	void SetBorderColor(const FLinearColor& InColor);
 
+	/** Heal flash confined to the restored chunk [From, To] (fades via Strength). */
+	UFUNCTION(BlueprintCallable, Category = "Pointed Progress")
+	void SetHealFlash(float From, float To, const FLinearColor& Color, float Strength);
+
 	UFUNCTION(BlueprintPure, Category = "Pointed Progress")
 	float GetProgress() const { return Progress; }
 
@@ -114,4 +118,8 @@ static const FName ParamBorderAlpha;
 	static const FName ParamBorderPx;
 	static const FName ParamBarWidthPx;
 	static const FName ParamBarHeightPx;
+	static const FName ParamFlashStart;
+	static const FName ParamFlashEnd;
+	static const FName ParamFlashColor;
+	static const FName ParamFlashStrength;
 };

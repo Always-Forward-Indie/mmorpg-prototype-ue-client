@@ -27,7 +27,8 @@ PARAMS_SCALAR = {
     "Progress": 1.0, "Ghost": 1.0,
     "TipLenPx": 18.0, "BorderPx": 2.0,
     "BarWidthPx": 400.0, "BarHeightPx": 50.0,
-    "BorderAlpha": 0.45,
+    "BorderAlpha": 1.0,
+    "FlashStart": 0.0, "FlashEnd": 0.0, "FlashStrength": 0.0,
     "AA": 0.02,
 }
 # RGBA 0..1 (sRGB-ish authoring values; linear conversion happens in C++ via FColor).
@@ -41,8 +42,10 @@ PARAMS_VECTOR = {
     # HP ghost (damage trail) gradient: light red family.
     "GhostTop": (0xE6 / 255.0, 0xA9 / 255.0, 0xA9 / 255.0, 1.0),
     "GhostBottom": (0x93 / 255.0, 0x42 / 255.0, 0x4B / 255.0, 1.0),
-    # Track outline: #526272 at 45%.
-    "BorderColor": (0x52 / 255.0, 0x62 / 255.0, 0x72 / 255.0, 0.45),
+    # Track outline color (RGB; alpha comes from the BorderAlpha scalar).
+    "BorderColor": (0x52 / 255.0, 0x62 / 255.0, 0x72 / 255.0, 1.0),
+    # Heal-flash color (driven per-heal by the HUD; band limited to [FlashStart, FlashEnd]).
+    "FlashColor": (0x27 / 255.0, 0xFF / 255.0, 0x40 / 255.0, 1.0),
 }
 
 LIB = unreal.MaterialEditingLibrary
@@ -326,9 +329,43 @@ def build():
     conn(lerp1, lerp2, "A", "lerp1->lerp2.A")
     conn(fill_col, lerp2, "B", "fill->lerp2.B")
     conn(w_fill, lerp2, "Alpha", "wfill->lerp2.Alpha")
+
+    # Heal flash band: glow only the restored chunk [FlashStart, FlashEnd].
+    # band = saturate((U-F0)/AAX) * (1-saturate((U-F1)/AAX)) * fill * strength.
+    def band_edge(param_name, y, tag, invert):
+        sub = make_expr(mat, unreal.MaterialExpressionSubtract, 2920, y)
+        conn(mask_r, sub, "A", "{} U->fb.A".format(tag))
+        conn(ps[param_name], sub, "B", "{} F->fb.B".format(tag))
+        div = make_expr(mat, unreal.MaterialExpressionDivide, 3080, y)
+        conn(sub, div, "A", "{} fb->div.A".format(tag))
+        conn(aa_x, div, "B", "{} AAX->div.B".format(tag))
+        sat = make_expr(mat, unreal.MaterialExpressionSaturate, 3240, y)
+        conn(div, sat, "", "{} div->sat".format(tag))
+        if invert:
+            out = make_expr(mat, unreal.MaterialExpressionOneMinus, 3400, y)
+            conn(sat, out, "", "{} sat->one".format(tag))
+            return out
+        return sat
+
+    band_lo = band_edge("FlashStart", -320, "flo", False)
+    band_hi = band_edge("FlashEnd", -400, "fhi", True)
+    band_m = make_expr(mat, unreal.MaterialExpressionMultiply, 3560, -320)
+    conn(band_lo, band_m, "A", "flo->band.A")
+    conn(band_hi, band_m, "B", "fhi->band.B")
+    band_f = make_expr(mat, unreal.MaterialExpressionMultiply, 3720, -320)
+    conn(band_m, band_f, "A", "band->bf.A")
+    conn(fill_mask, band_f, "B", "fill->bf.B")
+    band_w = make_expr(mat, unreal.MaterialExpressionMultiply, 3880, -320)
+    conn(band_f, band_w, "A", "bf->bw.A")
+    conn(ps["FlashStrength"], band_w, "B", "fs->bw.B")
+    flash_lerp = make_expr(mat, unreal.MaterialExpressionLinearInterpolate, 3880, -120)
+    conn(lerp2, flash_lerp, "A", "lerp2->fl.A")
+    conn(pv["FlashColor"], flash_lerp, "B", "flash->fl.B")
+    conn(band_w, flash_lerp, "Alpha", "bw->fl.Alpha")
+    step("flash band ok")
     # Border RGB only; alpha handled per-pixel via BorderColor.A below.
-    lerp3 = make_expr(mat, unreal.MaterialExpressionLinearInterpolate, 3240, 40)
-    conn(lerp2, lerp3, "A", "lerp2->lerp3.A")
+    lerp3 = make_expr(mat, unreal.MaterialExpressionLinearInterpolate, 4040, 40)
+    conn(flash_lerp, lerp3, "A", "fl->lerp3.A")
     conn(pv["BorderColor"], lerp3, "B", "border->lerp3.B")
     conn(w_ring, lerp3, "Alpha", "wring->lerp3.Alpha")
 

@@ -17,6 +17,10 @@ const FName UPointedProgressWidget::ParamTipLenPx(TEXT("TipLenPx"));
 const FName UPointedProgressWidget::ParamBorderPx(TEXT("BorderPx"));
 const FName UPointedProgressWidget::ParamBarWidthPx(TEXT("BarWidthPx"));
 const FName UPointedProgressWidget::ParamBarHeightPx(TEXT("BarHeightPx"));
+const FName UPointedProgressWidget::ParamFlashStart(TEXT("FlashStart"));
+const FName UPointedProgressWidget::ParamFlashEnd(TEXT("FlashEnd"));
+const FName UPointedProgressWidget::ParamFlashColor(TEXT("FlashColor"));
+const FName UPointedProgressWidget::ParamFlashStrength(TEXT("FlashStrength"));
 
 void UPointedProgressWidget::NativeConstruct()
 {
@@ -99,6 +103,18 @@ void UPointedProgressWidget::SetBorderColor(const FLinearColor& InColor)
 		MID->SetVectorParameterValue(ParamBorderColor, RGB);
 		MID->SetScalarParameterValue(ParamBorderAlpha, InColor.A);
 	}
+}
+
+void UPointedProgressWidget::SetHealFlash(float From, float To, const FLinearColor& Color, float Strength)
+{
+	if (!MID)
+	{
+		return;
+	}
+	MID->SetScalarParameterValue(ParamFlashStart, From);
+	MID->SetScalarParameterValue(ParamFlashEnd, To);
+	MID->SetVectorParameterValue(ParamFlashColor, Color);
+	MID->SetScalarParameterValue(ParamFlashStrength, Strength);
 }
 
 void UPointedProgressWidget::EnsureMID()

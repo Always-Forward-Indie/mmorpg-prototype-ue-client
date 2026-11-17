@@ -107,6 +107,12 @@ private:
 	float CurrentMaxHP = 1.0f;
 	float CurrentMaxMana = 1.0f;
 
+	// Heal-flash band [From, To] in fill fractions; driven into the material.
+	float HPFlashFrom = 0.0f;
+	float HPFlashTo = 0.0f;
+	float MPFlashFrom = 0.0f;
+	float MPFlashTo = 0.0f;
+
 	void TickBar(float& DisplayedPct, float TargetPct, float DeltaTime);
 	FLinearColor LerpColor(const FLinearColor& A, const FLinearColor& B, float T) const;
 };

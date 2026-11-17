@@ -102,6 +102,7 @@ public:
 	static const FName ParamTrackTop;
 	static const FName ParamTrackBottom;
 	static const FName ParamBorderColor;
+static const FName ParamBorderAlpha;
 	static const FName ParamTipLenPx;
 	static const FName ParamBorderPx;
 	static const FName ParamBarWidthPx;

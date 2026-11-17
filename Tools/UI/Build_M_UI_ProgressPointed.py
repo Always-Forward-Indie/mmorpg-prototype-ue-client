@@ -27,6 +27,7 @@ PARAMS_SCALAR = {
     "Progress": 1.0, "Ghost": 1.0,
     "TipLenPx": 18.0, "BorderPx": 2.0,
     "BarWidthPx": 400.0, "BarHeightPx": 50.0,
+    "BorderAlpha": 0.45,
     "AA": 0.02,
 }
 # RGBA 0..1 (sRGB-ish authoring values; linear conversion happens in C++ via FColor).
@@ -312,13 +313,10 @@ def build():
     conn(pv["BorderColor"], lerp3, "B", "border->lerp3.B")
     conn(w_ring, lerp3, "Alpha", "wring->lerp3.Alpha")
 
-    # Per-pixel opacity: inner -> 1, ring -> BorderColor.A, outside -> 0.
-    b_alpha = make_expr(mat, unreal.MaterialExpressionComponentMask, 3080, 160)
-    b_alpha.set_editor_property("A", True)
-    conn(pv["BorderColor"], b_alpha, "", "border->balpha")
+    # Per-pixel opacity: inner -> 1, ring -> BorderAlpha, outside -> 0.
     op_lerp = make_expr(mat, unreal.MaterialExpressionLinearInterpolate, 3240, 220)
     conn(const_one, op_lerp, "A", "1->op.A")
-    conn(b_alpha, op_lerp, "B", "bA->op.B")
+    conn(ps["BorderAlpha"], op_lerp, "B", "bA->op.B")
     conn(w_ring, op_lerp, "Alpha", "wring->op.Alpha")
     final_alpha = make_expr(mat, unreal.MaterialExpressionMultiply, 3400, 220)
     conn(shape_mask, final_alpha, "A", "shape->fa.A")

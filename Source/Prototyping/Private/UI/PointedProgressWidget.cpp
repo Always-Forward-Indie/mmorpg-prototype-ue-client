@@ -12,6 +12,7 @@ const FName UPointedProgressWidget::ParamGhostBottom(TEXT("GhostBottom"));
 const FName UPointedProgressWidget::ParamTrackTop(TEXT("TrackTop"));
 const FName UPointedProgressWidget::ParamTrackBottom(TEXT("TrackBottom"));
 const FName UPointedProgressWidget::ParamBorderColor(TEXT("BorderColor"));
+const FName UPointedProgressWidget::ParamBorderAlpha(TEXT("BorderAlpha"));
 const FName UPointedProgressWidget::ParamTipLenPx(TEXT("TipLenPx"));
 const FName UPointedProgressWidget::ParamBorderPx(TEXT("BorderPx"));
 const FName UPointedProgressWidget::ParamBarWidthPx(TEXT("BarWidthPx"));
@@ -94,7 +95,10 @@ void UPointedProgressWidget::SetBorderColor(const FLinearColor& InColor)
 {
 	if (MID)
 	{
-		MID->SetVectorParameterValue(ParamBorderColor, InColor);
+		FLinearColor RGB = InColor;
+		RGB.A = 1.0f;
+		MID->SetVectorParameterValue(ParamBorderColor, RGB);
+		MID->SetScalarParameterValue(ParamBorderAlpha, InColor.A);
 	}
 }
 

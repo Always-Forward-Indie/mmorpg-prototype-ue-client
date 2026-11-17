@@ -45,9 +45,13 @@ bool FPointedProgressCoreTest::RunTest(const FString& Parameters)
     // Fill: vertical wipe, hull stays intact.
     TestTrue(TEXT("filled left"), R::IsFilled(0.2f, 0.5f));
     TestFalse(TEXT("empty right"), R::IsFilled(0.8f, 0.5f));
-    // Border: uniform inset, degenerate tip returns 0 instead of NaN.
-    TestEqual(TEXT("inner tip"), R::InnerHalfHeight(0.0f, TestTipLenH, TestAspect, TestBorderH), 0.0f);
-    TestTrue(TEXT("inner inside"), R::InnerHalfHeight(0.5f, TestTipLenH, TestAspect, TestBorderH) > 0.4f);
+    // Border: uniform-width SDF band. Deep inside -> 1, hull edge -> 0.
+    // Junction regression (the old two-curve ring pinched here):
+    // U = TipLenH / Aspect, dy just inside the ring.
+    TestEqual(TEXT("inner deep"), R::InnerFactor(0.5f, 0.5f, TestTipLenH, TestAspect, TestBorderH), 1.0f);
+    TestEqual(TEXT("inner edge"), R::InnerFactor(0.5f, 0.96f, TestTipLenH, TestAspect, TestBorderH), 0.0f);
+    const float JunctionRing = R::InnerFactor(TestTipLenH / TestAspect, 0.95f, TestTipLenH, TestAspect, TestBorderH);
+    TestTrue(TEXT("junction ring uniform"), JunctionRing > 0.2f && JunctionRing < 0.3f);
     // Ghost: converges toward target, heals snap via widget (ghost < progress).
     const float Stepped = R::StepGhost(1.0f, 0.5f, 0.1f, 3.0f);
     TestTrue(TEXT("ghost falls"), Stepped < 1.0f && Stepped >= 0.5f);

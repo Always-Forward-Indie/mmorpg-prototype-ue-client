@@ -52,13 +52,15 @@ struct PROTOTYPING_API FPointedProgressCore
 		return U <= Progress;
 	}
 
-	/** Inner (border-inset) half height; uniform BorderH inset, max() floors at 0. */
-	static float InnerHalfHeight(float U, float TipLenH, float Aspect, float BorderH)
+	/** Inner fill factor: 1 deep inside, ramping to 0 within BorderH of the hull
+	 * edge (hard, no-AA analog of the shader SDF band). Single-hull ring, so the
+	 * width is uniform by construction - the old two-curve ring pinched at the
+	 * tip junction. */
+	static float InnerFactor(float U, float V, float TipLenH, float Aspect, float BorderH)
 	{
-		const float EdgeH = FMath::Max(FMath::Min(U, 1.0f - U) * Aspect - BorderH, 0.0f);
-		const float Denom = FMath::Max(TipLenH - BorderH, 1e-4f);
-		const float T = FMath::Clamp(EdgeH / Denom, 0.0f, 1.0f);
-		return FMath::Max(0.5f * T * (1.4f - 0.4f * T) - BorderH, 0.0f);
+		const float H = ShapeHalfHeight(U, TipLenH, Aspect);
+		const float Dy = FMath::Abs(V - 0.5f);
+		return FMath::Clamp((H - BorderH - Dy) / FMath::Max(BorderH, 1e-4f), 0.0f, 1.0f);
 	}
 
 	/**

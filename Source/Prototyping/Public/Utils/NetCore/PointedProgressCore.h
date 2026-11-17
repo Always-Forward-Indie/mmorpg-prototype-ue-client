@@ -11,8 +11,8 @@
  * the same formulas with SmoothStep AA on top.
  *
  * Bar space is height-normalized: V in 0..1, U scaled by Aspect = W/H so one
- * unit is square. Tips are parabolic (h = 0.5*t*(2-t)): smooth nose with a
- * finite slope plus a smooth top-edge junction, never needle-sharp.
+ * unit is square. Tips use h = 0.5*t*(1.4-0.4t): a defined (crisp but
+ * kink-free) corner at the tip junction plus a smooth nose, never needle-sharp.
  */
 struct PROTOTYPING_API FPointedProgressCore
 {
@@ -37,7 +37,7 @@ struct PROTOTYPING_API FPointedProgressCore
 	static float ShapeHalfHeight(float U, float TipLenH, float Aspect)
 	{
 		const float T = TipT(U, TipLenH, Aspect);
-		return 0.5f * T * (2.0f - T);
+		return 0.5f * T * (1.4f - 0.4f * T);
 	}
 
 	/** Hard inside test (no AA). True when (U,V) is inside the hull. */
@@ -58,7 +58,7 @@ struct PROTOTYPING_API FPointedProgressCore
 		const float EdgeH = FMath::Max(FMath::Min(U, 1.0f - U) * Aspect - BorderH, 0.0f);
 		const float Denom = FMath::Max(TipLenH - BorderH, 1e-4f);
 		const float T = FMath::Clamp(EdgeH / Denom, 0.0f, 1.0f);
-		return FMath::Max(0.5f * T * (2.0f - T) - BorderH, 0.0f);
+		return FMath::Max(0.5f * T * (1.4f - 0.4f * T) - BorderH, 0.0f);
 	}
 
 	/**

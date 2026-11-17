@@ -32,35 +32,34 @@ void UPointedProgressWidget::NativeTick(const FGeometry& MyGeometry, float InDel
 
 	PushSize();
 
-	if (FMath::IsNearlyEqual(Ghost, Progress, 1e-4f))
+	bool bMoved = false;
+	if (!FMath::IsNearlyEqual(Progress, TargetProgress, 1e-4f))
 	{
-		return;
+		Progress = FMath::FInterpConstantTo(Progress, TargetProgress, InDeltaTime, FillInterpSpeed);
+		bMoved = true;
 	}
-	Ghost = FPointedProgressCore::StepGhost(Ghost, Progress, InDeltaTime, GhostInterpSpeed);
-	// Ghost only falls toward Progress; a heal snaps it up instantly.
-	if (Ghost < Progress)
+	// Ghost trails the displayed edge in both directions (damage and heal).
+	const float NewGhost = FPointedProgressCore::StepGhost(Ghost, Progress, InDeltaTime, GhostInterpSpeed);
+	if (!FMath::IsNearlyEqual(NewGhost, Ghost, 1e-5f))
 	{
-		Ghost = Progress;
+		Ghost = NewGhost;
+		bMoved = true;
 	}
-	if (MID)
+	if (bMoved)
 	{
-		MID->SetScalarParameterValue(ParamGhost, Ghost);
+		PushScalars();
 	}
 }
 
 void UPointedProgressWidget::SetProgress(float InProgress)
 {
-	Progress = FPointedProgressCore::Clamp01(InProgress);
-	if (Ghost < Progress)
-	{
-		Ghost = Progress;
-	}
-	PushScalars();
+	TargetProgress = FPointedProgressCore::Clamp01(InProgress);
 }
 
 void UPointedProgressWidget::SnapGhost()
 {
-	Ghost = Progress;
+	Progress = TargetProgress;
+	Ghost = TargetProgress;
 	PushScalars();
 }
 

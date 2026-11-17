@@ -26,7 +26,8 @@ class PROTOTYPING_API UPointedProgressWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	/** Set fill [0..1]. Ghost catches up from above via tick. */
+	/** Set fill target [0..1]. Displayed fill eases toward it (both directions);
+	 * ghost trails behind the displayed value. */
 	UFUNCTION(BlueprintCallable, Category = "Pointed Progress")
 	void SetProgress(float InProgress);
 
@@ -64,6 +65,11 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Pointed Progress")
 	UMaterialInterface* SourceMaterial = nullptr;
 
+	/** Displayed-fill catch-up speed, 1/s. Faster than GhostInterpSpeed so the
+	 * trail stays visible behind the moving edge in both directions. */
+	UPROPERTY(EditDefaultsOnly, Category = "Pointed Progress", meta = (ClampMin = "0.1", ClampMax = "20.0"))
+	float FillInterpSpeed = 5.0f;
+
 	/** Ghost catch-up speed, 1/s. ~3 matches AAA damage trails. */
 	UPROPERTY(EditDefaultsOnly, Category = "Pointed Progress", meta = (ClampMin = "0.1", ClampMax = "20.0"))
 	float GhostInterpSpeed = 3.0f;
@@ -88,6 +94,7 @@ private:
 	UMaterialInstanceDynamic* MID = nullptr;
 
 	float Progress = 1.0f;
+	float TargetProgress = 1.0f;
 	float Ghost = 1.0f;
 	FVector2D LastPushedSize = FVector2D::ZeroVector;
 

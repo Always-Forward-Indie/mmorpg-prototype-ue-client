@@ -1,7 +1,7 @@
 #include "Misc/AutomationTest.h"
 #include "Utils/NetCore/PointedProgressCore.h"
 
-// Pointed <=====> bar math: parabolic hull SDF predicates (aspect-aware,
+// Pointed <=====> bar math: defined-corner hull SDF predicates (aspect-aware,
 // height-normalized bar space) plus ghost-trail stepping. Calls production
 // FPointedProgressCore used by UPointedProgressWidget and mirrored 1:1 by
 // M_UI_ProgressPointed (material adds only SmoothStep AA).
@@ -35,7 +35,7 @@ bool FPointedProgressCoreTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("half junction"), R::ShapeHalfHeight(TestTipLenH / TestAspect, TestTipLenH, TestAspect), 0.5f);
     // Nose neighborhood stays smooth and positive (no needle, no flat zero zone).
     const float NoseH = R::ShapeHalfHeight(0.005f, TestTipLenH, TestAspect);
-    TestTrue(TEXT("nose positive"), NoseH > 0.09f && NoseH < 0.12f);
+    TestTrue(TEXT("nose positive"), NoseH > 0.07f && NoseH < 0.08f);
     TestTrue(TEXT("inside center"), R::IsInsideShape(0.5f, 0.5f, TestTipLenH, TestAspect));
     // Center top edge is exactly on the hull boundary (<= is inclusive, the
     // shader centers its SmoothStep AA there, so the edge pixel is half-alpha).

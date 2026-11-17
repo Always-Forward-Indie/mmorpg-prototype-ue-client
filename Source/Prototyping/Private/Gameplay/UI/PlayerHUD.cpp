@@ -22,7 +22,7 @@ void UPlayerHUD::NativeConstruct()
 	const FLinearColor TrackTop(FColor(0x08, 0x0E, 0x16));
 	const FLinearColor TrackBottom(FColor(0x1D, 0x29, 0x35));
 	FLinearColor Border(FColor(0x52, 0x62, 0x72));
-	Border.A = 0.45f;
+	Border.A = 1.0f;
 	if (HealthBar)
 	{
 		HealthBar->SetTrackGradient(TrackTop, TrackBottom);

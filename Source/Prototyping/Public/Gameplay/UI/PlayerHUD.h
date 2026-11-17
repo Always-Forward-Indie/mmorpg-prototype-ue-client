@@ -70,7 +70,10 @@ protected:
 	float HealFlashDuration = 0.5f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD|Colors")
-	FLinearColor HPNormalColor = FLinearColor(0.18f, 0.72f, 0.18f, 1.0f);
+	FLinearColor HPNormalColor = FLinearColor(FColor(0xC9, 0x60, 0x60));
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD|Colors")
+	FLinearColor HPBottomNormalColor = FLinearColor(FColor(0x78, 0x2C, 0x37));
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD|Colors")
 	FLinearColor HPDamageFlashColor = FLinearColor(0.95f, 0.1f, 0.1f, 1.0f);
@@ -79,7 +82,10 @@ protected:
 	FLinearColor HPHealFlashColor = FLinearColor(0.15f, 1.0f, 0.25f, 1.0f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD|Colors")
-	FLinearColor MPNormalColor = FLinearColor(0.18f, 0.4f, 0.85f, 1.0f);
+	FLinearColor MPNormalColor = FLinearColor(FColor(0x60, 0x9D, 0xD8));
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD|Colors")
+	FLinearColor MPBottomNormalColor = FLinearColor(FColor(0x28, 0x5A, 0x99));
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD|Colors")
 	FLinearColor MPDamageFlashColor = FLinearColor(0.5f, 0.15f, 0.9f, 1.0f);

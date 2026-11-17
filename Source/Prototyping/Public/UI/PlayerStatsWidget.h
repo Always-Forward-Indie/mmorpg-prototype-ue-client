@@ -3,7 +3,6 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "UI/FocusableWindowWidget.h"
-#include "UI/PointedProgressWidget.h"
 #include "Data/DataStructs.h"
 #include "Components/TextBlock.h"
 #include "Components/ProgressBar.h"
@@ -29,11 +28,11 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPlayerStatsVisibilityChangedDelegate);
  *
  * Level / vitals row (all optional):
  *  Level_Text          � UTextBlock  ("Lv. 7")
- *  HP_Bar              � UPointedProgressWidget
+ *  HP_Bar              � UProgressBar
  *  HP_Text             � UTextBlock  ("85 / 150")
- *  MP_Bar              � UPointedProgressWidget
+ *  MP_Bar              � UProgressBar
  *  MP_Text             � UTextBlock  ("40 / 80")
- *  XP_Bar              � UPointedProgressWidget
+ *  XP_Bar              � UProgressBar
  *  XP_Text             � UTextBlock  ("3400 / 5000")
  *  Weight_Bar          � UProgressBar
  *  Weight_Text         � UTextBlock  ("18.5 / 74.0 kg")
@@ -110,19 +109,19 @@ protected:
     UTextBlock* SP_Text = nullptr;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
-    UPointedProgressWidget* HP_Bar = nullptr;
+    UProgressBar* HP_Bar = nullptr;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UTextBlock* HP_Text = nullptr;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
-    UPointedProgressWidget* MP_Bar = nullptr;
+    UProgressBar* MP_Bar = nullptr;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UTextBlock* MP_Text = nullptr;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
-    UPointedProgressWidget* XP_Bar = nullptr;
+    UProgressBar* XP_Bar = nullptr;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UTextBlock* XP_Text = nullptr;

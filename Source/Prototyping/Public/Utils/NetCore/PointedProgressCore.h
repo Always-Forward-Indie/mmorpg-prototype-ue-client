@@ -7,8 +7,12 @@
  *
  * Single source of truth for the shape used by M_UI_ProgressPointed and
  * UPointedProgressWidget. No UObject, no UWorld, no materials here, only
- * UV math so the Automation spec can pin it. The material implements the
- * same formulas with SmoothStep AA on top.
+ * bar-space math so the Automation spec can pin it. The material implements
+ * the same formulas with SmoothStep AA on top.
+ *
+ * Bar space is height-normalized: V in 0..1, U scaled by Aspect = W/H so one
+ * unit is square. Tips are parabolic (h = 0.5*t*(2-t)): smooth nose with a
+ * finite slope plus a smooth top-edge junction, never needle-sharp.
  */
 struct PROTOTYPING_API FPointedProgressCore
 {
@@ -18,31 +22,28 @@ struct PROTOTYPING_API FPointedProgressCore
 		return FMath::Clamp(V, 0.0f, 1.0f);
 	}
 
-	/**
-	 * Edge ramp: 0 exactly at a tip, 1 once Tip width inside.
-	 * U in [0..1], Tip is one-tip width as fraction of total width (0.1-0.15).
-	 * Tip <= 0 means no point (full rectangle).
-	 */
-	static float EdgeRamp(float U, float Tip)
+	/** Tip parameter: saturate(edgeH / TipLenH), 0 at the nose, 1 inside. */
+	static float TipT(float U, float TipLenH, float Aspect)
 	{
-		if (Tip <= 0.0f)
+		if (TipLenH <= 0.0f)
 		{
 			return 1.0f;
 		}
-		const float MinEnd = FMath::Min(U, 1.0f - U);
-		return FMath::Clamp(MinEnd / Tip, 0.0f, 1.0f);
+		const float EdgeH = FMath::Min(U, 1.0f - U) * Aspect;
+		return FMath::Clamp(EdgeH / TipLenH, 0.0f, 1.0f);
 	}
 
-	/** Half height of the <=====> hull at U (0 at tips, 0.5 inside). */
-	static float ShapeHalfHeight(float U, float Tip)
+	/** Half height of the <=====> hull at U (0 at the nose, 0.5 inside). */
+	static float ShapeHalfHeight(float U, float TipLenH, float Aspect)
 	{
-		return 0.5f * EdgeRamp(U, Tip);
+		const float T = TipT(U, TipLenH, Aspect);
+		return 0.5f * T * (2.0f - T);
 	}
 
 	/** Hard inside test (no AA). True when (U,V) is inside the hull. */
-	static bool IsInsideShape(float U, float V, float Tip)
+	static bool IsInsideShape(float U, float V, float TipLenH, float Aspect)
 	{
-		return FMath::Abs(V - 0.5f) <= ShapeHalfHeight(U, Tip);
+		return FMath::Abs(V - 0.5f) <= ShapeHalfHeight(U, TipLenH, Aspect);
 	}
 
 	/** Hard fill test (no AA): filled when U is left of Progress. */
@@ -51,25 +52,13 @@ struct PROTOTYPING_API FPointedProgressCore
 		return U <= Progress;
 	}
 
-	/**
-	 * Inner ramp for the border ring: same as EdgeRamp but pushed in by
-	 * Border on both axes. Returns 0 when the border eats the whole tip.
-	 */
-	static float InnerRamp(float U, float Tip, float Border)
+	/** Inner (border-inset) half height; uniform BorderH inset, max() floors at 0. */
+	static float InnerHalfHeight(float U, float TipLenH, float Aspect, float BorderH)
 	{
-		const float Denom = Tip - Border;
-		if (Denom <= 1e-4f)
-		{
-			return 0.0f;
-		}
-		const float MinEnd = FMath::Min(U, 1.0f - U);
-		return FMath::Clamp((MinEnd - Border) / Denom, 0.0f, 1.0f);
-	}
-
-	/** Half height of the inner (border-inset) hull. */
-	static float InnerHalfHeight(float U, float Tip, float Border)
-	{
-		return 0.5f * InnerRamp(U, Tip, Border) - Border * 0.5f;
+		const float EdgeH = FMath::Max(FMath::Min(U, 1.0f - U) * Aspect - BorderH, 0.0f);
+		const float Denom = FMath::Max(TipLenH - BorderH, 1e-4f);
+		const float T = FMath::Clamp(EdgeH / Denom, 0.0f, 1.0f);
+		return FMath::Max(0.5f * T * (2.0f - T) - BorderH, 0.0f);
 	}
 
 	/**

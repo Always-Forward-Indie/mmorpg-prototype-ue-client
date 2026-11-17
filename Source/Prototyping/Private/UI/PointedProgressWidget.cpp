@@ -5,19 +5,31 @@
 
 const FName UPointedProgressWidget::ParamProgress(TEXT("Progress"));
 const FName UPointedProgressWidget::ParamGhost(TEXT("Ghost"));
-const FName UPointedProgressWidget::ParamFillColor(TEXT("FillColor"));
+const FName UPointedProgressWidget::ParamFillTop(TEXT("FillTop"));
+const FName UPointedProgressWidget::ParamFillBottom(TEXT("FillBottom"));
+const FName UPointedProgressWidget::ParamGhostTop(TEXT("GhostTop"));
+const FName UPointedProgressWidget::ParamGhostBottom(TEXT("GhostBottom"));
+const FName UPointedProgressWidget::ParamTrackTop(TEXT("TrackTop"));
+const FName UPointedProgressWidget::ParamTrackBottom(TEXT("TrackBottom"));
+const FName UPointedProgressWidget::ParamBorderColor(TEXT("BorderColor"));
+const FName UPointedProgressWidget::ParamTipLenPx(TEXT("TipLenPx"));
+const FName UPointedProgressWidget::ParamBorderPx(TEXT("BorderPx"));
+const FName UPointedProgressWidget::ParamBarWidthPx(TEXT("BarWidthPx"));
+const FName UPointedProgressWidget::ParamBarHeightPx(TEXT("BarHeightPx"));
 
 void UPointedProgressWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	LastPushedSize = FVector2D::ZeroVector;
 	EnsureMID();
 	PushScalars();
-	PushColors();
 }
 
 void UPointedProgressWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
+
+	PushSize();
 
 	if (FMath::IsNearlyEqual(Ghost, Progress, 1e-4f))
 	{
@@ -51,10 +63,39 @@ void UPointedProgressWidget::SnapGhost()
 	PushScalars();
 }
 
-void UPointedProgressWidget::SetFillColor(const FLinearColor& InColor)
+void UPointedProgressWidget::SetFillGradient(const FLinearColor& Top, const FLinearColor& Bottom)
 {
-	FillColor = InColor;
-	PushColors();
+	if (MID)
+	{
+		MID->SetVectorParameterValue(ParamFillTop, Top);
+		MID->SetVectorParameterValue(ParamFillBottom, Bottom);
+	}
+}
+
+void UPointedProgressWidget::SetGhostGradient(const FLinearColor& Top, const FLinearColor& Bottom)
+{
+	if (MID)
+	{
+		MID->SetVectorParameterValue(ParamGhostTop, Top);
+		MID->SetVectorParameterValue(ParamGhostBottom, Bottom);
+	}
+}
+
+void UPointedProgressWidget::SetTrackGradient(const FLinearColor& Top, const FLinearColor& Bottom)
+{
+	if (MID)
+	{
+		MID->SetVectorParameterValue(ParamTrackTop, Top);
+		MID->SetVectorParameterValue(ParamTrackBottom, Bottom);
+	}
+}
+
+void UPointedProgressWidget::SetBorderColor(const FLinearColor& InColor)
+{
+	if (MID)
+	{
+		MID->SetVectorParameterValue(ParamBorderColor, InColor);
+	}
 }
 
 void UPointedProgressWidget::EnsureMID()
@@ -94,13 +135,21 @@ void UPointedProgressWidget::PushScalars() const
 	}
 	MID->SetScalarParameterValue(ParamProgress, Progress);
 	MID->SetScalarParameterValue(ParamGhost, Ghost);
+	MID->SetScalarParameterValue(ParamTipLenPx, TipLengthPx);
+	MID->SetScalarParameterValue(ParamBorderPx, BorderWidthPx);
 }
 
-void UPointedProgressWidget::PushColors() const
+void UPointedProgressWidget::PushSize()
 {
 	if (!MID)
 	{
 		return;
 	}
-	MID->SetVectorParameterValue(ParamFillColor, FillColor);
+	const FVector2D Size = GetCachedGeometry().GetLocalSize();
+	if (Size.X > 0.0f && Size.Y > 0.0f && !Size.Equals(LastPushedSize, 0.5f))
+	{
+		LastPushedSize = Size;
+		MID->SetScalarParameterValue(ParamBarWidthPx, Size.X);
+		MID->SetScalarParameterValue(ParamBarHeightPx, Size.Y);
+	}
 }

@@ -6,13 +6,16 @@ Run inside Unreal Editor (Tools -> Execute Python Script) or headless:
 Always rebuilds from scratch: existing asset is deleted first (GUI editor),
 then a fresh material is created and wired. Safe to re-run. Result: /Game/UI/Materials/M_UI_ProgressPointed.
 
-Graph mirrors FPointedProgressCore 1:1, material adds only SmoothStep AA:
-  minEnd -> edgeRamp -> maxHalf, dy -> shapeDist -> shapeMask -> Opacity
-  U-Progress / U-Ghost -> fill/ghost masks, border inner hull, 3x Lerp -> Final Color
+Shape (mirrors FPointedProgressCore 1:1, material adds only SmoothStep AA):
+  Bar space is height-normalized: Y in 0..1, X scaled by Aspect = W/H so one
+  unit is square. Tips are parabolic (h = 0.5*t*(2-t): smooth nose with a
+  finite slope plus a smooth junction, never needle-sharp).
+  Border ring is a uniform px inset: same hull with (edgeH - b) and (h - b).
 
 API notes (UE 5.8, verified by probe): connect_material_expressions takes the
 SOURCE output as "" (default pin) and the DEST input by name ("A"/"B"/"Input"/
 "Min"/"Max"/"Value"/"Alpha"). Named source pins ("UV", "R", ...) return False.
+Single-input pins (Mask/Saturate/Abs/OneMinus) take "".
 """
 import unreal
 
@@ -21,13 +24,24 @@ NAME = "M_UI_ProgressPointed"
 PATH = "{}/{}".format(PKG, NAME)
 
 PARAMS_SCALAR = {
-    "Progress": 0.5, "Ghost": 0.5, "Tip": 0.12, "Border": 0.03, "AA": 0.005,
+    "Progress": 1.0, "Ghost": 1.0,
+    "TipLenPx": 18.0, "BorderPx": 2.0,
+    "BarWidthPx": 400.0, "BarHeightPx": 50.0,
+    "AA": 0.02,
 }
+# RGBA 0..1 (sRGB-ish authoring values; linear conversion happens in C++ via FColor).
 PARAMS_VECTOR = {
-    "FillColor": (0.7, 0.1, 0.1, 1.0),
-    "GhostColor": (1.0, 0.9, 0.6, 1.0),
-    "BgColor": (0.08, 0.08, 0.1, 1.0),
-    "BorderColor": (0.0, 0.0, 0.0, 1.0),
+    # Track (background) gradient: #080E16 -> #1D2935.
+    "TrackTop": (0x08 / 255.0, 0x0E / 255.0, 0x16 / 255.0, 1.0),
+    "TrackBottom": (0x1D / 255.0, 0x29 / 255.0, 0x35 / 255.0, 1.0),
+    # HP fill gradient: #C96060 -> #782C37.
+    "FillTop": (0xC9 / 255.0, 0x60 / 255.0, 0x60 / 255.0, 1.0),
+    "FillBottom": (0x78 / 255.0, 0x2C / 255.0, 0x37 / 255.0, 1.0),
+    # HP ghost (damage trail) gradient: light red family.
+    "GhostTop": (0xE6 / 255.0, 0xA9 / 255.0, 0xA9 / 255.0, 1.0),
+    "GhostBottom": (0x93 / 255.0, 0x42 / 255.0, 0x4B / 255.0, 1.0),
+    # Track outline: #526272 at 45%.
+    "BorderColor": (0x52 / 255.0, 0x62 / 255.0, 0x72 / 255.0, 0.45),
 }
 
 LIB = unreal.MaterialEditingLibrary
@@ -110,63 +124,147 @@ def build():
     const_half.set_editor_property("R", 0.5)
     const_one = make_expr(mat, unreal.MaterialExpressionConstant, -280, 260)
     const_one.set_editor_property("R", 1.0)
+    const_zero = make_expr(mat, unreal.MaterialExpressionConstant, -280, 320)
+    const_zero.set_editor_property("R", 0.0)
 
-    # minEnd = min(U, 1-U)
+    # Aspect = W / H (height units are square).
+    aspect = make_expr(mat, unreal.MaterialExpressionDivide, -280, -160)
+    conn(ps["BarWidthPx"], aspect, "A", "W->aspect.A")
+    conn(ps["BarHeightPx"], aspect, "B", "H->aspect.B")
+
+    # ex = min(U, 1-U); edgeH = ex * Aspect.
     one_minus_u = make_expr(mat, unreal.MaterialExpressionSubtract, -280, -80)
     conn(const_one, one_minus_u, "A", "1->1-U.A")
     conn(mask_r, one_minus_u, "B", "U->1-U.B")
     min_end = make_expr(mat, unreal.MaterialExpressionMin, -120, -80)
     conn(mask_r, min_end, "A", "U->min.A")
     conn(one_minus_u, min_end, "B", "1-U->min.B")
-    step("minEnd ok")
+    edge_h = make_expr(mat, unreal.MaterialExpressionMultiply, 40, -80)
+    conn(min_end, edge_h, "A", "min->edge.A")
+    conn(aspect, edge_h, "B", "aspect->edge.B")
+    step("edgeH ok")
 
-    # edgeRamp = saturate(minEnd / Tip); maxHalf = edgeRamp * 0.5
-    div_tip = make_expr(mat, unreal.MaterialExpressionDivide, 40, -80)
-    conn(min_end, div_tip, "A", "min->div.A")
-    conn(ps["Tip"], div_tip, "B", "Tip->div.B")
-    ramp = make_expr(mat, unreal.MaterialExpressionSaturate, 200, -80)
-    conn(div_tip, ramp, "", "div->sat")
-    max_half = make_expr(mat, unreal.MaterialExpressionMultiply, 360, -80)
-    conn(ramp, max_half, "A", "ramp->half.A")
-    conn(const_half, max_half, "B", "0.5->half.B")
-    step("edgeRamp ok")
+    # tipLenH = TipLenPx / H; t = saturate(edgeH / tipLenH).
+    tip_len_h = make_expr(mat, unreal.MaterialExpressionDivide, 40, 40)
+    conn(ps["TipLenPx"], tip_len_h, "A", "tipPx->tipH.A")
+    conn(ps["BarHeightPx"], tip_len_h, "B", "H->tipH.B")
+    t_param = make_expr(mat, unreal.MaterialExpressionDivide, 200, -80)
+    conn(edge_h, t_param, "A", "edge->t.A")
+    conn(tip_len_h, t_param, "B", "tipH->t.B")
+    t_sat = make_expr(mat, unreal.MaterialExpressionSaturate, 360, -80)
+    conn(t_param, t_sat, "", "t->tsat")
 
-    # dy = |V - 0.5|; shapeDist = dy - maxHalf
-    v_sub = make_expr(mat, unreal.MaterialExpressionSubtract, -120, 80)
+    # h = 0.5 * t * (2 - t)  (parabolic tip: smooth nose + smooth junction,
+    # no SquareRoot node needed).
+    const_two = make_expr(mat, unreal.MaterialExpressionConstant, 360, 140)
+    const_two.set_editor_property("R", 2.0)
+    two_minus_t = make_expr(mat, unreal.MaterialExpressionSubtract, 520, 140)
+    conn(const_two, two_minus_t, "A", "2->tmt.A")
+    conn(t_sat, two_minus_t, "B", "t->tmt.B")
+    tt = make_expr(mat, unreal.MaterialExpressionMultiply, 680, 140)
+    conn(t_sat, tt, "A", "t->tt.A")
+    conn(two_minus_t, tt, "B", "tmt->tt.B")
+    half_h = make_expr(mat, unreal.MaterialExpressionMultiply, 840, 140)
+    conn(tt, half_h, "A", "tt->half.A")
+    conn(const_half, half_h, "B", "0.5->half.B")
+    step("hull ok")
+
+    # dy = |V - 0.5|; d_outer = dy - h.
+    v_sub = make_expr(mat, unreal.MaterialExpressionSubtract, -120, 160)
     conn(mask_g, v_sub, "A", "V->vsub.A")
     conn(const_half, v_sub, "B", "0.5->vsub.B")
-    dy = make_expr(mat, unreal.MaterialExpressionAbs, 40, 80)
+    dy = make_expr(mat, unreal.MaterialExpressionAbs, 40, 160)
     conn(v_sub, dy, "", "vsub->abs")
-    shape_dist = make_expr(mat, unreal.MaterialExpressionSubtract, 520, 0)
-    conn(dy, shape_dist, "A", "dy->shape.A")
-    conn(max_half, shape_dist, "B", "half->shape.B")
-    step("shapeDist ok")
-
-    # shapeMask = 1 - smoothstep(-AA, +AA, shapeDist)
-    m1 = make_expr(mat, unreal.MaterialExpressionConstant, 360, 160)
+    d_outer = make_expr(mat, unreal.MaterialExpressionSubtract, 1320, 0)
+    conn(dy, d_outer, "A", "dy->dout.A")
+    conn(half_h, d_outer, "B", "h->dout.B")
+    outer = make_expr(mat, unreal.MaterialExpressionSmoothStep, 1480, 0)
+    m1 = make_expr(mat, unreal.MaterialExpressionConstant, 1320, 160)
     m1.set_editor_property("R", -1.0)
-    neg_aa = make_expr(mat, unreal.MaterialExpressionMultiply, 520, 160)
+    neg_aa = make_expr(mat, unreal.MaterialExpressionMultiply, 1320, 240)
     conn(m1, neg_aa, "A", "-1->negAA.A")
     conn(ps["AA"], neg_aa, "B", "AA->negAA.B")
-    smooth = make_expr(mat, unreal.MaterialExpressionSmoothStep, 680, 0)
-    conn(neg_aa, smooth, "Min", "negAA->smooth.Min")
-    conn(ps["AA"], smooth, "Max", "AA->smooth.Max")
-    conn(shape_dist, smooth, "Value", "dist->smooth.Value")
-    shape_mask = make_expr(mat, unreal.MaterialExpressionOneMinus, 840, 0)
-    conn(smooth, shape_mask, "", "smooth->shapeMask")
+    conn(neg_aa, outer, "Min", "negAA->outer.Min")
+    conn(ps["AA"], outer, "Max", "AA->outer.Max")
+    conn(d_outer, outer, "Value", "dout->outer.Value")
+    shape_mask = make_expr(mat, unreal.MaterialExpressionOneMinus, 1640, 0)
+    conn(outer, shape_mask, "", "outer->shapeMask")
     step("shapeMask ok")
 
-    # fill/ghost masks = 1 - saturate((U - P) / AA)
+    # Border inset in height units: b = BorderPx / H.
+    b_h = make_expr(mat, unreal.MaterialExpressionDivide, 200, 240)
+    conn(ps["BorderPx"], b_h, "A", "bpx->bh.A")
+    conn(ps["BarHeightPx"], b_h, "B", "H->bh.B")
+    # edgeI = max(edgeH - b, 0).
+    edge_sub = make_expr(mat, unreal.MaterialExpressionSubtract, 360, 240)
+    conn(edge_h, edge_sub, "A", "edge->esub.A")
+    conn(b_h, edge_sub, "B", "b->esub.B")
+    edge_i = make_expr(mat, unreal.MaterialExpressionMax, 520, 240)
+    conn(edge_sub, edge_i, "A", "esub->ei.A")
+    conn(const_zero, edge_i, "B", "0->ei.B")
+    # tipLenI = max(tipLenH - b, eps).
+    tip_sub = make_expr(mat, unreal.MaterialExpressionSubtract, 520, 320)
+    conn(tip_len_h, tip_sub, "A", "tipH->tsub.A")
+    conn(b_h, tip_sub, "B", "b->tsub.B")
+    tip_i = make_expr(mat, unreal.MaterialExpressionMax, 680, 320)
+    conn(tip_sub, tip_i, "A", "tsub->ti.A")
+    eps = make_expr(mat, unreal.MaterialExpressionConstant, 520, 380)
+    eps.set_editor_property("R", 0.001)
+    conn(eps, tip_i, "B", "eps->ti.B")
+    # Parabolic inner tip, then inset by b, clamped >= 0.
+    t_i = make_expr(mat, unreal.MaterialExpressionDivide, 840, 240)
+    conn(edge_i, t_i, "A", "ei->ti2.A")
+    conn(tip_i, t_i, "B", "tipI->ti2.B")
+    t_i_sat = make_expr(mat, unreal.MaterialExpressionSaturate, 1000, 240)
+    conn(t_i, t_i_sat, "", "ti2->tisat")
+    two_i = make_expr(mat, unreal.MaterialExpressionConstant, 1160, 180)
+    two_i.set_editor_property("R", 2.0)
+    tmt_i = make_expr(mat, unreal.MaterialExpressionSubtract, 1160, 240)
+    conn(two_i, tmt_i, "A", "2->tmti.A")
+    conn(t_i_sat, tmt_i, "B", "tisat->tmti.B")
+    tt_i = make_expr(mat, unreal.MaterialExpressionMultiply, 1320, 240)
+    conn(t_i_sat, tt_i, "A", "tisat->tti.A")
+    conn(tmt_i, tt_i, "B", "tmti->tti.B")
+    half_i = make_expr(mat, unreal.MaterialExpressionMultiply, 1480, 240)
+    conn(tt_i, half_i, "A", "tti->halfi.A")
+    conn(const_half, half_i, "B", "0.5->halfi.B")
+    inner_sub = make_expr(mat, unreal.MaterialExpressionSubtract, 2120, 320)
+    conn(half_i, inner_sub, "A", "halfi->isub.A")
+    conn(b_h, inner_sub, "B", "b->isub.B")
+    inner_h = make_expr(mat, unreal.MaterialExpressionMax, 2280, 320)
+    conn(inner_sub, inner_h, "A", "isub->ih.A")
+    conn(const_zero, inner_h, "B", "0->ih.B")
+    d_inner = make_expr(mat, unreal.MaterialExpressionSubtract, 2280, 160)
+    conn(dy, d_inner, "A", "dy->din.A")
+    conn(inner_h, d_inner, "B", "ih->din.B")
+    smooth_i = make_expr(mat, unreal.MaterialExpressionSmoothStep, 2440, 160)
+    conn(neg_aa, smooth_i, "Min", "negAA->si.Min")
+    conn(ps["AA"], smooth_i, "Max", "AA->si.Max")
+    conn(d_inner, smooth_i, "Value", "din->si.Value")
+    inner_one = make_expr(mat, unreal.MaterialExpressionOneMinus, 2600, 160)
+    conn(smooth_i, inner_one, "", "si->ione")
+    inner_mask = make_expr(mat, unreal.MaterialExpressionMultiply, 2760, 160)
+    conn(inner_one, inner_mask, "A", "ione->imask.A")
+    conn(shape_mask, inner_mask, "B", "shape->imask.B")
+    step("inner hull ok")
+
+    # Fill/ghost vertical wipe. AAX = 1.5px in U units.
+    aa_x = make_expr(mat, unreal.MaterialExpressionDivide, 1960, 0)
+    c15 = make_expr(mat, unreal.MaterialExpressionConstant, 1800, 60)
+    c15.set_editor_property("R", 1.5)
+    conn(c15, aa_x, "A", "1.5->aax.A")
+    conn(ps["BarWidthPx"], aa_x, "B", "W->aax.B")
+
     def wipe(param_name, y, tag):
-        sub = make_expr(mat, unreal.MaterialExpressionSubtract, 520, y)
+        sub = make_expr(mat, unreal.MaterialExpressionSubtract, 2120, y)
         conn(mask_r, sub, "A", "{} U->sub.A".format(tag))
         conn(ps[param_name], sub, "B", "{} P->sub.B".format(tag))
-        div = make_expr(mat, unreal.MaterialExpressionDivide, 680, y)
+        div = make_expr(mat, unreal.MaterialExpressionDivide, 2280, y)
         conn(sub, div, "A", "{} sub->div.A".format(tag))
-        conn(ps["AA"], div, "B", "{} AA->div.B".format(tag))
-        sat = make_expr(mat, unreal.MaterialExpressionSaturate, 840, y)
+        conn(aa_x, div, "B", "{} AAX->div.B".format(tag))
+        sat = make_expr(mat, unreal.MaterialExpressionSaturate, 2440, y)
         conn(div, sat, "", "{} div->sat".format(tag))
-        out = make_expr(mat, unreal.MaterialExpressionOneMinus, 1000, y)
+        out = make_expr(mat, unreal.MaterialExpressionOneMinus, 2600, y)
         conn(sat, out, "", "{} sat->mask".format(tag))
         return out
 
@@ -174,70 +272,61 @@ def build():
     ghost_mask = wipe("Ghost", -280, "ghost")
     step("fill/ghost ok")
 
-    # Border inner hull: innerRamp = saturate((minEnd-Border)/(Tip-Border))
-    tip_sub = make_expr(mat, unreal.MaterialExpressionSubtract, 40, 240)
-    conn(ps["Tip"], tip_sub, "A", "Tip->tipsub.A")
-    conn(ps["Border"], tip_sub, "B", "Border->tipsub.B")
-    min_sub = make_expr(mat, unreal.MaterialExpressionSubtract, 200, 240)
-    conn(min_end, min_sub, "A", "min->minsub.A")
-    conn(ps["Border"], min_sub, "B", "Border->minsub.B")
-    inner_div = make_expr(mat, unreal.MaterialExpressionDivide, 360, 240)
-    conn(min_sub, inner_div, "A", "minsub->innerdiv.A")
-    conn(tip_sub, inner_div, "B", "tipsub->innerdiv.B")
-    inner_ramp = make_expr(mat, unreal.MaterialExpressionSaturate, 520, 240)
-    conn(inner_div, inner_ramp, "", "innerdiv->innerramp")
-    inner_half_a = make_expr(mat, unreal.MaterialExpressionMultiply, 680, 240)
-    conn(inner_ramp, inner_half_a, "A", "ramp->ih.A")
-    conn(const_half, inner_half_a, "B", "0.5->ih.B")
-    border_half = make_expr(mat, unreal.MaterialExpressionMultiply, 680, 320)
-    conn(ps["Border"], border_half, "A", "Border->bh.A")
-    conn(const_half, border_half, "B", "0.5->bh.B")
-    inner_half = make_expr(mat, unreal.MaterialExpressionSubtract, 840, 280)
-    conn(inner_half_a, inner_half, "A", "ih->inner.A")
-    conn(border_half, inner_half, "B", "bh->inner.B")
-    inner_dist = make_expr(mat, unreal.MaterialExpressionSubtract, 1000, 280)
-    conn(dy, inner_dist, "A", "dy->idist.A")
-    conn(inner_half, inner_dist, "B", "inner->idist.B")
-    inner_smooth = make_expr(mat, unreal.MaterialExpressionSmoothStep, 1160, 280)
-    conn(neg_aa, inner_smooth, "Min", "negAA->ismooth.Min")
-    conn(ps["AA"], inner_smooth, "Max", "AA->ismooth.Max")
-    conn(inner_dist, inner_smooth, "Value", "idist->ismooth.Value")
-    inner_one = make_expr(mat, unreal.MaterialExpressionOneMinus, 1320, 280)
-    conn(inner_smooth, inner_one, "", "ismooth->ione")
-    inner_mask = make_expr(mat, unreal.MaterialExpressionMultiply, 1480, 280)
-    conn(inner_one, inner_mask, "A", "ione->imask.A")
-    conn(shape_mask, inner_mask, "B", "shape->imask.B")
-    step("inner hull ok")
+    # Vertical gradients by V.
+    def vgrad(top_param, bot_param, y, tag):
+        g = make_expr(mat, unreal.MaterialExpressionLinearInterpolate, 2600, y)
+        conn(pv[top_param], g, "A", "{} top->g.A".format(tag))
+        conn(pv[bot_param], g, "B", "{} bot->g.B".format(tag))
+        conn(mask_g, g, "Alpha", "{} V->g.Alpha".format(tag))
+        return g
 
-    # Color chain: Bg -> Ghost -> Fill -> Border.
+    track_col = vgrad("TrackTop", "TrackBottom", -80, "track")
+    ghost_col = vgrad("GhostTop", "GhostBottom", -160, "ghostC")
+    fill_col = vgrad("FillTop", "FillBottom", -240, "fillC")
+    step("gradients ok")
+
+    # Color chain: track -> ghost -> fill -> border.
     def masked(mask_a, mask_b, y, tag):
-        m = make_expr(mat, unreal.MaterialExpressionMultiply, 1160, y)
+        m = make_expr(mat, unreal.MaterialExpressionMultiply, 2760, y)
         conn(mask_a, m, "A", "{} m.A".format(tag))
         conn(mask_b, m, "B", "{} m.B".format(tag))
         return m
 
     w_ghost = masked(ghost_mask, inner_mask, -160, "wghost")
     w_fill = masked(fill_mask, inner_mask, -80, "wfill")
-    ring_one = make_expr(mat, unreal.MaterialExpressionOneMinus, 1480, 160)
+    ring_one = make_expr(mat, unreal.MaterialExpressionOneMinus, 2920, 160)
     conn(inner_mask, ring_one, "", "inner->ringone")
     w_ring = masked(shape_mask, ring_one, 160, "wring")
 
-    lerp1 = make_expr(mat, unreal.MaterialExpressionLinearInterpolate, 1480, -120)
-    conn(pv["BgColor"], lerp1, "A", "bg->lerp1.A")
-    conn(pv["GhostColor"], lerp1, "B", "ghost->lerp1.B")
+    lerp1 = make_expr(mat, unreal.MaterialExpressionLinearInterpolate, 2920, -120)
+    conn(track_col, lerp1, "A", "track->lerp1.A")
+    conn(ghost_col, lerp1, "B", "ghost->lerp1.B")
     conn(w_ghost, lerp1, "Alpha", "wghost->lerp1.Alpha")
-    lerp2 = make_expr(mat, unreal.MaterialExpressionLinearInterpolate, 1640, -40)
+    lerp2 = make_expr(mat, unreal.MaterialExpressionLinearInterpolate, 3080, -40)
     conn(lerp1, lerp2, "A", "lerp1->lerp2.A")
-    conn(pv["FillColor"], lerp2, "B", "fill->lerp2.B")
+    conn(fill_col, lerp2, "B", "fill->lerp2.B")
     conn(w_fill, lerp2, "Alpha", "wfill->lerp2.Alpha")
-    lerp3 = make_expr(mat, unreal.MaterialExpressionLinearInterpolate, 1800, 40)
+    # Border RGB only; alpha handled per-pixel via BorderColor.A below.
+    lerp3 = make_expr(mat, unreal.MaterialExpressionLinearInterpolate, 3240, 40)
     conn(lerp2, lerp3, "A", "lerp2->lerp3.A")
     conn(pv["BorderColor"], lerp3, "B", "border->lerp3.B")
     conn(w_ring, lerp3, "Alpha", "wring->lerp3.Alpha")
 
+    # Per-pixel opacity: inner -> 1, ring -> BorderColor.A, outside -> 0.
+    b_alpha = make_expr(mat, unreal.MaterialExpressionComponentMask, 3080, 160)
+    b_alpha.set_editor_property("A", True)
+    conn(pv["BorderColor"], b_alpha, "", "border->balpha")
+    op_lerp = make_expr(mat, unreal.MaterialExpressionLinearInterpolate, 3240, 220)
+    conn(const_one, op_lerp, "A", "1->op.A")
+    conn(b_alpha, op_lerp, "B", "bA->op.B")
+    conn(w_ring, op_lerp, "Alpha", "wring->op.Alpha")
+    final_alpha = make_expr(mat, unreal.MaterialExpressionMultiply, 3400, 220)
+    conn(shape_mask, final_alpha, "A", "shape->fa.A")
+    conn(op_lerp, final_alpha, "B", "op->fa.B")
+
     if not LIB.connect_material_property(lerp3, "", unreal.MaterialProperty.MP_BASE_COLOR):
         raise RuntimeError("connect MP_BASE_COLOR failed")
-    if not LIB.connect_material_property(shape_mask, "", unreal.MaterialProperty.MP_OPACITY):
+    if not LIB.connect_material_property(final_alpha, "", unreal.MaterialProperty.MP_OPACITY):
         raise RuntimeError("connect MP_OPACITY failed")
     step("outputs ok")
 

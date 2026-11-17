@@ -18,8 +18,29 @@ void UPlayerHUD::NativeConstruct()
 	CurrentMaxMana = 1.0f;
 	if (HealthBar) HealthBar->SetProgress(1.0f);
 	if (ManaBar)   ManaBar->SetProgress(1.0f);
-	if (HealthBar) HealthBar->SetFillColor(HPNormalColor);
-	if (ManaBar)   ManaBar->SetFillColor(MPNormalColor);
+	// Shared track palette: #080E16 -> #1D2935, outline #526272 at 45%.
+	const FLinearColor TrackTop(FColor(0x08, 0x0E, 0x16));
+	const FLinearColor TrackBottom(FColor(0x1D, 0x29, 0x35));
+	FLinearColor Border(FColor(0x52, 0x62, 0x72));
+	Border.A = 0.45f;
+	if (HealthBar)
+	{
+		HealthBar->SetTrackGradient(TrackTop, TrackBottom);
+		HealthBar->SetGhostGradient(
+			FLinearColor(FColor(0xE6, 0xA9, 0xA9)),
+			FLinearColor(FColor(0x93, 0x42, 0x4B)));
+		HealthBar->SetBorderColor(Border);
+	}
+	if (ManaBar)
+	{
+		ManaBar->SetTrackGradient(TrackTop, TrackBottom);
+		ManaBar->SetGhostGradient(
+			FLinearColor(FColor(0xAC, 0xCD, 0xEB)),
+			FLinearColor(FColor(0x3E, 0x6E, 0xA6)));
+		ManaBar->SetBorderColor(Border);
+	}
+	if (HealthBar) HealthBar->SetFillGradient(HPNormalColor, HPBottomNormalColor);
+	if (ManaBar)   ManaBar->SetFillGradient(MPNormalColor, MPBottomNormalColor);
 	if (HealthBarTextValue) HealthBarTextValue->SetText(FText::FromString(TEXT("--/--")));
 	if (ManaBarTextValue)   ManaBarTextValue->SetText(FText::FromString(TEXT("--/--")));
 }
@@ -39,22 +60,27 @@ void UPlayerHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	if (HealthBar) HealthBar->SetProgress(DisplayedHPPercent);
 	if (ManaBar)   ManaBar->SetProgress(DisplayedMPPercent);
 
-	// HP colour: flash toward damage/heal colour, then lerp back to normal
+	// HP colour: flash toward damage/heal colour, then lerp back to normal.
+	// The flash drives both gradient stops so the bar keeps its shading.
 	if (HPDamageFlashTimer > 0.0f)
 	{
 		HPDamageFlashTimer -= InDeltaTime;
 		const float T = FMath::Clamp(HPDamageFlashTimer / DamageFlashDuration, 0.0f, 1.0f);
-		if (HealthBar) HealthBar->SetFillColor(LerpColor(HPNormalColor, HPDamageFlashColor, T));
+		if (HealthBar) HealthBar->SetFillGradient(
+			LerpColor(HPNormalColor, HPDamageFlashColor, T),
+			LerpColor(HPBottomNormalColor, HPDamageFlashColor, T));
 	}
 	else if (HPHealFlashTimer > 0.0f)
 	{
 		HPHealFlashTimer -= InDeltaTime;
 		const float T = FMath::Clamp(HPHealFlashTimer / HealFlashDuration, 0.0f, 1.0f);
-		if (HealthBar) HealthBar->SetFillColor(LerpColor(HPNormalColor, HPHealFlashColor, T));
+		if (HealthBar) HealthBar->SetFillGradient(
+			LerpColor(HPNormalColor, HPHealFlashColor, T),
+			LerpColor(HPBottomNormalColor, HPHealFlashColor, T));
 	}
 	else
 	{
-		if (HealthBar) HealthBar->SetFillColor(HPNormalColor);
+		if (HealthBar) HealthBar->SetFillGradient(HPNormalColor, HPBottomNormalColor);
 	}
 
 	// MP colour flash
@@ -62,17 +88,21 @@ void UPlayerHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	{
 		MPDamageFlashTimer -= InDeltaTime;
 		const float T = FMath::Clamp(MPDamageFlashTimer / DamageFlashDuration, 0.0f, 1.0f);
-		if (ManaBar) ManaBar->SetFillColor(LerpColor(MPNormalColor, MPDamageFlashColor, T));
+		if (ManaBar) ManaBar->SetFillGradient(
+			LerpColor(MPNormalColor, MPDamageFlashColor, T),
+			LerpColor(MPBottomNormalColor, MPDamageFlashColor, T));
 	}
 	else if (MPHealFlashTimer > 0.0f)
 	{
 		MPHealFlashTimer -= InDeltaTime;
 		const float T = FMath::Clamp(MPHealFlashTimer / HealFlashDuration, 0.0f, 1.0f);
-		if (ManaBar) ManaBar->SetFillColor(LerpColor(MPNormalColor, MPHealFlashColor, T));
+		if (ManaBar) ManaBar->SetFillGradient(
+			LerpColor(MPNormalColor, MPHealFlashColor, T),
+			LerpColor(MPBottomNormalColor, MPHealFlashColor, T));
 	}
 	else
 	{
-		if (ManaBar) ManaBar->SetFillColor(MPNormalColor);
+		if (ManaBar) ManaBar->SetFillGradient(MPNormalColor, MPBottomNormalColor);
 	}
 }
 

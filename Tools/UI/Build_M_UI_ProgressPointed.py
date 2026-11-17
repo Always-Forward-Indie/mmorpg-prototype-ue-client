@@ -100,9 +100,18 @@ def build():
 
     tex = make_expr(mat, unreal.MaterialExpressionTextureCoordinate, -600, 0)
     mask_r = make_expr(mat, unreal.MaterialExpressionComponentMask, -440, -80)
+    # NOTE: set ALL channel flags explicitly. Fresh nodes default to every
+    # channel enabled, and set_editor_property only flips the named one;
+    # leaving G/B/A on silently breaks the U/V split (rectangular bars).
     mask_r.set_editor_property("R", True)
+    mask_r.set_editor_property("G", False)
+    mask_r.set_editor_property("B", False)
+    mask_r.set_editor_property("A", False)
     mask_g = make_expr(mat, unreal.MaterialExpressionComponentMask, -440, 80)
+    mask_g.set_editor_property("R", False)
     mask_g.set_editor_property("G", True)
+    mask_g.set_editor_property("B", False)
+    mask_g.set_editor_property("A", False)
     conn(tex, mask_r, "", "tex->mask_r")
     conn(tex, mask_g, "", "tex->mask_g")
     step("uv split ok")

@@ -1,5 +1,4 @@
 #include "Gameplay/UI/PlayerHUD.h"
-#include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Engine/Texture2D.h"
@@ -17,10 +16,10 @@ void UPlayerHUD::NativeConstruct()
 	MPHealFlashTimer    = 0.0f;
 	CurrentMaxHP  = 1.0f;
 	CurrentMaxMana = 1.0f;
-	if (HealthBar) HealthBar->SetPercent(1.0f);
-	if (ManaBar)   ManaBar->SetPercent(1.0f);
-	if (HealthBar) HealthBar->SetFillColorAndOpacity(HPNormalColor);
-	if (ManaBar)   ManaBar->SetFillColorAndOpacity(MPNormalColor);
+	if (HealthBar) HealthBar->SetProgress(1.0f);
+	if (ManaBar)   ManaBar->SetProgress(1.0f);
+	if (HealthBar) HealthBar->SetFillColor(HPNormalColor);
+	if (ManaBar)   ManaBar->SetFillColor(MPNormalColor);
 	if (HealthBarTextValue) HealthBarTextValue->SetText(FText::FromString(TEXT("--/--")));
 	if (ManaBarTextValue)   ManaBarTextValue->SetText(FText::FromString(TEXT("--/--")));
 }
@@ -37,25 +36,25 @@ void UPlayerHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	TickBar(DisplayedHPPercent, TargetHPPercent, InDeltaTime);
 	TickBar(DisplayedMPPercent, TargetMPPercent, InDeltaTime);
 
-	if (HealthBar) HealthBar->SetPercent(DisplayedHPPercent);
-	if (ManaBar)   ManaBar->SetPercent(DisplayedMPPercent);
+	if (HealthBar) HealthBar->SetProgress(DisplayedHPPercent);
+	if (ManaBar)   ManaBar->SetProgress(DisplayedMPPercent);
 
 	// HP colour: flash toward damage/heal colour, then lerp back to normal
 	if (HPDamageFlashTimer > 0.0f)
 	{
 		HPDamageFlashTimer -= InDeltaTime;
 		const float T = FMath::Clamp(HPDamageFlashTimer / DamageFlashDuration, 0.0f, 1.0f);
-		if (HealthBar) HealthBar->SetFillColorAndOpacity(LerpColor(HPNormalColor, HPDamageFlashColor, T));
+		if (HealthBar) HealthBar->SetFillColor(LerpColor(HPNormalColor, HPDamageFlashColor, T));
 	}
 	else if (HPHealFlashTimer > 0.0f)
 	{
 		HPHealFlashTimer -= InDeltaTime;
 		const float T = FMath::Clamp(HPHealFlashTimer / HealFlashDuration, 0.0f, 1.0f);
-		if (HealthBar) HealthBar->SetFillColorAndOpacity(LerpColor(HPNormalColor, HPHealFlashColor, T));
+		if (HealthBar) HealthBar->SetFillColor(LerpColor(HPNormalColor, HPHealFlashColor, T));
 	}
 	else
 	{
-		if (HealthBar) HealthBar->SetFillColorAndOpacity(HPNormalColor);
+		if (HealthBar) HealthBar->SetFillColor(HPNormalColor);
 	}
 
 	// MP colour flash
@@ -63,17 +62,17 @@ void UPlayerHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	{
 		MPDamageFlashTimer -= InDeltaTime;
 		const float T = FMath::Clamp(MPDamageFlashTimer / DamageFlashDuration, 0.0f, 1.0f);
-		if (ManaBar) ManaBar->SetFillColorAndOpacity(LerpColor(MPNormalColor, MPDamageFlashColor, T));
+		if (ManaBar) ManaBar->SetFillColor(LerpColor(MPNormalColor, MPDamageFlashColor, T));
 	}
 	else if (MPHealFlashTimer > 0.0f)
 	{
 		MPHealFlashTimer -= InDeltaTime;
 		const float T = FMath::Clamp(MPHealFlashTimer / HealFlashDuration, 0.0f, 1.0f);
-		if (ManaBar) ManaBar->SetFillColorAndOpacity(LerpColor(MPNormalColor, MPHealFlashColor, T));
+		if (ManaBar) ManaBar->SetFillColor(LerpColor(MPNormalColor, MPHealFlashColor, T));
 	}
 	else
 	{
-		if (ManaBar) ManaBar->SetFillColorAndOpacity(MPNormalColor);
+		if (ManaBar) ManaBar->SetFillColor(MPNormalColor);
 	}
 }
 
@@ -135,8 +134,8 @@ void UPlayerHUD::SnapBarsToTarget()
 {
 	DisplayedHPPercent = TargetHPPercent;
 	DisplayedMPPercent = TargetMPPercent;
-	if (HealthBar) HealthBar->SetPercent(DisplayedHPPercent);
-	if (ManaBar)   ManaBar->SetPercent(DisplayedMPPercent);
+	if (HealthBar) { HealthBar->SetProgress(DisplayedHPPercent); HealthBar->SnapGhost(); }
+	if (ManaBar)   { ManaBar->SetProgress(DisplayedMPPercent);   ManaBar->SnapGhost(); }
 }
 
 bool UPlayerHUD::IsHUDReady() const

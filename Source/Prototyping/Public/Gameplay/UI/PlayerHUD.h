@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "UI/PointedProgressWidget.h"
 #include "PlayerHUD.generated.h"
 
 UCLASS(BlueprintType, Blueprintable)
@@ -31,9 +32,9 @@ public:
 	class UImage* GetPortraitImage() const { return Portrait_Image; }
 
 	UFUNCTION(BlueprintCallable, Category = "HUD")
-	class UProgressBar* GetHealthBar() const { return HealthBar; }
+	class UPointedProgressWidget* GetHealthBar() const { return HealthBar; }
 	UFUNCTION(BlueprintCallable, Category = "HUD")
-	class UProgressBar* GetManaBar() const { return ManaBar; }
+	class UPointedProgressWidget* GetManaBar() const { return ManaBar; }
 
 	UFUNCTION(BlueprintCallable, Category = "HUD")
 	bool IsHUDReady() const;
@@ -44,13 +45,13 @@ protected:
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 	UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "HUD")
-	class UProgressBar* HealthBar;
+	class UPointedProgressWidget* HealthBar;
 
 	UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "HUD")
 	class UTextBlock* HealthBarTextValue;
 
 	UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "HUD")
-	class UProgressBar* ManaBar;
+	class UPointedProgressWidget* ManaBar;
 
 	UPROPERTY(BlueprintReadWrite, meta = (BindWidget), Category = "HUD")
 	class UTextBlock* ManaBarTextValue;

@@ -67,7 +67,11 @@ void UPlayerStatsWidget::RefreshVitals(const FPlayerStatsUpdateStruct& Stats)
     if (HP_Bar)
     {
         const float Pct = Stats.healthMax > 0 ? (float)Stats.healthCurrent / (float)Stats.healthMax : 0.f;
-        HP_Bar->SetPercent(FMath::Clamp(Pct, 0.f, 1.f));
+        HP_Bar->SetProgress(FMath::Clamp(Pct, 0.f, 1.f));
+        if (Pct >= 1.f)
+        {
+            HP_Bar->SnapGhost();
+        }
     }
     if (HP_Text)
         HP_Text->SetText(FText::Format(LOCTEXT("HPValue", "HP: {0} / {1}"),
@@ -77,7 +81,11 @@ void UPlayerStatsWidget::RefreshVitals(const FPlayerStatsUpdateStruct& Stats)
     if (MP_Bar)
     {
         const float Pct = Stats.manaMax > 0 ? (float)Stats.manaCurrent / (float)Stats.manaMax : 0.f;
-        MP_Bar->SetPercent(FMath::Clamp(Pct, 0.f, 1.f));
+        MP_Bar->SetProgress(FMath::Clamp(Pct, 0.f, 1.f));
+        if (Pct >= 1.f)
+        {
+            MP_Bar->SnapGhost();
+        }
     }
     if (MP_Text)
         MP_Text->SetText(FText::Format(LOCTEXT("MPValue", "MP: {0} / {1}"),
@@ -89,7 +97,11 @@ void UPlayerStatsWidget::RefreshVitals(const FPlayerStatsUpdateStruct& Stats)
         const int32 Range = Stats.experienceNextLevel - Stats.experienceLevelStart;
         const int32 Delta = Stats.experienceCurrent  - Stats.experienceLevelStart;
         const float Pct   = Range > 0 ? (float)Delta / (float)Range : 0.f;
-        XP_Bar->SetPercent(FMath::Clamp(Pct, 0.f, 1.f));
+        XP_Bar->SetProgress(FMath::Clamp(Pct, 0.f, 1.f));
+        if (Pct >= 1.f)
+        {
+            XP_Bar->SnapGhost();
+        }
     }
     if (XP_Text)
         XP_Text->SetText(FText::Format(LOCTEXT("XPValue", "XP: {0} / {1}"),

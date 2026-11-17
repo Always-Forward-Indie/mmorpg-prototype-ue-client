@@ -34,6 +34,26 @@ void UPlayerStatsWidget::NativeConstruct()
         EquippedTitle_Text  ? TEXT("OK") : TEXT("NULL")
     );
 
+    // Pointed-bar fill colors (match HUD normals; XP gold).
+    if (HP_Bar)
+    {
+        HP_Bar->SetProgress(1.0f);
+        HP_Bar->SnapGhost();
+        HP_Bar->SetFillColor(FLinearColor(0.18f, 0.72f, 0.18f, 1.0f));
+    }
+    if (MP_Bar)
+    {
+        MP_Bar->SetProgress(1.0f);
+        MP_Bar->SnapGhost();
+        MP_Bar->SetFillColor(FLinearColor(0.18f, 0.4f, 0.85f, 1.0f));
+    }
+    if (XP_Bar)
+    {
+        XP_Bar->SetProgress(0.0f);
+        XP_Bar->SnapGhost();
+        XP_Bar->SetFillColor(FLinearColor(1.0f, 0.85f, 0.25f, 1.0f));
+    }
+
     // Center on screen
     if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
     {
